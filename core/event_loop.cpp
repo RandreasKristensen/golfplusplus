@@ -4,6 +4,45 @@
 
 #include <SDL.h>
 
+namespace {
+button_state* button_for_scancode(input_state& input, const SDL_Scancode scancode) {
+    switch (scancode) {
+    case SDL_SCANCODE_LEFT:
+    case SDL_SCANCODE_A:
+        return &input.left;
+    case SDL_SCANCODE_RIGHT:
+    case SDL_SCANCODE_D:
+        return &input.right;
+    case SDL_SCANCODE_UP:
+    case SDL_SCANCODE_W:
+        return &input.up;
+    case SDL_SCANCODE_DOWN:
+    case SDL_SCANCODE_S:
+        return &input.down;
+    case SDL_SCANCODE_SPACE:
+        return &input.space;
+    case SDL_SCANCODE_ESCAPE:
+        return &input.escape;
+    default:
+        return nullptr;
+    }
+}
+
+void set_button_down(button_state& button) {
+    if (!button.is_down) {
+        button.pressed = true;
+    }
+    button.is_down = true;
+}
+
+void set_button_up(button_state& button) {
+    if (button.is_down) {
+        button.released = true;
+    }
+    button.is_down = false;
+}
+}
+
 void poll_events(input_state& input) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -11,8 +50,22 @@ void poll_events(input_state& input) {
             input.quit_requested = true;
         }
 
-        if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-            input.quit_requested = true;
+        if (event.type == SDL_KEYDOWN && event.key.repeat == 0) {
+            button_state* button = button_for_scancode(input, event.key.keysym.scancode);
+            if (button != nullptr) {
+                set_button_down(*button);
+            }
+
+            if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+                input.quit_requested = true;
+            }
+        }
+
+        if (event.type == SDL_KEYUP && event.key.repeat == 0) {
+            button_state* button = button_for_scancode(input, event.key.keysym.scancode);
+            if (button != nullptr) {
+                set_button_up(*button);
+            }
         }
     }
 }

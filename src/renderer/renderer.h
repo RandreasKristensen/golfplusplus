@@ -3,6 +3,7 @@
 #include <SDL.h>
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 
 #include "renderer/framebuffer.h"
 #include "renderer/shader.h"
@@ -10,13 +11,13 @@
 struct renderer {
     bool init(SDL_Window* window);
     void shutdown();
-    void render();
+    void render(const glm::vec3& ball_position);
 
 private:
     bool init_shaders();
     bool init_geometry();
     bool init_framebuffer();
-    void render_scene(const glm::mat4& view, const glm::mat4& proj);
+    void render_scene(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& ball_position);
     void render_crt(int screen_width, int screen_height);
 
     SDL_Window* window_ = nullptr;

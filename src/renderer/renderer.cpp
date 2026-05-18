@@ -85,7 +85,7 @@ void renderer::shutdown() {
     window_ = nullptr;
 }
 
-void renderer::render() {
+void renderer::render(const glm::vec3& ball_position) {
     if (!window_) {
         return;
     }
@@ -105,11 +105,12 @@ void renderer::render() {
                                             static_cast<float>(target_width_) / static_cast<float>(target_height_),
                                             0.1f,
                                             100.0f);
-    const glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 6.0f, 12.0f),
-                                       glm::vec3(0.0f, 0.0f, 0.0f),
+    const glm::vec3 camera_target(ball_position.x, 0.0f, ball_position.z);
+    const glm::mat4 view = glm::lookAt(camera_target + glm::vec3(0.0f, 6.0f, 12.0f),
+                                       camera_target,
                                        glm::vec3(0.0f, 1.0f, 0.0f));
 
-    render_scene(view, proj);
+    render_scene(view, proj, ball_position);
 
     framebuffer::bind_default();
     render_crt(screen_width, screen_height);
@@ -202,7 +203,7 @@ bool renderer::init_framebuffer() {
     return scene_fbo_.init(target_width_, target_height_);
 }
 
-void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj) {
+void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& ball_position) {
     const glm::mat4 ground_model(1.0f);
     const glm::mat4 ground_mvp = proj * view * ground_model;
 
@@ -214,7 +215,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj) {
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
 
-    const glm::mat4 ball_model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.25f, 0.0f));
+    const glm::mat4 ball_model = glm::translate(glm::mat4(1.0f), ball_position + glm::vec3(0.0f, 0.25f, 0.0f));
     const glm::mat4 ball_mvp = proj * view * ball_model;
 
     ball_shader_.use();

@@ -46,6 +46,11 @@ set(VCR_GOLF_PHYSICS_SOURCES
     src/physics/wind.cpp
 )
 
+set(VCR_GOLF_GAME_SOURCES
+    src/game/game_state.cpp
+    src/game/swing.cpp
+)
+
 set(GLM_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/vendor/glm)
 if (EXISTS ${GLM_ROOT}/glm/vec3.hpp)
     set(GLM_INCLUDE_DIR ${GLM_ROOT})
@@ -69,9 +74,19 @@ target_include_directories(vcr-golf-physics PUBLIC
 
 target_link_libraries(vcr-golf PRIVATE vcr-golf-physics)
 
+add_library(vcr-golf-game ${VCR_GOLF_GAME_SOURCES})
+target_include_directories(vcr-golf-game PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${GLM_INCLUDE_DIR}
+)
+target_link_libraries(vcr-golf-game PUBLIC vcr-golf-physics)
+
+target_link_libraries(vcr-golf PRIVATE vcr-golf-game)
+
 if (VCR_GOLF_BUILD_TESTS)
-    add_executable(vcr-golf-tests tests/physics_tests.cpp)
-    target_link_libraries(vcr-golf-tests PRIVATE vcr-golf-physics)
-    target_include_directories(vcr-golf-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    add_executable(vcr-golf-tests tests/physics_tests.cpp tests/game_tests.cpp)
+    target_link_libraries(vcr-golf-tests PRIVATE vcr-golf-physics vcr-golf-game)
+    target_include_directories(vcr-golf-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_include_directories(vcr-golf-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 endif()

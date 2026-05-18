@@ -10,27 +10,30 @@ Build the smallest vertical slice that proves the core feel: deterministic ball 
 
 **Phase 2** - Renderer core (parallel with Phase 1): implement low-res framebuffer, nearest-neighbor upscale, and CRT post-process pass; render a flat ground plane and a ball mesh to confirm the pipeline visually.
 
-**Phase 3** - Game state + input (depends on Phases 1 and 2): define minimal GameState, club stats, and a swing state machine; wire keyboard-only input (left/right to aim, up/down to switch clubs, Enter timing twice for swing) and feed results into the physics step.
+**Phase 3** - Game state + input (depends on Phases 1 and 2): define minimal GameState, club stats, and a swing state machine; wire keyboard-only input (left/right to aim, up/down to switch clubs, Space timing twice for swing) and feed results into the physics step.
 
 **Phase 4** - MVP sandbox loop (depends on Phase 3): add a simple course representation (flat plane with optional pin marker), first-person or close follow camera, power meter UI bar, stroke counting, and reset/retee action.
 
 **Phase 5** - Post-MVP scaffolding (parallelizable): add hole JSON loading, material zones, and collision with spline-derived terrain; then layer in quest UI and shop after the gameplay loop is stable.
 
+maybe add diagrams like class diagrams and like maybe a diagram where each folder is a box and their relations? would be good for 
+
 ## **MVP**
 
 MVP scope is a ball flight sandbox, not a full hole with quests or shop.
-Input is keyboard only with timing-based swing (Enter pressed twice).
+Input is keyboard only with timing-based swing (Space pressed twice).
 Quests, saves, and shop are excluded from MVP.
 POV camera definition: assume a close follow or ball-level camera; confirm exact POV framing and desired FOV.
 Club set: recommend 2 to 3 clubs with distinct power and spin to validate gameplay without overbuilding content.
 Course target for MVP: flat plane only vs. a minimal pin marker to support stroke counting and reset behavior.
 
 
-## Build
+## Build & Run
 
 ```pwrshl
 cmake --preset debug
-cmake --build build/debug
+cmake --build build/debug --clean-first
+.\build\debug\vcr-golf.exe
 ```
 
 
