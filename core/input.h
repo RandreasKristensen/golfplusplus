@@ -18,6 +18,7 @@ struct input_state {
     button_state up;
     button_state down;
     button_state space;
+    button_state retee;
     button_state escape;
 
     void reset_frame() {
@@ -27,6 +28,7 @@ struct input_state {
         up.reset_frame();
         down.reset_frame();
         space.reset_frame();
+        retee.reset_frame();
         escape.reset_frame();
     }
 };

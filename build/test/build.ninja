@@ -221,6 +221,15 @@ build libvcr-golf-physics.a: CXX_STATIC_LIBRARY_LINKER__vcr-golf-physics_Debug C
 
 build cmake_object_order_depends_target_vcr-golf-game: phony || cmake_object_order_depends_target_vcr-golf-physics
 
+build CMakeFiles/vcr-golf-game.dir/src/game/game_tuning.cpp.obj: CXX_COMPILER__vcr-golf-game_unscanned_Debug C$:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/game_tuning.cpp || cmake_object_order_depends_target_vcr-golf-game
+  CONFIG = Debug
+  DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\game_tuning.cpp.obj.d
+  FLAGS = -g -std=gnu++17
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src
+  OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
+  OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\src\game
+  TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
+
 build CMakeFiles/vcr-golf-game.dir/src/game/game_state.cpp.obj: CXX_COMPILER__vcr-golf-game_unscanned_Debug C$:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/game_state.cpp || cmake_object_order_depends_target_vcr-golf-game
   CONFIG = Debug
   DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\game_state.cpp.obj.d
@@ -247,7 +256,7 @@ build CMakeFiles/vcr-golf-game.dir/src/game/swing.cpp.obj: CXX_COMPILER__vcr-gol
 #############################################
 # Link the static library libvcr-golf-game.a
 
-build libvcr-golf-game.a: CXX_STATIC_LIBRARY_LINKER__vcr-golf-game_Debug CMakeFiles/vcr-golf-game.dir/src/game/game_state.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/swing.cpp.obj || libvcr-golf-physics.a
+build libvcr-golf-game.a: CXX_STATIC_LIBRARY_LINKER__vcr-golf-game_Debug CMakeFiles/vcr-golf-game.dir/src/game/game_tuning.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/game_state.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/swing.cpp.obj || libvcr-golf-physics.a
   CONFIG = Debug
   LANGUAGE_COMPILE_FLAGS = -g
   OBJECT_DIR = CMakeFiles\vcr-golf-game.dir

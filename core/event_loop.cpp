@@ -21,6 +21,8 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
         return &input.down;
     case SDL_SCANCODE_SPACE:
         return &input.space;
+    case SDL_SCANCODE_R:
+        return &input.retee;
     case SDL_SCANCODE_ESCAPE:
         return &input.escape;
     default:

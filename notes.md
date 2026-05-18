@@ -44,3 +44,15 @@ cmake --preset test
 cmake --build build/test
 .\build\test\vcr-golf-tests.exe
 ```
+
+## Ideas
+
+I wanna be able to call my clubs stuff
+
+the camera should be life first person walk around an up to the ball, press space, then you line up, then you look down at the ball while you shoot (press space twice) the the character looks up at the ball like you would, first person.
+
+you should be able to pick up balls around the course that are not yours
+
+if you dont find your ball, you have to drop it, theres a timer from when you shoot
+
+GOLF CARTS???

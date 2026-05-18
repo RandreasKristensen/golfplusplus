@@ -2,10 +2,13 @@
 
 #include <cmath>
 
-wind_state sample_wind(const std::uint32_t seed, const float time) {
-    const float phase = static_cast<float>(seed % 1024U) * 0.01f;
-    const float speed = 2.0f + 1.5f * std::sin(time * 0.2f + phase);
-    const float angle = 0.7f * std::sin(time * 0.11f + phase * 1.3f) + phase;
+wind_state sample_wind(const std::uint32_t seed, const float time, const wind_tuning& tuning) {
+    const float phase = static_cast<float>(seed % 1024U) * tuning.seed_phase_scale;
+    const float speed = tuning.base_speed
+        + tuning.speed_variation * std::sin(time * tuning.speed_time_scale + phase);
+    const float angle = tuning.angle_variation
+        * std::sin(time * tuning.angle_time_scale + phase * tuning.phase_angle_scale)
+        + phase;
 
     wind_state out;
     out.velocity = {

@@ -47,6 +47,7 @@ set(VCR_GOLF_PHYSICS_SOURCES
 )
 
 set(VCR_GOLF_GAME_SOURCES
+    src/game/game_tuning.cpp
     src/game/game_state.cpp
     src/game/swing.cpp
 )
