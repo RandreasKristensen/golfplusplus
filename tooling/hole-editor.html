@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>vcr-golf — hole editor</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #141414;
+  color: #c8c4b4;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+#toolbar {
+  background: #1c1c1c;
+  border-bottom: 1px solid #2a2a2a;
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+#toolbar h1 {
+  font-size: 12px;
+  font-weight: normal;
+  color: #f0c060;
+  margin-right: 10px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.btn {
+  background: #252525;
+  border: 1px solid #363636;
+  color: #b0ac9c;
+  padding: 4px 9px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  transition: background 0.1s, border-color 0.1s;
+}
+.btn:hover { background: #2e2e2e; border-color: #505050; }
+.btn.active { background: #302810; border-color: #f0c060; color: #f0c060; }
+.btn.primary { background: #1e2e14; border-color: #5a9040; color: #80c060; }
+.btn.primary:hover { background: #253817; }
+.sep { width: 1px; height: 18px; background: #2a2a2a; margin: 0 3px; flex-shrink: 0; }
+
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+#canvas-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+#canvas { display: block; cursor: crosshair; }
+
+#status {
+  position: absolute;
+  top: 8px; right: 8px;
+  background: rgba(20,20,20,0.85);
+  border: 1px solid #2e2e2e;
+  padding: 3px 8px;
+  font-size: 10px;
+  color: #555;
+  pointer-events: none;
+}
+#hint {
+  position: absolute;
+  bottom: 8px; left: 10px;
+  font-size: 10px;
+  color: #444;
+  pointer-events: none;
+}
+
+#panel {
+  width: 272px;
+  background: #1a1a1a;
+  border-left: 1px solid #262626;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+#panel-scroll {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+.section {
+  border-bottom: 1px solid #242424;
+  padding: 10px 12px;
+}
+.section-title {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #555;
+  margin-bottom: 8px;
+}
+.field {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+  gap: 6px;
+}
+.field label {
+  color: #777;
+  font-size: 11px;
+  min-width: 64px;
+  flex-shrink: 0;
+}
+.field input[type="text"],
+.field input[type="number"] {
+  flex: 1;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  color: #c8c4b4;
+  padding: 3px 5px;
+  font-family: inherit;
+  font-size: 11px;
+  min-width: 0;
+}
+.field input:focus { outline: none; border-color: #f0c060; }
+
+.list-item {
+  background: #151515;
+  border: 1px solid #242424;
+  padding: 5px 7px;
+  margin-bottom: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+}
+.list-item:hover { border-color: #3a3a3a; }
+.list-item.selected { border-color: #f0c060; background: #1e1900; }
+.item-label { color: #888; min-width: 18px; font-size: 10px; }
+.item-coords { flex: 1; color: #999; font-size: 10px; overflow: hidden; white-space: nowrap; }
+.item-del {
+  color: #444; cursor: pointer; font-size: 15px;
+  padding: 0 2px; line-height: 1; flex-shrink: 0;
+}
+.item-del:hover { color: #c04040; }
+
+.zone-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.zone-dot.green  { background: #4a9a4a; }
+.zone-dot.bunker { background: #c8a840; }
+.zone-dot.water  { background: #4060c8; }
+
+.subfield {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 10px;
+  color: #666;
+}
+.subfield label { min-width: 40px; color: #666; }
+.subfield input {
+  flex: 1;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  color: #b0ac9c;
+  padding: 2px 4px;
+  font-family: inherit;
+  font-size: 10px;
+}
+.subfield input:focus { outline: none; border-color: #f0c060; }
+
+#export-out {
+  width: 100%;
+  height: 100px;
+  background: #0e0e0e;
+  border: 1px solid #242424;
+  color: #6a9a5a;
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  padding: 5px;
+  resize: none;
+  margin-top: 6px;
+}
+#import-in {
+  width: 100%;
+  height: 70px;
+  background: #0e0e0e;
+  border: 1px solid #242424;
+  color: #9a9a7a;
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  padding: 5px;
+  resize: none;
+  margin-top: 6px;
+}
+#import-in::placeholder { color: #444; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1>⛳ vcr-golf / hole editor</h1>
+  <div class="sep"></div>
+  <button class="btn active" id="btn-select"  onclick="setMode('select')">select</button>
+  <button class="btn"        id="btn-addcp"   onclick="setMode('add_cp')">+ point</button>
+  <div class="sep"></div>
+  <button class="btn"        id="btn-green"   onclick="setMode('add_zone','green')">+ green</button>
+  <button class="btn"        id="btn-bunker"  onclick="setMode('add_zone','bunker')">+ bunker</button>
+  <button class="btn"        id="btn-water"   onclick="setMode('add_zone','water')">+ water</button>
+  <div class="sep"></div>
+  <button class="btn"        onclick="fitView();render()">fit</button>
+  <button class="btn"        onclick="newHole()">new</button>
+  <div class="sep"></div>
+  <button class="btn primary" onclick="doExport()">export json</button>
+</div>
+
+<div id="main">
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div id="status">ready</div>
+    <div id="hint">scroll → zoom &nbsp;·&nbsp; drag bg → pan &nbsp;·&nbsp; right-click → delete</div>
+  </div>
+
+  <div id="panel">
+    <div id="panel-scroll">
+
+      <div class="section">
+        <div class="section-title">hole info</div>
+        <div class="field"><label>id</label>     <input type="text"   id="f-id"    oninput="hole.id=this.value"></div>
+        <div class="field"><label>name</label>   <input type="text"   id="f-name"  oninput="hole.name=this.value"></div>
+        <div class="field"><label>par</label>    <input type="number" id="f-par"   min="1" max="6" oninput="hole.par=+this.value"></div>
+        <div class="field"><label>wind seed</label><input type="number" id="f-seed" oninput="hole.wind_seed=+this.value"></div>
+        <div class="field"><label>width</label>  <input type="number" id="f-width" step="0.5" min="2" oninput="hole.spline.width=+this.value;render()"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">control points</div>
+        <div id="cp-list"></div>
+        <div id="cp-edit"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">material zones</div>
+        <div id="zone-list"></div>
+        <div id="zone-edit"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">export</div>
+        <button class="btn primary" style="width:100%" onclick="doExport()">copy to clipboard</button>
+        <textarea id="export-out" readonly></textarea>
+      </div>
+
+      <div class="section">
+        <div class="section-title">import</div>
+        <textarea id="import-in" placeholder="paste hole json here…"></textarea>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="doImport()">load</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ── state ────────────────────────────────────────────────────────────────────
+
+let hole = {
+  id: "hole_01", name: "The Ditch", par: 3, wind_seed: 42,
+  tee: [0, 0, 0], pin: [0, 0, 80],
+  spline: {
+    control_points: [[0,0,0],[2,1,20],[-1,0.5,40],[3,2,60],[0,1,80]],
+    width: 18.0
+  },
+  material_zones: [
+    { type: "green",  center: [0, 0, 80], radius: 6.0 },
+    { type: "bunker", center: [5, 0, 52], radius: 3.5 }
+  ]
+};
+
+let view   = { ox: 0, oz: 40, scale: 5 };
+let mode   = 'select';
+let ztype  = null;
+let sel    = null;    // { type, index? }
+let drag   = null;
+let pan    = null;
+
+// ── canvas ───────────────────────────────────────────────────────────────────
+
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+
+function resize() {
+  const w = document.getElementById('canvas-wrap');
+  canvas.width  = w.clientWidth;
+  canvas.height = w.clientHeight;
+  render();
+}
+window.addEventListener('resize', resize);
+requestAnimationFrame(resize);
+
+// ── coords ───────────────────────────────────────────────────────────────────
+
+const w2c = (wx, wz) => ({
+  x: canvas.width  / 2 + (wx - view.ox) * view.scale,
+  y: canvas.height / 2 + (wz - view.oz) * view.scale
+});
+const c2w = (cx, cy) => ({
+  x: (cx - canvas.width  / 2) / view.scale + view.ox,
+  z: (cy - canvas.height / 2) / view.scale + view.oz
+});
+const r2 = v => Math.round(v * 100) / 100;
+
+// ── spline ───────────────────────────────────────────────────────────────────
+
+function catmullSample(pts, t) {
+  const n = pts.length;
+  if (n < 2) return [0, 0];
+  const seg = Math.min(Math.floor(t * (n - 1)), n - 2);
+  const lt  = t * (n - 1) - seg;
+  const p0 = pts[Math.max(seg - 1, 0)];
+  const p1 = pts[seg];
+  const p2 = pts[Math.min(seg + 1, n - 1)];
+  const p3 = pts[Math.min(seg + 2, n - 1)];
+  const f = (a, b, c, d) =>
+    0.5 * ((2*b) + (-a+c)*lt + (2*a-5*b+4*c-d)*lt*lt + (-a+3*b-3*c+d)*lt*lt*lt);
+  return [f(p0[0],p1[0],p2[0],p3[0]), f(p0[2],p1[2],p2[2],p3[2])];
+}
+
+function splinePts(n = 100) {
+  if (hole.spline.control_points.length < 2) return [];
+  const out = [];
+  for (let i = 0; i <= n; i++) out.push(catmullSample(hole.spline.control_points, i / n));
+  return out;
+}
+
+// ── render ───────────────────────────────────────────────────────────────────
+
+const ZONE = {
+  green:  { fill: 'rgba(50,130,50,0.3)',  stroke: 'rgba(80,180,70,0.65)'  },
+  bunker: { fill: 'rgba(170,140,50,0.3)', stroke: 'rgba(210,175,70,0.65)' },
+  water:  { fill: 'rgba(35,75,190,0.3)',  stroke: 'rgba(60,110,220,0.65)' }
+};
+
+function render() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // grid
+  const gs = 10;
+  ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 0.5;
+  const x0 = Math.floor((view.ox - W/2/view.scale) / gs) * gs;
+  const x1 = Math.ceil ((view.ox + W/2/view.scale) / gs) * gs;
+  const z0 = Math.floor((view.oz - H/2/view.scale) / gs) * gs;
+  const z1 = Math.ceil ((view.oz + H/2/view.scale) / gs) * gs;
+  for (let wx = x0; wx <= x1; wx += gs) {
+    const {x} = w2c(wx, 0); ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+  for (let wz = z0; wz <= z1; wz += gs) {
+    const {y} = w2c(0, wz); ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+  // grid labels
+  ctx.fillStyle = '#2e2e2e'; ctx.font = '9px Courier New';
+  for (let wx = x0; wx <= x1; wx += gs) { const {x}=w2c(wx,0); ctx.fillText(wx,x+2,H-4); }
+  for (let wz = z0; wz <= z1; wz += gs) { const {y}=w2c(0,wz); ctx.fillText(wz,4,y-2); }
+
+  const sp = splinePts();
+
+  // fairway strip
+  if (sp.length > 1) {
+    ctx.lineWidth   = hole.spline.width * view.scale;
+    ctx.strokeStyle = 'rgba(45,90,35,0.45)';
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath();
+    sp.forEach(([wx,wz],i) => { const c=w2c(wx,wz); i?ctx.lineTo(c.x,c.y):ctx.moveTo(c.x,c.y); });
+    ctx.stroke();
+  }
+
+  // material zones
+  hole.material_zones.forEach((z, i) => {
+    const col    = ZONE[z.type];
+    const isSel  = sel && sel.type === 'zone' && sel.index === i;
+    ctx.lineWidth = isSel ? 1.5 : 0.8;
+
+    if (z.type === 'water' && z.bounds) {
+      const c0 = w2c(z.bounds[0][0], z.bounds[0][2]);
+      const c1 = w2c(z.bounds[1][0], z.bounds[1][2]);
+      const rx = Math.min(c0.x,c1.x), ry = Math.min(c0.y,c1.y);
+      const rw = Math.abs(c1.x-c0.x), rh = Math.abs(c1.y-c0.y);
+      ctx.fillStyle = col.fill; ctx.fillRect(rx,ry,rw,rh);
+      ctx.strokeStyle = isSel ? '#f0c060' : col.stroke; ctx.strokeRect(rx,ry,rw,rh);
+      if (isSel) { // corner handles
+        [[rx,ry],[rx+rw,ry],[rx,ry+rh],[rx+rw,ry+rh]].forEach(([hx,hy])=>{
+          ctx.fillStyle='#f0c060'; ctx.beginPath(); ctx.arc(hx,hy,4,0,Math.PI*2); ctx.fill();
+        });
+      }
+    } else if (z.center) {
+      const c = w2c(z.center[0], z.center[2]);
+      const r = (z.radius || 5) * view.scale;
+      ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI*2);
+      ctx.fillStyle = col.fill; ctx.fill();
+      ctx.strokeStyle = isSel ? '#f0c060' : col.stroke; ctx.stroke();
+      if (isSel) { // resize handle
+        ctx.beginPath(); ctx.arc(c.x + r, c.y, 4, 0, Math.PI*2);
+        ctx.fillStyle = '#f0c060'; ctx.fill();
+      }
+    }
+
+    // zone label
+    const lc = z.center ? w2c(z.center[0], z.center[2])
+                        : (() => { const a=w2c(z.bounds[0][0],z.bounds[0][2]),b=w2c(z.bounds[1][0],z.bounds[1][2]); return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; })();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = `${Math.max(8, view.scale * 1.4)}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.fillText(z.type, lc.x, lc.y + 4);
+    ctx.textAlign = 'left';
+  });
+
+  // spline path (dashed centre line)
+  if (sp.length > 1) {
+    ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(100,180,70,0.45)';
+    ctx.setLineDash([4,4]);
+    ctx.beginPath();
+    sp.forEach(([wx,wz],i) => { const c=w2c(wx,wz); i?ctx.lineTo(c.x,c.y):ctx.moveTo(c.x,c.y); });
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // tee
+  drawTee(hole.tee, sel && sel.type === 'tee');
+
+  // pin
+  drawPin(hole.pin, sel && sel.type === 'pin');
+
+  // control points
+  hole.spline.control_points.forEach((pt, i) => {
+    const c     = w2c(pt[0], pt[2]);
+    const isSel = sel && sel.type === 'cp' && sel.index === i;
+    ctx.fillStyle   = isSel ? '#f0c060' : (i===0||i===hole.spline.control_points.length-1) ? '#70b050' : '#7070b0';
+    ctx.strokeStyle = isSel ? '#fff' : '#000';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.rect(c.x-5, c.y-5, 10, 10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '9px Courier New';
+    ctx.fillText(i, c.x+6, c.y-5);
+    if (Math.abs(pt[1]) > 0.05) {
+      ctx.fillStyle = pt[1]>0 ? 'rgba(200,175,70,0.7)' : 'rgba(70,110,200,0.7)';
+      ctx.fillText('y'+pt[1].toFixed(1), c.x+6, c.y+13);
+    }
+  });
+
+  // mode hint on canvas
+  if (mode !== 'select') {
+    const hints = { add_cp: 'click to add control point', add_zone: `click to place ${ztype}` };
+    ctx.fillStyle = '#f0c060';
+    ctx.font = '11px Courier New';
+    ctx.fillText(hints[mode] || '', 10, H - 10);
+  }
+
+  // status bar
+  document.getElementById('status').textContent =
+    `${view.scale.toFixed(1)}px/u  |  pts:${hole.spline.control_points.length}  |  zones:${hole.material_zones.length}`;
+}
+
+function drawTee(pos, sel) {
+  const c = w2c(pos[0], pos[2]);
+  ctx.strokeStyle = ctx.fillStyle = sel ? '#f0c060' : '#90d060';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(c.x-8,c.y); ctx.lineTo(c.x+8,c.y);
+  ctx.moveTo(c.x,c.y); ctx.lineTo(c.x,c.y+14); ctx.stroke();
+  ctx.font = '9px Courier New'; ctx.textAlign = 'center';
+  ctx.fillText('TEE', c.x, c.y-5); ctx.textAlign = 'left';
+}
+
+function drawPin(pos, sel) {
+  const c = w2c(pos[0], pos[2]);
+  const col = sel ? '#f0c060' : '#d05848';
+  ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(c.x, c.y-14); ctx.lineTo(c.x, c.y+4); ctx.stroke();
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.moveTo(c.x,c.y-14); ctx.lineTo(c.x+10,c.y-10); ctx.lineTo(c.x,c.y-6); ctx.fill();
+  ctx.font = '9px Courier New'; ctx.textAlign = 'center';
+  ctx.fillText('PIN', c.x, c.y+13); ctx.textAlign = 'left';
+}
+
+// ── hit test ─────────────────────────────────────────────────────────────────
+
+function hit(cx, cy) {
+  const D = 10;
+  // resize handle (circular zones, only when selected)
+  for (let i=0; i<hole.material_zones.length; i++) {
+    const z = hole.material_zones[i];
+    if (!z.center || !(sel && sel.type==='zone' && sel.index===i)) continue;
+    const c  = w2c(z.center[0], z.center[2]);
+    const hx = c.x + (z.radius||5)*view.scale;
+    if (Math.hypot(cx-hx, cy-c.y) < 7) return { type:'zone_resize', index:i };
+  }
+  // control points
+  for (let i=hole.spline.control_points.length-1; i>=0; i--) {
+    const c = w2c(hole.spline.control_points[i][0], hole.spline.control_points[i][2]);
+    if (Math.abs(cx-c.x)<=D && Math.abs(cy-c.y)<=D) return { type:'cp', index:i };
+  }
+  // tee / pin
+  const tc = w2c(hole.tee[0], hole.tee[2]);
+  if (Math.hypot(cx-tc.x, cy-tc.y) < 14) return { type:'tee' };
+  const pc = w2c(hole.pin[0], hole.pin[2]);
+  if (Math.hypot(cx-pc.x, cy-pc.y) < 14) return { type:'pin' };
+  // zones
+  for (let i=hole.material_zones.length-1; i>=0; i--) {
+    const z = hole.material_zones[i];
+    if (z.type==='water' && z.bounds) {
+      const a=w2c(z.bounds[0][0],z.bounds[0][2]), b=w2c(z.bounds[1][0],z.bounds[1][2]);
+      if (cx>=Math.min(a.x,b.x)&&cx<=Math.max(a.x,b.x)&&cy>=Math.min(a.y,b.y)&&cy<=Math.max(a.y,b.y))
+        return { type:'zone', index:i };
+    } else if (z.center) {
+      const c=w2c(z.center[0],z.center[2]);
+      if (Math.hypot(cx-c.x,cy-c.y)<(z.radius||5)*view.scale) return { type:'zone', index:i };
+    }
+  }
+  return null;
+}
+
+// ── mouse ────────────────────────────────────────────────────────────────────
+
+function getpos(e) {
+  const r = canvas.getBoundingClientRect();
+  return { cx: e.clientX - r.left, cy: e.clientY - r.top };
+}
+
+canvas.addEventListener('mousedown', e => {
+  e.preventDefault();
+  const {cx,cy} = getpos(e);
+  const w = c2w(cx,cy);
+
+  // right-click delete
+  if (e.button === 2) {
+    const h2 = hit(cx,cy);
+    if (h2?.type==='cp' && hole.spline.control_points.length>2) {
+      hole.spline.control_points.splice(h2.index,1);
+      if (sel?.type==='cp') sel=null;
+    } else if (h2?.type==='zone') {
+      hole.material_zones.splice(h2.index,1);
+      if (sel?.type==='zone') sel=null;
+    }
+    updatePanel(); render(); return;
+  }
+  if (e.button !== 0) return;
+
+  // add control point
+  if (mode==='add_cp') {
+    hole.spline.control_points.push([r2(w.x),0,r2(w.z)]);
+    sel = { type:'cp', index: hole.spline.control_points.length-1 };
+    updatePanel(); render(); return;
+  }
+
+  // place zone
+  if (mode==='add_zone') {
+    if (ztype==='water') {
+      hole.material_zones.push({ type:'water', bounds:[[r2(w.x-8),0,r2(w.z-5)],[r2(w.x+8),0,r2(w.z+5)]] });
+    } else {
+      hole.material_zones.push({ type:ztype, center:[r2(w.x),0,r2(w.z)], radius: ztype==='green'?6:3.5 });
+    }
+    sel = { type:'zone', index: hole.material_zones.length-1 };
+    setMode('select'); updatePanel(); render(); return;
+  }
+
+  // select / drag
+  const h2 = hit(cx,cy);
+  if (h2) {
+    sel = (h2.type==='zone_resize') ? { type:'zone', index:h2.index } : h2;
+    const op = origPos(h2);
+    drag = { ...h2, cx0:cx, cy0:cy, ox:op.x, oz:op.z };
+  } else {
+    sel = null;
+    pan  = { cx0:cx, cy0:cy, vox:view.ox, voz:view.oz };
+    canvas.style.cursor = 'grabbing';
+  }
+  updatePanel(); render();
+});
+
+function origPos(h2) {
+  if (h2.type==='cp') { const p=hole.spline.control_points[h2.index]; return {x:p[0],z:p[2]}; }
+  if (h2.type==='tee') return {x:hole.tee[0],z:hole.tee[2]};
+  if (h2.type==='pin') return {x:hole.pin[0],z:hole.pin[2]};
+  if (h2.type==='zone') {
+    const z=hole.material_zones[h2.index];
+    return z.center ? {x:z.center[0],z:z.center[2]} : {x:z.bounds[0][0],z:z.bounds[0][2]};
+  }
+  return {x:0,z:0};
+}
+
+canvas.addEventListener('mousemove', e => {
+  const {cx,cy} = getpos(e);
+  if (pan) {
+    view.ox = pan.vox - (cx-pan.cx0)/view.scale;
+    view.oz = pan.voz - (cy-pan.cy0)/view.scale;
+    render(); return;
+  }
+  if (!drag) return;
+  const dx = (cx-drag.cx0)/view.scale, dz = (cy-drag.cy0)/view.scale;
+  const nx = r2(drag.ox+dx), nz = r2(drag.oz+dz);
+
+  if (drag.type==='cp') { hole.spline.control_points[drag.index][0]=nx; hole.spline.control_points[drag.index][2]=nz; }
+  else if (drag.type==='tee') { hole.tee[0]=nx; hole.tee[2]=nz; }
+  else if (drag.type==='pin') { hole.pin[0]=nx; hole.pin[2]=nz; }
+  else if (drag.type==='zone') {
+    const z=hole.material_zones[drag.index];
+    if (z.center) { z.center[0]=nx; z.center[2]=nz; }
+    else if (z.bounds) {
+      const bw=z.bounds[1][0]-z.bounds[0][0], bh=z.bounds[1][2]-z.bounds[0][2];
+      z.bounds[0][0]=nx; z.bounds[0][2]=nz; z.bounds[1][0]=r2(nx+bw); z.bounds[1][2]=r2(nz+bh);
+    }
+  } else if (drag.type==='zone_resize') {
+    const z=hole.material_zones[drag.index];
+    if (z.center) {
+      const w2=c2w(cx,cy);
+      z.radius = r2(Math.max(0.5, Math.hypot(w2.x-z.center[0], w2.z-z.center[2])));
+    }
+  }
+  updatePanel(); render();
+});
+
+canvas.addEventListener('mouseup', () => {
+  drag=null; pan=null; canvas.style.cursor='crosshair';
+});
+canvas.addEventListener('mouseleave', () => { drag=null; pan=null; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const {cx,cy} = getpos(e);
+  const wb = c2w(cx,cy);
+  view.scale = Math.max(1, Math.min(50, view.scale * (e.deltaY<0 ? 1.12 : 0.89)));
+  const wa = c2w(cx,cy);
+  view.ox += wb.x-wa.x; view.oz += wb.z-wa.z;
+  render();
+}, {passive:false});
+
+// ── mode ─────────────────────────────────────────────────────────────────────
+
+function setMode(m, zt) {
+  mode=m; ztype=zt||null;
+  const map = { select:'btn-select', add_cp:'btn-addcp',
+    'add_zone:green':'btn-green','add_zone:bunker':'btn-bunker','add_zone:water':'btn-water' };
+  document.querySelectorAll('#toolbar .btn').forEach(b=>b.classList.remove('active'));
+  const k = m==='add_zone'?`add_zone:${zt}`:m;
+  document.getElementById(map[k])?.classList.add('active');
+  render();
+}
+
+// ── panel ────────────────────────────────────────────────────────────────────
+
+function updatePanel() {
+  // metadata fields
+  setValue('f-id',   hole.id);
+  setValue('f-name', hole.name);
+  setValue('f-par',  hole.par);
+  setValue('f-seed', hole.wind_seed);
+  setValue('f-width',hole.spline.width);
+
+  // control point list
+  const cpList = document.getElementById('cp-list');
+  cpList.innerHTML = '';
+  hole.spline.control_points.forEach((pt,i) => {
+    const isSel = sel?.type==='cp' && sel.index===i;
+    const el = document.createElement('div');
+    el.className = 'list-item' + (isSel?' selected':'');
+    el.innerHTML =
+      `<span class="item-label">${i}</span>` +
+      `<span class="item-coords">x${fmt(pt[0])} y${fmt(pt[1])} z${fmt(pt[2])}</span>` +
+      `<span class="item-del" data-i="${i}">×</span>`;
+    el.addEventListener('click', ev => { if(ev.target.dataset.i!==undefined) return; sel={type:'cp',index:i}; updatePanel(); render(); });
+    cpList.appendChild(el);
+  });
+  cpList.querySelectorAll('.item-del').forEach(el =>
+    el.addEventListener('click', () => {
+      const i=+el.dataset.i;
+      if(hole.spline.control_points.length<=2) return;
+      hole.spline.control_points.splice(i,1);
+      if(sel?.type==='cp') sel=null;
+      updatePanel(); render();
+    })
+  );
+
+  // cp elevation edit when selected
+  const cpEdit = document.getElementById('cp-edit');
+  if (sel?.type==='cp') {
+    const pt = hole.spline.control_points[sel.index];
+    cpEdit.innerHTML =
+      `<div class="subfield"><label>y (elev)</label>` +
+      `<input type="number" step="0.5" value="${pt[1]}" oninput="setCpY(${sel.index},+this.value)">` +
+      `</div>`;
+  } else { cpEdit.innerHTML=''; }
+
+  // zone list
+  const zList = document.getElementById('zone-list');
+  zList.innerHTML='';
+  hole.material_zones.forEach((z,i) => {
+    const isSel = sel?.type==='zone' && sel.index===i;
+    const desc = z.center ? `r${(z.radius||0).toFixed(1)} @ ${z.center[0].toFixed(1)},${z.center[2].toFixed(1)}` : 'bounds';
+    const el = document.createElement('div');
+    el.className='list-item'+(isSel?' selected':'');
+    el.innerHTML =
+      `<span class="zone-dot ${z.type}"></span>` +
+      `<span class="item-coords">${z.type} — ${desc}</span>` +
+      `<span class="item-del" data-i="${i}">×</span>`;
+    el.addEventListener('click', ev => { if(ev.target.dataset.i!==undefined) return; sel={type:'zone',index:i}; updatePanel(); render(); });
+    zList.appendChild(el);
+  });
+  zList.querySelectorAll('.item-del').forEach(el =>
+    el.addEventListener('click', () => {
+      hole.material_zones.splice(+el.dataset.i,1);
+      if(sel?.type==='zone') sel=null;
+      updatePanel(); render();
+    })
+  );
+
+  // zone detail edit
+  const zEdit = document.getElementById('zone-edit');
+  if (sel?.type==='zone') {
+    const z = hole.material_zones[sel.index];
+    if (z?.center) {
+      zEdit.innerHTML =
+        `<div class="subfield"><label>radius</label>` +
+        `<input type="number" step="0.5" min="0.5" value="${(z.radius||5).toFixed(1)}" oninput="setZoneR(${sel.index},+this.value)">` +
+        `</div>`;
+    } else if (z?.bounds) {
+      const bw = r2(z.bounds[1][0]-z.bounds[0][0]);
+      const bh = r2(z.bounds[1][2]-z.bounds[0][2]);
+      zEdit.innerHTML =
+        `<div class="subfield"><label>width</label><input type="number" step="1" value="${bw}" oninput="setWaterW(${sel.index},+this.value)"></div>` +
+        `<div class="subfield"><label>depth</label><input type="number" step="1" value="${bh}" oninput="setWaterH(${sel.index},+this.value)"></div>`;
+    } else { zEdit.innerHTML=''; }
+  } else { zEdit.innerHTML=''; }
+
+  refreshExport();
+}
+
+function setValue(id,v) {
+  const el=document.getElementById(id);
+  if(el && el!==document.activeElement) el.value=v;
+}
+const fmt = v => (v>=0?'+':'')+v.toFixed(1);
+
+function setCpY(i,v)   { hole.spline.control_points[i][1]=v; render(); }
+function setZoneR(i,v) { hole.material_zones[i].radius=Math.max(0.5,v); render(); }
+function setWaterW(i,v){ const z=hole.material_zones[i]; z.bounds[1][0]=r2(z.bounds[0][0]+Math.max(1,v)); render(); }
+function setWaterH(i,v){ const z=hole.material_zones[i]; z.bounds[1][2]=r2(z.bounds[0][2]+Math.max(1,v)); render(); }
+
+// ── export / import ──────────────────────────────────────────────────────────
+
+function buildJSON() {
+  const h = JSON.parse(JSON.stringify(hole));
+  h.tee = h.tee.map(r2);
+  h.pin = h.pin.map(r2);
+  h.spline.width = r2(h.spline.width);
+  h.spline.control_points = h.spline.control_points.map(p=>p.map(r2));
+  h.material_zones = h.material_zones.map(z=>{
+    if(z.center) z.center=z.center.map(r2);
+    if(z.bounds) z.bounds=z.bounds.map(b=>b.map(r2));
+    if(z.radius!==undefined) z.radius=r2(z.radius);
+    return z;
+  });
+  return JSON.stringify(h, null, 2);
+}
+
+function refreshExport() {
+  document.getElementById('export-out').value = buildJSON();
+}
+
+function doExport() {
+  const json = buildJSON();
+  navigator.clipboard?.writeText(json).then(()=>{
+    const b = document.querySelector('button.primary');
+    const orig = b.textContent;
+    b.textContent='copied!'; b.style.color='#90d060';
+    setTimeout(()=>{ b.textContent=orig; b.style.color=''; },1500);
+  }).catch(()=>{
+    document.getElementById('export-out').select();
+  });
+}
+
+function doImport() {
+  try {
+    const parsed = JSON.parse(document.getElementById('import-in').value.trim());
+    if (!parsed?.spline?.control_points) throw new Error('missing spline.control_points');
+    hole = parsed;
+    if (!hole.tee) hole.tee=[0,0,0];
+    if (!hole.pin) hole.pin=[0,0,80];
+    if (!hole.material_zones) hole.material_zones=[];
+    sel=null; fitView(); updatePanel(); render();
+  } catch(e) { alert('Invalid JSON:\n'+e.message); }
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function fitView() {
+  const pts = [
+    ...hole.spline.control_points.map(p=>[p[0],p[2]]),
+    [hole.tee[0],hole.tee[2]], [hole.pin[0],hole.pin[2]]
+  ];
+  const xs=pts.map(p=>p[0]), zs=pts.map(p=>p[1]);
+  view.ox=(Math.min(...xs)+Math.max(...xs))/2;
+  view.oz=(Math.min(...zs)+Math.max(...zs))/2;
+  const rng = Math.max(Math.max(...xs)-Math.min(...xs)+30, Math.max(...zs)-Math.min(...zs)+30);
+  view.scale = Math.max(1, Math.min(20, Math.min(canvas.width,canvas.height)/rng));
+}
+
+function newHole() {
+  if (!confirm('New hole? Unsaved work will be lost.')) return;
+  hole = {
+    id:'hole_01', name:'New Hole', par:3, wind_seed:Math.floor(Math.random()*9999),
+    tee:[0,0,0], pin:[0,0,80],
+    spline:{ control_points:[[0,0,0],[0,0,20],[0,0,40],[0,0,60],[0,0,80]], width:18 },
+    material_zones:[{ type:'green', center:[0,0,80], radius:6 }]
+  };
+  sel=null; fitView(); updatePanel(); render();
+}
+
+// ── init ─────────────────────────────────────────────────────────────────────
+
+updatePanel();
+setTimeout(()=>{ fitView(); render(); }, 60);
+</script>
+</body>
+</html>
