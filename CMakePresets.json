@@ -20,6 +20,17 @@
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
+    },
+    {
+      "name": "test",
+      "displayName": "Test",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/test",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCR_GOLF_BUILD_TESTS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -30,6 +41,10 @@
     {
       "name": "release",
       "configurePreset": "release"
+    },
+    {
+      "name": "test",
+      "configurePreset": "test"
     }
   ]
 }

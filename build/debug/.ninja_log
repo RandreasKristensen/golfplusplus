@@ -1,7 +1,6 @@
 # ninja log v7
-21	3120	8008399093675663	CMakeFiles/vcr-golf.dir/core/main.cpp.obj	a75bc27029ec400c
+18	890	8008399907372254	CMakeFiles/vcr-golf.dir/core/main.cpp.obj	a75bc27029ec400c
 56	3126	8008399094025769	CMakeFiles/vcr-golf.dir/core/event_loop.cpp.obj	37817c9b7c6612df
 42	3133	8008399093885687	CMakeFiles/vcr-golf.dir/core/app.cpp.obj	1f1c64b29d1b81b6
 47	4391	8008399093935662	CMakeFiles/vcr-golf.dir/core/window.cpp.obj	8ecfc3795cca9420
-18	890	8008399907372254	CMakeFiles/vcr-golf.dir/core/main.cpp.obj	a75bc27029ec400c
 891	1044	8008399916095366	vcr-golf.exe	7d71e622cfe5397d
