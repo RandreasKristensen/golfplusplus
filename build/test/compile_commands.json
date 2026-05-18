@@ -1,50 +1,56 @@
 [
 {
-  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
   "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\main.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\main.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/main.cpp",
-  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/main.cpp.obj"
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf.dir/core/main.cpp.obj"
 },
 {
-  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
   "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\app.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\app.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/app.cpp",
-  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/app.cpp.obj"
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf.dir/core/app.cpp.obj"
 },
 {
-  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
   "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\window.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\window.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/window.cpp",
-  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/window.cpp.obj"
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf.dir/core/window.cpp.obj"
 },
 {
-  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
   "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\event_loop.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\event_loop.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/event_loop.cpp",
-  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/event_loop.cpp.obj"
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf.dir/core/event_loop.cpp.obj"
 },
 {
-  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
   "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-physics.dir\\src\\physics\\ball_physics.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\physics\\ball_physics.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/physics/ball_physics.cpp",
-  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf-physics.dir/src/physics/ball_physics.cpp.obj"
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-physics.dir/src/physics/ball_physics.cpp.obj"
 },
 {
-  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
   "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-physics.dir\\src\\physics\\flight_model.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\physics\\flight_model.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/physics/flight_model.cpp",
-  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf-physics.dir/src/physics/flight_model.cpp.obj"
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-physics.dir/src/physics/flight_model.cpp.obj"
 },
 {
-  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
   "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-physics.dir\\src\\physics\\collision.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\physics\\collision.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/physics/collision.cpp",
-  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf-physics.dir/src/physics/collision.cpp.obj"
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-physics.dir/src/physics/collision.cpp.obj"
 },
 {
-  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
   "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-physics.dir\\src\\physics\\wind.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\physics\\wind.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/physics/wind.cpp",
-  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf-physics.dir/src/physics/wind.cpp.obj"
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-physics.dir/src/physics/wind.cpp.obj"
+},
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -g -std=gnu++17 -o CMakeFiles\\vcr-golf-tests.dir\\tests\\physics_tests.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\tests\\physics_tests.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/tests/physics_tests.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-tests.dir/tests/physics_tests.cpp.obj"
 }
 ]

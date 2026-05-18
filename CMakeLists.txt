@@ -42,20 +42,28 @@ set(VCR_GOLF_PHYSICS_SOURCES
     src/physics/wind.cpp
 )
 
-find_path(GLM_INCLUDE_DIR glm/vec3.hpp)
+set(GLM_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/vendor/glm)
+if (EXISTS ${GLM_ROOT}/glm/vec3.hpp)
+    set(GLM_INCLUDE_DIR ${GLM_ROOT})
+else()
+    find_path(GLM_INCLUDE_DIR glm/vec3.hpp)
+endif()
 
-add_library(vcr-golf-physics EXCLUDE_FROM_ALL ${VCR_GOLF_PHYSICS_SOURCES})
+if (NOT GLM_INCLUDE_DIR)
+    message(FATAL_ERROR "GLM not found. Install it or add vendor/glm.")
+endif()
+
+add_library(vcr-golf-physics ${VCR_GOLF_PHYSICS_SOURCES})
 target_include_directories(vcr-golf-physics PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${GLM_INCLUDE_DIR}
 )
 
-if (VCR_GOLF_BUILD_TESTS)
-    if (NOT GLM_INCLUDE_DIR)
-        message(FATAL_ERROR "GLM not found. Install it or set GLM_INCLUDE_DIR.")
-    endif()
+target_link_libraries(vcr-golf PRIVATE vcr-golf-physics)
 
+if (VCR_GOLF_BUILD_TESTS)
     add_executable(vcr-golf-tests tests/physics_tests.cpp)
     target_link_libraries(vcr-golf-tests PRIVATE vcr-golf-physics)
     target_include_directories(vcr-golf-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_include_directories(vcr-golf-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 endif()

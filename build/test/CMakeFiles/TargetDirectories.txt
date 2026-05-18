@@ -1,0 +1,5 @@
+C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf.dir
+C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-physics.dir
+C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-tests.dir
+C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/edit_cache.dir
+C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/rebuild_cache.dir

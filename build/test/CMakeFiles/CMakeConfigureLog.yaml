@@ -406,471 +406,6 @@ events:
       - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja-build.exe"
       - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja-build"
       - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.com"
-      - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.exe"
-      - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja"
-      - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/samu.com"
-      - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/samu.exe"
-      - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/samu"
-      - "C:/Program Files/Lens/resources/cli/bin/ninja-build.com"
-      - "C:/Program Files/Lens/resources/cli/bin/ninja-build.exe"
-      - "C:/Program Files/Lens/resources/cli/bin/ninja-build"
-      - "C:/Program Files/Lens/resources/cli/bin/ninja.com"
-      - "C:/Program Files/Lens/resources/cli/bin/ninja.exe"
-      - "C:/Program Files/Lens/resources/cli/bin/ninja"
-      - "C:/Program Files/Lens/resources/cli/bin/samu.com"
-      - "C:/Program Files/Lens/resources/cli/bin/samu.exe"
-      - "C:/Program Files/Lens/resources/cli/bin/samu"
-    found: false
-    search_context:
-      ENV{PATH}:
-        - "C:\\Program Files\\SqlCmd\\"
-        - "C:\\Program Files\\Microsoft\\jdk-17.0.14.7-hotspot\\bin"
-        - "C:\\Program Files (x86)\\VMware\\VMware Workstation\\bin\\"
-        - "C:\\Program Files\\Common Files\\Oracle\\Java\\javapath"
-        - "C:\\Windows\\system32"
-        - "C:\\Windows"
-        - "C:\\Windows\\System32\\Wbem"
-        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\"
-        - "C:\\Windows\\System32\\OpenSSH\\"
-        - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
-        - "C:\\WINDOWS\\system32"
-        - "C:\\WINDOWS"
-        - "C:\\WINDOWS\\System32\\Wbem"
-        - "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\"
-        - "C:\\WINDOWS\\System32\\OpenSSH\\"
-        - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
-        - "C:\\Program Files\\MATLAB\\R2024a\\runtime\\win64"
-        - "C:\\Program Files\\MATLAB\\R2024a\\bin"
-        - "C:\\Program Files\\dotnet\\"
-        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA app\\NvDLISR"
-        - "C:\\Program Files\\Git\\cmd"
-        - "C:\\Program Files\\Azure Data Studio\\bin"
-        - "C:\\MinGW\\bin"
-        - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\MongoDB\\Tools\\100\\"
-        - "C:\\Program Files\\nodejs\\"
-        - "C:\\Program Files\\Rancher Desktop\\resources\\resources\\win32\\bin\\"
-        - "C:\\Program Files\\Rancher Desktop\\resources\\resources\\win32\\docker-cli-plugins\\"
-        - "C:\\Program Files\\Rancher Desktop\\resources\\resources\\linux\\bin\\"
-        - "C:\\Program Files\\Rancher Desktop\\resources\\resources\\linux\\docker-cli-plugins\\"
-        - "C:\\Program Files\\CMake\\bin"
-        - "C:\\Users\\arand\\.cargo\\bin"
-        - "C:\\Users\\arand\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\"
-        - "C:\\Users\\arand\\AppData\\Local\\Programs\\Python\\Python313\\"
-        - "C:\\Users\\arand\\AppData\\Local\\Microsoft\\WindowsApps"
-        - "C:\\Users\\arand\\AppData\\Local\\GitHubDesktop\\bin"
-        - "C:\\Users\\arand\\.dotnet\\tools"
-        - "C:\\Users\\arand\\.dotnet\\tools"
-        - "C:\\WINDOWS\\system32\\config\\systemprofile\\.dotnet\\tools"
-        - "C:\\Users\\arand\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
-        - "C:\\Program Files\\JetBrains\\JetBrains Rider 2024.3.4\\bin"
-        - "C:\\Program Files\\Azure Data Studio\\bin"
-        - "C:\\Users\\arand\\AppData\\Local\\Programs\\mongosh\\"
-        - "C:\\Users\\arand\\AppData\\Roaming\\npm"
-        - "C:\\Users\\arand\\AppData\\Local\\Microsoft\\WinGet\\Links"
-        - "C:\\Program Files\\Lens\\resources\\cli\\bin"
-...
-
----
-events:
-  -
-    kind: "find-v1"
-    backtrace:
-      - "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeNinjaFindMake.cmake:5 (find_program)"
-      - "CMakeLists.txt:2 (project)"
-    mode: "program"
-    variable: "CMAKE_MAKE_PROGRAM"
-    description: "Program used to build from build.ninja files."
-    settings:
-      SearchFramework: "NEVER"
-      SearchAppBundle: "NEVER"
-      CMAKE_FIND_USE_CMAKE_PATH: true
-      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
-      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
-      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
-      CMAKE_FIND_USE_INSTALL_PREFIX: true
-    names:
-      - "ninja-build"
-      - "ninja"
-      - "samu"
-    candidate_directories:
-      - "C:/Program Files/SqlCmd/"
-      - "C:/Program Files/Microsoft/jdk-17.0.14.7-hotspot/bin/"
-      - "C:/Program Files (x86)/VMware/VMware Workstation/bin/"
-      - "C:/Program Files/Common Files/Oracle/Java/javapath/"
-      - "C:/WINDOWS/System32/"
-      - "C:/WINDOWS/"
-      - "C:/WINDOWS/System32/wbem/"
-      - "C:/WINDOWS/System32/WindowsPowerShell/v1.0/"
-      - "C:/WINDOWS/System32/OpenSSH/"
-      - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
-      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
-      - "C:/Program Files/MATLAB/R2024a/runtime/win64/"
-      - "C:/Program Files/MATLAB/R2024a/bin/"
-      - "C:/Program Files/dotnet/"
-      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/"
-      - "C:/Program Files/Git/cmd/"
-      - "C:/Program Files/Azure Data Studio/bin/"
-      - "C:/MinGW/bin/"
-      - "C:/msys64/mingw64/bin/"
-      - "C:/Program Files/MongoDB/Tools/100/"
-      - "C:/Program Files/nodejs/"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/bin/"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/bin/"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/"
-      - "C:/Program Files/CMake/bin/"
-      - "C:/Users/arand/.cargo/bin/"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/"
-      - "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/"
-      - "C:/Users/arand/AppData/Local/GitHubDesktop/bin/"
-      - "C:/Users/arand/.dotnet/tools/"
-      - "C:/WINDOWS/System32/config/systemprofile/.dotnet/tools/"
-      - "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/bin/"
-      - "C:/Program Files/JetBrains/JetBrains Rider 2024.3.4/bin/"
-      - "C:/Users/arand/AppData/Local/Programs/mongosh/"
-      - "C:/Users/arand/AppData/Roaming/npm/"
-      - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/"
-      - "C:/Program Files/Lens/resources/cli/bin/"
-    searched_directories:
-      - "C:/Program Files/SqlCmd/ninja-build.com"
-      - "C:/Program Files/SqlCmd/ninja-build.exe"
-      - "C:/Program Files/SqlCmd/ninja-build"
-      - "C:/Program Files/SqlCmd/ninja.com"
-      - "C:/Program Files/SqlCmd/ninja.exe"
-      - "C:/Program Files/SqlCmd/ninja"
-      - "C:/Program Files/SqlCmd/samu.com"
-      - "C:/Program Files/SqlCmd/samu.exe"
-      - "C:/Program Files/SqlCmd/samu"
-      - "C:/Program Files/Microsoft/jdk-17.0.14.7-hotspot/bin/ninja-build.com"
-      - "C:/Program Files/Microsoft/jdk-17.0.14.7-hotspot/bin/ninja-build.exe"
-      - "C:/Program Files/Microsoft/jdk-17.0.14.7-hotspot/bin/ninja-build"
-      - "C:/Program Files/Microsoft/jdk-17.0.14.7-hotspot/bin/ninja.com"
-      - "C:/Program Files/Microsoft/jdk-17.0.14.7-hotspot/bin/ninja.exe"
-      - "C:/Program Files/Microsoft/jdk-17.0.14.7-hotspot/bin/ninja"
-      - "C:/Program Files/Microsoft/jdk-17.0.14.7-hotspot/bin/samu.com"
-      - "C:/Program Files/Microsoft/jdk-17.0.14.7-hotspot/bin/samu.exe"
-      - "C:/Program Files/Microsoft/jdk-17.0.14.7-hotspot/bin/samu"
-      - "C:/Program Files (x86)/VMware/VMware Workstation/bin/ninja-build.com"
-      - "C:/Program Files (x86)/VMware/VMware Workstation/bin/ninja-build.exe"
-      - "C:/Program Files (x86)/VMware/VMware Workstation/bin/ninja-build"
-      - "C:/Program Files (x86)/VMware/VMware Workstation/bin/ninja.com"
-      - "C:/Program Files (x86)/VMware/VMware Workstation/bin/ninja.exe"
-      - "C:/Program Files (x86)/VMware/VMware Workstation/bin/ninja"
-      - "C:/Program Files (x86)/VMware/VMware Workstation/bin/samu.com"
-      - "C:/Program Files (x86)/VMware/VMware Workstation/bin/samu.exe"
-      - "C:/Program Files (x86)/VMware/VMware Workstation/bin/samu"
-      - "C:/Program Files/Common Files/Oracle/Java/javapath/ninja-build.com"
-      - "C:/Program Files/Common Files/Oracle/Java/javapath/ninja-build.exe"
-      - "C:/Program Files/Common Files/Oracle/Java/javapath/ninja-build"
-      - "C:/Program Files/Common Files/Oracle/Java/javapath/ninja.com"
-      - "C:/Program Files/Common Files/Oracle/Java/javapath/ninja.exe"
-      - "C:/Program Files/Common Files/Oracle/Java/javapath/ninja"
-      - "C:/Program Files/Common Files/Oracle/Java/javapath/samu.com"
-      - "C:/Program Files/Common Files/Oracle/Java/javapath/samu.exe"
-      - "C:/Program Files/Common Files/Oracle/Java/javapath/samu"
-      - "C:/WINDOWS/System32/ninja-build.com"
-      - "C:/WINDOWS/System32/ninja-build.exe"
-      - "C:/WINDOWS/System32/ninja-build"
-      - "C:/WINDOWS/System32/ninja.com"
-      - "C:/WINDOWS/System32/ninja.exe"
-      - "C:/WINDOWS/System32/ninja"
-      - "C:/WINDOWS/System32/samu.com"
-      - "C:/WINDOWS/System32/samu.exe"
-      - "C:/WINDOWS/System32/samu"
-      - "C:/WINDOWS/ninja-build.com"
-      - "C:/WINDOWS/ninja-build.exe"
-      - "C:/WINDOWS/ninja-build"
-      - "C:/WINDOWS/ninja.com"
-      - "C:/WINDOWS/ninja.exe"
-      - "C:/WINDOWS/ninja"
-      - "C:/WINDOWS/samu.com"
-      - "C:/WINDOWS/samu.exe"
-      - "C:/WINDOWS/samu"
-      - "C:/WINDOWS/System32/wbem/ninja-build.com"
-      - "C:/WINDOWS/System32/wbem/ninja-build.exe"
-      - "C:/WINDOWS/System32/wbem/ninja-build"
-      - "C:/WINDOWS/System32/wbem/ninja.com"
-      - "C:/WINDOWS/System32/wbem/ninja.exe"
-      - "C:/WINDOWS/System32/wbem/ninja"
-      - "C:/WINDOWS/System32/wbem/samu.com"
-      - "C:/WINDOWS/System32/wbem/samu.exe"
-      - "C:/WINDOWS/System32/wbem/samu"
-      - "C:/WINDOWS/System32/WindowsPowerShell/v1.0/ninja-build.com"
-      - "C:/WINDOWS/System32/WindowsPowerShell/v1.0/ninja-build.exe"
-      - "C:/WINDOWS/System32/WindowsPowerShell/v1.0/ninja-build"
-      - "C:/WINDOWS/System32/WindowsPowerShell/v1.0/ninja.com"
-      - "C:/WINDOWS/System32/WindowsPowerShell/v1.0/ninja.exe"
-      - "C:/WINDOWS/System32/WindowsPowerShell/v1.0/ninja"
-      - "C:/WINDOWS/System32/WindowsPowerShell/v1.0/samu.com"
-      - "C:/WINDOWS/System32/WindowsPowerShell/v1.0/samu.exe"
-      - "C:/WINDOWS/System32/WindowsPowerShell/v1.0/samu"
-      - "C:/WINDOWS/System32/OpenSSH/ninja-build.com"
-      - "C:/WINDOWS/System32/OpenSSH/ninja-build.exe"
-      - "C:/WINDOWS/System32/OpenSSH/ninja-build"
-      - "C:/WINDOWS/System32/OpenSSH/ninja.com"
-      - "C:/WINDOWS/System32/OpenSSH/ninja.exe"
-      - "C:/WINDOWS/System32/OpenSSH/ninja"
-      - "C:/WINDOWS/System32/OpenSSH/samu.com"
-      - "C:/WINDOWS/System32/OpenSSH/samu.exe"
-      - "C:/WINDOWS/System32/OpenSSH/samu"
-      - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/ninja-build.com"
-      - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/ninja-build.exe"
-      - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/ninja-build"
-      - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/ninja.com"
-      - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/ninja.exe"
-      - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/ninja"
-      - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/samu.com"
-      - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/samu.exe"
-      - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/samu"
-      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/ninja-build.com"
-      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/ninja-build.exe"
-      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/ninja-build"
-      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/ninja.com"
-      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/ninja.exe"
-      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/ninja"
-      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/samu.com"
-      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/samu.exe"
-      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/samu"
-      - "C:/Program Files/MATLAB/R2024a/runtime/win64/ninja-build.com"
-      - "C:/Program Files/MATLAB/R2024a/runtime/win64/ninja-build.exe"
-      - "C:/Program Files/MATLAB/R2024a/runtime/win64/ninja-build"
-      - "C:/Program Files/MATLAB/R2024a/runtime/win64/ninja.com"
-      - "C:/Program Files/MATLAB/R2024a/runtime/win64/ninja.exe"
-      - "C:/Program Files/MATLAB/R2024a/runtime/win64/ninja"
-      - "C:/Program Files/MATLAB/R2024a/runtime/win64/samu.com"
-      - "C:/Program Files/MATLAB/R2024a/runtime/win64/samu.exe"
-      - "C:/Program Files/MATLAB/R2024a/runtime/win64/samu"
-      - "C:/Program Files/MATLAB/R2024a/bin/ninja-build.com"
-      - "C:/Program Files/MATLAB/R2024a/bin/ninja-build.exe"
-      - "C:/Program Files/MATLAB/R2024a/bin/ninja-build"
-      - "C:/Program Files/MATLAB/R2024a/bin/ninja.com"
-      - "C:/Program Files/MATLAB/R2024a/bin/ninja.exe"
-      - "C:/Program Files/MATLAB/R2024a/bin/ninja"
-      - "C:/Program Files/MATLAB/R2024a/bin/samu.com"
-      - "C:/Program Files/MATLAB/R2024a/bin/samu.exe"
-      - "C:/Program Files/MATLAB/R2024a/bin/samu"
-      - "C:/Program Files/dotnet/ninja-build.com"
-      - "C:/Program Files/dotnet/ninja-build.exe"
-      - "C:/Program Files/dotnet/ninja-build"
-      - "C:/Program Files/dotnet/ninja.com"
-      - "C:/Program Files/dotnet/ninja.exe"
-      - "C:/Program Files/dotnet/ninja"
-      - "C:/Program Files/dotnet/samu.com"
-      - "C:/Program Files/dotnet/samu.exe"
-      - "C:/Program Files/dotnet/samu"
-      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/ninja-build.com"
-      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/ninja-build.exe"
-      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/ninja-build"
-      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/ninja.com"
-      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/ninja.exe"
-      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/ninja"
-      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/samu.com"
-      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/samu.exe"
-      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/samu"
-      - "C:/Program Files/Git/cmd/ninja-build.com"
-      - "C:/Program Files/Git/cmd/ninja-build.exe"
-      - "C:/Program Files/Git/cmd/ninja-build"
-      - "C:/Program Files/Git/cmd/ninja.com"
-      - "C:/Program Files/Git/cmd/ninja.exe"
-      - "C:/Program Files/Git/cmd/ninja"
-      - "C:/Program Files/Git/cmd/samu.com"
-      - "C:/Program Files/Git/cmd/samu.exe"
-      - "C:/Program Files/Git/cmd/samu"
-      - "C:/Program Files/Azure Data Studio/bin/ninja-build.com"
-      - "C:/Program Files/Azure Data Studio/bin/ninja-build.exe"
-      - "C:/Program Files/Azure Data Studio/bin/ninja-build"
-      - "C:/Program Files/Azure Data Studio/bin/ninja.com"
-      - "C:/Program Files/Azure Data Studio/bin/ninja.exe"
-      - "C:/Program Files/Azure Data Studio/bin/ninja"
-      - "C:/Program Files/Azure Data Studio/bin/samu.com"
-      - "C:/Program Files/Azure Data Studio/bin/samu.exe"
-      - "C:/Program Files/Azure Data Studio/bin/samu"
-      - "C:/MinGW/bin/ninja-build.com"
-      - "C:/MinGW/bin/ninja-build.exe"
-      - "C:/MinGW/bin/ninja-build"
-      - "C:/MinGW/bin/ninja.com"
-      - "C:/MinGW/bin/ninja.exe"
-      - "C:/MinGW/bin/ninja"
-      - "C:/MinGW/bin/samu.com"
-      - "C:/MinGW/bin/samu.exe"
-      - "C:/MinGW/bin/samu"
-      - "C:/msys64/mingw64/bin/ninja-build.com"
-      - "C:/msys64/mingw64/bin/ninja-build.exe"
-      - "C:/msys64/mingw64/bin/ninja-build"
-      - "C:/msys64/mingw64/bin/ninja.com"
-      - "C:/msys64/mingw64/bin/ninja.exe"
-      - "C:/msys64/mingw64/bin/ninja"
-      - "C:/msys64/mingw64/bin/samu.com"
-      - "C:/msys64/mingw64/bin/samu.exe"
-      - "C:/msys64/mingw64/bin/samu"
-      - "C:/Program Files/MongoDB/Tools/100/ninja-build.com"
-      - "C:/Program Files/MongoDB/Tools/100/ninja-build.exe"
-      - "C:/Program Files/MongoDB/Tools/100/ninja-build"
-      - "C:/Program Files/MongoDB/Tools/100/ninja.com"
-      - "C:/Program Files/MongoDB/Tools/100/ninja.exe"
-      - "C:/Program Files/MongoDB/Tools/100/ninja"
-      - "C:/Program Files/MongoDB/Tools/100/samu.com"
-      - "C:/Program Files/MongoDB/Tools/100/samu.exe"
-      - "C:/Program Files/MongoDB/Tools/100/samu"
-      - "C:/Program Files/nodejs/ninja-build.com"
-      - "C:/Program Files/nodejs/ninja-build.exe"
-      - "C:/Program Files/nodejs/ninja-build"
-      - "C:/Program Files/nodejs/ninja.com"
-      - "C:/Program Files/nodejs/ninja.exe"
-      - "C:/Program Files/nodejs/ninja"
-      - "C:/Program Files/nodejs/samu.com"
-      - "C:/Program Files/nodejs/samu.exe"
-      - "C:/Program Files/nodejs/samu"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/bin/ninja-build.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/bin/ninja-build.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/bin/ninja-build"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/bin/ninja.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/bin/ninja.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/bin/ninja"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/bin/samu.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/bin/samu.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/bin/samu"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/ninja-build.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/ninja-build.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/ninja-build"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/ninja.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/ninja.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/ninja"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/samu.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/samu.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/samu"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/bin/ninja-build.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/bin/ninja-build.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/bin/ninja-build"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/bin/ninja.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/bin/ninja.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/bin/ninja"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/bin/samu.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/bin/samu.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/bin/samu"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/ninja-build.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/ninja-build.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/ninja-build"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/ninja.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/ninja.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/ninja"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/samu.com"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/samu.exe"
-      - "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/samu"
-      - "C:/Program Files/CMake/bin/ninja-build.com"
-      - "C:/Program Files/CMake/bin/ninja-build.exe"
-      - "C:/Program Files/CMake/bin/ninja-build"
-      - "C:/Program Files/CMake/bin/ninja.com"
-      - "C:/Program Files/CMake/bin/ninja.exe"
-      - "C:/Program Files/CMake/bin/ninja"
-      - "C:/Program Files/CMake/bin/samu.com"
-      - "C:/Program Files/CMake/bin/samu.exe"
-      - "C:/Program Files/CMake/bin/samu"
-      - "C:/Users/arand/.cargo/bin/ninja-build.com"
-      - "C:/Users/arand/.cargo/bin/ninja-build.exe"
-      - "C:/Users/arand/.cargo/bin/ninja-build"
-      - "C:/Users/arand/.cargo/bin/ninja.com"
-      - "C:/Users/arand/.cargo/bin/ninja.exe"
-      - "C:/Users/arand/.cargo/bin/ninja"
-      - "C:/Users/arand/.cargo/bin/samu.com"
-      - "C:/Users/arand/.cargo/bin/samu.exe"
-      - "C:/Users/arand/.cargo/bin/samu"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/ninja-build.com"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/ninja-build.exe"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/ninja-build"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/ninja.com"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/ninja.exe"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/ninja"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/samu.com"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/samu.exe"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/samu"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/ninja-build.com"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/ninja-build.exe"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/ninja-build"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/ninja.com"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/ninja.exe"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/ninja"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/samu.com"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/samu.exe"
-      - "C:/Users/arand/AppData/Local/Programs/Python/Python313/samu"
-      - "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/ninja-build.com"
-      - "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/ninja-build.exe"
-      - "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/ninja-build"
-      - "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/ninja.com"
-      - "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/ninja.exe"
-      - "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/ninja"
-      - "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/samu.com"
-      - "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/samu.exe"
-      - "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/samu"
-      - "C:/Users/arand/AppData/Local/GitHubDesktop/bin/ninja-build.com"
-      - "C:/Users/arand/AppData/Local/GitHubDesktop/bin/ninja-build.exe"
-      - "C:/Users/arand/AppData/Local/GitHubDesktop/bin/ninja-build"
-      - "C:/Users/arand/AppData/Local/GitHubDesktop/bin/ninja.com"
-      - "C:/Users/arand/AppData/Local/GitHubDesktop/bin/ninja.exe"
-      - "C:/Users/arand/AppData/Local/GitHubDesktop/bin/ninja"
-      - "C:/Users/arand/AppData/Local/GitHubDesktop/bin/samu.com"
-      - "C:/Users/arand/AppData/Local/GitHubDesktop/bin/samu.exe"
-      - "C:/Users/arand/AppData/Local/GitHubDesktop/bin/samu"
-      - "C:/Users/arand/.dotnet/tools/ninja-build.com"
-      - "C:/Users/arand/.dotnet/tools/ninja-build.exe"
-      - "C:/Users/arand/.dotnet/tools/ninja-build"
-      - "C:/Users/arand/.dotnet/tools/ninja.com"
-      - "C:/Users/arand/.dotnet/tools/ninja.exe"
-      - "C:/Users/arand/.dotnet/tools/ninja"
-      - "C:/Users/arand/.dotnet/tools/samu.com"
-      - "C:/Users/arand/.dotnet/tools/samu.exe"
-      - "C:/Users/arand/.dotnet/tools/samu"
-      - "C:/WINDOWS/System32/config/systemprofile/.dotnet/tools/ninja-build.com"
-      - "C:/WINDOWS/System32/config/systemprofile/.dotnet/tools/ninja-build.exe"
-      - "C:/WINDOWS/System32/config/systemprofile/.dotnet/tools/ninja-build"
-      - "C:/WINDOWS/System32/config/systemprofile/.dotnet/tools/ninja.com"
-      - "C:/WINDOWS/System32/config/systemprofile/.dotnet/tools/ninja.exe"
-      - "C:/WINDOWS/System32/config/systemprofile/.dotnet/tools/ninja"
-      - "C:/WINDOWS/System32/config/systemprofile/.dotnet/tools/samu.com"
-      - "C:/WINDOWS/System32/config/systemprofile/.dotnet/tools/samu.exe"
-      - "C:/WINDOWS/System32/config/systemprofile/.dotnet/tools/samu"
-      - "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/bin/ninja-build.com"
-      - "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/bin/ninja-build.exe"
-      - "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/bin/ninja-build"
-      - "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/bin/ninja.com"
-      - "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/bin/ninja.exe"
-      - "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/bin/ninja"
-      - "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/bin/samu.com"
-      - "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/bin/samu.exe"
-      - "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/bin/samu"
-      - "C:/Program Files/JetBrains/JetBrains Rider 2024.3.4/bin/ninja-build.com"
-      - "C:/Program Files/JetBrains/JetBrains Rider 2024.3.4/bin/ninja-build.exe"
-      - "C:/Program Files/JetBrains/JetBrains Rider 2024.3.4/bin/ninja-build"
-      - "C:/Program Files/JetBrains/JetBrains Rider 2024.3.4/bin/ninja.com"
-      - "C:/Program Files/JetBrains/JetBrains Rider 2024.3.4/bin/ninja.exe"
-      - "C:/Program Files/JetBrains/JetBrains Rider 2024.3.4/bin/ninja"
-      - "C:/Program Files/JetBrains/JetBrains Rider 2024.3.4/bin/samu.com"
-      - "C:/Program Files/JetBrains/JetBrains Rider 2024.3.4/bin/samu.exe"
-      - "C:/Program Files/JetBrains/JetBrains Rider 2024.3.4/bin/samu"
-      - "C:/Users/arand/AppData/Local/Programs/mongosh/ninja-build.com"
-      - "C:/Users/arand/AppData/Local/Programs/mongosh/ninja-build.exe"
-      - "C:/Users/arand/AppData/Local/Programs/mongosh/ninja-build"
-      - "C:/Users/arand/AppData/Local/Programs/mongosh/ninja.com"
-      - "C:/Users/arand/AppData/Local/Programs/mongosh/ninja.exe"
-      - "C:/Users/arand/AppData/Local/Programs/mongosh/ninja"
-      - "C:/Users/arand/AppData/Local/Programs/mongosh/samu.com"
-      - "C:/Users/arand/AppData/Local/Programs/mongosh/samu.exe"
-      - "C:/Users/arand/AppData/Local/Programs/mongosh/samu"
-      - "C:/Users/arand/AppData/Roaming/npm/ninja-build.com"
-      - "C:/Users/arand/AppData/Roaming/npm/ninja-build.exe"
-      - "C:/Users/arand/AppData/Roaming/npm/ninja-build"
-      - "C:/Users/arand/AppData/Roaming/npm/ninja.com"
-      - "C:/Users/arand/AppData/Roaming/npm/ninja.exe"
-      - "C:/Users/arand/AppData/Roaming/npm/ninja"
-      - "C:/Users/arand/AppData/Roaming/npm/samu.com"
-      - "C:/Users/arand/AppData/Roaming/npm/samu.exe"
-      - "C:/Users/arand/AppData/Roaming/npm/samu"
-      - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja-build.com"
-      - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja-build.exe"
-      - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja-build"
-      - "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.com"
     found: "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.exe"
     search_context:
       ENV{PATH}:
@@ -1507,7 +1042,7 @@ events:
       Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "a.exe"
       
       The C compiler identification is GNU, found in:
-        C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/4.3.2/CompilerIdC/a.exe
+        C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/4.3.2/CompilerIdC/a.exe
       
   -
     kind: "find-v1"
@@ -3933,7 +3468,7 @@ events:
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.exe"
       
       The CXX compiler identification is GNU, found in:
-        C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/4.3.2/CompilerIdCXX/a.exe
+        C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/4.3.2/CompilerIdCXX/a.exe
       
   -
     kind: "find-v1"
@@ -5057,8 +4592,8 @@ events:
     checks:
       - "Detecting C compiler ABI info"
     directories:
-      source: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/CMakeScratch/TryCompile-4hhkvd"
-      binary: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/CMakeScratch/TryCompile-4hhkvd"
+      source: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/CMakeScratch/TryCompile-wi4zpf"
+      binary: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/CMakeScratch/TryCompile-wi4zpf"
     cmakeVariables:
       CMAKE_CXX_STDLIB_MODULES_JSON: ""
       CMAKE_C_FLAGS: ""
@@ -5068,10 +4603,10 @@ events:
       variable: "CMAKE_C_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/CMakeScratch/TryCompile-4hhkvd'
+        Change Dir: 'C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/CMakeScratch/TryCompile-wi4zpf'
         
-        Run Build Command(s): C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_e2d40
-        [1/2] C:\\msys64\\mingw64\\bin\\cc.exe   -v -o CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj -c "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCCompilerABI.c"
+        Run Build Command(s): C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_198cf
+        [1/2] C:\\msys64\\mingw64\\bin\\cc.exe   -v -o CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj -c "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCCompilerABI.c"
         Using built-in specs.
         COLLECT_GCC=C:\\msys64\\mingw64\\bin\\cc.exe
         Target: x86_64-w64-mingw32
@@ -5079,8 +4614,8 @@ events:
         Thread model: posix
         Supported LTO compression algorithms: zlib zstd
         gcc version 14.2.0 (Rev3, Built by MSYS2 project) 
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_e2d40.dir/'
-         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/cc1.exe -quiet -v -iprefix C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/ -D_REENTRANT C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_e2d40.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=nocona -version -o C:\\Users\\arand\\AppData\\Local\\Temp\\cccqquDz.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_198cf.dir/'
+         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/cc1.exe -quiet -v -iprefix C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/ -D_REENTRANT C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_198cf.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=nocona -version -o C:\\Users\\arand\\AppData\\Local\\Temp\\cctw4xmD.s
         GNU C17 (Rev3, Built by MSYS2 project) version 14.2.0 (x86_64-w64-mingw32)
         	compiled by GNU C version 14.2.0, GMP version 6.3.0, MPFR version 4.2.1, MPC version 1.3.1, isl version isl-0.27-GMP
         
@@ -5100,13 +4635,13 @@ events:
          C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/include-fixed
         End of search list.
         Compiler executable checksum: 044dc7e786fef208387ba8a79ebebc21
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_e2d40.dir/'
-         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj C:\\Users\\arand\\AppData\\Local\\Temp\\cccqquDz.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_198cf.dir/'
+         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj C:\\Users\\arand\\AppData\\Local\\Temp\\cctw4xmD.s
         GNU assembler version 2.44 (x86_64-w64-mingw32) using BFD version (GNU Binutils) 2.44
         COMPILER_PATH=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/;C:/msys64/mingw64/bin/../lib/gcc/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/
         LIBRARY_PATH=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/;C:/msys64/mingw64/bin/../lib/gcc/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.'
-        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\msys64\\mingw64\\bin\\cc.exe  -v -Wl,-v CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj -o cmTC_e2d40.exe -Wl,--out-implib,libcmTC_e2d40.dll.a -Wl,--major-image-version,0,--minor-image-version,0   && cd ."
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.'
+        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\msys64\\mingw64\\bin\\cc.exe  -v -Wl,-v CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj -o cmTC_198cf.exe -Wl,--out-implib,libcmTC_198cf.dll.a -Wl,--major-image-version,0,--minor-image-version,0   && cd ."
         Using built-in specs.
         COLLECT_GCC=C:\\msys64\\mingw64\\bin\\cc.exe
         COLLECT_LTO_WRAPPER=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe
@@ -5117,12 +4652,12 @@ events:
         gcc version 14.2.0 (Rev3, Built by MSYS2 project) 
         COMPILER_PATH=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/;C:/msys64/mingw64/bin/../lib/gcc/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/
         LIBRARY_PATH=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/;C:/msys64/mingw64/bin/../lib/gcc/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_e2d40.exe' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_e2d40.'
-         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/collect2.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccWz6cAP.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_e2d40.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj --out-implib libcmTC_e2d40.dll.a --major-image-version 0 --minor-image-version 0 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_198cf.exe' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_198cf.'
+         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/collect2.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccL7pRXR.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_198cf.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj --out-implib libcmTC_198cf.dll.a --major-image-version 0 --minor-image-version 0 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o
         collect2 version 14.2.0
-        C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccWz6cAP.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_e2d40.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj --out-implib libcmTC_e2d40.dll.a --major-image-version 0 --minor-image-version 0 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o
+        C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccL7pRXR.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_198cf.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj --out-implib libcmTC_198cf.dll.a --major-image-version 0 --minor-image-version 0 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o
         GNU ld (GNU Binutils) 2.44
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_e2d40.exe' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_e2d40.'
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_198cf.exe' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_198cf.'
         
       exitCode: 0
   -
@@ -5155,10 +4690,10 @@ events:
       Parsed C implicit link information:
         link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
         linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
-        ignore line: [Change Dir: 'C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/CMakeScratch/TryCompile-4hhkvd']
+        ignore line: [Change Dir: 'C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/CMakeScratch/TryCompile-wi4zpf']
         ignore line: []
-        ignore line: [Run Build Command(s): C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_e2d40]
-        ignore line: [[1/2] C:\\msys64\\mingw64\\bin\\cc.exe   -v -o CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj -c "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCCompilerABI.c"]
+        ignore line: [Run Build Command(s): C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_198cf]
+        ignore line: [[1/2] C:\\msys64\\mingw64\\bin\\cc.exe   -v -o CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj -c "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCCompilerABI.c"]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=C:\\msys64\\mingw64\\bin\\cc.exe]
         ignore line: [Target: x86_64-w64-mingw32]
@@ -5166,8 +4701,8 @@ events:
         ignore line: [Thread model: posix]
         ignore line: [Supported LTO compression algorithms: zlib zstd]
         ignore line: [gcc version 14.2.0 (Rev3  Built by MSYS2 project) ]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_e2d40.dir/']
-        ignore line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/cc1.exe -quiet -v -iprefix C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/ -D_REENTRANT C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_e2d40.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=nocona -version -o C:\\Users\\arand\\AppData\\Local\\Temp\\cccqquDz.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_198cf.dir/']
+        ignore line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/cc1.exe -quiet -v -iprefix C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/ -D_REENTRANT C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_198cf.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=nocona -version -o C:\\Users\\arand\\AppData\\Local\\Temp\\cctw4xmD.s]
         ignore line: [GNU C17 (Rev3  Built by MSYS2 project) version 14.2.0 (x86_64-w64-mingw32)]
         ignore line: [	compiled by GNU C version 14.2.0  GMP version 6.3.0  MPFR version 4.2.1  MPC version 1.3.1  isl version isl-0.27-GMP]
         ignore line: []
@@ -5187,8 +4722,8 @@ events:
         ignore line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/include-fixed]
         ignore line: [End of search list.]
         ignore line: [Compiler executable checksum: 044dc7e786fef208387ba8a79ebebc21]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_e2d40.dir/']
-        ignore line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj C:\\Users\\arand\\AppData\\Local\\Temp\\cccqquDz.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_198cf.dir/']
+        ignore line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj C:\\Users\\arand\\AppData\\Local\\Temp\\cctw4xmD.s]
         ignore line: [GNU assembler version 2.44 (x86_64-w64-mingw32) using BFD version (GNU Binutils) 2.44]
         ignore line: [COMPILER_PATH=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/]
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/]
@@ -5199,8 +4734,8 @@ events:
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/]
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/]
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.']
-        ignore line: [[2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\msys64\\mingw64\\bin\\cc.exe  -v -Wl -v CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj -o cmTC_e2d40.exe -Wl --out-implib libcmTC_e2d40.dll.a -Wl --major-image-version 0 --minor-image-version 0   && cd ."]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj' '-c' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.']
+        ignore line: [[2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\msys64\\mingw64\\bin\\cc.exe  -v -Wl -v CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj -o cmTC_198cf.exe -Wl --out-implib libcmTC_198cf.dll.a -Wl --major-image-version 0 --minor-image-version 0   && cd ."]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=C:\\msys64\\mingw64\\bin\\cc.exe]
         ignore line: [COLLECT_LTO_WRAPPER=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe]
@@ -5218,13 +4753,13 @@ events:
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/]
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/]
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_e2d40.exe' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_e2d40.']
-        link line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/collect2.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccWz6cAP.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_e2d40.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj --out-implib libcmTC_e2d40.dll.a --major-image-version 0 --minor-image-version 0 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_198cf.exe' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_198cf.']
+        link line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/collect2.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccL7pRXR.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_198cf.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj --out-implib libcmTC_198cf.dll.a --major-image-version 0 --minor-image-version 0 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o]
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/collect2.exe] ==> ignore
           arg [-plugin] ==> ignore
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll] ==> ignore
           arg [-plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe] ==> ignore
-          arg [-plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccWz6cAP.res] ==> ignore
+          arg [-plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccL7pRXR.res] ==> ignore
           arg [-plugin-opt=-pass-through=-lmingw32] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc_eh] ==> ignore
@@ -5246,7 +4781,7 @@ events:
           arg [i386pep] ==> ignore
           arg [-Bdynamic] ==> search dynamic
           arg [-o] ==> ignore
-          arg [cmTC_e2d40.exe] ==> ignore
+          arg [cmTC_198cf.exe] ==> ignore
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o] ==> obj [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o]
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o] ==> obj [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o]
           arg [-LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0] ==> dir [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0]
@@ -5256,9 +4791,9 @@ events:
           arg [-LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib] ==> dir [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib]
           arg [-LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../..] ==> dir [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../..]
           arg [-v] ==> ignore
-          arg [CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj] ==> ignore
+          arg [CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj] ==> ignore
           arg [--out-implib] ==> ignore
-          arg [libcmTC_e2d40.dll.a] ==> ignore
+          arg [libcmTC_198cf.dll.a] ==> ignore
           arg [--major-image-version] ==> ignore
           arg [0] ==> ignore
           arg [--minor-image-version] ==> ignore
@@ -5283,7 +4818,7 @@ events:
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o] ==> obj [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o]
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o] ==> obj [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o]
         ignore line: [collect2 version 14.2.0]
-        ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccWz6cAP.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_e2d40.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_e2d40.dir/CMakeCCompilerABI.c.obj --out-implib libcmTC_e2d40.dll.a --major-image-version 0 --minor-image-version 0 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o]
+        ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccL7pRXR.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_eh -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_198cf.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_198cf.dir/CMakeCCompilerABI.c.obj --out-implib libcmTC_198cf.dll.a --major-image-version 0 --minor-image-version 0 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lgcc_eh -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o]
         linker tool for 'C': C:/msys64/mingw64/x86_64-w64-mingw32/bin/ld.exe
         remove lib [gcc_eh]
         remove lib [msvcrt]
@@ -5324,8 +4859,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/CMakeScratch/TryCompile-lcrgl4"
-      binary: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/CMakeScratch/TryCompile-lcrgl4"
+      source: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/CMakeScratch/TryCompile-8xy1i2"
+      binary: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/CMakeScratch/TryCompile-8xy1i2"
     cmakeVariables:
       CMAKE_CXX_FLAGS: ""
       CMAKE_CXX_FLAGS_DEBUG: "-g"
@@ -5336,10 +4871,10 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/CMakeScratch/TryCompile-lcrgl4'
+        Change Dir: 'C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/CMakeScratch/TryCompile-8xy1i2'
         
-        Run Build Command(s): C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_26716
-        [1/2] C:\\msys64\\mingw64\\bin\\c++.exe   -v -o CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj -c "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp"
+        Run Build Command(s): C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_70575
+        [1/2] C:\\msys64\\mingw64\\bin\\c++.exe   -v -o CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj -c "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp"
         Using built-in specs.
         COLLECT_GCC=C:\\msys64\\mingw64\\bin\\c++.exe
         Target: x86_64-w64-mingw32
@@ -5347,8 +4882,8 @@ events:
         Thread model: posix
         Supported LTO compression algorithms: zlib zstd
         gcc version 14.2.0 (Rev3, Built by MSYS2 project) 
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_26716.dir/'
-         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/cc1plus.exe -quiet -v -iprefix C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/ -D_REENTRANT C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_26716.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=nocona -version -o C:\\Users\\arand\\AppData\\Local\\Temp\\ccLJhDe5.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_70575.dir/'
+         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/cc1plus.exe -quiet -v -iprefix C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/ -D_REENTRANT C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_70575.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=nocona -version -o C:\\Users\\arand\\AppData\\Local\\Temp\\ccmARgaF.s
         GNU C++17 (Rev3, Built by MSYS2 project) version 14.2.0 (x86_64-w64-mingw32)
         	compiled by GNU C version 14.2.0, GMP version 6.3.0, MPFR version 4.2.1, MPC version 1.3.1, isl version isl-0.27-GMP
         
@@ -5374,13 +4909,13 @@ events:
          C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/include-fixed
         End of search list.
         Compiler executable checksum: 28918c7e5d1ae734d44f45b0191a08a4
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_26716.dir/'
-         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj C:\\Users\\arand\\AppData\\Local\\Temp\\ccLJhDe5.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_70575.dir/'
+         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj C:\\Users\\arand\\AppData\\Local\\Temp\\ccmARgaF.s
         GNU assembler version 2.44 (x86_64-w64-mingw32) using BFD version (GNU Binutils) 2.44
         COMPILER_PATH=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/;C:/msys64/mingw64/bin/../lib/gcc/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/
         LIBRARY_PATH=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/;C:/msys64/mingw64/bin/../lib/gcc/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.'
-        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\msys64\\mingw64\\bin\\c++.exe  -v -Wl,-v CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_26716.exe -Wl,--out-implib,libcmTC_26716.dll.a -Wl,--major-image-version,0,--minor-image-version,0   && cd ."
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.'
+        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\msys64\\mingw64\\bin\\c++.exe  -v -Wl,-v CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_70575.exe -Wl,--out-implib,libcmTC_70575.dll.a -Wl,--major-image-version,0,--minor-image-version,0   && cd ."
         Using built-in specs.
         COLLECT_GCC=C:\\msys64\\mingw64\\bin\\c++.exe
         COLLECT_LTO_WRAPPER=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe
@@ -5391,12 +4926,12 @@ events:
         gcc version 14.2.0 (Rev3, Built by MSYS2 project) 
         COMPILER_PATH=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/;C:/msys64/mingw64/bin/../lib/gcc/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/
         LIBRARY_PATH=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/;C:/msys64/mingw64/bin/../lib/gcc/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/;C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_26716.exe' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_26716.'
-         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/collect2.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\cc2hawTa.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_26716.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_26716.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_70575.exe' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_70575.'
+         C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/collect2.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccYdIKHT.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_70575.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_70575.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o
         collect2 version 14.2.0
-        C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\cc2hawTa.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_26716.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_26716.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o
+        C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccYdIKHT.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_70575.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_70575.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o
         GNU ld (GNU Binutils) 2.44
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_26716.exe' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_26716.'
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_70575.exe' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_70575.'
         
       exitCode: 0
   -
@@ -5435,10 +4970,10 @@ events:
       Parsed CXX implicit link information:
         link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
         linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
-        ignore line: [Change Dir: 'C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/CMakeScratch/TryCompile-lcrgl4']
+        ignore line: [Change Dir: 'C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/CMakeScratch/TryCompile-8xy1i2']
         ignore line: []
-        ignore line: [Run Build Command(s): C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_26716]
-        ignore line: [[1/2] C:\\msys64\\mingw64\\bin\\c++.exe   -v -o CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj -c "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp"]
+        ignore line: [Run Build Command(s): C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_70575]
+        ignore line: [[1/2] C:\\msys64\\mingw64\\bin\\c++.exe   -v -o CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj -c "C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp"]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=C:\\msys64\\mingw64\\bin\\c++.exe]
         ignore line: [Target: x86_64-w64-mingw32]
@@ -5446,8 +4981,8 @@ events:
         ignore line: [Thread model: posix]
         ignore line: [Supported LTO compression algorithms: zlib zstd]
         ignore line: [gcc version 14.2.0 (Rev3  Built by MSYS2 project) ]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_26716.dir/']
-        ignore line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/cc1plus.exe -quiet -v -iprefix C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/ -D_REENTRANT C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_26716.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=nocona -version -o C:\\Users\\arand\\AppData\\Local\\Temp\\ccLJhDe5.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_70575.dir/']
+        ignore line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/cc1plus.exe -quiet -v -iprefix C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/ -D_REENTRANT C:/Program Files/CMake/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_70575.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=nocona -version -o C:\\Users\\arand\\AppData\\Local\\Temp\\ccmARgaF.s]
         ignore line: [GNU C++17 (Rev3  Built by MSYS2 project) version 14.2.0 (x86_64-w64-mingw32)]
         ignore line: [	compiled by GNU C version 14.2.0  GMP version 6.3.0  MPFR version 4.2.1  MPC version 1.3.1  isl version isl-0.27-GMP]
         ignore line: []
@@ -5473,8 +5008,8 @@ events:
         ignore line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/include-fixed]
         ignore line: [End of search list.]
         ignore line: [Compiler executable checksum: 28918c7e5d1ae734d44f45b0191a08a4]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_26716.dir/']
-        ignore line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj C:\\Users\\arand\\AppData\\Local\\Temp\\ccLJhDe5.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_70575.dir/']
+        ignore line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj C:\\Users\\arand\\AppData\\Local\\Temp\\ccmARgaF.s]
         ignore line: [GNU assembler version 2.44 (x86_64-w64-mingw32) using BFD version (GNU Binutils) 2.44]
         ignore line: [COMPILER_PATH=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/]
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/]
@@ -5485,8 +5020,8 @@ events:
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/]
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/]
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.']
-        ignore line: [[2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\msys64\\mingw64\\bin\\c++.exe  -v -Wl -v CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_26716.exe -Wl --out-implib libcmTC_26716.dll.a -Wl --major-image-version 0 --minor-image-version 0   && cd ."]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.']
+        ignore line: [[2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\msys64\\mingw64\\bin\\c++.exe  -v -Wl -v CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_70575.exe -Wl --out-implib libcmTC_70575.dll.a -Wl --major-image-version 0 --minor-image-version 0   && cd ."]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=C:\\msys64\\mingw64\\bin\\c++.exe]
         ignore line: [COLLECT_LTO_WRAPPER=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe]
@@ -5504,13 +5039,13 @@ events:
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/]
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/]
         ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_26716.exe' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_26716.']
-        link line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/collect2.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\cc2hawTa.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_26716.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_26716.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_70575.exe' '-shared-libgcc' '-mtune=generic' '-march=nocona' '-dumpdir' 'cmTC_70575.']
+        link line: [ C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/collect2.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccYdIKHT.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_70575.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_70575.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o]
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/collect2.exe] ==> ignore
           arg [-plugin] ==> ignore
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll] ==> ignore
           arg [-plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe] ==> ignore
-          arg [-plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\cc2hawTa.res] ==> ignore
+          arg [-plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccYdIKHT.res] ==> ignore
           arg [-plugin-opt=-pass-through=-lmingw32] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
@@ -5532,7 +5067,7 @@ events:
           arg [i386pep] ==> ignore
           arg [-Bdynamic] ==> search dynamic
           arg [-o] ==> ignore
-          arg [cmTC_26716.exe] ==> ignore
+          arg [cmTC_70575.exe] ==> ignore
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o] ==> obj [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o]
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o] ==> obj [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o]
           arg [-LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0] ==> dir [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0]
@@ -5542,9 +5077,9 @@ events:
           arg [-LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib] ==> dir [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib]
           arg [-LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../..] ==> dir [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../..]
           arg [-v] ==> ignore
-          arg [CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj] ==> ignore
+          arg [CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj] ==> ignore
           arg [--out-implib] ==> ignore
-          arg [libcmTC_26716.dll.a] ==> ignore
+          arg [libcmTC_70575.dll.a] ==> ignore
           arg [--major-image-version] ==> ignore
           arg [0] ==> ignore
           arg [--minor-image-version] ==> ignore
@@ -5570,7 +5105,7 @@ events:
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o] ==> obj [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o]
           arg [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o] ==> obj [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o]
         ignore line: [collect2 version 14.2.0]
-        ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\cc2hawTa.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_26716.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_26716.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_26716.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o]
+        ignore line: [C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/liblto_plugin.dll -plugin-opt=C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\arand\\AppData\\Local\\Temp\\ccYdIKHT.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep -Bdynamic -o cmTC_70575.exe C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/crt2.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtbegin.o -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0 -LC:/msys64/mingw64/bin/../lib/gcc -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib/../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/lib -LC:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../.. -v CMakeFiles/cmTC_70575.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_70575.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc_s -lgcc -lmingwex -lmsvcrt -lkernel32 C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../lib/default-manifest.o C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/crtend.o]
         linker tool for 'CXX': C:/msys64/mingw64/x86_64-w64-mingw32/bin/ld.exe
         remove lib [msvcrt]
         remove lib [msvcrt]
@@ -5603,7 +5138,7 @@ events:
   -
     kind: "find_package-v1"
     backtrace:
-      - "CMakeLists.txt:23 (find_package)"
+      - "CMakeLists.txt:25 (find_package)"
     name: "SDL2"
     configs:
       -
@@ -5642,27 +5177,27 @@ events:
         CMAKE_FIND_ROOT_PATH_MODE: "BOTH"
     candidates:
       -
-        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/pkgRedirects/SDL2Config.cmake"
+        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/pkgRedirects/SDL2Config.cmake"
         mode: "config"
         reason: "no_exist"
       -
-        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/pkgRedirects/sdl2-config.cmake"
+        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/pkgRedirects/sdl2-config.cmake"
         mode: "config"
         reason: "no_exist"
       -
-        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/pkgRedirects/lib/cps/SDL2.cps"
+        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/pkgRedirects/lib/cps/SDL2.cps"
         mode: "cps"
         reason: "no_exist"
       -
-        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/pkgRedirects/lib/cps/sdl2.cps"
+        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/pkgRedirects/lib/cps/sdl2.cps"
         mode: "cps"
         reason: "no_exist"
       -
-        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/pkgRedirects/share/cps/SDL2.cps"
+        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/pkgRedirects/share/cps/SDL2.cps"
         mode: "cps"
         reason: "no_exist"
       -
-        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/pkgRedirects/share/cps/sdl2.cps"
+        path: "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/pkgRedirects/share/cps/sdl2.cps"
         mode: "cps"
         reason: "no_exist"
       -
@@ -6074,494 +5609,17 @@ events:
         mode: "cps"
         reason: "no_exist"
       -
-        path: "C:/Program Files/MongoDB/Tools/100/SDL2Config.cmake"
+        path: "C:/msys64/mingw64/lib/cmake/SDL2_mixer/SDL2Config.cmake"
         mode: "config"
         reason: "no_exist"
       -
-        path: "C:/Program Files/MongoDB/Tools/100/sdl2-config.cmake"
+        path: "C:/msys64/mingw64/lib/cmake/SDL2_mixer/sdl2-config.cmake"
         mode: "config"
         reason: "no_exist"
-      -
-        path: "C:/Program Files/MongoDB/Tools/100/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/MongoDB/Tools/100/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/MongoDB/Tools/100/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/MongoDB/Tools/100/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/nodejs/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/nodejs/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/nodejs/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/nodejs/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/nodejs/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/nodejs/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/win32/docker-cli-plugins/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Rancher Desktop/resources/resources/linux/docker-cli-plugins/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/CMake/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/CMake/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/CMake/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/CMake/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/CMake/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/CMake/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.cargo/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.cargo/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.cargo/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.cargo/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.cargo/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.cargo/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/Scripts/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Python/Python313/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WindowsApps/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/GitHubDesktop/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/GitHubDesktop/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/GitHubDesktop/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/GitHubDesktop/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/GitHubDesktop/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/GitHubDesktop/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.dotnet/tools/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.dotnet/tools/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.dotnet/tools/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.dotnet/tools/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.dotnet/tools/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/.dotnet/tools/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/Microsoft VS Code/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/mongosh/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/mongosh/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/mongosh/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/mongosh/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/mongosh/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Programs/mongosh/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Roaming/npm/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Roaming/npm/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Roaming/npm/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Roaming/npm/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Roaming/npm/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Roaming/npm/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Users/arand/AppData/Local/Microsoft/WinGet/Links/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Lens/resources/cli/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Lens/resources/cli/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Lens/resources/cli/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Lens/resources/cli/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Lens/resources/cli/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/Lens/resources/cli/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/CMake/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/CMake/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files (x86)/SDL2Config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files (x86)/sdl2-config.cmake"
-        mode: "config"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files (x86)/lib/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files (x86)/lib/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files (x86)/share/cps/SDL2.cps"
-        mode: "cps"
-        reason: "no_exist"
-      -
-        path: "C:/Program Files (x86)/share/cps/sdl2.cps"
-        mode: "cps"
-        reason: "no_exist"
-    found: null
+    found:
+      path: "C:/msys64/mingw64/lib/cmake/SDL2/SDL2Config.cmake"
+      mode: "config"
+      version: "2.32.2"
     search_context:
       ENV{PATH}:
         - "C:\\Program Files\\SqlCmd\\"
@@ -6616,10 +5674,6 @@ events:
         - "C:/Program Files (x86)"
         - "C:/Program Files/CMake"
         - "C:/Program Files (x86)/vcr-golf"
-...
-
----
-events:
   -
     kind: "find-v1"
     backtrace:

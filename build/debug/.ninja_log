@@ -3,4 +3,16 @@
 56	3126	8008399094025769	CMakeFiles/vcr-golf.dir/core/event_loop.cpp.obj	37817c9b7c6612df
 42	3133	8008399093885687	CMakeFiles/vcr-golf.dir/core/app.cpp.obj	1f1c64b29d1b81b6
 47	4391	8008399093935662	CMakeFiles/vcr-golf.dir/core/window.cpp.obj	8ecfc3795cca9420
-891	1044	8008399916095366	vcr-golf.exe	7d71e622cfe5397d
+727	899	8008434860288562	vcr-golf.exe	4f2b67ef12e30d0f
+61	407	8008434853630492	CMakeFiles/vcr-golf-physics.dir/src/physics/collision.cpp.obj	f005fb766e5cf112
+37	422	8008434853380454	CMakeFiles/vcr-golf-physics.dir/src/physics/ball_physics.cpp.obj	d40e4aa67055175c
+67	469	8008434853680467	CMakeFiles/vcr-golf-physics.dir/src/physics/wind.cpp.obj	84d41406518cb8b2
+56	539	8008434853570465	CMakeFiles/vcr-golf-physics.dir/src/physics/flight_model.cpp.obj	f78a5655f5c2bcf9
+539	727	8008434858406798	libvcr-golf-physics.a	e3d690f38fffc2fc
+17	246	8008435826636811	build.ninja	f2d7917177608600
+17	246	8008435826636811	C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/cmake_install.cmake	f2d7917177608600
+62	436	8008435827682850	CMakeFiles/vcr-golf-physics.dir/src/physics/collision.cpp.obj	f005fb766e5cf112
+30	438	8008435827357197	CMakeFiles/vcr-golf-physics.dir/src/physics/ball_physics.cpp.obj	d40e4aa67055175c
+56	557	8008435827602349	CMakeFiles/vcr-golf-physics.dir/src/physics/flight_model.cpp.obj	f78a5655f5c2bcf9
+557	655	8008435832621067	libvcr-golf-physics.a	e3d690f38fffc2fc
+655	841	8008435833602178	vcr-golf.exe	4f2b67ef12e30d0f

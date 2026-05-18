@@ -1,0 +1,15 @@
+# ninja log v7
+20	507	8008436147299152	CMakeFiles/vcr-golf-physics.dir/src/physics/ball_physics.cpp.obj	d40e4aa67055175c
+44	512	8008436147539103	CMakeFiles/vcr-golf-physics.dir/src/physics/collision.cpp.obj	f005fb766e5cf112
+50	595	8008436147589123	CMakeFiles/vcr-golf-physics.dir/src/physics/wind.cpp.obj	84d41406518cb8b2
+39	719	8008436147489121	CMakeFiles/vcr-golf-physics.dir/src/physics/flight_model.cpp.obj	f78a5655f5c2bcf9
+720	868	8008436154293298	libvcr-golf-physics.a	e3d690f38fffc2fc
+90	1197	8008436147994383	CMakeFiles/vcr-golf-tests.dir/tests/physics_tests.cpp.obj	12b3fedaf9c49b06
+55	1307	8008436147639125	CMakeFiles/vcr-golf.dir/core/main.cpp.obj	a75bc27029ec400c
+62	1364	8008436147719213	CMakeFiles/vcr-golf.dir/core/app.cpp.obj	1f1c64b29d1b81b6
+79	1423	8008436147894413	CMakeFiles/vcr-golf.dir/core/event_loop.cpp.obj	37817c9b7c6612df
+1198	1443	8008436159071981	vcr-golf-tests.exe	231572682b393cea
+71	1633	8008436147799204	CMakeFiles/vcr-golf.dir/core/window.cpp.obj	8ecfc3795cca9420
+1633	1787	8008436163430897	vcr-golf.exe	4f2b67ef12e30d0f
+15	779	8008437728505488	CMakeFiles/vcr-golf-tests.dir/tests/physics_tests.cpp.obj	12b3fedaf9c49b06
+780	935	8008437736150580	vcr-golf-tests.exe	231572682b393cea
