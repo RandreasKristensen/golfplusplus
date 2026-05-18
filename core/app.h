@@ -2,6 +2,7 @@
 
 #include "core/input.h"
 #include "core/window.h"
+#include "renderer/renderer.h"
 
 struct app {
     bool init();
@@ -10,6 +11,7 @@ struct app {
 
 private:
     window window_;
+    renderer renderer_;
     input_state input_;
     bool running_ = false;
 };

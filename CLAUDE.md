@@ -19,7 +19,7 @@ A lo-fi 3D golf game written in C++. The aesthetic is pixelated VCR / retro camc
 | Window + input | SDL2 | system install |
 | Audio | SDL_mixer | system install |
 | OpenGL loader | GLAD (GL 3.3 core) | `src/glad/` |
-| Math | GLM | `vendor/glm/` |
+| Math | GLM | `vendor/glm/` or system install |
 | JSON parsing | nlohmann/json | `vendor/nlohmann/json.hpp` |
 | Testing | doctest | `vendor/doctest.h` |
 | Build | CMake 3.25+ | `CMakeLists.txt` + `CMakePresets.json` |
@@ -45,7 +45,7 @@ Every function in `src/physics/` must:
 
 ```cpp
 // CORRECT — pure function, same inputs always give same output
-BallState step(const BallState in, const WindState wind, const float dt);
+ball_state step(const ball_state in, const wind_state wind, const float dt);
 float compute_drag(const glm::vec3 velocity, const float radius);
 glm::vec3 magnus_force(const glm::vec3 spin, const glm::vec3 velocity);
 
@@ -54,12 +54,12 @@ void step(BallState* state, const float dt);
 void step(BallState& state, const float dt);
 
 // WRONG — reads global state
-BallState step(const BallState in, const float dt) {
+ball_state step(const ball_state in, const float dt) {
     float ws = g_wind_speed; // NO. Pass WindState as a parameter.
 }
 
 // WRONG — I/O inside physics
-BallState step(const BallState in, const WindState wind, const float dt) {
+ball_state step(const ball_state in, const wind_state wind, const float dt) {
     std::cout << "stepping"; // NO.
 }
 ```
@@ -78,14 +78,14 @@ Pure functions are trivially unit-testable with zero setup or mocking. They prod
 | `flight_model.cpp` | Drag, Magnus effect, gravity application |
 | `collision.cpp` | Terrain intersection, bounce, roll-out |
 | `wind.cpp` | Takes a `WindState`, returns a force vector |
-| `physics_test.cpp` | doctest tests — can run entirely in isolation |
+| `tests/physics_tests.cpp` | doctest tests — can run entirely in isolation |
 
 ### Wind determinism
 
 Wind is a pure function of a seed and time. The same seed and time must always produce the same wind vector.
 
 ```cpp
-WindState sample_wind(const uint32_t seed, const float time);
+wind_state sample_wind(const uint32_t seed, const float time);
 ```
 
 - Store the seed in the hole JSON so each hole has a stable wind character

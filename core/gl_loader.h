@@ -1,0 +1,98 @@
+#pragma once
+
+#include <SDL.h>
+
+#if defined(VCR_GOLF_USE_GLAD)
+#include "glad/glad.h"
+
+bool load_gl_functions();
+#else
+#include <SDL_opengl.h>
+#include <SDL_opengl_glext.h>
+
+bool load_gl_functions();
+
+extern PFNGLGENVERTEXARRAYSPROC glGenVertexArrays_ptr;
+extern PFNGLBINDVERTEXARRAYPROC glBindVertexArray_ptr;
+extern PFNGLDELETEVERTEXARRAYSPROC glDeleteVertexArrays_ptr;
+extern PFNGLGENBUFFERSPROC glGenBuffers_ptr;
+extern PFNGLBINDBUFFERPROC glBindBuffer_ptr;
+extern PFNGLBUFFERDATAPROC glBufferData_ptr;
+extern PFNGLDELETEBUFFERSPROC glDeleteBuffers_ptr;
+extern PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray_ptr;
+extern PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer_ptr;
+extern PFNGLACTIVETEXTUREPROC glActiveTexture_ptr;
+
+extern PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers_ptr;
+extern PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer_ptr;
+extern PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D_ptr;
+extern PFNGLGENRENDERBUFFERSPROC glGenRenderbuffers_ptr;
+extern PFNGLBINDRENDERBUFFERPROC glBindRenderbuffer_ptr;
+extern PFNGLRENDERBUFFERSTORAGEPROC glRenderbufferStorage_ptr;
+extern PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer_ptr;
+extern PFNGLCHECKFRAMEBUFFERSTATUSPROC glCheckFramebufferStatus_ptr;
+extern PFNGLDELETERENDERBUFFERSPROC glDeleteRenderbuffers_ptr;
+extern PFNGLDELETEFRAMEBUFFERSPROC glDeleteFramebuffers_ptr;
+
+extern PFNGLCREATESHADERPROC glCreateShader_ptr;
+extern PFNGLSHADERSOURCEPROC glShaderSource_ptr;
+extern PFNGLCOMPILESHADERPROC glCompileShader_ptr;
+extern PFNGLGETSHADERIVPROC glGetShaderiv_ptr;
+extern PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog_ptr;
+extern PFNGLDELETESHADERPROC glDeleteShader_ptr;
+extern PFNGLCREATEPROGRAMPROC glCreateProgram_ptr;
+extern PFNGLATTACHSHADERPROC glAttachShader_ptr;
+extern PFNGLLINKPROGRAMPROC glLinkProgram_ptr;
+extern PFNGLGETPROGRAMIVPROC glGetProgramiv_ptr;
+extern PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog_ptr;
+extern PFNGLDELETEPROGRAMPROC glDeleteProgram_ptr;
+extern PFNGLUSEPROGRAMPROC glUseProgram_ptr;
+
+extern PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation_ptr;
+extern PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv_ptr;
+extern PFNGLUNIFORM3FVPROC glUniform3fv_ptr;
+extern PFNGLUNIFORM2FVPROC glUniform2fv_ptr;
+extern PFNGLUNIFORM1IPROC glUniform1i_ptr;
+
+#define glGenVertexArrays glGenVertexArrays_ptr
+#define glBindVertexArray glBindVertexArray_ptr
+#define glDeleteVertexArrays glDeleteVertexArrays_ptr
+#define glGenBuffers glGenBuffers_ptr
+#define glBindBuffer glBindBuffer_ptr
+#define glBufferData glBufferData_ptr
+#define glDeleteBuffers glDeleteBuffers_ptr
+#define glEnableVertexAttribArray glEnableVertexAttribArray_ptr
+#define glVertexAttribPointer glVertexAttribPointer_ptr
+#define glActiveTexture glActiveTexture_ptr
+
+#define glGenFramebuffers glGenFramebuffers_ptr
+#define glBindFramebuffer glBindFramebuffer_ptr
+#define glFramebufferTexture2D glFramebufferTexture2D_ptr
+#define glGenRenderbuffers glGenRenderbuffers_ptr
+#define glBindRenderbuffer glBindRenderbuffer_ptr
+#define glRenderbufferStorage glRenderbufferStorage_ptr
+#define glFramebufferRenderbuffer glFramebufferRenderbuffer_ptr
+#define glCheckFramebufferStatus glCheckFramebufferStatus_ptr
+#define glDeleteRenderbuffers glDeleteRenderbuffers_ptr
+#define glDeleteFramebuffers glDeleteFramebuffers_ptr
+
+#define glCreateShader glCreateShader_ptr
+#define glShaderSource glShaderSource_ptr
+#define glCompileShader glCompileShader_ptr
+#define glGetShaderiv glGetShaderiv_ptr
+#define glGetShaderInfoLog glGetShaderInfoLog_ptr
+#define glDeleteShader glDeleteShader_ptr
+#define glCreateProgram glCreateProgram_ptr
+#define glAttachShader glAttachShader_ptr
+#define glLinkProgram glLinkProgram_ptr
+#define glGetProgramiv glGetProgramiv_ptr
+#define glGetProgramInfoLog glGetProgramInfoLog_ptr
+#define glDeleteProgram glDeleteProgram_ptr
+#define glUseProgram glUseProgram_ptr
+
+#define glGetUniformLocation glGetUniformLocation_ptr
+#define glUniformMatrix4fv glUniformMatrix4fv_ptr
+#define glUniform3fv glUniform3fv_ptr
+#define glUniform2fv glUniform2fv_ptr
+#define glUniform1i glUniform1i_ptr
+#endif

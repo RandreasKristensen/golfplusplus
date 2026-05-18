@@ -28,15 +28,16 @@ Course target for MVP: flat plane only vs. a minimal pin marker to support strok
 
 ## Build
 
-´´´pwrshl
+```pwrshl
 cmake --preset debug
 cmake --build build/debug
-´´´
+```
 
 
 ## Test
 
-´´´pwrshl
+```pwrshl
+cmake --preset test
 cmake --build build/test
 .\build\test\vcr-golf-tests.exe
-´´´
+```

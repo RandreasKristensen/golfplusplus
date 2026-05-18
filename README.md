@@ -39,7 +39,7 @@ cmake --build build/debug
 
 ### Dependencies
 
-GLM, nlohmann/json, and doctest are header-only and vendored under `vendor/`. GLAD is committed under `src/glad/`. You only need SDL2 and SDL_mixer from your system:
+GLM is required (install via your package manager or place it under `vendor/glm`). doctest is provided under `vendor/`. GLAD is committed under `src/glad/`. You only need SDL2 and SDL_mixer from your system:
 
 ```bash
 # Ubuntu / Debian
@@ -50,6 +50,9 @@ brew install sdl2 sdl2_mixer
 
 # Windows (vcpkg)
 vcpkg install sdl2 sdl2-mixer
+
+# Windows (MSYS2 MinGW64)
+pacman -S mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_mixer mingw-w64-x86_64-glm
 ```
 
 ---
@@ -97,7 +100,7 @@ The `src/physics/` module is written as pure functions — same inputs always pr
 
 ```cpp
 // Everything in physics/ looks like this
-BallState step(const BallState in, const WindState wind, const float dt);
+ball_state step(const ball_state in, const wind_state wind, const float dt);
 ```
 
 See `docs/physics_design.md` for the full flight model.

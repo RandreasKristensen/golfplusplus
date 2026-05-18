@@ -1,27 +1,51 @@
 [
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
-  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\main.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\main.cpp",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\main.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\main.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/main.cpp",
   "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/main.cpp.obj"
 },
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
-  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\app.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\app.cpp",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\app.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\app.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/app.cpp",
   "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/app.cpp.obj"
 },
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
-  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\window.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\window.cpp",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\window.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\window.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/window.cpp",
   "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/window.cpp.obj"
 },
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
-  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\event_loop.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\event_loop.cpp",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\event_loop.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\event_loop.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/event_loop.cpp",
   "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/event_loop.cpp.obj"
+},
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\gl_loader.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\gl_loader.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/gl_loader.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/gl_loader.cpp.obj"
+},
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\src\\renderer\\shader.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\renderer\\shader.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/renderer/shader.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/src/renderer/shader.cpp.obj"
+},
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\src\\renderer\\framebuffer.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\renderer\\framebuffer.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/renderer/framebuffer.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/src/renderer/framebuffer.cpp.obj"
+},
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\src\\renderer\\renderer.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\renderer\\renderer.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/renderer/renderer.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/src/renderer/renderer.cpp.obj"
 },
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",

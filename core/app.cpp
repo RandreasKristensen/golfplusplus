@@ -7,6 +7,11 @@ bool app::init() {
         return false;
     }
 
+    if (!renderer_.init(window_.sdl_window())) {
+        window_.shutdown();
+        return false;
+    }
+
     running_ = true;
     return true;
 }
@@ -20,11 +25,12 @@ void app::run() {
             running_ = false;
         }
 
-        // TODO: update and render once systems exist.
+        renderer_.render();
         window_.swap();
     }
 }
 
 void app::shutdown() {
+    renderer_.shutdown();
     window_.shutdown();
 }

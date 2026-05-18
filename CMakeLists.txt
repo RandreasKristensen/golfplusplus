@@ -11,6 +11,10 @@ set(VCR_GOLF_SOURCES
     core/app.cpp
     core/window.cpp
     core/event_loop.cpp
+    core/gl_loader.cpp
+    src/renderer/shader.cpp
+    src/renderer/framebuffer.cpp
+    src/renderer/renderer.cpp
 )
 
 add_executable(vcr-golf ${VCR_GOLF_SOURCES})
@@ -52,6 +56,10 @@ endif()
 if (NOT GLM_INCLUDE_DIR)
     message(FATAL_ERROR "GLM not found. Install it or add vendor/glm.")
 endif()
+
+file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/assets" VCR_GOLF_ASSETS_DIR)
+target_include_directories(vcr-golf PRIVATE ${GLM_INCLUDE_DIR})
+target_compile_definitions(vcr-golf PRIVATE VCR_GOLF_ASSETS_DIR=\"${VCR_GOLF_ASSETS_DIR}\")
 
 add_library(vcr-golf-physics ${VCR_GOLF_PHYSICS_SOURCES})
 target_include_directories(vcr-golf-physics PUBLIC

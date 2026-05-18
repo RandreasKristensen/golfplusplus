@@ -2,22 +2,7 @@
 
 #include <SDL.h>
 
-#if defined(VCR_GOLF_USE_GLAD)
-#include "glad/glad.h"
-#else
-#include <SDL_opengl.h>
-#endif
-
-namespace {
-bool init_gl_loader() {
-#if defined(VCR_GOLF_USE_GLAD)
-    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(SDL_GL_GetProcAddress))) {
-        return false;
-    }
-#endif
-    return true;
-}
-}
+#include "core/gl_loader.h"
 
 bool window::init(const char* title, int width, int height) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
@@ -55,7 +40,7 @@ bool window::init(const char* title, int width, int height) {
 
     SDL_GL_SetSwapInterval(1);
 
-    if (!init_gl_loader()) {
+    if (!load_gl_functions()) {
         SDL_Log("OpenGL loader init failed.");
         shutdown();
         return false;
