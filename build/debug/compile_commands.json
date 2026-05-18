@@ -1,0 +1,26 @@
+[
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\main.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\main.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/main.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/main.cpp.obj"
+},
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\app.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\app.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/app.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/app.cpp.obj"
+},
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\window.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\window.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/window.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/window.cpp.obj"
+},
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DSDL_MAIN_HANDLED -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2 -g -std=gnu++17 -o CMakeFiles\\vcr-golf.dir\\core\\event_loop.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\core\\event_loop.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/core/event_loop.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/debug/CMakeFiles/vcr-golf.dir/core/event_loop.cpp.obj"
+}
+]

@@ -22,9 +22,6 @@ target_compile_definitions(vcr-golf PRIVATE SDL_MAIN_HANDLED)
 
 find_package(SDL2 REQUIRED)
 target_link_libraries(vcr-golf PRIVATE SDL2::SDL2)
-if (TARGET SDL2::SDL2main)
-    target_link_libraries(vcr-golf PRIVATE SDL2::SDL2main)
-endif()
 
 find_package(OpenGL REQUIRED)
 target_link_libraries(vcr-golf PRIVATE OpenGL::GL)

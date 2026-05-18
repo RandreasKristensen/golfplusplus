@@ -24,3 +24,11 @@ Quests, saves, and shop are excluded from MVP.
 POV camera definition: assume a close follow or ball-level camera; confirm exact POV framing and desired FOV.
 Club set: recommend 2 to 3 clubs with distinct power and spin to validate gameplay without overbuilding content.
 Course target for MVP: flat plane only vs. a minimal pin marker to support stroke counting and reset behavior.
+
+
+## Build
+
+´´´pwrshl
+cmake --preset debug
+cmake --build build/debug
+´´´
