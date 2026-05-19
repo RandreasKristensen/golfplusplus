@@ -5,6 +5,8 @@
 
 #include <glm/vec3.hpp>
 
+#include "physics/material_zone.h"
+
 struct terrain_spline {
     std::vector<glm::vec3> control_points;
     float width = 0.0f;
@@ -13,7 +15,15 @@ struct terrain_spline {
 
 enum class terrain_material {
     fairway,
-    rough
+    rough,
+    green,
+    bunker,
+    water
+};
+
+struct terrain_zone_tuning {
+    float bunker_depth = 0.55f;
+    float water_depth = 0.35f;
 };
 
 struct terrain_vertex {
@@ -44,5 +54,8 @@ struct terrain_sample {
 
 glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, float t);
 terrain_mesh build_terrain_mesh(const terrain_spline& terrain);
+terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
+                                const std::vector<material_zone>& zones,
+                                const terrain_zone_tuning& tuning);
 terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& position, float fallback_y);
 terrain_sample sample_terrain(const terrain_spline& terrain, const glm::vec3& position, float fallback_y);

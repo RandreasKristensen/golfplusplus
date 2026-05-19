@@ -134,6 +134,37 @@ TEST_CASE("terrain mesh centerline follows spline height") {
     }
 }
 
+TEST_CASE("terrain zones prioritize water over green") {
+    terrain_spline terrain;
+    terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 20.0f)
+    };
+    terrain.width = 10.0f;
+    terrain.sample_count = 12;
+
+    material_zone green_zone;
+    green_zone.type = material_zone_type::green;
+    green_zone.center = glm::vec3(0.0f, 0.0f, 10.0f);
+    green_zone.radius = 6.0f;
+    green_zone.has_radius = true;
+
+    material_zone water_zone;
+    water_zone.type = material_zone_type::water;
+    water_zone.center = glm::vec3(0.0f, 0.0f, 10.0f);
+    water_zone.radius = 3.0f;
+    water_zone.has_radius = true;
+
+    std::vector<material_zone> zones = {green_zone, water_zone};
+    terrain_zone_tuning zone_tuning;
+    zone_tuning.water_depth = 0.4f;
+
+    const terrain_mesh mesh = build_terrain_mesh(terrain, zones, zone_tuning);
+    const terrain_sample sample = sample_terrain_mesh(mesh, glm::vec3(0.0f, 0.0f, 10.0f), -2.0f);
+
+    CHECK(sample.material == terrain_material::water);
+}
+
 TEST_CASE("spline terrain samples loaded elevation") {
     terrain_spline terrain;
     terrain.control_points = {

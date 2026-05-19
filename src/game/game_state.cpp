@@ -99,6 +99,9 @@ void place_player_near_ball(game_state& state) {
 
 void apply_ground_roll_friction(game_state& state, const float dt) {
     const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position);
+    if (terrain.material == terrain_material::water) {
+        return;
+    }
     if (state.ball.position.y > terrain.point.y + 0.001f) {
         return;
     }
@@ -211,22 +214,41 @@ void update_addressing(game_state& state, const input_state& input, const float 
 void step_ball(game_state& state, const float dt) {
     if (!ball_is_moving(state.ball, state.tuning)) {
         const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position);
+        const bool in_water = terrain.material == terrain_material::water;
+        const float restitution = in_water ? state.tuning.water_restitution : state.tuning.ground_restitution;
+        const float friction = in_water ? state.tuning.water_friction : state.tuning.ground_friction;
         state.ball = resolve_terrain_collision(state.ball,
                                                terrain,
-                                               state.tuning.ground_restitution,
-                                               state.tuning.ground_friction);
+                                               restitution,
+                                               friction);
         state.ball.velocity = glm::vec3(0.0f, 0.0f, 0.0f);
         state.ball.spin = glm::vec3(0.0f, 0.0f, 0.0f);
         return;
     }
 
     const wind_state wind = sample_wind(state.tuning.wind_seed, state.hole_time, state.tuning.wind);
-    state.ball = step(state.ball, wind, dt, state.tuning.physics);
+    const terrain_sample terrain_before = terrain_sample_at(state.tuning, state.ball.position);
+    const bool water_zone = terrain_before.material == terrain_material::water;
+    const float water_depth = std::max(0.0f, state.tuning.zone_tuning.water_depth);
+    // Water surface is inferred from the deformed mesh depth.
+    const float water_surface = terrain_before.point.y + water_depth;
+    const bool water_volume = water_zone && state.ball.position.y <= water_surface;
+
+    physics_tuning physics = state.tuning.physics;
+    if (water_volume) {
+        physics.drag_coeff += physics.water_drag_coeff;
+        physics.spin_decay += physics.water_spin_decay;
+    }
+
+    state.ball = step(state.ball, wind, dt, physics);
     const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position);
+    const bool in_water = terrain.material == terrain_material::water;
+    const float restitution = in_water ? state.tuning.water_restitution : state.tuning.ground_restitution;
+    const float friction = in_water ? state.tuning.water_friction : state.tuning.ground_friction;
     state.ball = resolve_terrain_collision(state.ball,
                                            terrain,
-                                           state.tuning.ground_restitution,
-                                           state.tuning.ground_friction);
+                                           restitution,
+                                           friction);
     apply_ground_roll_friction(state, dt);
 }
 }

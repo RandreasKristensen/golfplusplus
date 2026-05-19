@@ -28,19 +28,6 @@ float terrain_height_at(const game_tuning& tuning, const glm::vec3& position) {
     return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y).point.y;
 }
 
-render_material_type render_type_for_material(const material_zone_type type) {
-    switch (type) {
-    case material_zone_type::green:
-        return render_material_type::green;
-    case material_zone_type::bunker:
-        return render_material_type::bunker;
-    case material_zone_type::water:
-        return render_material_type::water;
-    default:
-        return render_material_type::unknown;
-    }
-}
-
 glm::vec3 render_color_for_terrain_material(const terrain_material material, const float distance_from_center, const float width) {
     const float half_width = std::max(0.001f, width * 0.5f);
     const float edge_amount = std::max(0.0f, std::min(1.0f, std::abs(distance_from_center) / half_width));
@@ -52,6 +39,12 @@ glm::vec3 render_color_for_terrain_material(const terrain_material material, con
                          0.17f + edge_amount * 0.02f);
     case terrain_material::rough:
         return glm::vec3(0.12f, 0.27f, 0.12f);
+    case terrain_material::green:
+        return glm::vec3(0.20f, 0.68f, 0.28f);
+    case terrain_material::bunker:
+        return glm::vec3(0.66f, 0.55f, 0.22f);
+    case terrain_material::water:
+        return glm::vec3(0.10f, 0.22f, 0.60f);
     default:
         return glm::vec3(0.16f, 0.38f, 0.16f);
     }
@@ -72,24 +65,6 @@ std::vector<render_terrain_vertex> make_render_terrain_vertices(const terrain_me
     return vertices;
 }
 
-std::vector<render_material_zone> make_render_zones(const std::vector<material_zone>& zones) {
-    std::vector<render_material_zone> render_zones;
-    render_zones.reserve(zones.size());
-
-    for (const material_zone& zone : zones) {
-        render_material_zone render_zone;
-        render_zone.type = render_type_for_material(zone.type);
-        render_zone.center = zone.center;
-        render_zone.radius = zone.radius;
-        render_zone.bounds_min = zone.bounds_min;
-        render_zone.bounds_max = zone.bounds_max;
-        render_zone.has_radius = zone.has_radius;
-        render_zone.has_bounds = zone.has_bounds;
-        render_zones.push_back(render_zone);
-    }
-
-    return render_zones;
-}
 
 void set_walking_camera(render_data& data, const game_state& game) {
     const glm::vec3 forward = aim_direction(game.player.yaw);
@@ -158,7 +133,6 @@ render_data make_render_data(const game_state& game) {
     data.course_extent = game.tuning.course.extent;
     data.terrain_vertices = make_render_terrain_vertices(game.tuning.terrain_mesh_data);
     data.terrain_indices = game.tuning.terrain_mesh_data.indices;
-    data.material_zones = make_render_zones(game.tuning.course.material_zones);
     data.aim_angle = game.aim_angle;
     if (game.mode == game_mode::aiming) {
         data.aim_arc_points = estimate_aim_arc(game);

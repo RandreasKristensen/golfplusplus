@@ -58,7 +58,7 @@ void apply_hole(game_tuning& tuning, const hole_data& hole) {
     tuning.terrain.control_points = hole.spline.control_points;
     tuning.terrain.width = hole.spline.width;
     tuning.terrain.sample_count = 128;
-    tuning.terrain_mesh_data = build_terrain_mesh(tuning.terrain);
+    tuning.terrain_mesh_data = build_terrain_mesh(tuning.terrain, tuning.course.material_zones, tuning.zone_tuning);
     tuning.wind_seed = hole.wind_seed;
     tuning.ground_y = hole.tee_position.y;
 }
@@ -75,6 +75,9 @@ game_tuning default_game_tuning() {
     tuning.scale.cup_visual_radius_meters = 0.10f;
     tuning.scale.pin_visual_height_meters = 2.10f;
 
+    tuning.zone_tuning.bunker_depth = 0.55f;
+    tuning.zone_tuning.water_depth = 0.35f;
+
     const std::optional<hole_data> loaded_hole = load_hole_from_file(asset_path("holes/test.json"));
     apply_hole(tuning, loaded_hole.value_or(fallback_hole()));
 
@@ -86,6 +89,9 @@ game_tuning default_game_tuning() {
     tuning.physics.drag_coeff = 0.02f;
     tuning.physics.magnus_coeff = 0.0004f;
     tuning.physics.spin_decay = 0.6f;
+    tuning.physics.water_drag_coeff = 0.22f;
+    tuning.physics.water_spin_decay = 2.8f;
+
 
     tuning.wind.seed_phase_scale = 0.01f;
     tuning.wind.base_speed = 2.0f;
@@ -101,6 +107,8 @@ game_tuning default_game_tuning() {
     tuning.stop_speed = 0.08f;
     tuning.ground_restitution = 0.35f;
     tuning.ground_friction = 0.08f;
+    tuning.water_restitution = 0.05f;
+    tuning.water_friction = 0.28f;
     tuning.ground_roll_friction = 1.0f;
     tuning.ground_settle_speed = 0.6f;
     tuning.ball_interact_radius = 3.0f;

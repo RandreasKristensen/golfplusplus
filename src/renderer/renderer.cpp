@@ -93,19 +93,6 @@ std::vector<float> make_sphere_vertices(const int latitude_segments, const int l
     return vertices;
 }
 
-glm::vec3 color_for_material(const render_material_type type) {
-    switch (type) {
-    case render_material_type::green:
-        return glm::vec3(0.20f, 0.68f, 0.28f);
-    case render_material_type::bunker:
-        return glm::vec3(0.66f, 0.55f, 0.22f);
-    case render_material_type::water:
-        return glm::vec3(0.10f, 0.22f, 0.60f);
-    default:
-        return glm::vec3(0.18f, 0.42f, 0.18f);
-    }
-}
-
 void set_terrain_draw_state(shader_program& shader,
                             const glm::mat4& model,
                             const glm::mat4& view,
@@ -566,28 +553,6 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
         glBindVertexArray(terrain_mesh_vao_);
         glDrawElements(GL_TRIANGLES, terrain_mesh_index_count_, GL_UNSIGNED_INT, reinterpret_cast<void*>(0));
         glBindVertexArray(0);
-    }
-
-    for (const render_material_zone& zone : data.material_zones) {
-        if (zone.has_radius) {
-            const float zone_scale = std::max(1.0f, zone.radius * 2.0f);
-            const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1.0f),
-                                                              zone.center + glm::vec3(0.0f, 0.025f, 0.0f)),
-                                               glm::vec3(zone_scale, 1.0f, zone_scale));
-            set_terrain_draw_state(terrain_shader_, model, view, proj, color_for_material(zone.type), false);
-            glBindVertexArray(marker_vao_);
-            glDrawArrays(GL_TRIANGLES, 0, marker_vertex_count_);
-            glBindVertexArray(0);
-        } else if (zone.has_bounds) {
-            const glm::vec3 center = (zone.bounds_min + zone.bounds_max) * 0.5f + glm::vec3(0.0f, 0.025f, 0.0f);
-            const glm::vec3 size = zone.bounds_max - zone.bounds_min;
-            const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1.0f), center),
-                                               glm::vec3(std::max(0.05f, size.x / 24.0f), 1.0f, std::max(0.05f, size.z / 24.0f)));
-            set_terrain_draw_state(terrain_shader_, model, view, proj, color_for_material(zone.type), false);
-            glBindVertexArray(ground_vao_);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
-            glBindVertexArray(0);
-        }
     }
 
     const glm::mat4 tee_model = glm::scale(glm::translate(glm::mat4(1.0f),

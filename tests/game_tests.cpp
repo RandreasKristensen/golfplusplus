@@ -48,7 +48,7 @@ bool near_float(const float a, const float b, const float eps = 0.00001f) {
 }
 
 void rebuild_cached_terrain_mesh(game_tuning& tuning) {
-    tuning.terrain_mesh_data = build_terrain_mesh(tuning.terrain);
+    tuning.terrain_mesh_data = build_terrain_mesh(tuning.terrain, tuning.course.material_zones, tuning.zone_tuning);
 }
 
 glm::vec3 terrain_clamped_tee(const game_tuning& tuning) {
@@ -511,4 +511,55 @@ TEST_CASE("follow mode returns to walking when ball is stopped") {
     CHECK(state.mode == game_mode::walking);
     CHECK(state.player.position == player_position);
     CHECK(!can_interact_with_ball(state));
+}
+
+TEST_CASE("water drag slows ball more than fairway") {
+    game_tuning tuning;
+    tuning.wind.base_speed = 0.0f;
+    tuning.wind.speed_variation = 0.0f;
+    tuning.wind.speed_time_scale = 0.0f;
+    tuning.wind.angle_variation = 0.0f;
+    tuning.wind.angle_time_scale = 0.0f;
+    tuning.wind.phase_angle_scale = 0.0f;
+    tuning.terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 20.0f)
+    };
+    tuning.terrain.width = 10.0f;
+    tuning.terrain.sample_count = 16;
+    tuning.ground_y = 0.0f;
+    tuning.physics.drag_coeff = 0.01f;
+    tuning.physics.magnus_coeff = 0.0f;
+    tuning.physics.spin_decay = 0.0f;
+    tuning.physics.water_drag_coeff = 0.35f;
+    tuning.physics.water_spin_decay = 0.0f;
+    tuning.zone_tuning.water_depth = 0.4f;
+    tuning.ground_restitution = 0.0f;
+    tuning.ground_friction = 0.0f;
+    tuning.water_restitution = 0.0f;
+    tuning.water_friction = 0.0f;
+
+    material_zone water_zone;
+    water_zone.type = material_zone_type::water;
+    water_zone.center = glm::vec3(0.0f, 0.0f, 10.0f);
+    water_zone.radius = 4.5f;
+    water_zone.has_radius = true;
+    tuning.course.material_zones = {water_zone};
+    rebuild_cached_terrain_mesh(tuning);
+
+    game_state wet_state;
+    wet_state.tuning = tuning;
+    wet_state.mode = game_mode::following_shot;
+    wet_state.ball.position = glm::vec3(0.0f, 0.0f, 10.0f);
+    wet_state.ball.velocity = glm::vec3(6.0f, 0.0f, 0.0f);
+
+    game_state dry_state = wet_state;
+    dry_state.tuning.course.material_zones.clear();
+    rebuild_cached_terrain_mesh(dry_state.tuning);
+
+    input_state input;
+    update_game(wet_state, input, 0.016f);
+    update_game(dry_state, input, 0.016f);
+
+    CHECK(horizontal_speed(wet_state.ball.velocity) < horizontal_speed(dry_state.ball.velocity));
 }

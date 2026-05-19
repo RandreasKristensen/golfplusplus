@@ -38,6 +38,7 @@ struct game_tuning {
     world_scale_tuning scale;
     terrain_spline terrain;
     terrain_mesh terrain_mesh_data;
+    terrain_zone_tuning zone_tuning;
     std::vector<club_definition> clubs;
     physics_tuning physics;
     wind_tuning wind;
@@ -49,6 +50,8 @@ struct game_tuning {
     float ground_y = 0.0f;
     float ground_restitution = 0.0f;
     float ground_friction = 0.0f;
+    float water_restitution = 0.0f;
+    float water_friction = 0.0f;
     float ground_roll_friction = 0.0f;
     float ground_settle_speed = 0.0f;
     float ball_interact_radius = 0.0f;

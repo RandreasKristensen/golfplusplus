@@ -1,14 +1,21 @@
 #include "physics/terrain.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
 namespace {
 float clamp01(const float value) {
     return std::max(0.0f, std::min(1.0f, value));
+}
+
+float smoothstep(const float edge0, const float edge1, const float value) {
+    const float t = clamp01((value - edge0) / std::max(0.00001f, edge1 - edge0));
+    return t * t * (3.0f - 2.0f * t);
 }
 
 float distance_xz_squared(const glm::vec3& a, const glm::vec3& b) {
@@ -33,6 +40,131 @@ glm::vec3 safe_normalize(const glm::vec3& value, const glm::vec3& fallback) {
         return fallback;
     }
     return value / len;
+}
+
+int material_priority(const terrain_material material) {
+    switch (material) {
+    case terrain_material::water:
+        return 3;
+    case terrain_material::bunker:
+        return 2;
+    case terrain_material::green:
+        return 1;
+    case terrain_material::fairway:
+        return 0;
+    case terrain_material::rough:
+    default:
+        return -1;
+    }
+}
+
+int material_index(const terrain_material material) {
+    switch (material) {
+    case terrain_material::fairway:
+        return 0;
+    case terrain_material::rough:
+        return 1;
+    case terrain_material::green:
+        return 2;
+    case terrain_material::bunker:
+        return 3;
+    case terrain_material::water:
+        return 4;
+    default:
+        return 0;
+    }
+}
+
+terrain_material material_from_zone(const material_zone_type type) {
+    switch (type) {
+    case material_zone_type::green:
+        return terrain_material::green;
+    case material_zone_type::bunker:
+        return terrain_material::bunker;
+    case material_zone_type::water:
+        return terrain_material::water;
+    default:
+        return terrain_material::fairway;
+    }
+}
+
+int zone_priority(const material_zone_type type) {
+    switch (type) {
+    case material_zone_type::water:
+        return 3;
+    case material_zone_type::bunker:
+        return 2;
+    case material_zone_type::green:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+bool zone_contains(const material_zone& zone, const glm::vec3& position, float& out_normalized_distance) {
+    if (zone.has_radius && zone.radius > 0.00001f) {
+        const float dist = std::sqrt(distance_xz_squared(position, zone.center));
+        if (dist > zone.radius) {
+            return false;
+        }
+        out_normalized_distance = clamp01(dist / zone.radius);
+        return true;
+    }
+
+    if (zone.has_bounds) {
+        const float min_x = std::min(zone.bounds_min.x, zone.bounds_max.x);
+        const float max_x = std::max(zone.bounds_min.x, zone.bounds_max.x);
+        const float min_z = std::min(zone.bounds_min.z, zone.bounds_max.z);
+        const float max_z = std::max(zone.bounds_min.z, zone.bounds_max.z);
+        if (position.x < min_x || position.x > max_x || position.z < min_z || position.z > max_z) {
+            return false;
+        }
+
+        const glm::vec3 center = (zone.bounds_min + zone.bounds_max) * 0.5f;
+        const glm::vec3 half = glm::max(glm::abs(zone.bounds_max - zone.bounds_min) * 0.5f, glm::vec3(0.0001f));
+        const float norm_x = std::abs(position.x - center.x) / half.x;
+        const float norm_z = std::abs(position.z - center.z) / half.z;
+        out_normalized_distance = clamp01(std::max(norm_x, norm_z));
+        return true;
+    }
+
+    return false;
+}
+
+struct zone_hit {
+    bool has_hit = false;
+    terrain_material material = terrain_material::fairway;
+    float normalized_distance = 1.0f;
+};
+
+zone_hit query_zone_hit(const glm::vec3& position, const std::vector<material_zone>& zones) {
+    zone_hit hit;
+    int best_priority = -1;
+    float best_distance = 1.0f;
+
+    for (const material_zone& zone : zones) {
+        float normalized_distance = 0.0f;
+        if (!zone_contains(zone, position, normalized_distance)) {
+            continue;
+        }
+
+        const int priority = zone_priority(zone.type);
+        if (priority < best_priority) {
+            continue;
+        }
+
+        if (priority == best_priority && normalized_distance >= best_distance) {
+            continue;
+        }
+
+        best_priority = priority;
+        best_distance = normalized_distance;
+        hit.has_hit = true;
+        hit.material = material_from_zone(zone.type);
+        hit.normalized_distance = normalized_distance;
+    }
+
+    return hit;
 }
 
 glm::vec3 catmull_rom(const glm::vec3& p0,
@@ -132,7 +264,41 @@ terrain_sample sample_from_barycentric(const terrain_mesh& mesh,
         + b.distance_from_center * barycentric.y
         + c.distance_from_center * barycentric.z);
     sample.triangle_index = triangle_index;
-    sample.material = inside_surface ? terrain_material::fairway : terrain_material::rough;
+    if (inside_surface) {
+        constexpr int material_count = 5;
+        std::array<float, material_count> weights{};
+        const auto add_weight = [&](const terrain_material material, const float weight) {
+            const int index = material_index(material);
+            if (index < 0 || index >= material_count) {
+                return;
+            }
+            weights[static_cast<std::size_t>(index)] += weight;
+        };
+        add_weight(a.material, barycentric.x);
+        add_weight(b.material, barycentric.y);
+        add_weight(c.material, barycentric.z);
+
+        terrain_material best = terrain_material::fairway;
+        float best_weight = -1.0f;
+        int best_priority = -1;
+        for (int i = 0; i < material_count; ++i) {
+            if (weights[i] <= 0.00001f) {
+                continue;
+            }
+            const terrain_material material = static_cast<terrain_material>(i);
+            const int priority = material_priority(material);
+            if (weights[i] > best_weight + 0.00001f ||
+                (std::abs(weights[i] - best_weight) <= 0.00001f && priority > best_priority)) {
+                best = material;
+                best_weight = weights[i];
+                best_priority = priority;
+            }
+        }
+
+        sample.material = best;
+    } else {
+        sample.material = terrain_material::rough;
+    }
     sample.has_spline = true;
     sample.inside_surface = inside_surface;
     return sample;
@@ -188,6 +354,12 @@ glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, const float
 }
 
 terrain_mesh build_terrain_mesh(const terrain_spline& terrain) {
+    return build_terrain_mesh(terrain, {}, terrain_zone_tuning{});
+}
+
+terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
+                                const std::vector<material_zone>& zones,
+                                const terrain_zone_tuning& tuning) {
     terrain_mesh mesh;
     if (terrain.control_points.size() < 2 || terrain.width <= 0.00001f) {
         return mesh;
@@ -212,6 +384,22 @@ terrain_mesh build_terrain_mesh(const terrain_spline& terrain) {
             vertex.normal = glm::vec3(0.0f);
             vertex.distance_from_center = offset;
             vertex.material = terrain_material::fairway;
+
+            const zone_hit hit = query_zone_hit(vertex.position, zones);
+            if (hit.has_hit) {
+                vertex.material = hit.material;
+                if (hit.material == terrain_material::bunker && tuning.bunker_depth > 0.0f) {
+                    const float t = clamp01(hit.normalized_distance);
+                    const float bowl = -(1.0f - t * t) * tuning.bunker_depth;
+                    vertex.position.y += bowl;
+                } else if (hit.material == terrain_material::water && tuning.water_depth > 0.0f) {
+                    constexpr float edge_softness = 0.25f;
+                    const float t = clamp01(hit.normalized_distance);
+                    const float edge = smoothstep(1.0f - edge_softness, 1.0f, t);
+                    const float depth = -tuning.water_depth * (1.0f - edge);
+                    vertex.position.y += depth;
+                }
+            }
             mesh.vertices.push_back(vertex);
         }
     }

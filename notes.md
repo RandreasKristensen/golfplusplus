@@ -47,21 +47,24 @@ cmake --build build/test
 
 ## Ideas
 
-**TODO:** Green 
+A FUCKING PAPER MAP OF THE COURSE YOURE CURRENTLY ON would be so sick
+Also a score card where you can write down, but no control so its possible just to lie lmao. Maybe you gotta even keep count yourself? Then compare with actual count at the end so we can see if you cheat.
+
+analyze tech debt. If we were to, say, want to refactor the hole-editor. What would that cost in our architecture? How do we improve?
+
+How do we implement the quests like they were described in the documentation? Do we have any limitatins in our current architecture that we need to fix before we implement them?
+
+tweak the camera. It doesn't feel correct. Make it have like *FOV* , *height off ground* , and *distance from ball* when standing besides it and swinging settings
 
 I wanna be able to call my clubs stuff
 
-the camera should be life first person walk around an up to the ball, press space, then you line up, then you look down at the ball while you shoot (press space twice) the the character looks up at the ball like you would, first person.
-
-you should be able to pick up balls around the course that are not yours
-
-if you dont find your ball, you have to drop it, theres a timer from when you shoot
+you should be able to pick up balls around the course that are not yours if you dont find your ball, you have to drop it, theres a timer from when you shoot
 
 GOLF CARTS???
 
 higher pixel rendering density.
 
-press shift to get distance to flag or ball, only before pressing space to enter direction-mode.
+press shift to get distance to flag or ball, only before pressing space to enter direction-mode. should be a filter (just like images drawn on top of the lens) with range to the pin, and it can also locate your ball with like a beam of light thats kind of see through
 
 rename to golf++ with g++ logo.
 

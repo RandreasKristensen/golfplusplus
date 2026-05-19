@@ -12,23 +12,6 @@
 #include "renderer/framebuffer.h"
 #include "renderer/shader.h"
 
-enum class render_material_type {
-    green,
-    bunker,
-    water,
-    unknown
-};
-
-struct render_material_zone {
-    render_material_type type = render_material_type::unknown;
-    glm::vec3 center = glm::vec3(0.0f);
-    float radius = 0.0f;
-    glm::vec3 bounds_min = glm::vec3(0.0f);
-    glm::vec3 bounds_max = glm::vec3(0.0f);
-    bool has_radius = false;
-    bool has_bounds = false;
-};
-
 struct render_terrain_vertex {
     glm::vec3 position = glm::vec3(0.0f);
     glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -44,7 +27,6 @@ struct render_data {
     std::vector<glm::vec3> aim_arc_points;
     std::vector<render_terrain_vertex> terrain_vertices;
     std::vector<std::uint32_t> terrain_indices;
-    std::vector<render_material_zone> material_zones;
     float cup_radius = 0.053975f;
     float ball_visual_radius_meters = 0.10f;
     float cup_visual_radius_meters = 0.10f;
