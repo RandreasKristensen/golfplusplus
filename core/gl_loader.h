@@ -52,6 +52,7 @@ extern PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation_ptr;
 extern PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv_ptr;
 extern PFNGLUNIFORM3FVPROC glUniform3fv_ptr;
 extern PFNGLUNIFORM2FVPROC glUniform2fv_ptr;
+extern PFNGLUNIFORM1FPROC glUniform1f_ptr;
 extern PFNGLUNIFORM1IPROC glUniform1i_ptr;
 
 #define glGenVertexArrays glGenVertexArrays_ptr
@@ -94,5 +95,6 @@ extern PFNGLUNIFORM1IPROC glUniform1i_ptr;
 #define glUniformMatrix4fv glUniformMatrix4fv_ptr
 #define glUniform3fv glUniform3fv_ptr
 #define glUniform2fv glUniform2fv_ptr
+#define glUniform1f glUniform1f_ptr
 #define glUniform1i glUniform1i_ptr
 #endif

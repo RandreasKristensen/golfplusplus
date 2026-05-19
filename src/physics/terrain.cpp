@@ -24,6 +24,13 @@ float distance_xz_squared(const glm::vec3& a, const glm::vec3& b) {
     return dx * dx + dz * dz;
 }
 
+float distance_squared(const glm::vec3& a, const glm::vec3& b) {
+    const float dx = a.x - b.x;
+    const float dy = a.y - b.y;
+    const float dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
 float control_polygon_xz_length(const std::vector<glm::vec3>& points) {
     float length = 0.0f;
     for (std::size_t i = 1; i < points.size(); ++i) {
@@ -324,6 +331,102 @@ glm::vec3 closest_barycentric_on_edge(const glm::vec3& position,
     barycentric[i1] = t;
     return barycentric;
 }
+
+int triangle_section_index(const terrain_mesh& mesh, const int triangle_index) {
+    if (mesh.section_count <= 0 || mesh.cross_section_count < 2) {
+        return 0;
+    }
+
+    const int triangles_per_section = (mesh.cross_section_count - 1) * 2;
+    if (triangles_per_section <= 0) {
+        return 0;
+    }
+
+    return std::clamp(triangle_index / triangles_per_section, 0, mesh.section_count - 1);
+}
+
+glm::vec3 section_center_point(const terrain_mesh& mesh, const int section_index) {
+    if (mesh.vertices.empty() || mesh.cross_section_count <= 0 || mesh.section_count <= 0) {
+        return glm::vec3(0.0f);
+    }
+
+    const int clamped_section = std::clamp(section_index, 0, mesh.section_count - 1);
+    const int center_column = mesh.cross_section_count / 2;
+    const std::size_t index = static_cast<std::size_t>(clamped_section * mesh.cross_section_count + center_column);
+    if (index >= mesh.vertices.size()) {
+        return glm::vec3(0.0f);
+    }
+
+    return mesh.vertices[index].position;
+}
+
+struct terrain_candidate {
+    terrain_sample sample;
+    int section_index = 0;
+    float section_distance = std::numeric_limits<float>::max();
+    float height_distance = std::numeric_limits<float>::max();
+    float edge_distance = std::numeric_limits<float>::max();
+};
+
+bool is_better_inside_candidate(const terrain_candidate& candidate,
+                                const terrain_candidate& best,
+                                const int preferred_section) {
+    constexpr float epsilon = 0.00001f;
+    const bool candidate_preferred = preferred_section >= 0 && candidate.section_index == preferred_section;
+    const bool best_preferred = preferred_section >= 0 && best.section_index == preferred_section;
+    if (candidate_preferred != best_preferred) {
+        return candidate_preferred;
+    }
+    if (candidate.section_distance < best.section_distance - epsilon) {
+        return true;
+    }
+    if (candidate.section_distance > best.section_distance + epsilon) {
+        return false;
+    }
+    if (candidate.height_distance < best.height_distance - epsilon) {
+        return true;
+    }
+    if (candidate.height_distance > best.height_distance + epsilon) {
+        return false;
+    }
+    if (candidate.sample.distance_from_center < best.sample.distance_from_center - epsilon) {
+        return true;
+    }
+    if (candidate.sample.distance_from_center > best.sample.distance_from_center + epsilon) {
+        return false;
+    }
+    return candidate.sample.triangle_index < best.sample.triangle_index;
+}
+
+bool is_better_edge_candidate(const terrain_candidate& candidate,
+                              const terrain_candidate& best,
+                              const int preferred_section) {
+    constexpr float epsilon = 0.00001f;
+    const bool candidate_preferred = preferred_section >= 0 && candidate.section_index == preferred_section;
+    const bool best_preferred = preferred_section >= 0 && best.section_index == preferred_section;
+    if (candidate_preferred != best_preferred) {
+        return candidate_preferred;
+    }
+    if (candidate.edge_distance < best.edge_distance - epsilon) {
+        return true;
+    }
+    if (candidate.edge_distance > best.edge_distance + epsilon) {
+        return false;
+    }
+    if (candidate.section_distance < best.section_distance - epsilon) {
+        return true;
+    }
+    if (candidate.section_distance > best.section_distance + epsilon) {
+        return false;
+    }
+    if (candidate.sample.distance_from_center < best.sample.distance_from_center - epsilon) {
+        return true;
+    }
+    if (candidate.sample.distance_from_center > best.sample.distance_from_center + epsilon) {
+        return false;
+    }
+    return candidate.sample.triangle_index < best.sample.triangle_index;
+}
 }
 
 glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, const float t) {
@@ -443,45 +546,87 @@ terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
 }
 
 terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& position, const float fallback_y) {
+    return sample_terrain_mesh(mesh, position, fallback_y, nullptr);
+}
+
+terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
+                                  const glm::vec3& position,
+                                  const float fallback_y,
+                                  const terrain_sample* previous_sample) {
     if (mesh.vertices.empty() || mesh.indices.size() < 3U) {
         terrain_sample sample;
         sample.point = glm::vec3(position.x, fallback_y, position.z);
         return sample;
     }
 
-    float best_distance = std::numeric_limits<float>::max();
-    terrain_sample best_sample;
-    best_sample.point = glm::vec3(position.x, fallback_y, position.z);
+    const glm::vec3 query_point(position.x, fallback_y, position.z);
+    const int preferred_section = previous_sample && previous_sample->triangle_index >= 0
+        ? triangle_section_index(mesh, previous_sample->triangle_index)
+        : -1;
+
+    bool has_inside_candidate = false;
+    bool has_edge_candidate = false;
+    terrain_candidate best_inside;
+    terrain_candidate best_edge;
+    best_edge.sample.point = query_point;
 
     for (std::size_t i = 0; i + 2U < mesh.indices.size(); i += 3U) {
         const terrain_vertex& a = mesh.vertices[mesh.indices[i]];
         const terrain_vertex& b = mesh.vertices[mesh.indices[i + 1U]];
         const terrain_vertex& c = mesh.vertices[mesh.indices[i + 2U]];
+        const int triangle_index = static_cast<int>(i / 3U);
+        const int section_index = triangle_section_index(mesh, triangle_index);
+        const glm::vec3 section_center = section_center_point(mesh, section_index);
+        const float section_distance = distance_xz_squared(query_point, section_center);
 
         glm::vec3 barycentric(0.0f);
         if (barycentric_xz(position, a.position, b.position, c.position, barycentric)) {
-            terrain_sample sample = sample_from_barycentric(mesh, static_cast<int>(i / 3U), barycentric, true);
+            terrain_sample sample = sample_from_barycentric(mesh, triangle_index, barycentric, true);
             sample.point.x = position.x;
             sample.point.z = position.z;
-            return sample;
+            terrain_candidate candidate;
+            candidate.sample = sample;
+            candidate.section_index = section_index;
+            candidate.section_distance = section_distance;
+            candidate.height_distance = std::abs(sample.point.y - fallback_y);
+            if (!has_inside_candidate || is_better_inside_candidate(candidate, best_inside, preferred_section)) {
+                best_inside = candidate;
+                has_inside_candidate = true;
+            }
+            continue;
         }
 
         for (int edge = 0; edge < 3; ++edge) {
             const glm::vec3 edge_barycentric = closest_barycentric_on_edge(position, a.position, b.position, c.position, edge);
-            terrain_sample edge_sample = sample_from_barycentric(mesh, static_cast<int>(i / 3U), edge_barycentric, false);
-            const float distance = distance_xz_squared(position, edge_sample.point);
-            if (distance < best_distance) {
-                best_distance = distance;
-                edge_sample.distance_from_center += std::sqrt(distance);
-                best_sample = edge_sample;
+            terrain_sample edge_sample = sample_from_barycentric(mesh, triangle_index, edge_barycentric, false);
+            const float distance = distance_squared(query_point, edge_sample.point);
+            edge_sample.distance_from_center += std::sqrt(distance);
+            terrain_candidate candidate;
+            candidate.sample = edge_sample;
+            candidate.section_index = section_index;
+            candidate.section_distance = section_distance;
+            candidate.edge_distance = distance;
+            if (!has_edge_candidate || is_better_edge_candidate(candidate, best_edge, preferred_section)) {
+                best_edge = candidate;
+                has_edge_candidate = true;
             }
         }
     }
 
-    best_sample.has_spline = true;
-    best_sample.inside_surface = false;
-    best_sample.material = terrain_material::rough;
-    return best_sample;
+    if (has_inside_candidate) {
+        return best_inside.sample;
+    }
+
+    if (has_edge_candidate) {
+        best_edge.sample.has_spline = true;
+        best_edge.sample.inside_surface = false;
+        best_edge.sample.material = terrain_material::rough;
+        return best_edge.sample;
+    }
+
+    terrain_sample sample;
+    sample.point = query_point;
+    return sample;
 }
 
 terrain_sample sample_terrain(const terrain_spline& terrain, const glm::vec3& position, const float fallback_y) {

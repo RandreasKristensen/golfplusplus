@@ -12,6 +12,7 @@ struct shader_program {
     void set_mat4(const char* name, const glm::mat4& value) const;
     void set_vec3(const char* name, const glm::vec3& value) const;
     void set_vec2(const char* name, const glm::vec2& value) const;
+    void set_float(const char* name, float value) const;
     void set_int(const char* name, int value) const;
 
     unsigned int id() const { return program_; }

@@ -15,6 +15,67 @@ namespace {
 bool near_vec3(const glm::vec3& a, const glm::vec3& b, const float eps = 1e-5f) {
     return glm::length(a - b) <= eps;
 }
+
+bool near_float(const float a, const float b, const float eps = 1e-5f) {
+    return std::fabs(a - b) <= eps;
+}
+
+terrain_mesh crossing_branch_mesh() {
+    terrain_mesh mesh;
+    mesh.section_count = 2;
+    mesh.cross_section_count = 4;
+    mesh.width = 2.0f;
+    mesh.vertices.resize(16);
+
+    const glm::vec3 normal(0.0f, 1.0f, 0.0f);
+
+    const glm::vec3 branch_a[8] = {
+        glm::vec3(-2.0f, 0.0f, -0.8f),
+        glm::vec3(-2.0f, 0.0f,  0.8f),
+        glm::vec3( 2.0f, 0.0f, -0.8f),
+        glm::vec3( 2.0f, 0.0f,  0.8f),
+        glm::vec3(-2.0f, 0.0f, -0.8f),
+        glm::vec3(-2.0f, 0.0f,  0.8f),
+        glm::vec3( 2.0f, 0.0f, -0.8f),
+        glm::vec3( 2.0f, 0.0f,  0.8f)
+    };
+
+    const glm::vec3 branch_b[8] = {
+        glm::vec3(-0.8f, 5.0f, -2.0f),
+        glm::vec3( 0.8f, 5.0f, -2.0f),
+        glm::vec3(-0.8f, 5.0f,  2.0f),
+        glm::vec3( 0.8f, 5.0f,  2.0f),
+        glm::vec3(-0.8f, 5.0f, -2.0f),
+        glm::vec3( 0.8f, 5.0f, -2.0f),
+        glm::vec3(-0.8f, 5.0f,  2.0f),
+        glm::vec3( 0.8f, 5.0f,  2.0f)
+    };
+
+    for (int i = 0; i < 8; ++i) {
+        mesh.vertices[static_cast<std::size_t>(i)].position = branch_a[i];
+        mesh.vertices[static_cast<std::size_t>(i)].normal = normal;
+        mesh.vertices[static_cast<std::size_t>(i)].distance_from_center = 0.0f;
+        mesh.vertices[static_cast<std::size_t>(i)].material = terrain_material::fairway;
+
+        mesh.vertices[static_cast<std::size_t>(i + 8)].position = branch_b[i];
+        mesh.vertices[static_cast<std::size_t>(i + 8)].normal = normal;
+        mesh.vertices[static_cast<std::size_t>(i + 8)].distance_from_center = 0.0f;
+        mesh.vertices[static_cast<std::size_t>(i + 8)].material = terrain_material::green;
+    }
+
+    mesh.indices = {
+        0U, 1U, 2U,
+        1U, 3U, 2U,
+        4U, 5U, 6U,
+        5U, 7U, 6U,
+        8U, 9U, 10U,
+        9U, 11U, 10U,
+        12U, 13U, 14U,
+        13U, 15U, 14U
+    };
+
+    return mesh;
+}
 }
 
 TEST_CASE("ball decelerates under aerodynamic drag") {
@@ -72,10 +133,17 @@ TEST_CASE("ground collision bounces and applies friction") {
     b.velocity = glm::vec3(2.0f, -5.0f, 3.0f);
 
     const ball_state r = resolve_ground_collision(b, 0.0f, 0.8f, 0.3f);
-    CHECK(r.position.y == 0.0f);
+    CHECK(near_float(r.position.y, b.radius));
     CHECK(r.velocity.y > 0.0f);
     CHECK(r.velocity.x < 2.0f);
     CHECK(r.velocity.z < 3.0f);
+}
+
+TEST_CASE("ball state carries the real golf ball contract") {
+    const ball_state ball;
+
+    CHECK(near_float(ball.radius, 0.021335f));
+    CHECK(near_float(ball.mass, 0.04593f));
 }
 
 TEST_CASE("terrain mesh is a continuous shared ribbon") {
@@ -252,6 +320,34 @@ TEST_CASE("terrain sampling clamps outside ribbon as rough") {
     CHECK(sample.distance_from_center > 8.9f);
 }
 
+TEST_CASE("terrain sampling stays on the hinted branch through a crossing overlap") {
+    const terrain_mesh mesh = crossing_branch_mesh();
+    const glm::vec3 crossing(0.0f, 0.0f, 0.0f);
+
+    terrain_sample lower_hint;
+    lower_hint.triangle_index = 0;
+    lower_hint.has_spline = true;
+    lower_hint.inside_surface = true;
+    terrain_sample upper_hint;
+    upper_hint.triangle_index = 6;
+    upper_hint.has_spline = true;
+    upper_hint.inside_surface = true;
+
+    const terrain_sample lower_cross = sample_terrain_mesh(mesh, crossing, 0.0f, &lower_hint);
+    const terrain_sample upper_cross = sample_terrain_mesh(mesh, crossing, 0.0f, &upper_hint);
+
+    CHECK(lower_hint.inside_surface);
+    CHECK(upper_hint.inside_surface);
+    CHECK(lower_cross.inside_surface);
+    CHECK(upper_cross.inside_surface);
+    CHECK(lower_cross.material == terrain_material::fairway);
+    CHECK(upper_cross.material == terrain_material::green);
+    CHECK(std::abs(lower_cross.point.y - 0.0f) < 0.001f);
+    CHECK(std::abs(upper_cross.point.y - 5.0f) < 0.001f);
+    CHECK(lower_cross.triangle_index == lower_hint.triangle_index);
+    CHECK(upper_cross.triangle_index == upper_hint.triangle_index);
+}
+
 TEST_CASE("terrain collision uses spline elevation and is deterministic") {
     terrain_spline terrain;
     terrain.control_points = {
@@ -270,7 +366,7 @@ TEST_CASE("terrain collision uses spline elevation and is deterministic") {
     const ball_state r1 = resolve_terrain_collision(ball, sample, 0.5f, 0.1f);
     const ball_state r2 = resolve_terrain_collision(ball, sample, 0.5f, 0.1f);
 
-    CHECK(r1.position.y > 4.9f);
+    CHECK(near_float(glm::dot(r1.position - sample.point, sample.normal), ball.radius));
     CHECK(r1.velocity.y > ball.velocity.y);
     CHECK(near_vec3(r1.position, r2.position));
     CHECK(near_vec3(r1.velocity, r2.velocity));

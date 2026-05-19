@@ -17,6 +17,14 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
         return &input.down;
     case SDL_SCANCODE_SPACE:
         return &input.space;
+    case SDL_SCANCODE_LSHIFT:
+    case SDL_SCANCODE_RSHIFT:
+        return &input.shift;
+    case SDL_SCANCODE_RETURN:
+    case SDL_SCANCODE_KP_ENTER:
+        return &input.enter;
+    case SDL_SCANCODE_BACKSPACE:
+        return &input.backspace;
     case SDL_SCANCODE_R:
         return &input.retee;
     case SDL_SCANCODE_ESCAPE:
@@ -54,9 +62,6 @@ void poll_events(input_state& input) {
                 set_button_down(*button);
             }
 
-            if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-                input.quit_requested = true;
-            }
         }
 
         if (event.type == SDL_KEYUP && event.key.repeat == 0) {

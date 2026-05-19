@@ -1,185 +1,91 @@
 #include "game/club_loader.h"
 
 #include <algorithm>
-#include <cctype>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <optional>
-#include <sstream>
-#include <stdexcept>
+#include <string>
+#include <vector>
+
+#include <nlohmann/json.hpp>
 
 namespace {
-std::string read_file(const std::filesystem::path& path) {
+using json = nlohmann::json;
+
+std::optional<json> load_json_file(const std::filesystem::path& path) {
     std::ifstream file(path);
     if (!file) {
-        return {};
+        return std::nullopt;
     }
 
-    std::ostringstream stream;
-    stream << file.rdbuf();
-    return stream.str();
+    json parsed = json::parse(file, nullptr, false);
+    if (parsed.is_discarded()) {
+        return std::nullopt;
+    }
+    return parsed;
 }
 
-std::optional<std::size_t> find_object_end(const std::string& text, const std::size_t object_begin) {
-    int depth = 0;
-    bool in_string = false;
-    bool escaped = false;
-
-    for (std::size_t i = object_begin; i < text.size(); ++i) {
-        const char c = text[i];
-        if (in_string) {
-            if (escaped) {
-                escaped = false;
-            } else if (c == '\\') {
-                escaped = true;
-            } else if (c == '"') {
-                in_string = false;
-            }
-            continue;
-        }
-
-        if (c == '"') {
-            in_string = true;
-        } else if (c == '{') {
-            ++depth;
-        } else if (c == '}') {
-            --depth;
-            if (depth == 0) {
-                return i;
-            }
-        }
+std::optional<std::string> string_at(const json& object, const char* key) {
+    const auto it = object.find(key);
+    if (it == object.end() || !it->is_string()) {
+        return std::nullopt;
     }
-
-    return std::nullopt;
+    return it->get<std::string>();
 }
 
-std::optional<std::string> object_for_key(const std::string& text, const char* key) {
-    const std::string needle = std::string("\"") + key + "\"";
-    const std::size_t key_pos = text.find(needle);
-    if (key_pos == std::string::npos) {
+std::optional<int> int_at(const json& object, const char* key) {
+    const auto it = object.find(key);
+    if (it == object.end() || !it->is_number_integer()) {
         return std::nullopt;
     }
-
-    const std::size_t colon = text.find(':', key_pos + needle.size());
-    if (colon == std::string::npos) {
-        return std::nullopt;
-    }
-
-    const std::size_t object_begin = text.find('{', colon + 1);
-    if (object_begin == std::string::npos) {
-        return std::nullopt;
-    }
-
-    const std::optional<std::size_t> object_end = find_object_end(text, object_begin);
-    if (!object_end) {
-        return std::nullopt;
-    }
-
-    return text.substr(object_begin, *object_end - object_begin + 1);
+    return it->get<int>();
 }
 
-std::optional<std::string> string_for_key(const std::string& text, const char* key) {
-    const std::string needle = std::string("\"") + key + "\"";
-    const std::size_t key_pos = text.find(needle);
-    if (key_pos == std::string::npos) {
+std::optional<float> float_at(const json& object, const char* key) {
+    const auto it = object.find(key);
+    if (it == object.end() || !it->is_number()) {
         return std::nullopt;
     }
-
-    const std::size_t colon = text.find(':', key_pos + needle.size());
-    if (colon == std::string::npos) {
-        return std::nullopt;
-    }
-
-    const std::size_t first_quote = text.find('"', colon + 1);
-    if (first_quote == std::string::npos) {
-        return std::nullopt;
-    }
-
-    std::string value;
-    bool escaped = false;
-    for (std::size_t i = first_quote + 1; i < text.size(); ++i) {
-        const char c = text[i];
-        if (escaped) {
-            value.push_back(c);
-            escaped = false;
-        } else if (c == '\\') {
-            escaped = true;
-        } else if (c == '"') {
-            return value;
-        } else {
-            value.push_back(c);
-        }
-    }
-
-    return std::nullopt;
+    return it->get<float>();
 }
 
-std::optional<float> float_for_key(const std::string& text, const char* key) {
-    const std::string needle = std::string("\"") + key + "\"";
-    const std::size_t key_pos = text.find(needle);
-    if (key_pos == std::string::npos) {
+std::optional<club_definition> parse_club_definition(const json& root) {
+    if (!root.is_object()) {
         return std::nullopt;
     }
 
-    const std::size_t colon = text.find(':', key_pos + needle.size());
-    if (colon == std::string::npos) {
+    const auto stats_it = root.find("stats");
+    if (stats_it == root.end() || !stats_it->is_object()) {
         return std::nullopt;
     }
 
-    std::size_t begin = colon + 1;
-    while (begin < text.size() && std::isspace(static_cast<unsigned char>(text[begin])) != 0) {
-        ++begin;
-    }
-
-    char* end = nullptr;
-    const float value = std::strtof(text.c_str() + begin, &end);
-    if (end == text.c_str() + begin) {
-        return std::nullopt;
-    }
-
-    return value;
-}
-
-std::optional<int> int_for_key(const std::string& text, const char* key) {
-    const std::optional<float> value = float_for_key(text, key);
-    if (!value) {
-        return std::nullopt;
-    }
-    return static_cast<int>(*value);
-}
-
-std::optional<club_definition> parse_club_definition(const std::string& text) {
-    const std::optional<std::string> stats = object_for_key(text, "stats");
-    if (!stats) {
-        return std::nullopt;
-    }
-
-    const std::optional<float> power = float_for_key(*stats, "power");
-    const std::optional<float> loft_degrees = float_for_key(*stats, "loft_degrees");
-    const std::optional<float> accuracy = float_for_key(*stats, "accuracy");
-    const std::optional<float> spin_bias = float_for_key(*stats, "spin_bias");
+    const std::optional<float> power = float_at(*stats_it, "power");
+    const std::optional<float> loft_degrees = float_at(*stats_it, "loft_degrees");
+    const std::optional<float> accuracy = float_at(*stats_it, "accuracy");
+    const std::optional<float> spin_bias = float_at(*stats_it, "spin_bias");
     if (!power || !loft_degrees || !accuracy || !spin_bias) {
         return std::nullopt;
     }
 
     club_definition club;
-    club.id = string_for_key(text, "id").value_or("");
-    club.name = string_for_key(text, "name").value_or(club.id);
-    club.label = string_for_key(text, "label").value_or(club.name);
-    club.price = int_for_key(text, "price").value_or(0);
-    club.bag_order = int_for_key(text, "bag_order").value_or(0);
+    club.id = string_at(root, "id").value_or("");
+    club.name = string_at(root, "name").value_or(club.id);
+    club.label = string_at(root, "label").value_or(club.name);
+    club.price = int_at(root, "price").value_or(0);
+    club.bag_order = int_at(root, "bag_order").value_or(0);
     club.stats.power = *power;
     club.stats.loft_degrees = *loft_degrees;
     club.stats.accuracy = *accuracy;
     club.stats.spin_bias = *spin_bias;
+    club.stats.timing_speed = float_at(*stats_it, "timing_speed").value_or(1.0f);
+    club.stats.roll_friction_scale = float_at(*stats_it, "roll_friction_scale").value_or(1.0f);
     return club;
 }
 }
 
 std::vector<club_definition> load_clubs_from_directory(const std::string& directory) {
     std::vector<club_definition> clubs;
-    std::filesystem::path dir(directory);
+    const std::filesystem::path dir(directory);
     if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
         return clubs;
     }
@@ -193,8 +99,11 @@ std::vector<club_definition> load_clubs_from_directory(const std::string& direct
 
     std::sort(files.begin(), files.end());
     for (const std::filesystem::path& path : files) {
-        const std::string contents = read_file(path);
-        const std::optional<club_definition> club = parse_club_definition(contents);
+        const std::optional<json> root = load_json_file(path);
+        if (!root) {
+            continue;
+        }
+        const std::optional<club_definition> club = parse_club_definition(*root);
         if (club) {
             clubs.push_back(*club);
         }

@@ -138,6 +138,13 @@ void shader_program::set_vec2(const char* name, const glm::vec2& value) const {
     }
 }
 
+void shader_program::set_float(const char* name, const float value) const {
+    const int location = glGetUniformLocation(program_, name);
+    if (location >= 0) {
+        glUniform1f(location, value);
+    }
+}
+
 void shader_program::set_int(const char* name, int value) const {
     const int location = glGetUniformLocation(program_, name);
     if (location >= 0) {

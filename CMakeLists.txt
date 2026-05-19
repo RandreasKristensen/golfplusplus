@@ -48,11 +48,18 @@ set(VCR_GOLF_PHYSICS_SOURCES
 )
 
 set(VCR_GOLF_GAME_SOURCES
+    src/game/asset_resolver.cpp
     src/game/club_loader.cpp
+    src/game/course_loader.cpp
+    src/game/game_content.cpp
     src/game/hole_loader.cpp
+    src/game/save_data.cpp
+    src/game/round_state.cpp
     src/game/game_tuning.cpp
     src/game/game_state.cpp
     src/game/swing.cpp
+    quest/quest_loader.cpp
+    quest/quest_engine.cpp
 )
 
 set(GLM_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/vendor/glm)
@@ -82,6 +89,7 @@ add_library(vcr-golf-game ${VCR_GOLF_GAME_SOURCES})
 target_include_directories(vcr-golf-game PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor
     ${GLM_INCLUDE_DIR}
 )
 target_link_libraries(vcr-golf-game PUBLIC vcr-golf-physics)

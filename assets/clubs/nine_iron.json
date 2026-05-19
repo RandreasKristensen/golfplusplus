@@ -1,0 +1,13 @@
+{
+  "id": "nine_iron",
+  "name": "9 Iron",
+  "label": "9I",
+  "price": 0,
+  "bag_order": 3,
+  "stats": {
+    "power": 33.5,
+    "loft_degrees": 40.0,
+    "accuracy": 0.78,
+    "spin_bias": 0.12
+  }
+}

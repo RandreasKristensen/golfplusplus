@@ -1,6 +1,7 @@
 #include "core/app.h"
 
 #include "core/event_loop.h"
+#include "game/asset_resolver.h"
 #include "game/hole_data.h"
 #include "physics/terrain.h"
 
@@ -26,6 +27,10 @@ float radians(const float degrees) {
 
 float terrain_height_at(const game_tuning& tuning, const glm::vec3& position) {
     return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y).point.y;
+}
+
+glm::vec3 terrain_anchor_at(const game_tuning& tuning, const glm::vec3& anchor) {
+    return sample_terrain_mesh(tuning.terrain_mesh_data, anchor, tuning.ground_y).point;
 }
 
 glm::vec3 render_color_for_terrain_material(const terrain_material material, const float distance_from_center, const float width) {
@@ -124,8 +129,9 @@ std::vector<glm::vec3> estimate_aim_arc(const game_state& game) {
 render_data make_render_data(const game_state& game) {
     render_data data;
     data.ball_position = game.ball.position;
-    data.tee_position = game.tuning.course.tee_position;
-    data.pin_position = game.tuning.course.pin_position;
+    data.player_position = game.player.position;
+    data.tee_position = terrain_anchor_at(game.tuning, game.tuning.course.tee_position);
+    data.pin_position = terrain_anchor_at(game.tuning, game.tuning.course.pin_position);
     data.cup_radius = game.tuning.course.cup_radius;
     data.ball_visual_radius_meters = game.tuning.scale.ball_visual_radius_meters;
     data.cup_visual_radius_meters = game.tuning.scale.cup_visual_radius_meters;
@@ -146,6 +152,10 @@ render_data make_render_data(const game_state& game) {
     if (game.selected_club < game.tuning.clubs.size()) {
         data.selected_club_label = game.tuning.clubs[game.selected_club].label;
     }
+    data.show_rangefinder = game.rangefinder_active;
+    data.rangefinder_distance_meters = game.rangefinder_distance_meters;
+    data.rangefinder_distance_label = game.rangefinder_distance_label;
+    data.show_course_map = game.course_map_active;
 
     if (game.mode == game_mode::walking) {
         set_walking_camera(data, game);
@@ -171,7 +181,11 @@ bool app::init() {
         return false;
     }
 
-    game_ = make_initial_game_state();
+    char* base_path = SDL_GetBasePath();
+    game_ = make_initial_game_state(resolve_asset_root(base_path != nullptr ? base_path : ""));
+    if (base_path != nullptr) {
+        SDL_free(base_path);
+    }
     running_ = true;
     return true;
 }
@@ -189,11 +203,13 @@ void app::run() {
         input_.reset_frame();
         poll_events(input_);
 
-        if (input_.quit_requested) {
+        const bool escape_quits = input_.escape.pressed && game_.mode == game_mode::walking;
+        update_game(game_, input_, dt);
+
+        if (input_.quit_requested || escape_quits) {
             running_ = false;
         }
 
-        update_game(game_, input_, dt);
         renderer_.render(make_render_data(game_));
         window_.swap();
     }

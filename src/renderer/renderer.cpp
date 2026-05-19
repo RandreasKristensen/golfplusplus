@@ -5,6 +5,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec4.hpp>
 
 #include <algorithm>
 #include <array>
@@ -102,6 +103,7 @@ void set_terrain_draw_state(shader_program& shader,
     shader.set_mat4("u_model", model);
     shader.set_mat4("u_mvp", proj * view * model);
     shader.set_vec3("u_color", color);
+    shader.set_float("u_alpha", 1.0f);
     shader.set_int("u_use_vertex_color", use_vertex_color ? 1 : 0);
 }
 
@@ -166,18 +168,140 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         "1000",
         "0111"
     };
+    static const std::array<const char*, 7> glyph_d = {
+        "1110",
+        "1001",
+        "1001",
+        "1001",
+        "1001",
+        "1001",
+        "1110"
+    };
+    static const std::array<const char*, 7> glyph_m = {
+        "10001",
+        "11011",
+        "10101",
+        "10101",
+        "10001",
+        "10001",
+        "10001"
+    };
+    static const std::array<const char*, 7> glyph_0 = {
+        "0110",
+        "1001",
+        "1001",
+        "1001",
+        "1001",
+        "1001",
+        "0110"
+    };
+    static const std::array<const char*, 7> glyph_1 = {
+        "010",
+        "110",
+        "010",
+        "010",
+        "010",
+        "010",
+        "111"
+    };
+    static const std::array<const char*, 7> glyph_2 = {
+        "1110",
+        "0001",
+        "0001",
+        "0110",
+        "1000",
+        "1000",
+        "1111"
+    };
+    static const std::array<const char*, 7> glyph_3 = {
+        "1110",
+        "0001",
+        "0001",
+        "0110",
+        "0001",
+        "0001",
+        "1110"
+    };
+    static const std::array<const char*, 7> glyph_4 = {
+        "1001",
+        "1001",
+        "1001",
+        "1111",
+        "0001",
+        "0001",
+        "0001"
+    };
+    static const std::array<const char*, 7> glyph_5 = {
+        "1111",
+        "1000",
+        "1000",
+        "1110",
+        "0001",
+        "0001",
+        "1110"
+    };
+    static const std::array<const char*, 7> glyph_6 = {
+        "0111",
+        "1000",
+        "1000",
+        "1110",
+        "1001",
+        "1001",
+        "0110"
+    };
+    static const std::array<const char*, 7> glyph_8 = {
+        "0110",
+        "1001",
+        "1001",
+        "0110",
+        "1001",
+        "1001",
+        "0110"
+    };
+    static const std::array<const char*, 7> glyph_9 = {
+        "0110",
+        "1001",
+        "1001",
+        "0111",
+        "0001",
+        "0001",
+        "1110"
+    };
 
     switch (value) {
+    case '0':
+        return glyph_0;
+    case '1':
+        return glyph_1;
+    case '2':
+        return glyph_2;
+    case '3':
+        return glyph_3;
+    case '4':
+        return glyph_4;
+    case '5':
+        return glyph_5;
+    case '6':
+        return glyph_6;
+    case '7':
+        return glyph_7;
+    case '8':
+        return glyph_8;
+    case '9':
+        return glyph_9;
     case 'P':
         return glyph_p;
     case 'W':
         return glyph_w;
-    case '7':
-        return glyph_7;
     case 'S':
         return glyph_s;
     case 'C':
         return glyph_c;
+    case 'D':
+        return glyph_d;
+    case 'M':
+    case 'm':
+        return glyph_m;
     default:
         return glyph_i;
     }
@@ -187,12 +311,17 @@ int glyph_width(const char value) {
     return static_cast<int>(std::string(glyph_rows(value)[0]).size());
 }
 
-void draw_overlay_quad(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const glm::vec3 color) {
+void draw_overlay_quad(shader_program& shader,
+                       const glm::vec2 center,
+                       const glm::vec2 half_size,
+                       const glm::vec3 color,
+                       const float alpha = 1.0f) {
     const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(center, 0.0f)),
                                        glm::vec3(half_size, 1.0f));
     shader.set_mat4("u_model", glm::mat4(1.0f));
     shader.set_mat4("u_mvp", model);
     shader.set_vec3("u_color", color);
+    shader.set_float("u_alpha", alpha);
     shader.set_int("u_use_vertex_color", 0);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
@@ -219,17 +348,34 @@ void draw_pixel_glyph(shader_program& shader,
     }
 }
 
+float pixel_text_width(const std::string& label, const float pixel_size) {
+    float width = 0.0f;
+    for (const char c : label) {
+        width += static_cast<float>(glyph_width(c) + 1) * pixel_size;
+    }
+    return std::max(0.0f, width - pixel_size);
+}
+
+void draw_pixel_text_centered(shader_program& shader,
+                              const std::string& label,
+                              const glm::vec2 center,
+                              const float pixel_size,
+                              const glm::vec3 color) {
+    const float width = pixel_text_width(label, pixel_size);
+    glm::vec2 cursor(center.x - width * 0.5f, center.y + 3.5f * pixel_size);
+    for (const char c : label) {
+        draw_pixel_glyph(shader, c, cursor, pixel_size, color);
+        cursor.x += static_cast<float>(glyph_width(c) + 1) * pixel_size;
+    }
+}
+
 void draw_club_label(shader_program& shader, const std::string& label) {
     const glm::vec3 label_color(0.90f, 0.88f, 0.76f);
     const glm::vec3 panel_color(0.055f, 0.06f, 0.07f);
     draw_overlay_quad(shader, glm::vec2(0.78f, 0.78f), glm::vec2(0.17f, 0.12f), panel_color);
 
     const float pixel_size = 0.025f;
-    float width = 0.0f;
-    for (const char c : label) {
-        width += static_cast<float>(glyph_width(c) + 1) * pixel_size;
-    }
-    width = std::max(0.0f, width - pixel_size);
+    const float width = pixel_text_width(label, pixel_size);
 
     glm::vec2 cursor(0.78f - width * 0.5f, 0.86f);
     for (const char c : label) {
@@ -245,17 +391,171 @@ void draw_interact_prompt(shader_program& shader) {
 
     const std::string label = "SPC";
     const float pixel_size = 0.021f;
-    float width = 0.0f;
-    for (const char c : label) {
-        width += static_cast<float>(glyph_width(c) + 1) * pixel_size;
-    }
-    width = std::max(0.0f, width - pixel_size);
+    const float width = pixel_text_width(label, pixel_size);
 
     glm::vec2 cursor(-width * 0.5f, -0.51f);
     for (const char c : label) {
         draw_pixel_glyph(shader, c, cursor, pixel_size, prompt_color);
         cursor.x += static_cast<float>(glyph_width(c) + 1) * pixel_size;
     }
+}
+
+bool project_to_screen(const glm::mat4& view,
+                       const glm::mat4& proj,
+                       const glm::vec3& world_position,
+                       glm::vec2& screen_position) {
+    const glm::vec4 clip = proj * view * glm::vec4(world_position, 1.0f);
+    if (clip.w <= 0.0f) {
+        return false;
+    }
+
+    const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+    if (ndc.z < -1.0f || ndc.z > 1.0f) {
+        return false;
+    }
+
+    screen_position = glm::vec2(ndc.x, ndc.y);
+    return true;
+}
+
+void draw_rangefinder_view(shader_program& shader,
+                           const glm::mat4& view,
+                           const glm::mat4& proj,
+                           const render_data& data) {
+    draw_overlay_quad(shader, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.16f, 0.34f, 0.24f), 0.18f);
+    draw_overlay_quad(shader, glm::vec2(-0.91f, 0.0f), glm::vec2(0.18f, 1.0f), glm::vec3(0.01f, 0.018f, 0.014f), 0.52f);
+    draw_overlay_quad(shader, glm::vec2(0.91f, 0.0f), glm::vec2(0.18f, 1.0f), glm::vec3(0.01f, 0.018f, 0.014f), 0.52f);
+    draw_overlay_quad(shader, glm::vec2(0.0f, 0.89f), glm::vec2(1.0f, 0.22f), glm::vec3(0.01f, 0.018f, 0.014f), 0.45f);
+    draw_overlay_quad(shader, glm::vec2(0.0f, -0.89f), glm::vec2(1.0f, 0.22f), glm::vec3(0.01f, 0.018f, 0.014f), 0.45f);
+
+    const glm::vec3 reticle_color(0.62f, 0.96f, 0.64f);
+    draw_overlay_quad(shader, glm::vec2(0.0f, 0.0f), glm::vec2(0.006f, 0.11f), reticle_color, 0.72f);
+    draw_overlay_quad(shader, glm::vec2(0.0f, 0.0f), glm::vec2(0.11f, 0.006f), reticle_color, 0.72f);
+    draw_overlay_quad(shader, glm::vec2(-0.18f, 0.0f), glm::vec2(0.055f, 0.006f), reticle_color, 0.56f);
+    draw_overlay_quad(shader, glm::vec2(0.18f, 0.0f), glm::vec2(0.055f, 0.006f), reticle_color, 0.56f);
+    draw_overlay_quad(shader, glm::vec2(0.0f, -0.18f), glm::vec2(0.006f, 0.055f), reticle_color, 0.56f);
+    draw_overlay_quad(shader, glm::vec2(0.0f, 0.18f), glm::vec2(0.006f, 0.055f), reticle_color, 0.56f);
+
+    glm::vec2 pin_screen(0.0f);
+    const glm::vec3 label_anchor = data.pin_position + glm::vec3(0.0f, data.pin_visual_height_meters + 0.36f, 0.0f);
+    if (!project_to_screen(view, proj, label_anchor, pin_screen)) {
+        return;
+    }
+
+    pin_screen.x = std::max(-0.78f, std::min(0.78f, pin_screen.x));
+    pin_screen.y = std::max(-0.68f, std::min(0.82f, pin_screen.y));
+    const float pixel_size = 0.025f;
+    const float label_width = pixel_text_width(data.rangefinder_distance_label, pixel_size);
+    const glm::vec2 panel_half(std::max(0.13f, label_width * 0.5f + 0.045f), 0.085f);
+    draw_overlay_quad(shader, pin_screen + glm::vec2(0.0f, 0.015f), panel_half, glm::vec3(0.015f, 0.032f, 0.024f), 0.78f);
+    draw_pixel_text_centered(shader,
+                             data.rangefinder_distance_label,
+                             pin_screen + glm::vec2(0.0f, 0.015f),
+                             pixel_size,
+                             glm::vec3(0.76f, 1.0f, 0.72f));
+}
+
+struct course_map_layout {
+    glm::vec2 center{0.0f, 0.02f};
+    glm::vec2 half_size{0.68f, 0.76f};
+    glm::vec3 world_center{0.0f};
+    float scale = 0.01f;
+};
+
+void expand_map_bounds(const glm::vec3& position, glm::vec2& min_point, glm::vec2& max_point) {
+    min_point.x = std::min(min_point.x, position.x);
+    min_point.y = std::min(min_point.y, position.z);
+    max_point.x = std::max(max_point.x, position.x);
+    max_point.y = std::max(max_point.y, position.z);
+}
+
+course_map_layout make_course_map_layout(const render_data& data) {
+    glm::vec2 min_point(data.tee_position.x, data.tee_position.z);
+    glm::vec2 max_point = min_point;
+    expand_map_bounds(data.pin_position, min_point, max_point);
+    expand_map_bounds(data.player_position, min_point, max_point);
+    expand_map_bounds(data.ball_position, min_point, max_point);
+
+    for (const render_terrain_vertex& vertex : data.terrain_vertices) {
+        expand_map_bounds(vertex.position, min_point, max_point);
+    }
+
+    const glm::vec2 size = max_point - min_point;
+    const float fallback_span = std::max(1.0f, data.course_extent);
+    const float span = std::max(fallback_span * 0.12f, std::max(size.x, size.y));
+
+    course_map_layout layout;
+    layout.world_center = glm::vec3((min_point.x + max_point.x) * 0.5f,
+                                    0.0f,
+                                    (min_point.y + max_point.y) * 0.5f);
+    layout.scale = std::min(layout.half_size.x, layout.half_size.y) * 1.72f / std::max(1.0f, span);
+    return layout;
+}
+
+glm::vec2 map_point(const course_map_layout& layout, const glm::vec3& position) {
+    const glm::vec2 delta(position.x - layout.world_center.x, position.z - layout.world_center.z);
+    return layout.center + delta * layout.scale;
+}
+
+void draw_map_marker(shader_program& shader,
+                     const glm::vec2 position,
+                     const glm::vec3 color,
+                     const float radius) {
+    draw_overlay_quad(shader, position, glm::vec2(radius), glm::vec3(0.04f, 0.035f, 0.025f), 0.55f);
+    draw_overlay_quad(shader, position, glm::vec2(radius * 0.64f), color, 1.0f);
+}
+
+void draw_paper_course_map(shader_program& shader, const render_data& data) {
+    const course_map_layout layout = make_course_map_layout(data);
+    const glm::vec3 paper(0.76f, 0.72f, 0.55f);
+    const glm::vec3 paper_shadow(0.14f, 0.12f, 0.09f);
+    draw_overlay_quad(shader, layout.center + glm::vec2(0.035f, -0.035f), layout.half_size, paper_shadow, 0.42f);
+    draw_overlay_quad(shader, layout.center, layout.half_size, paper, 0.96f);
+
+    const glm::vec3 fold(0.42f, 0.35f, 0.24f);
+    draw_overlay_quad(shader, layout.center, glm::vec2(layout.half_size.x, 0.006f), fold, 0.18f);
+    draw_overlay_quad(shader, layout.center, glm::vec2(0.006f, layout.half_size.y), fold, 0.18f);
+    draw_overlay_quad(shader,
+                      layout.center + glm::vec2(0.0f, layout.half_size.y),
+                      glm::vec2(layout.half_size.x, 0.012f),
+                      fold,
+                      0.46f);
+    draw_overlay_quad(shader,
+                      layout.center - glm::vec2(0.0f, layout.half_size.y),
+                      glm::vec2(layout.half_size.x, 0.012f),
+                      fold,
+                      0.46f);
+    draw_overlay_quad(shader,
+                      layout.center + glm::vec2(layout.half_size.x, 0.0f),
+                      glm::vec2(0.012f, layout.half_size.y),
+                      fold,
+                      0.46f);
+    draw_overlay_quad(shader,
+                      layout.center - glm::vec2(layout.half_size.x, 0.0f),
+                      glm::vec2(0.012f, layout.half_size.y),
+                      fold,
+                      0.46f);
+
+    const float terrain_dot = std::max(0.0028f, std::min(0.0065f, layout.scale * 0.34f));
+    for (const render_terrain_vertex& vertex : data.terrain_vertices) {
+        const glm::vec2 point = map_point(layout, vertex.position);
+        if (std::abs(point.x - layout.center.x) > layout.half_size.x - 0.025f ||
+            std::abs(point.y - layout.center.y) > layout.half_size.y - 0.025f) {
+            continue;
+        }
+
+        const glm::vec3 ink = vertex.color * 0.72f + glm::vec3(0.10f, 0.08f, 0.04f);
+        draw_overlay_quad(shader, point, glm::vec2(terrain_dot), ink, 0.72f);
+    }
+
+    draw_map_marker(shader, map_point(layout, data.tee_position), glm::vec3(0.34f, 0.21f, 0.12f), 0.023f);
+    draw_map_marker(shader, map_point(layout, data.ball_position), glm::vec3(0.94f, 0.93f, 0.82f), 0.020f);
+    draw_map_marker(shader, map_point(layout, data.player_position), glm::vec3(0.22f, 0.46f, 0.72f), 0.024f);
+
+    const glm::vec2 pin = map_point(layout, data.pin_position);
+    draw_overlay_quad(shader, pin + glm::vec2(0.0f, 0.028f), glm::vec2(0.004f, 0.042f), glm::vec3(0.06f, 0.04f, 0.025f), 0.92f);
+    draw_overlay_quad(shader, pin + glm::vec2(0.022f, 0.055f), glm::vec2(0.028f, 0.018f), glm::vec3(0.76f, 0.17f, 0.12f), 0.96f);
+    draw_map_marker(shader, pin, glm::vec3(0.94f, 0.78f, 0.22f), 0.018f);
 }
 }
 
@@ -372,7 +672,7 @@ void renderer::render(const render_data& data) {
                                        glm::vec3(0.0f, 1.0f, 0.0f));
 
     render_scene(view, proj, data);
-    render_overlay(data);
+    render_overlay(view, proj, data);
 
     framebuffer::bind_default();
     render_crt(screen_width, screen_height);
@@ -607,7 +907,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
 
     const float ball_radius = std::max(0.02f, data.ball_visual_radius_meters);
     const glm::mat4 ball_model = glm::scale(glm::translate(glm::mat4(1.0f),
-                                                           data.ball_position + glm::vec3(0.0f, ball_radius, 0.0f)),
+                                                           data.ball_position),
                                             glm::vec3(ball_radius));
     const glm::mat4 ball_mvp = proj * view * ball_model;
 
@@ -622,14 +922,25 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     glBindVertexArray(0);
 }
 
-void renderer::render_overlay(const render_data& data) {
+void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, const render_data& data) {
     glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     terrain_shader_.use();
     terrain_shader_.set_mat4("u_model", glm::mat4(1.0f));
     terrain_shader_.set_int("u_use_vertex_color", 0);
+    terrain_shader_.set_float("u_alpha", 1.0f);
     terrain_shader_.set_vec3("u_light_dir", glm::vec3(0.0f, 1.0f, 0.0f));
     glBindVertexArray(screen_vao_);
+
+    if (data.show_course_map) {
+        draw_paper_course_map(terrain_shader_, data);
+    }
+
+    if (data.show_rangefinder) {
+        draw_rangefinder_view(terrain_shader_, view, proj, data);
+    }
 
     draw_club_label(terrain_shader_, data.selected_club_label);
 
@@ -675,6 +986,7 @@ void renderer::render_overlay(const render_data& data) {
     }
 
     glBindVertexArray(0);
+    glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
 }
 

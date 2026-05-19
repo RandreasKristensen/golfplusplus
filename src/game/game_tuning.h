@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/club_definition.h"
+#include "game/course_definition.h"
 #include "game/hole_data.h"
 #include "physics/physics_tuning.h"
 #include "physics/terrain.h"
@@ -61,4 +62,11 @@ struct game_tuning {
 };
 
 // Central gameplay feel tuning. Edit this factory's values in game_tuning.cpp.
+std::vector<club_definition> fallback_club_definitions();
 game_tuning default_game_tuning();
+game_tuning default_game_tuning(const std::string& asset_root);
+void apply_hole_to_tuning(game_tuning& tuning, const hole_data& hole);
+bool load_hole_runtime(game_tuning& tuning,
+                       const course_definition& course,
+                       std::size_t hole_index,
+                       const std::string& asset_root);

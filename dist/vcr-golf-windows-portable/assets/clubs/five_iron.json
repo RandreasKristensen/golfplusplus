@@ -1,0 +1,13 @@
+{
+  "id": "five_iron",
+  "name": "5 Iron",
+  "label": "5I",
+  "price": 0,
+  "bag_order": 5,
+  "stats": {
+    "power": 45.0,
+    "loft_degrees": 27.0,
+    "accuracy": 0.62,
+    "spin_bias": 0.06
+  }
+}

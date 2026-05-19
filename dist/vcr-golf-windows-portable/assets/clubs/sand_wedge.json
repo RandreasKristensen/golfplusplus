@@ -1,0 +1,13 @@
+{
+  "id": "sand_wedge",
+  "name": "Sand Wedge",
+  "label": "SW",
+  "price": 0,
+  "bag_order": 1,
+  "stats": {
+    "power": 25.0,
+    "loft_degrees": 54.0,
+    "accuracy": 0.86,
+    "spin_bias": 0.18
+  }
+}

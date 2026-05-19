@@ -1,6 +1,8 @@
 #include "game/game_state.h"
 
 #include "core/input.h"
+#include "game/asset_resolver.h"
+#include "game/course_loader.h"
 #include "physics/ball_physics.h"
 #include "physics/collision.h"
 #include "physics/terrain.h"
@@ -8,6 +10,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <filesystem>
 
 #include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
@@ -37,9 +41,46 @@ terrain_sample terrain_sample_at(const game_tuning& tuning, const glm::vec3& pos
     return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y);
 }
 
-glm::vec3 terrain_clamped_position(const game_tuning& tuning, glm::vec3 position) {
-    position.y = terrain_height_at(tuning, position);
-    return position;
+terrain_sample terrain_sample_at(const game_tuning& tuning,
+                                 const glm::vec3& position,
+                                 const terrain_sample* previous_sample) {
+    return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y, previous_sample);
+}
+
+glm::vec3 pin_anchor_position(const game_tuning& tuning) {
+    return terrain_sample_at(tuning, tuning.course.pin_position).point;
+}
+
+void update_rangefinder_state(game_state& state, const input_state& input) {
+    state.rangefinder_active = rangefinder_should_show(state.mode, input);
+    state.rangefinder_distance_meters = compute_rangefinder_distance_meters(state.player.position,
+                                                                            pin_anchor_position(state.tuning),
+                                                                            state.tuning.scale.meters_per_world_unit);
+    state.rangefinder_distance_label = format_rangefinder_distance(state.rangefinder_distance_meters);
+}
+
+void update_course_map_state(game_state& state, const input_state& input) {
+    state.course_map_active = course_map_should_show(state.mode, input);
+}
+
+void update_walk_overlays(game_state& state, const input_state& input) {
+    update_rangefinder_state(state, input);
+    update_course_map_state(state, input);
+}
+
+glm::vec3 ball_rest_position(const game_tuning& tuning, const glm::vec3& position, const float radius) {
+    const terrain_sample terrain = terrain_sample_at(tuning, position);
+    const glm::vec3 normal = glm::length(terrain.normal) > 0.00001f
+        ? glm::normalize(terrain.normal)
+        : glm::vec3(0.0f, 1.0f, 0.0f);
+    return terrain.point + normal * radius;
+}
+
+float ball_support_distance(const ball_state& ball, const terrain_sample& terrain) {
+    const glm::vec3 normal = glm::length(terrain.normal) > 0.00001f
+        ? glm::normalize(terrain.normal)
+        : glm::vec3(0.0f, 1.0f, 0.0f);
+    return glm::dot(ball.position - terrain.point, normal);
 }
 
 glm::vec3 address_player_position(const game_state& state) {
@@ -90,6 +131,13 @@ void launch_ball(game_state& state) {
     ++state.stroke_count;
 }
 
+club_stats selected_club_stats(const game_state& state) {
+    if (state.selected_club >= state.tuning.clubs.size()) {
+        return club_stats{};
+    }
+    return state.tuning.clubs[state.selected_club].stats;
+}
+
 void place_player_near_ball(game_state& state) {
     const glm::vec3 forward = aim_direction(state.aim_angle);
     state.player.position = state.ball.position - forward * state.tuning.player_stand_off_distance;
@@ -97,12 +145,14 @@ void place_player_near_ball(game_state& state) {
     state.player.yaw = state.aim_angle;
 }
 
-void apply_ground_roll_friction(game_state& state, const float dt) {
-    const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position);
+void apply_ground_roll_friction(game_state& state,
+                                const terrain_sample& terrain,
+                                const float roll_friction_scale,
+                                const float dt) {
     if (terrain.material == terrain_material::water) {
         return;
     }
-    if (state.ball.position.y > terrain.point.y + 0.001f) {
+    if (ball_support_distance(state.ball, terrain) > state.ball.radius + 0.001f) {
         return;
     }
 
@@ -114,7 +164,6 @@ void apply_ground_roll_friction(game_state& state, const float dt) {
         return;
     }
 
-    state.ball.position.y = terrain.point.y;
     const glm::vec3 tangent_velocity = state.ball.velocity - normal * normal_speed;
     const float speed = glm::length(tangent_velocity);
     if (speed <= 0.0f) {
@@ -122,14 +171,16 @@ void apply_ground_roll_friction(game_state& state, const float dt) {
         return;
     }
 
-    const float speed_after_friction = std::max(0.0f, speed - state.tuning.ground_roll_friction * dt);
+    const float speed_after_friction = std::max(0.0f,
+                                                speed - state.tuning.ground_roll_friction *
+                                                std::max(0.0f, roll_friction_scale) * dt);
     state.ball.velocity = tangent_velocity * (speed_after_friction / speed);
 }
 
 void update_swing(game_state& state, const input_state& input, const float dt) {
     if (state.swing.phase == swing_phase::timing) {
         state.swing.elapsed += dt;
-        state.swing.power = sample_swing_power(state.swing.elapsed);
+        state.swing.power = sample_swing_power(state.swing.elapsed * selected_club_stats(state).timing_speed);
     }
 
     if (!input.space.pressed) {
@@ -226,13 +277,14 @@ void step_ball(game_state& state, const float dt) {
         return;
     }
 
+    const club_stats launched_club = selected_club_stats(state);
     const wind_state wind = sample_wind(state.tuning.wind_seed, state.hole_time, state.tuning.wind);
     const terrain_sample terrain_before = terrain_sample_at(state.tuning, state.ball.position);
     const bool water_zone = terrain_before.material == terrain_material::water;
     const float water_depth = std::max(0.0f, state.tuning.zone_tuning.water_depth);
     // Water surface is inferred from the deformed mesh depth.
     const float water_surface = terrain_before.point.y + water_depth;
-    const bool water_volume = water_zone && state.ball.position.y <= water_surface;
+    const bool water_volume = water_zone && (state.ball.position.y - state.ball.radius) <= water_surface;
 
     physics_tuning physics = state.tuning.physics;
     if (water_volume) {
@@ -241,33 +293,93 @@ void step_ball(game_state& state, const float dt) {
     }
 
     state.ball = step(state.ball, wind, dt, physics);
-    const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position);
+    const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position, &terrain_before);
     const bool in_water = terrain.material == terrain_material::water;
     const float restitution = in_water ? state.tuning.water_restitution : state.tuning.ground_restitution;
-    const float friction = in_water ? state.tuning.water_friction : state.tuning.ground_friction;
+    const float friction = in_water
+        ? state.tuning.water_friction
+        : state.tuning.ground_friction * std::max(0.0f, launched_club.roll_friction_scale);
     state.ball = resolve_terrain_collision(state.ball,
                                            terrain,
                                            restitution,
                                            friction);
-    apply_ground_roll_friction(state, dt);
+    apply_ground_roll_friction(state, terrain, launched_club.roll_friction_scale, dt);
+}
+
+void reset_transient_hole_state(game_state& state) {
+    state.ball.radius = state.tuning.scale.ball_physics_radius_meters;
+    state.ball.mass = state.tuning.scale.ball_mass_kg;
+    state.ball.position = ball_rest_position(state.tuning, state.tuning.course.tee_position, state.ball.radius);
+    state.ball.velocity = glm::vec3(0.0f);
+    state.ball.spin = glm::vec3(0.0f);
+    state.shot_camera_position = glm::vec3(0.0f);
+    state.swing = swing_state{};
+    state.mode = game_mode::walking;
+    state.stroke_count = 0;
+    state.hole_time = 0.0f;
+    place_player_near_ball(state);
+    input_state input;
+    update_walk_overlays(state, input);
 }
 }
 
 game_state make_initial_game_state() {
+    return make_initial_game_state(resolve_asset_root(""));
+}
+
+game_state make_initial_game_state(const std::string& asset_root) {
     game_state state;
-    state.tuning = default_game_tuning();
-    state.ball.position = terrain_clamped_position(state.tuning, state.tuning.course.tee_position);
-    place_player_near_ball(state);
+    state.asset_root = asset_root;
+    std::vector<course_definition> courses = load_courses_from_directory((std::filesystem::path(asset_root) / "courses").string());
+    state.active_course = courses.empty() ? fallback_course_definition() : courses.front();
+    state.round = start_course(state.active_course);
+    state.save.current_course_id = state.active_course.id;
+    state.save.current_hole_index = 0;
+    state.tuning = default_game_tuning(asset_root);
+    reset_transient_hole_state(state);
     return state;
 }
 
 void retee_ball(game_state& state) {
-    state.ball.position = terrain_clamped_position(state.tuning, state.tuning.course.tee_position);
-    state.ball.velocity = glm::vec3(0.0f);
-    state.ball.spin = glm::vec3(0.0f);
-    state.swing = swing_state{};
-    state.mode = game_mode::walking;
-    place_player_near_ball(state);
+    const int strokes = state.stroke_count;
+    reset_transient_hole_state(state);
+    state.stroke_count = strokes;
+}
+
+bool start_game_course(game_state& state, const course_definition& course) {
+    const round_state next_round = start_course(course);
+    if (next_round.finished || !load_hole_runtime(state.tuning, course, 0, state.asset_root)) {
+        return false;
+    }
+
+    state.active_course = course;
+    state.round = next_round;
+    state.save.current_course_id = course.id;
+    state.save.current_hole_index = 0;
+    reset_transient_hole_state(state);
+    return true;
+}
+
+bool complete_current_hole(game_state& state) {
+    const std::size_t completed_index = state.round.current_hole_index;
+    state.save.current_course_id = state.active_course.id;
+    state.save.hole_scores[static_cast<int>(completed_index)] = state.stroke_count;
+    const bool has_next = complete_hole(state.round, state.stroke_count);
+    state.save.current_hole_index = static_cast<int>(state.round.current_hole_index);
+    if (state.round.finished) {
+        return true;
+    }
+
+    if (!has_next || state.round.current_hole_index == completed_index) {
+        return false;
+    }
+
+    if (!load_hole_runtime(state.tuning, state.active_course, state.round.current_hole_index, state.asset_root)) {
+        return false;
+    }
+
+    reset_transient_hole_state(state);
+    return true;
 }
 
 void update_game(game_state& state, const input_state& input, const float dt) {
@@ -276,6 +388,14 @@ void update_game(game_state& state, const input_state& input, const float dt) {
 
     if (input.retee.pressed) {
         retee_ball(state);
+        update_walk_overlays(state, input);
+        return;
+    }
+
+    if (should_cancel_shot_setup(state.mode, input)) {
+        state.mode = game_mode::walking;
+        state.swing = swing_state{};
+        update_walk_overlays(state, input);
         return;
     }
 
@@ -297,11 +417,14 @@ void update_game(game_state& state, const input_state& input, const float dt) {
             state.mode = game_mode::walking;
         }
     }
+
+    update_walk_overlays(state, input);
 }
 
 bool ball_is_moving(const ball_state& ball, const game_tuning& tuning) {
-    const float terrain_height = terrain_height_at(tuning, ball.position);
-    return glm::length(ball.velocity) > tuning.stop_speed || ball.position.y > terrain_height + 0.001f;
+    const terrain_sample terrain = terrain_sample_at(tuning, ball.position);
+    return glm::length(ball.velocity) > tuning.stop_speed
+        || ball_support_distance(ball, terrain) > ball.radius + 0.001f;
 }
 
 bool ball_is_moving(const ball_state& ball) {
@@ -313,4 +436,32 @@ bool can_interact_with_ball(const game_state& state) {
     const glm::vec3 horizontal_delta(delta.x, 0.0f, delta.z);
     return glm::length(horizontal_delta) <= state.tuning.ball_interact_radius
         && !ball_is_moving(state.ball, state.tuning);
+}
+
+bool rangefinder_should_show(const game_mode mode, const input_state& input) {
+    return mode == game_mode::walking && input.shift.is_down;
+}
+
+bool course_map_should_show(const game_mode mode, const input_state& input) {
+    return mode == game_mode::walking && input.enter.is_down;
+}
+
+bool should_cancel_shot_setup(const game_mode mode, const input_state& input) {
+    return (mode == game_mode::aiming || mode == game_mode::addressing)
+        && (input.backspace.pressed || input.escape.pressed);
+}
+
+float compute_rangefinder_distance_meters(const glm::vec3& player_position,
+                                          const glm::vec3& pin_anchor,
+                                          const float meters_per_world_unit) {
+    const glm::vec3 delta = pin_anchor - player_position;
+    const glm::vec3 horizontal_delta(delta.x, 0.0f, delta.z);
+    return glm::length(horizontal_delta) * meters_per_world_unit;
+}
+
+std::string format_rangefinder_distance(const float distance_meters) {
+    const int rounded_meters = static_cast<int>(std::floor(std::max(0.0f, distance_meters) + 0.5f));
+    char buffer[16] = {};
+    std::snprintf(buffer, sizeof(buffer), "%dM", rounded_meters);
+    return std::string(buffer);
 }

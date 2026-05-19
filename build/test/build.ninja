@@ -54,7 +54,7 @@ build CMakeFiles/vcr-golf.dir/core/main.cpp.obj: CXX_COMPILER__vcr-golf_unscanne
   DEFINES = -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf.dir\core\main.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -isystem C:/msys64/mingw64/include/SDL2
   OBJECT_DIR = CMakeFiles\vcr-golf.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf.dir\core
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf.dir
@@ -64,7 +64,7 @@ build CMakeFiles/vcr-golf.dir/core/app.cpp.obj: CXX_COMPILER__vcr-golf_unscanned
   DEFINES = -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf.dir\core\app.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -isystem C:/msys64/mingw64/include/SDL2
   OBJECT_DIR = CMakeFiles\vcr-golf.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf.dir\core
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf.dir
@@ -74,7 +74,7 @@ build CMakeFiles/vcr-golf.dir/core/window.cpp.obj: CXX_COMPILER__vcr-golf_unscan
   DEFINES = -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf.dir\core\window.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -isystem C:/msys64/mingw64/include/SDL2
   OBJECT_DIR = CMakeFiles\vcr-golf.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf.dir\core
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf.dir
@@ -84,7 +84,7 @@ build CMakeFiles/vcr-golf.dir/core/event_loop.cpp.obj: CXX_COMPILER__vcr-golf_un
   DEFINES = -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf.dir\core\event_loop.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -isystem C:/msys64/mingw64/include/SDL2
   OBJECT_DIR = CMakeFiles\vcr-golf.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf.dir\core
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf.dir
@@ -94,7 +94,7 @@ build CMakeFiles/vcr-golf.dir/core/gl_loader.cpp.obj: CXX_COMPILER__vcr-golf_uns
   DEFINES = -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf.dir\core\gl_loader.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -isystem C:/msys64/mingw64/include/SDL2
   OBJECT_DIR = CMakeFiles\vcr-golf.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf.dir\core
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf.dir
@@ -104,7 +104,7 @@ build CMakeFiles/vcr-golf.dir/src/renderer/shader.cpp.obj: CXX_COMPILER__vcr-gol
   DEFINES = -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf.dir\src\renderer\shader.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -isystem C:/msys64/mingw64/include/SDL2
   OBJECT_DIR = CMakeFiles\vcr-golf.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf.dir\src\renderer
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf.dir
@@ -114,7 +114,7 @@ build CMakeFiles/vcr-golf.dir/src/renderer/framebuffer.cpp.obj: CXX_COMPILER__vc
   DEFINES = -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf.dir\src\renderer\framebuffer.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -isystem C:/msys64/mingw64/include/SDL2
   OBJECT_DIR = CMakeFiles\vcr-golf.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf.dir\src\renderer
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf.dir
@@ -124,7 +124,7 @@ build CMakeFiles/vcr-golf.dir/src/renderer/renderer.cpp.obj: CXX_COMPILER__vcr-g
   DEFINES = -DSDL_MAIN_HANDLED -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf.dir\src\renderer\renderer.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -isystem C:/msys64/mingw64/include/SDL2
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -isystem C:/msys64/mingw64/include/SDL2
   OBJECT_DIR = CMakeFiles\vcr-golf.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf.dir\src\renderer
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf.dir
@@ -230,12 +230,42 @@ build libvcr-golf-physics.a: CXX_STATIC_LIBRARY_LINKER__vcr-golf-physics_Debug C
 
 build cmake_object_order_depends_target_vcr-golf-game: phony || cmake_object_order_depends_target_vcr-golf-physics
 
+build CMakeFiles/vcr-golf-game.dir/src/game/asset_resolver.cpp.obj: CXX_COMPILER__vcr-golf-game_unscanned_Debug C$:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/asset_resolver.cpp || cmake_object_order_depends_target_vcr-golf-game
+  CONFIG = Debug
+  DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
+  DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\asset_resolver.cpp.obj.d
+  FLAGS = -g -std=gnu++17
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
+  OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
+  OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\src\game
+  TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
+
 build CMakeFiles/vcr-golf-game.dir/src/game/club_loader.cpp.obj: CXX_COMPILER__vcr-golf-game_unscanned_Debug C$:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/club_loader.cpp || cmake_object_order_depends_target_vcr-golf-game
   CONFIG = Debug
   DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\club_loader.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
+  OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
+  OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\src\game
+  TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
+
+build CMakeFiles/vcr-golf-game.dir/src/game/course_loader.cpp.obj: CXX_COMPILER__vcr-golf-game_unscanned_Debug C$:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/course_loader.cpp || cmake_object_order_depends_target_vcr-golf-game
+  CONFIG = Debug
+  DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
+  DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\course_loader.cpp.obj.d
+  FLAGS = -g -std=gnu++17
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
+  OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
+  OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\src\game
+  TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
+
+build CMakeFiles/vcr-golf-game.dir/src/game/game_content.cpp.obj: CXX_COMPILER__vcr-golf-game_unscanned_Debug C$:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/game_content.cpp || cmake_object_order_depends_target_vcr-golf-game
+  CONFIG = Debug
+  DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
+  DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\game_content.cpp.obj.d
+  FLAGS = -g -std=gnu++17
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
   OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\src\game
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
@@ -245,7 +275,27 @@ build CMakeFiles/vcr-golf-game.dir/src/game/hole_loader.cpp.obj: CXX_COMPILER__v
   DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\hole_loader.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
+  OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
+  OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\src\game
+  TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
+
+build CMakeFiles/vcr-golf-game.dir/src/game/save_data.cpp.obj: CXX_COMPILER__vcr-golf-game_unscanned_Debug C$:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/save_data.cpp || cmake_object_order_depends_target_vcr-golf-game
+  CONFIG = Debug
+  DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
+  DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\save_data.cpp.obj.d
+  FLAGS = -g -std=gnu++17
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
+  OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
+  OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\src\game
+  TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
+
+build CMakeFiles/vcr-golf-game.dir/src/game/round_state.cpp.obj: CXX_COMPILER__vcr-golf-game_unscanned_Debug C$:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/round_state.cpp || cmake_object_order_depends_target_vcr-golf-game
+  CONFIG = Debug
+  DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
+  DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\round_state.cpp.obj.d
+  FLAGS = -g -std=gnu++17
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
   OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\src\game
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
@@ -255,7 +305,7 @@ build CMakeFiles/vcr-golf-game.dir/src/game/game_tuning.cpp.obj: CXX_COMPILER__v
   DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\game_tuning.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
   OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\src\game
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
@@ -265,7 +315,7 @@ build CMakeFiles/vcr-golf-game.dir/src/game/game_state.cpp.obj: CXX_COMPILER__vc
   DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\game_state.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
   OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\src\game
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
@@ -275,9 +325,29 @@ build CMakeFiles/vcr-golf-game.dir/src/game/swing.cpp.obj: CXX_COMPILER__vcr-gol
   DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
   DEP_FILE = CMakeFiles\vcr-golf-game.dir\src\game\swing.cpp.obj.d
   FLAGS = -g -std=gnu++17
-  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
   OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
   OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\src\game
+  TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
+
+build CMakeFiles/vcr-golf-game.dir/quest/quest_loader.cpp.obj: CXX_COMPILER__vcr-golf-game_unscanned_Debug C$:/Users/arand/Desktop/AU/sjov/golfplusplus/quest/quest_loader.cpp || cmake_object_order_depends_target_vcr-golf-game
+  CONFIG = Debug
+  DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
+  DEP_FILE = CMakeFiles\vcr-golf-game.dir\quest\quest_loader.cpp.obj.d
+  FLAGS = -g -std=gnu++17
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
+  OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
+  OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\quest
+  TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
+
+build CMakeFiles/vcr-golf-game.dir/quest/quest_engine.cpp.obj: CXX_COMPILER__vcr-golf-game_unscanned_Debug C$:/Users/arand/Desktop/AU/sjov/golfplusplus/quest/quest_engine.cpp || cmake_object_order_depends_target_vcr-golf-game
+  CONFIG = Debug
+  DEFINES = -DVCR_GOLF_ASSETS_DIR=\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\"
+  DEP_FILE = CMakeFiles\vcr-golf-game.dir\quest\quest_engine.cpp.obj.d
+  FLAGS = -g -std=gnu++17
+  INCLUDES = -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor
+  OBJECT_DIR = CMakeFiles\vcr-golf-game.dir
+  OBJECT_FILE_DIR = CMakeFiles\vcr-golf-game.dir\quest
   TARGET_SUPPORT_DIR = CMakeFiles\vcr-golf-game.dir
 
 
@@ -288,7 +358,7 @@ build CMakeFiles/vcr-golf-game.dir/src/game/swing.cpp.obj: CXX_COMPILER__vcr-gol
 #############################################
 # Link the static library libvcr-golf-game.a
 
-build libvcr-golf-game.a: CXX_STATIC_LIBRARY_LINKER__vcr-golf-game_Debug CMakeFiles/vcr-golf-game.dir/src/game/club_loader.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/hole_loader.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/game_tuning.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/game_state.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/swing.cpp.obj || libvcr-golf-physics.a
+build libvcr-golf-game.a: CXX_STATIC_LIBRARY_LINKER__vcr-golf-game_Debug CMakeFiles/vcr-golf-game.dir/src/game/asset_resolver.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/club_loader.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/course_loader.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/game_content.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/hole_loader.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/save_data.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/round_state.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/game_tuning.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/game_state.cpp.obj CMakeFiles/vcr-golf-game.dir/src/game/swing.cpp.obj CMakeFiles/vcr-golf-game.dir/quest/quest_loader.cpp.obj CMakeFiles/vcr-golf-game.dir/quest/quest_engine.cpp.obj || libvcr-golf-physics.a
   CONFIG = Debug
   LANGUAGE_COMPILE_FLAGS = -g
   OBJECT_DIR = CMakeFiles\vcr-golf-game.dir

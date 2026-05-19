@@ -20,6 +20,7 @@ struct render_terrain_vertex {
 
 struct render_data {
     glm::vec3 ball_position = glm::vec3(0.0f);
+    glm::vec3 player_position = glm::vec3(0.0f);
     glm::vec3 camera_position = glm::vec3(0.0f, 6.0f, -12.0f);
     glm::vec3 camera_target = glm::vec3(0.0f);
     glm::vec3 tee_position = glm::vec3(0.0f);
@@ -27,9 +28,9 @@ struct render_data {
     std::vector<glm::vec3> aim_arc_points;
     std::vector<render_terrain_vertex> terrain_vertices;
     std::vector<std::uint32_t> terrain_indices;
-    float cup_radius = 0.053975f;
+    float cup_radius = 0.65f;
     float ball_visual_radius_meters = 0.10f;
-    float cup_visual_radius_meters = 0.10f;
+    float cup_visual_radius_meters = 0.75f;
     float pin_visual_height_meters = 2.10f;
     float course_extent = 100.0f;
     float aim_angle = 0.0f;
@@ -40,6 +41,10 @@ struct render_data {
     float swing_power = 0.0f;
     int stroke_count = 0;
     std::string selected_club_label;
+    bool show_rangefinder = false;
+    float rangefinder_distance_meters = 0.0f;
+    std::string rangefinder_distance_label;
+    bool show_course_map = false;
 };
 
 struct renderer {
@@ -52,7 +57,7 @@ private:
     bool init_geometry();
     bool init_framebuffer();
     void render_scene(const glm::mat4& view, const glm::mat4& proj, const render_data& data);
-    void render_overlay(const render_data& data);
+    void render_overlay(const glm::mat4& view, const glm::mat4& proj, const render_data& data);
     void render_crt(int screen_width, int screen_height);
     void upload_terrain_mesh(const render_data& data);
 

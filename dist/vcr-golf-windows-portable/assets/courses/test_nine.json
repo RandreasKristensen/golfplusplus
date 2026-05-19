@@ -1,0 +1,16 @@
+{
+  "id": "test_nine",
+  "name": "Test Nine",
+  "hole_count": 9,
+  "holes": [
+    "holes/test.json",
+    "holes/test.json",
+    "holes/test.json",
+    "holes/test.json",
+    "holes/test.json",
+    "holes/test.json",
+    "holes/test.json",
+    "holes/test.json",
+    "holes/test.json"
+  ]
+}

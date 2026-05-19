@@ -45,6 +45,7 @@ PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation_ptr = nullptr;
 PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv_ptr = nullptr;
 PFNGLUNIFORM3FVPROC glUniform3fv_ptr = nullptr;
 PFNGLUNIFORM2FVPROC glUniform2fv_ptr = nullptr;
+PFNGLUNIFORM1FPROC glUniform1f_ptr = nullptr;
 PFNGLUNIFORM1IPROC glUniform1i_ptr = nullptr;
 
 namespace {
@@ -102,6 +103,7 @@ bool load_gl_functions() {
     ok &= load_proc(glUniformMatrix4fv_ptr, "glUniformMatrix4fv");
     ok &= load_proc(glUniform3fv_ptr, "glUniform3fv");
     ok &= load_proc(glUniform2fv_ptr, "glUniform2fv");
+    ok &= load_proc(glUniform1f_ptr, "glUniform1f");
     ok &= load_proc(glUniform1i_ptr, "glUniform1i");
 
     return ok;
