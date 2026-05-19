@@ -67,6 +67,12 @@
 },
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-physics.dir\\src\\physics\\terrain.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\physics\\terrain.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/physics/terrain.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-physics.dir/src/physics/terrain.cpp.obj"
+},
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
   "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-physics.dir\\src\\physics\\wind.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\physics\\wind.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/physics/wind.cpp",
   "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-physics.dir/src/physics/wind.cpp.obj"
@@ -76,6 +82,12 @@
   "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-game.dir\\src\\game\\club_loader.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\game\\club_loader.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/club_loader.cpp",
   "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-game.dir/src/game/club_loader.cpp.obj"
+},
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-game.dir\\src\\game\\hole_loader.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\game\\hole_loader.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/hole_loader.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-game.dir/src/game/hole_loader.cpp.obj"
 },
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",

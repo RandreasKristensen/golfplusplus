@@ -1,7 +1,9 @@
 #include "game/game_tuning.h"
 
 #include "game/club_loader.h"
+#include "game/hole_loader.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,15 +27,56 @@ std::vector<club_definition> fallback_clubs() {
         club_definition{"seven_iron", "7 Iron", "7I", 0, 2, club_stats{28.0f, 34.0f, 0.70f, 0.08f}}
     };
 }
+
+hole_data fallback_hole() {
+    hole_data hole;
+    hole.id = "fallback_sandbox";
+    hole.name = "Fallback Sandbox";
+    hole.par = 3;
+    hole.wind_seed = 42U;
+    hole.tee_position = glm::vec3(0.0f, 0.0f, 0.0f);
+    hole.pin_position = glm::vec3(0.0f, 0.0f, 80.0f);
+    hole.spline.width = 18.0f;
+    hole.spline.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 40.0f),
+        glm::vec3(0.0f, 0.0f, 80.0f)
+    };
+    return hole;
+}
+
+void apply_hole(game_tuning& tuning, const hole_data& hole) {
+    tuning.course.id = hole.id;
+    tuning.course.name = hole.name;
+    tuning.course.par = hole.par;
+    tuning.course.tee_position = hole.tee_position;
+    tuning.course.pin_position = hole.pin_position;
+    tuning.course.cup_radius = tuning.scale.cup_physics_radius_meters;
+    tuning.course.extent = estimate_course_extent(hole);
+    tuning.course.spline = hole.spline;
+    tuning.course.material_zones = hole.material_zones;
+    tuning.terrain.control_points = hole.spline.control_points;
+    tuning.terrain.width = hole.spline.width;
+    tuning.terrain.sample_count = 128;
+    tuning.terrain_mesh_data = build_terrain_mesh(tuning.terrain);
+    tuning.wind_seed = hole.wind_seed;
+    tuning.ground_y = hole.tee_position.y;
+}
 }
 
 game_tuning default_game_tuning() {
     game_tuning tuning;
 
-    tuning.course.tee_position = glm::vec3(0.0f, 0.0f, 0.0f);
-    tuning.course.pin_position = glm::vec3(0.0f, 0.0f, 80.0f);
-    tuning.course.cup_radius = 0.75f;
-    tuning.course.extent = 140.0f;
+    tuning.scale.meters_per_world_unit = 1.0f;
+    tuning.scale.ball_physics_radius_meters = 0.021335f;
+    tuning.scale.ball_mass_kg = 0.04593f;
+    tuning.scale.cup_physics_radius_meters = 0.053975f;
+    tuning.scale.ball_visual_radius_meters = 0.10f;
+    tuning.scale.cup_visual_radius_meters = 0.10f;
+    tuning.scale.pin_visual_height_meters = 2.10f;
+
+    const std::optional<hole_data> loaded_hole = load_hole_from_file(asset_path("holes/test.json"));
+    apply_hole(tuning, loaded_hole.value_or(fallback_hole()));
 
     tuning.clubs = load_clubs_from_directory(asset_path("clubs"));
     if (tuning.clubs.empty()) {
@@ -52,12 +95,10 @@ game_tuning default_game_tuning() {
     tuning.wind.angle_time_scale = 0.11f;
     tuning.wind.phase_angle_scale = 1.3f;
 
-    tuning.wind_seed = 42U;
     tuning.aim_turn_rate = 1.8f;
     tuning.min_swing_power = 0.15f;
     tuning.launch_side_spin_scale = 4.0f;
     tuning.stop_speed = 0.08f;
-    tuning.ground_y = 0.0f;
     tuning.ground_restitution = 0.35f;
     tuning.ground_friction = 0.08f;
     tuning.ground_roll_friction = 1.0f;

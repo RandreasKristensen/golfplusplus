@@ -1,22 +1,43 @@
 #pragma once
 
 #include "game/club_definition.h"
+#include "game/hole_data.h"
 #include "physics/physics_tuning.h"
+#include "physics/terrain.h"
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include <glm/vec3.hpp>
 
 struct sandbox_course {
+    std::string id;
+    std::string name;
+    int par = 3;
     glm::vec3 tee_position{0.0f, 0.0f, 0.0f};
     glm::vec3 pin_position{0.0f, 0.0f, 0.0f};
     float cup_radius = 0.0f;
     float extent = 0.0f;
+    hole_spline spline;
+    std::vector<material_zone> material_zones;
+};
+
+struct world_scale_tuning {
+    float meters_per_world_unit = 1.0f;
+    float ball_physics_radius_meters = 0.021335f;
+    float ball_mass_kg = 0.04593f;
+    float cup_physics_radius_meters = 0.053975f;
+    float ball_visual_radius_meters = 0.10f;
+    float cup_visual_radius_meters = 0.10f;
+    float pin_visual_height_meters = 2.10f;
 };
 
 struct game_tuning {
     sandbox_course course;
+    world_scale_tuning scale;
+    terrain_spline terrain;
+    terrain_mesh terrain_mesh_data;
     std::vector<club_definition> clubs;
     physics_tuning physics;
     wind_tuning wind;

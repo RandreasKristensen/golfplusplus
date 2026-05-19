@@ -3,6 +3,7 @@
 #include "core/input.h"
 #include "physics/ball_physics.h"
 #include "physics/collision.h"
+#include "physics/terrain.h"
 #include "physics/wind.h"
 
 #include <algorithm>
@@ -28,11 +29,24 @@ glm::vec3 address_camera_position(const game_state& state) {
     return state.ball.position + left * 2.4f - forward * 0.7f + glm::vec3(0.0f, 2.0f, 0.0f);
 }
 
+float terrain_height_at(const game_tuning& tuning, const glm::vec3& position) {
+    return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y).point.y;
+}
+
+terrain_sample terrain_sample_at(const game_tuning& tuning, const glm::vec3& position) {
+    return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y);
+}
+
+glm::vec3 terrain_clamped_position(const game_tuning& tuning, glm::vec3 position) {
+    position.y = terrain_height_at(tuning, position);
+    return position;
+}
+
 glm::vec3 address_player_position(const game_state& state) {
     const glm::vec3 forward = aim_direction(state.aim_angle);
     const glm::vec3 left = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
     glm::vec3 position = state.ball.position + left * state.tuning.player_stand_off_distance - forward * 0.4f;
-    position.y = state.tuning.ground_y;
+    position.y = terrain_height_at(state.tuning, position);
     return position;
 }
 
@@ -79,30 +93,34 @@ void launch_ball(game_state& state) {
 void place_player_near_ball(game_state& state) {
     const glm::vec3 forward = aim_direction(state.aim_angle);
     state.player.position = state.ball.position - forward * state.tuning.player_stand_off_distance;
-    state.player.position.y = state.tuning.ground_y;
+    state.player.position.y = terrain_height_at(state.tuning, state.player.position);
     state.player.yaw = state.aim_angle;
 }
 
 void apply_ground_roll_friction(game_state& state, const float dt) {
-    if (state.ball.position.y > state.tuning.ground_y + 0.001f) {
+    const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position);
+    if (state.ball.position.y > terrain.point.y + 0.001f) {
         return;
     }
 
-    if (std::abs(state.ball.velocity.y) <= state.tuning.ground_settle_speed) {
-        state.ball.position.y = state.tuning.ground_y;
-        state.ball.velocity.y = 0.0f;
+    const glm::vec3 normal = glm::length(terrain.normal) > 0.00001f
+        ? glm::normalize(terrain.normal)
+        : glm::vec3(0.0f, 1.0f, 0.0f);
+    const float normal_speed = glm::dot(state.ball.velocity, normal);
+    if (normal_speed > state.tuning.ground_settle_speed) {
+        return;
     }
 
-    glm::vec3 horizontal(state.ball.velocity.x, 0.0f, state.ball.velocity.z);
-    const float speed = glm::length(horizontal);
+    state.ball.position.y = terrain.point.y;
+    const glm::vec3 tangent_velocity = state.ball.velocity - normal * normal_speed;
+    const float speed = glm::length(tangent_velocity);
     if (speed <= 0.0f) {
+        state.ball.velocity = glm::vec3(0.0f);
         return;
     }
 
     const float speed_after_friction = std::max(0.0f, speed - state.tuning.ground_roll_friction * dt);
-    const glm::vec3 damped = horizontal * (speed_after_friction / speed);
-    state.ball.velocity.x = damped.x;
-    state.ball.velocity.z = damped.z;
+    state.ball.velocity = tangent_velocity * (speed_after_friction / speed);
 }
 
 void update_swing(game_state& state, const input_state& input, const float dt) {
@@ -143,7 +161,7 @@ void update_walking(game_state& state, const input_state& input, const float dt)
         state.player.position -= forward * state.tuning.player_walk_speed * dt;
     }
 
-    state.player.position.y = state.tuning.ground_y;
+    state.player.position.y = terrain_height_at(state.tuning, state.player.position);
 
     if (input.space.pressed && can_interact_with_ball(state)) {
         state.mode = game_mode::aiming;
@@ -192,6 +210,11 @@ void update_addressing(game_state& state, const input_state& input, const float 
 
 void step_ball(game_state& state, const float dt) {
     if (!ball_is_moving(state.ball, state.tuning)) {
+        const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position);
+        state.ball = resolve_terrain_collision(state.ball,
+                                               terrain,
+                                               state.tuning.ground_restitution,
+                                               state.tuning.ground_friction);
         state.ball.velocity = glm::vec3(0.0f, 0.0f, 0.0f);
         state.ball.spin = glm::vec3(0.0f, 0.0f, 0.0f);
         return;
@@ -199,10 +222,11 @@ void step_ball(game_state& state, const float dt) {
 
     const wind_state wind = sample_wind(state.tuning.wind_seed, state.hole_time, state.tuning.wind);
     state.ball = step(state.ball, wind, dt, state.tuning.physics);
-    state.ball = resolve_ground_collision(state.ball,
-                                          state.tuning.ground_y,
-                                          state.tuning.ground_restitution,
-                                          state.tuning.ground_friction);
+    const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position);
+    state.ball = resolve_terrain_collision(state.ball,
+                                           terrain,
+                                           state.tuning.ground_restitution,
+                                           state.tuning.ground_friction);
     apply_ground_roll_friction(state, dt);
 }
 }
@@ -210,13 +234,13 @@ void step_ball(game_state& state, const float dt) {
 game_state make_initial_game_state() {
     game_state state;
     state.tuning = default_game_tuning();
-    state.ball.position = state.tuning.course.tee_position;
+    state.ball.position = terrain_clamped_position(state.tuning, state.tuning.course.tee_position);
     place_player_near_ball(state);
     return state;
 }
 
 void retee_ball(game_state& state) {
-    state.ball.position = state.tuning.course.tee_position;
+    state.ball.position = terrain_clamped_position(state.tuning, state.tuning.course.tee_position);
     state.ball.velocity = glm::vec3(0.0f);
     state.ball.spin = glm::vec3(0.0f);
     state.swing = swing_state{};
@@ -254,7 +278,8 @@ void update_game(game_state& state, const input_state& input, const float dt) {
 }
 
 bool ball_is_moving(const ball_state& ball, const game_tuning& tuning) {
-    return glm::length(ball.velocity) > tuning.stop_speed || ball.position.y > 0.001f;
+    const float terrain_height = terrain_height_at(tuning, ball.position);
+    return glm::length(ball.velocity) > tuning.stop_speed || ball.position.y > terrain_height + 0.001f;
 }
 
 bool ball_is_moving(const ball_state& ball) {

@@ -43,11 +43,13 @@ set(VCR_GOLF_PHYSICS_SOURCES
     src/physics/ball_physics.cpp
     src/physics/flight_model.cpp
     src/physics/collision.cpp
+    src/physics/terrain.cpp
     src/physics/wind.cpp
 )
 
 set(VCR_GOLF_GAME_SOURCES
     src/game/club_loader.cpp
+    src/game/hole_loader.cpp
     src/game/game_tuning.cpp
     src/game/game_state.cpp
     src/game/swing.cpp

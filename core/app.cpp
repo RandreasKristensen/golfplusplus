@@ -1,6 +1,8 @@
 #include "core/app.h"
 
 #include "core/event_loop.h"
+#include "game/hole_data.h"
+#include "physics/terrain.h"
 
 #include <SDL.h>
 
@@ -20,6 +22,73 @@ glm::vec3 aim_direction(const float aim_angle) {
 
 float radians(const float degrees) {
     return degrees * pi / 180.0f;
+}
+
+float terrain_height_at(const game_tuning& tuning, const glm::vec3& position) {
+    return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y).point.y;
+}
+
+render_material_type render_type_for_material(const material_zone_type type) {
+    switch (type) {
+    case material_zone_type::green:
+        return render_material_type::green;
+    case material_zone_type::bunker:
+        return render_material_type::bunker;
+    case material_zone_type::water:
+        return render_material_type::water;
+    default:
+        return render_material_type::unknown;
+    }
+}
+
+glm::vec3 render_color_for_terrain_material(const terrain_material material, const float distance_from_center, const float width) {
+    const float half_width = std::max(0.001f, width * 0.5f);
+    const float edge_amount = std::max(0.0f, std::min(1.0f, std::abs(distance_from_center) / half_width));
+
+    switch (material) {
+    case terrain_material::fairway:
+        return glm::vec3(0.17f + edge_amount * 0.04f,
+                         0.44f - edge_amount * 0.08f,
+                         0.17f + edge_amount * 0.02f);
+    case terrain_material::rough:
+        return glm::vec3(0.12f, 0.27f, 0.12f);
+    default:
+        return glm::vec3(0.16f, 0.38f, 0.16f);
+    }
+}
+
+std::vector<render_terrain_vertex> make_render_terrain_vertices(const terrain_mesh& mesh) {
+    std::vector<render_terrain_vertex> vertices;
+    vertices.reserve(mesh.vertices.size());
+
+    for (const terrain_vertex& vertex : mesh.vertices) {
+        render_terrain_vertex render_vertex;
+        render_vertex.position = vertex.position;
+        render_vertex.normal = vertex.normal;
+        render_vertex.color = render_color_for_terrain_material(vertex.material, vertex.distance_from_center, mesh.width);
+        vertices.push_back(render_vertex);
+    }
+
+    return vertices;
+}
+
+std::vector<render_material_zone> make_render_zones(const std::vector<material_zone>& zones) {
+    std::vector<render_material_zone> render_zones;
+    render_zones.reserve(zones.size());
+
+    for (const material_zone& zone : zones) {
+        render_material_zone render_zone;
+        render_zone.type = render_type_for_material(zone.type);
+        render_zone.center = zone.center;
+        render_zone.radius = zone.radius;
+        render_zone.bounds_min = zone.bounds_min;
+        render_zone.bounds_max = zone.bounds_max;
+        render_zone.has_radius = zone.has_radius;
+        render_zone.has_bounds = zone.has_bounds;
+        render_zones.push_back(render_zone);
+    }
+
+    return render_zones;
 }
 
 void set_walking_camera(render_data& data, const game_state& game) {
@@ -65,8 +134,9 @@ std::vector<glm::vec3> estimate_aim_arc(const game_state& game) {
     for (int i = 1; i <= max_points; ++i) {
         const float t = static_cast<float>(i) * step_seconds;
         glm::vec3 point = game.ball.position + velocity * t + glm::vec3(0.0f, 0.5f * gravity * t * t, 0.0f);
-        if (point.y < game.tuning.ground_y) {
-            point.y = game.tuning.ground_y;
+        const float terrain_height = terrain_height_at(game.tuning, point);
+        if (point.y < terrain_height) {
+            point.y = terrain_height;
             points.push_back(point);
             break;
         }
@@ -82,7 +152,13 @@ render_data make_render_data(const game_state& game) {
     data.tee_position = game.tuning.course.tee_position;
     data.pin_position = game.tuning.course.pin_position;
     data.cup_radius = game.tuning.course.cup_radius;
+    data.ball_visual_radius_meters = game.tuning.scale.ball_visual_radius_meters;
+    data.cup_visual_radius_meters = game.tuning.scale.cup_visual_radius_meters;
+    data.pin_visual_height_meters = game.tuning.scale.pin_visual_height_meters;
     data.course_extent = game.tuning.course.extent;
+    data.terrain_vertices = make_render_terrain_vertices(game.tuning.terrain_mesh_data);
+    data.terrain_indices = game.tuning.terrain_mesh_data.indices;
+    data.material_zones = make_render_zones(game.tuning.course.material_zones);
     data.aim_angle = game.aim_angle;
     if (game.mode == game_mode::aiming) {
         data.aim_arc_points = estimate_aim_arc(game);

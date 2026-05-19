@@ -47,6 +47,8 @@ cmake --build build/test
 
 ## Ideas
 
+**TODO:** Green 
+
 I wanna be able to call my clubs stuff
 
 the camera should be life first person walk around an up to the ball, press space, then you line up, then you look down at the ball while you shoot (press space twice) the the character looks up at the ball like you would, first person.
@@ -57,4 +59,32 @@ if you dont find your ball, you have to drop it, theres a timer from when you sh
 
 GOLF CARTS???
 
-marker for expected flight in aim mode.
+higher pixel rendering density.
+
+press shift to get distance to flag or ball, only before pressing space to enter direction-mode.
+
+rename to golf++ with g++ logo.
+
+fix build settings
+
+prompt 
+                            it will probably fail on your friends’ machines because it cannot find the DLLs or assets.
+
+                            What you can send right now is a folder like:
+
+                            vcr-golf/
+                                vcr-golf.exe
+                                SDL2.dll
+                                libstdc++-6.dll
+                                libgcc_s_seh-1.dll
+                                assets/
+                                shaders/
+                                clubs/
+                                holes/
+
+                            But we should first change asset loading from the baked source path to a path relative to the executable, like:
+
+                            ./assets
+
+                            Then the zipped folder will work much more reliably. The right next step is adding a small runtime asset-path
+                            resolver based on the executable directory.
