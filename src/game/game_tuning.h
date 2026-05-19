@@ -1,6 +1,6 @@
 #pragma once
 
-#include "physics/club_stats.h"
+#include "game/club_definition.h"
 #include "physics/physics_tuning.h"
 
 #include <cstdint>
@@ -17,7 +17,7 @@ struct sandbox_course {
 
 struct game_tuning {
     sandbox_course course;
-    std::vector<club_stats> clubs;
+    std::vector<club_definition> clubs;
     physics_tuning physics;
     wind_tuning wind;
     std::uint32_t wind_seed = 0U;
@@ -27,9 +27,13 @@ struct game_tuning {
     float stop_speed = 0.0f;
     float ground_y = 0.0f;
     float ground_restitution = 0.0f;
-    float ground_friction = 0.004f;
+    float ground_friction = 0.0f;
     float ground_roll_friction = 0.0f;
-    float ground_settle_speed = 0.001f;
+    float ground_settle_speed = 0.0f;
+    float ball_interact_radius = 0.0f;
+    float player_walk_speed = 0.0f;
+    float player_turn_rate = 0.0f;
+    float player_stand_off_distance = 0.0f;
 };
 
 // Central gameplay feel tuning. Edit this factory's values in game_tuning.cpp.

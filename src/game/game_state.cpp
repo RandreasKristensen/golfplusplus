@@ -22,6 +22,20 @@ float radians(const float degrees) {
     return degrees * pi / 180.0f;
 }
 
+glm::vec3 address_camera_position(const game_state& state) {
+    const glm::vec3 forward = aim_direction(state.aim_angle);
+    const glm::vec3 left = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
+    return state.ball.position + left * 2.4f - forward * 0.7f + glm::vec3(0.0f, 2.0f, 0.0f);
+}
+
+glm::vec3 address_player_position(const game_state& state) {
+    const glm::vec3 forward = aim_direction(state.aim_angle);
+    const glm::vec3 left = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
+    glm::vec3 position = state.ball.position + left * state.tuning.player_stand_off_distance - forward * 0.4f;
+    position.y = state.tuning.ground_y;
+    return position;
+}
+
 void select_previous_club(game_state& state) {
     if (state.tuning.clubs.empty()) {
         return;
@@ -47,17 +61,26 @@ void launch_ball(game_state& state) {
         return;
     }
 
-    const club_stats& club = state.tuning.clubs[state.selected_club];
+    const club_stats& club = state.tuning.clubs[state.selected_club].stats;
     const glm::vec3 forward = aim_direction(state.aim_angle);
     const float loft = radians(club.loft_degrees);
     const glm::vec3 launch_dir = glm::normalize(forward * std::cos(loft) + glm::vec3(0.0f, std::sin(loft), 0.0f));
     const float power = std::max(state.tuning.min_swing_power, state.swing.power);
     const float speed = club.power * power;
 
+    state.shot_camera_position = address_camera_position(state);
     state.ball.velocity = launch_dir * speed;
     state.ball.spin = glm::vec3(-club.spin_bias * speed, 0.0f, club.accuracy * state.tuning.launch_side_spin_scale);
     state.swing = swing_state{};
+    state.mode = game_mode::following_shot;
     ++state.stroke_count;
+}
+
+void place_player_near_ball(game_state& state) {
+    const glm::vec3 forward = aim_direction(state.aim_angle);
+    state.player.position = state.ball.position - forward * state.tuning.player_stand_off_distance;
+    state.player.position.y = state.tuning.ground_y;
+    state.player.yaw = state.aim_angle;
 }
 
 void apply_ground_roll_friction(game_state& state, const float dt) {
@@ -102,6 +125,71 @@ void update_swing(game_state& state, const input_state& input, const float dt) {
     launch_ball(state);
 }
 
+void update_walking(game_state& state, const input_state& input, const float dt) {
+    if (input.left.is_down) {
+        state.player.yaw += state.tuning.player_turn_rate * dt;
+    }
+
+    if (input.right.is_down) {
+        state.player.yaw -= state.tuning.player_turn_rate * dt;
+    }
+
+    const glm::vec3 forward = aim_direction(state.player.yaw);
+    if (input.up.is_down) {
+        state.player.position += forward * state.tuning.player_walk_speed * dt;
+    }
+
+    if (input.down.is_down) {
+        state.player.position -= forward * state.tuning.player_walk_speed * dt;
+    }
+
+    state.player.position.y = state.tuning.ground_y;
+
+    if (input.space.pressed && can_interact_with_ball(state)) {
+        state.mode = game_mode::aiming;
+        state.aim_angle = state.player.yaw;
+        state.swing = swing_state{};
+    }
+}
+
+void update_aiming(game_state& state, const input_state& input, const float dt) {
+    if (input.left.is_down) {
+        state.aim_angle += state.tuning.aim_turn_rate * dt;
+    }
+
+    if (input.right.is_down) {
+        state.aim_angle -= state.tuning.aim_turn_rate * dt;
+    }
+
+    state.player.yaw = state.aim_angle;
+
+    if (input.up.pressed) {
+        select_previous_club(state);
+    }
+
+    if (input.down.pressed) {
+        select_next_club(state);
+    }
+
+    if (input.space.pressed) {
+        state.player.position = address_player_position(state);
+        state.mode = game_mode::addressing;
+        state.swing = swing_state{};
+    }
+}
+
+void update_addressing(game_state& state, const input_state& input, const float dt) {
+    if (input.up.pressed) {
+        select_previous_club(state);
+    }
+
+    if (input.down.pressed) {
+        select_next_club(state);
+    }
+
+    update_swing(state, input, dt);
+}
+
 void step_ball(game_state& state, const float dt) {
     if (!ball_is_moving(state.ball, state.tuning)) {
         state.ball.velocity = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -123,6 +211,7 @@ game_state make_initial_game_state() {
     game_state state;
     state.tuning = default_game_tuning();
     state.ball.position = state.tuning.course.tee_position;
+    place_player_near_ball(state);
     return state;
 }
 
@@ -131,6 +220,8 @@ void retee_ball(game_state& state) {
     state.ball.velocity = glm::vec3(0.0f);
     state.ball.spin = glm::vec3(0.0f);
     state.swing = swing_state{};
+    state.mode = game_mode::walking;
+    place_player_near_ball(state);
 }
 
 void update_game(game_state& state, const input_state& input, const float dt) {
@@ -142,28 +233,24 @@ void update_game(game_state& state, const input_state& input, const float dt) {
         return;
     }
 
-    const bool moving = ball_is_moving(state.ball, state.tuning);
-    if (!moving) {
-        if (input.left.is_down) {
-            state.aim_angle -= state.tuning.aim_turn_rate * clamped_dt;
-        }
-
-        if (input.right.is_down) {
-            state.aim_angle += state.tuning.aim_turn_rate * clamped_dt;
-        }
-
-        if (input.up.pressed) {
-            select_previous_club(state);
-        }
-
-        if (input.down.pressed) {
-            select_next_club(state);
-        }
-
-        update_swing(state, input, clamped_dt);
+    if (state.mode == game_mode::walking) {
+        update_walking(state, input, clamped_dt);
+    } else if (state.mode == game_mode::aiming) {
+        update_aiming(state, input, clamped_dt);
+    } else if (state.mode == game_mode::addressing) {
+        update_addressing(state, input, clamped_dt);
     }
 
-    step_ball(state, clamped_dt);
+    if (state.mode == game_mode::following_shot || ball_is_moving(state.ball, state.tuning)) {
+        state.mode = game_mode::following_shot;
+        step_ball(state, clamped_dt);
+
+        if (!ball_is_moving(state.ball, state.tuning)) {
+            state.ball.velocity = glm::vec3(0.0f);
+            state.ball.spin = glm::vec3(0.0f);
+            state.mode = game_mode::walking;
+        }
+    }
 }
 
 bool ball_is_moving(const ball_state& ball, const game_tuning& tuning) {
@@ -172,4 +259,11 @@ bool ball_is_moving(const ball_state& ball, const game_tuning& tuning) {
 
 bool ball_is_moving(const ball_state& ball) {
     return ball_is_moving(ball, default_game_tuning());
+}
+
+bool can_interact_with_ball(const game_state& state) {
+    const glm::vec3 delta = state.player.position - state.ball.position;
+    const glm::vec3 horizontal_delta(delta.x, 0.0f, delta.z);
+    return glm::length(horizontal_delta) <= state.tuning.ball_interact_radius
+        && !ball_is_moving(state.ball, state.tuning);
 }

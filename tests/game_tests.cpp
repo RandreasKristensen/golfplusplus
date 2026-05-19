@@ -9,7 +9,23 @@
 #include <cmath>
 
 namespace {
+void enter_aiming(game_state& state) {
+    input_state input;
+    input.space.pressed = true;
+    update_game(state, input, 0.016f);
+}
+
+void enter_addressing(game_state& state) {
+    enter_aiming(state);
+
+    input_state input;
+    input.space.pressed = true;
+    update_game(state, input, 0.016f);
+}
+
 void launch_selected_club(game_state& state) {
+    enter_addressing(state);
+
     input_state input;
     input.space.pressed = true;
     update_game(state, input, 0.016f);
@@ -24,14 +40,77 @@ float horizontal_speed(const glm::vec3& velocity) {
 }
 }
 
-TEST_CASE("first space press starts swing timing") {
+TEST_CASE("walking movement changes player position and yaw") {
     game_state state = make_initial_game_state();
+    const glm::vec3 start_position = state.player.position;
+    const float start_yaw = state.player.yaw;
+
+    input_state input;
+    input.up.is_down = true;
+    input.left.is_down = true;
+
+    update_game(state, input, 0.25f);
+
+    CHECK(glm::length(state.player.position - start_position) > 0.0f);
+    CHECK(state.player.yaw > start_yaw);
+    CHECK(state.mode == game_mode::walking);
+}
+
+TEST_CASE("space far from ball does not enter aiming") {
+    game_state state = make_initial_game_state();
+    state.player.position = glm::vec3(20.0f, 0.0f, 0.0f);
+
+    input_state input;
+    input.space.pressed = true;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.mode == game_mode::walking);
+}
+
+TEST_CASE("space near ball enters aiming") {
+    game_state state = make_initial_game_state();
+
+    enter_aiming(state);
+
+    CHECK(state.mode == game_mode::aiming);
+    CHECK(state.swing.phase == swing_phase::idle);
+    CHECK(state.stroke_count == 0);
+    CHECK(glm::length(state.ball.velocity) == 0.0f);
+}
+
+TEST_CASE("space in aiming enters addressing without launching") {
+    game_state state = make_initial_game_state();
+
+    enter_addressing(state);
+
+    CHECK(state.mode == game_mode::addressing);
+    CHECK(state.swing.phase == swing_phase::idle);
+    CHECK(state.stroke_count == 0);
+    CHECK(glm::length(state.ball.velocity) == 0.0f);
+}
+
+TEST_CASE("locking aim moves player to left side address stance") {
+    game_state state = make_initial_game_state();
+    state.aim_angle = 0.0f;
+
+    enter_addressing(state);
+
+    CHECK(state.mode == game_mode::addressing);
+    CHECK(state.player.position.x > state.ball.position.x);
+    CHECK(state.player.position.y == state.tuning.ground_y);
+}
+
+TEST_CASE("first address space press starts swing timing") {
+    game_state state = make_initial_game_state();
+    enter_addressing(state);
+
     input_state input;
     input.space.pressed = true;
     input.space.is_down = true;
 
     update_game(state, input, 0.016f);
 
+    CHECK(state.mode == game_mode::addressing);
     CHECK(state.swing.phase == swing_phase::timing);
     CHECK(state.stroke_count == 0);
     CHECK(glm::length(state.ball.velocity) == 0.0f);
@@ -45,10 +124,18 @@ TEST_CASE("sandbox course initializes tee and pin") {
     CHECK(state.tuning.course.cup_radius > 0.0f);
     CHECK(state.tuning.course.extent > state.tuning.course.pin_position.z);
     CHECK(state.ball.position == state.tuning.course.tee_position);
+    CHECK(state.tuning.clubs.size() == 3);
+    CHECK(state.tuning.clubs[0].id == "putter");
+    CHECK(state.tuning.clubs[1].id == "pitching_wedge");
+    CHECK(state.tuning.clubs[2].id == "seven_iron");
+    CHECK(state.tuning.clubs[0].label == "P");
+    CHECK(state.tuning.clubs[1].label == "PW");
+    CHECK(state.tuning.clubs[2].label == "7I");
 }
 
-TEST_CASE("second space press launches selected club shot") {
+TEST_CASE("space-space in addressing launches selected club shot and enters follow") {
     game_state state = make_initial_game_state();
+    enter_addressing(state);
 
     input_state input;
     input.space.pressed = true;
@@ -63,8 +150,10 @@ TEST_CASE("second space press launches selected club shot") {
     update_game(state, input, 0.016f);
 
     CHECK(state.swing.phase == swing_phase::idle);
+    CHECK(state.mode == game_mode::following_shot);
     CHECK(state.stroke_count == 1);
     CHECK(glm::length(state.ball.velocity) > 0.0f);
+    CHECK(glm::length(state.shot_camera_position) > 0.0f);
 }
 
 TEST_CASE("launch tuning changes shot speed") {
@@ -73,15 +162,8 @@ TEST_CASE("launch tuning changes shot speed") {
     low_power.tuning.min_swing_power = 0.1f;
     high_power.tuning.min_swing_power = 0.8f;
 
-    input_state input;
-    input.space.pressed = true;
-    update_game(low_power, input, 0.016f);
-    update_game(high_power, input, 0.016f);
-
-    input.reset_frame();
-    input.space.pressed = true;
-    update_game(low_power, input, 0.016f);
-    update_game(high_power, input, 0.016f);
+    launch_selected_club(low_power);
+    launch_selected_club(high_power);
 
     CHECK(glm::length(high_power.ball.velocity) > glm::length(low_power.ball.velocity));
 }
@@ -98,7 +180,7 @@ TEST_CASE("club loft changes launch angle") {
 
     const float putter_rise = putter.ball.velocity.y / horizontal_speed(putter.ball.velocity);
     const float wedge_rise = wedge.ball.velocity.y / horizontal_speed(wedge.ball.velocity);
-    CHECK(wedge.tuning.clubs[wedge.selected_club].loft_degrees > putter.tuning.clubs[putter.selected_club].loft_degrees);
+    CHECK(wedge.tuning.clubs[wedge.selected_club].stats.loft_degrees > putter.tuning.clubs[putter.selected_club].stats.loft_degrees);
     CHECK(wedge_rise > putter_rise);
 }
 
@@ -139,6 +221,8 @@ TEST_CASE("ground roll friction stops a grounded ball") {
 TEST_CASE("retee resets ball and cancels swing without adding a stroke") {
     game_state state = make_initial_game_state();
 
+    enter_addressing(state);
+
     input_state input;
     input.space.pressed = true;
     update_game(state, input, 0.016f);
@@ -155,6 +239,7 @@ TEST_CASE("retee resets ball and cancels swing without adding a stroke") {
     CHECK(glm::length(state.ball.velocity) == 0.0f);
     CHECK(glm::length(state.ball.spin) == 0.0f);
     CHECK(state.swing.phase == swing_phase::idle);
+    CHECK(state.mode == game_mode::walking);
     CHECK(state.stroke_count == 0);
 }
 
@@ -175,6 +260,7 @@ TEST_CASE("retee works while ball is moving") {
 
 TEST_CASE("club selection wraps on button presses") {
     game_state state = make_initial_game_state();
+    enter_aiming(state);
 
     input_state input;
     input.up.pressed = true;
@@ -189,36 +275,45 @@ TEST_CASE("club selection wraps on button presses") {
 
 TEST_CASE("held left and right adjust aim") {
     game_state state = make_initial_game_state();
+    enter_aiming(state);
 
     input_state input;
     input.left.is_down = true;
     update_game(state, input, 0.25f);
-    CHECK(state.aim_angle < 0.0f);
+    CHECK(state.aim_angle > 0.0f);
 
     input.left.is_down = false;
     input.right.is_down = true;
     update_game(state, input, 0.05f);
     update_game(state, input, 0.05f);
-    CHECK(state.aim_angle > 0.0f);
+    CHECK(state.aim_angle < 0.0f);
 }
 
 TEST_CASE("launched ball advances through physics updates") {
     game_state state = make_initial_game_state();
 
-    input_state input;
-    input.space.pressed = true;
-    update_game(state, input, 0.016f);
-
-    input.reset_frame();
-    update_game(state, input, 0.35f);
-
-    input.reset_frame();
-    input.space.pressed = true;
-    update_game(state, input, 0.016f);
+    launch_selected_club(state);
 
     const glm::vec3 launch_position = state.ball.position;
+    input_state input;
     input.reset_frame();
     update_game(state, input, 0.016f);
 
     CHECK(glm::length(state.ball.position - launch_position) > 0.0f);
+}
+
+TEST_CASE("follow mode returns to walking when ball is stopped") {
+    game_state state = make_initial_game_state();
+    const glm::vec3 player_position = state.player.position;
+    state.mode = game_mode::following_shot;
+    state.ball.velocity = glm::vec3(0.0f);
+    state.ball.spin = glm::vec3(0.0f);
+    state.ball.position = glm::vec3(8.0f, 0.0f, 10.0f);
+
+    input_state input;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.mode == game_mode::walking);
+    CHECK(state.player.position == player_position);
+    CHECK(!can_interact_with_ball(state));
 }

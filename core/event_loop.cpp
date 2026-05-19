@@ -8,16 +8,12 @@ namespace {
 button_state* button_for_scancode(input_state& input, const SDL_Scancode scancode) {
     switch (scancode) {
     case SDL_SCANCODE_LEFT:
-    case SDL_SCANCODE_A:
         return &input.left;
     case SDL_SCANCODE_RIGHT:
-    case SDL_SCANCODE_D:
         return &input.right;
     case SDL_SCANCODE_UP:
-    case SDL_SCANCODE_W:
         return &input.up;
     case SDL_SCANCODE_DOWN:
-    case SDL_SCANCODE_S:
         return &input.down;
     case SDL_SCANCODE_SPACE:
         return &input.space;

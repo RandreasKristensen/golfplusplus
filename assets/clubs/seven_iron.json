@@ -1,0 +1,13 @@
+{
+  "id": "seven_iron",
+  "name": "7 Iron",
+  "label": "7I",
+  "price": 0,
+  "bag_order": 2,
+  "stats": {
+    "power": 28.0,
+    "loft_degrees": 34.0,
+    "accuracy": 0.70,
+    "spin_bias": 0.08
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "putter",
+  "name": "Putter",
+  "label": "P",
+  "price": 0,
+  "bag_order": 0,
+  "stats": {
+    "power": 40.0,
+    "loft_degrees": 3.0,
+    "accuracy": 0.95,
+    "spin_bias": 0.03
+  }
+}

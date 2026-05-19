@@ -5,8 +5,77 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <cmath>
+#include <vector>
+
+#include <glm/geometric.hpp>
+#include <glm/vec3.hpp>
 
 namespace {
+constexpr float pi = 3.14159265358979323846f;
+
+glm::vec3 aim_direction(const float aim_angle) {
+    return glm::normalize(glm::vec3(std::sin(aim_angle), 0.0f, std::cos(aim_angle)));
+}
+
+float radians(const float degrees) {
+    return degrees * pi / 180.0f;
+}
+
+void set_walking_camera(render_data& data, const game_state& game) {
+    const glm::vec3 forward = aim_direction(game.player.yaw);
+    data.camera_position = game.player.position + glm::vec3(0.0f, 1.65f, 0.0f);
+    data.camera_target = data.camera_position + forward * 10.0f;
+}
+
+void set_aiming_camera(render_data& data, const game_state& game) {
+    const glm::vec3 forward = aim_direction(game.aim_angle);
+    data.camera_position = game.ball.position - forward * 2.0f + glm::vec3(0.0f, 1.55f, 0.0f);
+    data.camera_target = game.ball.position + forward * 12.0f + glm::vec3(0.0f, 1.05f, 0.0f);
+}
+
+void set_address_camera(render_data& data, const game_state& game) {
+    const glm::vec3 forward = aim_direction(game.aim_angle);
+    const glm::vec3 left = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
+    data.camera_position = game.ball.position + left * 2.4f - forward * 0.7f + glm::vec3(0.0f, 2.0f, 0.0f);
+    data.camera_target = game.ball.position + forward * 0.7f + glm::vec3(0.0f, 0.25f, 0.0f);
+}
+
+void set_follow_camera(render_data& data, const game_state& game) {
+    const glm::vec3 target(game.ball.position.x, std::max(0.5f, game.ball.position.y), game.ball.position.z);
+    data.camera_position = game.shot_camera_position;
+    data.camera_target = target;
+}
+
+std::vector<glm::vec3> estimate_aim_arc(const game_state& game) {
+    std::vector<glm::vec3> points;
+    if (game.selected_club >= game.tuning.clubs.size()) {
+        return points;
+    }
+
+    const club_stats& club = game.tuning.clubs[game.selected_club].stats;
+    const glm::vec3 forward = aim_direction(game.aim_angle);
+    const float loft = radians(club.loft_degrees);
+    const glm::vec3 launch_dir = glm::normalize(forward * std::cos(loft) + glm::vec3(0.0f, std::sin(loft), 0.0f));
+    const glm::vec3 velocity = launch_dir * club.power;
+
+    constexpr float gravity = -9.81f;
+    constexpr float step_seconds = 0.18f;
+    constexpr int max_points = 28;
+    for (int i = 1; i <= max_points; ++i) {
+        const float t = static_cast<float>(i) * step_seconds;
+        glm::vec3 point = game.ball.position + velocity * t + glm::vec3(0.0f, 0.5f * gravity * t * t, 0.0f);
+        if (point.y < game.tuning.ground_y) {
+            point.y = game.tuning.ground_y;
+            points.push_back(point);
+            break;
+        }
+        points.push_back(point);
+    }
+
+    return points;
+}
+
 render_data make_render_data(const game_state& game) {
     render_data data;
     data.ball_position = game.ball.position;
@@ -15,11 +84,29 @@ render_data make_render_data(const game_state& game) {
     data.cup_radius = game.tuning.course.cup_radius;
     data.course_extent = game.tuning.course.extent;
     data.aim_angle = game.aim_angle;
+    if (game.mode == game_mode::aiming) {
+        data.aim_arc_points = estimate_aim_arc(game);
+    }
     data.ball_moving = ball_is_moving(game.ball, game.tuning);
+    data.show_interact_prompt = game.mode == game_mode::walking && can_interact_with_ball(game);
+    data.show_aim_indicator = game.mode == game_mode::aiming || game.mode == game_mode::addressing;
     data.swing_timing = game.swing.phase == swing_phase::timing;
     data.swing_power = game.swing.power;
     data.stroke_count = game.stroke_count;
-    data.selected_club = static_cast<int>(game.selected_club);
+    if (game.selected_club < game.tuning.clubs.size()) {
+        data.selected_club_label = game.tuning.clubs[game.selected_club].label;
+    }
+
+    if (game.mode == game_mode::walking) {
+        set_walking_camera(data, game);
+    } else if (game.mode == game_mode::aiming) {
+        set_aiming_camera(data, game);
+    } else if (game.mode == game_mode::addressing) {
+        set_address_camera(data, game);
+    } else {
+        set_follow_camera(data, game);
+    }
+
     return data;
 }
 }

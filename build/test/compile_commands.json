@@ -73,31 +73,37 @@
 },
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
-  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-game.dir\\src\\game\\game_tuning.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\game\\game_tuning.cpp",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-game.dir\\src\\game\\club_loader.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\game\\club_loader.cpp",
+  "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/club_loader.cpp",
+  "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-game.dir/src/game/club_loader.cpp.obj"
+},
+{
+  "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-game.dir\\src\\game\\game_tuning.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\game\\game_tuning.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/game_tuning.cpp",
   "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-game.dir/src/game/game_tuning.cpp.obj"
 },
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
-  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-game.dir\\src\\game\\game_state.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\game\\game_state.cpp",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-game.dir\\src\\game\\game_state.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\game\\game_state.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/game_state.cpp",
   "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-game.dir/src/game/game_state.cpp.obj"
 },
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
-  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-game.dir\\src\\game\\swing.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\game\\swing.cpp",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -g -std=gnu++17 -o CMakeFiles\\vcr-golf-game.dir\\src\\game\\swing.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\src\\game\\swing.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/src/game/swing.cpp",
   "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-game.dir/src/game/swing.cpp.obj"
 },
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
-  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -g -std=gnu++17 -o CMakeFiles\\vcr-golf-tests.dir\\tests\\physics_tests.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\tests\\physics_tests.cpp",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -g -std=gnu++17 -o CMakeFiles\\vcr-golf-tests.dir\\tests\\physics_tests.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\tests\\physics_tests.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/tests/physics_tests.cpp",
   "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-tests.dir/tests/physics_tests.cpp.obj"
 },
 {
   "directory": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test",
-  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -g -std=gnu++17 -o CMakeFiles\\vcr-golf-tests.dir\\tests\\game_tests.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\tests\\game_tests.cpp",
+  "command": "C:\\msys64\\mingw64\\bin\\c++.exe -DVCR_GOLF_ASSETS_DIR=\\\"C:/Users/arand/Desktop/AU/sjov/golfplusplus/assets\\\" -IC:/Users/arand/Desktop/AU/sjov/golfplusplus -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/src -IC:/Users/arand/Desktop/AU/sjov/golfplusplus/vendor -g -std=gnu++17 -o CMakeFiles\\vcr-golf-tests.dir\\tests\\game_tests.cpp.obj -c C:\\Users\\arand\\Desktop\\AU\\sjov\\golfplusplus\\tests\\game_tests.cpp",
   "file": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/tests/game_tests.cpp",
   "output": "C:/Users/arand/Desktop/AU/sjov/golfplusplus/build/test/CMakeFiles/vcr-golf-tests.dir/tests/game_tests.cpp.obj"
 }

@@ -67,6 +67,24 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         "010",
         "111"
     };
+    static const std::array<const char*, 7> glyph_s = {
+        "1111",
+        "1000",
+        "1000",
+        "1110",
+        "0001",
+        "0001",
+        "1110"
+    };
+    static const std::array<const char*, 7> glyph_c = {
+        "0111",
+        "1000",
+        "1000",
+        "1000",
+        "1000",
+        "1000",
+        "0111"
+    };
 
     switch (value) {
     case 'P':
@@ -75,6 +93,10 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         return glyph_w;
     case '7':
         return glyph_7;
+    case 'S':
+        return glyph_s;
+    case 'C':
+        return glyph_c;
     default:
         return glyph_i;
     }
@@ -114,29 +136,43 @@ void draw_pixel_glyph(shader_program& shader,
     }
 }
 
-void draw_club_label(shader_program& shader, const int selected_club) {
+void draw_club_label(shader_program& shader, const std::string& label) {
     const glm::vec3 label_color(0.90f, 0.88f, 0.76f);
     const glm::vec3 panel_color(0.055f, 0.06f, 0.07f);
     draw_overlay_quad(shader, glm::vec2(0.78f, 0.78f), glm::vec2(0.17f, 0.12f), panel_color);
 
     const float pixel_size = 0.025f;
-    const glm::vec2 start(0.68f, 0.86f);
-
-    if (selected_club == 1) {
-        draw_pixel_glyph(shader, 'P', start, pixel_size, label_color);
-        const float advance = static_cast<float>(glyph_width('P') + 1) * pixel_size;
-        draw_pixel_glyph(shader, 'W', start + glm::vec2(advance, 0.0f), pixel_size, label_color);
-        return;
+    float width = 0.0f;
+    for (const char c : label) {
+        width += static_cast<float>(glyph_width(c) + 1) * pixel_size;
     }
+    width = std::max(0.0f, width - pixel_size);
 
-    if (selected_club == 2) {
-        draw_pixel_glyph(shader, '7', start, pixel_size, label_color);
-        const float advance = static_cast<float>(glyph_width('7') + 1) * pixel_size;
-        draw_pixel_glyph(shader, 'I', start + glm::vec2(advance, 0.0f), pixel_size, label_color);
-        return;
+    glm::vec2 cursor(0.78f - width * 0.5f, 0.86f);
+    for (const char c : label) {
+        draw_pixel_glyph(shader, c, cursor, pixel_size, label_color);
+        cursor.x += static_cast<float>(glyph_width(c) + 1) * pixel_size;
     }
+}
 
-    draw_pixel_glyph(shader, 'P', glm::vec2(0.755f, 0.86f), pixel_size, label_color);
+void draw_interact_prompt(shader_program& shader) {
+    const glm::vec3 prompt_color(0.95f, 0.82f, 0.28f);
+    const glm::vec3 panel_color(0.05f, 0.055f, 0.06f);
+    draw_overlay_quad(shader, glm::vec2(0.0f, -0.56f), glm::vec2(0.19f, 0.075f), panel_color);
+
+    const std::string label = "SPC";
+    const float pixel_size = 0.021f;
+    float width = 0.0f;
+    for (const char c : label) {
+        width += static_cast<float>(glyph_width(c) + 1) * pixel_size;
+    }
+    width = std::max(0.0f, width - pixel_size);
+
+    glm::vec2 cursor(-width * 0.5f, -0.51f);
+    for (const char c : label) {
+        draw_pixel_glyph(shader, c, cursor, pixel_size, prompt_color);
+        cursor.x += static_cast<float>(glyph_width(c) + 1) * pixel_size;
+    }
 }
 }
 
@@ -216,18 +252,15 @@ void renderer::render(const render_data& data) {
 
     scene_fbo_.bind();
     glViewport(0, 0, target_width_, target_height_);
-    glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
+    glClearColor(0.36f, 0.56f, 0.82f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     const glm::mat4 proj = glm::perspective(glm::radians(60.0f),
                                             static_cast<float>(target_width_) / static_cast<float>(target_height_),
                                             0.1f,
                                             std::max(160.0f, data.course_extent * 2.5f));
-    const glm::vec3 forward = aim_direction(data.aim_angle);
-    const glm::vec3 camera_target(data.ball_position.x, std::max(0.5f, data.ball_position.y), data.ball_position.z);
-    const glm::vec3 camera_position = camera_target - forward * 12.0f + glm::vec3(0.0f, 6.0f, 0.0f);
-    const glm::mat4 view = glm::lookAt(camera_position,
-                                       camera_target + forward * 5.0f,
+    const glm::mat4 view = glm::lookAt(data.camera_position,
+                                       data.camera_target,
                                        glm::vec3(0.0f, 1.0f, 0.0f));
 
     render_scene(view, proj, data);
@@ -368,18 +401,16 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
 
-    if (!data.ball_moving) {
-        const glm::vec3 forward = aim_direction(data.aim_angle);
-        const glm::mat4 aim_model = glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f),
-                                                                          data.ball_position + forward * 1.8f + glm::vec3(0.0f, 0.035f, 0.0f)),
-                                                             data.aim_angle,
-                                                             glm::vec3(0.0f, 1.0f, 0.0f)),
-                                               glm::vec3(0.35f, 1.0f, 5.0f));
-        terrain_shader_.set_mat4("u_mvp", proj * view * aim_model);
-        terrain_shader_.set_vec3("u_color", glm::vec3(0.9f, 0.72f, 0.18f));
-
+    if (data.show_aim_indicator && !data.aim_arc_points.empty()) {
+        terrain_shader_.set_vec3("u_color", glm::vec3(0.95f, 0.78f, 0.22f));
         glBindVertexArray(ball_vao_);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        for (std::size_t i = 0; i < data.aim_arc_points.size(); ++i) {
+            const float scale = 0.35f + static_cast<float>(i % 3) * 0.04f;
+            const glm::mat4 arc_model = glm::scale(glm::translate(glm::mat4(1.0f), data.aim_arc_points[i] + glm::vec3(0.0f, 0.05f, 0.0f)),
+                                                   glm::vec3(scale, 1.0f, scale));
+            terrain_shader_.set_mat4("u_mvp", proj * view * arc_model);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+        }
         glBindVertexArray(0);
     }
 
@@ -401,7 +432,11 @@ void renderer::render_overlay(const render_data& data) {
     terrain_shader_.use();
     glBindVertexArray(screen_vao_);
 
-    draw_club_label(terrain_shader_, data.selected_club);
+    draw_club_label(terrain_shader_, data.selected_club_label);
+
+    if (data.show_interact_prompt) {
+        draw_interact_prompt(terrain_shader_);
+    }
 
     if (data.swing_timing) {
         const float power = std::max(0.0f, std::min(data.swing_power, 1.0f));

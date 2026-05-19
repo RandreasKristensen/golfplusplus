@@ -2,6 +2,9 @@
 
 #include <SDL.h>
 
+#include <string>
+#include <vector>
+
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
@@ -10,16 +13,21 @@
 
 struct render_data {
     glm::vec3 ball_position = glm::vec3(0.0f);
+    glm::vec3 camera_position = glm::vec3(0.0f, 6.0f, -12.0f);
+    glm::vec3 camera_target = glm::vec3(0.0f);
     glm::vec3 tee_position = glm::vec3(0.0f);
     glm::vec3 pin_position = glm::vec3(0.0f);
+    std::vector<glm::vec3> aim_arc_points;
     float cup_radius = 0.75f;
     float course_extent = 100.0f;
     float aim_angle = 0.0f;
     bool ball_moving = false;
+    bool show_interact_prompt = false;
+    bool show_aim_indicator = false;
     bool swing_timing = false;
     float swing_power = 0.0f;
     int stroke_count = 0;
-    int selected_club = 0;
+    std::string selected_club_label;
 };
 
 struct renderer {

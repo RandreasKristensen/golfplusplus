@@ -47,6 +47,7 @@ set(VCR_GOLF_PHYSICS_SOURCES
 )
 
 set(VCR_GOLF_GAME_SOURCES
+    src/game/club_loader.cpp
     src/game/game_tuning.cpp
     src/game/game_state.cpp
     src/game/swing.cpp
@@ -82,6 +83,7 @@ target_include_directories(vcr-golf-game PUBLIC
     ${GLM_INCLUDE_DIR}
 )
 target_link_libraries(vcr-golf-game PUBLIC vcr-golf-physics)
+target_compile_definitions(vcr-golf-game PUBLIC VCR_GOLF_ASSETS_DIR=\"${VCR_GOLF_ASSETS_DIR}\")
 
 target_link_libraries(vcr-golf PRIVATE vcr-golf-game)
 
