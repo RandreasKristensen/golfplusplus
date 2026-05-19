@@ -50,6 +50,10 @@ cmake --build build/test
 A FUCKING PAPER MAP OF THE COURSE YOURE CURRENTLY ON would be so sick
 Also a score card where you can write down, but no control so its possible just to lie lmao. Maybe you gotta even keep count yourself? Then compare with actual count at the end so we can see if you cheat.
 
+I want putts to roll slower but farther but stop, and this is a hard balance
+
+I want the putter action space bar game to be slower that the others, and some visuals so you know.
+
 analyze tech debt. If we were to, say, want to refactor the hole-editor. What would that cost in our architecture? How do we improve?
 
 How do we implement the quests like they were described in the documentation? Do we have any limitatins in our current architecture that we need to fix before we implement them?
