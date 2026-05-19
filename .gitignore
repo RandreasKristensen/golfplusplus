@@ -1,0 +1,7 @@
+build/
+dist/
+
+# Editor and OS noise
+.vscode/
+.DS_Store
+Thumbs.db
