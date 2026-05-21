@@ -58,28 +58,8 @@ higher pixel rendering density.
 
 press shift to get distance to flag or ball, only before pressing space to enter direction-mode. should be a filter (just like images drawn on top of the lens) with range to the pin, and it can also locate your ball with like a beam of light thats kind of see through
 
-rename to golf++ with g++ logo.
+rename to golf++ with g++ logo. everywhere - .exe files, window when launched etc.
 
-fix build settings
+fullscreen option scaling to any resolution natively???? would be so sick in fullscreen widescreen not even windowed lmao
 
-prompt 
-                            it will probably fail on your friends’ machines because it cannot find the DLLs or assets.
-
-                            What you can send right now is a folder like:
-
-                            vcr-golf/
-                                vcr-golf.exe
-                                SDL2.dll
-                                libstdc++-6.dll
-                                libgcc_s_seh-1.dll
-                                assets/
-                                shaders/
-                                clubs/
-                                holes/
-
-                            But we should first change asset loading from the baked source path to a path relative to the executable, like:
-
-                            ./assets
-
-                            Then the zipped folder will work much more reliably. The right next step is adding a small runtime asset-path
-                            resolver based on the executable directory.
+the drawn putting greens and bunkers and water dont seem to be scaling correctly; they are way too small. the putting green is in the middle of the node on the http hole generator, but in the game the flag is off in the rough, because the width is still not correct
