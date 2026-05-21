@@ -21,7 +21,7 @@ cmake --build build/test
 
 ```pwrshl
 cmake --preset release
-cmake --build C:\Users\arand\Desktop\AU\sjov\golfplusplus\build\release
+cmake --build C:\Users\arand\Desktop\AU\sjov\golfplusplus\build\release --clean-first
 .\build\release\vcr-golf.exe
 ```
 

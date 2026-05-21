@@ -51,6 +51,63 @@ glm::vec3 pin_anchor_position(const game_tuning& tuning) {
     return terrain_sample_at(tuning, tuning.course.pin_position).point;
 }
 
+float effective_cup_radius(const game_tuning& tuning) {
+    return std::max(tuning.course.cup_radius, tuning.scale.cup_visual_radius_meters);
+}
+
+float distance_xz_squared(const glm::vec3& a, const glm::vec3& b) {
+    const float dx = a.x - b.x;
+    const float dz = a.z - b.z;
+    return dx * dx + dz * dz;
+}
+
+bool path_intersects_cup(const glm::vec3& start,
+                         const glm::vec3& end,
+                         const glm::vec3& cup_center,
+                         const float radius,
+                         const float max_center_height_above_cup) {
+    const glm::vec3 segment(end.x - start.x, 0.0f, end.z - start.z);
+    const float segment_len_sq = glm::dot(segment, segment);
+    if (segment_len_sq <= 0.000001f) {
+        return distance_xz_squared(end, cup_center) <= radius * radius &&
+            end.y <= cup_center.y + max_center_height_above_cup;
+    }
+
+    const glm::vec3 to_cup(cup_center.x - start.x, 0.0f, cup_center.z - start.z);
+    const float t = std::max(0.0f, std::min(1.0f, glm::dot(to_cup, segment) / segment_len_sq));
+    const glm::vec3 closest = start + segment * t;
+    return distance_xz_squared(closest, cup_center) <= radius * radius &&
+        closest.y <= cup_center.y + max_center_height_above_cup;
+}
+
+void sink_ball_in_cup(game_state& state) {
+    const glm::vec3 pin_anchor = pin_anchor_position(state.tuning);
+    state.ball.position = pin_anchor - glm::vec3(0.0f, state.ball.radius * 2.0f, 0.0f);
+    state.ball.velocity = glm::vec3(0.0f);
+    state.ball.spin = glm::vec3(0.0f);
+    state.swing = swing_state{};
+    state.mode = game_mode::walking;
+}
+
+bool complete_if_ball_reached_cup(game_state& state, const glm::vec3& previous_ball_position) {
+    if (state.round.finished) {
+        return false;
+    }
+
+    const glm::vec3 pin_anchor = pin_anchor_position(state.tuning);
+    if (!path_intersects_cup(previous_ball_position,
+                             state.ball.position,
+                             pin_anchor,
+                             effective_cup_radius(state.tuning),
+                             std::max(state.ball.radius * 4.0f, state.tuning.scale.ball_visual_radius_meters * 2.0f))) {
+        return false;
+    }
+
+    sink_ball_in_cup(state);
+    complete_current_hole(state);
+    return true;
+}
+
 void update_rangefinder_state(game_state& state, const input_state& input) {
     state.rangefinder_active = rangefinder_should_show(state.mode, input);
     state.rangefinder_distance_meters = compute_rangefinder_distance_meters(state.player.position,
@@ -382,6 +439,13 @@ bool complete_current_hole(game_state& state) {
     return true;
 }
 
+bool ball_is_in_cup(const game_state& state) {
+    const glm::vec3 pin_anchor = pin_anchor_position(state.tuning);
+    const glm::vec3 delta = state.ball.position - pin_anchor;
+    const glm::vec3 horizontal_delta(delta.x, 0.0f, delta.z);
+    return glm::length(horizontal_delta) <= effective_cup_radius(state.tuning);
+}
+
 void update_game(game_state& state, const input_state& input, const float dt) {
     const float clamped_dt = std::max(0.0f, std::min(dt, 0.05f));
     state.hole_time += clamped_dt;
@@ -409,13 +473,35 @@ void update_game(game_state& state, const input_state& input, const float dt) {
 
     if (state.mode == game_mode::following_shot || ball_is_moving(state.ball, state.tuning)) {
         state.mode = game_mode::following_shot;
+        const glm::vec3 previous_ball_position = state.ball.position;
         step_ball(state, clamped_dt);
+
+        if (complete_if_ball_reached_cup(state, previous_ball_position)) {
+            update_walk_overlays(state, input);
+            return;
+        }
 
         if (!ball_is_moving(state.ball, state.tuning)) {
             state.ball.velocity = glm::vec3(0.0f);
             state.ball.spin = glm::vec3(0.0f);
             state.mode = game_mode::walking;
+            if (ball_is_in_cup(state)) {
+                sink_ball_in_cup(state);
+                complete_current_hole(state);
+                update_walk_overlays(state, input);
+                return;
+            }
         }
+    }
+
+    if (state.mode == game_mode::walking &&
+        !state.round.finished &&
+        !ball_is_moving(state.ball, state.tuning) &&
+        ball_is_in_cup(state)) {
+        sink_ball_in_cup(state);
+        complete_current_hole(state);
+        update_walk_overlays(state, input);
+        return;
     }
 
     update_walk_overlays(state, input);

@@ -54,6 +54,7 @@ void update_game(game_state& state, const input_state& input, float dt);
 void retee_ball(game_state& state);
 bool start_game_course(game_state& state, const course_definition& course);
 bool complete_current_hole(game_state& state);
+bool ball_is_in_cup(const game_state& state);
 bool ball_is_moving(const ball_state& ball, const game_tuning& tuning);
 bool ball_is_moving(const ball_state& ball);
 bool can_interact_with_ball(const game_state& state);

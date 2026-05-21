@@ -14,6 +14,7 @@
 #include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <optional>
 #include <string>
@@ -61,6 +62,14 @@ void rebuild_cached_terrain_mesh(game_tuning& tuning) {
 glm::vec3 terrain_clamped_tee(const game_tuning& tuning) {
     const terrain_sample sample = sample_terrain_mesh(tuning.terrain_mesh_data, tuning.course.tee_position, tuning.ground_y);
     return sample.point + sample.normal * tuning.scale.ball_physics_radius_meters;
+}
+
+glm::vec3 terrain_anchored_pin(const game_tuning& tuning) {
+    return sample_terrain_mesh(tuning.terrain_mesh_data, tuning.course.pin_position, tuning.ground_y).point;
+}
+
+float visible_cup_radius(const game_tuning& tuning) {
+    return std::max(tuning.course.cup_radius, tuning.scale.cup_visual_radius_meters);
 }
 
 std::string asset_root() {
@@ -388,6 +397,157 @@ TEST_CASE("game course completion preserves score and resets transient hole stat
     CHECK(glm::length(state.ball.velocity) == 0.0f);
     CHECK(state.swing.phase == swing_phase::idle);
     CHECK(state.mode == game_mode::walking);
+}
+
+TEST_CASE("ball in cup uses terrain anchored pin and horizontal cup radius") {
+    game_state state = make_initial_game_state();
+    const glm::vec3 pin_anchor = terrain_anchored_pin(state.tuning);
+    const float cup_radius = visible_cup_radius(state.tuning);
+
+    state.ball.position = pin_anchor;
+    CHECK(ball_is_in_cup(state));
+
+    state.ball.position = pin_anchor + glm::vec3(cup_radius - 0.01f, 12.0f, 0.0f);
+    CHECK(ball_is_in_cup(state));
+
+    state.ball.position = pin_anchor + glm::vec3(cup_radius + 0.01f, 12.0f, 0.0f);
+    CHECK(!ball_is_in_cup(state));
+}
+
+TEST_CASE("stopped following shot in cup completes and advances hole") {
+    course_definition course;
+    course.id = "two_hole";
+    course.name = "Two Hole";
+    course.hole_count = 2;
+    course.holes = {"holes/test.json", "holes/test.json"};
+
+    game_state state = make_initial_game_state(asset_root());
+    CHECK(start_game_course(state, course));
+    if (state.active_course.id != course.id) {
+        return;
+    }
+
+    state.stroke_count = 2;
+    state.mode = game_mode::following_shot;
+    state.ball.position = terrain_anchored_pin(state.tuning);
+    state.ball.velocity = glm::vec3(0.0f);
+    state.ball.spin = glm::vec3(0.0f);
+
+    input_state input;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.round.current_hole_index == 1);
+    CHECK(state.round.strokes_per_hole[0] == 2);
+    CHECK(state.save.current_hole_index == 1);
+    CHECK(state.save.hole_scores.at(0) == 2);
+    CHECK(state.stroke_count == 0);
+    CHECK(state.mode == game_mode::walking);
+    CHECK(glm::length(state.ball.velocity) == 0.0f);
+    CHECK(glm::length(state.ball.spin) == 0.0f);
+}
+
+TEST_CASE("walking ball already resting in cup completes hole") {
+    course_definition course;
+    course.id = "two_hole";
+    course.name = "Two Hole";
+    course.hole_count = 2;
+    course.holes = {"holes/test.json", "holes/test.json"};
+
+    game_state state = make_initial_game_state(asset_root());
+    CHECK(start_game_course(state, course));
+    if (state.active_course.id != course.id) {
+        return;
+    }
+
+    state.stroke_count = 2;
+    state.mode = game_mode::walking;
+    state.ball.position = terrain_anchored_pin(state.tuning);
+    state.ball.velocity = glm::vec3(0.0f);
+    state.ball.spin = glm::vec3(0.0f);
+
+    input_state input;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.round.current_hole_index == 1);
+    CHECK(state.round.strokes_per_hole[0] == 2);
+    CHECK(state.save.hole_scores.at(0) == 2);
+}
+
+TEST_CASE("moving ball crossing visible cup completes hole") {
+    course_definition course;
+    course.id = "two_hole";
+    course.name = "Two Hole";
+    course.hole_count = 2;
+    course.holes = {"holes/test.json", "holes/test.json"};
+
+    game_state state = make_initial_game_state(asset_root());
+    CHECK(start_game_course(state, course));
+    if (state.active_course.id != course.id) {
+        return;
+    }
+
+    const glm::vec3 pin_anchor = terrain_anchored_pin(state.tuning);
+    state.stroke_count = 1;
+    state.mode = game_mode::following_shot;
+    state.ball.position = pin_anchor + glm::vec3(-(visible_cup_radius(state.tuning) + 0.25f), state.ball.radius, 0.0f);
+    state.ball.velocity = glm::vec3(40.0f, 0.0f, 0.0f);
+    state.ball.spin = glm::vec3(0.0f);
+    state.tuning.physics.drag_coeff = 0.0f;
+    state.tuning.physics.magnus_coeff = 0.0f;
+    state.tuning.wind.base_speed = 0.0f;
+    state.tuning.wind.speed_variation = 0.0f;
+    state.tuning.ground_restitution = 0.0f;
+    state.tuning.ground_friction = 0.0f;
+    state.tuning.ground_roll_friction = 0.0f;
+
+    input_state input;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.round.current_hole_index == 1);
+    CHECK(state.round.strokes_per_hole[0] == 1);
+    CHECK(state.save.hole_scores.at(0) == 1);
+    CHECK(state.mode == game_mode::walking);
+    CHECK(glm::length(state.ball.velocity) == 0.0f);
+}
+
+TEST_CASE("final hole cup completion sinks ball and marks round finished") {
+    game_state state = make_initial_game_state(asset_root());
+    state.stroke_count = 3;
+    state.mode = game_mode::walking;
+    const glm::vec3 pin_anchor = terrain_anchored_pin(state.tuning);
+    state.ball.position = pin_anchor;
+    state.ball.velocity = glm::vec3(0.0f);
+    state.ball.spin = glm::vec3(0.0f);
+
+    input_state input;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.round.finished);
+    CHECK(state.save.hole_scores.at(0) == 3);
+    CHECK(state.ball.position.y < pin_anchor.y);
+    CHECK(glm::length(state.ball.velocity) == 0.0f);
+    CHECK(glm::length(state.ball.spin) == 0.0f);
+}
+
+TEST_CASE("stopped following shot outside cup returns to walking without completing") {
+    game_state state = make_initial_game_state();
+    state.stroke_count = 2;
+    state.mode = game_mode::following_shot;
+    const glm::vec3 pin_anchor = terrain_anchored_pin(state.tuning);
+    const glm::vec3 outside_cup = pin_anchor + glm::vec3(visible_cup_radius(state.tuning) + 2.0f, 0.0f, 0.0f);
+    state.ball.position = sample_terrain_mesh(state.tuning.terrain_mesh_data, outside_cup, state.tuning.ground_y).point;
+    state.ball.velocity = glm::vec3(0.0f);
+    state.ball.spin = glm::vec3(0.0f);
+
+    input_state input;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.mode == game_mode::walking);
+    CHECK(state.round.current_hole_index == 0);
+    CHECK(state.stroke_count == 2);
+    CHECK(state.save.hole_scores.empty());
+    CHECK(glm::length(state.ball.velocity) == 0.0f);
+    CHECK(glm::length(state.ball.spin) == 0.0f);
 }
 
 TEST_CASE("save data round trips progress and migrates missing version") {
