@@ -5,6 +5,7 @@
 #include "game/course_loader.h"
 #include "game/hole_loader.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -24,6 +25,7 @@ hole_data fallback_hole() {
     hole.tee_position = glm::vec3(0.0f, 0.0f, 0.0f);
     hole.pin_position = glm::vec3(0.0f, 0.0f, 80.0f);
     hole.spline.width = 18.0f;
+    hole.spline.rough_width = 18.0f;
     hole.spline.control_points = {
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(0.0f, 0.0f, 40.0f),
@@ -58,8 +60,10 @@ void apply_hole_to_tuning(game_tuning& tuning, const hole_data& hole) {
     tuning.course.extent = estimate_course_extent(hole);
     tuning.course.spline = hole.spline;
     tuning.course.material_zones = hole.material_zones;
+    tuning.course.trees = hole.trees;
     tuning.terrain.control_points = hole.spline.control_points;
-    tuning.terrain.width = hole.spline.width;
+    tuning.terrain.width = std::max(hole.spline.width, hole.spline.rough_width);
+    tuning.terrain.fairway_width = hole.spline.width;
     tuning.terrain.sample_count = 128;
     tuning.terrain_mesh_data = build_terrain_mesh(tuning.terrain, tuning.course.material_zones, tuning.zone_tuning);
     tuning.wind_seed = hole.wind_seed;
@@ -103,10 +107,8 @@ game_tuning default_game_tuning(const std::string& asset_root) {
     tuning.zone_tuning.water_depth = 0.35f;
 
     std::vector<course_definition> courses = load_courses_from_directory(asset_path(asset_root, "courses"));
-    if (courses.empty()) {
-        courses.push_back(fallback_course_definition());
-    }
-    if (!load_hole_runtime(tuning, courses.front(), 0, asset_root)) {
+    const course_definition default_course = default_course_definition(courses);
+    if (!load_hole_runtime(tuning, default_course, 0, asset_root)) {
         const std::optional<hole_data> loaded_hole = load_hole_from_file(asset_path(asset_root, "holes/test.json"));
         apply_hole_to_tuning(tuning, loaded_hole.value_or(fallback_hole()));
     }
@@ -139,6 +141,8 @@ game_tuning default_game_tuning(const std::string& asset_root) {
     tuning.ground_friction = 0.08f;
     tuning.water_restitution = 0.05f;
     tuning.water_friction = 0.28f;
+    tuning.tree_restitution = 0.25f;
+    tuning.tree_friction = 0.35f;
     tuning.ground_roll_friction = 1.0f;
     tuning.ground_settle_speed = 0.6f;
     tuning.ball_interact_radius = 3.0f;

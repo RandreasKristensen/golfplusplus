@@ -6,6 +6,7 @@
 #include "physics/ball_physics.h"
 #include "physics/collision.h"
 #include "physics/terrain.h"
+#include "physics/tree_collision.h"
 #include "physics/wind.h"
 
 #include <algorithm>
@@ -45,6 +46,21 @@ terrain_sample terrain_sample_at(const game_tuning& tuning,
                                  const glm::vec3& position,
                                  const terrain_sample* previous_sample) {
     return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y, previous_sample);
+}
+
+std::vector<tree_collision_body> anchored_tree_bodies(const game_tuning& tuning) {
+    std::vector<tree_collision_body> trees;
+    trees.reserve(tuning.course.trees.size());
+    for (const tree_instance& tree : tuning.course.trees) {
+        tree_collision_body body;
+        body.base = terrain_sample_at(tuning, tree.position).point;
+        body.trunk_radius = tree.trunk_radius;
+        body.trunk_height = tree.trunk_height;
+        body.leaf_radius = tree.leaf_radius;
+        body.leaf_height = tree.leaf_height;
+        trees.push_back(body);
+    }
+    return trees;
 }
 
 glm::vec3 pin_anchor_position(const game_tuning& tuning) {
@@ -360,6 +376,10 @@ void step_ball(game_state& state, const float dt) {
                                            terrain,
                                            restitution,
                                            friction);
+    state.ball = resolve_tree_collisions(state.ball,
+                                         anchored_tree_bodies(state.tuning),
+                                         state.tuning.tree_restitution,
+                                         state.tuning.tree_friction);
     apply_ground_roll_friction(state, terrain, launched_club.roll_friction_scale, dt);
 }
 
@@ -388,7 +408,7 @@ game_state make_initial_game_state(const std::string& asset_root) {
     game_state state;
     state.asset_root = asset_root;
     std::vector<course_definition> courses = load_courses_from_directory((std::filesystem::path(asset_root) / "courses").string());
-    state.active_course = courses.empty() ? fallback_course_definition() : courses.front();
+    state.active_course = default_course_definition(courses);
     state.round = start_course(state.active_course);
     state.save.current_course_id = state.active_course.id;
     state.save.current_hole_index = 0;

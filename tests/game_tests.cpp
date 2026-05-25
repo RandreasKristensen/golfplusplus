@@ -16,6 +16,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <optional>
 #include <string>
 #include <vector>
@@ -290,6 +292,87 @@ TEST_CASE("hole editor json loads into game tuning course data") {
     CHECK(tuning.course.extent >= estimate_course_extent(*hole));
 }
 
+TEST_CASE("hole loader reads rough width and trees with defaults") {
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "vcr_golf_tree_hole.json";
+    std::ofstream file(path);
+    file << R"({
+      "id": "tree_hole",
+      "name": "Tree Hole",
+      "par": 4,
+      "tee": [0, 0, 0],
+      "pin": [0, 0, 40],
+      "spline": {
+        "control_points": [[0, 0, 0], [0, 0, 40]],
+        "width": 12,
+        "rough_width": 24
+      },
+      "trees": [
+        { "position": [14, 0, 20], "leaf_radius": 2.5 },
+        { "position": ["bad", 0, 20] }
+      ]
+    })";
+    file.close();
+
+    const std::optional<hole_data> hole = load_hole_from_file(path.string());
+    std::filesystem::remove(path);
+
+    CHECK(hole.has_value());
+    if (!hole) {
+        return;
+    }
+
+    CHECK(near_float(hole->spline.width, 12.0f));
+    CHECK(near_float(hole->spline.rough_width, 24.0f));
+    CHECK(hole->trees.size() == 1);
+    CHECK(near_float(hole->trees[0].trunk_radius, 0.35f));
+    CHECK(near_float(hole->trees[0].trunk_height, 2.4f));
+    CHECK(near_float(hole->trees[0].leaf_radius, 2.5f));
+    CHECK(near_float(hole->trees[0].leaf_height, 3.2f));
+}
+
+TEST_CASE("hole loader defaults missing rough width to fairway width") {
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "vcr_golf_no_rough_hole.json";
+    std::ofstream file(path);
+    file << R"({
+      "id": "legacy_hole",
+      "tee": [0, 0, 0],
+      "pin": [0, 0, 40],
+      "spline": {
+        "control_points": [[0, 0, 0], [0, 0, 40]],
+        "width": 12
+      }
+    })";
+    file.close();
+
+    const std::optional<hole_data> hole = load_hole_from_file(path.string());
+    std::filesystem::remove(path);
+
+    CHECK(hole.has_value());
+    if (!hole) {
+        return;
+    }
+
+    CHECK(near_float(hole->spline.rough_width, hole->spline.width));
+}
+
+TEST_CASE("course extent includes authored trees") {
+    hole_data hole;
+    hole.tee_position = glm::vec3(0.0f);
+    hole.pin_position = glm::vec3(0.0f, 0.0f, 20.0f);
+    hole.spline.width = 8.0f;
+    hole.spline.rough_width = 8.0f;
+    hole.spline.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 20.0f)
+    };
+    tree_instance tree;
+    tree.position = glm::vec3(80.0f, 0.0f, 0.0f);
+    tree.leaf_radius = 6.0f;
+    hole.trees = {tree};
+
+    CHECK(estimate_course_extent(hole) >= 86.0f);
+}
+
 TEST_CASE("content layer loads courses clubs and quests from asset root") {
     const game_content content = load_game_content(asset_root());
 
@@ -336,6 +419,38 @@ TEST_CASE("course manifests load nine and eighteen hole definitions in order") {
     CHECK(eighteen->id == "test_eighteen");
     CHECK(eighteen->hole_count == 18);
     CHECK(eighteen->holes.size() == 18);
+}
+
+TEST_CASE("course manifests can reference holes by id") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/course_01.json");
+
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+
+    CHECK(course->id == "course_01");
+    CHECK(course->hole_count == 2);
+    CHECK(course->holes.front() == "test");
+    CHECK(course_hole_path(asset_root(), *course, 0).find("holes") != std::string::npos);
+
+    game_tuning tuning = default_game_tuning();
+    CHECK(load_hole_runtime(tuning, *course, 0, asset_root()));
+    CHECK(!tuning.course.id.empty());
+}
+
+TEST_CASE("hole directory loader discovers authored holes") {
+    const std::vector<hole_data> holes = load_holes_from_directory(asset_root() + "/holes");
+
+    CHECK(holes.size() >= 2);
+    bool found_test = false;
+    bool found_test2 = false;
+    for (const hole_data& hole : holes) {
+        found_test = found_test || hole.name == "Test";
+        found_test2 = found_test2 || hole.name == "The Ditch";
+    }
+    CHECK(found_test);
+    CHECK(found_test2);
 }
 
 TEST_CASE("missing course hole path fails cleanly") {
@@ -839,6 +954,48 @@ TEST_CASE("game update collides ball against spline terrain height") {
                                                       state.tuning.ground_y);
     CHECK(near_float(glm::dot(state.ball.position - sample.point, sample.normal), state.ball.radius));
     CHECK(state.ball.velocity.y == 0.0f);
+}
+
+TEST_CASE("game update resolves ball collision with authored tree") {
+    game_state state;
+    state.mode = game_mode::following_shot;
+    state.tuning.wind.base_speed = 0.0f;
+    state.tuning.wind.speed_variation = 0.0f;
+    state.tuning.physics.drag_coeff = 0.0f;
+    state.tuning.physics.magnus_coeff = 0.0f;
+    state.tuning.physics.spin_decay = 0.0f;
+    state.tuning.ground_restitution = 0.0f;
+    state.tuning.ground_friction = 0.0f;
+    state.tuning.ground_roll_friction = 0.0f;
+    state.tuning.ground_settle_speed = 10.0f;
+    state.tuning.tree_restitution = 0.25f;
+    state.tuning.tree_friction = 0.35f;
+    state.tuning.stop_speed = 0.01f;
+    state.tuning.terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 10.0f)
+    };
+    state.tuning.terrain.width = 8.0f;
+    state.tuning.terrain.sample_count = 16;
+
+    tree_instance tree;
+    tree.position = glm::vec3(0.0f, 0.0f, 5.0f);
+    tree.trunk_radius = 0.5f;
+    tree.trunk_height = 2.0f;
+    tree.leaf_radius = 1.0f;
+    tree.leaf_height = 2.0f;
+    state.tuning.course.trees = {tree};
+    rebuild_cached_terrain_mesh(state.tuning);
+
+    state.ball.radius = 0.1f;
+    state.ball.position = glm::vec3(0.35f, 0.8f, 5.0f);
+    state.ball.velocity = glm::vec3(-3.0f, 0.0f, 0.0f);
+
+    input_state input;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.ball.position.x >= tree.trunk_radius + state.ball.radius - 0.0001f);
+    CHECK(state.ball.velocity.x > 0.0f);
 }
 
 TEST_CASE("roll friction preserves slope tangent velocity") {

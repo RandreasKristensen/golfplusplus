@@ -1,4 +1,4 @@
-# vcr-golf
+# golf++
 
 A pixelated, VCR-aesthetic 3D golf game with text-driven RPG progression. Hit balls across lo-fi curved courses, earn money through story quests, and upgrade your bag with clubs and balls that actually change how you play.
 
@@ -30,11 +30,11 @@ A pixelated, VCR-aesthetic 3D golf game with text-driven RPG progression. Hit ba
 ## Building
 
 ```bash
-git clone https://github.com/yourname/vcr-golf
-cd vcr-golf
+git clone https://github.com/yourname/golfplusplus
+cd golfplusplus
 cmake --preset debug
 cmake --build build/debug
-./build/debug/vcr-golf
+./build/debug/golf++
 ```
 
 ### Dependencies
@@ -62,7 +62,7 @@ pacman -S mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_mixer mingw-w64-x86_64-glm
 ```bash
 cmake --preset test
 cmake --build build/test
-./build/test/vcr-golf-tests
+./build/test/golf++-tests
 ```
 
 The physics module has the heaviest test coverage — pure functions test cleanly with no setup or mocking.
@@ -72,7 +72,7 @@ The physics module has the heaviest test coverage — pure functions test cleanl
 ## Project structure
 
 ```
-vcr-golf/
+golfplusplus/
 ├── core/             # main.cpp, app loop, window, input
 ├── quest/            # Quest engine, parser, shop, dialogue
 ├── ui/               # HUD, power meter, dialogue boxes, menus

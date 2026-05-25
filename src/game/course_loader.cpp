@@ -73,6 +73,14 @@ std::optional<course_definition> course_from_json(const json& root) {
 
     return course;
 }
+
+std::filesystem::path hole_reference_path(const std::string& reference) {
+    const std::filesystem::path path(reference);
+    if (path.is_absolute() || path.has_parent_path() || path.has_extension()) {
+        return path;
+    }
+    return std::filesystem::path("holes") / (reference + ".json");
+}
 }
 
 std::optional<course_definition> load_course_from_file(const std::string& path) {
@@ -117,6 +125,19 @@ course_definition fallback_course_definition() {
     return course;
 }
 
+course_definition default_course_definition(const std::vector<course_definition>& courses) {
+    const auto dev = std::find_if(courses.begin(), courses.end(), [](const course_definition& course) {
+        return course.id == "dev_course";
+    });
+    if (dev != courses.end()) {
+        return *dev;
+    }
+    if (!courses.empty()) {
+        return courses.front();
+    }
+    return fallback_course_definition();
+}
+
 std::string course_hole_path(const std::string& asset_root,
                              const course_definition& course,
                              const std::size_t hole_index) {
@@ -124,7 +145,7 @@ std::string course_hole_path(const std::string& asset_root,
         return {};
     }
 
-    const std::filesystem::path hole_reference(course.holes[hole_index]);
+    const std::filesystem::path hole_reference = hole_reference_path(course.holes[hole_index]);
     if (hole_reference.is_absolute()) {
         return hole_reference.string();
     }

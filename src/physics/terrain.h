@@ -9,7 +9,9 @@
 
 struct terrain_spline {
     std::vector<glm::vec3> control_points;
+    // Width is the full rendered/playable ribbon. fairway_width marks the inner fairway strip.
     float width = 0.0f;
+    float fairway_width = 0.0f;
     int sample_count = 96;
 };
 

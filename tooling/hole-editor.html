@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>vcr-golf — hole editor</title>
+<title>golf++ — hole editor</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -160,6 +160,7 @@ body {
 .zone-dot.green  { background: #4a9a4a; }
 .zone-dot.bunker { background: #c8a840; }
 .zone-dot.water  { background: #4060c8; }
+.zone-dot.tree   { background: #286838; border-radius: 2px; }
 
 .subfield {
   display: flex;
@@ -211,14 +212,16 @@ body {
 <body>
 
 <div id="toolbar">
-  <h1>⛳ vcr-golf / hole editor</h1>
+  <h1>⛳ golf++ / hole editor</h1>
   <div class="sep"></div>
   <button class="btn active" id="btn-select"  onclick="setMode('select')">select</button>
   <button class="btn"        id="btn-addcp"   onclick="setMode('add_cp')">+ point</button>
+  <button class="btn"        id="btn-measure" onclick="setMode('measure')">measure</button>
   <div class="sep"></div>
   <button class="btn"        id="btn-green"   onclick="setMode('add_zone','green')">+ green</button>
   <button class="btn"        id="btn-bunker"  onclick="setMode('add_zone','bunker')">+ bunker</button>
   <button class="btn"        id="btn-water"   onclick="setMode('add_zone','water')">+ water</button>
+  <button class="btn"        id="btn-tree"    onclick="setMode('add_tree')">+ tree</button>
   <div class="sep"></div>
   <button class="btn"        onclick="fitView();render()">fit</button>
   <button class="btn"        onclick="newHole()">new</button>
@@ -243,6 +246,7 @@ body {
         <div class="field"><label>par</label>    <input type="number" id="f-par"   min="1" max="6" oninput="hole.par=+this.value"></div>
         <div class="field"><label>wind seed</label><input type="number" id="f-seed" oninput="hole.wind_seed=+this.value"></div>
         <div class="field"><label>width</label>  <input type="number" id="f-width" step="0.5" min="2" oninput="hole.spline.width=+this.value;render()"></div>
+        <div class="field"><label>rough width</label><input type="number" id="f-rough-width" step="0.5" min="2" oninput="setRoughWidth(+this.value)"></div>
       </div>
 
       <div class="section">
@@ -255,6 +259,12 @@ body {
         <div class="section-title">material zones</div>
         <div id="zone-list"></div>
         <div id="zone-edit"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">trees</div>
+        <div id="tree-list"></div>
+        <div id="tree-edit"></div>
       </div>
 
       <div class="section">
@@ -274,6 +284,8 @@ body {
 </div>
 
 <script>
+const METERS_PER_WORLD_UNIT = 1.0;
+
 // ── state ────────────────────────────────────────────────────────────────────
 
 let hole = {
@@ -281,12 +293,14 @@ let hole = {
   tee: [0, 0, 0], pin: [0, 0, 80],
   spline: {
     control_points: [[0,0,0],[2,1,20],[-1,0.5,40],[3,2,60],[0,1,80]],
-    width: 18.0
+    width: 18.0,
+    rough_width: 28.0
   },
   material_zones: [
     { type: "green",  center: [0, 0, 80], radius: 6.0 },
     { type: "bunker", center: [5, 0, 52], radius: 3.5 }
-  ]
+  ],
+  trees: []
 };
 
 let view   = { ox: 0, oz: 40, scale: 5 };
@@ -295,6 +309,8 @@ let ztype  = null;
 let sel    = null;    // { type, index? }
 let drag   = null;
 let pan    = null;
+let mouseWorld = null;
+let measure = { a: null, b: null };
 
 // ── canvas ───────────────────────────────────────────────────────────────────
 
@@ -322,6 +338,44 @@ const c2w = (cx, cy) => ({
 });
 const r2 = v => Math.round(v * 100) / 100;
 
+function pointXZ(p) {
+  if (Array.isArray(p)) return { x: p[0] || 0, z: p.length >= 3 ? (p[2] || 0) : (p[1] || 0) };
+  return { x: p?.x || 0, z: p?.z || 0 };
+}
+
+function distXZ(a, b) {
+  const pa = pointXZ(a), pb = pointXZ(b);
+  return Math.hypot(pa.x - pb.x, pa.z - pb.z);
+}
+
+function toMeters(worldDistance) {
+  return worldDistance * METERS_PER_WORLD_UNIT;
+}
+
+function fmtMeters(value) {
+  const rounded = Math.round(value);
+  return `${rounded.toLocaleString('en-US')}m`;
+}
+
+function normalizeHole() {
+  if (!hole.spline) hole.spline = { control_points: [[0,0,0],[0,0,80]], width: 18 };
+  if (!hole.spline.control_points) hole.spline.control_points = [[0,0,0],[0,0,80]];
+  if (!Number.isFinite(+hole.spline.width) || +hole.spline.width <= 0) hole.spline.width = 18;
+  if (!Number.isFinite(+hole.spline.rough_width) || +hole.spline.rough_width < +hole.spline.width) {
+    hole.spline.rough_width = +hole.spline.width;
+  }
+  if (!hole.material_zones) hole.material_zones = [];
+  if (!hole.trees) hole.trees = [];
+  hole.trees = hole.trees.filter(t => Array.isArray(t.position) && t.position.length === 3).map(t => ({
+    ...t,
+    position: t.position,
+    trunk_radius: Number.isFinite(+t.trunk_radius) ? Math.max(0.05, +t.trunk_radius) : 0.35,
+    trunk_height: Number.isFinite(+t.trunk_height) ? Math.max(0.1, +t.trunk_height) : 2.4,
+    leaf_radius: Number.isFinite(+t.leaf_radius) ? Math.max(0.1, +t.leaf_radius) : 1.6,
+    leaf_height: Number.isFinite(+t.leaf_height) ? Math.max(0.1, +t.leaf_height) : 3.2
+  }));
+}
+
 // ── spline ───────────────────────────────────────────────────────────────────
 
 function catmullSample(pts, t) {
@@ -345,6 +399,13 @@ function splinePts(n = 100) {
   return out;
 }
 
+function splinePathLength(samples = 160) {
+  const pts = splinePts(samples);
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) total += distXZ(pts[i - 1], pts[i]);
+  return toMeters(total);
+}
+
 // ── render ───────────────────────────────────────────────────────────────────
 
 const ZONE = {
@@ -356,6 +417,7 @@ const ZONE = {
 function render() {
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
+  normalizeHole();
 
   // grid
   const gs = 10;
@@ -372,10 +434,27 @@ function render() {
   }
   // grid labels
   ctx.fillStyle = '#2e2e2e'; ctx.font = '9px Courier New';
-  for (let wx = x0; wx <= x1; wx += gs) { const {x}=w2c(wx,0); ctx.fillText(wx,x+2,H-4); }
-  for (let wz = z0; wz <= z1; wz += gs) { const {y}=w2c(0,wz); ctx.fillText(wz,4,y-2); }
+  for (let wx = x0; wx <= x1; wx += gs) { const {x}=w2c(wx,0); ctx.fillText(`${fmtMeters(toMeters(wx))}`,x+2,H-4); }
+  for (let wz = z0; wz <= z1; wz += gs) { const {y}=w2c(0,wz); ctx.fillText(`${fmtMeters(toMeters(wz))}`,4,y-2); }
 
   const sp = splinePts();
+
+  drawMeasurementLabel(
+    hole.tee,
+    hole.pin,
+    fmtMeters(toMeters(distXZ(hole.tee, hole.pin))),
+    { line: 'rgba(240,192,96,0.28)', text: 'rgba(240,210,130,0.86)', dash: [6, 6], offset: -12 }
+  );
+
+  // rough strip
+  if (sp.length > 1 && hole.spline.rough_width > hole.spline.width) {
+    ctx.lineWidth   = hole.spline.rough_width * view.scale;
+    ctx.strokeStyle = 'rgba(24,58,26,0.58)';
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath();
+    sp.forEach(([wx,wz],i) => { const c=w2c(wx,wz); i?ctx.lineTo(c.x,c.y):ctx.moveTo(c.x,c.y); });
+    ctx.stroke();
+  }
 
   // fairway strip
   if (sp.length > 1) {
@@ -442,6 +521,9 @@ function render() {
   // pin
   drawPin(hole.pin, sel && sel.type === 'pin');
 
+  // trees
+  hole.trees.forEach((tree, i) => drawTree(tree, sel && sel.type === 'tree' && sel.index === i));
+
   // control points
   hole.spline.control_points.forEach((pt, i) => {
     const c     = w2c(pt[0], pt[2]);
@@ -457,19 +539,48 @@ function render() {
       ctx.fillStyle = pt[1]>0 ? 'rgba(200,175,70,0.7)' : 'rgba(70,110,200,0.7)';
       ctx.fillText('y'+pt[1].toFixed(1), c.x+6, c.y+13);
     }
+    if (isSel) {
+      if (i > 0) {
+        drawMeasurementLabel(hole.spline.control_points[i - 1], pt, fmtMeters(toMeters(distXZ(hole.spline.control_points[i - 1], pt))), {
+          line: 'rgba(240,192,96,0.22)', text: 'rgba(240,210,130,0.78)', dash: [3, 5], offset: -8
+        });
+      }
+      if (i < hole.spline.control_points.length - 1) {
+        drawMeasurementLabel(pt, hole.spline.control_points[i + 1], fmtMeters(toMeters(distXZ(pt, hole.spline.control_points[i + 1]))), {
+          line: 'rgba(240,192,96,0.22)', text: 'rgba(240,210,130,0.78)', dash: [3, 5], offset: 8
+        });
+      }
+    }
   });
+
+  if (mode === 'add_cp' && mouseWorld && hole.spline.control_points.length > 0) {
+    const prev = hole.spline.control_points[hole.spline.control_points.length - 1];
+    drawMeasurementLabel(prev, mouseWorld, fmtMeters(toMeters(distXZ(prev, mouseWorld))), {
+      line: 'rgba(240,192,96,0.35)', text: 'rgba(240,210,130,0.9)', dash: [4, 4], offset: -10
+    });
+  }
+
+  const measureB = measure.b || (mode === 'measure' ? mouseWorld : null);
+  if (measure.a && measureB) {
+    drawMeasurementLabel(measure.a, measureB, fmtMeters(toMeters(distXZ(measure.a, measureB))), {
+      line: 'rgba(240,192,96,0.55)', text: '#f0d080', dash: measure.b ? [] : [4, 4], offset: -10
+    });
+  }
 
   // mode hint on canvas
   if (mode !== 'select') {
-    const hints = { add_cp: 'click to add control point', add_zone: `click to place ${ztype}` };
+    const hints = { add_cp: 'click to add control point', add_zone: `click to place ${ztype}`, add_tree: 'click to place tree', measure: 'click point A, click point B, right-click clears' };
     ctx.fillStyle = '#f0c060';
     ctx.font = '11px Courier New';
     ctx.fillText(hints[mode] || '', 10, H - 10);
   }
 
+  drawScaleBar();
+
   // status bar
+  const cursor = mouseWorld ? `  |  x:${mouseWorld.x.toFixed(1)} z:${mouseWorld.z.toFixed(1)}` : '';
   document.getElementById('status').textContent =
-    `${view.scale.toFixed(1)}px/u  |  pts:${hole.spline.control_points.length}  |  zones:${hole.material_zones.length}`;
+    `${view.scale.toFixed(1)}px/m  |  hole: ${fmtMeters(toMeters(distXZ(hole.tee, hole.pin)))} direct / ${fmtMeters(splinePathLength())} path  |  pts:${hole.spline.control_points.length}  |  zones:${hole.material_zones.length}  |  trees:${hole.trees.length}${cursor}`;
 }
 
 function drawTee(pos, sel) {
@@ -493,10 +604,99 @@ function drawPin(pos, sel) {
   ctx.fillText('PIN', c.x, c.y+13); ctx.textAlign = 'left';
 }
 
+function drawTree(tree, isSel) {
+  const c = w2c(tree.position[0], tree.position[2]);
+  const r = Math.max(5, (tree.leaf_radius || 1.6) * view.scale);
+  ctx.fillStyle = isSel ? 'rgba(240,192,96,0.42)' : 'rgba(20,90,35,0.5)';
+  ctx.strokeStyle = isSel ? '#f0c060' : 'rgba(70,135,65,0.75)';
+  ctx.lineWidth = isSel ? 1.5 : 0.8;
+  ctx.beginPath();
+  ctx.moveTo(c.x, c.y - r);
+  ctx.lineTo(c.x + r * 0.82, c.y + r * 0.55);
+  ctx.lineTo(c.x - r * 0.82, c.y + r * 0.55);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = isSel ? '#f0c060' : '#6b3f20';
+  ctx.beginPath();
+  ctx.arc(c.x, c.y, Math.max(2.5, (tree.trunk_radius || 0.35) * view.scale), 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawMeasurementLabel(worldA, worldB, label, style = {}) {
+  const a = pointXZ(worldA), b = pointXZ(worldB);
+  const ca = w2c(a.x, a.z), cb = w2c(b.x, b.z);
+  const mx = (ca.x + cb.x) / 2;
+  const my = (ca.y + cb.y) / 2;
+  const dx = cb.x - ca.x, dy = cb.y - ca.y;
+  const len = Math.max(1, Math.hypot(dx, dy));
+  const ox = (-dy / len) * (style.offset ?? -10);
+  const oy = ( dx / len) * (style.offset ?? -10);
+
+  ctx.save();
+  ctx.lineWidth = style.width || 1;
+  ctx.strokeStyle = style.line || 'rgba(240,192,96,0.35)';
+  ctx.setLineDash(style.dash || []);
+  ctx.beginPath();
+  ctx.moveTo(ca.x, ca.y);
+  ctx.lineTo(cb.x, cb.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.font = '10px Courier New';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const tx = mx + ox, ty = my + oy;
+  const tw = ctx.measureText(label).width + 8;
+  ctx.fillStyle = 'rgba(20,20,20,0.78)';
+  ctx.fillRect(tx - tw / 2, ty - 7, tw, 14);
+  ctx.strokeStyle = 'rgba(240,192,96,0.24)';
+  ctx.strokeRect(tx - tw / 2, ty - 7, tw, 14);
+  ctx.fillStyle = style.text || 'rgba(240,210,130,0.88)';
+  ctx.fillText(label, tx, ty + 0.5);
+  ctx.restore();
+}
+
+function drawScaleBar() {
+  const niceMeters = [1, 2, 5, 10, 25, 50, 100, 200, 500, 1000];
+  const targetPx = Math.min(160, Math.max(80, canvas.width * 0.16));
+  let chosen = niceMeters[0];
+  for (const value of niceMeters) {
+    if ((value / METERS_PER_WORLD_UNIT) * view.scale <= targetPx) chosen = value;
+  }
+
+  const px = Math.max(44, (chosen / METERS_PER_WORLD_UNIT) * view.scale);
+  const x = 12, y = canvas.height - 38;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(240,210,130,0.82)';
+  ctx.fillStyle = 'rgba(20,20,20,0.72)';
+  ctx.lineWidth = 2;
+  ctx.fillRect(x - 6, y - 18, px + 12, 28);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + px, y);
+  ctx.moveTo(x, y - 5);
+  ctx.lineTo(x, y + 5);
+  ctx.moveTo(x + px, y - 5);
+  ctx.lineTo(x + px, y + 5);
+  ctx.stroke();
+  ctx.font = '10px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(240,210,130,0.92)';
+  ctx.fillText(`${chosen.toLocaleString('en-US')} m`, x + px / 2, y - 8);
+  ctx.restore();
+}
+
 // ── hit test ─────────────────────────────────────────────────────────────────
 
 function hit(cx, cy) {
   const D = 10;
+  for (let i=hole.trees.length-1; i>=0; i--) {
+    const t = hole.trees[i];
+    const c = w2c(t.position[0], t.position[2]);
+    const r = Math.max(8, (t.leaf_radius || 1.6) * view.scale);
+    if (Math.hypot(cx-c.x, cy-c.y) <= r) return { type:'tree', index:i };
+  }
   // resize handle (circular zones, only when selected)
   for (let i=0; i<hole.material_zones.length; i++) {
     const z = hole.material_zones[i];
@@ -541,9 +741,14 @@ canvas.addEventListener('mousedown', e => {
   e.preventDefault();
   const {cx,cy} = getpos(e);
   const w = c2w(cx,cy);
+  mouseWorld = { x: r2(w.x), z: r2(w.z) };
 
   // right-click delete
   if (e.button === 2) {
+    if (mode === 'measure') {
+      measure = { a: null, b: null };
+      render(); return;
+    }
     const h2 = hit(cx,cy);
     if (h2?.type==='cp' && hole.spline.control_points.length>2) {
       hole.spline.control_points.splice(h2.index,1);
@@ -551,10 +756,22 @@ canvas.addEventListener('mousedown', e => {
     } else if (h2?.type==='zone') {
       hole.material_zones.splice(h2.index,1);
       if (sel?.type==='zone') sel=null;
+    } else if (h2?.type==='tree') {
+      hole.trees.splice(h2.index,1);
+      if (sel?.type==='tree') sel=null;
     }
     updatePanel(); render(); return;
   }
   if (e.button !== 0) return;
+
+  if (mode === 'measure') {
+    if (!measure.a || measure.b) {
+      measure = { a: { x: r2(w.x), z: r2(w.z) }, b: null };
+    } else {
+      measure.b = { x: r2(w.x), z: r2(w.z) };
+    }
+    render(); return;
+  }
 
   // add control point
   if (mode==='add_cp') {
@@ -571,6 +788,19 @@ canvas.addEventListener('mousedown', e => {
       hole.material_zones.push({ type:ztype, center:[r2(w.x),0,r2(w.z)], radius: ztype==='green'?6:3.5 });
     }
     sel = { type:'zone', index: hole.material_zones.length-1 };
+    setMode('select'); updatePanel(); render(); return;
+  }
+
+  // place tree
+  if (mode==='add_tree') {
+    hole.trees.push({
+      position:[r2(w.x),0,r2(w.z)],
+      trunk_radius:0.35,
+      trunk_height:2.4,
+      leaf_radius:1.6,
+      leaf_height:3.2
+    });
+    sel = { type:'tree', index: hole.trees.length-1 };
     setMode('select'); updatePanel(); render(); return;
   }
 
@@ -596,23 +826,30 @@ function origPos(h2) {
     const z=hole.material_zones[h2.index];
     return z.center ? {x:z.center[0],z:z.center[2]} : {x:z.bounds[0][0],z:z.bounds[0][2]};
   }
+  if (h2.type==='tree') { const t=hole.trees[h2.index]; return {x:t.position[0],z:t.position[2]}; }
   return {x:0,z:0};
 }
 
 canvas.addEventListener('mousemove', e => {
   const {cx,cy} = getpos(e);
+  const w = c2w(cx,cy);
+  mouseWorld = { x: r2(w.x), z: r2(w.z) };
   if (pan) {
     view.ox = pan.vox - (cx-pan.cx0)/view.scale;
     view.oz = pan.voz - (cy-pan.cy0)/view.scale;
     render(); return;
   }
-  if (!drag) return;
+  if (!drag) {
+    render();
+    return;
+  }
   const dx = (cx-drag.cx0)/view.scale, dz = (cy-drag.cy0)/view.scale;
   const nx = r2(drag.ox+dx), nz = r2(drag.oz+dz);
 
   if (drag.type==='cp') { hole.spline.control_points[drag.index][0]=nx; hole.spline.control_points[drag.index][2]=nz; }
   else if (drag.type==='tee') { hole.tee[0]=nx; hole.tee[2]=nz; }
   else if (drag.type==='pin') { hole.pin[0]=nx; hole.pin[2]=nz; }
+  else if (drag.type==='tree') { hole.trees[drag.index].position[0]=nx; hole.trees[drag.index].position[2]=nz; }
   else if (drag.type==='zone') {
     const z=hole.material_zones[drag.index];
     if (z.center) { z.center[0]=nx; z.center[2]=nz; }
@@ -633,7 +870,7 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mouseup', () => {
   drag=null; pan=null; canvas.style.cursor='crosshair';
 });
-canvas.addEventListener('mouseleave', () => { drag=null; pan=null; });
+canvas.addEventListener('mouseleave', () => { drag=null; pan=null; mouseWorld=null; render(); });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 canvas.addEventListener('wheel', e => {
@@ -651,6 +888,7 @@ canvas.addEventListener('wheel', e => {
 function setMode(m, zt) {
   mode=m; ztype=zt||null;
   const map = { select:'btn-select', add_cp:'btn-addcp',
+    measure:'btn-measure', add_tree:'btn-tree',
     'add_zone:green':'btn-green','add_zone:bunker':'btn-bunker','add_zone:water':'btn-water' };
   document.querySelectorAll('#toolbar .btn').forEach(b=>b.classList.remove('active'));
   const k = m==='add_zone'?`add_zone:${zt}`:m;
@@ -667,6 +905,7 @@ function updatePanel() {
   setValue('f-par',  hole.par);
   setValue('f-seed', hole.wind_seed);
   setValue('f-width',hole.spline.width);
+  setValue('f-rough-width',hole.spline.rough_width);
 
   // control point list
   const cpList = document.getElementById('cp-list');
@@ -743,6 +982,38 @@ function updatePanel() {
     } else { zEdit.innerHTML=''; }
   } else { zEdit.innerHTML=''; }
 
+  // tree list
+  const tList = document.getElementById('tree-list');
+  tList.innerHTML='';
+  hole.trees.forEach((t,i) => {
+    const isSel = sel?.type==='tree' && sel.index===i;
+    const el = document.createElement('div');
+    el.className='list-item'+(isSel?' selected':'');
+    el.innerHTML =
+      `<span class="zone-dot tree"></span>` +
+      `<span class="item-coords">tree @ ${t.position[0].toFixed(1)},${t.position[2].toFixed(1)}</span>` +
+      `<span class="item-del" data-i="${i}">Ã—</span>`;
+    el.addEventListener('click', ev => { if(ev.target.dataset.i!==undefined) return; sel={type:'tree',index:i}; updatePanel(); render(); });
+    tList.appendChild(el);
+  });
+  tList.querySelectorAll('.item-del').forEach(el =>
+    el.addEventListener('click', () => {
+      hole.trees.splice(+el.dataset.i,1);
+      if(sel?.type==='tree') sel=null;
+      updatePanel(); render();
+    })
+  );
+
+  const tEdit = document.getElementById('tree-edit');
+  if (sel?.type==='tree') {
+    const t = hole.trees[sel.index];
+    tEdit.innerHTML =
+      `<div class="subfield"><label>trunk r</label><input type="number" step="0.05" min="0.05" value="${t.trunk_radius}" oninput="setTreeValue(${sel.index},'trunk_radius',+this.value)"></div>` +
+      `<div class="subfield"><label>trunk h</label><input type="number" step="0.1" min="0.1" value="${t.trunk_height}" oninput="setTreeValue(${sel.index},'trunk_height',+this.value)"></div>` +
+      `<div class="subfield"><label>leaf r</label><input type="number" step="0.1" min="0.1" value="${t.leaf_radius}" oninput="setTreeValue(${sel.index},'leaf_radius',+this.value)"></div>` +
+      `<div class="subfield"><label>leaf h</label><input type="number" step="0.1" min="0.1" value="${t.leaf_height}" oninput="setTreeValue(${sel.index},'leaf_height',+this.value)"></div>`;
+  } else { tEdit.innerHTML=''; }
+
   refreshExport();
 }
 
@@ -756,20 +1027,32 @@ function setCpY(i,v)   { hole.spline.control_points[i][1]=v; render(); }
 function setZoneR(i,v) { hole.material_zones[i].radius=Math.max(0.5,v); render(); }
 function setWaterW(i,v){ const z=hole.material_zones[i]; z.bounds[1][0]=r2(z.bounds[0][0]+Math.max(1,v)); render(); }
 function setWaterH(i,v){ const z=hole.material_zones[i]; z.bounds[1][2]=r2(z.bounds[0][2]+Math.max(1,v)); render(); }
+function setRoughWidth(v) { hole.spline.rough_width=Math.max(hole.spline.width, v); render(); }
+function setTreeValue(i,k,v) { hole.trees[i][k]=Math.max(k==='trunk_radius'?0.05:0.1, v); render(); }
 
 // ── export / import ──────────────────────────────────────────────────────────
 
 function buildJSON() {
+  normalizeHole();
   const h = JSON.parse(JSON.stringify(hole));
   h.tee = h.tee.map(r2);
   h.pin = h.pin.map(r2);
   h.spline.width = r2(h.spline.width);
+  h.spline.rough_width = r2(Math.max(h.spline.width, h.spline.rough_width || h.spline.width));
   h.spline.control_points = h.spline.control_points.map(p=>p.map(r2));
   h.material_zones = h.material_zones.map(z=>{
     if(z.center) z.center=z.center.map(r2);
     if(z.bounds) z.bounds=z.bounds.map(b=>b.map(r2));
     if(z.radius!==undefined) z.radius=r2(z.radius);
     return z;
+  });
+  h.trees = (h.trees || []).map(t => {
+    t.position = t.position.map(r2);
+    t.trunk_radius = r2(t.trunk_radius);
+    t.trunk_height = r2(t.trunk_height);
+    t.leaf_radius = r2(t.leaf_radius);
+    t.leaf_height = r2(t.leaf_height);
+    return t;
   });
   return JSON.stringify(h, null, 2);
 }
@@ -797,7 +1080,7 @@ function doImport() {
     hole = parsed;
     if (!hole.tee) hole.tee=[0,0,0];
     if (!hole.pin) hole.pin=[0,0,80];
-    if (!hole.material_zones) hole.material_zones=[];
+    normalizeHole();
     sel=null; fitView(); updatePanel(); render();
   } catch(e) { alert('Invalid JSON:\n'+e.message); }
 }
@@ -807,7 +1090,8 @@ function doImport() {
 function fitView() {
   const pts = [
     ...hole.spline.control_points.map(p=>[p[0],p[2]]),
-    [hole.tee[0],hole.tee[2]], [hole.pin[0],hole.pin[2]]
+    [hole.tee[0],hole.tee[2]], [hole.pin[0],hole.pin[2]],
+    ...hole.trees.map(t=>[t.position[0],t.position[2]])
   ];
   const xs=pts.map(p=>p[0]), zs=pts.map(p=>p[1]);
   view.ox=(Math.min(...xs)+Math.max(...xs))/2;
@@ -821,8 +1105,9 @@ function newHole() {
   hole = {
     id:'hole_01', name:'New Hole', par:3, wind_seed:Math.floor(Math.random()*9999),
     tee:[0,0,0], pin:[0,0,80],
-    spline:{ control_points:[[0,0,0],[0,0,20],[0,0,40],[0,0,60],[0,0,80]], width:18 },
-    material_zones:[{ type:'green', center:[0,0,80], radius:6 }]
+    spline:{ control_points:[[0,0,0],[0,0,20],[0,0,40],[0,0,60],[0,0,80]], width:18, rough_width:28 },
+    material_zones:[{ type:'green', center:[0,0,80], radius:6 }],
+    trees:[]
   };
   sel=null; fitView(); updatePanel(); render();
 }

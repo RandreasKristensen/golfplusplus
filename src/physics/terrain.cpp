@@ -468,6 +468,11 @@ terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
         return mesh;
     }
 
+    const float fairway_width = terrain.fairway_width > 0.00001f
+        ? std::min(terrain.fairway_width, terrain.width)
+        : terrain.width;
+    const float fairway_half_width = fairway_width * 0.5f;
+
     mesh.section_count = terrain_section_count(terrain);
     mesh.cross_section_count = 9;
     mesh.width = terrain.width;
@@ -486,7 +491,9 @@ terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
             vertex.position.y += cross_section_height_offset(offset, terrain.width);
             vertex.normal = glm::vec3(0.0f);
             vertex.distance_from_center = offset;
-            vertex.material = terrain_material::fairway;
+            vertex.material = std::abs(offset) <= fairway_half_width
+                ? terrain_material::fairway
+                : terrain_material::rough;
 
             const zone_hit hit = query_zone_hit(vertex.position, zones);
             if (hit.has_hit) {
