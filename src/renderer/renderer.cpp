@@ -216,12 +216,9 @@ void draw_swing_club(shader_program& shader,
 
     const float power = std::clamp(data.swing_power, 0.0f, 1.0f);
     const glm::vec3 forward = aim_direction(data.aim_angle);
-    glm::vec3 player_side = data.player_position - data.ball_position;
-    player_side.y = 0.0f;
+    glm::vec3 player_side = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
     if (glm::length(player_side) <= 0.0001f) {
-        player_side = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
-    } else {
-        player_side = glm::normalize(player_side);
+        player_side = glm::vec3(1.0f, 0.0f, 0.0f);
     }
 
     const float ball_radius = std::max(0.02f, data.ball_visual_radius_meters);
@@ -248,7 +245,7 @@ void draw_swing_club(shader_program& shader,
                      view,
                      proj,
                      head_center + forward * 0.03f,
-                     forward,
+                     player_side,
                      0.0f,
                      glm::vec2(0.16f, 0.040f),
                      glm::vec3(0.16f, 0.15f, 0.13f));
@@ -435,13 +432,22 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         "0010"
     };
     static const std::array<const char*, 7> glyph_s = {
-        "1111",
+        "1110",
         "1000",
         "1000",
         "1110",
         "0001",
         "0001",
         "1110"
+    };
+    static const std::array<const char*, 7> glyph_plus = {
+        "00100",
+        "00100",
+        "11111",
+        "00100",
+        "00100",
+        "00000",
+        "00000"
     };
     static const std::array<const char*, 7> glyph_c = {
         "0111",
@@ -609,6 +615,8 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         return glyph_y;
     case 'S':
         return glyph_s;
+    case '+':
+        return glyph_plus;
     case 'C':
         return glyph_c;
     case 'D':
@@ -904,6 +912,24 @@ float pixel_text_width(const std::string& label, const float pixel_size) {
     return std::max(0.0f, width - pixel_size);
 }
 
+float fit_pixel_size(const std::string& label,
+                     const glm::vec2& max_half_size,
+                     const float max_pixel_size,
+                     const float min_pixel_size,
+                     const float padding = 0.88f) {
+    if (label.empty()) {
+        return min_pixel_size;
+    }
+
+    const float max_width = max_half_size.x * 2.0f * padding;
+    const float max_height = max_half_size.y * 2.0f * padding;
+    const float base_width = std::max(1.0f, pixel_text_width(label, 1.0f));
+    const float width_scale = max_width / base_width;
+    const float height_scale = max_height / 7.0f;
+    const float target = std::min(width_scale, height_scale);
+    return std::clamp(target, min_pixel_size, max_pixel_size);
+}
+
 void draw_pixel_text_centered(shader_program& shader,
                               const std::string& label,
                               const glm::vec2 center,
@@ -940,32 +966,24 @@ void draw_fps_counter(shader_program& shader, const std::string& label) {
 void draw_club_label(shader_program& shader, const std::string& label) {
     const glm::vec3 label_color(0.90f, 0.88f, 0.76f);
     const glm::vec3 panel_color(0.055f, 0.06f, 0.07f);
-    draw_overlay_quad(shader, glm::vec2(0.78f, 0.78f), glm::vec2(0.17f, 0.12f), panel_color);
+    const glm::vec2 panel_center(0.78f, 0.78f);
+    const glm::vec2 panel_half(0.17f, 0.12f);
+    draw_overlay_quad(shader, panel_center, panel_half, panel_color);
 
-    const float pixel_size = 0.025f;
-    const float width = pixel_text_width(label, pixel_size);
-
-    glm::vec2 cursor(0.78f - width * 0.5f, 0.86f);
-    for (const char c : label) {
-        draw_pixel_glyph(shader, c, cursor, pixel_size, label_color);
-        cursor.x += static_cast<float>(glyph_width(c) + 1) * pixel_size;
-    }
+    const float pixel_size = fit_pixel_size(label, panel_half, 0.022f, 0.010f);
+    draw_pixel_text_centered(shader, label, panel_center, pixel_size, label_color);
 }
 
 void draw_interact_prompt(shader_program& shader) {
     const glm::vec3 prompt_color(0.95f, 0.82f, 0.28f);
     const glm::vec3 panel_color(0.05f, 0.055f, 0.06f);
-    draw_overlay_quad(shader, glm::vec2(0.0f, -0.56f), glm::vec2(0.19f, 0.075f), panel_color);
+    const glm::vec2 panel_center(0.0f, -0.56f);
+    const glm::vec2 panel_half(0.19f, 0.075f);
+    draw_overlay_quad(shader, panel_center, panel_half, panel_color);
 
     const std::string label = "SPC";
-    const float pixel_size = 0.021f;
-    const float width = pixel_text_width(label, pixel_size);
-
-    glm::vec2 cursor(-width * 0.5f, -0.51f);
-    for (const char c : label) {
-        draw_pixel_glyph(shader, c, cursor, pixel_size, prompt_color);
-        cursor.x += static_cast<float>(glyph_width(c) + 1) * pixel_size;
-    }
+    const float pixel_size = fit_pixel_size(label, panel_half, 0.020f, 0.010f, 0.82f);
+    draw_pixel_text_centered(shader, label, panel_center, pixel_size, prompt_color);
 }
 
 void draw_power_meter(shader_program& shader, const float swing_power) {
@@ -1167,9 +1185,11 @@ void draw_startup_menu(shader_program& shader, const render_startup_menu& menu) 
 
     draw_overlay_quad(shader, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.0f, 0.0f, 0.0f), 0.72f);
     draw_overlay_quad(shader, glm::vec2(0.0f, 0.0f), glm::vec2(0.86f, 0.88f), glm::vec3(0.012f, 0.014f, 0.014f), 0.30f);
-    draw_pixel_text_centered(shader, menu.title, glm::vec2(0.0f, 0.80f), 0.028f, glm::vec3(0.95f, 0.78f, 0.28f));
+    const float menu_title_pixel = fit_pixel_size(menu.title, glm::vec2(0.78f, 0.10f), 0.028f, 0.014f);
+    draw_pixel_text_centered(shader, menu.title, glm::vec2(0.0f, 0.80f), menu_title_pixel, glm::vec3(0.95f, 0.78f, 0.28f));
     if (!menu.subtitle.empty()) {
-        draw_pixel_text_centered(shader, menu.subtitle, glm::vec2(0.0f, 0.68f), 0.015f, glm::vec3(0.72f, 0.72f, 0.62f));
+        const float menu_subtitle_pixel = fit_pixel_size(menu.subtitle, glm::vec2(0.70f, 0.065f), 0.015f, 0.010f);
+        draw_pixel_text_centered(shader, menu.subtitle, glm::vec2(0.0f, 0.68f), menu_subtitle_pixel, glm::vec3(0.72f, 0.72f, 0.62f));
     }
 
     const glm::vec2 tile_half = startup_tile_half_size(menu.screen);
@@ -1183,16 +1203,44 @@ void draw_startup_menu(shader_program& shader, const render_startup_menu& menu) 
 
         if (tile.has_preview) {
             draw_hole_thumbnail(shader, tile.preview, center + glm::vec2(0.0f, 0.030f), glm::vec2(tile_half.x * 0.86f, tile_half.y * 0.48f));
-            draw_pixel_text_left(shader, tile.title, center + glm::vec2(-tile_half.x * 0.86f, -tile_half.y * 0.28f), 0.012f, glm::vec3(0.90f, 0.88f, 0.76f));
-            draw_pixel_text_left(shader, tile.subtitle, center + glm::vec2(-tile_half.x * 0.86f, -tile_half.y * 0.58f), 0.010f, glm::vec3(0.68f, 0.69f, 0.62f));
+
+            const glm::vec2 title_half(tile_half.x * 0.86f, tile_half.y * 0.22f);
+            const glm::vec2 subtitle_half(tile_half.x * 0.86f, tile_half.y * 0.18f);
+            const float title_pixel = fit_pixel_size(tile.title, title_half, 0.012f, 0.008f);
+            const float subtitle_pixel = fit_pixel_size(tile.subtitle, subtitle_half, 0.010f, 0.007f);
+
+            draw_pixel_text_left(shader,
+                                 tile.title,
+                                 center + glm::vec2(-tile_half.x * 0.86f, -tile_half.y * 0.28f),
+                                 title_pixel,
+                                 glm::vec3(0.90f, 0.88f, 0.76f));
+            draw_pixel_text_left(shader,
+                                 tile.subtitle,
+                                 center + glm::vec2(-tile_half.x * 0.86f, -tile_half.y * 0.58f),
+                                 subtitle_pixel,
+                                 glm::vec3(0.68f, 0.69f, 0.62f));
         } else {
-            draw_pixel_text_centered(shader, tile.title, center + glm::vec2(0.0f, 0.018f), 0.020f, glm::vec3(0.90f, 0.88f, 0.76f));
-            draw_pixel_text_centered(shader, tile.subtitle, center + glm::vec2(0.0f, -0.050f), 0.011f, glm::vec3(0.66f, 0.67f, 0.61f));
+            const glm::vec2 title_half(tile_half.x * 0.82f, tile_half.y * 0.32f);
+            const glm::vec2 subtitle_half(tile_half.x * 0.82f, tile_half.y * 0.26f);
+            const float title_pixel = fit_pixel_size(tile.title, title_half, 0.020f, 0.010f);
+            const float subtitle_pixel = fit_pixel_size(tile.subtitle, subtitle_half, 0.012f, 0.008f);
+
+            draw_pixel_text_centered(shader,
+                                     tile.title,
+                                     center + glm::vec2(0.0f, 0.018f),
+                                     title_pixel,
+                                     glm::vec3(0.90f, 0.88f, 0.76f));
+            draw_pixel_text_centered(shader,
+                                     tile.subtitle,
+                                     center + glm::vec2(0.0f, -0.050f),
+                                     subtitle_pixel,
+                                     glm::vec3(0.66f, 0.67f, 0.61f));
         }
     }
 
     if (!menu.footer.empty()) {
-        draw_pixel_text_centered(shader, menu.footer, glm::vec2(0.0f, -0.86f), 0.013f, glm::vec3(0.56f, 0.57f, 0.52f));
+        const float footer_pixel = fit_pixel_size(menu.footer, glm::vec2(0.78f, 0.05f), 0.013f, 0.009f);
+        draw_pixel_text_centered(shader, menu.footer, glm::vec2(0.0f, -0.86f), footer_pixel, glm::vec3(0.56f, 0.57f, 0.52f));
     }
 }
 
@@ -1240,9 +1288,10 @@ void draw_rangefinder_view(shader_program& shader,
 
     pin_screen.x = std::max(-0.78f, std::min(0.78f, pin_screen.x));
     pin_screen.y = std::max(-0.68f, std::min(0.82f, pin_screen.y));
-    const float pixel_size = 0.025f;
+    const glm::vec2 label_max_half(0.22f, 0.065f);
+    const float pixel_size = fit_pixel_size(data.rangefinder_distance_label, label_max_half, 0.020f, 0.010f);
     const float label_width = pixel_text_width(data.rangefinder_distance_label, pixel_size);
-    const glm::vec2 panel_half(std::max(0.13f, label_width * 0.5f + 0.045f), 0.085f);
+    const glm::vec2 panel_half(std::max(0.12f, label_width * 0.5f + 0.035f), 0.070f);
     draw_overlay_quad(shader, pin_screen + glm::vec2(0.0f, 0.015f), panel_half, glm::vec3(0.015f, 0.032f, 0.024f), 0.78f);
     draw_pixel_text_centered(shader,
                              data.rangefinder_distance_label,

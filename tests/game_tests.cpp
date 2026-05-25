@@ -97,7 +97,7 @@ std::vector<std::string> expected_club_ids() {
 }
 
 std::vector<std::string> expected_club_labels() {
-    return {"P", "SW", "PW", "9I", "7I", "5I", "7W", "4W", "D"};
+    return {"P", "SWDG", "PWDG", "9I", "7I", "5I", "7WD", "5WD", "DRVR"};
 }
 }
 
