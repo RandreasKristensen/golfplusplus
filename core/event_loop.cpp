@@ -20,6 +20,9 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
     case SDL_SCANCODE_LSHIFT:
     case SDL_SCANCODE_RSHIFT:
         return &input.shift;
+    case SDL_SCANCODE_LCTRL:
+    case SDL_SCANCODE_RCTRL:
+        return &input.ctrl;
     case SDL_SCANCODE_RETURN:
     case SDL_SCANCODE_KP_ENTER:
         return &input.enter;
@@ -54,6 +57,23 @@ void poll_events(input_state& input) {
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT) {
             input.quit_requested = true;
+        }
+
+        if (event.type == SDL_MOUSEMOTION) {
+            input.mouse_x = event.motion.x;
+            input.mouse_y = event.motion.y;
+        }
+
+        if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+            input.mouse_x = event.button.x;
+            input.mouse_y = event.button.y;
+            set_button_down(input.mouse_left);
+        }
+
+        if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
+            input.mouse_x = event.button.x;
+            input.mouse_y = event.button.y;
+            set_button_up(input.mouse_left);
         }
 
         if (event.type == SDL_KEYDOWN && event.key.repeat == 0) {

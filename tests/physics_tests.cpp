@@ -5,6 +5,7 @@
 #include "physics/ball_physics.h"
 #include "physics/collision.h"
 #include "physics/terrain.h"
+#include "physics/tree_collision.h"
 #include "physics/wind.h"
 
 #include <cmath>
@@ -233,6 +234,54 @@ TEST_CASE("terrain zones prioritize water over green") {
     CHECK(sample.material == terrain_material::water);
 }
 
+TEST_CASE("terrain mesh separates fairway from authored rough ribbon") {
+    terrain_spline terrain;
+    terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 20.0f)
+    };
+    terrain.width = 20.0f;
+    terrain.fairway_width = 10.0f;
+    terrain.sample_count = 12;
+
+    const terrain_mesh mesh = build_terrain_mesh(terrain);
+    CHECK(mesh.cross_section_count == 9);
+    if (mesh.cross_section_count != 9) {
+        return;
+    }
+
+    const terrain_vertex edge = mesh.vertices[0];
+    const terrain_vertex center = mesh.vertices[4];
+    CHECK(center.material == terrain_material::fairway);
+    CHECK(edge.material == terrain_material::rough);
+}
+
+TEST_CASE("terrain zones override rough and fairway materials") {
+    terrain_spline terrain;
+    terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 20.0f)
+    };
+    terrain.width = 20.0f;
+    terrain.fairway_width = 8.0f;
+    terrain.sample_count = 12;
+
+    material_zone water_zone;
+    water_zone.type = material_zone_type::water;
+    water_zone.center = glm::vec3(10.0f, 0.0f, 0.0f);
+    water_zone.radius = 1.0f;
+    water_zone.has_radius = true;
+
+    const terrain_mesh mesh = build_terrain_mesh(terrain, {water_zone}, terrain_zone_tuning{});
+    CHECK(mesh.cross_section_count == 9);
+    if (mesh.cross_section_count != 9) {
+        return;
+    }
+
+    const terrain_vertex rough_edge = mesh.vertices[0];
+    CHECK(rough_edge.material == terrain_material::water);
+}
+
 TEST_CASE("spline terrain samples loaded elevation") {
     terrain_spline terrain;
     terrain.control_points = {
@@ -370,4 +419,59 @@ TEST_CASE("terrain collision uses spline elevation and is deterministic") {
     CHECK(r1.velocity.y > ball.velocity.y);
     CHECK(near_vec3(r1.position, r2.position));
     CHECK(near_vec3(r1.velocity, r2.velocity));
+}
+
+TEST_CASE("tree trunk collision pushes ball outside and reflects deterministically") {
+    tree_collision_body tree;
+    tree.base = glm::vec3(0.0f);
+    tree.trunk_radius = 0.35f;
+    tree.trunk_height = 2.4f;
+
+    ball_state ball;
+    ball.radius = 0.1f;
+    ball.position = glm::vec3(0.30f, 1.0f, 0.0f);
+    ball.velocity = glm::vec3(-2.0f, 0.0f, 0.0f);
+
+    const ball_state r1 = resolve_tree_collision(ball, tree, 0.25f, 0.35f);
+    const ball_state r2 = resolve_tree_collision(ball, tree, 0.25f, 0.35f);
+
+    CHECK(r1.position.x >= tree.trunk_radius + ball.radius - 0.0001f);
+    CHECK(r1.velocity.x > 0.0f);
+    CHECK(near_vec3(r1.position, r2.position));
+    CHECK(near_vec3(r1.velocity, r2.velocity));
+}
+
+TEST_CASE("tree leaf cone collision damps and deflects deterministically") {
+    tree_collision_body tree;
+    tree.base = glm::vec3(0.0f);
+    tree.trunk_radius = 0.25f;
+    tree.trunk_height = 2.0f;
+    tree.leaf_radius = 1.5f;
+    tree.leaf_height = 3.0f;
+
+    ball_state ball;
+    ball.radius = 0.1f;
+    ball.position = glm::vec3(0.8f, 3.0f, 0.0f);
+    ball.velocity = glm::vec3(-4.0f, 0.0f, 0.0f);
+
+    const ball_state r1 = resolve_tree_collision(ball, tree, 0.2f, 0.5f);
+    const ball_state r2 = resolve_tree_collision(ball, tree, 0.2f, 0.5f);
+
+    CHECK(glm::length(r1.velocity) < glm::length(ball.velocity));
+    CHECK(r1.position.x > ball.position.x);
+    CHECK(near_vec3(r1.position, r2.position));
+    CHECK(near_vec3(r1.velocity, r2.velocity));
+}
+
+TEST_CASE("tree collision leaves distant ball unchanged") {
+    tree_collision_body tree;
+    tree.base = glm::vec3(0.0f);
+
+    ball_state ball;
+    ball.position = glm::vec3(5.0f, 1.0f, 0.0f);
+    ball.velocity = glm::vec3(1.0f, 0.0f, 0.0f);
+
+    const ball_state result = resolve_tree_collision(ball, tree, 0.25f, 0.35f);
+    CHECK(near_vec3(result.position, ball.position));
+    CHECK(near_vec3(result.velocity, ball.velocity));
 }

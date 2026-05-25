@@ -1,7 +1,17 @@
 build/
 dist/
+build-*/
+cmake-build-*/
 
 # Editor and OS noise
 .vscode/
 .DS_Store
 Thumbs.db
+
+# CMake local artifacts
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json

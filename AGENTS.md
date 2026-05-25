@@ -1,4 +1,4 @@
-# CLAUDE.md — vcr-golf project context
+# CLAUDE.md — golf++ project context
 
 Read this before touching anything. It covers the architecture, rules, conventions, and the reasoning behind decisions.
 
@@ -9,6 +9,12 @@ For ANY directory specific command, always write the full directory for where to
 ## Project overview
 
 A lo-fi 3D golf game written in C++. The aesthetic is pixelated VCR / retro camcorder — renders to a low-resolution framebuffer and upscales with a CRT post-process shader. Gameplay involves hitting golf balls on spline-deformed course geometry, with club and ball stats affecting shot shape. Progression comes from a text-based RPG quest layer — earn money through branching story quests, spend it on gear in a shop.
+
+---
+
+## AI provenance
+
+This project was built almost entirely with AI assistance (Claude + GPT) when tooling was available. Treat this file as the authoritative context for automated edits.
 
 ---
 
@@ -405,7 +411,7 @@ TEST_CASE("step is deterministic — same inputs give same output") {
 }
 ```
 
-Run all tests: `cmake --preset test && cmake --build build/test && ./build/test/vcr-golf-tests`
+Run all tests: `cmake --preset test && cmake --build build/test && ./build/test/golf++-tests`
 
 ---
 

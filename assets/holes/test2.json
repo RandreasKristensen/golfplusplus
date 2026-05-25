@@ -1,0 +1,148 @@
+{
+  "id": "hole_01",
+  "name": "The Ditch",
+  "par": 3,
+  "wind_seed": 42,
+  "tee": [
+    0,
+    0,
+    0
+  ],
+  "pin": [
+    -0.46,
+    0,
+    78.61
+  ],
+  "spline": {
+    "control_points": [
+      [
+        -4.88,
+        0,
+        0.35
+      ],
+      [
+        2,
+        1,
+        20
+      ],
+      [
+        -1,
+        0.5,
+        40
+      ],
+      [
+        3,
+        2,
+        60
+      ],
+      [
+        -2.44,
+        1,
+        89.41
+      ]
+    ],
+    "width": 18,
+    "rough_width": 28
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        0,
+        0,
+        79.3
+      ],
+      "radius": 8.65
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -5.11,
+        0,
+        67.8
+      ],
+      "radius": 3.5
+    },
+    {
+      "type": "water",
+      "bounds": [
+        [
+          -1.14,
+          0,
+          14.69
+        ],
+        [
+          10.86,
+          0,
+          24.69
+        ]
+      ]
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -3.94,
+        0,
+        92.52
+      ],
+      "radius": 4.6
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        -10.8,
+        0,
+        27.93
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    },
+    {
+      "position": [
+        -8.23,
+        0,
+        22.36
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    },
+    {
+      "position": [
+        -6.61,
+        0,
+        26.31
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    },
+    {
+      "position": [
+        -9.86,
+        0,
+        31.65
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    },
+    {
+      "position": [
+        -4.75,
+        0,
+        21.19
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    }
+  ]
+}

@@ -4,6 +4,23 @@
 
 #include "core/gl_loader.h"
 
+namespace {
+void set_window_icon(SDL_Window* window) {
+    if (window == nullptr) {
+        return;
+    }
+
+    SDL_Surface* icon = SDL_LoadBMP(VCR_GOLF_ASSETS_DIR "/icons/golfpp-icon.bmp");
+    if (!icon) {
+        SDL_Log("SDL_LoadBMP icon failed: %s", SDL_GetError());
+        return;
+    }
+
+    SDL_SetWindowIcon(window, icon);
+    SDL_FreeSurface(icon);
+}
+}
+
 bool window::init(const char* title, int width, int height) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
@@ -30,6 +47,8 @@ bool window::init(const char* title, int width, int height) {
         shutdown();
         return false;
     }
+
+    set_window_icon(window_);
 
     gl_context_ = SDL_GL_CreateContext(window_);
     if (!gl_context_) {

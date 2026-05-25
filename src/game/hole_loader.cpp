@@ -148,6 +148,40 @@ std::vector<material_zone> material_zones_from_json(const json& root) {
     return zones;
 }
 
+std::vector<tree_instance> trees_from_json(const json& root) {
+    std::vector<tree_instance> trees;
+    const auto array_it = root.find("trees");
+    if (array_it == root.end() || !array_it->is_array()) {
+        return trees;
+    }
+
+    for (const json& object : *array_it) {
+        if (!object.is_object()) {
+            continue;
+        }
+
+        const auto position_it = object.find("position");
+        if (position_it == object.end()) {
+            continue;
+        }
+
+        const std::optional<glm::vec3> position = vec3_from_json(*position_it);
+        if (!position) {
+            continue;
+        }
+
+        tree_instance tree;
+        tree.position = *position;
+        tree.trunk_radius = std::max(0.01f, float_at(object, "trunk_radius").value_or(tree.trunk_radius));
+        tree.trunk_height = std::max(0.01f, float_at(object, "trunk_height").value_or(tree.trunk_height));
+        tree.leaf_radius = std::max(0.01f, float_at(object, "leaf_radius").value_or(tree.leaf_radius));
+        tree.leaf_height = std::max(0.01f, float_at(object, "leaf_height").value_or(tree.leaf_height));
+        trees.push_back(tree);
+    }
+
+    return trees;
+}
+
 float extent_for_point(const glm::vec3& point, const float padding) {
     return std::max(std::abs(point.x), std::abs(point.z)) + padding;
 }
@@ -187,18 +221,46 @@ std::optional<hole_data> load_hole_from_file(const std::string& path) {
     hole.tee_position = *tee;
     hole.pin_position = *pin;
     hole.spline.width = *width;
+    hole.spline.rough_width = std::max(*width, float_at(*spline_it, "rough_width").value_or(*width));
     hole.spline.control_points = *control_points;
     hole.material_zones = material_zones_from_json(*root);
+    hole.trees = trees_from_json(*root);
 
     return hole;
 }
 
+std::vector<hole_data> load_holes_from_directory(const std::string& directory) {
+    std::vector<hole_data> holes;
+    const std::filesystem::path dir(directory);
+    if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
+        return holes;
+    }
+
+    std::vector<std::filesystem::path> files;
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(dir)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".json") {
+            files.push_back(entry.path());
+        }
+    }
+
+    std::sort(files.begin(), files.end());
+    for (const std::filesystem::path& path : files) {
+        const std::optional<hole_data> hole = load_hole_from_file(path.string());
+        if (hole) {
+            holes.push_back(*hole);
+        }
+    }
+
+    return holes;
+}
+
 float estimate_course_extent(const hole_data& hole) {
-    float extent = std::max(extent_for_point(hole.tee_position, hole.spline.width),
-                            extent_for_point(hole.pin_position, hole.spline.width));
+    const float course_width = std::max(hole.spline.width, hole.spline.rough_width);
+    float extent = std::max(extent_for_point(hole.tee_position, course_width),
+                            extent_for_point(hole.pin_position, course_width));
 
     for (const glm::vec3& point : hole.spline.control_points) {
-        extent = std::max(extent, extent_for_point(point, hole.spline.width));
+        extent = std::max(extent, extent_for_point(point, course_width));
     }
 
     for (const material_zone& zone : hole.material_zones) {
@@ -209,6 +271,10 @@ float estimate_course_extent(const hole_data& hole) {
             extent = std::max(extent, extent_for_point(zone.bounds_min, 0.0f));
             extent = std::max(extent, extent_for_point(zone.bounds_max, 0.0f));
         }
+    }
+
+    for (const tree_instance& tree : hole.trees) {
+        extent = std::max(extent, extent_for_point(tree.position, tree.leaf_radius));
     }
 
     return std::max(20.0f, extent);

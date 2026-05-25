@@ -9,6 +9,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+#include "physics/material_zone.h"
 #include "renderer/framebuffer.h"
 #include "renderer/shader.h"
 
@@ -16,6 +17,58 @@ struct render_terrain_vertex {
     glm::vec3 position = glm::vec3(0.0f);
     glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
     glm::vec3 color = glm::vec3(0.18f, 0.42f, 0.18f);
+};
+
+struct controls_overlay_state {
+    bool visible = true;
+    bool left_down = false;
+    bool right_down = false;
+    bool up_down = false;
+    bool down_down = false;
+    bool space_down = false;
+    bool shift_down = false;
+    bool enter_down = false;
+    bool backspace_down = false;
+    bool retee_down = false;
+};
+
+struct render_tree {
+    glm::vec3 base = glm::vec3(0.0f);
+    float trunk_radius = 0.35f;
+    float trunk_height = 2.4f;
+    float leaf_radius = 1.6f;
+    float leaf_height = 3.2f;
+};
+
+enum class startup_menu_screen {
+    none,
+    main,
+    hole_picker,
+    course_picker
+};
+
+struct render_hole_preview {
+    glm::vec3 tee_position = glm::vec3(0.0f);
+    glm::vec3 pin_position = glm::vec3(0.0f);
+    std::vector<glm::vec3> control_points;
+    float fairway_width = 0.0f;
+    std::vector<material_zone> material_zones;
+};
+
+struct render_startup_tile {
+    std::string title;
+    std::string subtitle;
+    bool selected = false;
+    bool has_preview = false;
+    render_hole_preview preview;
+};
+
+struct render_startup_menu {
+    startup_menu_screen screen = startup_menu_screen::none;
+    std::string title;
+    std::string subtitle;
+    std::string footer;
+    std::vector<render_startup_tile> tiles;
 };
 
 struct render_data {
@@ -26,6 +79,7 @@ struct render_data {
     glm::vec3 tee_position = glm::vec3(0.0f);
     glm::vec3 pin_position = glm::vec3(0.0f);
     std::vector<glm::vec3> aim_arc_points;
+    std::vector<render_tree> trees;
     std::vector<render_terrain_vertex> terrain_vertices;
     std::vector<std::uint32_t> terrain_indices;
     float cup_radius = 0.65f;
@@ -37,6 +91,7 @@ struct render_data {
     bool ball_moving = false;
     bool show_interact_prompt = false;
     bool show_aim_indicator = false;
+    bool shot_addressing = false;
     bool swing_timing = false;
     float swing_power = 0.0f;
     int stroke_count = 0;
@@ -45,6 +100,10 @@ struct render_data {
     float rangefinder_distance_meters = 0.0f;
     std::string rangefinder_distance_label;
     bool show_course_map = false;
+    bool show_fps = false;
+    std::string fps_label;
+    controls_overlay_state controls;
+    render_startup_menu startup_menu;
 };
 
 struct renderer {
@@ -76,10 +135,16 @@ private:
     unsigned int ball_vbo_ = 0;
     unsigned int marker_vao_ = 0;
     unsigned int marker_vbo_ = 0;
+    unsigned int cylinder_vao_ = 0;
+    unsigned int cylinder_vbo_ = 0;
+    unsigned int cone_vao_ = 0;
+    unsigned int cone_vbo_ = 0;
     unsigned int screen_vao_ = 0;
     unsigned int screen_vbo_ = 0;
     int ball_vertex_count_ = 0;
     int marker_vertex_count_ = 0;
+    int cylinder_vertex_count_ = 0;
+    int cone_vertex_count_ = 0;
     int terrain_mesh_index_count_ = 0;
 
     int target_width_ = 640;

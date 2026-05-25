@@ -11,6 +11,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cctype>
 #include <string>
 #include <vector>
 
@@ -62,6 +63,13 @@ void append_sphere_vertex(std::vector<float>& vertices, const glm::vec3 normal) 
     });
 }
 
+void append_mesh_vertex(std::vector<float>& vertices, const glm::vec3 position, const glm::vec3 normal) {
+    vertices.insert(vertices.end(), {
+        position.x, position.y, position.z,
+        normal.x, normal.y, normal.z
+    });
+}
+
 std::vector<float> make_sphere_vertices(const int latitude_segments, const int longitude_segments) {
     std::vector<float> vertices;
     vertices.reserve(static_cast<std::size_t>(latitude_segments) *
@@ -94,6 +102,65 @@ std::vector<float> make_sphere_vertices(const int latitude_segments, const int l
     return vertices;
 }
 
+std::vector<float> make_cylinder_vertices(const int segments) {
+    std::vector<float> vertices;
+    vertices.reserve(static_cast<std::size_t>(segments) * 72);
+
+    constexpr float pi = 3.14159265358979323846f;
+    for (int i = 0; i < segments; ++i) {
+        const float a0 = 2.0f * pi * static_cast<float>(i) / static_cast<float>(segments);
+        const float a1 = 2.0f * pi * static_cast<float>(i + 1) / static_cast<float>(segments);
+        const glm::vec3 n0(std::cos(a0), 0.0f, std::sin(a0));
+        const glm::vec3 n1(std::cos(a1), 0.0f, std::sin(a1));
+        const glm::vec3 p00(n0.x, 0.0f, n0.z);
+        const glm::vec3 p01(n1.x, 0.0f, n1.z);
+        const glm::vec3 p10(n0.x, 1.0f, n0.z);
+        const glm::vec3 p11(n1.x, 1.0f, n1.z);
+
+        append_mesh_vertex(vertices, p00, n0);
+        append_mesh_vertex(vertices, p01, n1);
+        append_mesh_vertex(vertices, p11, n1);
+        append_mesh_vertex(vertices, p00, n0);
+        append_mesh_vertex(vertices, p11, n1);
+        append_mesh_vertex(vertices, p10, n0);
+
+        append_mesh_vertex(vertices, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f));
+        append_mesh_vertex(vertices, p01, glm::vec3(0.0f, -1.0f, 0.0f));
+        append_mesh_vertex(vertices, p00, glm::vec3(0.0f, -1.0f, 0.0f));
+
+        append_mesh_vertex(vertices, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        append_mesh_vertex(vertices, p10, glm::vec3(0.0f, 1.0f, 0.0f));
+        append_mesh_vertex(vertices, p11, glm::vec3(0.0f, 1.0f, 0.0f));
+    }
+
+    return vertices;
+}
+
+std::vector<float> make_cone_vertices(const int segments) {
+    std::vector<float> vertices;
+    vertices.reserve(static_cast<std::size_t>(segments) * 54);
+
+    constexpr float pi = 3.14159265358979323846f;
+    const glm::vec3 tip(0.0f, 1.0f, 0.0f);
+    for (int i = 0; i < segments; ++i) {
+        const float a0 = 2.0f * pi * static_cast<float>(i) / static_cast<float>(segments);
+        const float a1 = 2.0f * pi * static_cast<float>(i + 1) / static_cast<float>(segments);
+        const glm::vec3 p0(std::cos(a0), 0.0f, std::sin(a0));
+        const glm::vec3 p1(std::cos(a1), 0.0f, std::sin(a1));
+        const glm::vec3 face_normal = glm::normalize(glm::cross(p1 - p0, tip - p0));
+
+        append_mesh_vertex(vertices, p0, face_normal);
+        append_mesh_vertex(vertices, p1, face_normal);
+        append_mesh_vertex(vertices, tip, face_normal);
+
+        append_mesh_vertex(vertices, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f));
+        append_mesh_vertex(vertices, p0, glm::vec3(0.0f, -1.0f, 0.0f));
+        append_mesh_vertex(vertices, p1, glm::vec3(0.0f, -1.0f, 0.0f));
+    }
+
+    return vertices;
+}
+
 void set_terrain_draw_state(shader_program& shader,
                             const glm::mat4& model,
                             const glm::mat4& view,
@@ -113,11 +180,174 @@ glm::mat4 panel_model(const glm::vec3 center, const float yaw_degrees, const glm
     return glm::scale(model, scale);
 }
 
+float axis_x_yaw_radians(const glm::vec3& axis) {
+    glm::vec3 flat(axis.x, 0.0f, axis.z);
+    if (glm::length(flat) <= 0.0001f) {
+        flat = glm::vec3(1.0f, 0.0f, 0.0f);
+    } else {
+        flat = glm::normalize(flat);
+    }
+    return std::atan2(-flat.z, flat.x);
+}
+
+void draw_world_panel(shader_program& shader,
+                      const glm::mat4& view,
+                      const glm::mat4& proj,
+                      const glm::vec3& center,
+                      const glm::vec3& axis_x,
+                      const float local_z_rotation,
+                      const glm::vec2& half_size,
+                      const glm::vec3& color) {
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), center);
+    model = glm::rotate(model, axis_x_yaw_radians(axis_x), glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::rotate(model, local_z_rotation, glm::vec3(0.0f, 0.0f, 1.0f));
+    model = glm::scale(model, glm::vec3(half_size, 1.0f));
+    set_terrain_draw_state(shader, model, view, proj, color, false);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void draw_swing_club(shader_program& shader,
+                     const glm::mat4& view,
+                     const glm::mat4& proj,
+                     const render_data& data) {
+    if (!data.shot_addressing && !data.swing_timing) {
+        return;
+    }
+
+    const float power = std::clamp(data.swing_power, 0.0f, 1.0f);
+    const glm::vec3 forward = aim_direction(data.aim_angle);
+    glm::vec3 player_side = data.player_position - data.ball_position;
+    player_side.y = 0.0f;
+    if (glm::length(player_side) <= 0.0001f) {
+        player_side = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
+    } else {
+        player_side = glm::normalize(player_side);
+    }
+
+    const float ball_radius = std::max(0.02f, data.ball_visual_radius_meters);
+    const glm::vec3 head_center = data.ball_position
+        + player_side * (ball_radius + 0.18f)
+        - forward * 0.08f
+        + glm::vec3(0.0f, ball_radius * 0.55f, 0.0f);
+
+    const float backswing_angle = glm::radians(14.0f + power * 62.0f);
+    const float shaft_length = 1.10f;
+    const glm::vec3 shaft_direction = glm::normalize(player_side * std::sin(backswing_angle) +
+                                                     glm::vec3(0.0f, std::cos(backswing_angle), 0.0f));
+    const glm::vec3 shaft_center = head_center + shaft_direction * (shaft_length * 0.5f);
+
+    draw_world_panel(shader,
+                     view,
+                     proj,
+                     shaft_center,
+                     player_side,
+                     -backswing_angle,
+                     glm::vec2(0.018f, shaft_length * 0.5f),
+                     glm::vec3(0.82f, 0.78f, 0.62f));
+    draw_world_panel(shader,
+                     view,
+                     proj,
+                     head_center + forward * 0.03f,
+                     forward,
+                     0.0f,
+                     glm::vec2(0.16f, 0.040f),
+                     glm::vec3(0.16f, 0.15f, 0.13f));
+    draw_world_panel(shader,
+                     view,
+                     proj,
+                     head_center - player_side * 0.02f,
+                     player_side,
+                     0.0f,
+                     glm::vec2(0.13f, 0.035f),
+                     glm::vec3(0.09f, 0.085f, 0.075f));
+}
+
 const std::array<const char*, 7>& glyph_rows(const char value) {
+    static const std::array<const char*, 7> glyph_a = {
+        "0110",
+        "1001",
+        "1001",
+        "1111",
+        "1001",
+        "1001",
+        "1001"
+    };
+    static const std::array<const char*, 7> glyph_b = {
+        "1110",
+        "1001",
+        "1001",
+        "1110",
+        "1001",
+        "1001",
+        "1110"
+    };
+    static const std::array<const char*, 7> glyph_g = {
+        "0111",
+        "1000",
+        "1000",
+        "1011",
+        "1001",
+        "1001",
+        "0111"
+    };
+    static const std::array<const char*, 7> glyph_h = {
+        "1001",
+        "1001",
+        "1001",
+        "1111",
+        "1001",
+        "1001",
+        "1001"
+    };
+    static const std::array<const char*, 7> glyph_l = {
+        "1000",
+        "1000",
+        "1000",
+        "1000",
+        "1000",
+        "1000",
+        "1111"
+    };
+    static const std::array<const char*, 7> glyph_n = {
+        "1001",
+        "1101",
+        "1101",
+        "1011",
+        "1011",
+        "1001",
+        "1001"
+    };
     static const std::array<const char*, 7> glyph_p = {
         "1110",
         "1001",
         "1001",
+        "1110",
+        "1000",
+        "1000",
+        "1000"
+    };
+    static const std::array<const char*, 7> glyph_q = {
+        "0110",
+        "1001",
+        "1001",
+        "1001",
+        "1011",
+        "1001",
+        "0111"
+    };
+    static const std::array<const char*, 7> glyph_o = {
+        "0110",
+        "1001",
+        "1001",
+        "1001",
+        "1001",
+        "1001",
+        "0110"
+    };
+    static const std::array<const char*, 7> glyph_f = {
+        "1111",
+        "1000",
+        "1000",
         "1110",
         "1000",
         "1000",
@@ -149,6 +379,60 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         "010",
         "010",
         "111"
+    };
+    static const std::array<const char*, 7> glyph_e = {
+        "1111",
+        "1000",
+        "1000",
+        "1110",
+        "1000",
+        "1000",
+        "1111"
+    };
+    static const std::array<const char*, 7> glyph_r = {
+        "1110",
+        "1001",
+        "1001",
+        "1110",
+        "1010",
+        "1001",
+        "1001"
+    };
+    static const std::array<const char*, 7> glyph_t = {
+        "11111",
+        "00100",
+        "00100",
+        "00100",
+        "00100",
+        "00100",
+        "00100"
+    };
+    static const std::array<const char*, 7> glyph_u = {
+        "1001",
+        "1001",
+        "1001",
+        "1001",
+        "1001",
+        "1001",
+        "0110"
+    };
+    static const std::array<const char*, 7> glyph_v = {
+        "1001",
+        "1001",
+        "1001",
+        "1001",
+        "1001",
+        "0110",
+        "0110"
+    };
+    static const std::array<const char*, 7> glyph_y = {
+        "1001",
+        "1001",
+        "0110",
+        "0010",
+        "0010",
+        "0010",
+        "0010"
     };
     static const std::array<const char*, 7> glyph_s = {
         "1111",
@@ -289,10 +573,40 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         return glyph_8;
     case '9':
         return glyph_9;
+    case 'A':
+        return glyph_a;
+    case 'B':
+        return glyph_b;
+    case 'G':
+        return glyph_g;
+    case 'H':
+        return glyph_h;
+    case 'L':
+        return glyph_l;
+    case 'N':
+        return glyph_n;
     case 'P':
         return glyph_p;
+    case 'Q':
+        return glyph_q;
+    case 'O':
+        return glyph_o;
+    case 'F':
+        return glyph_f;
     case 'W':
         return glyph_w;
+    case 'E':
+        return glyph_e;
+    case 'R':
+        return glyph_r;
+    case 'T':
+        return glyph_t;
+    case 'U':
+        return glyph_u;
+    case 'V':
+        return glyph_v;
+    case 'Y':
+        return glyph_y;
     case 'S':
         return glyph_s;
     case 'C':
@@ -308,7 +622,11 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
 }
 
 int glyph_width(const char value) {
-    return static_cast<int>(std::string(glyph_rows(value)[0]).size());
+    if (value == ' ') {
+        return 3;
+    }
+    const char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(value)));
+    return static_cast<int>(std::string(glyph_rows(upper)[0]).size());
 }
 
 void draw_overlay_quad(shader_program& shader,
@@ -326,12 +644,242 @@ void draw_overlay_quad(shader_program& shader,
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
+void draw_overlay_rotated_quad(shader_program& shader,
+                               const glm::vec2 center,
+                               const glm::vec2 half_size,
+                               const float angle_radians,
+                               const glm::vec3 color,
+                               const float alpha) {
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(center, 0.0f));
+    model = glm::rotate(model, angle_radians, glm::vec3(0.0f, 0.0f, 1.0f));
+    model = glm::scale(model, glm::vec3(half_size, 1.0f));
+    shader.set_mat4("u_model", glm::mat4(1.0f));
+    shader.set_mat4("u_mvp", model);
+    shader.set_vec3("u_color", color);
+    shader.set_float("u_alpha", alpha);
+    shader.set_int("u_use_vertex_color", 0);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void draw_overlay_segment(shader_program& shader,
+                          const glm::vec2 start,
+                          const glm::vec2 end,
+                          const float thickness,
+                          const glm::vec3 color,
+                          const float alpha) {
+    const glm::vec2 delta = end - start;
+    const float length = glm::length(delta);
+    if (length <= 0.00001f) {
+        return;
+    }
+
+    draw_overlay_rotated_quad(shader,
+                              (start + end) * 0.5f,
+                              glm::vec2(length * 0.5f, thickness * 0.5f),
+                              std::atan2(delta.y, delta.x),
+                              color,
+                              alpha);
+}
+
+void draw_button_outline(shader_program& shader,
+                         const glm::vec2 center,
+                         const glm::vec2 half_size,
+                         const glm::vec3 color,
+                         const float alpha) {
+    constexpr float line_thickness = 0.008f;
+    const glm::vec2 top_left(center.x - half_size.x, center.y + half_size.y);
+    const glm::vec2 top_right(center.x + half_size.x, center.y + half_size.y);
+    const glm::vec2 bottom_left(center.x - half_size.x, center.y - half_size.y);
+    const glm::vec2 bottom_right(center.x + half_size.x, center.y - half_size.y);
+
+    draw_overlay_segment(shader, top_left, top_right, line_thickness, color, alpha);
+    draw_overlay_segment(shader, top_right, bottom_right, line_thickness, color, alpha);
+    draw_overlay_segment(shader, bottom_right, bottom_left, line_thickness, color, alpha);
+    draw_overlay_segment(shader, bottom_left, top_left, line_thickness, color, alpha);
+}
+
+void draw_control_button_base(shader_program& shader,
+                              const glm::vec2 center,
+                              const glm::vec2 half_size,
+                              const bool is_down) {
+    const glm::vec3 outline_color(0.66f, 0.68f, 0.66f);
+    const glm::vec3 pressed_color(0.88f, 0.70f, 0.30f);
+
+    if (is_down) {
+        draw_overlay_quad(shader, center, half_size, pressed_color, 0.90f);
+    } else {
+        draw_overlay_quad(shader, center, half_size, glm::vec3(0.12f, 0.13f, 0.13f), 0.08f);
+    }
+
+    draw_button_outline(shader, center, half_size, outline_color, is_down ? 0.95f : 0.58f);
+}
+
+glm::vec3 control_icon_color(const bool is_down) {
+    return is_down ? glm::vec3(0.08f, 0.085f, 0.08f) : glm::vec3(0.70f, 0.72f, 0.70f);
+}
+
+float control_icon_alpha(const bool is_down) {
+    return is_down ? 1.0f : 0.58f;
+}
+
+void draw_arrow_icon(shader_program& shader,
+                     const glm::vec2 center,
+                     const glm::vec2 direction,
+                     const glm::vec2 half_size,
+                     const bool is_down) {
+    const glm::vec2 dir = glm::normalize(direction);
+    const glm::vec2 side(-dir.y, dir.x);
+    const float radius = std::min(half_size.x, half_size.y) * 0.66f;
+    const float thickness = std::max(0.008f, radius * 0.14f);
+    const glm::vec2 tip = center + dir * radius;
+    const glm::vec2 tail = center - dir * (radius * 0.48f);
+    const glm::vec2 shoulder = tip - dir * (radius * 0.46f);
+    const glm::vec3 color = control_icon_color(is_down);
+    const float alpha = control_icon_alpha(is_down);
+
+    draw_overlay_segment(shader, tail, tip, thickness, color, alpha);
+    draw_overlay_segment(shader, tip, shoulder + side * (radius * 0.34f), thickness, color, alpha);
+    draw_overlay_segment(shader, tip, shoulder - side * (radius * 0.34f), thickness, color, alpha);
+}
+
+void draw_space_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
+    const glm::vec3 color = control_icon_color(is_down);
+    const float alpha = control_icon_alpha(is_down);
+    const float thickness = 0.010f;
+    const float width = half_size.x * 1.08f;
+    const float height = half_size.y * 0.34f;
+    const glm::vec2 left(center.x - width * 0.5f, center.y - height * 0.15f);
+    const glm::vec2 right(center.x + width * 0.5f, center.y - height * 0.15f);
+
+    draw_overlay_segment(shader, left, right, thickness, color, alpha);
+    draw_overlay_segment(shader, left, left + glm::vec2(0.0f, height), thickness, color, alpha);
+    draw_overlay_segment(shader, right, right + glm::vec2(0.0f, height), thickness, color, alpha);
+}
+
+void draw_shift_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
+    const glm::vec3 color = control_icon_color(is_down);
+    const float alpha = control_icon_alpha(is_down);
+    const float thickness = 0.010f;
+    const float width = half_size.x * 0.84f;
+    const float height = half_size.y * 0.88f;
+    const glm::vec2 tip = center + glm::vec2(0.0f, height * 0.48f);
+    const glm::vec2 left_shoulder = center + glm::vec2(-width * 0.38f, height * 0.04f);
+    const glm::vec2 right_shoulder = center + glm::vec2(width * 0.38f, height * 0.04f);
+    const glm::vec2 left_base = center + glm::vec2(-width * 0.20f, -height * 0.48f);
+    const glm::vec2 right_base = center + glm::vec2(width * 0.20f, -height * 0.48f);
+
+    draw_overlay_segment(shader, tip, left_shoulder, thickness, color, alpha);
+    draw_overlay_segment(shader, tip, right_shoulder, thickness, color, alpha);
+    draw_overlay_segment(shader, left_shoulder, left_base, thickness, color, alpha);
+    draw_overlay_segment(shader, right_shoulder, right_base, thickness, color, alpha);
+    draw_overlay_segment(shader, left_base, right_base, thickness, color, alpha);
+}
+
+void draw_enter_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
+    const glm::vec3 color = control_icon_color(is_down);
+    const float alpha = control_icon_alpha(is_down);
+    const float thickness = 0.010f;
+    const glm::vec2 top = center + glm::vec2(half_size.x * 0.44f, half_size.y * 0.40f);
+    const glm::vec2 turn = center + glm::vec2(half_size.x * 0.44f, -half_size.y * 0.10f);
+    const glm::vec2 tip = center + glm::vec2(-half_size.x * 0.42f, -half_size.y * 0.10f);
+    const glm::vec2 shoulder = tip + glm::vec2(half_size.x * 0.30f, 0.0f);
+
+    draw_overlay_segment(shader, top, turn, thickness, color, alpha);
+    draw_overlay_segment(shader, turn, tip, thickness, color, alpha);
+    draw_overlay_segment(shader, tip, shoulder + glm::vec2(0.0f, half_size.y * 0.22f), thickness, color, alpha);
+    draw_overlay_segment(shader, tip, shoulder - glm::vec2(0.0f, half_size.y * 0.22f), thickness, color, alpha);
+}
+
+void draw_backspace_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
+    const glm::vec3 color = control_icon_color(is_down);
+    const float alpha = control_icon_alpha(is_down);
+    const float thickness = 0.010f;
+    const glm::vec2 tip = center + glm::vec2(-half_size.x * 0.44f, 0.0f);
+    const glm::vec2 mid = center + glm::vec2(half_size.x * 0.20f, 0.0f);
+
+    draw_overlay_segment(shader, tip, mid, thickness, color, alpha);
+    draw_overlay_segment(shader, tip, center + glm::vec2(-half_size.x * 0.10f, half_size.y * 0.28f), thickness, color, alpha);
+    draw_overlay_segment(shader, tip, center + glm::vec2(-half_size.x * 0.10f, -half_size.y * 0.28f), thickness, color, alpha);
+    draw_overlay_segment(shader,
+                         center + glm::vec2(half_size.x * 0.36f, half_size.y * 0.34f),
+                         center + glm::vec2(half_size.x * 0.36f, -half_size.y * 0.34f),
+                         thickness,
+                         color,
+                         alpha);
+}
+
+void draw_retee_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
+    const glm::vec3 color = control_icon_color(is_down);
+    const float alpha = control_icon_alpha(is_down);
+    const float radius = std::min(half_size.x, half_size.y) * 0.52f;
+    const float thickness = 0.010f;
+    constexpr int segment_count = 12;
+    constexpr float start_angle = -0.45f;
+    constexpr float end_angle = 4.65f;
+
+    glm::vec2 previous = center + glm::vec2(std::cos(start_angle), std::sin(start_angle)) * radius;
+    for (int i = 1; i <= segment_count; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(segment_count);
+        const float angle = start_angle + (end_angle - start_angle) * t;
+        const glm::vec2 next = center + glm::vec2(std::cos(angle), std::sin(angle)) * radius;
+        draw_overlay_segment(shader, previous, next, thickness, color, alpha);
+        previous = next;
+    }
+
+    const glm::vec2 tip = center + glm::vec2(std::cos(end_angle), std::sin(end_angle)) * radius;
+    draw_overlay_segment(shader, tip, tip + glm::vec2(half_size.x * 0.18f, half_size.y * 0.08f), thickness, color, alpha);
+    draw_overlay_segment(shader, tip, tip + glm::vec2(half_size.x * 0.04f, -half_size.y * 0.22f), thickness, color, alpha);
+}
+
+void draw_controls_overlay(shader_program& shader, const controls_overlay_state& controls) {
+    if (!controls.visible) {
+        return;
+    }
+
+    const glm::vec2 dpad_half(0.060f, 0.060f);
+    const glm::vec2 small_half(0.066f, 0.052f);
+    const glm::vec2 wide_half(0.138f, 0.052f);
+    const glm::vec2 dpad_center(0.79f, 0.02f);
+
+    draw_control_button_base(shader, dpad_center + glm::vec2(0.0f, 0.126f), dpad_half, controls.up_down);
+    draw_arrow_icon(shader, dpad_center + glm::vec2(0.0f, 0.126f), glm::vec2(0.0f, 1.0f), dpad_half, controls.up_down);
+
+    draw_control_button_base(shader, dpad_center + glm::vec2(-0.070f, 0.0f), dpad_half, controls.left_down);
+    draw_arrow_icon(shader, dpad_center + glm::vec2(-0.070f, 0.0f), glm::vec2(-1.0f, 0.0f), dpad_half, controls.left_down);
+
+    draw_control_button_base(shader, dpad_center + glm::vec2(0.070f, 0.0f), dpad_half, controls.right_down);
+    draw_arrow_icon(shader, dpad_center + glm::vec2(0.070f, 0.0f), glm::vec2(1.0f, 0.0f), dpad_half, controls.right_down);
+
+    draw_control_button_base(shader, dpad_center + glm::vec2(0.0f, -0.126f), dpad_half, controls.down_down);
+    draw_arrow_icon(shader, dpad_center + glm::vec2(0.0f, -0.126f), glm::vec2(0.0f, -1.0f), dpad_half, controls.down_down);
+
+    draw_control_button_base(shader, glm::vec2(0.79f, -0.32f), wide_half, controls.space_down);
+    draw_space_icon(shader, glm::vec2(0.79f, -0.32f), wide_half, controls.space_down);
+
+    draw_control_button_base(shader, glm::vec2(0.70f, -0.46f), small_half, controls.shift_down);
+    draw_shift_icon(shader, glm::vec2(0.70f, -0.46f), small_half, controls.shift_down);
+
+    draw_control_button_base(shader, glm::vec2(0.88f, -0.46f), small_half, controls.enter_down);
+    draw_enter_icon(shader, glm::vec2(0.88f, -0.46f), small_half, controls.enter_down);
+
+    draw_control_button_base(shader, glm::vec2(0.70f, -0.60f), small_half, controls.backspace_down);
+    draw_backspace_icon(shader, glm::vec2(0.70f, -0.60f), small_half, controls.backspace_down);
+
+    draw_control_button_base(shader, glm::vec2(0.88f, -0.60f), small_half, controls.retee_down);
+    draw_retee_icon(shader, glm::vec2(0.88f, -0.60f), small_half, controls.retee_down);
+}
+
 void draw_pixel_glyph(shader_program& shader,
                       const char value,
                       const glm::vec2 top_left,
                       const float pixel_size,
                       const glm::vec3 color) {
-    const std::array<const char*, 7>& rows = glyph_rows(value);
+    if (value == ' ') {
+        return;
+    }
+
+    const char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(value)));
+    const std::array<const char*, 7>& rows = glyph_rows(upper);
     for (int y = 0; y < static_cast<int>(rows.size()); ++y) {
         const char* row = rows[y];
         for (int x = 0; row[x] != '\0'; ++x) {
@@ -369,6 +917,26 @@ void draw_pixel_text_centered(shader_program& shader,
     }
 }
 
+void draw_pixel_text_left(shader_program& shader,
+                          const std::string& label,
+                          const glm::vec2 top_left,
+                          const float pixel_size,
+                          const glm::vec3 color) {
+    glm::vec2 cursor = top_left;
+    for (const char c : label) {
+        draw_pixel_glyph(shader, c, cursor, pixel_size, color);
+        cursor.x += static_cast<float>(glyph_width(c) + 1) * pixel_size;
+    }
+}
+
+void draw_fps_counter(shader_program& shader, const std::string& label) {
+    if (label.empty()) {
+        return;
+    }
+
+    draw_pixel_text_left(shader, label, glm::vec2(-0.96f, 0.92f), 0.018f, glm::vec3(0.96f, 0.78f, 0.18f));
+}
+
 void draw_club_label(shader_program& shader, const std::string& label) {
     const glm::vec3 label_color(0.90f, 0.88f, 0.76f);
     const glm::vec3 panel_color(0.055f, 0.06f, 0.07f);
@@ -397,6 +965,234 @@ void draw_interact_prompt(shader_program& shader) {
     for (const char c : label) {
         draw_pixel_glyph(shader, c, cursor, pixel_size, prompt_color);
         cursor.x += static_cast<float>(glyph_width(c) + 1) * pixel_size;
+    }
+}
+
+void draw_power_meter(shader_program& shader, const float swing_power) {
+    const float power = std::clamp(swing_power, 0.0f, 1.0f);
+    const glm::vec3 panel_color(0.055f, 0.060f, 0.065f);
+    const glm::vec3 outline_color(0.62f, 0.64f, 0.60f);
+    const glm::vec3 text_color(0.88f, 0.86f, 0.72f);
+    const glm::vec3 amber(0.92f, 0.70f, 0.18f);
+
+    const glm::vec2 panel_center(-0.62f, -0.72f);
+    const glm::vec2 panel_half(0.32f, 0.155f);
+    draw_overlay_quad(shader, panel_center + glm::vec2(0.012f, -0.014f), panel_half, glm::vec3(0.0f), 0.22f);
+    draw_overlay_quad(shader, panel_center, panel_half, panel_color, 0.78f);
+    draw_button_outline(shader, panel_center, panel_half, outline_color, 0.54f);
+
+    draw_pixel_text_left(shader, "POWER", panel_center + glm::vec2(-0.275f, 0.105f), 0.015f, text_color);
+
+    const glm::vec2 track_center = panel_center + glm::vec2(0.020f, -0.012f);
+    const glm::vec2 track_half(0.245f, 0.035f);
+    const float track_left = track_center.x - track_half.x;
+    const float track_right = track_center.x + track_half.x;
+    const float track_width = track_half.x * 2.0f;
+
+    draw_overlay_quad(shader, track_center, track_half, glm::vec3(0.030f, 0.032f, 0.034f), 0.92f);
+    draw_button_outline(shader, track_center, track_half, outline_color, 0.56f);
+
+    if (power > 0.0f) {
+        const float fill_half_width = track_half.x * power;
+        const glm::vec2 fill_center(track_left + fill_half_width, track_center.y);
+        draw_overlay_quad(shader, fill_center, glm::vec2(fill_half_width, track_half.y * 0.58f), amber, 0.92f);
+    }
+
+    const float sweet_x = track_left + track_width * 0.86f;
+    draw_overlay_segment(shader,
+                         glm::vec2(sweet_x, track_center.y - track_half.y * 1.08f),
+                         glm::vec2(sweet_x, track_center.y + track_half.y * 1.08f),
+                         0.006f,
+                         glm::vec3(0.96f, 0.88f, 0.55f),
+                         0.88f);
+
+    const float needle_x = track_left + track_width * power;
+    draw_overlay_segment(shader,
+                         glm::vec2(needle_x, track_center.y - 0.055f),
+                         glm::vec2(needle_x, track_center.y + 0.055f),
+                         0.008f,
+                         glm::vec3(0.98f, 0.80f, 0.24f),
+                         0.96f);
+
+    const std::array<float, 3> ticks{0.0f, 0.5f, 1.0f};
+    for (const float tick : ticks) {
+        const float x = track_left + track_width * tick;
+        draw_overlay_segment(shader,
+                             glm::vec2(x, track_center.y - 0.058f),
+                             glm::vec2(x, track_center.y - 0.080f),
+                             0.005f,
+                             outline_color,
+                             0.72f);
+    }
+
+    draw_pixel_text_centered(shader, "0", glm::vec2(track_left, panel_center.y - 0.112f), 0.011f, text_color);
+    draw_pixel_text_centered(shader, "50", glm::vec2(track_center.x, panel_center.y - 0.112f), 0.011f, text_color);
+    draw_pixel_text_centered(shader, "100", glm::vec2(track_right, panel_center.y - 0.112f), 0.011f, text_color);
+}
+
+glm::vec3 thumbnail_zone_color(const material_zone_type type) {
+    switch (type) {
+    case material_zone_type::green:
+        return glm::vec3(0.20f, 0.62f, 0.24f);
+    case material_zone_type::bunker:
+        return glm::vec3(0.68f, 0.56f, 0.24f);
+    case material_zone_type::water:
+        return glm::vec3(0.12f, 0.24f, 0.66f);
+    default:
+        return glm::vec3(0.28f, 0.30f, 0.28f);
+    }
+}
+
+glm::vec2 thumbnail_world_point(const glm::vec3& point, const bool rotate_long_axis) {
+    if (rotate_long_axis) {
+        return glm::vec2(point.z, -point.x);
+    }
+    return glm::vec2(point.x, point.z);
+}
+
+void expand_preview_bounds(const glm::vec2& point, glm::vec2& min_point, glm::vec2& max_point) {
+    min_point.x = std::min(min_point.x, point.x);
+    min_point.y = std::min(min_point.y, point.y);
+    max_point.x = std::max(max_point.x, point.x);
+    max_point.y = std::max(max_point.y, point.y);
+}
+
+glm::vec2 preview_point(const glm::vec3& point,
+                        const glm::vec2& center,
+                        const glm::vec2& half_size,
+                        const glm::vec2& min_point,
+                        const float scale,
+                        const bool rotate_long_axis) {
+    const glm::vec2 world = thumbnail_world_point(point, rotate_long_axis);
+    return center + glm::vec2((world.x - min_point.x) * scale - half_size.x,
+                              (world.y - min_point.y) * scale - half_size.y);
+}
+
+void draw_hole_thumbnail(shader_program& shader,
+                         const render_hole_preview& preview,
+                         const glm::vec2 center,
+                         const glm::vec2 half_size) {
+    draw_overlay_quad(shader, center, half_size, glm::vec3(0.028f, 0.034f, 0.030f), 0.96f);
+    draw_button_outline(shader, center, half_size, glm::vec3(0.42f, 0.44f, 0.40f), 0.42f);
+
+    glm::vec2 raw_min(preview.tee_position.x, preview.tee_position.z);
+    glm::vec2 raw_max = raw_min;
+    expand_preview_bounds(glm::vec2(preview.pin_position.x, preview.pin_position.z), raw_min, raw_max);
+    for (const glm::vec3& point : preview.control_points) {
+        expand_preview_bounds(glm::vec2(point.x, point.z), raw_min, raw_max);
+    }
+    for (const material_zone& zone : preview.material_zones) {
+        if (zone.has_radius) {
+            expand_preview_bounds(glm::vec2(zone.center.x + zone.radius, zone.center.z + zone.radius), raw_min, raw_max);
+            expand_preview_bounds(glm::vec2(zone.center.x - zone.radius, zone.center.z - zone.radius), raw_min, raw_max);
+        }
+        if (zone.has_bounds) {
+            expand_preview_bounds(glm::vec2(zone.bounds_min.x, zone.bounds_min.z), raw_min, raw_max);
+            expand_preview_bounds(glm::vec2(zone.bounds_max.x, zone.bounds_max.z), raw_min, raw_max);
+        }
+    }
+
+    const bool rotate_long_axis = (raw_max.y - raw_min.y) > (raw_max.x - raw_min.x);
+    glm::vec2 min_point = thumbnail_world_point(preview.tee_position, rotate_long_axis);
+    glm::vec2 max_point = min_point;
+    expand_preview_bounds(thumbnail_world_point(preview.pin_position, rotate_long_axis), min_point, max_point);
+    for (const glm::vec3& point : preview.control_points) {
+        expand_preview_bounds(thumbnail_world_point(point, rotate_long_axis), min_point, max_point);
+    }
+    for (const material_zone& zone : preview.material_zones) {
+        if (zone.has_radius) {
+            expand_preview_bounds(thumbnail_world_point(zone.center + glm::vec3(zone.radius, 0.0f, zone.radius), rotate_long_axis), min_point, max_point);
+            expand_preview_bounds(thumbnail_world_point(zone.center - glm::vec3(zone.radius, 0.0f, zone.radius), rotate_long_axis), min_point, max_point);
+        }
+        if (zone.has_bounds) {
+            expand_preview_bounds(thumbnail_world_point(zone.bounds_min, rotate_long_axis), min_point, max_point);
+            expand_preview_bounds(thumbnail_world_point(zone.bounds_max, rotate_long_axis), min_point, max_point);
+        }
+    }
+
+    const glm::vec2 span = glm::max(max_point - min_point, glm::vec2(1.0f));
+    const glm::vec2 inset_half = half_size * 0.82f;
+    const float scale = std::min((inset_half.x * 2.0f) / span.x, (inset_half.y * 2.0f) / span.y);
+    const glm::vec2 padded_min = min_point - (glm::vec2(inset_half.x * 2.0f, inset_half.y * 2.0f) / scale - span) * 0.5f;
+
+    for (const material_zone& zone : preview.material_zones) {
+        const glm::vec3 color = thumbnail_zone_color(zone.type);
+        if (zone.has_bounds) {
+            const glm::vec2 a = preview_point(zone.bounds_min, center, inset_half, padded_min, scale, rotate_long_axis);
+            const glm::vec2 b = preview_point(zone.bounds_max, center, inset_half, padded_min, scale, rotate_long_axis);
+            draw_overlay_quad(shader, (a + b) * 0.5f, glm::abs(b - a) * 0.5f, color, 0.64f);
+        } else if (zone.has_radius) {
+            const glm::vec2 p = preview_point(zone.center, center, inset_half, padded_min, scale, rotate_long_axis);
+            const float radius = std::max(0.010f, zone.radius * scale);
+            draw_overlay_quad(shader, p, glm::vec2(radius), color, 0.64f);
+        }
+    }
+
+    if (preview.control_points.size() >= 2) {
+        const float fairway_width = std::max(0.010f, preview.fairway_width * scale * 0.35f);
+        for (std::size_t i = 1; i < preview.control_points.size(); ++i) {
+            const glm::vec2 a = preview_point(preview.control_points[i - 1], center, inset_half, padded_min, scale, rotate_long_axis);
+            const glm::vec2 b = preview_point(preview.control_points[i], center, inset_half, padded_min, scale, rotate_long_axis);
+            draw_overlay_segment(shader, a, b, fairway_width, glm::vec3(0.18f, 0.46f, 0.18f), 0.82f);
+            draw_overlay_segment(shader, a, b, 0.006f, glm::vec3(0.62f, 0.78f, 0.38f), 0.55f);
+        }
+    }
+
+    const glm::vec2 tee = preview_point(preview.tee_position, center, inset_half, padded_min, scale, rotate_long_axis);
+    const glm::vec2 pin = preview_point(preview.pin_position, center, inset_half, padded_min, scale, rotate_long_axis);
+    draw_overlay_quad(shader, tee, glm::vec2(0.014f), glm::vec3(0.88f, 0.80f, 0.48f), 0.94f);
+    draw_overlay_quad(shader, pin, glm::vec2(0.012f, 0.028f), glm::vec3(0.88f, 0.18f, 0.12f), 0.94f);
+}
+
+glm::vec2 startup_tile_center(const startup_menu_screen screen, const int index) {
+    if (screen == startup_menu_screen::main) {
+        return glm::vec2(0.0f, 0.26f - static_cast<float>(index) * 0.24f);
+    }
+
+    constexpr int columns = 3;
+    const int row = index / columns;
+    const int column = index % columns;
+    return glm::vec2(-0.58f + static_cast<float>(column) * 0.58f,
+                     0.36f - static_cast<float>(row) * 0.38f);
+}
+
+glm::vec2 startup_tile_half_size(const startup_menu_screen screen) {
+    return screen == startup_menu_screen::main ? glm::vec2(0.42f, 0.095f) : glm::vec2(0.25f, 0.165f);
+}
+
+void draw_startup_menu(shader_program& shader, const render_startup_menu& menu) {
+    if (menu.screen == startup_menu_screen::none) {
+        return;
+    }
+
+    draw_overlay_quad(shader, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.0f, 0.0f, 0.0f), 0.72f);
+    draw_overlay_quad(shader, glm::vec2(0.0f, 0.0f), glm::vec2(0.86f, 0.88f), glm::vec3(0.012f, 0.014f, 0.014f), 0.30f);
+    draw_pixel_text_centered(shader, menu.title, glm::vec2(0.0f, 0.80f), 0.028f, glm::vec3(0.95f, 0.78f, 0.28f));
+    if (!menu.subtitle.empty()) {
+        draw_pixel_text_centered(shader, menu.subtitle, glm::vec2(0.0f, 0.68f), 0.015f, glm::vec3(0.72f, 0.72f, 0.62f));
+    }
+
+    const glm::vec2 tile_half = startup_tile_half_size(menu.screen);
+    for (std::size_t i = 0; i < menu.tiles.size(); ++i) {
+        const render_startup_tile& tile = menu.tiles[i];
+        const glm::vec2 center = startup_tile_center(menu.screen, static_cast<int>(i));
+        const glm::vec3 panel_color = tile.selected ? glm::vec3(0.20f, 0.16f, 0.065f) : glm::vec3(0.070f, 0.075f, 0.075f);
+        const glm::vec3 outline = tile.selected ? glm::vec3(0.94f, 0.72f, 0.22f) : glm::vec3(0.50f, 0.52f, 0.48f);
+        draw_overlay_quad(shader, center, tile_half, panel_color, tile.selected ? 0.94f : 0.76f);
+        draw_button_outline(shader, center, tile_half, outline, tile.selected ? 0.94f : 0.44f);
+
+        if (tile.has_preview) {
+            draw_hole_thumbnail(shader, tile.preview, center + glm::vec2(0.0f, 0.030f), glm::vec2(tile_half.x * 0.86f, tile_half.y * 0.48f));
+            draw_pixel_text_left(shader, tile.title, center + glm::vec2(-tile_half.x * 0.86f, -tile_half.y * 0.28f), 0.012f, glm::vec3(0.90f, 0.88f, 0.76f));
+            draw_pixel_text_left(shader, tile.subtitle, center + glm::vec2(-tile_half.x * 0.86f, -tile_half.y * 0.58f), 0.010f, glm::vec3(0.68f, 0.69f, 0.62f));
+        } else {
+            draw_pixel_text_centered(shader, tile.title, center + glm::vec2(0.0f, 0.018f), 0.020f, glm::vec3(0.90f, 0.88f, 0.76f));
+            draw_pixel_text_centered(shader, tile.subtitle, center + glm::vec2(0.0f, -0.050f), 0.011f, glm::vec3(0.66f, 0.67f, 0.61f));
+        }
+    }
+
+    if (!menu.footer.empty()) {
+        draw_pixel_text_centered(shader, menu.footer, glm::vec2(0.0f, -0.86f), 0.013f, glm::vec3(0.56f, 0.57f, 0.52f));
     }
 }
 
@@ -478,6 +1274,12 @@ course_map_layout make_course_map_layout(const render_data& data) {
 
     for (const render_terrain_vertex& vertex : data.terrain_vertices) {
         expand_map_bounds(vertex.position, min_point, max_point);
+    }
+
+    for (const render_tree& tree : data.trees) {
+        expand_map_bounds(tree.base, min_point, max_point);
+        expand_map_bounds(tree.base + glm::vec3(tree.leaf_radius, 0.0f, tree.leaf_radius), min_point, max_point);
+        expand_map_bounds(tree.base - glm::vec3(tree.leaf_radius, 0.0f, tree.leaf_radius), min_point, max_point);
     }
 
     const glm::vec2 size = max_point - min_point;
@@ -643,6 +1445,12 @@ void draw_paper_course_map(shader_program& shader, const render_data& data) {
 
     draw_filled_map_terrain(shader, layout, data);
 
+    for (const render_tree& tree : data.trees) {
+        const glm::vec2 p = map_point(layout, tree.base);
+        const float radius = std::max(0.012f, std::min(0.028f, tree.leaf_radius * layout.scale));
+        draw_map_marker(shader, p, glm::vec3(0.08f, 0.24f, 0.11f), radius);
+    }
+
     draw_map_marker(shader, map_point(layout, data.tee_position), glm::vec3(0.34f, 0.21f, 0.12f), 0.023f);
     draw_map_marker(shader, map_point(layout, data.ball_position), glm::vec3(0.94f, 0.93f, 0.82f), 0.020f);
     draw_map_marker(shader, map_point(layout, data.player_position), glm::vec3(0.22f, 0.46f, 0.72f), 0.024f);
@@ -726,6 +1534,26 @@ void renderer::shutdown() {
     if (marker_vao_ != 0) {
         glDeleteVertexArrays(1, &marker_vao_);
         marker_vao_ = 0;
+    }
+
+    if (cylinder_vbo_ != 0) {
+        glDeleteBuffers(1, &cylinder_vbo_);
+        cylinder_vbo_ = 0;
+    }
+
+    if (cylinder_vao_ != 0) {
+        glDeleteVertexArrays(1, &cylinder_vao_);
+        cylinder_vao_ = 0;
+    }
+
+    if (cone_vbo_ != 0) {
+        glDeleteBuffers(1, &cone_vbo_);
+        cone_vbo_ = 0;
+    }
+
+    if (cone_vao_ != 0) {
+        glDeleteVertexArrays(1, &cone_vao_);
+        cone_vao_ = 0;
     }
 
     if (screen_vbo_ != 0) {
@@ -878,6 +1706,40 @@ bool renderer::init_geometry() {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), reinterpret_cast<void*>(0));
     glBindVertexArray(0);
 
+    const std::vector<float> cylinder_vertices = make_cylinder_vertices(8);
+    cylinder_vertex_count_ = static_cast<int>(cylinder_vertices.size() / 6);
+
+    glGenVertexArrays(1, &cylinder_vao_);
+    glGenBuffers(1, &cylinder_vbo_);
+    glBindVertexArray(cylinder_vao_);
+    glBindBuffer(GL_ARRAY_BUFFER, cylinder_vbo_);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(cylinder_vertices.size() * sizeof(float)),
+                 cylinder_vertices.data(),
+                 GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(0));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
+    glBindVertexArray(0);
+
+    const std::vector<float> cone_vertices = make_cone_vertices(10);
+    cone_vertex_count_ = static_cast<int>(cone_vertices.size() / 6);
+
+    glGenVertexArrays(1, &cone_vao_);
+    glGenBuffers(1, &cone_vbo_);
+    glBindVertexArray(cone_vao_);
+    glBindBuffer(GL_ARRAY_BUFFER, cone_vbo_);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(cone_vertices.size() * sizeof(float)),
+                 cone_vertices.data(),
+                 GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(0));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
+    glBindVertexArray(0);
+
     const float screen_vertices[] = {
         -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
          1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
@@ -950,6 +1812,27 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
         glBindVertexArray(0);
     }
 
+    for (const render_tree& tree : data.trees) {
+        const float trunk_radius = std::max(0.01f, tree.trunk_radius);
+        const float trunk_height = std::max(0.01f, tree.trunk_height);
+        const float leaf_radius = std::max(0.01f, tree.leaf_radius);
+        const float leaf_height = std::max(0.01f, tree.leaf_height);
+
+        const glm::mat4 trunk_model = glm::scale(glm::translate(glm::mat4(1.0f), tree.base),
+                                                 glm::vec3(trunk_radius, trunk_height, trunk_radius));
+        set_terrain_draw_state(terrain_shader_, trunk_model, view, proj, glm::vec3(0.31f, 0.20f, 0.11f), false);
+        glBindVertexArray(cylinder_vao_);
+        glDrawArrays(GL_TRIANGLES, 0, cylinder_vertex_count_);
+
+        const glm::mat4 leaf_model = glm::scale(glm::translate(glm::mat4(1.0f),
+                                                               tree.base + glm::vec3(0.0f, trunk_height, 0.0f)),
+                                                glm::vec3(leaf_radius, leaf_height, leaf_radius));
+        set_terrain_draw_state(terrain_shader_, leaf_model, view, proj, glm::vec3(0.06f, 0.24f, 0.11f), false);
+        glBindVertexArray(cone_vao_);
+        glDrawArrays(GL_TRIANGLES, 0, cone_vertex_count_);
+    }
+    glBindVertexArray(0);
+
     const glm::mat4 tee_model = glm::scale(glm::translate(glm::mat4(1.0f),
                                                           data.tee_position + glm::vec3(0.0f, 0.01f, 0.0f)),
                                            glm::vec3(1.8f, 1.0f, 1.8f));
@@ -1000,6 +1883,14 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
         glBindVertexArray(0);
     }
 
+    if (data.shot_addressing || data.swing_timing) {
+        terrain_shader_.use();
+        terrain_shader_.set_vec3("u_light_dir", glm::normalize(glm::vec3(-0.35f, 0.80f, 0.42f)));
+        glBindVertexArray(screen_vao_);
+        draw_swing_club(terrain_shader_, view, proj, data);
+        glBindVertexArray(0);
+    }
+
     const float ball_radius = std::max(0.02f, data.ball_visual_radius_meters);
     const glm::mat4 ball_model = glm::scale(glm::translate(glm::mat4(1.0f),
                                                            data.ball_position),
@@ -1033,6 +1924,10 @@ void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, cons
         draw_paper_course_map(terrain_shader_, data);
     }
 
+    if (data.show_fps) {
+        draw_fps_counter(terrain_shader_, data.fps_label);
+    }
+
     if (data.show_rangefinder) {
         draw_rangefinder_view(terrain_shader_, view, proj, data);
     }
@@ -1043,20 +1938,10 @@ void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, cons
         draw_interact_prompt(terrain_shader_);
     }
 
-    if (data.swing_timing) {
-        const float power = std::max(0.0f, std::min(data.swing_power, 1.0f));
-        const glm::mat4 back_model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(-0.56f, -0.82f, 0.0f)),
-                                                glm::vec3(0.62f, 0.045f, 1.0f));
-        terrain_shader_.set_mat4("u_mvp", back_model);
-        terrain_shader_.set_vec3("u_color", glm::vec3(0.08f, 0.08f, 0.10f));
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+    draw_controls_overlay(terrain_shader_, data.controls);
 
-        const glm::mat4 fill_model = glm::scale(glm::translate(glm::mat4(1.0f),
-                                                               glm::vec3(-1.18f + power * 0.62f, -0.82f, 0.0f)),
-                                                glm::vec3(0.62f * power, 0.032f, 1.0f));
-        terrain_shader_.set_mat4("u_mvp", fill_model);
-        terrain_shader_.set_vec3("u_color", glm::vec3(0.92f, 0.70f, 0.18f));
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+    if (data.swing_timing) {
+        draw_power_meter(terrain_shader_, data.swing_power);
     }
 
     const int strokes = std::max(data.stroke_count, 0);
@@ -1079,6 +1964,8 @@ void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, cons
         terrain_shader_.set_vec3("u_color", glm::vec3(0.88f, 0.88f, 0.78f));
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }
+
+    draw_startup_menu(terrain_shader_, data.startup_menu);
 
     glBindVertexArray(0);
     glDisable(GL_BLEND);

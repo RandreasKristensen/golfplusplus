@@ -22,6 +22,7 @@ struct sandbox_course {
     float extent = 0.0f;
     hole_spline spline;
     std::vector<material_zone> material_zones;
+    std::vector<tree_instance> trees;
 };
 
 struct world_scale_tuning {
@@ -53,6 +54,8 @@ struct game_tuning {
     float ground_friction = 0.0f;
     float water_restitution = 0.0f;
     float water_friction = 0.0f;
+    float tree_restitution = 0.0f;
+    float tree_friction = 0.0f;
     float ground_roll_friction = 0.0f;
     float ground_settle_speed = 0.0f;
     float ball_interact_radius = 0.0f;
