@@ -33,12 +33,18 @@ cmake --build build/test
 
 ## Ideas
 
+**Todo**
+continue claude osm importing script work.
+continue codex cart implementation.
+
 **bugs**
 the drawn on club is facing the wrong way
 tweak the camera. It doesn't feel correct. Make it have like *FOV* , *height off ground* , and *distance from ball* when standing besides it and swinging settings
 
 **map editor**
 water cannot be resized in the editor
+make a auto map generator thing from top down pictures of courses. Can this be done ?
+Maybe just like asking codex or claude to generate some courses would work?
 
 **Textures**
 vejr!!! kunne være så sygt med regn i hvert fald, hvor de bare ryger lidt kortere.
@@ -47,7 +53,6 @@ higher pixel rendering density.
 fullscreen option scaling to any resolution natively???? would be so sick in fullscreen widescreen not even windowed lmao
 
 **ui**
-make a line for the flight path.
 wind direction ui in the game. In the range finder? The range should also be smaller in the range finder
 compass
 
