@@ -103,6 +103,12 @@ game_tuning default_game_tuning(const std::string& asset_root) {
     tuning.scale.cup_visual_radius_meters = 0.75f;
     tuning.scale.pin_visual_height_meters = 2.10f;
 
+    tuning.flight_path.color = glm::vec3(0.92f, 0.18f, 0.16f);
+    tuning.flight_path.alpha = 0.45f;
+    tuning.flight_path.min_point_spacing = 0.25f;
+    tuning.flight_path.max_points = 96;
+    tuning.flight_path.line_width = 1.0f;
+
     tuning.zone_tuning.bunker_depth = 0.55f;
     tuning.zone_tuning.water_depth = 0.35f;
 

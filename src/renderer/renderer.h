@@ -79,6 +79,7 @@ struct render_data {
     glm::vec3 tee_position = glm::vec3(0.0f);
     glm::vec3 pin_position = glm::vec3(0.0f);
     std::vector<glm::vec3> aim_arc_points;
+    std::vector<glm::vec3> flight_path_points;
     std::vector<render_tree> trees;
     std::vector<render_terrain_vertex> terrain_vertices;
     std::vector<std::uint32_t> terrain_indices;
@@ -89,10 +90,15 @@ struct render_data {
     float course_extent = 100.0f;
     float aim_angle = 0.0f;
     bool ball_moving = false;
+    bool show_flight_path = false;
+    glm::vec3 flight_path_color = glm::vec3(0.92f, 0.18f, 0.16f);
+    float flight_path_alpha = 0.45f;
+    float flight_path_width = 1.0f;
     bool show_interact_prompt = false;
     bool show_aim_indicator = false;
     bool shot_addressing = false;
     bool swing_timing = false;
+    bool show_power_meter = false;
     float swing_power = 0.0f;
     int stroke_count = 0;
     std::string selected_club_label;
@@ -133,6 +139,8 @@ private:
     unsigned int terrain_mesh_ebo_ = 0;
     unsigned int ball_vao_ = 0;
     unsigned int ball_vbo_ = 0;
+    unsigned int flight_path_vao_ = 0;
+    unsigned int flight_path_vbo_ = 0;
     unsigned int marker_vao_ = 0;
     unsigned int marker_vbo_ = 0;
     unsigned int cylinder_vao_ = 0;

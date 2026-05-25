@@ -28,10 +28,41 @@ float radians(const float degrees) {
     return degrees * pi / 180.0f;
 }
 
+float aim_angle_towards(const glm::vec3& from, const glm::vec3& to) {
+    const glm::vec3 delta = to - from;
+    const glm::vec3 flat(delta.x, 0.0f, delta.z);
+    if (glm::length(flat) <= 0.0001f) {
+        return 0.0f;
+    }
+    return std::atan2(flat.x, flat.z);
+}
+
 glm::vec3 address_camera_position(const game_state& state) {
     const glm::vec3 forward = aim_direction(state.aim_angle);
     const glm::vec3 left = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
     return state.ball.position + left * 2.4f - forward * 0.7f + glm::vec3(0.0f, 2.0f, 0.0f);
+}
+
+void clear_flight_path(game_state& state) {
+    state.flight_path_points.clear();
+}
+
+void append_flight_path_point(game_state& state, const glm::vec3& position) {
+    const float min_spacing = std::max(0.01f, state.tuning.flight_path.min_point_spacing);
+    if (!state.flight_path_points.empty()) {
+        const glm::vec3 delta = position - state.flight_path_points.back();
+        if (glm::length(delta) < min_spacing) {
+            return;
+        }
+    }
+
+    state.flight_path_points.push_back(position);
+    const int max_points = std::max(2, state.tuning.flight_path.max_points);
+    if (static_cast<int>(state.flight_path_points.size()) > max_points) {
+        const std::size_t excess = state.flight_path_points.size() - static_cast<std::size_t>(max_points);
+        state.flight_path_points.erase(state.flight_path_points.begin(),
+                                       state.flight_path_points.begin() + static_cast<std::vector<glm::vec3>::difference_type>(excess));
+    }
 }
 
 float terrain_height_at(const game_tuning& tuning, const glm::vec3& position) {
@@ -103,6 +134,7 @@ void sink_ball_in_cup(game_state& state) {
     state.ball.spin = glm::vec3(0.0f);
     state.swing = swing_state{};
     state.mode = game_mode::walking;
+    clear_flight_path(state);
 }
 
 bool complete_if_ball_reached_cup(game_state& state, const glm::vec3& previous_ball_position) {
@@ -201,6 +233,8 @@ void launch_ball(game_state& state) {
     state.ball.spin = glm::vec3(-club.spin_bias * speed, 0.0f, club.accuracy * state.tuning.launch_side_spin_scale);
     state.swing = swing_state{};
     state.mode = game_mode::following_shot;
+    clear_flight_path(state);
+    append_flight_path_point(state, state.ball.position);
     ++state.stroke_count;
 }
 
@@ -394,6 +428,8 @@ void reset_transient_hole_state(game_state& state) {
     state.mode = game_mode::walking;
     state.stroke_count = 0;
     state.hole_time = 0.0f;
+    clear_flight_path(state);
+    state.aim_angle = aim_angle_towards(state.ball.position, pin_anchor_position(state.tuning));
     place_player_near_ball(state);
     input_state input;
     update_walk_overlays(state, input);
@@ -495,6 +531,7 @@ void update_game(game_state& state, const input_state& input, const float dt) {
         state.mode = game_mode::following_shot;
         const glm::vec3 previous_ball_position = state.ball.position;
         step_ball(state, clamped_dt);
+        append_flight_path_point(state, state.ball.position);
 
         if (complete_if_ball_reached_cup(state, previous_ball_position)) {
             update_walk_overlays(state, input);
@@ -505,6 +542,7 @@ void update_game(game_state& state, const input_state& input, const float dt) {
             state.ball.velocity = glm::vec3(0.0f);
             state.ball.spin = glm::vec3(0.0f);
             state.mode = game_mode::walking;
+            clear_flight_path(state);
             if (ball_is_in_cup(state)) {
                 sink_ball_in_cup(state);
                 complete_current_hole(state);

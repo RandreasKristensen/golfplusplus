@@ -35,9 +35,18 @@ struct world_scale_tuning {
     float pin_visual_height_meters = 2.10f;
 };
 
+struct flight_path_tuning {
+    glm::vec3 color{0.92f, 0.18f, 0.16f};
+    float alpha = 0.45f;
+    float min_point_spacing = 0.25f;
+    int max_points = 96;
+    float line_width = 1.0f;
+};
+
 struct game_tuning {
     sandbox_course course;
     world_scale_tuning scale;
+    flight_path_tuning flight_path;
     terrain_spline terrain;
     terrain_mesh terrain_mesh_data;
     terrain_zone_tuning zone_tuning;

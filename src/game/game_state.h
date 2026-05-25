@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 #include <glm/vec3.hpp>
 
@@ -46,6 +47,7 @@ struct game_state {
     float rangefinder_distance_meters = 0.0f;
     std::string rangefinder_distance_label;
     bool course_map_active = false;
+    std::vector<glm::vec3> flight_path_points;
 };
 
 game_state make_initial_game_state();

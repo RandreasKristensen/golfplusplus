@@ -182,10 +182,16 @@ render_data make_render_data(const game_state& game, const input_state& input) {
         data.aim_arc_points = estimate_aim_arc(game);
     }
     data.ball_moving = ball_is_moving(game.ball, game.tuning);
+    data.flight_path_points = game.flight_path_points;
+    data.flight_path_color = game.tuning.flight_path.color;
+    data.flight_path_alpha = game.tuning.flight_path.alpha;
+    data.flight_path_width = game.tuning.flight_path.line_width;
+    data.show_flight_path = data.ball_moving && !data.flight_path_points.empty();
     data.show_interact_prompt = game.mode == game_mode::walking && can_interact_with_ball(game);
     data.show_aim_indicator = game.mode == game_mode::aiming || game.mode == game_mode::addressing;
     data.shot_addressing = game.mode == game_mode::addressing;
     data.swing_timing = game.swing.phase == swing_phase::timing;
+    data.show_power_meter = game.mode == game_mode::aiming || game.mode == game_mode::addressing || data.swing_timing;
     data.swing_power = game.swing.power;
     data.stroke_count = game.stroke_count;
     if (game.selected_club < game.tuning.clubs.size()) {
@@ -471,6 +477,21 @@ render_startup_menu make_startup_menu_render_data(const startup_flow flow,
     }
     return menu;
 }
+
+render_startup_menu make_confirm_menu_render_data(const int selection) {
+    render_startup_menu menu;
+    menu.screen = startup_menu_screen::main;
+    menu.title = "ARE YOU SURE";
+
+    const std::array<const char*, 2> items{{"YES", "NO"}};
+    for (std::size_t i = 0; i < items.size(); ++i) {
+        render_startup_tile tile;
+        tile.title = items[i];
+        tile.selected = static_cast<int>(i) == selection;
+        menu.tiles.push_back(tile);
+    }
+    return menu;
+}
 }
 
 bool app::init() {
@@ -573,10 +594,53 @@ void app::run() {
             continue;
         }
 
-        const bool escape_quits = input_.escape.pressed && game_.mode == game_mode::walking;
+        bool confirm_opened_this_frame = false;
+        if (!confirm_menu_active_ && input_.escape.pressed && game_.mode == game_mode::walking) {
+            confirm_menu_active_ = true;
+            confirm_selection_ = 1;
+            confirm_opened_this_frame = true;
+        }
+
+        if (confirm_menu_active_) {
+            if (input_.quit_requested) {
+                running_ = false;
+            } else if (!confirm_opened_this_frame) {
+                const int count = 2;
+                const int hit = startup_hit_index(startup_menu_screen::main, count, input_, window_.sdl_window());
+                if (hit >= 0) {
+                    confirm_selection_ = hit;
+                }
+                move_startup_selection(startup_flow::main, confirm_selection_, count, input_);
+
+                const bool accept = input_.enter.pressed || input_.space.pressed || hit >= 0;
+                const bool cancel = input_.escape.pressed || input_.backspace.pressed;
+
+                if (accept) {
+                    if (confirm_selection_ == 0) {
+                        confirm_menu_active_ = false;
+                        startup_flow_ = startup_flow::main;
+                        startup_selection_ = 0;
+                        game_ = make_initial_game_state(game_.asset_root);
+                    } else {
+                        confirm_menu_active_ = false;
+                    }
+                } else if (cancel) {
+                    confirm_menu_active_ = false;
+                }
+            }
+
+            render_data data = make_render_data(game_, input_);
+            data.show_fps = show_fps_;
+            data.fps_label = format_fps_label(displayed_fps_);
+            data.startup_menu = make_confirm_menu_render_data(confirm_selection_);
+            renderer_.render(data);
+            window_.swap();
+            continue;
+        }
+
         update_game(game_, input_, dt);
 
-        if (input_.quit_requested || escape_quits) {
+        if (input_.quit_requested) {
             running_ = false;
         }
 

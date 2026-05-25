@@ -216,29 +216,34 @@ void draw_swing_club(shader_program& shader,
 
     const float power = std::clamp(data.swing_power, 0.0f, 1.0f);
     const glm::vec3 forward = aim_direction(data.aim_angle);
-    glm::vec3 player_side = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    glm::vec3 player_side = glm::normalize(glm::cross(up, forward));
     if (glm::length(player_side) <= 0.0001f) {
         player_side = glm::vec3(1.0f, 0.0f, 0.0f);
     }
 
-    const float ball_radius = std::max(0.02f, data.ball_visual_radius_meters);
-    const glm::vec3 head_center = data.ball_position
-        + player_side * (ball_radius + 0.18f)
-        - forward * 0.08f
-        + glm::vec3(0.0f, ball_radius * 0.55f, 0.0f);
+    const glm::vec3 swing_side = -player_side;
 
-    const float backswing_angle = glm::radians(14.0f + power * 62.0f);
+    const float ball_radius = std::max(0.02f, data.ball_visual_radius_meters);
     const float shaft_length = 1.10f;
-    const glm::vec3 shaft_direction = glm::normalize(player_side * std::sin(backswing_angle) +
-                                                     glm::vec3(0.0f, std::cos(backswing_angle), 0.0f));
-    const glm::vec3 shaft_center = head_center + shaft_direction * (shaft_length * 0.5f);
+    const float swing_angle = glm::radians(12.0f + power * 60.0f);
+
+    const glm::vec3 grip_position = data.ball_position
+        + player_side * (ball_radius + 0.10f)
+        - forward * 0.36f
+        + up * (shaft_length * 0.92f + ball_radius * 0.35f);
+
+    const glm::vec3 shaft_direction = glm::normalize(swing_side * std::sin(swing_angle) -
+                                                     up * std::cos(swing_angle));
+    const glm::vec3 shaft_center = grip_position + shaft_direction * (shaft_length * 0.5f);
+    const glm::vec3 head_center = grip_position + shaft_direction * shaft_length;
 
     draw_world_panel(shader,
                      view,
                      proj,
                      shaft_center,
                      player_side,
-                     -backswing_angle,
+                     -swing_angle,
                      glm::vec2(0.018f, shaft_length * 0.5f),
                      glm::vec3(0.82f, 0.78f, 0.62f));
     draw_world_panel(shader,
@@ -249,6 +254,14 @@ void draw_swing_club(shader_program& shader,
                      0.0f,
                      glm::vec2(0.16f, 0.040f),
                      glm::vec3(0.16f, 0.15f, 0.13f));
+    draw_world_panel(shader,
+                     view,
+                     proj,
+                     head_center + forward * 0.055f,
+                     -player_side,
+                     0.0f,
+                     glm::vec2(0.14f, 0.045f),
+                     glm::vec3(0.20f, 0.19f, 0.17f));
     draw_world_panel(shader,
                      view,
                      proj,
@@ -1575,6 +1588,16 @@ void renderer::shutdown() {
         ball_vao_ = 0;
     }
 
+    if (flight_path_vbo_ != 0) {
+        glDeleteBuffers(1, &flight_path_vbo_);
+        flight_path_vbo_ = 0;
+    }
+
+    if (flight_path_vao_ != 0) {
+        glDeleteVertexArrays(1, &flight_path_vao_);
+        flight_path_vao_ = 0;
+    }
+
     if (marker_vbo_ != 0) {
         glDeleteBuffers(1, &marker_vbo_);
         marker_vbo_ = 0;
@@ -1738,6 +1761,34 @@ bool renderer::init_geometry() {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(0));
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
+    glBindVertexArray(0);
+
+    glGenVertexArrays(1, &flight_path_vao_);
+    glGenBuffers(1, &flight_path_vbo_);
+    glBindVertexArray(flight_path_vao_);
+    glBindBuffer(GL_ARRAY_BUFFER, flight_path_vbo_);
+    glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0,
+                          3,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(render_terrain_vertex),
+                          reinterpret_cast<void*>(offsetof(render_terrain_vertex, position)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1,
+                          3,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(render_terrain_vertex),
+                          reinterpret_cast<void*>(offsetof(render_terrain_vertex, normal)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2,
+                          3,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(render_terrain_vertex),
+                          reinterpret_cast<void*>(offsetof(render_terrain_vertex, color)));
     glBindVertexArray(0);
 
     const std::vector<float> marker_vertices = make_disc_vertices(18);
@@ -1940,6 +1991,42 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
         glBindVertexArray(0);
     }
 
+    if (data.show_flight_path && data.flight_path_points.size() > 1 && flight_path_vao_ != 0) {
+        std::vector<render_terrain_vertex> path_vertices;
+        path_vertices.reserve(data.flight_path_points.size());
+        for (const glm::vec3& point : data.flight_path_points) {
+            render_terrain_vertex vertex;
+            vertex.position = point + glm::vec3(0.0f, 0.02f, 0.0f);
+            vertex.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+            vertex.color = glm::vec3(1.0f);
+            path_vertices.push_back(vertex);
+        }
+
+        glBindVertexArray(flight_path_vao_);
+        glBindBuffer(GL_ARRAY_BUFFER, flight_path_vbo_);
+        glBufferData(GL_ARRAY_BUFFER,
+                     static_cast<GLsizeiptr>(path_vertices.size() * sizeof(render_terrain_vertex)),
+                     path_vertices.data(),
+                     GL_DYNAMIC_DRAW);
+
+        terrain_shader_.use();
+        const glm::mat4 model(1.0f);
+        terrain_shader_.set_mat4("u_model", model);
+        terrain_shader_.set_mat4("u_mvp", proj * view * model);
+        terrain_shader_.set_vec3("u_color", data.flight_path_color);
+        terrain_shader_.set_float("u_alpha", data.flight_path_alpha);
+        terrain_shader_.set_int("u_use_vertex_color", 0);
+        terrain_shader_.set_vec3("u_light_dir", glm::vec3(0.0f, 1.0f, 0.0f));
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glLineWidth(std::max(1.0f, data.flight_path_width));
+        glDrawArrays(GL_LINE_STRIP, 0, static_cast<GLsizei>(path_vertices.size()));
+        glLineWidth(1.0f);
+        glDisable(GL_BLEND);
+        glBindVertexArray(0);
+    }
+
     const float ball_radius = std::max(0.02f, data.ball_visual_radius_meters);
     const glm::mat4 ball_model = glm::scale(glm::translate(glm::mat4(1.0f),
                                                            data.ball_position),
@@ -1989,7 +2076,7 @@ void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, cons
 
     draw_controls_overlay(terrain_shader_, data.controls);
 
-    if (data.swing_timing) {
+    if (data.show_power_meter) {
         draw_power_meter(terrain_shader_, data.swing_power);
     }
 

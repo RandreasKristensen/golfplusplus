@@ -34,7 +34,7 @@ cmake --build build/test
 ## Ideas
 
 **bugs**
-the drawn on club is facing the wrong way, and it should have a club head. The displayed this should be there in the gamestate before, so you can see it before it goes up.
+the drawn on club is facing the wrong way
 tweak the camera. It doesn't feel correct. Make it have like *FOV* , *height off ground* , and *distance from ball* when standing besides it and swinging settings
 
 **map editor**
