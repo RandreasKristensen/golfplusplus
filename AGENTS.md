@@ -12,6 +12,34 @@ A lo-fi 3D golf game written in C++. The aesthetic is pixelated VCR / retro camc
 
 ---
 
+## Product Direction
+
+- The project direction is a lo-fi golf RPG: golf simulation first, RPG progression second, multiplayer later.
+- Preserve the VCR/CRT aesthetic and deterministic physics while expanding RPG systems.
+- Prefer data-driven content for quests, NPCs, items, skills, unlocks, and world interactions.
+- Course selection may remain menu-based, but in-course play should trend toward roamable hubs.
+- Do not implement true seamless open world until course-hub systems are proven.
+- Keep the core game client-first and offline-playable. Add backend systems only for clear jobs like cloud saves, score submissions, ghost data, accounts, or cosmetics.
+
+---
+
+## Planning Mode Context
+
+When planning future work, interpret feature requests through the RPG direction above:
+
+- Treat golf simulation as the stable foundation; build RPG systems around it instead of destabilizing core physics.
+- Prefer reusable systems over one-off state. For example, plan `skill_id -> xp/level` progression instead of standalone counters like `smoking_xp`, `drinking_xp`, or `drift_xp`.
+- Put persistent progression behind dedicated systems: skills, inventory, quest state, world flags, unlock history, and discovered locations.
+- Put RPG content in JSON/data files. NPC dialogue, quest text, rewards, item definitions, skill definitions, and unlock rules should not be hardcoded into C++.
+- For unlocks, plan a progression/unlock API instead of direct checks spread through UI, shop, quest, and game update code.
+- For NPCs and course hubs, plan data-driven placement plus an interaction system for nearby NPCs, signs, shops, pickups, and hole starts.
+- For multiplayer, plan the path as hot-seat/local first, ghost/replay second, async score/challenge sharing third, lightweight backend only when needed, and real-time online later.
+- Do not propose an OSRS/Path of Exile-style authoritative backend unless the requested feature truly needs protected leaderboards, a shared economy, ranked competition, or server-owned progression.
+- If a backend is proposed, give it a narrow job such as cloud saves, score submissions, ghost data, accounts, or cosmetics, while keeping the core game offline-playable.
+- Before planning large feature work, account for file-splitting needs in `app.cpp`, `game_state.cpp`, and `renderer.cpp` so new systems do not get bolted onto already-large responsibilities.
+
+---
+
 ## AI provenance
 
 This project was built almost entirely with AI assistance (Claude + GPT) when tooling was available. Treat this file as the authoritative context for automated edits.
@@ -31,6 +59,18 @@ This project was built almost entirely with AI assistance (Claude + GPT) when to
 | Build | CMake 3.25+ | `CMakeLists.txt` + `CMakePresets.json` |
 
 **Do not introduce new dependencies without flagging it first.** If you think a library would help, say so and explain the tradeoff — don't just add it.
+
+---
+
+## Scaling Rules
+
+- Do not add more bespoke fields like `smoke_emote` / `beer_emote` for every new activity unless it is only temporary visual state.
+- Persistent progression belongs in dedicated save structures: skills, inventory, quest state, world flags.
+- Unlock logic should live behind a progression/unlock API, not scattered across UI, shop, quest, and game update code.
+- New RPG content belongs in JSON/data files, not hardcoded C++.
+- Split `app.cpp`, `game_state.cpp`, and `renderer.cpp` responsibilities before adding large new systems to them.
+- Multiplayer code must not be mixed directly into single-player game state; define a session/network boundary first.
+- Do not build an OSRS/Path of Exile-style authoritative backend before RPG progression, course hubs, and async multiplayer prove they need it.
 
 ---
 
@@ -207,6 +247,10 @@ Save triggers (in priority order):
 - On quest completion
 - On clean exit (SDL_QUIT)
 
+Save data is expected to grow to include skills, inventory, active quests, completed quests, world flags, discovered locations, and unlock history. Every save expansion must bump the save version and add migration behavior.
+
+Do not save transient ball flight, live emote animation, current input, renderer state, or temporary audio events.
+
 Do not autosave mid-hole.
 
 ---
@@ -259,6 +303,10 @@ Tooling: use the external web hole editor at `tooling/hole-editor.html`. We are 
 
 Quests live in `quest/`. They are entirely data-driven. C++ owns the engine, JSON owns the content.
 
+Keep simple dialogue quests supported. Future quests should support NPC ownership, active objective state, completion conditions, skill/item requirements, world flags, and rewards.
+
+Quest text, NPC dialogue, rewards, requirements, and branching content stay data-driven.
+
 ### Rule: no quest content in C++
 
 If you are writing story text, dialogue, or reward definitions in a `.cpp` or `.h` file, stop. Add a JSON file under `assets/quests/` instead.
@@ -300,6 +348,18 @@ If you are writing story text, dialogue, or reward definitions in a `.cpp` or `.
 | `player_wallet.cpp` | Add/spend money. Never goes below zero |
 | `shop.cpp` | Maps unlock item IDs to club/ball stat structs |
 | `reward.cpp` | Applies quest rewards to game state |
+
+---
+
+## Multiplayer Direction
+
+Multiplayer is long-term. Start with hot-seat/local, ghost replay, and async score/challenge sharing before real-time online.
+
+Keep the normal game simulation client-first. A lightweight backend may later store cloud saves, score submissions, ghost data, accounts, or cosmetics, but the core game should remain playable offline.
+
+Real-time online requires explicit session state, player IDs, authority rules, synchronization, and latency handling. Do not build real-time multiplayer by sharing the current mutable `game_state` directly.
+
+If competitive leaderboards or a shared economy become central, revisit server authority deliberately. Until then, tolerate that casual client-side submissions can be cheated and separate any future verified results from unverified/social ones.
 
 ---
 

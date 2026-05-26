@@ -48,7 +48,9 @@ enum class startup_menu_screen {
     main,
     help,
     hole_picker,
-    course_picker
+    course_picker,
+    shop_picker,
+    shop_inventory
 };
 
 struct render_hole_preview {
@@ -73,6 +75,13 @@ struct render_startup_menu {
     std::string subtitle;
     std::string footer;
     std::vector<render_startup_tile> tiles;
+};
+
+struct render_skill_progress {
+    std::string label;
+    int level = 1;
+    int xp = 0;
+    int xp_to_next = 0;
 };
 
 struct render_data {
@@ -115,8 +124,10 @@ struct render_data {
     std::string rangefinder_distance_label;
     bool show_course_map = false;
     bool show_scorecard = false;
+    bool show_skills_panel = false;
     bool show_course_results = false;
     scorecard_data scorecard;
+    std::vector<render_skill_progress> skills;
     bool cart_active = false;
     bool cart_drifting = false;
     float cart_yaw = 0.0f;

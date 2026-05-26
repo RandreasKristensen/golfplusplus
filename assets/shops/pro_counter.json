@@ -1,0 +1,74 @@
+{
+  "id": "pro_counter",
+  "npc_id": "club_pro",
+  "title": "Pro Counter",
+  "subtitle": "Club unlocks",
+  "items": [
+    {
+      "id": "sand_wedge",
+      "title": "Sand Wedge",
+      "description": "Adds the sand wedge to your bag.",
+      "price": 20,
+      "grant_unlock_id": "sand_wedge",
+      "requirements": {
+        "skill_id": "golf_swing",
+        "min_skill_level": 2
+      }
+    },
+    {
+      "id": "nine_iron",
+      "title": "9 Iron",
+      "description": "Adds the 9 iron to your bag.",
+      "price": 30,
+      "grant_unlock_id": "nine_iron",
+      "requirements": {
+        "skill_id": "golf_swing",
+        "min_skill_level": 2
+      }
+    },
+    {
+      "id": "five_iron",
+      "title": "5 Iron",
+      "description": "Adds the 5 iron to your bag.",
+      "price": 45,
+      "grant_unlock_id": "five_iron",
+      "requirements": {
+        "skill_id": "golf_swing",
+        "min_skill_level": 3
+      }
+    },
+    {
+      "id": "seven_wood",
+      "title": "7 Wood",
+      "description": "Adds the 7 wood to your bag.",
+      "price": 65,
+      "grant_unlock_id": "seven_wood",
+      "requirements": {
+        "skill_id": "golf_swing",
+        "min_skill_level": 4
+      }
+    },
+    {
+      "id": "four_wood",
+      "title": "4 Wood",
+      "description": "Adds the 4 wood to your bag.",
+      "price": 80,
+      "grant_unlock_id": "four_wood",
+      "requirements": {
+        "skill_id": "golf_swing",
+        "min_skill_level": 5
+      }
+    },
+    {
+      "id": "driver",
+      "title": "Driver",
+      "description": "Adds the driver to your bag.",
+      "price": 110,
+      "grant_unlock_id": "driver",
+      "requirements": {
+        "skill_id": "golf_swing",
+        "min_skill_level": 6
+      }
+    }
+  ]
+}

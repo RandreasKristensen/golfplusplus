@@ -3,6 +3,7 @@
 #include "core/input.h"
 #include "game/asset_resolver.h"
 #include "game/course_loader.h"
+#include "game/progression.h"
 #include "physics/ball_physics.h"
 #include "physics/collision.h"
 #include "physics/terrain.h"
@@ -149,6 +150,66 @@ bool path_intersects_cup(const glm::vec3& start,
         closest.y <= cup_center.y + max_center_height_above_cup;
 }
 
+bool contains_string(const std::vector<std::string>& values, const std::string& value) {
+    return std::find(values.begin(), values.end(), value) != values.end();
+}
+
+bool starter_club_id(const std::string& club_id) {
+    return club_id == "putter" || club_id == "pitching_wedge" || club_id == "seven_iron";
+}
+
+bool club_available(const save_data& save, const club_definition& club) {
+    return starter_club_id(club.id) || has_unlock(save.unlocked_items, club.id);
+}
+
+bool rangefinder_unlocked(const save_data& save) {
+    return has_unlock(save.unlocked_items, rangefinder_unlock_id());
+}
+
+bool cart_unlocked(const save_data& save) {
+    return has_unlock(save.unlocked_items, cart_unlock_id());
+}
+
+std::string selected_cigarette_unlock_id(const save_data& save) {
+    if (has_unlock(save.unlocked_items, cigarette_longcut_unlock_id())) {
+        return cigarette_longcut_unlock_id();
+    }
+    if (has_unlock(save.unlocked_items, cigarette_menthol_unlock_id())) {
+        return cigarette_menthol_unlock_id();
+    }
+    if (has_unlock(save.unlocked_items, cigarette_filterless_unlock_id())) {
+        return cigarette_filterless_unlock_id();
+    }
+    return "";
+}
+
+float cigarette_effect_duration(const std::string& unlock_id) {
+    if (unlock_id == cigarette_longcut_unlock_id()) {
+        return 8.0f;
+    }
+    if (unlock_id == cigarette_menthol_unlock_id() || unlock_id == cigarette_filterless_unlock_id()) {
+        return 5.0f;
+    }
+    return 0.0f;
+}
+
+club_stats apply_cigarette_effect(const club_stats& base, const cigarette_effect_state& effect) {
+    if (effect.remaining_seconds <= 0.0f) {
+        return base;
+    }
+
+    club_stats adjusted = base;
+    if (effect.unlock_id == cigarette_filterless_unlock_id()) {
+        adjusted.spin_bias *= 0.90f;
+    } else if (effect.unlock_id == cigarette_menthol_unlock_id()) {
+        adjusted.timing_speed *= 0.85f;
+    } else if (effect.unlock_id == cigarette_longcut_unlock_id()) {
+        adjusted.spin_bias *= 0.94f;
+        adjusted.timing_speed *= 0.92f;
+    }
+    return adjusted;
+}
+
 void sink_ball_in_cup(game_state& state) {
     push_audio_event(state, audio_event_type::ball_cup);
     const glm::vec3 pin_anchor = pin_anchor_position(state.tuning);
@@ -180,7 +241,7 @@ bool complete_if_ball_reached_cup(game_state& state, const glm::vec3& previous_b
 }
 
 void update_rangefinder_state(game_state& state, const input_state& input) {
-    state.rangefinder_active = rangefinder_should_show(state.mode, input);
+    state.rangefinder_active = rangefinder_unlocked(state.save) && rangefinder_should_show(state.mode, input);
     state.rangefinder_distance_meters = compute_rangefinder_distance_meters(state.player.position,
                                                                             pin_anchor_position(state.tuning),
                                                                             state.tuning.scale.meters_per_world_unit);
@@ -193,6 +254,10 @@ void update_course_map_state(game_state& state, const input_state& input) {
 
 void update_scorecard_state(game_state& state, const input_state& input) {
     state.scorecard_active = scorecard_should_show(state.mode, input);
+}
+
+void update_skills_panel_state(game_state& state, const input_state& input) {
+    state.skills_panel_active = input.caps_lock.is_down;
 }
 
 void clear_emote(game_state& state) {
@@ -216,10 +281,28 @@ void tick_emote(emote_state& emote, const float dt) {
     }
 }
 
+void tick_cigarette_effect(cigarette_effect_state& effect, const float dt) {
+    if (effect.remaining_seconds <= 0.0f) {
+        effect = cigarette_effect_state{};
+        return;
+    }
+
+    effect.remaining_seconds = std::max(0.0f, effect.remaining_seconds - dt);
+    if (effect.remaining_seconds <= 0.0f) {
+        effect = cigarette_effect_state{};
+    }
+}
+
 void update_emote_state(game_state& state, const input_state& input, const float dt) {
     if (input.key_1.pressed) {
-        trigger_emote(state.smoke_emote);
-        push_audio_event(state, audio_event_type::emote_smoke);
+        const std::string cigarette_id = selected_cigarette_unlock_id(state.save);
+        if (!cigarette_id.empty()) {
+            trigger_emote(state.smoke_emote);
+            state.cigarette_effect.unlock_id = cigarette_id;
+            state.cigarette_effect.remaining_seconds = cigarette_effect_duration(cigarette_id);
+            add_skill_xp(state.save.skills, smoking_skill_id(), 10);
+            push_audio_event(state, audio_event_type::emote_smoke);
+        }
     }
     if (input.key_2.pressed) {
         trigger_emote(state.beer_emote);
@@ -228,12 +311,14 @@ void update_emote_state(game_state& state, const input_state& input, const float
 
     tick_emote(state.smoke_emote, dt);
     tick_emote(state.beer_emote, dt);
+    tick_cigarette_effect(state.cigarette_effect, dt);
 }
 
 void update_walk_overlays(game_state& state, const input_state& input) {
     update_rangefinder_state(state, input);
     update_course_map_state(state, input);
     update_scorecard_state(state, input);
+    update_skills_panel_state(state, input);
 }
 
 glm::vec3 ball_rest_position(const game_tuning& tuning, const glm::vec3& position, const float radius) {
@@ -286,7 +371,7 @@ void launch_ball(game_state& state) {
         return;
     }
 
-    const club_stats& club = state.tuning.clubs[state.selected_club].stats;
+    const club_stats club = apply_cigarette_effect(state.tuning.clubs[state.selected_club].stats, state.cigarette_effect);
     const glm::vec3 forward = aim_direction(state.aim_angle);
     const float loft = radians(club.loft_degrees);
     const glm::vec3 launch_dir = glm::normalize(forward * std::cos(loft) + glm::vec3(0.0f, std::sin(loft), 0.0f));
@@ -301,6 +386,7 @@ void launch_ball(game_state& state) {
     clear_flight_path(state);
     append_flight_path_point(state, state.ball.position);
     ++state.stroke_count;
+    add_skill_xp(state.save.skills, golf_swing_skill_id(), 25);
     push_club_audio_event(state, audio_event_type::club_hit);
 }
 
@@ -309,6 +395,10 @@ club_stats selected_club_stats(const game_state& state) {
         return club_stats{};
     }
     return state.tuning.clubs[state.selected_club].stats;
+}
+
+club_stats effective_selected_club_stats(const game_state& state) {
+    return apply_cigarette_effect(selected_club_stats(state), state.cigarette_effect);
 }
 
 void place_player_near_ball(game_state& state) {
@@ -413,7 +503,7 @@ void apply_ground_roll_friction(game_state& state,
 void update_swing(game_state& state, const input_state& input, const float dt) {
     if (state.swing.phase == swing_phase::timing) {
         state.swing.elapsed += dt;
-        state.swing.power = sample_swing_power(state.swing.elapsed * selected_club_stats(state).timing_speed);
+        state.swing.power = sample_swing_power(state.swing.elapsed * effective_selected_club_stats(state).timing_speed);
     }
 
     if (!input.space.pressed) {
@@ -432,10 +522,12 @@ void update_swing(game_state& state, const input_state& input, const float dt) {
 }
 
 void update_walking(game_state& state, const input_state& input, const float dt) {
-    if (input.left_shift.is_down || state.cart.active) {
+    if (cart_unlocked(state.save) && (input.left_shift.is_down || state.cart.active)) {
         update_cart(state, input, dt);
         return;
     }
+
+    const glm::vec3 position_before = state.player.position;
 
     if (input.left.is_down) {
         state.player.yaw += state.tuning.player_turn_rate * dt;
@@ -455,6 +547,15 @@ void update_walking(game_state& state, const input_state& input, const float dt)
     }
 
     state.player.position.y = terrain_height_at(state.tuning, state.player.position);
+
+    const glm::vec3 walk_delta = state.player.position - position_before;
+    const glm::vec3 horizontal_delta(walk_delta.x, 0.0f, walk_delta.z);
+    state.fitness_walk_meter_remainder += glm::length(horizontal_delta) * state.tuning.scale.meters_per_world_unit;
+    const int earned_fitness_xp = static_cast<int>(std::floor(state.fitness_walk_meter_remainder / 10.0f));
+    if (earned_fitness_xp > 0) {
+        add_skill_xp(state.save.skills, fitness_skill_id(), earned_fitness_xp);
+        state.fitness_walk_meter_remainder -= static_cast<float>(earned_fitness_xp) * 10.0f;
+    }
 
     if (input.space.pressed && can_interact_with_ball(state)) {
         state.mode = game_mode::aiming;
@@ -570,9 +671,12 @@ void reset_transient_hole_state(game_state& state) {
     state.swing = swing_state{};
     state.cart = cart_state{};
     clear_emote(state);
+    state.cigarette_effect = cigarette_effect_state{};
     state.mode = game_mode::walking;
     state.stroke_count = 0;
     state.hole_time = 0.0f;
+    state.skills_panel_active = false;
+    state.fitness_walk_meter_remainder = 0.0f;
     clear_flight_path(state);
     state.aim_angle = aim_angle_towards(state.ball.position, pin_anchor_position(state.tuning));
     place_player_near_ball(state);
@@ -585,6 +689,44 @@ game_state make_initial_game_state() {
     return make_initial_game_state(resolve_asset_root(""));
 }
 
+void refresh_unlocked_clubs(game_state& state) {
+    if (state.club_catalog.empty()) {
+        state.club_catalog = state.tuning.clubs;
+    }
+
+    std::string selected_id;
+    if (state.selected_club < state.tuning.clubs.size()) {
+        selected_id = state.tuning.clubs[state.selected_club].id;
+    }
+
+    std::vector<club_definition> available;
+    for (const club_definition& club : state.club_catalog) {
+        if (club_available(state.save, club)) {
+            available.push_back(club);
+        }
+    }
+
+    if (available.empty()) {
+        for (const club_definition& club : state.club_catalog) {
+            if (club.id == "putter") {
+                available.push_back(club);
+                break;
+            }
+        }
+    }
+
+    state.tuning.clubs = available;
+    state.selected_club = 0;
+    if (!selected_id.empty()) {
+        for (std::size_t i = 0; i < state.tuning.clubs.size(); ++i) {
+            if (state.tuning.clubs[i].id == selected_id) {
+                state.selected_club = i;
+                return;
+            }
+        }
+    }
+}
+
 game_state make_initial_game_state(const std::string& asset_root) {
     game_state state;
     state.asset_root = asset_root;
@@ -594,6 +736,8 @@ game_state make_initial_game_state(const std::string& asset_root) {
     state.save.current_course_id = state.active_course.id;
     state.save.current_hole_index = 0;
     state.tuning = default_game_tuning(asset_root);
+    state.club_catalog = state.tuning.clubs;
+    refresh_unlocked_clubs(state);
     reset_transient_hole_state(state);
     return state;
 }
@@ -626,6 +770,9 @@ bool complete_current_hole(game_state& state) {
     const bool has_next = complete_hole(state.round, state.stroke_count);
     state.save.current_hole_index = static_cast<int>(state.round.current_hole_index);
     if (state.round.finished) {
+        if (!state.active_course.id.empty() && !contains_string(state.save.completed_course_ids, state.active_course.id)) {
+            state.save.completed_course_ids.push_back(state.active_course.id);
+        }
         return true;
     }
 

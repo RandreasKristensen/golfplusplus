@@ -1593,6 +1593,44 @@ void draw_cart_hud(shader_program& shader, const render_data& data) {
     }
 }
 
+void draw_skills_panel(shader_program& shader, const std::vector<render_skill_progress>& skills) {
+    if (skills.empty()) {
+        return;
+    }
+
+    const glm::vec2 center(0.0f, 0.16f);
+    const glm::vec2 half(0.58f, 0.44f);
+    const glm::vec3 panel_color(0.050f, 0.055f, 0.060f);
+    const glm::vec3 outline_color(0.62f, 0.64f, 0.60f);
+    const glm::vec3 title_color(0.95f, 0.78f, 0.28f);
+    const glm::vec3 text_color(0.88f, 0.86f, 0.72f);
+    const glm::vec3 muted_color(0.58f, 0.60f, 0.56f);
+
+    draw_overlay_quad(shader, center + glm::vec2(0.018f, -0.020f), half, glm::vec3(0.0f), 0.32f);
+    draw_overlay_quad(shader, center, half, panel_color, 0.88f);
+    draw_button_outline(shader, center, half, outline_color, 0.64f);
+
+    draw_pixel_text_centered(shader, "SKILLS", center + glm::vec2(0.0f, half.y - 0.070f), 0.020f, title_color);
+    draw_pixel_text_left(shader, "NAME", center + glm::vec2(-0.48f, half.y - 0.145f), 0.010f, muted_color);
+    draw_pixel_text_left(shader, "LV", center + glm::vec2(0.02f, half.y - 0.145f), 0.010f, muted_color);
+    draw_pixel_text_left(shader, "XP", center + glm::vec2(0.16f, half.y - 0.145f), 0.010f, muted_color);
+    draw_pixel_text_left(shader, "NEXT", center + glm::vec2(0.36f, half.y - 0.145f), 0.010f, muted_color);
+
+    constexpr float row_gap = 0.105f;
+    for (std::size_t i = 0; i < skills.size(); ++i) {
+        const render_skill_progress& skill = skills[i];
+        const float y = center.y + half.y - 0.225f - static_cast<float>(i) * row_gap;
+        const glm::vec3 row_color = i % 2 == 0 ? glm::vec3(0.075f, 0.080f, 0.078f) : glm::vec3(0.060f, 0.064f, 0.066f);
+        draw_overlay_quad(shader, glm::vec2(center.x, y - 0.016f), glm::vec2(0.50f, 0.038f), row_color, 0.74f);
+        draw_pixel_text_left(shader, skill.label, glm::vec2(center.x - 0.48f, y), 0.012f, text_color);
+        draw_pixel_text_left(shader, std::to_string(std::max(1, skill.level)), glm::vec2(center.x + 0.02f, y), 0.012f, text_color);
+        draw_pixel_text_left(shader, std::to_string(std::max(0, skill.xp)), glm::vec2(center.x + 0.16f, y), 0.012f, text_color);
+        draw_pixel_text_left(shader, std::to_string(std::max(0, skill.xp_to_next)), glm::vec2(center.x + 0.36f, y), 0.012f, text_color);
+    }
+
+    draw_pixel_text_centered(shader, "CAPS LOCK", center + glm::vec2(0.0f, -half.y + 0.055f), 0.009f, muted_color);
+}
+
 glm::vec3 thumbnail_zone_color(const material_zone_type type) {
     switch (type) {
     case material_zone_type::green:
@@ -2887,6 +2925,10 @@ void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, cons
 
     if (data.show_scorecard) {
         draw_compact_scorecard(terrain_shader_, data.scorecard);
+    }
+
+    if (data.show_skills_panel) {
+        draw_skills_panel(terrain_shader_, data.skills);
     }
 
     if (data.show_fps) {

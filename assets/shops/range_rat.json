@@ -1,0 +1,59 @@
+{
+  "id": "range_rat",
+  "npc_id": "range_rat",
+  "title": "Range Rat",
+  "subtitle": "Level unlocks",
+  "items": [
+    {
+      "id": "swing_notebook",
+      "title": "Swing Notebook",
+      "description": "Available once golf swing reaches level 2.",
+      "price": 15,
+      "grant_unlock_id": "swing_notebook",
+      "requirements": {
+        "skill_id": "golf_swing",
+        "min_skill_level": 2
+      }
+    },
+    {
+      "id": "smoke_trick_zine",
+      "title": "Smoke Zine",
+      "description": "Available once smoking reaches level 2.",
+      "price": 10,
+      "grant_unlock_id": "smoke_trick_zine",
+      "requirements": {
+        "skill_id": "smoking",
+        "min_skill_level": 2
+      }
+    },
+    {
+      "id": "cigarette_filterless",
+      "title": "Filterless Pack",
+      "description": "Unlocks smoke breaks with a short steadier-strike effect.",
+      "price": 5,
+      "grant_unlock_id": "cigarette_filterless"
+    },
+    {
+      "id": "cigarette_menthol",
+      "title": "Menthol Pack",
+      "description": "A cleaner drag that briefly slows swing timing.",
+      "price": 15,
+      "grant_unlock_id": "cigarette_menthol",
+      "requirements": {
+        "skill_id": "smoking",
+        "min_skill_level": 2
+      }
+    },
+    {
+      "id": "cigarette_longcut",
+      "title": "Longcut Pack",
+      "description": "A longer smoke break with a mild combined effect.",
+      "price": 30,
+      "grant_unlock_id": "cigarette_longcut",
+      "requirements": {
+        "skill_id": "smoking",
+        "min_skill_level": 4
+      }
+    }
+  ]
+}

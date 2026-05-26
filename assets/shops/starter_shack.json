@@ -1,0 +1,55 @@
+{
+  "id": "starter_shack",
+  "npc_id": "starter_caddie",
+  "title": "Caddie Shack",
+  "subtitle": "Course unlocks",
+  "items": [
+    {
+      "id": "marienlyst_day_pass",
+      "title": "Day Pass",
+      "description": "Unlocks the local pro counter.",
+      "price": 0,
+      "grant_unlock_id": "marienlyst_day_pass"
+    },
+    {
+      "id": "yardage_book",
+      "title": "Yardage Book",
+      "description": "A bought unlock gated by the day pass.",
+      "price": 25,
+      "grant_unlock_id": "yardage_book",
+      "requirements": {
+        "required_unlock_id": "marienlyst_day_pass"
+      }
+    },
+    {
+      "id": "rangefinder",
+      "title": "Rangefinder",
+      "description": "Hold shift while walking to read distance to the pin.",
+      "price": 35,
+      "grant_unlock_id": "rangefinder",
+      "requirements": {
+        "required_unlock_id": "marienlyst_day_pass"
+      }
+    },
+    {
+      "id": "cart",
+      "title": "Golf Cart",
+      "description": "Hold left shift while walking to drive the cart.",
+      "price": 80,
+      "grant_unlock_id": "cart",
+      "requirements": {
+        "required_unlock_id": "marienlyst_day_pass"
+      }
+    },
+    {
+      "id": "clubhouse_pin",
+      "title": "Clubhouse Pin",
+      "description": "A course-clear souvenir unlock.",
+      "price": 40,
+      "grant_unlock_id": "clubhouse_pin",
+      "requirements": {
+        "required_completed_course_id": "course_01"
+      }
+    }
+  ]
+}

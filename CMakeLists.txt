@@ -86,10 +86,14 @@ set(VCR_GOLF_GAME_SOURCES
     src/game/club_loader.cpp
     src/game/course_loader.cpp
     src/game/game_content.cpp
+    src/game/cloud_save.cpp
     src/game/hole_loader.cpp
+    src/game/progression.cpp
     src/game/save_data.cpp
+    src/game/save_manager.cpp
     src/game/round_state.cpp
     src/game/scorecard.cpp
+    src/game/shop.cpp
     src/game/game_tuning.cpp
     src/game/game_state.cpp
     src/game/swing.cpp

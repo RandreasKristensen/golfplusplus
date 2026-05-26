@@ -45,6 +45,23 @@ std::vector<std::string> string_array_at(const json& object, const char* key) {
     return values;
 }
 
+skill_progression skills_at(const json& object, const char* key) {
+    skill_progression progression;
+    const auto it = object.find(key);
+    if (it == object.end() || !it->is_object()) {
+        return progression;
+    }
+
+    for (auto skill_it = it->begin(); skill_it != it->end(); ++skill_it) {
+        if (!skill_it.value().is_number_integer()) {
+            continue;
+        }
+
+        progression[skill_it.key()].xp = std::max(0, skill_it.value().get<int>());
+    }
+    return progression;
+}
+
 std::optional<int> parse_int_key(const std::string& key) {
     char* end = nullptr;
     const long parsed = std::strtol(key.c_str(), &end, 10);
@@ -59,9 +76,17 @@ save_data migrate_save_data(save_data save) {
     if (save.version < 1) {
         save.version = 1;
     }
+    if (save.version < 2) {
+        ensure_default_skills(save.skills);
+        save.version = 2;
+    }
+    if (save.version < 3) {
+        save.version = 3;
+    }
     save.version = current_save_version;
     save.money = std::max(0, save.money);
     save.current_hole_index = std::max(0, save.current_hole_index);
+    ensure_default_skills(save.skills);
     return save;
 }
 
@@ -76,8 +101,10 @@ std::optional<save_data> parse_save_data(const std::string& text) {
     save.money = int_at(root, "money").value_or(0);
     save.unlocked_items = string_array_at(root, "unlocked_items");
     save.completed_quest_ids = string_array_at(root, "completed_quest_ids");
+    save.completed_course_ids = string_array_at(root, "completed_course_ids");
     save.current_course_id = string_at(root, "current_course_id").value_or("");
     save.current_hole_index = int_at(root, "current_hole_index").value_or(0);
+    save.skills = skills_at(root, "skills");
 
     const auto scores_it = root.find("hole_scores");
     if (scores_it != root.end() && scores_it->is_object()) {
@@ -102,6 +129,7 @@ std::string save_data_to_json(const save_data& save) {
     root["money"] = std::max(0, save.money);
     root["unlocked_items"] = save.unlocked_items;
     root["completed_quest_ids"] = save.completed_quest_ids;
+    root["completed_course_ids"] = save.completed_course_ids;
     root["current_course_id"] = save.current_course_id;
     root["current_hole_index"] = std::max(0, save.current_hole_index);
 
@@ -110,6 +138,14 @@ std::string save_data_to_json(const save_data& save) {
         scores[std::to_string(score.first)] = score.second;
     }
     root["hole_scores"] = scores;
+
+    json skills = json::object();
+    skill_progression saved_skills = save.skills;
+    ensure_default_skills(saved_skills);
+    for (const auto& skill : saved_skills) {
+        skills[skill.first] = std::max(0, std::min(skill_max_xp, skill.second.xp));
+    }
+    root["skills"] = skills;
 
     return root.dump(2) + "\n";
 }

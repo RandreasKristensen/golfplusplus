@@ -39,6 +39,11 @@ struct emote_state {
     bool active = false;
 };
 
+struct cigarette_effect_state {
+    std::string unlock_id;
+    float remaining_seconds = 0.0f;
+};
+
 enum class audio_event_type {
     swing_start,
     club_hit,
@@ -72,6 +77,7 @@ struct game_state {
     round_state round;
     save_data save;
     game_tuning tuning;
+    std::vector<club_definition> club_catalog;
     game_mode mode = game_mode::walking;
     float aim_angle = 0.0f;
     std::size_t selected_club = 0;
@@ -81,14 +87,18 @@ struct game_state {
     bool rangefinder_active = false;
     float rangefinder_distance_meters = 0.0f;
     std::string rangefinder_distance_label;
+    cigarette_effect_state cigarette_effect;
     bool course_map_active = false;
     bool scorecard_active = false;
+    bool skills_panel_active = false;
+    float fitness_walk_meter_remainder = 0.0f;
     std::vector<glm::vec3> flight_path_points;
     std::vector<audio_event> audio_events;
 };
 
 game_state make_initial_game_state();
 game_state make_initial_game_state(const std::string& asset_root);
+void refresh_unlocked_clubs(game_state& state);
 void update_game(game_state& state, const input_state& input, float dt);
 void retee_ball(game_state& state);
 bool start_game_course(game_state& state, const course_definition& course);

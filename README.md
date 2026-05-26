@@ -1,7 +1,10 @@
 # golf++
-# golf++
 
-A pixelated, VCR-aesthetic 3D golf game with text-driven RPG progression. Built almost entirely with AI assistance (Claude + GPT) when tooling was available.
+A pixelated VCR-aesthetic 3D golf RPG about playing weird courses, meeting NPCs, collecting gear, and leveling strange skills. Built almost entirely with AI assistance (Claude + GPT) when tooling was available.
+
+## Project Direction
+
+golf++ is growing from a stable golf simulation into a lo-fi course-hub RPG: golf first, RPG progression second, multiplayer later. See `AGENTS.md` for engineering rules and `ideas.md` for the roadmap/backlog.
 
 **Timeline snapshots (00→06):**
 
