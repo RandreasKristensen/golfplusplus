@@ -39,14 +39,14 @@ hole_data fallback_hole() {
 std::vector<club_definition> fallback_club_definitions() {
     return {
         club_definition{"putter", "Putter", "P", 0, 0, club_stats{22.0f, 2.0f, 0.97f, 0.02f, 0.25f, 0.35f}},
-        club_definition{"sand_wedge", "Sand Wedge", "SW", 0, 1, club_stats{25.0f, 54.0f, 0.86f, 0.18f}},
-        club_definition{"pitching_wedge", "Pitching Wedge", "PW", 0, 2, club_stats{30.5f, 46.0f, 0.85f, 0.15f}},
+        club_definition{"sand_wedge", "Sand Wedge", "SWDG", 0, 1, club_stats{25.0f, 54.0f, 0.86f, 0.18f}},
+        club_definition{"pitching_wedge", "Pitching Wedge", "PWDG", 0, 2, club_stats{30.5f, 46.0f, 0.85f, 0.15f}},
         club_definition{"nine_iron", "9 Iron", "9I", 0, 3, club_stats{33.5f, 40.0f, 0.78f, 0.12f}},
         club_definition{"seven_iron", "7 Iron", "7I", 0, 4, club_stats{38.5f, 34.0f, 0.70f, 0.08f}},
         club_definition{"five_iron", "5 Iron", "5I", 0, 5, club_stats{45.0f, 27.0f, 0.62f, 0.06f}},
-        club_definition{"seven_wood", "7 Wood", "7W", 0, 6, club_stats{53.0f, 22.0f, 0.55f, 0.045f}},
-        club_definition{"four_wood", "4 Wood", "4W", 0, 7, club_stats{65.0f, 16.0f, 0.48f, 0.035f}},
-        club_definition{"driver", "Driver", "D", 0, 8, club_stats{80.0f, 11.0f, 0.42f, 0.025f}}
+        club_definition{"seven_wood", "7 Wood", "7WD", 0, 6, club_stats{53.0f, 22.0f, 0.55f, 0.045f}},
+        club_definition{"four_wood", "4 Wood", "5WD", 0, 7, club_stats{65.0f, 16.0f, 0.48f, 0.035f}},
+        club_definition{"driver", "Driver", "DRVR", 0, 8, club_stats{80.0f, 11.0f, 0.42f, 0.025f}}
     };
 }
 
@@ -108,6 +108,20 @@ game_tuning default_game_tuning(const std::string& asset_root) {
     tuning.flight_path.min_point_spacing = 0.25f;
     tuning.flight_path.max_points = 96;
     tuning.flight_path.line_width = 1.0f;
+
+    tuning.cart.speed = 14.0f;
+    tuning.cart.turn_rate = 2.3f;
+    tuning.cart.drift_turn_rate = 3.9f;
+    tuning.cart.normal_damping = 13.0f;
+    tuning.cart.drift_damping = 5.0f;
+    tuning.cart.drift_duration = 0.42f;
+    tuning.cart.drift_speed_boost = 1.18f;
+
+    tuning.camera.walking_eye_offset = glm::vec3(0.0f, 1.65f, 0.0f);
+    tuning.camera.walking_target_distance = 10.0f;
+    tuning.camera.cart_eye_offset = tuning.camera.walking_eye_offset;
+    tuning.camera.cart_target_distance = tuning.camera.walking_target_distance;
+    tuning.camera.cart_fov_degrees = 60.0f;
 
     tuning.zone_tuning.bunker_depth = 0.55f;
     tuning.zone_tuning.water_depth = 0.35f;

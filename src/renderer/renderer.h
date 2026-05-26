@@ -21,6 +21,8 @@ struct render_terrain_vertex {
 
 struct controls_overlay_state {
     bool visible = true;
+    bool key_1_down = false;
+    bool key_2_down = false;
     bool left_down = false;
     bool right_down = false;
     bool up_down = false;
@@ -74,6 +76,7 @@ struct render_startup_menu {
 struct render_data {
     glm::vec3 ball_position = glm::vec3(0.0f);
     glm::vec3 player_position = glm::vec3(0.0f);
+    float player_yaw = 0.0f;
     glm::vec3 camera_position = glm::vec3(0.0f, 6.0f, -12.0f);
     glm::vec3 camera_target = glm::vec3(0.0f);
     glm::vec3 tee_position = glm::vec3(0.0f);
@@ -83,12 +86,14 @@ struct render_data {
     std::vector<render_tree> trees;
     std::vector<render_terrain_vertex> terrain_vertices;
     std::vector<std::uint32_t> terrain_indices;
+    std::vector<material_zone> material_zones;
     float cup_radius = 0.65f;
     float ball_visual_radius_meters = 0.10f;
     float cup_visual_radius_meters = 0.75f;
     float pin_visual_height_meters = 2.10f;
     float course_extent = 100.0f;
     float aim_angle = 0.0f;
+    float camera_fov_degrees = 60.0f;
     bool ball_moving = false;
     bool show_flight_path = false;
     glm::vec3 flight_path_color = glm::vec3(0.92f, 0.18f, 0.16f);
@@ -106,6 +111,14 @@ struct render_data {
     float rangefinder_distance_meters = 0.0f;
     std::string rangefinder_distance_label;
     bool show_course_map = false;
+    bool cart_active = false;
+    bool cart_drifting = false;
+    float cart_yaw = 0.0f;
+    float cart_speed = 0.0f;
+    bool smoke_emote_active = false;
+    bool beer_emote_active = false;
+    float smoke_emote_elapsed = 0.0f;
+    float beer_emote_elapsed = 0.0f;
     bool show_fps = false;
     std::string fps_label;
     controls_overlay_state controls;

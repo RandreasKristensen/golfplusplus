@@ -1,99 +1,66 @@
 {
-  "id": "hole_01",
-  "name": "New Hole",
+  "id": "marienlyst_golfklub_h03",
+  "name": "Hole 3",
   "par": 3,
-  "wind_seed": 4874,
+  "wind_seed": 3804,
   "tee": [
-    0,
-    0,
-    0
+    0.0,
+    0.0,
+    0.0
   ],
   "pin": [
-    48.62,
-    0,
-    50.76
+    34.29,
+    0.0,
+    -56.28
   ],
   "spline": {
     "control_points": [
       [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       [
-        -22.61,
-        0,
-        23.57
+        8.56,
+        0.0,
+        -14.06
       ],
       [
-        -17.34,
-        0,
-        61.42
+        17.12,
+        0.0,
+        -28.11
       ],
       [
-        15.81,
-        0,
-        45.04
+        25.68,
+        0.0,
+        -42.17
       ],
       [
-        59.5,
-        0,
-        57.39
+        34.24,
+        0.0,
+        -56.23
       ]
     ],
-    "width": 26,
-    "rough_width": 50
+    "width": 20.0,
+    "rough_width": 32.0
   },
   "material_zones": [
     {
       "type": "green",
       "center": [
-        52.7,
+        34.9,
         0,
-        54.84
+        -56.61
       ],
-      "radius": 11.4
-    },
-    {
-      "type": "bunker",
-      "center": [
-        -27.54,
-        0,
-        52.45
-      ],
-      "radius": 7.02
-    },
-    {
-      "type": "bunker",
-      "center": [
-        -18.19,
-        0,
-        65.71
-      ],
-      "radius": 9.93
-    },
-    {
-      "type": "water",
-      "bounds": [
-        [
-          2.2,
-          0,
-          32.66
-        ],
-        [
-          18.2,
-          0,
-          42.66
-        ]
-      ]
+      "radius": 3.97
     }
   ],
   "trees": [
     {
       "position": [
-        8.67,
-        0,
-        11.64
+        41.43,
+        0.0,
+        -69.4
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -102,9 +69,9 @@
     },
     {
       "position": [
-        5.78,
-        0,
-        17.08
+        38.58,
+        0.0,
+        -71.59
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -113,9 +80,9 @@
     },
     {
       "position": [
-        11.9,
-        0,
-        17.93
+        47.34,
+        0.0,
+        -69.83
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -124,9 +91,9 @@
     },
     {
       "position": [
-        0.17,
-        0,
-        19.97
+        51.84,
+        0.0,
+        -71.48
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -135,9 +102,9 @@
     },
     {
       "position": [
-        -6.12,
-        0,
-        28.82
+        83.15,
+        0.0,
+        -29.35
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -146,9 +113,9 @@
     },
     {
       "position": [
-        -0.68,
-        0,
-        25.25
+        -67.98,
+        0.0,
+        0.92
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -157,9 +124,9 @@
     },
     {
       "position": [
-        -0.68,
-        0,
-        30.86
+        44.28,
+        0.0,
+        -123.54
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -168,9 +135,9 @@
     },
     {
       "position": [
-        53.38,
-        0,
-        75.57
+        -51.5,
+        0.0,
+        -50.15
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -179,31 +146,9 @@
     },
     {
       "position": [
-        59.34,
-        0,
-        73.87
-      ],
-      "trunk_radius": 0.35,
-      "trunk_height": 2.4,
-      "leaf_radius": 1.6,
-      "leaf_height": 3.2
-    },
-    {
-      "position": [
-        54.57,
-        0,
-        71.83
-      ],
-      "trunk_radius": 0.35,
-      "trunk_height": 2.4,
-      "leaf_radius": 1.6,
-      "leaf_height": 3.2
-    },
-    {
-      "position": [
-        60.87,
-        0,
-        80.33
+        90.62,
+        0.0,
+        -6.67
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,

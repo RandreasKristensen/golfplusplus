@@ -15,7 +15,10 @@ struct input_state {
     bool quit_requested = false;
     int mouse_x = 0;
     int mouse_y = 0;
+    button_state key_1;
+    button_state key_2;
     button_state left;
+    button_state left_shift;
     button_state right;
     button_state up;
     button_state down;
@@ -30,7 +33,10 @@ struct input_state {
 
     void reset_frame() {
         quit_requested = false;
+        key_1.reset_frame();
+        key_2.reset_frame();
         left.reset_frame();
+        left_shift.reset_frame();
         right.reset_frame();
         up.reset_frame();
         down.reset_frame();

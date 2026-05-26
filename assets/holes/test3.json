@@ -1,17 +1,17 @@
 {
-  "id": "hole_01",
-  "name": "New Hole",
+  "id": "hole_03",
+  "name": "Abyss",
   "par": 3,
-  "wind_seed": 4874,
+  "wind_seed": 1081,
   "tee": [
     0,
     0,
     0
   ],
   "pin": [
-    48.62,
     0,
-    50.76
+    0,
+    80
   ],
   "spline": {
     "control_points": [
@@ -21,79 +21,70 @@
         0
       ],
       [
-        -22.61,
         0,
-        23.57
+        0,
+        20
       ],
       [
-        -17.34,
         0,
-        61.42
+        0,
+        40
       ],
       [
-        15.81,
         0,
-        45.04
+        0,
+        60
       ],
       [
-        59.5,
         0,
-        57.39
+        0,
+        80
       ]
     ],
-    "width": 26,
-    "rough_width": 50
+    "width": 50,
+    "rough_width": 75
   },
   "material_zones": [
     {
       "type": "green",
       "center": [
-        52.7,
         0,
-        54.84
-      ],
-      "radius": 11.4
-    },
-    {
-      "type": "bunker",
-      "center": [
-        -27.54,
         0,
-        52.45
+        80
       ],
-      "radius": 7.02
-    },
-    {
-      "type": "bunker",
-      "center": [
-        -18.19,
-        0,
-        65.71
-      ],
-      "radius": 9.93
+      "radius": 14.51
     },
     {
       "type": "water",
       "bounds": [
         [
-          2.2,
+          -20.75,
           0,
-          32.66
+          12.77
         ],
         [
-          18.2,
+          19.25,
           0,
-          42.66
+          42.77
         ]
       ]
+    },
+    {
+      "type": "bunker",
+      "center": [
+        16.83,
+        0,
+        62.14
+      ],
+      "radius": 8
     }
   ],
   "trees": [
     {
       "position": [
-        8.67,
+        -19.21,
         0,
-        11.64
+        7.73
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -102,9 +93,9 @@
     },
     {
       "position": [
-        5.78,
+        -13.77,
         0,
-        17.08
+        -4.68
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -113,9 +104,9 @@
     },
     {
       "position": [
-        11.9,
+        -26.52,
         0,
-        17.93
+        26.1
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -124,9 +115,9 @@
     },
     {
       "position": [
-        0.17,
+        -22.95,
         0,
-        19.97
+        37.66
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -135,9 +126,9 @@
     },
     {
       "position": [
-        -6.12,
+        -28.9,
         0,
-        28.82
+        41.06
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -146,9 +137,9 @@
     },
     {
       "position": [
-        -0.68,
+        -18.87,
         0,
-        25.25
+        59.59
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -157,9 +148,9 @@
     },
     {
       "position": [
-        -0.68,
+        -18.36,
         0,
-        30.86
+        49.73
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -168,9 +159,9 @@
     },
     {
       "position": [
-        53.38,
+        -13.77,
         0,
-        75.57
+        58.74
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -179,9 +170,9 @@
     },
     {
       "position": [
-        59.34,
+        -22.44,
         0,
-        73.87
+        94.1
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -190,9 +181,9 @@
     },
     {
       "position": [
-        54.57,
+        -18.02,
         0,
-        71.83
+        87.3
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -201,9 +192,9 @@
     },
     {
       "position": [
-        60.87,
+        -15.47,
         0,
-        80.33
+        96.99
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,

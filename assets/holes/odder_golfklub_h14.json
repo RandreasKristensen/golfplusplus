@@ -1,99 +1,84 @@
 {
-  "id": "hole_01",
-  "name": "New Hole",
-  "par": 3,
-  "wind_seed": 4874,
+  "id": "odder_golfklub_h14",
+  "name": "Hole 14",
+  "par": 5,
+  "wind_seed": 3341,
   "tee": [
-    0,
-    0,
-    0
+    0.0,
+    0.0,
+    0.0
   ],
   "pin": [
-    48.62,
-    0,
-    50.76
+    340.4,
+    0.0,
+    -334.61
   ],
   "spline": {
     "control_points": [
       [
-        0,
-        0,
-        0
+        94.38,
+        0.0,
+        -119.13
       ],
       [
-        -22.61,
-        0,
-        23.57
+        147.15,
+        0.0,
+        -175.13
       ],
       [
-        -17.34,
-        0,
-        61.42
+        202.48,
+        0.0,
+        -228.51
       ],
       [
-        15.81,
-        0,
-        45.04
+        269.15,
+        0.0,
+        -270.36
       ],
       [
-        59.5,
-        0,
-        57.39
+        328.6,
+        0.0,
+        -319.55
       ]
     ],
-    "width": 26,
-    "rough_width": 50
+    "width": 40.6,
+    "rough_width": 62.9
   },
   "material_zones": [
     {
       "type": "green",
       "center": [
-        52.7,
+        342.51,
         0,
-        54.84
+        -337.98
       ],
-      "radius": 11.4
+      "radius": 10.91
     },
     {
       "type": "bunker",
       "center": [
-        -27.54,
+        313.0,
         0,
-        52.45
+        -312.05
       ],
-      "radius": 7.02
+      "radius": 9.41
     },
     {
       "type": "bunker",
       "center": [
-        -18.19,
+        338.17,
         0,
-        65.71
+        -302.34
       ],
-      "radius": 9.93
-    },
-    {
-      "type": "water",
-      "bounds": [
-        [
-          2.2,
-          0,
-          32.66
-        ],
-        [
-          18.2,
-          0,
-          42.66
-        ]
-      ]
+      "radius": 10.31
     }
   ],
   "trees": [
     {
       "position": [
-        8.67,
-        0,
-        11.64
+        168.52,
+        0.0,
+        -172.19
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -102,9 +87,9 @@
     },
     {
       "position": [
-        5.78,
-        0,
-        17.08
+        131.82,
+        0.0,
+        -201.07
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -113,9 +98,9 @@
     },
     {
       "position": [
-        11.9,
-        0,
-        17.93
+        107.39,
+        0.0,
+        -174.83
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -124,9 +109,9 @@
     },
     {
       "position": [
-        0.17,
-        0,
-        19.97
+        273.88,
+        0.0,
+        -231.95
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -135,9 +120,9 @@
     },
     {
       "position": [
-        -6.12,
-        0,
-        28.82
+        96.35,
+        0.0,
+        -40.33
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -146,9 +131,9 @@
     },
     {
       "position": [
-        -0.68,
-        0,
-        25.25
+        188.63,
+        0.0,
+        -174.44
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -157,9 +142,9 @@
     },
     {
       "position": [
-        -0.68,
-        0,
-        30.86
+        183.47,
+        0.0,
+        -152.15
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -168,9 +153,9 @@
     },
     {
       "position": [
-        53.38,
-        0,
-        75.57
+        188.54,
+        0.0,
+        -157.98
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -179,9 +164,9 @@
     },
     {
       "position": [
-        59.34,
-        0,
-        73.87
+        239.96,
+        0.0,
+        -179.63
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -190,9 +175,9 @@
     },
     {
       "position": [
-        54.57,
-        0,
-        71.83
+        156.68,
+        0.0,
+        -94.26
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -201,9 +186,64 @@
     },
     {
       "position": [
-        60.87,
-        0,
-        80.33
+        195.12,
+        0.0,
+        -142.73
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    },
+    {
+      "position": [
+        183.89,
+        0.0,
+        -118.63
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    },
+    {
+      "position": [
+        304.04,
+        0.0,
+        -207.87
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    },
+    {
+      "position": [
+        214.72,
+        0.0,
+        -150.39
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    },
+    {
+      "position": [
+        258.26,
+        0.0,
+        -361.08
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    },
+    {
+      "position": [
+        418.62,
+        0.0,
+        -302.07
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,

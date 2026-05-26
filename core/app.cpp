@@ -96,8 +96,20 @@ std::vector<render_tree> make_render_trees(const game_tuning& tuning) {
 
 void set_walking_camera(render_data& data, const game_state& game) {
     const glm::vec3 forward = aim_direction(game.player.yaw);
-    data.camera_position = game.player.position + glm::vec3(0.0f, 1.65f, 0.0f);
-    data.camera_target = data.camera_position + forward * 10.0f;
+    data.camera_position = game.player.position + game.tuning.camera.walking_eye_offset;
+    data.camera_target = data.camera_position + forward * game.tuning.camera.walking_target_distance;
+}
+
+void set_cart_camera(render_data& data, const game_state& game) {
+    const glm::vec3 forward = aim_direction(game.cart.yaw);
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const glm::vec3 right = glm::normalize(glm::cross(forward, up));
+    const glm::vec3 offset = right * game.tuning.camera.cart_eye_offset.x +
+        up * game.tuning.camera.cart_eye_offset.y;
+
+    data.camera_position = game.player.position + offset;
+    data.camera_target = data.camera_position + forward * game.tuning.camera.cart_target_distance;
+    data.camera_fov_degrees = game.tuning.camera.cart_fov_degrees;
 }
 
 void set_aiming_camera(render_data& data, const game_state& game) {
@@ -151,12 +163,14 @@ std::vector<glm::vec3> estimate_aim_arc(const game_state& game) {
 
 controls_overlay_state make_controls_overlay_state(const input_state& input) {
     controls_overlay_state controls;
+    controls.key_1_down = input.key_1.is_down;
+    controls.key_2_down = input.key_2.is_down;
     controls.left_down = input.left.is_down;
     controls.right_down = input.right.is_down;
     controls.up_down = input.up.is_down;
     controls.down_down = input.down.is_down;
     controls.space_down = input.space.is_down;
-    controls.shift_down = input.shift.is_down;
+    controls.shift_down = input.left_shift.is_down;
     controls.enter_down = input.enter.is_down;
     controls.backspace_down = input.backspace.is_down;
     controls.retee_down = input.retee.is_down;
@@ -167,6 +181,7 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     render_data data;
     data.ball_position = game.ball.position;
     data.player_position = game.player.position;
+    data.player_yaw = game.player.yaw;
     data.tee_position = terrain_anchor_at(game.tuning, game.tuning.course.tee_position);
     data.pin_position = terrain_anchor_at(game.tuning, game.tuning.course.pin_position);
     data.cup_radius = game.tuning.course.cup_radius;
@@ -176,8 +191,10 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     data.course_extent = game.tuning.course.extent;
     data.terrain_vertices = make_render_terrain_vertices(game.tuning.terrain_mesh_data);
     data.terrain_indices = game.tuning.terrain_mesh_data.indices;
+    data.material_zones = game.tuning.course.material_zones;
     data.trees = make_render_trees(game.tuning);
     data.aim_angle = game.aim_angle;
+    data.camera_fov_degrees = 60.0f;
     if (game.mode == game_mode::aiming) {
         data.aim_arc_points = estimate_aim_arc(game);
     }
@@ -201,9 +218,19 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     data.rangefinder_distance_meters = game.rangefinder_distance_meters;
     data.rangefinder_distance_label = game.rangefinder_distance_label;
     data.show_course_map = game.course_map_active;
+    data.cart_active = game.cart.active;
+    data.cart_drifting = game.cart.drift_timer > 0.0f;
+    data.cart_yaw = game.cart.active ? game.cart.yaw : game.player.yaw;
+    data.cart_speed = game.cart.velocity;
+    data.smoke_emote_active = game.smoke_emote.active;
+    data.beer_emote_active = game.beer_emote.active;
+    data.smoke_emote_elapsed = game.smoke_emote.elapsed;
+    data.beer_emote_elapsed = game.beer_emote.elapsed;
     data.controls = make_controls_overlay_state(input);
 
-    if (game.mode == game_mode::walking) {
+    if (game.mode == game_mode::walking && game.cart.active) {
+        set_cart_camera(data, game);
+    } else if (game.mode == game_mode::walking) {
         set_walking_camera(data, game);
     } else if (game.mode == game_mode::aiming) {
         set_aiming_camera(data, game);

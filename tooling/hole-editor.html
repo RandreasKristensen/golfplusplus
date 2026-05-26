@@ -123,7 +123,8 @@ body {
   flex-shrink: 0;
 }
 .field input[type="text"],
-.field input[type="number"] {
+.field input[type="number"],
+.field select {
   flex: 1;
   background: #111;
   border: 1px solid #2a2a2a;
@@ -133,7 +134,35 @@ body {
   font-size: 11px;
   min-width: 0;
 }
-.field input:focus { outline: none; border-color: #f0c060; }
+.field input:focus,
+.field select:focus { outline: none; border-color: #f0c060; }
+
+.field.compact label { min-width: 38px; }
+.field.compact input { max-width: 72px; }
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+.field-row.three { grid-template-columns: 1fr 1fr 1fr; }
+.mini-btn {
+  background: #202020;
+  border: 1px solid #303030;
+  color: #8f8b7c;
+  padding: 3px 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+}
+.mini-btn:hover { border-color: #505050; color: #c8c4b4; }
+.panel-note {
+  color: #666;
+  font-size: 10px;
+  line-height: 1.35;
+  margin-top: 5px;
+}
+.panel-note.warn { color: #b88a50; }
 
 .list-item {
   background: #151515;
@@ -214,6 +243,9 @@ body {
 <div id="toolbar">
   <h1>⛳ golf++ / hole editor</h1>
   <div class="sep"></div>
+  <button class="btn"        onclick="openProjectFolder()">open project</button>
+  <button class="btn primary" id="btn-save-file" onclick="saveCurrentHole()" disabled>save hole</button>
+  <div class="sep"></div>
   <button class="btn active" id="btn-select"  onclick="setMode('select')">select</button>
   <button class="btn"        id="btn-addcp"   onclick="setMode('add_cp')">+ point</button>
   <button class="btn"        id="btn-measure" onclick="setMode('measure')">measure</button>
@@ -240,12 +272,23 @@ body {
     <div id="panel-scroll">
 
       <div class="section">
+        <div class="section-title">project files</div>
+        <div class="field"><label>course</label><select id="course-select" onchange="selectCourse(+this.value)"></select></div>
+        <div class="field"><label>hole</label><select id="hole-select" onchange="selectCourseHole(+this.value)"></select></div>
+        <div class="field-row">
+          <button class="mini-btn" onclick="previousCourseHole()">prev hole</button>
+          <button class="mini-btn" onclick="nextCourseHole()">next hole</button>
+        </div>
+        <div id="project-status" class="panel-note warn">Open the golf++ project folder to edit existing course holes in place.</div>
+      </div>
+
+      <div class="section">
         <div class="section-title">hole info</div>
-        <div class="field"><label>id</label>     <input type="text"   id="f-id"    oninput="hole.id=this.value"></div>
-        <div class="field"><label>name</label>   <input type="text"   id="f-name"  oninput="hole.name=this.value"></div>
-        <div class="field"><label>par</label>    <input type="number" id="f-par"   min="1" max="6" oninput="hole.par=+this.value"></div>
-        <div class="field"><label>wind seed</label><input type="number" id="f-seed" oninput="hole.wind_seed=+this.value"></div>
-        <div class="field"><label>width</label>  <input type="number" id="f-width" step="0.5" min="2" oninput="hole.spline.width=+this.value;render()"></div>
+        <div class="field"><label>id</label>     <input type="text"   id="f-id"    oninput="hole.id=this.value; markDirty()"></div>
+        <div class="field"><label>name</label>   <input type="text"   id="f-name"  oninput="hole.name=this.value; markDirty()"></div>
+        <div class="field"><label>par</label>    <input type="number" id="f-par"   min="1" max="6" oninput="hole.par=+this.value; markDirty()"></div>
+        <div class="field"><label>wind seed</label><input type="number" id="f-seed" oninput="hole.wind_seed=+this.value; markDirty()"></div>
+        <div class="field"><label>width</label>  <input type="number" id="f-width" step="0.5" min="2" oninput="hole.spline.width=+this.value; markDirty(); render()"></div>
         <div class="field"><label>rough width</label><input type="number" id="f-rough-width" step="0.5" min="2" oninput="setRoughWidth(+this.value)"></div>
       </div>
 
@@ -263,6 +306,15 @@ body {
 
       <div class="section">
         <div class="section-title">trees</div>
+        <div class="field-row">
+          <div class="field compact"><label>leaf r</label><input type="number" id="tree-default-leaf-radius" step="0.1" min="0.1" oninput="setTreeDefault('leaf_radius',+this.value)"></div>
+          <div class="field compact"><label>leaf h</label><input type="number" id="tree-default-leaf-height" step="0.1" min="0.1" oninput="setTreeDefault('leaf_height',+this.value)"></div>
+        </div>
+        <div class="field-row">
+          <div class="field compact"><label>trunk r</label><input type="number" id="tree-default-trunk-radius" step="0.05" min="0.05" oninput="setTreeDefault('trunk_radius',+this.value)"></div>
+          <div class="field compact"><label>trunk h</label><input type="number" id="tree-default-trunk-height" step="0.1" min="0.1" oninput="setTreeDefault('trunk_height',+this.value)"></div>
+        </div>
+        <div class="panel-note">Tree mode stays active, so click repeatedly to paint trees.</div>
         <div id="tree-list"></div>
         <div id="tree-edit"></div>
       </div>
@@ -311,6 +363,24 @@ let drag   = null;
 let pan    = null;
 let mouseWorld = null;
 let measure = { a: null, b: null };
+let isDirty = false;
+
+let projectDirHandle = null;
+let assetsDirHandle = null;
+let holesDirHandle = null;
+let coursesDirHandle = null;
+let courseManifests = [];
+let activeCourseIndex = -1;
+let activeHoleIndex = -1;
+let activeHoleRef = "";
+let activeHoleHandle = null;
+
+let treeDefaults = {
+  trunk_radius: 0.35,
+  trunk_height: 2.4,
+  leaf_radius: 1.6,
+  leaf_height: 3.2
+};
 
 // ── canvas ───────────────────────────────────────────────────────────────────
 
@@ -348,6 +418,25 @@ function distXZ(a, b) {
   return Math.hypot(pa.x - pb.x, pa.z - pb.z);
 }
 
+function waterRectWorld(z) {
+  const a = z.bounds?.[0] || [0,0,0];
+  const b = z.bounds?.[1] || [0,0,0];
+  return {
+    minX: Math.min(a[0], b[0]),
+    maxX: Math.max(a[0], b[0]),
+    minZ: Math.min(a[2], b[2]),
+    maxZ: Math.max(a[2], b[2])
+  };
+}
+
+function setWaterRect(index, rect) {
+  const z = hole.material_zones[index];
+  z.bounds = [
+    [r2(rect.minX), 0, r2(rect.minZ)],
+    [r2(rect.maxX), 0, r2(rect.maxZ)]
+  ];
+}
+
 function toMeters(worldDistance) {
   return worldDistance * METERS_PER_WORLD_UNIT;
 }
@@ -374,6 +463,199 @@ function normalizeHole() {
     leaf_radius: Number.isFinite(+t.leaf_radius) ? Math.max(0.1, +t.leaf_radius) : 1.6,
     leaf_height: Number.isFinite(+t.leaf_height) ? Math.max(0.1, +t.leaf_height) : 3.2
   }));
+}
+
+function setProjectStatus(text, warn = false) {
+  const el = document.getElementById('project-status');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('warn', warn);
+}
+
+function markDirty(value = true, updateExport = true) {
+  isDirty = value;
+  refreshSaveState();
+  if (value && updateExport) refreshExport();
+}
+
+function refreshSaveState() {
+  const btn = document.getElementById('btn-save-file');
+  if (btn) btn.disabled = !activeHoleHandle || !isDirty;
+}
+
+async function getOptionalDirectory(parent, name) {
+  try {
+    return await parent.getDirectoryHandle(name);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function getFileHandleFromPath(root, pathText, create = false) {
+  const parts = pathText.replace(/\\/g, '/').split('/').filter(Boolean);
+  if (parts.length === 0) return null;
+  let dir = root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    dir = await dir.getDirectoryHandle(parts[i], { create });
+  }
+  return await dir.getFileHandle(parts[parts.length - 1], { create });
+}
+
+function holeReferenceToAssetPath(reference) {
+  let ref = String(reference || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!ref) return '';
+  if (!ref.includes('/') && !ref.endsWith('.json')) ref = `holes/${ref}.json`;
+  else if (!ref.includes('/')) ref = `holes/${ref}`;
+  return ref;
+}
+
+async function readJsonFile(handle) {
+  const file = await handle.getFile();
+  return JSON.parse(await file.text());
+}
+
+async function openProjectFolder() {
+  if (!window.showDirectoryPicker) {
+    alert('Project folder loading requires a browser with the File System Access API, such as Chromium or Edge. Paste-import/export still works.');
+    return;
+  }
+
+  const dir = await window.showDirectoryPicker({ mode: 'readwrite' });
+  projectDirHandle = dir;
+  assetsDirHandle = await getOptionalDirectory(dir, 'assets');
+  if (!assetsDirHandle && dir.name === 'assets') assetsDirHandle = dir;
+  if (!assetsDirHandle) {
+    setProjectStatus('Selected folder has no assets directory.', true);
+    return;
+  }
+
+  holesDirHandle = await getOptionalDirectory(assetsDirHandle, 'holes');
+  coursesDirHandle = await getOptionalDirectory(assetsDirHandle, 'courses');
+  if (!holesDirHandle || !coursesDirHandle) {
+    setProjectStatus('Expected assets/holes and assets/courses.', true);
+    return;
+  }
+
+  await loadCourseManifests();
+  updateProjectPanel();
+  if (courseManifests.length > 0) await selectCourse(0);
+  else setProjectStatus('No valid course manifests found in assets/courses.', true);
+}
+
+async function loadCourseManifests() {
+  courseManifests = [];
+  for await (const [name, handle] of coursesDirHandle.entries()) {
+    if (handle.kind !== 'file' || !name.endsWith('.json')) continue;
+    try {
+      const data = await readJsonFile(handle);
+      if (Array.isArray(data.holes) && data.holes.length > 0) {
+        courseManifests.push({ name, handle, data });
+      }
+    } catch (_) {
+      // Ignore malformed course manifests; the game loader does the same at runtime.
+    }
+  }
+  courseManifests.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function updateProjectPanel() {
+  const courseSelect = document.getElementById('course-select');
+  const holeSelect = document.getElementById('hole-select');
+  if (!courseSelect || !holeSelect) return;
+
+  courseSelect.innerHTML = '';
+  courseManifests.forEach((entry, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = entry.data.name || entry.data.id || entry.name;
+    courseSelect.appendChild(opt);
+  });
+  courseSelect.value = String(activeCourseIndex >= 0 ? activeCourseIndex : 0);
+
+  holeSelect.innerHTML = '';
+  const active = courseManifests[activeCourseIndex];
+  if (active) {
+    active.data.holes.forEach((ref, i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = `${i + 1}. ${ref}`;
+      holeSelect.appendChild(opt);
+    });
+    holeSelect.value = String(activeHoleIndex >= 0 ? activeHoleIndex : 0);
+  }
+}
+
+async function selectCourse(index) {
+  if (index < 0 || index >= courseManifests.length) return;
+  activeCourseIndex = index;
+  activeHoleIndex = -1;
+  updateProjectPanel();
+  await selectCourseHole(0);
+}
+
+async function selectCourseHole(index) {
+  const active = courseManifests[activeCourseIndex];
+  if (!active || index < 0 || index >= active.data.holes.length) return;
+  if (isDirty && !confirm('Discard unsaved changes to the current hole?')) {
+    updateProjectPanel();
+    return;
+  }
+
+  activeHoleIndex = index;
+  activeHoleRef = active.data.holes[index];
+  const assetPath = holeReferenceToAssetPath(activeHoleRef);
+  try {
+    activeHoleHandle = await getFileHandleFromPath(assetsDirHandle, assetPath);
+    hole = await readJsonFile(activeHoleHandle);
+    if (!hole.tee) hole.tee = [0,0,0];
+    if (!hole.pin) hole.pin = [0,0,80];
+    normalizeHole();
+    sel = null;
+    markDirty(false);
+    fitView();
+    updatePanel();
+    render();
+    updateProjectPanel();
+    setProjectStatus(`Loaded ${assetPath}`);
+  } catch (e) {
+    activeHoleHandle = null;
+    setProjectStatus(`Could not load ${assetPath}: ${e.message}`, true);
+    refreshSaveState();
+  }
+}
+
+async function previousCourseHole() {
+  if (activeHoleIndex > 0) await selectCourseHole(activeHoleIndex - 1);
+}
+
+async function nextCourseHole() {
+  const active = courseManifests[activeCourseIndex];
+  if (active && activeHoleIndex < active.data.holes.length - 1) {
+    await selectCourseHole(activeHoleIndex + 1);
+  }
+}
+
+async function ensureWritable(handle) {
+  if (!handle.queryPermission || !handle.requestPermission) return true;
+  const opts = { mode: 'readwrite' };
+  if (await handle.queryPermission(opts) === 'granted') return true;
+  return await handle.requestPermission(opts) === 'granted';
+}
+
+async function saveCurrentHole() {
+  if (!activeHoleHandle) {
+    alert('Open a project course hole before saving in place.');
+    return;
+  }
+  if (!(await ensureWritable(activeHoleHandle))) {
+    setProjectStatus('Write permission was not granted.', true);
+    return;
+  }
+  const writable = await activeHoleHandle.createWritable();
+  await writable.write(buildJSON());
+  await writable.close();
+  markDirty(false);
+  setProjectStatus(`Saved ${holeReferenceToAssetPath(activeHoleRef)}`);
 }
 
 // ── spline ───────────────────────────────────────────────────────────────────
@@ -473,8 +755,9 @@ function render() {
     ctx.lineWidth = isSel ? 1.5 : 0.8;
 
     if (z.type === 'water' && z.bounds) {
-      const c0 = w2c(z.bounds[0][0], z.bounds[0][2]);
-      const c1 = w2c(z.bounds[1][0], z.bounds[1][2]);
+      const rect = waterRectWorld(z);
+      const c0 = w2c(rect.minX, rect.minZ);
+      const c1 = w2c(rect.maxX, rect.maxZ);
       const rx = Math.min(c0.x,c1.x), ry = Math.min(c0.y,c1.y);
       const rw = Math.abs(c1.x-c0.x), rh = Math.abs(c1.y-c0.y);
       ctx.fillStyle = col.fill; ctx.fillRect(rx,ry,rw,rh);
@@ -498,7 +781,7 @@ function render() {
 
     // zone label
     const lc = z.center ? w2c(z.center[0], z.center[2])
-                        : (() => { const a=w2c(z.bounds[0][0],z.bounds[0][2]),b=w2c(z.bounds[1][0],z.bounds[1][2]); return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; })();
+                        : (() => { const rect=waterRectWorld(z), a=w2c(rect.minX,rect.minZ),b=w2c(rect.maxX,rect.maxZ); return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; })();
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = `${Math.max(8, view.scale * 1.4)}px Courier New`;
     ctx.textAlign = 'center';
@@ -697,6 +980,22 @@ function hit(cx, cy) {
     const r = Math.max(8, (t.leaf_radius || 1.6) * view.scale);
     if (Math.hypot(cx-c.x, cy-c.y) <= r) return { type:'tree', index:i };
   }
+  // water resize handles, only when selected
+  if (sel?.type === 'zone') {
+    const z = hole.material_zones[sel.index];
+    if (z?.type === 'water' && z.bounds) {
+      const rect = waterRectWorld(z);
+      const corners = [
+        { corner:'nw', ...w2c(rect.minX, rect.minZ) },
+        { corner:'ne', ...w2c(rect.maxX, rect.minZ) },
+        { corner:'sw', ...w2c(rect.minX, rect.maxZ) },
+        { corner:'se', ...w2c(rect.maxX, rect.maxZ) }
+      ];
+      for (const h of corners) {
+        if (Math.hypot(cx - h.x, cy - h.y) < 8) return { type:'water_resize', index:sel.index, corner:h.corner };
+      }
+    }
+  }
   // resize handle (circular zones, only when selected)
   for (let i=0; i<hole.material_zones.length; i++) {
     const z = hole.material_zones[i];
@@ -719,7 +1018,8 @@ function hit(cx, cy) {
   for (let i=hole.material_zones.length-1; i>=0; i--) {
     const z = hole.material_zones[i];
     if (z.type==='water' && z.bounds) {
-      const a=w2c(z.bounds[0][0],z.bounds[0][2]), b=w2c(z.bounds[1][0],z.bounds[1][2]);
+      const rect = waterRectWorld(z);
+      const a=w2c(rect.minX,rect.minZ), b=w2c(rect.maxX,rect.maxZ);
       if (cx>=Math.min(a.x,b.x)&&cx<=Math.max(a.x,b.x)&&cy>=Math.min(a.y,b.y)&&cy<=Math.max(a.y,b.y))
         return { type:'zone', index:i };
     } else if (z.center) {
@@ -750,16 +1050,21 @@ canvas.addEventListener('mousedown', e => {
       render(); return;
     }
     const h2 = hit(cx,cy);
+    let deleted = false;
     if (h2?.type==='cp' && hole.spline.control_points.length>2) {
       hole.spline.control_points.splice(h2.index,1);
       if (sel?.type==='cp') sel=null;
+      deleted = true;
     } else if (h2?.type==='zone') {
       hole.material_zones.splice(h2.index,1);
       if (sel?.type==='zone') sel=null;
+      deleted = true;
     } else if (h2?.type==='tree') {
       hole.trees.splice(h2.index,1);
       if (sel?.type==='tree') sel=null;
+      deleted = true;
     }
+    if (deleted) markDirty();
     updatePanel(); render(); return;
   }
   if (e.button !== 0) return;
@@ -777,6 +1082,7 @@ canvas.addEventListener('mousedown', e => {
   if (mode==='add_cp') {
     hole.spline.control_points.push([r2(w.x),0,r2(w.z)]);
     sel = { type:'cp', index: hole.spline.control_points.length-1 };
+    markDirty();
     updatePanel(); render(); return;
   }
 
@@ -788,6 +1094,7 @@ canvas.addEventListener('mousedown', e => {
       hole.material_zones.push({ type:ztype, center:[r2(w.x),0,r2(w.z)], radius: ztype==='green'?6:3.5 });
     }
     sel = { type:'zone', index: hole.material_zones.length-1 };
+    markDirty();
     setMode('select'); updatePanel(); render(); return;
   }
 
@@ -795,21 +1102,23 @@ canvas.addEventListener('mousedown', e => {
   if (mode==='add_tree') {
     hole.trees.push({
       position:[r2(w.x),0,r2(w.z)],
-      trunk_radius:0.35,
-      trunk_height:2.4,
-      leaf_radius:1.6,
-      leaf_height:3.2
+      trunk_radius:treeDefaults.trunk_radius,
+      trunk_height:treeDefaults.trunk_height,
+      leaf_radius:treeDefaults.leaf_radius,
+      leaf_height:treeDefaults.leaf_height
     });
     sel = { type:'tree', index: hole.trees.length-1 };
-    setMode('select'); updatePanel(); render(); return;
+    markDirty();
+    updatePanel(); render(); return;
   }
 
   // select / drag
   const h2 = hit(cx,cy);
   if (h2) {
-    sel = (h2.type==='zone_resize') ? { type:'zone', index:h2.index } : h2;
+    sel = (h2.type==='zone_resize' || h2.type==='water_resize') ? { type:'zone', index:h2.index } : h2;
     const op = origPos(h2);
     drag = { ...h2, cx0:cx, cy0:cy, ox:op.x, oz:op.z };
+    if (h2.type === 'water_resize') drag.rect = waterRectWorld(hole.material_zones[h2.index]);
   } else {
     sel = null;
     pan  = { cx0:cx, cy0:cy, vox:view.ox, voz:view.oz };
@@ -824,10 +1133,38 @@ function origPos(h2) {
   if (h2.type==='pin') return {x:hole.pin[0],z:hole.pin[2]};
   if (h2.type==='zone') {
     const z=hole.material_zones[h2.index];
-    return z.center ? {x:z.center[0],z:z.center[2]} : {x:z.bounds[0][0],z:z.bounds[0][2]};
+    if (z.center) return {x:z.center[0],z:z.center[2]};
+    const rect = waterRectWorld(z);
+    return {x:rect.minX,z:rect.minZ};
+  }
+  if (h2.type==='water_resize') {
+    const rect = waterRectWorld(hole.material_zones[h2.index]);
+    if (h2.corner === 'ne') return {x:rect.maxX,z:rect.minZ};
+    if (h2.corner === 'sw') return {x:rect.minX,z:rect.maxZ};
+    if (h2.corner === 'se') return {x:rect.maxX,z:rect.maxZ};
+    return {x:rect.minX,z:rect.minZ};
   }
   if (h2.type==='tree') { const t=hole.trees[h2.index]; return {x:t.position[0],z:t.position[2]}; }
   return {x:0,z:0};
+}
+
+function resizeWaterFromCorner(index, corner, nx, nz, startRect) {
+  const minSize = 1.0;
+  const rect = { ...startRect };
+  if (corner === 'nw') {
+    rect.minX = Math.min(nx, startRect.maxX - minSize);
+    rect.minZ = Math.min(nz, startRect.maxZ - minSize);
+  } else if (corner === 'ne') {
+    rect.maxX = Math.max(nx, startRect.minX + minSize);
+    rect.minZ = Math.min(nz, startRect.maxZ - minSize);
+  } else if (corner === 'sw') {
+    rect.minX = Math.min(nx, startRect.maxX - minSize);
+    rect.maxZ = Math.max(nz, startRect.minZ + minSize);
+  } else if (corner === 'se') {
+    rect.maxX = Math.max(nx, startRect.minX + minSize);
+    rect.maxZ = Math.max(nz, startRect.minZ + minSize);
+  }
+  setWaterRect(index, rect);
 }
 
 canvas.addEventListener('mousemove', e => {
@@ -854,9 +1191,12 @@ canvas.addEventListener('mousemove', e => {
     const z=hole.material_zones[drag.index];
     if (z.center) { z.center[0]=nx; z.center[2]=nz; }
     else if (z.bounds) {
-      const bw=z.bounds[1][0]-z.bounds[0][0], bh=z.bounds[1][2]-z.bounds[0][2];
-      z.bounds[0][0]=nx; z.bounds[0][2]=nz; z.bounds[1][0]=r2(nx+bw); z.bounds[1][2]=r2(nz+bh);
+      const rect = waterRectWorld(z);
+      const bw=rect.maxX-rect.minX, bh=rect.maxZ-rect.minZ;
+      setWaterRect(drag.index, { minX:nx, minZ:nz, maxX:nx+bw, maxZ:nz+bh });
     }
+  } else if (drag.type==='water_resize') {
+    resizeWaterFromCorner(drag.index, drag.corner, nx, nz, drag.rect);
   } else if (drag.type==='zone_resize') {
     const z=hole.material_zones[drag.index];
     if (z.center) {
@@ -864,6 +1204,7 @@ canvas.addEventListener('mousemove', e => {
       z.radius = r2(Math.max(0.5, Math.hypot(w2.x-z.center[0], w2.z-z.center[2])));
     }
   }
+  markDirty(true, false);
   updatePanel(); render();
 });
 
@@ -906,6 +1247,10 @@ function updatePanel() {
   setValue('f-seed', hole.wind_seed);
   setValue('f-width',hole.spline.width);
   setValue('f-rough-width',hole.spline.rough_width);
+  setValue('tree-default-trunk-radius', treeDefaults.trunk_radius);
+  setValue('tree-default-trunk-height', treeDefaults.trunk_height);
+  setValue('tree-default-leaf-radius', treeDefaults.leaf_radius);
+  setValue('tree-default-leaf-height', treeDefaults.leaf_height);
 
   // control point list
   const cpList = document.getElementById('cp-list');
@@ -927,6 +1272,7 @@ function updatePanel() {
       if(hole.spline.control_points.length<=2) return;
       hole.spline.control_points.splice(i,1);
       if(sel?.type==='cp') sel=null;
+      markDirty();
       updatePanel(); render();
     })
   );
@@ -936,8 +1282,24 @@ function updatePanel() {
   if (sel?.type==='cp') {
     const pt = hole.spline.control_points[sel.index];
     cpEdit.innerHTML =
-      `<div class="subfield"><label>y (elev)</label>` +
-      `<input type="number" step="0.5" value="${pt[1]}" oninput="setCpY(${sel.index},+this.value)">` +
+      `<div class="field-row three">` +
+      `<div class="field compact"><label>x</label><input type="number" step="0.1" value="${pt[0]}" oninput="setCpValue(${sel.index},0,+this.value)"></div>` +
+      `<div class="field compact"><label>y</label><input type="number" step="0.1" value="${pt[1]}" oninput="setCpValue(${sel.index},1,+this.value)"></div>` +
+      `<div class="field compact"><label>z</label><input type="number" step="0.1" value="${pt[2]}" oninput="setCpValue(${sel.index},2,+this.value)"></div>` +
+      `</div>`;
+  } else if (sel?.type==='tee') {
+    cpEdit.innerHTML =
+      `<div class="field-row three">` +
+      `<div class="field compact"><label>x</label><input type="number" step="0.1" value="${hole.tee[0]}" oninput="setVec3Value(hole.tee,0,+this.value)"></div>` +
+      `<div class="field compact"><label>y</label><input type="number" step="0.1" value="${hole.tee[1]}" oninput="setVec3Value(hole.tee,1,+this.value)"></div>` +
+      `<div class="field compact"><label>z</label><input type="number" step="0.1" value="${hole.tee[2]}" oninput="setVec3Value(hole.tee,2,+this.value)"></div>` +
+      `</div>`;
+  } else if (sel?.type==='pin') {
+    cpEdit.innerHTML =
+      `<div class="field-row three">` +
+      `<div class="field compact"><label>x</label><input type="number" step="0.1" value="${hole.pin[0]}" oninput="setVec3Value(hole.pin,0,+this.value)"></div>` +
+      `<div class="field compact"><label>y</label><input type="number" step="0.1" value="${hole.pin[1]}" oninput="setVec3Value(hole.pin,1,+this.value)"></div>` +
+      `<div class="field compact"><label>z</label><input type="number" step="0.1" value="${hole.pin[2]}" oninput="setVec3Value(hole.pin,2,+this.value)"></div>` +
       `</div>`;
   } else { cpEdit.innerHTML=''; }
 
@@ -960,6 +1322,7 @@ function updatePanel() {
     el.addEventListener('click', () => {
       hole.material_zones.splice(+el.dataset.i,1);
       if(sel?.type==='zone') sel=null;
+      markDirty();
       updatePanel(); render();
     })
   );
@@ -974,9 +1337,14 @@ function updatePanel() {
         `<input type="number" step="0.5" min="0.5" value="${(z.radius||5).toFixed(1)}" oninput="setZoneR(${sel.index},+this.value)">` +
         `</div>`;
     } else if (z?.bounds) {
-      const bw = r2(z.bounds[1][0]-z.bounds[0][0]);
-      const bh = r2(z.bounds[1][2]-z.bounds[0][2]);
+      const rect = waterRectWorld(z);
+      const bw = r2(rect.maxX - rect.minX);
+      const bh = r2(rect.maxZ - rect.minZ);
       zEdit.innerHTML =
+        `<div class="field-row">` +
+        `<div class="field compact"><label>x</label><input type="number" step="0.5" value="${rect.minX}" oninput="setWaterOrigin(${sel.index},+this.value,null)"></div>` +
+        `<div class="field compact"><label>z</label><input type="number" step="0.5" value="${rect.minZ}" oninput="setWaterOrigin(${sel.index},null,+this.value)"></div>` +
+        `</div>` +
         `<div class="subfield"><label>width</label><input type="number" step="1" value="${bw}" oninput="setWaterW(${sel.index},+this.value)"></div>` +
         `<div class="subfield"><label>depth</label><input type="number" step="1" value="${bh}" oninput="setWaterH(${sel.index},+this.value)"></div>`;
     } else { zEdit.innerHTML=''; }
@@ -992,7 +1360,7 @@ function updatePanel() {
     el.innerHTML =
       `<span class="zone-dot tree"></span>` +
       `<span class="item-coords">tree @ ${t.position[0].toFixed(1)},${t.position[2].toFixed(1)}</span>` +
-      `<span class="item-del" data-i="${i}">Ã—</span>`;
+      `<span class="item-del" data-i="${i}">×</span>`;
     el.addEventListener('click', ev => { if(ev.target.dataset.i!==undefined) return; sel={type:'tree',index:i}; updatePanel(); render(); });
     tList.appendChild(el);
   });
@@ -1000,6 +1368,7 @@ function updatePanel() {
     el.addEventListener('click', () => {
       hole.trees.splice(+el.dataset.i,1);
       if(sel?.type==='tree') sel=null;
+      markDirty();
       updatePanel(); render();
     })
   );
@@ -1008,10 +1377,16 @@ function updatePanel() {
   if (sel?.type==='tree') {
     const t = hole.trees[sel.index];
     tEdit.innerHTML =
+      `<div class="field-row three">` +
+      `<div class="field compact"><label>x</label><input type="number" step="0.1" value="${t.position[0]}" oninput="setTreePosition(${sel.index},0,+this.value)"></div>` +
+      `<div class="field compact"><label>y</label><input type="number" step="0.1" value="${t.position[1]}" oninput="setTreePosition(${sel.index},1,+this.value)"></div>` +
+      `<div class="field compact"><label>z</label><input type="number" step="0.1" value="${t.position[2]}" oninput="setTreePosition(${sel.index},2,+this.value)"></div>` +
+      `</div>` +
       `<div class="subfield"><label>trunk r</label><input type="number" step="0.05" min="0.05" value="${t.trunk_radius}" oninput="setTreeValue(${sel.index},'trunk_radius',+this.value)"></div>` +
       `<div class="subfield"><label>trunk h</label><input type="number" step="0.1" min="0.1" value="${t.trunk_height}" oninput="setTreeValue(${sel.index},'trunk_height',+this.value)"></div>` +
       `<div class="subfield"><label>leaf r</label><input type="number" step="0.1" min="0.1" value="${t.leaf_radius}" oninput="setTreeValue(${sel.index},'leaf_radius',+this.value)"></div>` +
-      `<div class="subfield"><label>leaf h</label><input type="number" step="0.1" min="0.1" value="${t.leaf_height}" oninput="setTreeValue(${sel.index},'leaf_height',+this.value)"></div>`;
+      `<div class="subfield"><label>leaf h</label><input type="number" step="0.1" min="0.1" value="${t.leaf_height}" oninput="setTreeValue(${sel.index},'leaf_height',+this.value)"></div>` +
+      `<button class="mini-btn" style="width:100%;margin-top:6px" onclick="useSelectedTreeAsDefault(${sel.index})">use as new tree default</button>`;
   } else { tEdit.innerHTML=''; }
 
   refreshExport();
@@ -1023,12 +1398,45 @@ function setValue(id,v) {
 }
 const fmt = v => (v>=0?'+':'')+v.toFixed(1);
 
-function setCpY(i,v)   { hole.spline.control_points[i][1]=v; render(); }
-function setZoneR(i,v) { hole.material_zones[i].radius=Math.max(0.5,v); render(); }
-function setWaterW(i,v){ const z=hole.material_zones[i]; z.bounds[1][0]=r2(z.bounds[0][0]+Math.max(1,v)); render(); }
-function setWaterH(i,v){ const z=hole.material_zones[i]; z.bounds[1][2]=r2(z.bounds[0][2]+Math.max(1,v)); render(); }
-function setRoughWidth(v) { hole.spline.rough_width=Math.max(hole.spline.width, v); render(); }
-function setTreeValue(i,k,v) { hole.trees[i][k]=Math.max(k==='trunk_radius'?0.05:0.1, v); render(); }
+function setCpY(i,v) { setCpValue(i, 1, v); }
+function setCpValue(i,k,v) { hole.spline.control_points[i][k]=r2(v); markDirty(); render(); }
+function setVec3Value(vec,k,v) { vec[k]=r2(v); markDirty(); render(); }
+function setZoneR(i,v) { hole.material_zones[i].radius=Math.max(0.5,v); markDirty(); render(); }
+function setWaterOrigin(i,x,zv) {
+  const rect = waterRectWorld(hole.material_zones[i]);
+  const w = rect.maxX - rect.minX;
+  const h = rect.maxZ - rect.minZ;
+  const minX = x === null ? rect.minX : r2(x);
+  const minZ = zv === null ? rect.minZ : r2(zv);
+  setWaterRect(i, { minX, minZ, maxX:minX + w, maxZ:minZ + h });
+  markDirty(); render();
+}
+function setWaterW(i,v){
+  const rect = waterRectWorld(hole.material_zones[i]);
+  setWaterRect(i, { ...rect, maxX: rect.minX + Math.max(1, v) });
+  markDirty(); render();
+}
+function setWaterH(i,v){
+  const rect = waterRectWorld(hole.material_zones[i]);
+  setWaterRect(i, { ...rect, maxZ: rect.minZ + Math.max(1, v) });
+  markDirty(); render();
+}
+function setRoughWidth(v) { hole.spline.rough_width=Math.max(hole.spline.width, v); markDirty(); render(); }
+function setTreeValue(i,k,v) { hole.trees[i][k]=Math.max(k==='trunk_radius'?0.05:0.1, v); markDirty(); render(); }
+function setTreePosition(i,k,v) { hole.trees[i].position[k]=r2(v); markDirty(); render(); }
+function setTreeDefault(k,v) {
+  treeDefaults[k] = Math.max(k === 'trunk_radius' ? 0.05 : 0.1, Number.isFinite(v) ? v : treeDefaults[k]);
+}
+function useSelectedTreeAsDefault(i) {
+  const t = hole.trees[i];
+  treeDefaults = {
+    trunk_radius: t.trunk_radius,
+    trunk_height: t.trunk_height,
+    leaf_radius: t.leaf_radius,
+    leaf_height: t.leaf_height
+  };
+  updatePanel();
+}
 
 // ── export / import ──────────────────────────────────────────────────────────
 
@@ -1042,7 +1450,10 @@ function buildJSON() {
   h.spline.control_points = h.spline.control_points.map(p=>p.map(r2));
   h.material_zones = h.material_zones.map(z=>{
     if(z.center) z.center=z.center.map(r2);
-    if(z.bounds) z.bounds=z.bounds.map(b=>b.map(r2));
+    if(z.bounds) {
+      const rect = waterRectWorld(z);
+      z.bounds = [[r2(rect.minX), 0, r2(rect.minZ)], [r2(rect.maxX), 0, r2(rect.maxZ)]];
+    }
     if(z.radius!==undefined) z.radius=r2(z.radius);
     return z;
   });
@@ -1081,7 +1492,7 @@ function doImport() {
     if (!hole.tee) hole.tee=[0,0,0];
     if (!hole.pin) hole.pin=[0,0,80];
     normalizeHole();
-    sel=null; fitView(); updatePanel(); render();
+    sel=null; markDirty(true); fitView(); updatePanel(); render();
   } catch(e) { alert('Invalid JSON:\n'+e.message); }
 }
 
@@ -1102,6 +1513,8 @@ function fitView() {
 
 function newHole() {
   if (!confirm('New hole? Unsaved work will be lost.')) return;
+  activeHoleHandle = null;
+  activeHoleRef = "";
   hole = {
     id:'hole_01', name:'New Hole', par:3, wind_seed:Math.floor(Math.random()*9999),
     tee:[0,0,0], pin:[0,0,80],
@@ -1109,11 +1522,12 @@ function newHole() {
     material_zones:[{ type:'green', center:[0,0,80], radius:6 }],
     trees:[]
   };
-  sel=null; fitView(); updatePanel(); render();
+  sel=null; markDirty(true); fitView(); updatePanel(); render();
 }
 
 // ── init ─────────────────────────────────────────────────────────────────────
 
+updateProjectPanel();
 updatePanel();
 setTimeout(()=>{ fitView(); render(); }, 60);
 </script>

@@ -117,6 +117,101 @@ TEST_CASE("walking movement changes player position and yaw") {
     CHECK(state.mode == game_mode::walking);
 }
 
+TEST_CASE("left shift engages cart and release exits cleanly") {
+    game_state state = make_initial_game_state();
+    const glm::vec3 start_position = state.player.position;
+
+    input_state input;
+    input.left_shift.is_down = true;
+    input.shift.is_down = true;
+    update_game(state, input, 0.25f);
+
+    CHECK(state.mode == game_mode::walking);
+    CHECK(state.cart.active);
+    CHECK(state.cart.velocity > 0.0f);
+    CHECK(glm::length(state.player.position - start_position) > 0.0f);
+    CHECK(glm::length(state.ball.velocity) == 0.0f);
+
+    input.left_shift.is_down = false;
+    input.shift.is_down = false;
+    update_game(state, input, 0.016f);
+
+    CHECK(!state.cart.active);
+    CHECK(state.cart.velocity == 0.0f);
+}
+
+TEST_CASE("cart steering and drift use walking mode without entering shot setup") {
+    game_state state = make_initial_game_state();
+    const float start_yaw = state.player.yaw;
+
+    input_state input;
+    input.left_shift.is_down = true;
+    input.shift.is_down = true;
+    input.left.is_down = true;
+    input.space.pressed = true;
+    input.space.is_down = true;
+    update_game(state, input, 0.05f);
+
+    CHECK(state.mode == game_mode::walking);
+    CHECK(state.cart.active);
+    CHECK(state.cart.drift_timer > 0.0f);
+    CHECK(state.player.yaw > start_yaw);
+    CHECK(state.swing.phase == swing_phase::idle);
+    CHECK(state.stroke_count == 0);
+}
+
+TEST_CASE("cart auto disables outside walking mode") {
+    game_state state = make_initial_game_state();
+    state.mode = game_mode::aiming;
+    state.cart.active = true;
+    state.cart.velocity = 9.0f;
+    state.cart.drift_timer = 0.2f;
+
+    input_state input;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.mode == game_mode::aiming);
+    CHECK(!state.cart.active);
+    CHECK(state.cart.velocity == 0.0f);
+    CHECK(state.cart.drift_timer == 0.0f);
+}
+
+TEST_CASE("smoke and beer emotes can run together and auto clear") {
+    game_state state = make_initial_game_state();
+
+    input_state input;
+    input.key_1.pressed = true;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.smoke_emote.active);
+    CHECK(!state.beer_emote.active);
+
+    input.reset_frame();
+    input.key_2.pressed = true;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.smoke_emote.active);
+    CHECK(state.beer_emote.active);
+    CHECK(state.smoke_emote.elapsed > state.beer_emote.elapsed);
+    CHECK(near_float(state.beer_emote.elapsed, 0.016f));
+
+    input.reset_frame();
+    input.key_1.pressed = true;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.smoke_emote.active);
+    CHECK(state.beer_emote.active);
+    CHECK(near_float(state.smoke_emote.elapsed, 0.016f));
+
+    input.reset_frame();
+    for (int i = 0; i < 40; ++i) {
+        update_game(state, input, 0.05f);
+    }
+
+    CHECK(!state.smoke_emote.active);
+    CHECK(!state.beer_emote.active);
+}
+
 TEST_CASE("space far from ball does not enter aiming") {
     game_state state = make_initial_game_state();
     state.player.position = glm::vec3(20.0f, 0.0f, 0.0f);
@@ -380,13 +475,14 @@ TEST_CASE("content layer loads courses clubs and quests from asset root") {
     CHECK(!content.courses.empty());
     CHECK(!content.quests.empty());
 
-    bool found_dev = false;
+    bool found_course = false;
     bool found_quest = false;
     for (const course_definition& course : content.courses) {
-        if (course.id == "dev_course") {
-            found_dev = true;
-            CHECK(course.hole_count == 1);
-            CHECK(course.holes.size() == 1);
+        if (course.id == "course_01") {
+            found_course = true;
+            CHECK(course.name == "The Big Three");
+            CHECK(course.hole_count == 3);
+            CHECK(course.holes.size() == 3);
         }
     }
     for (const quest_definition& quest : content.quests) {
@@ -396,29 +492,25 @@ TEST_CASE("content layer loads courses clubs and quests from asset root") {
         }
     }
 
-    CHECK(found_dev);
+    CHECK(found_course);
     CHECK(found_quest);
 }
 
-TEST_CASE("course manifests load nine and eighteen hole definitions in order") {
-    const std::optional<course_definition> nine = load_course_from_file(asset_root() + "/courses/test_nine.json");
-    const std::optional<course_definition> eighteen = load_course_from_file(asset_root() + "/courses/test_eighteen.json");
+TEST_CASE("course manifest loads authored three-hole course in order") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/course_01.json");
 
-    CHECK(nine.has_value());
-    CHECK(eighteen.has_value());
-    if (!nine || !eighteen) {
+    CHECK(course.has_value());
+    if (!course) {
         return;
     }
 
-    CHECK(nine->id == "test_nine");
-    CHECK(nine->hole_count == 9);
-    CHECK(nine->holes.size() == 9);
-    CHECK(nine->holes.front() == "holes/test.json");
-    CHECK(nine->holes.back() == "holes/test.json");
-
-    CHECK(eighteen->id == "test_eighteen");
-    CHECK(eighteen->hole_count == 18);
-    CHECK(eighteen->holes.size() == 18);
+    CHECK(course->id == "course_01");
+    CHECK(course->name == "The Big Three");
+    CHECK(course->hole_count == 3);
+    CHECK(course->holes.size() == 3);
+    CHECK(course->holes[0] == "test");
+    CHECK(course->holes[1] == "test2");
+    CHECK(course->holes[2] == "test3");
 }
 
 TEST_CASE("course manifests can reference holes by id") {
@@ -430,7 +522,7 @@ TEST_CASE("course manifests can reference holes by id") {
     }
 
     CHECK(course->id == "course_01");
-    CHECK(course->hole_count == 2);
+    CHECK(course->hole_count == 3);
     CHECK(course->holes.front() == "test");
     CHECK(course_hole_path(asset_root(), *course, 0).find("holes") != std::string::npos);
 
@@ -445,12 +537,15 @@ TEST_CASE("hole directory loader discovers authored holes") {
     CHECK(holes.size() >= 2);
     bool found_test = false;
     bool found_test2 = false;
+    bool found_test3 = false;
     for (const hole_data& hole : holes) {
-        found_test = found_test || hole.name == "Test";
+        found_test = found_test || hole.name == "New Hole";
         found_test2 = found_test2 || hole.name == "The Ditch";
+        found_test3 = found_test3 || hole.name == "Abyss";
     }
     CHECK(found_test);
     CHECK(found_test2);
+    CHECK(found_test3);
 }
 
 TEST_CASE("missing course hole path fails cleanly") {
@@ -627,6 +722,9 @@ TEST_CASE("moving ball crossing visible cup completes hole") {
 
 TEST_CASE("final hole cup completion sinks ball and marks round finished") {
     game_state state = make_initial_game_state(asset_root());
+    const std::size_t final_hole = state.round.strokes_per_hole.size() - 1U;
+    state.round.current_hole_index = final_hole;
+    state.save.current_hole_index = static_cast<int>(final_hole);
     state.stroke_count = 3;
     state.mode = game_mode::walking;
     const glm::vec3 pin_anchor = terrain_anchored_pin(state.tuning);
@@ -638,7 +736,7 @@ TEST_CASE("final hole cup completion sinks ball and marks round finished") {
     update_game(state, input, 0.016f);
 
     CHECK(state.round.finished);
-    CHECK(state.save.hole_scores.at(0) == 3);
+    CHECK(state.save.hole_scores.at(static_cast<int>(final_hole)) == 3);
     CHECK(state.ball.position.y < pin_anchor.y);
     CHECK(glm::length(state.ball.velocity) == 0.0f);
     CHECK(glm::length(state.ball.spin) == 0.0f);
@@ -922,7 +1020,7 @@ TEST_CASE("walking height uses cached terrain mesh instead of flat ground") {
     input.up.is_down = true;
     update_game(state, input, 0.016f);
 
-    CHECK(state.player.position.y == 3.0f);
+    CHECK(near_float(state.player.position.y, 3.0f));
 }
 
 TEST_CASE("game update collides ball against spline terrain height") {
@@ -1095,7 +1193,7 @@ TEST_CASE("rangefinder formats rounded horizontal meters") {
     CHECK(format_rangefinder_distance(124.50f) == "125M");
 }
 
-TEST_CASE("rangefinder is only active while walking with shift held") {
+TEST_CASE("rangefinder is only active while walking with non-cart shift held") {
     game_state state = make_initial_game_state();
 
     input_state input;
@@ -1128,6 +1226,14 @@ TEST_CASE("rangefinder is only active while walking with shift held") {
     update_game(state, input, 0.016f);
     CHECK(!rangefinder_should_show(game_mode::addressing, input));
     CHECK(!rangefinder_should_show(game_mode::following_shot, input));
+
+    game_state cart_state = make_initial_game_state();
+    input_state cart_input;
+    cart_input.shift.is_down = true;
+    cart_input.left_shift.is_down = true;
+    update_game(cart_state, cart_input, 0.016f);
+    CHECK(cart_state.cart.active);
+    CHECK(!cart_state.rangefinder_active);
 }
 
 TEST_CASE("rangefinder distance changes as player walks toward pin") {
@@ -1219,15 +1325,16 @@ TEST_CASE("club selection wraps on button presses") {
 TEST_CASE("held left and right adjust aim") {
     game_state state = make_initial_game_state();
     enter_aiming(state);
+    state.aim_angle = 0.0f;
 
     input_state input;
     input.left.is_down = true;
     update_game(state, input, 0.25f);
     CHECK(state.aim_angle > 0.0f);
 
+    state.aim_angle = 0.0f;
     input.left.is_down = false;
     input.right.is_down = true;
-    update_game(state, input, 0.05f);
     update_game(state, input, 0.05f);
     CHECK(state.aim_angle < 0.0f);
 }

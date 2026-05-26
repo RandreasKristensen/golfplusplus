@@ -166,18 +166,88 @@ void set_terrain_draw_state(shader_program& shader,
                             const glm::mat4& view,
                             const glm::mat4& proj,
                             const glm::vec3& color,
+                            const float alpha,
                             const bool use_vertex_color) {
     shader.set_mat4("u_model", model);
     shader.set_mat4("u_mvp", proj * view * model);
     shader.set_vec3("u_color", color);
-    shader.set_float("u_alpha", 1.0f);
+    shader.set_float("u_alpha", alpha);
     shader.set_int("u_use_vertex_color", use_vertex_color ? 1 : 0);
+}
+
+void set_terrain_draw_state(shader_program& shader,
+                            const glm::mat4& model,
+                            const glm::mat4& view,
+                            const glm::mat4& proj,
+                            const glm::vec3& color,
+                            const bool use_vertex_color) {
+    set_terrain_draw_state(shader, model, view, proj, color, 1.0f, use_vertex_color);
 }
 
 glm::mat4 panel_model(const glm::vec3 center, const float yaw_degrees, const glm::vec3 scale) {
     glm::mat4 model = glm::translate(glm::mat4(1.0f), center);
     model = glm::rotate(model, glm::radians(yaw_degrees), glm::vec3(0.0f, 1.0f, 0.0f));
     return glm::scale(model, scale);
+}
+
+glm::vec3 material_zone_color(const material_zone_type type) {
+    switch (type) {
+    case material_zone_type::green:
+        return glm::vec3(0.20f, 0.68f, 0.28f);
+    case material_zone_type::bunker:
+        return glm::vec3(0.66f, 0.55f, 0.22f);
+    case material_zone_type::water:
+        return glm::vec3(0.10f, 0.22f, 0.60f);
+    default:
+        return glm::vec3(0.16f, 0.38f, 0.16f);
+    }
+}
+
+void draw_material_zone_overlays(shader_program& shader,
+                                 const glm::mat4& view,
+                                 const glm::mat4& proj,
+                                 const render_data& data,
+                                 const unsigned int marker_vao,
+                                 const int marker_vertex_count,
+                                 const unsigned int screen_vao) {
+    if (data.material_zones.empty()) {
+        return;
+    }
+
+    constexpr float lift = 0.045f;
+
+    for (const material_zone& zone : data.material_zones) {
+        if (zone.type == material_zone_type::unknown) {
+            continue;
+        }
+
+        const glm::vec3 color = material_zone_color(zone.type);
+        if (zone.has_radius && zone.radius > 0.0f) {
+            const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1.0f),
+                                                              zone.center + glm::vec3(0.0f, lift, 0.0f)),
+                                               glm::vec3(zone.radius * 2.0f, 1.0f, zone.radius * 2.0f));
+            set_terrain_draw_state(shader, model, view, proj, color, false);
+            glBindVertexArray(marker_vao);
+            glDrawArrays(GL_TRIANGLES, 0, marker_vertex_count);
+            continue;
+        }
+
+        if (zone.has_bounds) {
+            const glm::vec3 min_point(glm::min(zone.bounds_min, zone.bounds_max));
+            const glm::vec3 max_point(glm::max(zone.bounds_min, zone.bounds_max));
+            const glm::vec3 center = (min_point + max_point) * 0.5f + glm::vec3(0.0f, lift, 0.0f);
+            const glm::vec3 half = glm::max((max_point - min_point) * 0.5f, glm::vec3(0.05f));
+
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), center);
+            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(half.x, half.z, 1.0f));
+            set_terrain_draw_state(shader, model, view, proj, color, false);
+            glBindVertexArray(screen_vao);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+        }
+    }
+
+    glBindVertexArray(0);
 }
 
 float axis_x_yaw_radians(const glm::vec3& axis) {
@@ -272,6 +342,183 @@ void draw_swing_club(shader_program& shader,
                      glm::vec3(0.09f, 0.085f, 0.075f));
 }
 
+struct primitive_geometry {
+    unsigned int screen_vao = 0;
+    unsigned int cylinder_vao = 0;
+    unsigned int ball_vao = 0;
+    int cylinder_vertex_count = 0;
+    int ball_vertex_count = 0;
+};
+
+glm::mat4 local_model(const render_data& data, const glm::vec3& local, const glm::vec3& rotation, const glm::vec3& scale) {
+    glm::vec3 forward = data.camera_target - data.camera_position;
+    forward.y = 0.0f;
+    forward = glm::normalize(glm::length(forward) > 0.0001f ? forward : glm::vec3(0.0f, 0.0f, 1.0f));
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const glm::vec3 right = glm::normalize(glm::cross(up, forward));
+    const glm::vec3 position = data.camera_position + right * local.x + up * local.y + forward * local.z;
+
+    glm::mat4 model(1.0f);
+    model[0] = glm::vec4(right, 0.0f);
+    model[1] = glm::vec4(up, 0.0f);
+    model[2] = glm::vec4(forward, 0.0f);
+    model[3] = glm::vec4(position, 1.0f);
+    model = glm::rotate(model, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::rotate(model, rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
+    model = glm::rotate(model, rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
+    return glm::scale(model, scale);
+}
+
+void draw_local_panel(shader_program& shader,
+                      const glm::mat4& view,
+                      const glm::mat4& proj,
+                      const render_data& data,
+                      const glm::vec3& local,
+                      const glm::vec3& rotation,
+                      const glm::vec2& half_size,
+                      const glm::vec3& color,
+                      const float alpha = 1.0f) {
+    const glm::mat4 model = local_model(data, local, rotation, glm::vec3(half_size, 1.0f));
+    set_terrain_draw_state(shader, model, view, proj, color, alpha, false);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void draw_local_cylinder(shader_program& shader,
+                         const glm::mat4& view,
+                         const glm::mat4& proj,
+                         const render_data& data,
+                         const primitive_geometry& geometry,
+                         const glm::vec3& local,
+                         const glm::vec3& rotation,
+                         const glm::vec3& scale,
+                         const glm::vec3& color,
+                         const float alpha = 1.0f) {
+    glm::mat4 model = local_model(data, local, rotation, glm::vec3(1.0f));
+    model = glm::scale(model, scale);
+    model = glm::translate(model, glm::vec3(0.0f, -0.5f, 0.0f));
+    set_terrain_draw_state(shader, model, view, proj, color, alpha, false);
+    glBindVertexArray(geometry.cylinder_vao);
+    glDrawArrays(GL_TRIANGLES, 0, geometry.cylinder_vertex_count);
+}
+
+void draw_local_sphere(shader_program& shader,
+                       const glm::mat4& view,
+                       const glm::mat4& proj,
+                       const render_data& data,
+                       const primitive_geometry& geometry,
+                       const glm::vec3& local,
+                       const float radius,
+                       const glm::vec3& color,
+                       const float alpha = 1.0f) {
+    const glm::mat4 model = local_model(data, local, glm::vec3(0.0f), glm::vec3(radius));
+    set_terrain_draw_state(shader, model, view, proj, color, alpha, false);
+    glBindVertexArray(geometry.ball_vao);
+    glDrawArrays(GL_TRIANGLES, 0, geometry.ball_vertex_count);
+}
+
+void draw_cart_model(shader_program& shader,
+                     const glm::mat4& view,
+                     const glm::mat4& proj,
+                     const render_data& data,
+                     const primitive_geometry& geometry) {
+    if (!data.cart_active) {
+        return;
+    }
+
+    glBindVertexArray(geometry.screen_vao);
+    const glm::vec3 body(0.36f, 0.46f, 0.20f);
+    const glm::vec3 trim(0.08f, 0.09f, 0.08f);
+    const glm::vec3 cream(0.76f, 0.72f, 0.56f);
+
+    draw_local_panel(shader, view, proj, data, glm::vec3(0.0f, -0.79f, 1.08f), glm::vec3(glm::radians(78.0f), 0.0f, 0.0f), glm::vec2(0.74f, 0.48f), body);
+    draw_local_panel(shader, view, proj, data, glm::vec3(0.0f, -0.63f, 0.58f), glm::vec3(glm::radians(82.0f), 0.0f, 0.0f), glm::vec2(0.68f, 0.18f), trim);
+    draw_local_panel(shader, view, proj, data, glm::vec3(0.0f, -0.50f, 0.72f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec2(0.64f, 0.13f), cream);
+    draw_local_panel(shader, view, proj, data, glm::vec3(-0.78f, -0.63f, 0.86f), glm::vec3(0.0f, glm::radians(90.0f), 0.0f), glm::vec2(0.42f, 0.16f), body);
+    draw_local_panel(shader, view, proj, data, glm::vec3(0.78f, -0.63f, 0.86f), glm::vec3(0.0f, glm::radians(90.0f), 0.0f), glm::vec2(0.42f, 0.16f), body);
+    draw_local_panel(shader, view, proj, data, glm::vec3(0.0f, 0.23f, 0.72f), glm::vec3(glm::radians(88.0f), 0.0f, 0.0f), glm::vec2(0.84f, 0.42f), glm::vec3(0.72f, 0.68f, 0.47f));
+    draw_local_cylinder(shader, view, proj, data, geometry, glm::vec3(0.0f, -0.63f, 0.40f), glm::vec3(glm::radians(68.0f), 0.0f, glm::radians(90.0f)), glm::vec3(0.22f, 0.035f, 0.22f), glm::vec3(0.025f, 0.025f, 0.025f));
+    draw_local_cylinder(shader, view, proj, data, geometry, glm::vec3(0.0f, -0.73f, 0.48f), glm::vec3(glm::radians(22.0f), 0.0f, 0.0f), glm::vec3(0.024f, 0.30f, 0.024f), trim);
+
+    const std::array<float, 2> post_x{-0.56f, 0.56f};
+    const std::array<float, 2> post_z{0.46f, 1.10f};
+    for (const float x : post_x) {
+        for (const float z : post_z) {
+            draw_local_cylinder(shader, view, proj, data, geometry, glm::vec3(x, -0.17f, z), glm::vec3(0.0f), glm::vec3(0.035f, 0.84f, 0.035f), cream);
+        }
+    }
+
+    const std::array<float, 2> wheel_x{-0.68f, 0.68f};
+    const std::array<float, 2> wheel_z{1.30f};
+    for (const float x : wheel_x) {
+        for (const float z : wheel_z) {
+            draw_local_cylinder(shader, view, proj, data, geometry, glm::vec3(x, -1.08f, z), glm::vec3(0.0f, 0.0f, glm::radians(-90.0f)), glm::vec3(0.23f, 0.16f, 0.23f), glm::vec3(0.025f, 0.025f, 0.025f));
+            draw_local_sphere(shader, view, proj, data, geometry, glm::vec3(x, -1.08f, z), 0.085f, glm::vec3(0.58f, 0.56f, 0.48f));
+        }
+    }
+}
+
+void draw_smoke_emote_model(shader_program& shader,
+                            const glm::mat4& view,
+                            const glm::mat4& proj,
+                            const render_data& data,
+                            const primitive_geometry& geometry) {
+    const float t = std::max(0.0f, data.smoke_emote_elapsed);
+    const float ember = 0.55f + 0.45f * std::sin(t * 24.0f);
+    const glm::vec3 cigarette_local(0.18f, -0.42f, 0.82f);
+    glBindVertexArray(geometry.screen_vao);
+    draw_local_panel(shader, view, proj, data, cigarette_local, glm::vec3(0.0f, 0.0f, glm::radians(-18.0f)), glm::vec2(0.32f, 0.030f), glm::vec3(0.88f, 0.82f, 0.62f));
+    draw_local_panel(shader, view, proj, data, cigarette_local + glm::vec3(0.26f, -0.08f, 0.01f), glm::vec3(0.0f, 0.0f, glm::radians(-18.0f)), glm::vec2(0.055f, 0.036f), glm::vec3(0.95f, 0.20f + ember * 0.20f, 0.10f));
+    draw_local_cylinder(shader, view, proj, data, geometry, cigarette_local, glm::vec3(glm::radians(90.0f), 0.0f, glm::radians(-72.0f)), glm::vec3(0.034f, 0.54f, 0.034f), glm::vec3(0.88f, 0.82f, 0.62f));
+    draw_local_sphere(shader, view, proj, data, geometry, cigarette_local + glm::vec3(0.26f, -0.08f, 0.0f), 0.050f, glm::vec3(0.95f, 0.20f + ember * 0.20f, 0.10f));
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    for (int i = 0; i < 5; ++i) {
+        const float f = static_cast<float>(i);
+        const float rise = std::fmod(t * 0.55f + f * 0.18f, 0.90f);
+        const float sway = std::sin(t * 4.0f + f * 1.7f) * 0.055f;
+        const float alpha = std::clamp(0.48f - rise * 0.42f, 0.04f, 0.42f);
+        const float radius = 0.065f + rise * 0.075f;
+        draw_local_sphere(shader,
+                          view,
+                          proj,
+                          data,
+                          geometry,
+                          cigarette_local + glm::vec3(sway + f * 0.012f, 0.12f + rise, 0.02f - rise * 0.08f),
+                          radius,
+                          glm::vec3(0.78f, 0.80f, 0.78f),
+                          alpha);
+    }
+    glDisable(GL_BLEND);
+}
+
+void draw_beer_emote_model(shader_program& shader,
+                           const glm::mat4& view,
+                           const glm::mat4& proj,
+                           const render_data& data,
+                           const primitive_geometry& geometry) {
+    const float bob = std::sin(data.beer_emote_elapsed * 9.0f) * 0.035f;
+    const glm::vec3 can_local(-0.24f, -0.50f + bob, 0.82f);
+    draw_local_cylinder(shader, view, proj, data, geometry, can_local, glm::vec3(glm::radians(-8.0f), 0.0f, glm::radians(10.0f)), glm::vec3(0.145f, 0.48f, 0.145f), glm::vec3(0.76f, 0.76f, 0.70f));
+
+    glBindVertexArray(geometry.screen_vao);
+    draw_local_panel(shader, view, proj, data, can_local + glm::vec3(0.0f, 0.0f, 0.150f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec2(0.118f, 0.108f), glm::vec3(0.78f, 0.18f, 0.12f));
+    draw_local_panel(shader, view, proj, data, can_local + glm::vec3(0.0f, 0.25f, 0.01f), glm::vec3(glm::radians(90.0f), 0.0f, 0.0f), glm::vec2(0.052f, 0.024f), glm::vec3(0.18f, 0.18f, 0.16f));
+}
+
+void draw_emote_world_model(shader_program& shader,
+                            const glm::mat4& view,
+                            const glm::mat4& proj,
+                            const render_data& data,
+                            const primitive_geometry& geometry) {
+    if (data.smoke_emote_active) {
+        draw_smoke_emote_model(shader, view, proj, data, geometry);
+    }
+    if (data.beer_emote_active) {
+        draw_beer_emote_model(shader, view, proj, data, geometry);
+    }
+}
+
 const std::array<const char*, 7>& glyph_rows(const char value) {
     static const std::array<const char*, 7> glyph_a = {
         "0110",
@@ -306,6 +553,15 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         "1001",
         "1111",
         "1001",
+        "1001",
+        "1001"
+    };
+    static const std::array<const char*, 7> glyph_k = {
+        "1001",
+        "1010",
+        "1100",
+        "1100",
+        "1010",
         "1001",
         "1001"
     };
@@ -600,6 +856,8 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         return glyph_g;
     case 'H':
         return glyph_h;
+    case 'K':
+        return glyph_k;
     case 'L':
         return glyph_l;
     case 'N':
@@ -852,6 +1110,17 @@ void draw_retee_icon(shader_program& shader, const glm::vec2 center, const glm::
     draw_overlay_segment(shader, tip, tip + glm::vec2(half_size.x * 0.04f, -half_size.y * 0.22f), thickness, color, alpha);
 }
 
+float fit_pixel_size(const std::string& label,
+                     const glm::vec2& max_half_size,
+                     float max_pixel_size,
+                     float min_pixel_size,
+                     float padding);
+void draw_pixel_text_centered(shader_program& shader,
+                              const std::string& label,
+                              glm::vec2 center,
+                              float pixel_size,
+                              glm::vec3 color);
+
 void draw_controls_overlay(shader_program& shader, const controls_overlay_state& controls) {
     if (!controls.visible) {
         return;
@@ -888,6 +1157,21 @@ void draw_controls_overlay(shader_program& shader, const controls_overlay_state&
 
     draw_control_button_base(shader, glm::vec2(0.88f, -0.60f), small_half, controls.retee_down);
     draw_retee_icon(shader, glm::vec2(0.88f, -0.60f), small_half, controls.retee_down);
+
+    const glm::vec2 key_half(0.052f, 0.046f);
+    draw_control_button_base(shader, glm::vec2(0.70f, -0.74f), key_half, controls.key_1_down);
+    draw_pixel_text_centered(shader,
+                             "1",
+                             glm::vec2(0.70f, -0.74f),
+                             fit_pixel_size("1", key_half, 0.020f, 0.010f, 0.88f),
+                             control_icon_color(controls.key_1_down));
+
+    draw_control_button_base(shader, glm::vec2(0.88f, -0.74f), key_half, controls.key_2_down);
+    draw_pixel_text_centered(shader,
+                             "2",
+                             glm::vec2(0.88f, -0.74f),
+                             fit_pixel_size("2", key_half, 0.020f, 0.010f, 0.88f),
+                             control_icon_color(controls.key_2_down));
 }
 
 void draw_pixel_glyph(shader_program& shader,
@@ -973,7 +1257,7 @@ void draw_fps_counter(shader_program& shader, const std::string& label) {
         return;
     }
 
-    draw_pixel_text_left(shader, label, glm::vec2(-0.96f, 0.92f), 0.018f, glm::vec3(0.96f, 0.78f, 0.18f));
+    draw_pixel_text_left(shader, label, glm::vec2(-0.96f, 0.92f), 0.009f, glm::vec3(0.96f, 0.78f, 0.18f));
 }
 
 void draw_club_label(shader_program& shader, const std::string& label) {
@@ -1061,6 +1345,45 @@ void draw_power_meter(shader_program& shader, const float swing_power) {
     draw_pixel_text_centered(shader, "100", glm::vec2(track_right, panel_center.y - 0.112f), 0.011f, text_color);
 }
 
+void draw_cart_hud(shader_program& shader, const render_data& data) {
+    if (!data.cart_active) {
+        return;
+    }
+
+    const glm::vec3 panel_color(0.055f, 0.060f, 0.065f);
+    const glm::vec3 outline_color(0.60f, 0.62f, 0.56f);
+    const glm::vec3 text_color(0.94f, 0.86f, 0.52f);
+    const glm::vec3 meter_color = data.cart_drifting ? glm::vec3(0.96f, 0.56f, 0.22f) : glm::vec3(0.72f, 0.80f, 0.36f);
+
+    const glm::vec2 panel_center(-0.74f, 0.72f);
+    const glm::vec2 panel_half(0.19f, 0.13f);
+    draw_overlay_quad(shader, panel_center + glm::vec2(0.012f, -0.012f), panel_half, glm::vec3(0.0f), 0.18f);
+    draw_overlay_quad(shader, panel_center, panel_half, panel_color, 0.82f);
+    draw_button_outline(shader, panel_center, panel_half, outline_color, 0.52f);
+
+    draw_pixel_text_left(shader, "CART", panel_center + glm::vec2(-0.150f, 0.082f), 0.015f, text_color);
+    draw_pixel_text_left(shader,
+                         data.cart_drifting ? "DRIFT" : "DRIVE",
+                         panel_center + glm::vec2(-0.150f, 0.020f),
+                         0.013f,
+                         meter_color);
+
+    const glm::vec2 track_center = panel_center + glm::vec2(0.030f, -0.046f);
+    const glm::vec2 track_half(0.120f, 0.024f);
+    draw_overlay_quad(shader, track_center, track_half, glm::vec3(0.028f, 0.030f, 0.032f), 0.92f);
+    draw_button_outline(shader, track_center, track_half, outline_color, 0.46f);
+
+    const float speed_ratio = std::clamp(data.cart_speed / 18.0f, 0.0f, 1.0f);
+    if (speed_ratio > 0.0f) {
+        const float fill_half_width = track_half.x * speed_ratio;
+        draw_overlay_quad(shader,
+                          glm::vec2(track_center.x - track_half.x + fill_half_width, track_center.y),
+                          glm::vec2(fill_half_width, track_half.y * 0.60f),
+                          meter_color,
+                          0.94f);
+    }
+}
+
 glm::vec3 thumbnail_zone_color(const material_zone_type type) {
     switch (type) {
     case material_zone_type::green:
@@ -1146,6 +1469,16 @@ void draw_hole_thumbnail(shader_program& shader,
     const float scale = std::min((inset_half.x * 2.0f) / span.x, (inset_half.y * 2.0f) / span.y);
     const glm::vec2 padded_min = min_point - (glm::vec2(inset_half.x * 2.0f, inset_half.y * 2.0f) / scale - span) * 0.5f;
 
+    if (preview.control_points.size() >= 2) {
+        const float fairway_width = std::max(0.010f, preview.fairway_width * scale * 0.35f);
+        for (std::size_t i = 1; i < preview.control_points.size(); ++i) {
+            const glm::vec2 a = preview_point(preview.control_points[i - 1], center, inset_half, padded_min, scale, rotate_long_axis);
+            const glm::vec2 b = preview_point(preview.control_points[i], center, inset_half, padded_min, scale, rotate_long_axis);
+            draw_overlay_segment(shader, a, b, fairway_width, glm::vec3(0.18f, 0.46f, 0.18f), 0.82f);
+            draw_overlay_segment(shader, a, b, 0.006f, glm::vec3(0.62f, 0.78f, 0.38f), 0.55f);
+        }
+    }
+
     for (const material_zone& zone : preview.material_zones) {
         const glm::vec3 color = thumbnail_zone_color(zone.type);
         if (zone.has_bounds) {
@@ -1156,16 +1489,6 @@ void draw_hole_thumbnail(shader_program& shader,
             const glm::vec2 p = preview_point(zone.center, center, inset_half, padded_min, scale, rotate_long_axis);
             const float radius = std::max(0.010f, zone.radius * scale);
             draw_overlay_quad(shader, p, glm::vec2(radius), color, 0.64f);
-        }
-    }
-
-    if (preview.control_points.size() >= 2) {
-        const float fairway_width = std::max(0.010f, preview.fairway_width * scale * 0.35f);
-        for (std::size_t i = 1; i < preview.control_points.size(); ++i) {
-            const glm::vec2 a = preview_point(preview.control_points[i - 1], center, inset_half, padded_min, scale, rotate_long_axis);
-            const glm::vec2 b = preview_point(preview.control_points[i], center, inset_half, padded_min, scale, rotate_long_axis);
-            draw_overlay_segment(shader, a, b, fairway_width, glm::vec3(0.18f, 0.46f, 0.18f), 0.82f);
-            draw_overlay_segment(shader, a, b, 0.006f, glm::vec3(0.62f, 0.78f, 0.38f), 0.55f);
         }
     }
 
@@ -1658,7 +1981,7 @@ void renderer::render(const render_data& data) {
     glClearColor(0.36f, 0.56f, 0.82f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    const glm::mat4 proj = glm::perspective(glm::radians(60.0f),
+    const glm::mat4 proj = glm::perspective(glm::radians(std::max(1.0f, data.camera_fov_degrees)),
                                             static_cast<float>(target_width_) / static_cast<float>(target_height_),
                                             0.1f,
                                             std::max(160.0f, data.course_extent * 2.5f));
@@ -1912,6 +2235,14 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
         glBindVertexArray(0);
     }
 
+    draw_material_zone_overlays(terrain_shader_,
+                                view,
+                                proj,
+                                data,
+                                marker_vao_,
+                                marker_vertex_count_,
+                                screen_vao_);
+
     for (const render_tree& tree : data.trees) {
         const float trunk_radius = std::max(0.01f, tree.trunk_radius);
         const float trunk_height = std::max(0.01f, tree.trunk_height);
@@ -1933,6 +2264,19 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     }
     glBindVertexArray(0);
 
+    const primitive_geometry primitives{
+        screen_vao_,
+        cylinder_vao_,
+        ball_vao_,
+        cylinder_vertex_count_,
+        ball_vertex_count_
+    };
+    terrain_shader_.use();
+    terrain_shader_.set_vec3("u_light_dir", glm::normalize(glm::vec3(-0.35f, 0.80f, 0.42f)));
+    draw_cart_model(terrain_shader_, view, proj, data, primitives);
+    draw_emote_world_model(terrain_shader_, view, proj, data, primitives);
+    glBindVertexArray(0);
+
     const glm::mat4 tee_model = glm::scale(glm::translate(glm::mat4(1.0f),
                                                           data.tee_position + glm::vec3(0.0f, 0.01f, 0.0f)),
                                            glm::vec3(1.8f, 1.0f, 1.8f));
@@ -1944,13 +2288,15 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
 
     const float cup_scale = std::max(data.cup_visual_radius_meters * 2.0f, data.cup_radius * 2.0f);
     const glm::mat4 cup_model = glm::scale(glm::translate(glm::mat4(1.0f),
-                                                          data.pin_position + glm::vec3(0.0f, 0.02f, 0.0f)),
+                                                          data.pin_position + glm::vec3(0.0f, 0.09f, 0.0f)),
                                            glm::vec3(cup_scale, 1.0f, cup_scale));
     set_terrain_draw_state(terrain_shader_, cup_model, view, proj, glm::vec3(0.03f, 0.03f, 0.035f), false);
 
+    glDepthMask(GL_FALSE);
     glBindVertexArray(marker_vao_);
     glDrawArrays(GL_TRIANGLES, 0, marker_vertex_count_);
     glBindVertexArray(0);
+    glDepthMask(GL_TRUE);
 
     glBindVertexArray(screen_vao_);
     const float pin_height = std::max(0.1f, data.pin_visual_height_meters);
@@ -2068,6 +2414,7 @@ void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, cons
         draw_rangefinder_view(terrain_shader_, view, proj, data);
     }
 
+    draw_cart_hud(terrain_shader_, data);
     draw_club_label(terrain_shader_, data.selected_club_label);
 
     if (data.show_interact_prompt) {

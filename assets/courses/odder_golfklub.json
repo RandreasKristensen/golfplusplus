@@ -1,0 +1,25 @@
+{
+  "id": "odder_golfklub",
+  "name": "Odder Golfklub",
+  "hole_count": 18,
+  "holes": [
+    "holes/odder_golfklub_h01.json",
+    "holes/odder_golfklub_h02.json",
+    "holes/odder_golfklub_h03.json",
+    "holes/odder_golfklub_h04.json",
+    "holes/odder_golfklub_h05.json",
+    "holes/odder_golfklub_h06.json",
+    "holes/odder_golfklub_h07.json",
+    "holes/odder_golfklub_h08.json",
+    "holes/odder_golfklub_h09.json",
+    "holes/odder_golfklub_h10.json",
+    "holes/odder_golfklub_h11.json",
+    "holes/odder_golfklub_h12.json",
+    "holes/odder_golfklub_h13.json",
+    "holes/odder_golfklub_h14.json",
+    "holes/odder_golfklub_h15.json",
+    "holes/odder_golfklub_h16.json",
+    "holes/odder_golfklub_h17.json",
+    "holes/odder_golfklub_h18.json"
+  ]
+}

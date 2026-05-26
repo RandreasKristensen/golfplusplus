@@ -16,6 +16,12 @@ directly in any browser — no server required.
 open hole-editor.html
 ```
 
+In Chromium/Edge, use **open project** and choose the golf++ repo root. The
+editor will read `assets/courses/*.json`, show the holes referenced by the
+selected course manifest, and save the current hole back to its file under
+`assets/holes/`. Browsers without the File System Access API can still use the
+paste import/export workflow.
+
 ### Canvas controls
 
 | Action | Result |
@@ -44,10 +50,13 @@ position. Greens default to radius 6 m, bunkers to 3.5 m. Select the zone
 afterward to adjust center and radius in the panel.
 
 **+ water** — click to place a rectangular water hazard (16 × 10 m default).
-Select it to drag the corner handles or edit the bounds directly in the panel.
+Select it to drag the corner handles, move the whole hazard, or edit origin,
+width, and depth directly in the panel.
 
 **+ tree** — click to place a tree with default proportions (trunk 0.35 r ×
-2.4 h, leaves 1.6 r × 3.2 h). Select to adjust all four dimensions.
+2.4 h, leaves 1.6 r × 3.2 h). Tree mode stays active so repeated clicks paint
+trees quickly. Select a tree to adjust position and all four dimensions, or use
+that tree's dimensions as the default for newly painted trees.
 
 **fit** — resets the viewport to frame the whole hole.
 
@@ -61,8 +70,9 @@ spline.
 on the canvas.
 
 **Control points** — lists every spline point with its X/Y/Z coordinates.
-Select a point on the canvas or in the list to edit it numerically. The Y
-value controls elevation; leave at 0 for a flat hole.
+Select a point on the canvas or in the list to edit X/Y/Z numerically. The Y
+value controls elevation; leave at 0 for a flat hole. Selecting the tee or pin
+also exposes X/Y/Z fields for quick cleanup.
 
 **Material zones** — lists all greens, bunkers, and water hazards. Circular
 zones show center and radius; water zones show the two corner bounds.
@@ -102,23 +112,23 @@ open in the editor.
 ### Requirements
 
 ```bash
-pip install requests
+pip install requests  # optional; falls back to Python's standard library
 ```
 
 ### Usage
 
 ```bash
 # Search by course name
-py -3 osm_golf_convert.py "Aarhus Golf Klub"
+py -3 osm_golf_convert.py "Marienlyst Golf Klub"
 
 # Nearest course to a lat/lon — useful when you're standing on the course
-py -3 osm_golf_convert.py --lat 56.185 --lon 10.214
+py -3 osm_golf_convert.py --lat 56.180454 --lon 10.156731
 
 # By OSM relation ID — most reliable; find it at openstreetmap.org
 py -3 osm_golf_convert.py --id R3456789
 
 # Custom output directory
-py -3 osm_golf_convert.py "Aarhus Golf Klub" -o ./courses/aarhus/holes
+py -3 osm_golf_convert.py "Aarhus Golf Klub" -o ../assets/holes --course-out ../assets/courses
 
 # Skip writing the course manifest
 py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-course
@@ -126,15 +136,16 @@ py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-course
 
 ### Output
 
-Running the converter creates a `holes/` directory (or whatever `-o` points
-to) with one JSON file per hole, and a course manifest one level above it:
+Running the converter from `tooling/` writes directly to the game's asset
+folders by default:
 
 ```
-holes/
+../assets/holes/
   aarhus_golf_klub_h01.json
   aarhus_golf_klub_h02.json
   ...
-aarhus_golf_klub.json          ← course manifest
+../assets/courses/
+  aarhus_golf_klub.json          ← course manifest
 ```
 
 The course manifest follows the same format as the hand-authored course files:
@@ -172,13 +183,13 @@ The course manifest follows the same format as the hand-authored course files:
 
 ```bash
 # 1. Convert
-python osm_golf_convert.py "Skandinavisk Golf Center" -o ./holes
+python osm_golf_convert.py "Skandinavisk Golf Center"
 
 # 2. Open the editor and paste in a hole to review and fix up
 open hole-editor.html
 # → import → paste hole JSON → adjust spline / zones → export
 
-# 3. Save the cleaned JSON back to the holes/ directory
+# 3. Save the cleaned JSON back to ../assets/holes
 ```
 
 ### OSM data quality

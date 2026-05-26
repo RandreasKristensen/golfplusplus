@@ -43,10 +43,30 @@ struct flight_path_tuning {
     float line_width = 1.0f;
 };
 
+struct cart_tuning {
+    float speed = 0.0f;
+    float turn_rate = 0.0f;
+    float drift_turn_rate = 0.0f;
+    float normal_damping = 0.0f;
+    float drift_damping = 0.0f;
+    float drift_duration = 0.0f;
+    float drift_speed_boost = 0.0f;
+};
+
+struct camera_tuning {
+    glm::vec3 walking_eye_offset{0.0f, 1.65f, 0.0f};
+    float walking_target_distance = 10.0f;
+    glm::vec3 cart_eye_offset{0.0f, 1.2f, -4.8f};
+    float cart_target_distance = 11.0f;
+    float cart_fov_degrees = 67.0f;
+};
+
 struct game_tuning {
     sandbox_course course;
     world_scale_tuning scale;
     flight_path_tuning flight_path;
+    cart_tuning cart;
+    camera_tuning camera;
     terrain_spline terrain;
     terrain_mesh terrain_mesh_data;
     terrain_zone_tuning zone_tuning;

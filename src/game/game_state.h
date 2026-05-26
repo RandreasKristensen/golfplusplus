@@ -27,10 +27,25 @@ struct player_state {
     float yaw = 0.0f;
 };
 
+struct cart_state {
+    bool active = false;
+    float velocity = 0.0f;
+    float yaw = 0.0f;
+    float drift_timer = 0.0f;
+};
+
+struct emote_state {
+    float elapsed = 0.0f;
+    bool active = false;
+};
+
 struct game_state {
     // ball_state.position is the center of the ball; see physics/ball_state.h.
     ball_state ball;
     player_state player;
+    cart_state cart;
+    emote_state smoke_emote;
+    emote_state beer_emote;
     glm::vec3 shot_camera_position{0.0f};
     std::string asset_root;
     course_definition active_course;

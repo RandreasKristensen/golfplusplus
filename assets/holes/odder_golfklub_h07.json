@@ -1,99 +1,84 @@
 {
-  "id": "hole_01",
-  "name": "New Hole",
-  "par": 3,
-  "wind_seed": 4874,
+  "id": "odder_golfklub_h07",
+  "name": "Hole 7",
+  "par": 4,
+  "wind_seed": 7715,
   "tee": [
-    0,
-    0,
-    0
+    0.0,
+    0.0,
+    0.0
   ],
   "pin": [
-    48.62,
-    0,
-    50.76
+    65.88,
+    0.0,
+    29.66
   ],
   "spline": {
     "control_points": [
       [
-        0,
-        0,
-        0
+        39.67,
+        0.0,
+        90.75
       ],
       [
-        -22.61,
-        0,
-        23.57
+        56.72,
+        0.0,
+        114.75
       ],
       [
-        -17.34,
-        0,
-        61.42
+        59.45,
+        0.0,
+        170.56
       ],
       [
-        15.81,
-        0,
-        45.04
+        64.8,
+        0.0,
+        220.55
       ],
       [
-        59.5,
-        0,
-        57.39
+        78.73,
+        0.0,
+        251.48
       ]
     ],
-    "width": 26,
-    "rough_width": 50
+    "width": 104.4,
+    "rough_width": 161.8
   },
   "material_zones": [
     {
       "type": "green",
       "center": [
-        52.7,
+        65.82,
         0,
-        54.84
+        29.15
       ],
-      "radius": 11.4
+      "radius": 10.67
     },
     {
       "type": "bunker",
       "center": [
-        -27.54,
+        79.5,
         0,
-        52.45
+        34.21
       ],
-      "radius": 7.02
+      "radius": 14.51
     },
     {
       "type": "bunker",
       "center": [
-        -18.19,
+        67.61,
         0,
-        65.71
+        152.89
       ],
-      "radius": 9.93
-    },
-    {
-      "type": "water",
-      "bounds": [
-        [
-          2.2,
-          0,
-          32.66
-        ],
-        [
-          18.2,
-          0,
-          42.66
-        ]
-      ]
+      "radius": 14.96
     }
   ],
   "trees": [
     {
       "position": [
-        8.67,
-        0,
-        11.64
+        76.15,
+        0.0,
+        14.32
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -102,9 +87,9 @@
     },
     {
       "position": [
-        5.78,
-        0,
-        17.08
+        66.8,
+        0.0,
+        7.12
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -113,9 +98,9 @@
     },
     {
       "position": [
-        11.9,
-        0,
-        17.93
+        57.02,
+        0.0,
+        0.91
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -124,9 +109,9 @@
     },
     {
       "position": [
-        0.17,
-        0,
-        19.97
+        34.37,
+        0.0,
+        352.73
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -135,9 +120,9 @@
     },
     {
       "position": [
-        -6.12,
-        0,
-        28.82
+        33.03,
+        0.0,
+        351.76
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -146,9 +131,9 @@
     },
     {
       "position": [
-        -0.68,
-        0,
-        25.25
+        139.87,
+        0.0,
+        279.66
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -157,9 +142,9 @@
     },
     {
       "position": [
-        -0.68,
-        0,
-        30.86
+        32.61,
+        0.0,
+        398.62
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,
@@ -168,42 +153,9 @@
     },
     {
       "position": [
-        53.38,
-        0,
-        75.57
-      ],
-      "trunk_radius": 0.35,
-      "trunk_height": 2.4,
-      "leaf_radius": 1.6,
-      "leaf_height": 3.2
-    },
-    {
-      "position": [
-        59.34,
-        0,
-        73.87
-      ],
-      "trunk_radius": 0.35,
-      "trunk_height": 2.4,
-      "leaf_radius": 1.6,
-      "leaf_height": 3.2
-    },
-    {
-      "position": [
-        54.57,
-        0,
-        71.83
-      ],
-      "trunk_radius": 0.35,
-      "trunk_height": 2.4,
-      "leaf_radius": 1.6,
-      "leaf_height": 3.2
-    },
-    {
-      "position": [
-        60.87,
-        0,
-        80.33
+        17.35,
+        0.0,
+        401.6
       ],
       "trunk_radius": 0.35,
       "trunk_height": 2.4,

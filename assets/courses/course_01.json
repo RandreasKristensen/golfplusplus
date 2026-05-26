@@ -1,8 +1,9 @@
 {
   "id": "course_01",
-  "name": "Front Two",
+  "name": "The Big Three",
   "holes": [
     "test",
-    "test2"
+    "test2",
+    "test3"
   ]
 }

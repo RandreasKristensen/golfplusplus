@@ -1,8 +1,0 @@
-{
-  "id": "dev_course",
-  "name": "Development Course",
-  "hole_count": 1,
-  "holes": [
-    "holes/test.json"
-  ]
-}

@@ -1,0 +1,93 @@
+{
+  "id": "odder_golfklub_h09",
+  "name": "Hole 9",
+  "par": 4,
+  "wind_seed": 4532,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    -218.17,
+    0.0,
+    -26.64
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        -60.06,
+        0.0,
+        30.05
+      ],
+      [
+        -121.85,
+        0.0,
+        56.62
+      ],
+      [
+        -171.34,
+        0.0,
+        21.65
+      ],
+      [
+        -218.17,
+        0.0,
+        -26.64
+      ]
+    ],
+    "width": 20.0,
+    "rough_width": 32.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        -230.06,
+        0,
+        -27.18
+      ],
+      "radius": 26.67
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        -36.47,
+        0.0,
+        35.76
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    },
+    {
+      "position": [
+        -41.58,
+        0.0,
+        -23.61
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    },
+    {
+      "position": [
+        -280.2,
+        0.0,
+        24.38
+      ],
+      "trunk_radius": 0.35,
+      "trunk_height": 2.4,
+      "leaf_radius": 1.6,
+      "leaf_height": 3.2
+    }
+  ]
+}

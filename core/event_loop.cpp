@@ -7,6 +7,10 @@
 namespace {
 button_state* button_for_scancode(input_state& input, const SDL_Scancode scancode) {
     switch (scancode) {
+    case SDL_SCANCODE_1:
+        return &input.key_1;
+    case SDL_SCANCODE_2:
+        return &input.key_2;
     case SDL_SCANCODE_LEFT:
         return &input.left;
     case SDL_SCANCODE_RIGHT:
@@ -32,6 +36,15 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
         return &input.retee;
     case SDL_SCANCODE_ESCAPE:
         return &input.escape;
+    default:
+        return nullptr;
+    }
+}
+
+button_state* shift_specific_button_for_scancode(input_state& input, const SDL_Scancode scancode) {
+    switch (scancode) {
+    case SDL_SCANCODE_LSHIFT:
+        return &input.left_shift;
     default:
         return nullptr;
     }
@@ -81,6 +94,10 @@ void poll_events(input_state& input) {
             if (button != nullptr) {
                 set_button_down(*button);
             }
+            button_state* shift_button = shift_specific_button_for_scancode(input, event.key.keysym.scancode);
+            if (shift_button != nullptr) {
+                set_button_down(*shift_button);
+            }
 
         }
 
@@ -88,6 +105,10 @@ void poll_events(input_state& input) {
             button_state* button = button_for_scancode(input, event.key.keysym.scancode);
             if (button != nullptr) {
                 set_button_up(*button);
+            }
+            button_state* shift_button = shift_specific_button_for_scancode(input, event.key.keysym.scancode);
+            if (shift_button != nullptr) {
+                set_button_up(*shift_button);
             }
         }
     }

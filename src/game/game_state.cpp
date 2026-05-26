@@ -168,6 +168,39 @@ void update_course_map_state(game_state& state, const input_state& input) {
     state.course_map_active = course_map_should_show(state.mode, input);
 }
 
+void clear_emote(game_state& state) {
+    state.smoke_emote = emote_state{};
+    state.beer_emote = emote_state{};
+}
+
+void trigger_emote(emote_state& emote) {
+    emote.elapsed = 0.0f;
+    emote.active = true;
+}
+
+void tick_emote(emote_state& emote, const float dt) {
+    if (!emote.active) {
+        return;
+    }
+
+    emote.elapsed += dt;
+    if (emote.elapsed >= 2.0f) {
+        emote = emote_state{};
+    }
+}
+
+void update_emote_state(game_state& state, const input_state& input, const float dt) {
+    if (input.key_1.pressed) {
+        trigger_emote(state.smoke_emote);
+    }
+    if (input.key_2.pressed) {
+        trigger_emote(state.beer_emote);
+    }
+
+    tick_emote(state.smoke_emote, dt);
+    tick_emote(state.beer_emote, dt);
+}
+
 void update_walk_overlays(game_state& state, const input_state& input) {
     update_rangefinder_state(state, input);
     update_course_map_state(state, input);
@@ -250,6 +283,64 @@ void place_player_near_ball(game_state& state) {
     state.player.position = state.ball.position - forward * state.tuning.player_stand_off_distance;
     state.player.position.y = terrain_height_at(state.tuning, state.player.position);
     state.player.yaw = state.aim_angle;
+    state.cart.yaw = state.player.yaw;
+}
+
+void enter_cart_mode(game_state& state) {
+    if (state.cart.active) {
+        return;
+    }
+
+    state.cart.active = true;
+    state.cart.velocity = std::max(0.0f, state.cart.velocity);
+    state.cart.yaw = state.player.yaw;
+    state.cart.drift_timer = 0.0f;
+}
+
+void exit_cart_mode(game_state& state) {
+    state.cart.active = false;
+    state.cart.velocity = 0.0f;
+    state.cart.drift_timer = 0.0f;
+    state.cart.yaw = state.player.yaw;
+}
+
+void update_cart(game_state& state, const input_state& input, const float dt) {
+    if (!input.left_shift.is_down) {
+        exit_cart_mode(state);
+        return;
+    }
+
+    enter_cart_mode(state);
+
+    if (input.space.pressed) {
+        state.cart.drift_timer = state.tuning.cart.drift_duration;
+        state.cart.velocity = std::max(state.cart.velocity,
+                                       state.tuning.cart.speed * state.tuning.cart.drift_speed_boost);
+    }
+
+    if (state.cart.drift_timer > 0.0f) {
+        state.cart.drift_timer = std::max(0.0f, state.cart.drift_timer - dt);
+    }
+
+    const bool drifting = state.cart.drift_timer > 0.0f;
+    const float turn_rate = drifting ? state.tuning.cart.drift_turn_rate : state.tuning.cart.turn_rate;
+    if (input.left.is_down) {
+        state.cart.yaw += turn_rate * dt;
+    }
+    if (input.right.is_down) {
+        state.cart.yaw -= turn_rate * dt;
+    }
+
+    const float target_speed = state.tuning.cart.speed *
+        (drifting ? state.tuning.cart.drift_speed_boost : 1.0f);
+    const float damping = drifting ? state.tuning.cart.drift_damping : state.tuning.cart.normal_damping;
+    const float blend = 1.0f - std::exp(-std::max(0.0f, damping) * dt);
+    state.cart.velocity += (target_speed - state.cart.velocity) * blend;
+
+    const glm::vec3 forward = aim_direction(state.cart.yaw);
+    state.player.position += forward * state.cart.velocity * dt;
+    state.player.position.y = terrain_height_at(state.tuning, state.player.position);
+    state.player.yaw = state.cart.yaw;
 }
 
 void apply_ground_roll_friction(game_state& state,
@@ -305,6 +396,11 @@ void update_swing(game_state& state, const input_state& input, const float dt) {
 }
 
 void update_walking(game_state& state, const input_state& input, const float dt) {
+    if (input.left_shift.is_down || state.cart.active) {
+        update_cart(state, input, dt);
+        return;
+    }
+
     if (input.left.is_down) {
         state.player.yaw += state.tuning.player_turn_rate * dt;
     }
@@ -425,6 +521,8 @@ void reset_transient_hole_state(game_state& state) {
     state.ball.spin = glm::vec3(0.0f);
     state.shot_camera_position = glm::vec3(0.0f);
     state.swing = swing_state{};
+    state.cart = cart_state{};
+    clear_emote(state);
     state.mode = game_mode::walking;
     state.stroke_count = 0;
     state.hole_time = 0.0f;
@@ -505,6 +603,7 @@ bool ball_is_in_cup(const game_state& state) {
 void update_game(game_state& state, const input_state& input, const float dt) {
     const float clamped_dt = std::max(0.0f, std::min(dt, 0.05f));
     state.hole_time += clamped_dt;
+    update_emote_state(state, input, clamped_dt);
 
     if (input.retee.pressed) {
         retee_ball(state);
@@ -513,6 +612,7 @@ void update_game(game_state& state, const input_state& input, const float dt) {
     }
 
     if (should_cancel_shot_setup(state.mode, input)) {
+        exit_cart_mode(state);
         state.mode = game_mode::walking;
         state.swing = swing_state{};
         update_walk_overlays(state, input);
@@ -525,6 +625,10 @@ void update_game(game_state& state, const input_state& input, const float dt) {
         update_aiming(state, input, clamped_dt);
     } else if (state.mode == game_mode::addressing) {
         update_addressing(state, input, clamped_dt);
+    }
+
+    if (state.mode != game_mode::walking) {
+        exit_cart_mode(state);
     }
 
     if (state.mode == game_mode::following_shot || ball_is_moving(state.ball, state.tuning)) {
@@ -583,7 +687,7 @@ bool can_interact_with_ball(const game_state& state) {
 }
 
 bool rangefinder_should_show(const game_mode mode, const input_state& input) {
-    return mode == game_mode::walking && input.shift.is_down;
+    return mode == game_mode::walking && input.shift.is_down && !input.left_shift.is_down;
 }
 
 bool course_map_should_show(const game_mode mode, const input_state& input) {
