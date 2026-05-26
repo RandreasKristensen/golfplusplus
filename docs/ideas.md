@@ -30,12 +30,12 @@ Product direction, architecture TODOs, and backlog notes for golf++.
 
 ### Skills
 
-- Golfing
+- Golfing (each shot, round exp)
 - Putting
-- Driving accuracy
+- Driving accuracy (car paths and driving while drunk being a xp multiplier)
 - Smoking
 - Drinking
-- Drifting
+- Drifting  (car paths and turns that give drift exp, also for driving accuracy from just driving on road)
 - Ball finding (you can run out of balls, and balls have stats? you can buy balls if you run out find others on courses.)
 - Gambling
 
@@ -58,7 +58,6 @@ Product direction, architecture TODOs, and backlog notes for golf++.
 - Discoverable shortcuts
 
 ### Gear
-
 - Named parody clubs
 - Collectible balls
 - Custom club names
@@ -73,6 +72,8 @@ Product direction, architecture TODOs, and backlog notes for golf++.
 - Repeatable tasks
 - Branching outcomes
 
+stuff like hole in ones, course clubhousea with npcs and driving ranges where you can also get quests for, fun minigames maybe later? like golf story type stuff like hitting turtles but not that obviously aimed at utilizing the engine and style of the game.
+
 ### Multiplayer
 
 - Hot-seat first
@@ -82,11 +83,6 @@ Product direction, architecture TODOs, and backlog notes for golf++.
 - Real-time later
 
 ## Scratchpad Migrated From Notes
-
-### Bugs
-
-- The drawn-on club is facing the wrong way.
-- Tweak the camera. It does not feel correct. Add settings like FOV, height off ground, and distance from ball when standing beside it and swinging.
 
 ### Map Editor
 

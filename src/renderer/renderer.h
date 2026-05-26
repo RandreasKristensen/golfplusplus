@@ -151,6 +151,7 @@ private:
     bool init_shaders();
     bool init_geometry();
     bool init_framebuffer();
+    bool ensure_framebuffer_size(int screen_width, int screen_height);
     void render_scene(const glm::mat4& view, const glm::mat4& proj, const render_data& data);
     void render_overlay(const glm::mat4& view, const glm::mat4& proj, const render_data& data);
     void render_crt(int screen_width, int screen_height);

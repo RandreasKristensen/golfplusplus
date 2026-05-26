@@ -18,6 +18,10 @@
 #include "core/gl_loader.h"
 
 namespace {
+constexpr int reference_low_res_width = 640;
+constexpr int reference_low_res_height = 360;
+constexpr int min_low_res_dimension = 120;
+
 std::string asset_path(const char* relative) {
 #ifdef VCR_GOLF_ASSETS_DIR
     std::string base = VCR_GOLF_ASSETS_DIR;
@@ -2420,6 +2424,11 @@ void renderer::render(const render_data& data) {
     int screen_width = 0;
     int screen_height = 0;
     SDL_GL_GetDrawableSize(window_, &screen_width, &screen_height);
+    screen_width = std::max(1, screen_width);
+    screen_height = std::max(1, screen_height);
+    if (!ensure_framebuffer_size(screen_width, screen_height)) {
+        return;
+    }
 
     glEnable(GL_DEPTH_TEST);
 
@@ -2666,6 +2675,28 @@ bool renderer::init_geometry() {
 
 bool renderer::init_framebuffer() {
     return scene_fbo_.init(target_width_, target_height_);
+}
+
+bool renderer::ensure_framebuffer_size(const int screen_width, const int screen_height) {
+    const float screen_aspect = static_cast<float>(std::max(1, screen_width)) /
+        static_cast<float>(std::max(1, screen_height));
+    const float reference_pixels = static_cast<float>(reference_low_res_width * reference_low_res_height);
+    int next_width = std::max(min_low_res_dimension,
+                              static_cast<int>(std::floor(std::sqrt(reference_pixels * screen_aspect) + 0.5f)));
+    int next_height = static_cast<int>(std::floor(static_cast<float>(next_width) / screen_aspect + 0.5f));
+    if (next_height < min_low_res_dimension) {
+        next_height = min_low_res_dimension;
+        next_width = static_cast<int>(std::floor(static_cast<float>(next_height) * screen_aspect + 0.5f));
+    }
+
+    if (next_width == target_width_ && next_height == target_height_ &&
+        scene_fbo_.width() == target_width_ && scene_fbo_.height() == target_height_) {
+        return true;
+    }
+
+    target_width_ = next_width;
+    target_height_ = next_height;
+    return init_framebuffer();
 }
 
 void renderer::upload_terrain_mesh(const render_data& data) {
