@@ -162,7 +162,7 @@ game_tuning default_game_tuning(const std::string& asset_root) {
     tuning.wind.angle_time_scale = 0.11f;
     tuning.wind.phase_angle_scale = 1.3f;
 
-    tuning.aim_turn_rate = 1.8f;
+    tuning.aim_turn_rate = 0.75f;
     tuning.min_swing_power = 0.15f;
     tuning.launch_side_spin_scale = 4.0f;
     tuning.stop_speed = 0.08f;

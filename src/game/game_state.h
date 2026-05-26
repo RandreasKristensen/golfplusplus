@@ -39,6 +39,26 @@ struct emote_state {
     bool active = false;
 };
 
+enum class audio_event_type {
+    swing_start,
+    club_hit,
+    ball_land,
+    ball_tree_hit,
+    ball_cup,
+    hole_complete,
+    club_change,
+    cart_start,
+    cart_drift,
+    emote_smoke,
+    emote_beer
+};
+
+struct audio_event {
+    audio_event_type type = audio_event_type::swing_start;
+    terrain_material material = terrain_material::fairway;
+    std::string club_id;
+};
+
 struct game_state {
     // ball_state.position is the center of the ball; see physics/ball_state.h.
     ball_state ball;
@@ -64,6 +84,7 @@ struct game_state {
     bool course_map_active = false;
     bool scorecard_active = false;
     std::vector<glm::vec3> flight_path_points;
+    std::vector<audio_event> audio_events;
 };
 
 game_state make_initial_game_state();
@@ -80,6 +101,7 @@ bool rangefinder_should_show(game_mode mode, const input_state& input);
 bool course_map_should_show(game_mode mode, const input_state& input);
 bool scorecard_should_show(game_mode mode, const input_state& input);
 bool should_cancel_shot_setup(game_mode mode, const input_state& input);
+glm::vec3 follow_camera_target(const glm::vec3& ball_position);
 float compute_rangefinder_distance_meters(const glm::vec3& player_position,
                                           const glm::vec3& pin_anchor,
                                           float meters_per_world_unit);

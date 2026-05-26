@@ -236,6 +236,27 @@ TEST_CASE("space near ball enters aiming") {
     CHECK(glm::length(state.ball.velocity) == 0.0f);
 }
 
+TEST_CASE("aim left and right input is slower than walking turn input") {
+    game_state walking = make_initial_game_state();
+    game_state aiming = make_initial_game_state();
+    enter_aiming(aiming);
+
+    input_state input;
+    input.left.is_down = true;
+
+    const float walking_yaw_before = walking.player.yaw;
+    const float aiming_angle_before = aiming.aim_angle;
+
+    update_game(walking, input, 0.05f);
+    update_game(aiming, input, 0.05f);
+
+    const float walking_delta = std::fabs(walking.player.yaw - walking_yaw_before);
+    const float aiming_delta = std::fabs(aiming.aim_angle - aiming_angle_before);
+
+    CHECK(aiming.tuning.aim_turn_rate < walking.tuning.player_turn_rate);
+    CHECK(aiming_delta < walking_delta);
+}
+
 TEST_CASE("space in aiming enters addressing without launching") {
     game_state state = make_initial_game_state();
 
@@ -1350,6 +1371,22 @@ TEST_CASE("rangefinder formats rounded horizontal meters") {
     CHECK(near_float(compute_rangefinder_distance_meters(player_position, pin_anchor, 2.0f), 10.0f));
     CHECK(format_rangefinder_distance(124.49f) == "124M");
     CHECK(format_rangefinder_distance(124.50f) == "125M");
+}
+
+TEST_CASE("follow camera target keeps ball-relative height below zero") {
+    const glm::vec3 below_zero_ball(2.0f, -4.0f, 8.0f);
+    const glm::vec3 below_zero_target = follow_camera_target(below_zero_ball);
+
+    CHECK(near_float(below_zero_target.x, below_zero_ball.x));
+    CHECK(near_float(below_zero_target.y, -3.75f));
+    CHECK(near_float(below_zero_target.z, below_zero_ball.z));
+
+    const glm::vec3 positive_ball(-1.0f, 3.0f, 12.0f);
+    const glm::vec3 positive_target = follow_camera_target(positive_ball);
+
+    CHECK(near_float(positive_target.x, positive_ball.x));
+    CHECK(near_float(positive_target.y, 3.25f));
+    CHECK(near_float(positive_target.z, positive_ball.z));
 }
 
 TEST_CASE("rangefinder is only active while walking with non-cart shift held") {

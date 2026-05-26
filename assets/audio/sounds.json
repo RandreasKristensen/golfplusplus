@@ -1,0 +1,217 @@
+{
+  "master_volume": 0.8,
+  "categories": {
+    "ui": 0.55,
+    "gameplay": 0.85,
+    "ambience": 0.45
+  },
+  "sounds": [
+    {
+      "id": "ui_move",
+      "file": "sfx/ui_move.wav",
+      "type": "sfx",
+      "category": "ui",
+      "description": "Short VHS menu cursor tick, dry and low-fi.",
+      "target_length_seconds": 0.05,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ui_select",
+      "file": "sfx/ui_select.wav",
+      "type": "sfx",
+      "category": "ui",
+      "description": "Confirm/select blip.",
+      "target_length_seconds": 0.12,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ui_back",
+      "file": "sfx/ui_back.wav",
+      "type": "sfx",
+      "category": "ui",
+      "description": "Back/cancel thunk.",
+      "target_length_seconds": 0.12,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "swing_start",
+      "file": "sfx/swing_start.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Power meter starts, subtle club grip or backswing cue.",
+      "target_length_seconds": 0.2,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "club_hit_driver",
+      "file": "sfx/club_hit_driver.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Loud wooden or metal golf drive hit, short transient.",
+      "target_length_seconds": 0.5,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "club_hit_iron",
+      "file": "sfx/club_hit_iron.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Crisp iron strike.",
+      "target_length_seconds": 0.4,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "club_hit_wedge",
+      "file": "sfx/club_hit_wedge.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Softer wedge chip hit.",
+      "target_length_seconds": 0.35,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "club_hit_putter",
+      "file": "sfx/club_hit_putter.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Small putter tap.",
+      "target_length_seconds": 0.2,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ball_land_grass",
+      "file": "sfx/ball_land_grass.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Ball thump on grass.",
+      "target_length_seconds": 0.25,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ball_land_bunker",
+      "file": "sfx/ball_land_bunker.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Muffled sand impact.",
+      "target_length_seconds": 0.4,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ball_splash",
+      "file": "sfx/ball_splash.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Small water splash.",
+      "target_length_seconds": 0.7,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ball_tree_hit",
+      "file": "sfx/ball_tree_hit.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Woody knock and leaves rustle.",
+      "target_length_seconds": 0.45,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ball_roll",
+      "file": "sfx/ball_roll.wav",
+      "type": "loop",
+      "category": "gameplay",
+      "description": "Quiet rolling loop or short texture, loopable if possible.",
+      "target_length_seconds": 1.0,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ball_cup",
+      "file": "sfx/ball_cup.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Ball dropping into cup.",
+      "target_length_seconds": 0.7,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "hole_complete",
+      "file": "sfx/hole_complete.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Short success sting, VCR or arcade flavored.",
+      "target_length_seconds": 2.0,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "club_change",
+      "file": "sfx/club_change.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Small inventory or club switch click.",
+      "target_length_seconds": 0.15,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "cart_start",
+      "file": "sfx/cart_start.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Golf cart motor start or engage.",
+      "target_length_seconds": 1.0,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "cart_drive_loop",
+      "file": "sfx/cart_drive_loop.ogg",
+      "type": "loop",
+      "category": "gameplay",
+      "description": "Low golf cart electric motor loop, seamless.",
+      "target_length_seconds": 2.0,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "cart_drift",
+      "file": "sfx/cart_drift.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Silly tire skid on grass.",
+      "target_length_seconds": 0.5,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "emote_smoke",
+      "file": "sfx/emote_smoke.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Lighter inhale and exhale cue.",
+      "target_length_seconds": 1.4,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "emote_beer",
+      "file": "sfx/emote_beer.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Can open plus sip or glug.",
+      "target_length_seconds": 1.4,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ambience_course_day",
+      "file": "ambience/course_day.ogg",
+      "type": "ambience",
+      "category": "ambience",
+      "description": "Outdoor golf course bed: light wind, distant birds, no music, seamless.",
+      "target_length_seconds": 40.0,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ambience_menu_vcr",
+      "file": "ambience/menu_vcr.ogg",
+      "type": "ambience",
+      "category": "ambience",
+      "description": "Very quiet CRT/VCR hum for menus, seamless.",
+      "target_length_seconds": 20.0,
+      "volume_multiplier": 1.0
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/audio_engine.h"
 #include "core/input.h"
 #include "core/window.h"
 #include "game/game_content.h"
@@ -31,6 +32,7 @@ struct app {
 private:
     window window_;
     renderer renderer_;
+    audio_engine audio_;
     input_state input_;
     game_state game_;
     game_content content_;

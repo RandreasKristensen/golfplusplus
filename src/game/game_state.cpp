@@ -65,6 +65,28 @@ void append_flight_path_point(game_state& state, const glm::vec3& position) {
     }
 }
 
+void push_audio_event(game_state& state, const audio_event_type type) {
+    audio_event event;
+    event.type = type;
+    state.audio_events.push_back(event);
+}
+
+void push_club_audio_event(game_state& state, const audio_event_type type) {
+    audio_event event;
+    event.type = type;
+    if (state.selected_club < state.tuning.clubs.size()) {
+        event.club_id = state.tuning.clubs[state.selected_club].id;
+    }
+    state.audio_events.push_back(event);
+}
+
+void push_ball_land_audio_event(game_state& state, const terrain_material material) {
+    audio_event event;
+    event.type = audio_event_type::ball_land;
+    event.material = material;
+    state.audio_events.push_back(event);
+}
+
 float terrain_height_at(const game_tuning& tuning, const glm::vec3& position) {
     return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y).point.y;
 }
@@ -128,6 +150,7 @@ bool path_intersects_cup(const glm::vec3& start,
 }
 
 void sink_ball_in_cup(game_state& state) {
+    push_audio_event(state, audio_event_type::ball_cup);
     const glm::vec3 pin_anchor = pin_anchor_position(state.tuning);
     state.ball.position = pin_anchor - glm::vec3(0.0f, state.ball.radius * 2.0f, 0.0f);
     state.ball.velocity = glm::vec3(0.0f);
@@ -196,9 +219,11 @@ void tick_emote(emote_state& emote, const float dt) {
 void update_emote_state(game_state& state, const input_state& input, const float dt) {
     if (input.key_1.pressed) {
         trigger_emote(state.smoke_emote);
+        push_audio_event(state, audio_event_type::emote_smoke);
     }
     if (input.key_2.pressed) {
         trigger_emote(state.beer_emote);
+        push_audio_event(state, audio_event_type::emote_beer);
     }
 
     tick_emote(state.smoke_emote, dt);
@@ -244,6 +269,7 @@ void select_previous_club(game_state& state) {
     } else {
         --state.selected_club;
     }
+    push_audio_event(state, audio_event_type::club_change);
 }
 
 void select_next_club(game_state& state) {
@@ -252,6 +278,7 @@ void select_next_club(game_state& state) {
     }
 
     state.selected_club = (state.selected_club + 1) % state.tuning.clubs.size();
+    push_audio_event(state, audio_event_type::club_change);
 }
 
 void launch_ball(game_state& state) {
@@ -274,6 +301,7 @@ void launch_ball(game_state& state) {
     clear_flight_path(state);
     append_flight_path_point(state, state.ball.position);
     ++state.stroke_count;
+    push_club_audio_event(state, audio_event_type::club_hit);
 }
 
 club_stats selected_club_stats(const game_state& state) {
@@ -300,6 +328,7 @@ void enter_cart_mode(game_state& state) {
     state.cart.velocity = std::max(0.0f, state.cart.velocity);
     state.cart.yaw = state.player.yaw;
     state.cart.drift_timer = 0.0f;
+    push_audio_event(state, audio_event_type::cart_start);
 }
 
 void exit_cart_mode(game_state& state) {
@@ -321,6 +350,7 @@ void update_cart(game_state& state, const input_state& input, const float dt) {
         state.cart.drift_timer = state.tuning.cart.drift_duration;
         state.cart.velocity = std::max(state.cart.velocity,
                                        state.tuning.cart.speed * state.tuning.cart.drift_speed_boost);
+        push_audio_event(state, audio_event_type::cart_drift);
     }
 
     if (state.cart.drift_timer > 0.0f) {
@@ -394,6 +424,7 @@ void update_swing(game_state& state, const input_state& input, const float dt) {
         state.swing.phase = swing_phase::timing;
         state.swing.elapsed = 0.0f;
         state.swing.power = 0.0f;
+        push_audio_event(state, audio_event_type::swing_start);
         return;
     }
 
@@ -488,6 +519,7 @@ void step_ball(game_state& state, const float dt) {
     const club_stats launched_club = selected_club_stats(state);
     const wind_state wind = sample_wind(state.tuning.wind_seed, state.hole_time, state.tuning.wind);
     const terrain_sample terrain_before = terrain_sample_at(state.tuning, state.ball.position);
+    const bool was_airborne = ball_support_distance(state.ball, terrain_before) > state.ball.radius + 0.001f;
     const bool water_zone = terrain_before.material == terrain_material::water;
     const float water_depth = std::max(0.0f, state.tuning.zone_tuning.water_depth);
     // Water surface is inferred from the deformed mesh depth.
@@ -511,10 +543,20 @@ void step_ball(game_state& state, const float dt) {
                                            terrain,
                                            restitution,
                                            friction);
+    const bool is_grounded = ball_support_distance(state.ball, terrain) <= state.ball.radius + 0.001f;
+    if (was_airborne && is_grounded) {
+        push_ball_land_audio_event(state, terrain.material);
+    }
+
+    const ball_state before_tree_collision = state.ball;
     state.ball = resolve_tree_collisions(state.ball,
                                          anchored_tree_bodies(state.tuning),
                                          state.tuning.tree_restitution,
                                          state.tuning.tree_friction);
+    if (glm::length(state.ball.velocity - before_tree_collision.velocity) > 0.01f ||
+        glm::length(state.ball.position - before_tree_collision.position) > 0.001f) {
+        push_audio_event(state, audio_event_type::ball_tree_hit);
+    }
     apply_ground_roll_friction(state, terrain, launched_club.roll_friction_scale, dt);
 }
 
@@ -577,6 +619,7 @@ bool start_game_course(game_state& state, const course_definition& course) {
 }
 
 bool complete_current_hole(game_state& state) {
+    push_audio_event(state, audio_event_type::hole_complete);
     const std::size_t completed_index = state.round.current_hole_index;
     state.save.current_course_id = state.active_course.id;
     state.save.hole_scores[static_cast<int>(completed_index)] = state.stroke_count;
@@ -606,6 +649,7 @@ bool ball_is_in_cup(const game_state& state) {
 }
 
 void update_game(game_state& state, const input_state& input, const float dt) {
+    state.audio_events.clear();
     const float clamped_dt = std::max(0.0f, std::min(dt, 0.05f));
     if (state.round.finished) {
         update_walk_overlays(state, input);
@@ -711,6 +755,10 @@ bool scorecard_should_show(const game_mode mode, const input_state& input) {
 bool should_cancel_shot_setup(const game_mode mode, const input_state& input) {
     return (mode == game_mode::aiming || mode == game_mode::addressing)
         && (input.backspace.pressed || input.escape.pressed);
+}
+
+glm::vec3 follow_camera_target(const glm::vec3& ball_position) {
+    return ball_position + glm::vec3(0.0f, 0.25f, 0.0f);
 }
 
 float compute_rangefinder_distance_meters(const glm::vec3& player_position,

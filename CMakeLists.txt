@@ -12,6 +12,8 @@ set(VCR_GOLF_SOURCES
     core/window.cpp
     core/event_loop.cpp
     core/gl_loader.cpp
+    src/audio/audio_manifest.cpp
+    src/audio/audio_engine.cpp
     src/renderer/shader.cpp
     src/renderer/framebuffer.cpp
     src/renderer/renderer.cpp
@@ -23,12 +25,42 @@ set_target_properties(golfpp PROPERTIES OUTPUT_NAME "golf++")
 target_include_directories(golfpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor
 )
 
 target_compile_definitions(golfpp PRIVATE SDL_MAIN_HANDLED)
 
 find_package(SDL2 REQUIRED)
 target_link_libraries(golfpp PRIVATE SDL2::SDL2)
+
+find_package(SDL2_mixer QUIET)
+if (NOT TARGET SDL2_mixer::SDL2_mixer AND
+    NOT TARGET SDL2_mixer::SDL2_mixer-static AND
+    NOT TARGET SDL2::SDL2_mixer AND
+    NOT SDL2_MIXER_LIBRARY AND
+    NOT SDL2_MIXER_LIBRARIES)
+    find_package(PkgConfig QUIET)
+    if (PkgConfig_FOUND)
+        pkg_check_modules(SDL2_MIXER QUIET SDL2_mixer)
+    endif()
+endif()
+if (NOT TARGET SDL2_mixer::SDL2_mixer AND
+    NOT TARGET SDL2_mixer::SDL2_mixer-static AND
+    NOT TARGET SDL2::SDL2_mixer AND
+    NOT SDL2_MIXER_LIBRARY AND
+    NOT SDL2_MIXER_LIBRARIES)
+    message(FATAL_ERROR "SDL2_mixer not found. Install SDL2_mixer or provide an SDL2_mixer CMake/pkg-config package.")
+endif()
+if (TARGET SDL2_mixer::SDL2_mixer)
+    target_link_libraries(golfpp PRIVATE SDL2_mixer::SDL2_mixer)
+elseif (TARGET SDL2_mixer::SDL2_mixer-static)
+    target_link_libraries(golfpp PRIVATE SDL2_mixer::SDL2_mixer-static)
+elseif (TARGET SDL2::SDL2_mixer)
+    target_link_libraries(golfpp PRIVATE SDL2::SDL2_mixer)
+else()
+    target_include_directories(golfpp PRIVATE ${SDL2_MIXER_INCLUDE_DIRS} ${SDL2_MIXER_INCLUDE_DIR})
+    target_link_libraries(golfpp PRIVATE ${SDL2_MIXER_LIBRARIES} ${SDL2_MIXER_LIBRARY})
+endif()
 
 find_package(OpenGL REQUIRED)
 target_link_libraries(golfpp PRIVATE OpenGL::GL)
@@ -105,7 +137,12 @@ if (WIN32)
 endif()
 
 if (VCR_GOLF_BUILD_TESTS)
-    add_executable(golfpp-tests tests/physics_tests.cpp tests/game_tests.cpp)
+    add_executable(golfpp-tests
+        tests/physics_tests.cpp
+        tests/game_tests.cpp
+        tests/audio_manifest_tests.cpp
+        src/audio/audio_manifest.cpp
+    )
     set_target_properties(golfpp-tests PROPERTIES OUTPUT_NAME "golf++-tests")
     target_link_libraries(golfpp-tests PRIVATE vcr-golf-physics vcr-golf-game)
     target_include_directories(golfpp-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)

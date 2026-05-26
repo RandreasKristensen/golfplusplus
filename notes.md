@@ -41,6 +41,7 @@ tweak the camera. It doesn't feel correct. Make it have like *FOV* , *height off
 water cannot be resized in the editor
 make a auto map generator thing from top down pictures of courses. Can this be done ?
 Maybe just like asking codex or claude to generate some courses would work?
+mangler 
 
 **Textures**
 vejr!!! kunne være så sygt med regn i hvert fald, hvor de bare ryger lidt kortere.

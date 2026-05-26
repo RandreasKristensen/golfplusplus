@@ -1086,9 +1086,11 @@ void draw_arrow_icon(shader_program& shader,
     draw_overlay_segment(shader, tip, shoulder - side * (radius * 0.34f), thickness, color, alpha);
 }
 
-void draw_space_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
-    const glm::vec3 color = control_icon_color(is_down);
-    const float alpha = control_icon_alpha(is_down);
+void draw_space_icon(shader_program& shader,
+                     const glm::vec2 center,
+                     const glm::vec2 half_size,
+                     const glm::vec3 color,
+                     const float alpha) {
     const float thickness = 0.010f;
     const float width = half_size.x * 1.08f;
     const float height = half_size.y * 0.34f;
@@ -1098,6 +1100,10 @@ void draw_space_icon(shader_program& shader, const glm::vec2 center, const glm::
     draw_overlay_segment(shader, left, right, thickness, color, alpha);
     draw_overlay_segment(shader, left, left + glm::vec2(0.0f, height), thickness, color, alpha);
     draw_overlay_segment(shader, right, right + glm::vec2(0.0f, height), thickness, color, alpha);
+}
+
+void draw_space_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
+    draw_space_icon(shader, center, half_size, control_icon_color(is_down), control_icon_alpha(is_down));
 }
 
 void draw_shift_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
@@ -1483,14 +1489,7 @@ void draw_club_label(shader_program& shader, const std::string& label) {
 
 void draw_interact_prompt(shader_program& shader) {
     const glm::vec3 prompt_color(0.95f, 0.82f, 0.28f);
-    const glm::vec3 panel_color(0.05f, 0.055f, 0.06f);
-    const glm::vec2 panel_center(0.0f, -0.56f);
-    const glm::vec2 panel_half(0.19f, 0.075f);
-    draw_overlay_quad(shader, panel_center, panel_half, panel_color);
-
-    const std::string label = "SPC";
-    const float pixel_size = fit_pixel_size(label, panel_half, 0.020f, 0.010f, 0.82f);
-    draw_pixel_text_centered(shader, label, panel_center, pixel_size, prompt_color);
+    draw_space_icon(shader, glm::vec2(0.0f, -0.56f), glm::vec2(0.16f, 0.075f), prompt_color, 1.0f);
 }
 
 void draw_power_meter(shader_program& shader, const float swing_power) {

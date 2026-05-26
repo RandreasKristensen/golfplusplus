@@ -152,9 +152,8 @@ void set_address_camera(render_data& data, const game_state& game) {
 }
 
 void set_follow_camera(render_data& data, const game_state& game) {
-    const glm::vec3 target(game.ball.position.x, std::max(0.5f, game.ball.position.y), game.ball.position.z);
     data.camera_position = game.shot_camera_position;
-    data.camera_target = target;
+    data.camera_target = follow_camera_target(game.ball.position);
 }
 
 std::vector<glm::vec3> estimate_aim_arc(const game_state& game) {
@@ -562,6 +561,74 @@ render_startup_menu make_confirm_menu_render_data(const int selection) {
     }
     return menu;
 }
+
+std::string club_hit_sound_id(const std::string& club_id) {
+    if (club_id == "putter") {
+        return "club_hit_putter";
+    }
+    if (club_id.find("wedge") != std::string::npos) {
+        return "club_hit_wedge";
+    }
+    if (club_id.find("driver") != std::string::npos || club_id.find("wood") != std::string::npos) {
+        return "club_hit_driver";
+    }
+    return "club_hit_iron";
+}
+
+std::string ball_land_sound_id(const terrain_material material) {
+    if (material == terrain_material::water) {
+        return "ball_splash";
+    }
+    if (material == terrain_material::bunker) {
+        return "ball_land_bunker";
+    }
+    return "ball_land_grass";
+}
+
+void play_audio_event(audio_engine& audio, const audio_event& event) {
+    switch (event.type) {
+    case audio_event_type::swing_start:
+        audio.play("swing_start");
+        break;
+    case audio_event_type::club_hit:
+        audio.play(club_hit_sound_id(event.club_id));
+        break;
+    case audio_event_type::ball_land:
+        audio.play(ball_land_sound_id(event.material));
+        break;
+    case audio_event_type::ball_tree_hit:
+        audio.play("ball_tree_hit");
+        break;
+    case audio_event_type::ball_cup:
+        audio.play("ball_cup");
+        break;
+    case audio_event_type::hole_complete:
+        audio.play("hole_complete");
+        break;
+    case audio_event_type::club_change:
+        audio.play("club_change");
+        break;
+    case audio_event_type::cart_start:
+        audio.play("cart_start");
+        break;
+    case audio_event_type::cart_drift:
+        audio.play("cart_drift");
+        break;
+    case audio_event_type::emote_smoke:
+        audio.play("emote_smoke");
+        break;
+    case audio_event_type::emote_beer:
+        audio.play("emote_beer");
+        break;
+    }
+}
+
+void drain_audio_events(audio_engine& audio, game_state& game) {
+    for (const audio_event& event : game.audio_events) {
+        play_audio_event(audio, event);
+    }
+    game.audio_events.clear();
+}
 }
 
 bool app::init() {
@@ -579,6 +646,9 @@ bool app::init() {
     game_ = make_initial_game_state(asset_root);
     content_ = load_game_content(asset_root);
     hole_options_ = load_startup_holes(asset_root);
+    audio_.init();
+    audio_.load_manifest(std::filesystem::path(asset_root) / "audio" / "sounds.json");
+    audio_.start_ambience("ambience_menu_vcr");
     if (base_path != nullptr) {
         SDL_free(base_path);
     }
@@ -589,6 +659,7 @@ bool app::init() {
 void app::run() {
     Uint64 previous_counter = SDL_GetPerformanceCounter();
     const double performance_frequency = static_cast<double>(SDL_GetPerformanceFrequency());
+    bool cart_loop_active = false;
 
     while (running_) {
         const Uint64 current_counter = SDL_GetPerformanceCounter();
@@ -618,15 +689,20 @@ void app::run() {
 
             const int count = startup_item_count(startup_flow_, hole_options_, content_.courses);
             const startup_menu_screen screen = startup_screen_for_flow(startup_flow_);
+            const int previous_selection = startup_selection_;
             const int hit = startup_hit_index(screen, count, input_, window_.sdl_window());
             if (hit >= 0) {
                 startup_selection_ = hit;
             }
             move_startup_selection(startup_flow_, startup_selection_, count, input_);
+            if (startup_selection_ != previous_selection) {
+                audio_.play("ui_move");
+            }
 
             const bool accept = input_.enter.pressed || input_.space.pressed || hit >= 0;
             const bool back = input_.backspace.pressed || input_.escape.pressed;
             if (back) {
+                audio_.play("ui_back");
                 if (startup_flow_ == startup_flow::main) {
                     running_ = false;
                 } else {
@@ -634,6 +710,7 @@ void app::run() {
                     startup_selection_ = 0;
                 }
             } else if (accept) {
+                audio_.play("ui_select");
                 if (startup_flow_ == startup_flow::main) {
                     if (startup_selection_ == 0) {
                         startup_flow_ = startup_flow::hole_picker;
@@ -650,10 +727,12 @@ void app::run() {
                 } else if (startup_flow_ == startup_flow::hole_picker && count > 0) {
                     if (start_game_course(game_, single_hole_course(hole_options_[static_cast<std::size_t>(startup_selection_)]))) {
                         startup_flow_ = startup_flow::playing;
+                        audio_.start_ambience("ambience_course_day");
                     }
                 } else if (startup_flow_ == startup_flow::course_picker && count > 0) {
                     if (start_game_course(game_, content_.courses[static_cast<std::size_t>(startup_selection_)])) {
                         startup_flow_ = startup_flow::playing;
+                        audio_.start_ambience("ambience_course_day");
                     }
                 }
             }
@@ -682,6 +761,10 @@ void app::run() {
                 confirm_menu_active_ = false;
                 confirm_selection_ = 1;
                 game_ = make_initial_game_state(game_.asset_root);
+                audio_.stop_loop("cart_drive_loop");
+                cart_loop_active = false;
+                audio_.play("ui_select");
+                audio_.start_ambience("ambience_menu_vcr");
             }
 
             render_data data = make_render_data(game_, input_);
@@ -707,25 +790,34 @@ void app::run() {
                 running_ = false;
             } else if (!confirm_opened_this_frame) {
                 const int count = 2;
+                const int previous_selection = confirm_selection_;
                 const int hit = startup_hit_index(startup_menu_screen::main, count, input_, window_.sdl_window());
                 if (hit >= 0) {
                     confirm_selection_ = hit;
                 }
                 move_startup_selection(startup_flow::main, confirm_selection_, count, input_);
+                if (confirm_selection_ != previous_selection) {
+                    audio_.play("ui_move");
+                }
 
                 const bool accept = input_.enter.pressed || input_.space.pressed || hit >= 0;
                 const bool cancel = input_.escape.pressed || input_.backspace.pressed;
 
                 if (accept) {
+                    audio_.play("ui_select");
                     if (confirm_selection_ == 0) {
                         confirm_menu_active_ = false;
                         startup_flow_ = startup_flow::main;
                         startup_selection_ = 0;
                         game_ = make_initial_game_state(game_.asset_root);
+                        audio_.stop_loop("cart_drive_loop");
+                        cart_loop_active = false;
+                        audio_.start_ambience("ambience_menu_vcr");
                     } else {
                         confirm_menu_active_ = false;
                     }
                 } else if (cancel) {
+                    audio_.play("ui_back");
                     confirm_menu_active_ = false;
                 }
             }
@@ -740,6 +832,16 @@ void app::run() {
         }
 
         update_game(game_, input_, dt);
+        drain_audio_events(audio_, game_);
+
+        const bool cart_moving = game_.cart.active && std::abs(game_.cart.velocity) > 0.05f;
+        if (cart_moving && !cart_loop_active) {
+            audio_.play_loop("cart_drive_loop");
+            cart_loop_active = true;
+        } else if (!cart_moving && cart_loop_active) {
+            audio_.stop_loop("cart_drive_loop");
+            cart_loop_active = false;
+        }
 
         if (input_.quit_requested) {
             running_ = false;
@@ -754,6 +856,7 @@ void app::run() {
 }
 
 void app::shutdown() {
+    audio_.shutdown();
     renderer_.shutdown();
     window_.shutdown();
 }
