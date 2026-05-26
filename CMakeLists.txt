@@ -57,6 +57,7 @@ set(VCR_GOLF_GAME_SOURCES
     src/game/hole_loader.cpp
     src/game/save_data.cpp
     src/game/round_state.cpp
+    src/game/scorecard.cpp
     src/game/game_tuning.cpp
     src/game/game_state.cpp
     src/game/swing.cpp

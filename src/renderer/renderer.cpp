@@ -190,66 +190,6 @@ glm::mat4 panel_model(const glm::vec3 center, const float yaw_degrees, const glm
     return glm::scale(model, scale);
 }
 
-glm::vec3 material_zone_color(const material_zone_type type) {
-    switch (type) {
-    case material_zone_type::green:
-        return glm::vec3(0.20f, 0.68f, 0.28f);
-    case material_zone_type::bunker:
-        return glm::vec3(0.66f, 0.55f, 0.22f);
-    case material_zone_type::water:
-        return glm::vec3(0.10f, 0.22f, 0.60f);
-    default:
-        return glm::vec3(0.16f, 0.38f, 0.16f);
-    }
-}
-
-void draw_material_zone_overlays(shader_program& shader,
-                                 const glm::mat4& view,
-                                 const glm::mat4& proj,
-                                 const render_data& data,
-                                 const unsigned int marker_vao,
-                                 const int marker_vertex_count,
-                                 const unsigned int screen_vao) {
-    if (data.material_zones.empty()) {
-        return;
-    }
-
-    constexpr float lift = 0.045f;
-
-    for (const material_zone& zone : data.material_zones) {
-        if (zone.type == material_zone_type::unknown) {
-            continue;
-        }
-
-        const glm::vec3 color = material_zone_color(zone.type);
-        if (zone.has_radius && zone.radius > 0.0f) {
-            const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1.0f),
-                                                              zone.center + glm::vec3(0.0f, lift, 0.0f)),
-                                               glm::vec3(zone.radius * 2.0f, 1.0f, zone.radius * 2.0f));
-            set_terrain_draw_state(shader, model, view, proj, color, false);
-            glBindVertexArray(marker_vao);
-            glDrawArrays(GL_TRIANGLES, 0, marker_vertex_count);
-            continue;
-        }
-
-        if (zone.has_bounds) {
-            const glm::vec3 min_point(glm::min(zone.bounds_min, zone.bounds_max));
-            const glm::vec3 max_point(glm::max(zone.bounds_min, zone.bounds_max));
-            const glm::vec3 center = (min_point + max_point) * 0.5f + glm::vec3(0.0f, lift, 0.0f);
-            const glm::vec3 half = glm::max((max_point - min_point) * 0.5f, glm::vec3(0.05f));
-
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), center);
-            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::scale(model, glm::vec3(half.x, half.z, 1.0f));
-            set_terrain_draw_state(shader, model, view, proj, color, false);
-            glBindVertexArray(screen_vao);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
-        }
-    }
-
-    glBindVertexArray(0);
-}
-
 float axis_x_yaw_radians(const glm::vec3& axis) {
     glm::vec3 flat(axis.x, 0.0f, axis.z);
     if (glm::length(flat) <= 0.0001f) {
@@ -276,6 +216,14 @@ void draw_world_panel(shader_program& shader,
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
+glm::vec3 rotate_top_down_ccw_90_y(const glm::vec3& axis) {
+    glm::vec3 rotated(-axis.z, 0.0f, axis.x);
+    if (glm::length(rotated) <= 0.0001f) {
+        return glm::vec3(1.0f, 0.0f, 0.0f);
+    }
+    return glm::normalize(rotated);
+}
+
 void draw_swing_club(shader_program& shader,
                      const glm::mat4& view,
                      const glm::mat4& proj,
@@ -292,18 +240,20 @@ void draw_swing_club(shader_program& shader,
         player_side = glm::vec3(1.0f, 0.0f, 0.0f);
     }
 
-    const glm::vec3 swing_side = -player_side;
+    const glm::vec3 club_swing_side = -rotate_top_down_ccw_90_y(player_side);
+    const glm::vec3 club_head_axis = rotate_top_down_ccw_90_y(forward);
+    const glm::vec3 club_face_axis = club_head_axis;
 
     const float ball_radius = std::max(0.02f, data.ball_visual_radius_meters);
     const float shaft_length = 1.10f;
     const float swing_angle = glm::radians(12.0f + power * 60.0f);
 
     const glm::vec3 grip_position = data.ball_position
-        + player_side * (ball_radius + 0.10f)
-        - forward * 0.36f
+        + club_swing_side * (ball_radius + 0.10f)
+        - club_head_axis * 0.36f
         + up * (shaft_length * 0.92f + ball_radius * 0.35f);
 
-    const glm::vec3 shaft_direction = glm::normalize(swing_side * std::sin(swing_angle) -
+    const glm::vec3 shaft_direction = glm::normalize(club_swing_side * std::sin(swing_angle) -
                                                      up * std::cos(swing_angle));
     const glm::vec3 shaft_center = grip_position + shaft_direction * (shaft_length * 0.5f);
     const glm::vec3 head_center = grip_position + shaft_direction * shaft_length;
@@ -312,31 +262,31 @@ void draw_swing_club(shader_program& shader,
                      view,
                      proj,
                      shaft_center,
-                     player_side,
-                     -swing_angle,
+                     club_swing_side,
+                     swing_angle,
                      glm::vec2(0.018f, shaft_length * 0.5f),
                      glm::vec3(0.82f, 0.78f, 0.62f));
     draw_world_panel(shader,
                      view,
                      proj,
-                     head_center + forward * 0.03f,
-                     player_side,
+                     head_center + club_head_axis * 0.03f,
+                     club_face_axis,
                      0.0f,
                      glm::vec2(0.16f, 0.040f),
                      glm::vec3(0.16f, 0.15f, 0.13f));
     draw_world_panel(shader,
                      view,
                      proj,
-                     head_center + forward * 0.055f,
-                     -player_side,
+                     head_center + club_head_axis * 0.055f,
+                     -club_face_axis,
                      0.0f,
                      glm::vec2(0.14f, 0.045f),
                      glm::vec3(0.20f, 0.19f, 0.17f));
     draw_world_panel(shader,
                      view,
                      proj,
-                     head_center - player_side * 0.02f,
-                     player_side,
+                     head_center - club_swing_side * 0.02f,
+                     club_face_axis,
                      0.0f,
                      glm::vec2(0.13f, 0.035f),
                      glm::vec3(0.09f, 0.085f, 0.075f));
@@ -349,6 +299,15 @@ struct primitive_geometry {
     int cylinder_vertex_count = 0;
     int ball_vertex_count = 0;
 };
+
+glm::vec3 local_point_world(const render_data& data, const glm::vec3& local) {
+    glm::vec3 forward = data.camera_target - data.camera_position;
+    forward.y = 0.0f;
+    forward = glm::normalize(glm::length(forward) > 0.0001f ? forward : glm::vec3(0.0f, 0.0f, 1.0f));
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const glm::vec3 right = glm::normalize(glm::cross(up, forward));
+    return data.camera_position + right * local.x + up * local.y + forward * local.z;
+}
 
 glm::mat4 local_model(const render_data& data, const glm::vec3& local, const glm::vec3& rotation, const glm::vec3& scale) {
     glm::vec3 forward = data.camera_target - data.camera_position;
@@ -396,6 +355,42 @@ void draw_local_cylinder(shader_program& shader,
     glm::mat4 model = local_model(data, local, rotation, glm::vec3(1.0f));
     model = glm::scale(model, scale);
     model = glm::translate(model, glm::vec3(0.0f, -0.5f, 0.0f));
+    set_terrain_draw_state(shader, model, view, proj, color, alpha, false);
+    glBindVertexArray(geometry.cylinder_vao);
+    glDrawArrays(GL_TRIANGLES, 0, geometry.cylinder_vertex_count);
+}
+
+void draw_local_cylinder_between(shader_program& shader,
+                                 const glm::mat4& view,
+                                 const glm::mat4& proj,
+                                 const render_data& data,
+                                 const primitive_geometry& geometry,
+                                 const glm::vec3& start_local,
+                                 const glm::vec3& end_local,
+                                 const float radius,
+                                 const glm::vec3& color,
+                                 const float alpha = 1.0f) {
+    const glm::vec3 start = local_point_world(data, start_local);
+    const glm::vec3 end = local_point_world(data, end_local);
+    const glm::vec3 axis = end - start;
+    const float length = glm::length(axis);
+    if (length <= 0.0001f) {
+        return;
+    }
+
+    const glm::vec3 axis_dir = axis / length;
+    const glm::vec3 camera_dir = glm::normalize(data.camera_target - data.camera_position);
+    const glm::vec3 reference = std::abs(glm::dot(axis_dir, camera_dir)) > 0.92f
+        ? glm::vec3(0.0f, 1.0f, 0.0f)
+        : camera_dir;
+    const glm::vec3 side = glm::normalize(glm::cross(axis_dir, reference));
+    const glm::vec3 bend = glm::normalize(glm::cross(side, axis_dir));
+
+    glm::mat4 model(1.0f);
+    model[0] = glm::vec4(side * radius, 0.0f);
+    model[1] = glm::vec4(axis, 0.0f);
+    model[2] = glm::vec4(bend * radius, 0.0f);
+    model[3] = glm::vec4(start, 1.0f);
     set_terrain_draw_state(shader, model, view, proj, color, alpha, false);
     glBindVertexArray(geometry.cylinder_vao);
     glDrawArrays(GL_TRIANGLES, 0, geometry.cylinder_vertex_count);
@@ -464,12 +459,25 @@ void draw_smoke_emote_model(shader_program& shader,
                             const primitive_geometry& geometry) {
     const float t = std::max(0.0f, data.smoke_emote_elapsed);
     const float ember = 0.55f + 0.45f * std::sin(t * 24.0f);
-    const glm::vec3 cigarette_local(0.18f, -0.42f, 0.82f);
-    glBindVertexArray(geometry.screen_vao);
-    draw_local_panel(shader, view, proj, data, cigarette_local, glm::vec3(0.0f, 0.0f, glm::radians(-18.0f)), glm::vec2(0.32f, 0.030f), glm::vec3(0.88f, 0.82f, 0.62f));
-    draw_local_panel(shader, view, proj, data, cigarette_local + glm::vec3(0.26f, -0.08f, 0.01f), glm::vec3(0.0f, 0.0f, glm::radians(-18.0f)), glm::vec2(0.055f, 0.036f), glm::vec3(0.95f, 0.20f + ember * 0.20f, 0.10f));
-    draw_local_cylinder(shader, view, proj, data, geometry, cigarette_local, glm::vec3(glm::radians(90.0f), 0.0f, glm::radians(-72.0f)), glm::vec3(0.034f, 0.54f, 0.034f), glm::vec3(0.88f, 0.82f, 0.62f));
-    draw_local_sphere(shader, view, proj, data, geometry, cigarette_local + glm::vec3(0.26f, -0.08f, 0.0f), 0.050f, glm::vec3(0.95f, 0.20f + ember * 0.20f, 0.10f));
+    const glm::vec3 cigarette_local(0.08f, -0.42f, 0.78f);
+    const glm::vec3 cigarette_tip(0.30f, -0.47f, 1.12f);
+    draw_local_cylinder_between(shader,
+                                view,
+                                proj,
+                                data,
+                                geometry,
+                                cigarette_local,
+                                cigarette_tip,
+                                0.026f,
+                                glm::vec3(0.88f, 0.82f, 0.62f));
+    draw_local_sphere(shader,
+                      view,
+                      proj,
+                      data,
+                      geometry,
+                      cigarette_tip,
+                      0.046f,
+                      glm::vec3(0.95f, 0.20f + ember * 0.20f, 0.10f));
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -484,7 +492,7 @@ void draw_smoke_emote_model(shader_program& shader,
                           proj,
                           data,
                           geometry,
-                          cigarette_local + glm::vec3(sway + f * 0.012f, 0.12f + rise, 0.02f - rise * 0.08f),
+                          cigarette_tip + glm::vec3(sway + f * 0.012f, 0.10f + rise, -rise * 0.10f),
                           radius,
                           glm::vec3(0.78f, 0.80f, 0.78f),
                           alpha);
@@ -502,8 +510,8 @@ void draw_beer_emote_model(shader_program& shader,
     draw_local_cylinder(shader, view, proj, data, geometry, can_local, glm::vec3(glm::radians(-8.0f), 0.0f, glm::radians(10.0f)), glm::vec3(0.145f, 0.48f, 0.145f), glm::vec3(0.76f, 0.76f, 0.70f));
 
     glBindVertexArray(geometry.screen_vao);
-    draw_local_panel(shader, view, proj, data, can_local + glm::vec3(0.0f, 0.0f, 0.150f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec2(0.118f, 0.108f), glm::vec3(0.78f, 0.18f, 0.12f));
-    draw_local_panel(shader, view, proj, data, can_local + glm::vec3(0.0f, 0.25f, 0.01f), glm::vec3(glm::radians(90.0f), 0.0f, 0.0f), glm::vec2(0.052f, 0.024f), glm::vec3(0.18f, 0.18f, 0.16f));
+    draw_local_panel(shader, view, proj, data, can_local + glm::vec3(0.0f, 0.0f, -0.155f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec2(0.118f, 0.108f), glm::vec3(0.78f, 0.18f, 0.12f));
+    draw_local_panel(shader, view, proj, data, can_local + glm::vec3(0.0f, 0.25f, -0.03f), glm::vec3(glm::radians(90.0f), 0.0f, 0.0f), glm::vec2(0.052f, 0.024f), glm::vec3(0.18f, 0.18f, 0.16f));
 }
 
 void draw_emote_world_model(shader_program& shader,
@@ -646,6 +654,15 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         "010",
         "111"
     };
+    static const std::array<const char*, 7> glyph_j = {
+        "1111",
+        "0001",
+        "0001",
+        "0001",
+        "1001",
+        "1001",
+        "0110"
+    };
     static const std::array<const char*, 7> glyph_e = {
         "1111",
         "1000",
@@ -700,6 +717,15 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         "0010",
         "0010"
     };
+    static const std::array<const char*, 7> glyph_x = {
+        "1001",
+        "1001",
+        "0110",
+        "0110",
+        "0110",
+        "1001",
+        "1001"
+    };
     static const std::array<const char*, 7> glyph_s = {
         "1110",
         "1000",
@@ -717,6 +743,33 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
         "00100",
         "00000",
         "00000"
+    };
+    static const std::array<const char*, 7> glyph_dash = {
+        "0000",
+        "0000",
+        "0000",
+        "1111",
+        "0000",
+        "0000",
+        "0000"
+    };
+    static const std::array<const char*, 7> glyph_slash = {
+        "0001",
+        "0001",
+        "0010",
+        "0010",
+        "0100",
+        "0100",
+        "1000"
+    };
+    static const std::array<const char*, 7> glyph_colon = {
+        "000",
+        "010",
+        "010",
+        "000",
+        "010",
+        "010",
+        "000"
     };
     static const std::array<const char*, 7> glyph_c = {
         "0111",
@@ -895,6 +948,18 @@ const std::array<const char*, 7>& glyph_rows(const char value) {
     case 'M':
     case 'm':
         return glyph_m;
+    case 'I':
+        return glyph_i;
+    case 'J':
+        return glyph_j;
+    case 'X':
+        return glyph_x;
+    case '-':
+        return glyph_dash;
+    case '/':
+        return glyph_slash;
+    case ':':
+        return glyph_colon;
     default:
         return glyph_i;
     }
@@ -1174,6 +1239,17 @@ void draw_controls_overlay(shader_program& shader, const controls_overlay_state&
                              control_icon_color(controls.key_2_down));
 }
 
+enum class help_control_icon {
+    arrows,
+    space,
+    shift,
+    enter,
+    backspace,
+    retee,
+    key_1,
+    key_2
+};
+
 void draw_pixel_glyph(shader_program& shader,
                       const char value,
                       const glm::vec2 top_left,
@@ -1250,6 +1326,140 @@ void draw_pixel_text_left(shader_program& shader,
         draw_pixel_glyph(shader, c, cursor, pixel_size, color);
         cursor.x += static_cast<float>(glyph_width(c) + 1) * pixel_size;
     }
+}
+
+void draw_help_text_lines(shader_program& shader,
+                          const glm::vec2 top_left,
+                          const std::array<const char*, 4>& lines,
+                          const float pixel_size,
+                          const glm::vec3 color) {
+    constexpr float line_gap = 9.0f;
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        if (lines[i] == nullptr || lines[i][0] == '\0') {
+            continue;
+        }
+        draw_pixel_text_left(shader,
+                             lines[i],
+                             top_left - glm::vec2(0.0f, static_cast<float>(i) * pixel_size * line_gap),
+                             pixel_size,
+                             color);
+    }
+}
+
+void draw_help_control_icon(shader_program& shader,
+                            const help_control_icon icon,
+                            const glm::vec2 center) {
+    const bool is_down = false;
+    const glm::vec2 small_half(0.066f, 0.052f);
+    const glm::vec2 wide_half(0.138f, 0.052f);
+    const glm::vec2 key_half(0.052f, 0.046f);
+
+    switch (icon) {
+    case help_control_icon::arrows: {
+        const glm::vec2 dpad_half(0.043f, 0.043f);
+        const float offset = 0.052f;
+        draw_control_button_base(shader, center + glm::vec2(0.0f, offset), dpad_half, is_down);
+        draw_arrow_icon(shader, center + glm::vec2(0.0f, offset), glm::vec2(0.0f, 1.0f), dpad_half, is_down);
+        draw_control_button_base(shader, center + glm::vec2(-offset, 0.0f), dpad_half, is_down);
+        draw_arrow_icon(shader, center + glm::vec2(-offset, 0.0f), glm::vec2(-1.0f, 0.0f), dpad_half, is_down);
+        draw_control_button_base(shader, center + glm::vec2(offset, 0.0f), dpad_half, is_down);
+        draw_arrow_icon(shader, center + glm::vec2(offset, 0.0f), glm::vec2(1.0f, 0.0f), dpad_half, is_down);
+        draw_control_button_base(shader, center + glm::vec2(0.0f, -offset), dpad_half, is_down);
+        draw_arrow_icon(shader, center + glm::vec2(0.0f, -offset), glm::vec2(0.0f, -1.0f), dpad_half, is_down);
+        break;
+    }
+    case help_control_icon::space:
+        draw_control_button_base(shader, center, wide_half, is_down);
+        draw_space_icon(shader, center, wide_half, is_down);
+        break;
+    case help_control_icon::shift:
+        draw_control_button_base(shader, center, small_half, is_down);
+        draw_shift_icon(shader, center, small_half, is_down);
+        break;
+    case help_control_icon::enter:
+        draw_control_button_base(shader, center, small_half, is_down);
+        draw_enter_icon(shader, center, small_half, is_down);
+        break;
+    case help_control_icon::backspace:
+        draw_control_button_base(shader, center, small_half, is_down);
+        draw_backspace_icon(shader, center, small_half, is_down);
+        break;
+    case help_control_icon::retee:
+        draw_control_button_base(shader, center, small_half, is_down);
+        draw_retee_icon(shader, center, small_half, is_down);
+        break;
+    case help_control_icon::key_1:
+        draw_control_button_base(shader, center, key_half, is_down);
+        draw_pixel_text_centered(shader, "1", center, 0.020f, control_icon_color(is_down));
+        break;
+    case help_control_icon::key_2:
+        draw_control_button_base(shader, center, key_half, is_down);
+        draw_pixel_text_centered(shader, "2", center, 0.020f, control_icon_color(is_down));
+        break;
+    }
+}
+
+void draw_help_control_row(shader_program& shader,
+                           const help_control_icon icon,
+                           const glm::vec2 icon_center,
+                           const glm::vec2 label_top_left,
+                           const std::array<const char*, 4>& lines) {
+    draw_help_control_icon(shader, icon, icon_center);
+    draw_help_text_lines(shader, label_top_left, lines, 0.0092f, glm::vec3(0.84f, 0.84f, 0.74f));
+}
+
+void draw_startup_help_screen(shader_program& shader) {
+    const glm::vec2 left_icon(-0.66f, 0.0f);
+    const glm::vec2 left_label(-0.46f, 0.0f);
+    const glm::vec2 right_icon(0.30f, 0.0f);
+    const glm::vec2 right_label(0.45f, 0.0f);
+
+    draw_help_control_row(shader,
+                          help_control_icon::arrows,
+                          left_icon + glm::vec2(0.0f, 0.42f),
+                          left_label + glm::vec2(0.0f, 0.51f),
+                          {{"ARROWS", "WALK / AIM", "CLUB UP / DOWN", ""}});
+    draw_help_control_row(shader,
+                          help_control_icon::space,
+                          left_icon + glm::vec2(0.0f, 0.15f),
+                          left_label + glm::vec2(0.0f, 0.22f),
+                          {{"INTERACT", "START SWING", "SET POWER", "DRIFT CART"}});
+    draw_help_control_row(shader,
+                          help_control_icon::shift,
+                          left_icon + glm::vec2(0.0f, -0.22f),
+                          left_label + glm::vec2(0.0f, -0.18f),
+                          {{"LEFT SHIFT", "HOLD CART", "", ""}});
+    draw_help_control_row(shader,
+                          help_control_icon::shift,
+                          left_icon + glm::vec2(0.0f, -0.43f),
+                          left_label + glm::vec2(0.0f, -0.39f),
+                          {{"SHIFT", "RANGEFINDER", "", ""}});
+
+    draw_help_control_row(shader,
+                          help_control_icon::enter,
+                          right_icon + glm::vec2(0.0f, 0.43f),
+                          right_label + glm::vec2(0.0f, 0.50f),
+                          {{"ENTER", "COURSE MAP", "MENU SELECT", ""}});
+    draw_help_control_row(shader,
+                          help_control_icon::backspace,
+                          right_icon + glm::vec2(0.0f, 0.22f),
+                          right_label + glm::vec2(0.0f, 0.25f),
+                          {{"BACKSPACE /", "ESCAPE", "CANCEL /", "BACK"}});
+    draw_help_control_row(shader,
+                          help_control_icon::retee,
+                          right_icon + glm::vec2(0.0f, -0.12f),
+                          right_label + glm::vec2(0.0f, -0.12f),
+                          {{"R", "RETEE", "", ""}});
+    draw_help_control_row(shader,
+                          help_control_icon::key_1,
+                          right_icon + glm::vec2(0.0f, -0.32f),
+                          right_label + glm::vec2(0.0f, -0.30f),
+                          {{"1", "SMOKE", "", ""}});
+    draw_help_control_row(shader,
+                          help_control_icon::key_2,
+                          right_icon + glm::vec2(0.0f, -0.52f),
+                          right_label + glm::vec2(0.0f, -0.50f),
+                          {{"2", "BEER", "", ""}});
 }
 
 void draw_fps_counter(shader_program& shader, const std::string& label) {
@@ -1526,6 +1736,10 @@ void draw_startup_menu(shader_program& shader, const render_startup_menu& menu) 
     if (!menu.subtitle.empty()) {
         const float menu_subtitle_pixel = fit_pixel_size(menu.subtitle, glm::vec2(0.70f, 0.065f), 0.015f, 0.010f);
         draw_pixel_text_centered(shader, menu.subtitle, glm::vec2(0.0f, 0.68f), menu_subtitle_pixel, glm::vec3(0.72f, 0.72f, 0.62f));
+    }
+
+    if (menu.screen == startup_menu_screen::help) {
+        draw_startup_help_screen(shader);
     }
 
     const glm::vec2 tile_half = startup_tile_half_size(menu.screen);
@@ -1845,6 +2059,187 @@ void draw_paper_course_map(shader_program& shader, const render_data& data) {
     draw_overlay_quad(shader, pin + glm::vec2(0.022f, 0.055f), glm::vec2(0.028f, 0.018f), glm::vec3(0.76f, 0.17f, 0.12f), 0.96f);
     draw_map_marker(shader, pin, glm::vec3(0.94f, 0.78f, 0.22f), 0.018f);
 }
+
+std::string int_label(const int value) {
+    char buffer[16] = {};
+    std::snprintf(buffer, sizeof(buffer), "%d", value);
+    return std::string(buffer);
+}
+
+std::string score_label(const scorecard_row& row) {
+    return row.played ? int_label(row.strokes) : "";
+}
+
+std::string relative_label(const scorecard_row& row) {
+    return row.played ? row.relative_label : "";
+}
+
+std::string hole_label(const scorecard_row& row, const bool compact) {
+    if (compact || row.hole_name.empty()) {
+        return int_label(row.hole_number);
+    }
+    return int_label(row.hole_number) + " " + row.hole_name;
+}
+
+void draw_paper_card_base(shader_program& shader,
+                          const glm::vec2 center,
+                          const glm::vec2 half_size,
+                          const float alpha) {
+    const glm::vec3 paper(0.78f, 0.73f, 0.56f);
+    const glm::vec3 paper_shadow(0.12f, 0.095f, 0.065f);
+    const glm::vec3 fold(0.42f, 0.35f, 0.24f);
+
+    draw_overlay_quad(shader, center + glm::vec2(0.030f, -0.034f), half_size, paper_shadow, 0.40f * alpha);
+    draw_overlay_quad(shader, center, half_size, paper, 0.97f * alpha);
+    draw_overlay_quad(shader, center + glm::vec2(-half_size.x * 0.28f, 0.0f), glm::vec2(0.004f, half_size.y), fold, 0.14f * alpha);
+    draw_overlay_quad(shader, center + glm::vec2(half_size.x * 0.22f, 0.0f), glm::vec2(0.003f, half_size.y), fold, 0.10f * alpha);
+    draw_button_outline(shader, center, half_size, fold, 0.44f * alpha);
+}
+
+void draw_scorecard_grid_lines(shader_program& shader,
+                               const glm::vec2 center,
+                               const glm::vec2 half_size,
+                               const std::array<float, 5>& x_edges,
+                               const float header_y,
+                               const float row_height,
+                               const int row_count,
+                               const float alpha) {
+    const glm::vec3 ink(0.23f, 0.19f, 0.13f);
+    const float top = header_y + row_height * 0.62f;
+    const float bottom = header_y - row_height * (static_cast<float>(row_count) + 0.62f);
+    for (float x : x_edges) {
+        draw_overlay_segment(shader, glm::vec2(x, top), glm::vec2(x, bottom), 0.004f, ink, 0.38f * alpha);
+    }
+    for (int i = 0; i <= row_count + 1; ++i) {
+        const float y = top - static_cast<float>(i) * row_height;
+        draw_overlay_segment(shader, glm::vec2(x_edges.front(), y), glm::vec2(x_edges.back(), y), 0.004f, ink, 0.34f * alpha);
+    }
+    draw_button_outline(shader, center, half_size, ink, 0.22f * alpha);
+}
+
+void draw_scorecard_headers(shader_program& shader,
+                            const std::array<float, 5>& x_edges,
+                            const float y,
+                            const float pixel,
+                            const glm::vec3 color) {
+    draw_pixel_text_centered(shader, "HOLE", glm::vec2((x_edges[0] + x_edges[1]) * 0.5f, y), pixel, color);
+    draw_pixel_text_centered(shader, "PAR", glm::vec2((x_edges[1] + x_edges[2]) * 0.5f, y), pixel, color);
+    draw_pixel_text_centered(shader, "SCORE", glm::vec2((x_edges[2] + x_edges[3]) * 0.5f, y), pixel, color);
+    draw_pixel_text_centered(shader, "+/-", glm::vec2((x_edges[3] + x_edges[4]) * 0.5f, y), pixel, color);
+}
+
+void draw_scorecard_row_text(shader_program& shader,
+                             const scorecard_row& row,
+                             const std::array<float, 5>& x_edges,
+                             const float y,
+                             const float pixel,
+                             const bool compact,
+                             const bool current) {
+    const glm::vec3 ink = current ? glm::vec3(0.46f, 0.16f, 0.11f) : glm::vec3(0.16f, 0.12f, 0.08f);
+    const glm::vec3 pending(0.40f, 0.35f, 0.25f);
+    const glm::vec3 score_ink = row.played ? ink : pending;
+    const std::string hole = hole_label(row, compact);
+    const float hole_pixel = fit_pixel_size(hole,
+                                            glm::vec2((x_edges[1] - x_edges[0]) * 0.48f, 0.030f),
+                                            pixel,
+                                            0.0055f);
+    draw_pixel_text_left(shader, hole, glm::vec2(x_edges[0] + 0.014f, y + 3.5f * hole_pixel), hole_pixel, ink);
+    draw_pixel_text_centered(shader, int_label(row.par), glm::vec2((x_edges[1] + x_edges[2]) * 0.5f, y), pixel, ink);
+    draw_pixel_text_centered(shader, score_label(row), glm::vec2((x_edges[2] + x_edges[3]) * 0.5f, y), pixel, score_ink);
+    draw_pixel_text_centered(shader, relative_label(row), glm::vec2((x_edges[3] + x_edges[4]) * 0.5f, y), pixel, score_ink);
+}
+
+void draw_scorecard_totals(shader_program& shader,
+                           const scorecard_data& scorecard,
+                           const std::array<float, 5>& x_edges,
+                           const float y,
+                           const float pixel) {
+    const glm::vec3 ink(0.12f, 0.09f, 0.06f);
+    draw_pixel_text_left(shader, "TOTAL", glm::vec2(x_edges[0] + 0.014f, y + 3.5f * pixel), pixel, ink);
+    draw_pixel_text_centered(shader, int_label(scorecard.total_par), glm::vec2((x_edges[1] + x_edges[2]) * 0.5f, y), pixel, ink);
+    draw_pixel_text_centered(shader, int_label(scorecard.total_strokes), glm::vec2((x_edges[2] + x_edges[3]) * 0.5f, y), pixel, ink);
+    draw_pixel_text_centered(shader, scorecard.total_relative_label, glm::vec2((x_edges[3] + x_edges[4]) * 0.5f, y), pixel, ink);
+}
+
+void draw_scorecard_card(shader_program& shader,
+                         const scorecard_data& scorecard,
+                         const glm::vec2 center,
+                         const glm::vec2 half_size,
+                         const bool compact) {
+    if (scorecard.rows.empty()) {
+        return;
+    }
+
+    draw_paper_card_base(shader, center, half_size, 1.0f);
+
+    const glm::vec3 title_color(0.20f, 0.12f, 0.06f);
+    const glm::vec3 muted(0.35f, 0.30f, 0.20f);
+    const float title_pixel = fit_pixel_size(scorecard.course_name, glm::vec2(half_size.x * 0.78f, 0.055f), compact ? 0.014f : 0.020f, 0.007f);
+    draw_pixel_text_centered(shader, scorecard.course_name, center + glm::vec2(0.0f, half_size.y - 0.070f), title_pixel, title_color);
+    draw_pixel_text_centered(shader,
+                             compact ? "SCORECARD" : "COURSE RESULTS",
+                             center + glm::vec2(0.0f, half_size.y - (compact ? 0.126f : 0.142f)),
+                             compact ? 0.010f : 0.012f,
+                             muted);
+
+    const std::size_t row_limit = compact ? std::min<std::size_t>(scorecard.rows.size(), 8U) : scorecard.rows.size();
+    std::size_t first_row = 0;
+    if (compact && scorecard.rows.size() > row_limit) {
+        const std::size_t current = std::min(scorecard.current_hole_index, scorecard.rows.size() - 1U);
+        const std::size_t preferred = current > 3U ? current - 3U : 0U;
+        first_row = std::min(preferred, scorecard.rows.size() - row_limit);
+    }
+
+    const float grid_top = center.y + half_size.y - (compact ? 0.180f : 0.220f);
+    const float grid_bottom = center.y - half_size.y + (compact ? 0.118f : 0.142f);
+    const float available = std::max(0.12f, grid_top - grid_bottom);
+    const float row_height = std::min(compact ? 0.056f : 0.060f, available / static_cast<float>(row_limit + 1U));
+    const float header_y = grid_top - row_height * 0.50f;
+    const float x0 = center.x - half_size.x + 0.052f;
+    const float x4 = center.x + half_size.x - 0.052f;
+    const float hole_width = compact ? (x4 - x0) * 0.28f : (x4 - x0) * 0.46f;
+    const float par_width = (x4 - x0) * 0.16f;
+    const float score_width = (x4 - x0) * 0.22f;
+    const std::array<float, 5> x_edges{{
+        x0,
+        x0 + hole_width,
+        x0 + hole_width + par_width,
+        x0 + hole_width + par_width + score_width,
+        x4
+    }};
+
+    draw_scorecard_grid_lines(shader, center, half_size, x_edges, header_y, row_height, static_cast<int>(row_limit), 1.0f);
+    draw_scorecard_headers(shader, x_edges, header_y, compact ? 0.0075f : 0.0090f, muted);
+
+    const float row_pixel = std::min(compact ? 0.0090f : 0.0105f, row_height * 0.18f);
+    for (std::size_t row_index = 0; row_index < row_limit; ++row_index) {
+        const std::size_t source_index = first_row + row_index;
+        const scorecard_row& row = scorecard.rows[source_index];
+        const float y = header_y - row_height * (static_cast<float>(row_index) + 1.0f);
+        const bool current = !scorecard.finished && source_index == scorecard.current_hole_index;
+        draw_scorecard_row_text(shader, row, x_edges, y, row_pixel, compact, current);
+    }
+
+    const float total_y = center.y - half_size.y + (compact ? 0.060f : 0.076f);
+    draw_scorecard_totals(shader, scorecard, x_edges, total_y, compact ? 0.0085f : 0.0105f);
+
+    if (!compact) {
+        draw_pixel_text_centered(shader,
+                                 "ENTER / SPACE / ESC / BACKSPACE",
+                                 center + glm::vec2(0.0f, -half_size.y + 0.034f),
+                                 0.0070f,
+                                 muted);
+    }
+}
+
+void draw_compact_scorecard(shader_program& shader, const scorecard_data& scorecard) {
+    draw_scorecard_card(shader, scorecard, glm::vec2(-0.48f, 0.32f), glm::vec2(0.44f, 0.44f), true);
+}
+
+void draw_course_results(shader_program& shader, const scorecard_data& scorecard) {
+    draw_overlay_quad(shader, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.015f, 0.013f, 0.012f), 0.70f);
+    draw_scorecard_card(shader, scorecard, glm::vec2(0.0f, 0.0f), glm::vec2(0.74f, 0.80f), false);
+}
 }
 
 bool renderer::init(SDL_Window* window) {
@@ -1899,6 +2294,21 @@ void renderer::shutdown() {
     if (terrain_mesh_vao_ != 0) {
         glDeleteVertexArrays(1, &terrain_mesh_vao_);
         terrain_mesh_vao_ = 0;
+    }
+
+    if (material_overlay_ebo_ != 0) {
+        glDeleteBuffers(1, &material_overlay_ebo_);
+        material_overlay_ebo_ = 0;
+    }
+
+    if (material_overlay_vbo_ != 0) {
+        glDeleteBuffers(1, &material_overlay_vbo_);
+        material_overlay_vbo_ = 0;
+    }
+
+    if (material_overlay_vao_ != 0) {
+        glDeleteVertexArrays(1, &material_overlay_vao_);
+        material_overlay_vao_ = 0;
     }
 
     if (ball_vbo_ != 0) {
@@ -2069,6 +2479,37 @@ bool renderer::init_geometry() {
                           reinterpret_cast<void*>(offsetof(render_terrain_vertex, color)));
     glBindVertexArray(0);
 
+    glGenVertexArrays(1, &material_overlay_vao_);
+    glGenBuffers(1, &material_overlay_vbo_);
+    glGenBuffers(1, &material_overlay_ebo_);
+    glBindVertexArray(material_overlay_vao_);
+    glBindBuffer(GL_ARRAY_BUFFER, material_overlay_vbo_);
+    glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, material_overlay_ebo_);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0,
+                          3,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(render_terrain_vertex),
+                          reinterpret_cast<void*>(offsetof(render_terrain_vertex, position)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1,
+                          3,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(render_terrain_vertex),
+                          reinterpret_cast<void*>(offsetof(render_terrain_vertex, normal)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2,
+                          3,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(render_terrain_vertex),
+                          reinterpret_cast<void*>(offsetof(render_terrain_vertex, color)));
+    glBindVertexArray(0);
+
     const std::vector<float> ball_vertices = make_sphere_vertices(8, 12);
     ball_vertex_count_ = static_cast<int>(ball_vertices.size() / 6);
 
@@ -2213,11 +2654,40 @@ void renderer::upload_terrain_mesh(const render_data& data) {
     glBindVertexArray(0);
 }
 
+void renderer::upload_material_overlay_mesh(const render_data& data) {
+    if (material_overlay_vao_ == 0 || material_overlay_vbo_ == 0 || material_overlay_ebo_ == 0 ||
+        data.material_overlay_vertices.empty() || data.material_overlay_indices.empty()) {
+        material_overlay_index_count_ = 0;
+        return;
+    }
+
+    material_overlay_index_count_ = static_cast<int>(data.material_overlay_indices.size());
+
+    glBindVertexArray(material_overlay_vao_);
+    glBindBuffer(GL_ARRAY_BUFFER, material_overlay_vbo_);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(data.material_overlay_vertices.size() * sizeof(render_terrain_vertex)),
+                 data.material_overlay_vertices.data(),
+                 GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, material_overlay_ebo_);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(data.material_overlay_indices.size() * sizeof(std::uint32_t)),
+                 data.material_overlay_indices.data(),
+                 GL_DYNAMIC_DRAW);
+    glBindVertexArray(0);
+}
+
 void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const render_data& data) {
     upload_terrain_mesh(data);
+    upload_material_overlay_mesh(data);
 
     const float course_scale = std::max(1.0f, data.course_extent / 12.0f);
-    const glm::mat4 ground_model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.08f, 0.0f)),
+    float terrain_min_y = 0.0f;
+    for (const render_terrain_vertex& vertex : data.terrain_vertices) {
+        terrain_min_y = std::min(terrain_min_y, vertex.position.y);
+    }
+    const float background_ground_y = std::min(-0.08f, terrain_min_y - 2.0f);
+    const glm::mat4 ground_model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, background_ground_y, 0.0f)),
                                               glm::vec3(course_scale, 1.0f, course_scale));
 
     terrain_shader_.use();
@@ -2235,13 +2705,12 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
         glBindVertexArray(0);
     }
 
-    draw_material_zone_overlays(terrain_shader_,
-                                view,
-                                proj,
-                                data,
-                                marker_vao_,
-                                marker_vertex_count_,
-                                screen_vao_);
+    if (material_overlay_index_count_ > 0) {
+        set_terrain_draw_state(terrain_shader_, glm::mat4(1.0f), view, proj, glm::vec3(1.0f), true);
+        glBindVertexArray(material_overlay_vao_);
+        glDrawElements(GL_TRIANGLES, material_overlay_index_count_, GL_UNSIGNED_INT, reinterpret_cast<void*>(0));
+        glBindVertexArray(0);
+    }
 
     for (const render_tree& tree : data.trees) {
         const float trunk_radius = std::max(0.01f, tree.trunk_radius);
@@ -2402,8 +2871,23 @@ void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, cons
     terrain_shader_.set_vec3("u_light_dir", glm::vec3(0.0f, 1.0f, 0.0f));
     glBindVertexArray(screen_vao_);
 
+    if (data.show_course_results) {
+        draw_course_results(terrain_shader_, data.scorecard);
+        if (data.show_fps) {
+            draw_fps_counter(terrain_shader_, data.fps_label);
+        }
+        glBindVertexArray(0);
+        glDisable(GL_BLEND);
+        glEnable(GL_DEPTH_TEST);
+        return;
+    }
+
     if (data.show_course_map) {
         draw_paper_course_map(terrain_shader_, data);
+    }
+
+    if (data.show_scorecard) {
+        draw_compact_scorecard(terrain_shader_, data.scorecard);
     }
 
     if (data.show_fps) {

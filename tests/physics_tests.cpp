@@ -195,12 +195,17 @@ TEST_CASE("terrain mesh centerline follows spline height") {
         return;
     }
 
+    int checked_sections = 0;
     for (int section = 0; section < mesh.section_count; ++section) {
-        const float t = static_cast<float>(section) / static_cast<float>(mesh.section_count - 1);
-        const glm::vec3 spline_point = sample_terrain_spline_point(terrain, t);
         const terrain_vertex center = mesh.vertices[static_cast<std::size_t>(section * mesh.cross_section_count + 4)];
-        CHECK(near_vec3(center.position, spline_point, 0.001f));
+        if (center.position.z < -0.001f || center.position.z > 20.001f) {
+            continue;
+        }
+        CHECK(near_float(center.position.x, 0.0f, 0.001f));
+        CHECK(near_float(center.position.y, center.position.z * 0.5f, 0.001f));
+        ++checked_sections;
     }
+    CHECK(checked_sections >= terrain.sample_count);
 }
 
 TEST_CASE("terrain zones prioritize water over green") {
@@ -278,8 +283,87 @@ TEST_CASE("terrain zones override rough and fairway materials") {
         return;
     }
 
-    const terrain_vertex rough_edge = mesh.vertices[0];
-    CHECK(rough_edge.material == terrain_material::water);
+    bool found_water_edge = false;
+    for (const terrain_vertex& vertex : mesh.vertices) {
+        if (std::abs(vertex.position.x - 10.0f) < 0.001f && std::abs(vertex.position.z) < 0.001f) {
+            found_water_edge = found_water_edge || vertex.material == terrain_material::water;
+        }
+    }
+    CHECK(found_water_edge);
+}
+
+TEST_CASE("radius material overlay samples downhill terrain height") {
+    terrain_spline terrain;
+    terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, -6.0f, 20.0f)
+    };
+    terrain.width = 12.0f;
+    terrain.sample_count = 20;
+
+    material_zone bunker_zone;
+    bunker_zone.type = material_zone_type::bunker;
+    bunker_zone.center = glm::vec3(0.0f, 0.0f, 10.0f);
+    bunker_zone.radius = 2.0f;
+    bunker_zone.has_radius = true;
+
+    constexpr float lift = 0.045f;
+    const terrain_mesh terrain_mesh_data = build_terrain_mesh(terrain);
+    const terrain_mesh overlay = build_material_overlay_mesh(terrain_mesh_data, {bunker_zone}, lift);
+
+    CHECK(overlay.vertices.size() == 33U);
+    CHECK(overlay.indices.size() == 96U);
+    if (overlay.vertices.empty()) {
+        return;
+    }
+    CHECK(near_float(overlay.vertices.front().position.x, bunker_zone.center.x));
+    CHECK(near_float(overlay.vertices.front().position.z, bunker_zone.center.z));
+
+    bool found_sample_below_authored_height = false;
+    for (const terrain_vertex& vertex : overlay.vertices) {
+        CHECK(vertex.material == terrain_material::bunker);
+        found_sample_below_authored_height = found_sample_below_authored_height || vertex.position.y < -0.5f;
+        CHECK(vertex.position.y < bunker_zone.center.y + lift - 0.5f);
+    }
+    CHECK(found_sample_below_authored_height);
+}
+
+TEST_CASE("bounds material overlay samples downhill terrain height") {
+    terrain_spline terrain;
+    terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, -6.0f, 20.0f)
+    };
+    terrain.width = 12.0f;
+    terrain.sample_count = 20;
+
+    material_zone water_zone;
+    water_zone.type = material_zone_type::water;
+    water_zone.bounds_min = glm::vec3(-2.0f, 0.0f, 8.0f);
+    water_zone.bounds_max = glm::vec3(2.0f, 0.0f, 12.0f);
+    water_zone.has_bounds = true;
+
+    constexpr float lift = 0.045f;
+    const terrain_mesh terrain_mesh_data = build_terrain_mesh(terrain);
+    const terrain_mesh overlay = build_material_overlay_mesh(terrain_mesh_data, {water_zone}, lift);
+
+    CHECK(overlay.vertices.size() == 36U);
+    CHECK(overlay.indices.size() == 150U);
+    if (overlay.vertices.empty()) {
+        return;
+    }
+    CHECK(near_float(overlay.vertices.front().position.x, water_zone.bounds_min.x));
+    CHECK(near_float(overlay.vertices.front().position.z, water_zone.bounds_min.z));
+    CHECK(near_float(overlay.vertices.back().position.x, water_zone.bounds_max.x));
+    CHECK(near_float(overlay.vertices.back().position.z, water_zone.bounds_max.z));
+
+    bool found_sample_below_authored_height = false;
+    for (const terrain_vertex& vertex : overlay.vertices) {
+        CHECK(vertex.material == terrain_material::water);
+        found_sample_below_authored_height = found_sample_below_authored_height || vertex.position.y < -0.5f;
+        CHECK(vertex.position.y < water_zone.bounds_min.y + lift - 0.5f);
+    }
+    CHECK(found_sample_below_authored_height);
 }
 
 TEST_CASE("spline terrain samples loaded elevation") {
@@ -367,6 +451,95 @@ TEST_CASE("terrain sampling clamps outside ribbon as rough") {
     CHECK(sample.material == terrain_material::rough);
     CHECK(sample.point.x < -3.9f || sample.point.x > 3.9f);
     CHECK(sample.distance_from_center > 8.9f);
+}
+
+TEST_CASE("terrain anchor sampling preserves authored horizontal position outside ribbon") {
+    terrain_spline terrain;
+    terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 20.0f)
+    };
+    terrain.width = 8.0f;
+    terrain.sample_count = 20;
+
+    const terrain_mesh mesh = build_terrain_mesh(terrain);
+    const glm::vec3 authored(12.0f, 0.0f, 10.0f);
+    const terrain_sample sample = sample_terrain_anchor(mesh, authored, -5.0f);
+
+    CHECK(sample.has_spline);
+    CHECK(!sample.inside_surface);
+    CHECK(near_float(sample.point.x, authored.x));
+    CHECK(near_float(sample.point.z, authored.z));
+    CHECK(sample.material == terrain_material::rough);
+}
+
+TEST_CASE("terrain anchor height follows nearby downhill and uphill terrain outside ribbon") {
+    terrain_spline downhill;
+    downhill.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, -6.0f, 20.0f)
+    };
+    downhill.width = 8.0f;
+    downhill.sample_count = 20;
+
+    terrain_spline uphill = downhill;
+    uphill.control_points[1].y = 6.0f;
+
+    const terrain_sample downhill_sample = sample_terrain_anchor(build_terrain_mesh(downhill),
+                                                                 glm::vec3(12.0f, 0.0f, 10.0f),
+                                                                 0.0f);
+    const terrain_sample uphill_sample = sample_terrain_anchor(build_terrain_mesh(uphill),
+                                                               glm::vec3(12.0f, 0.0f, 10.0f),
+                                                               0.0f);
+
+    CHECK(downhill_sample.point.y < -1.0f);
+    CHECK(uphill_sample.point.y > 1.0f);
+}
+
+TEST_CASE("terrain mesh end caps extend beyond first and last control points") {
+    terrain_spline terrain;
+    terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 40.0f)
+    };
+    terrain.width = 20.0f;
+    terrain.fairway_width = 10.0f;
+    terrain.sample_count = 12;
+
+    const terrain_mesh mesh = build_terrain_mesh(terrain);
+    CHECK(mesh.cross_section_count == 9);
+    if (mesh.cross_section_count != 9 || mesh.vertices.empty()) {
+        return;
+    }
+
+    const terrain_vertex first_center = mesh.vertices[4];
+    const terrain_vertex last_center = mesh.vertices[static_cast<std::size_t>((mesh.section_count - 1) * mesh.cross_section_count + 4)];
+    const terrain_vertex first_edge = mesh.vertices[0];
+
+    CHECK(first_center.position.z <= -9.9f);
+    CHECK(last_center.position.z >= 49.9f);
+    CHECK(first_center.material == terrain_material::fairway);
+    CHECK(first_edge.material == terrain_material::rough);
+}
+
+TEST_CASE("outer rough apron samples terrain elevation instead of flat ground") {
+    terrain_spline terrain;
+    terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, -6.0f, 20.0f)
+    };
+    terrain.width = 10.0f;
+    terrain.sample_count = 20;
+
+    const terrain_mesh mesh = build_terrain_mesh(terrain);
+    const terrain_mesh apron = build_outer_rough_apron(mesh, terrain.width, 8);
+
+    bool found_below_zero = false;
+    for (const terrain_vertex& vertex : apron.vertices) {
+        found_below_zero = found_below_zero || vertex.position.y < 0.0f;
+        CHECK(vertex.material == terrain_material::rough);
+    }
+    CHECK(found_below_zero);
 }
 
 TEST_CASE("terrain sampling stays on the hinted branch through a crossing overlap") {

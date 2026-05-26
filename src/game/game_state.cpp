@@ -84,7 +84,7 @@ std::vector<tree_collision_body> anchored_tree_bodies(const game_tuning& tuning)
     trees.reserve(tuning.course.trees.size());
     for (const tree_instance& tree : tuning.course.trees) {
         tree_collision_body body;
-        body.base = terrain_sample_at(tuning, tree.position).point;
+        body.base = tree_base_position(tuning, tree);
         body.trunk_radius = tree.trunk_radius;
         body.trunk_height = tree.trunk_height;
         body.leaf_radius = tree.leaf_radius;
@@ -95,7 +95,7 @@ std::vector<tree_collision_body> anchored_tree_bodies(const game_tuning& tuning)
 }
 
 glm::vec3 pin_anchor_position(const game_tuning& tuning) {
-    return terrain_sample_at(tuning, tuning.course.pin_position).point;
+    return terrain_anchor_position(tuning, tuning.course.pin_position);
 }
 
 float effective_cup_radius(const game_tuning& tuning) {
@@ -168,6 +168,10 @@ void update_course_map_state(game_state& state, const input_state& input) {
     state.course_map_active = course_map_should_show(state.mode, input);
 }
 
+void update_scorecard_state(game_state& state, const input_state& input) {
+    state.scorecard_active = scorecard_should_show(state.mode, input);
+}
+
 void clear_emote(game_state& state) {
     state.smoke_emote = emote_state{};
     state.beer_emote = emote_state{};
@@ -204,6 +208,7 @@ void update_emote_state(game_state& state, const input_state& input, const float
 void update_walk_overlays(game_state& state, const input_state& input) {
     update_rangefinder_state(state, input);
     update_course_map_state(state, input);
+    update_scorecard_state(state, input);
 }
 
 glm::vec3 ball_rest_position(const game_tuning& tuning, const glm::vec3& position, const float radius) {
@@ -602,6 +607,11 @@ bool ball_is_in_cup(const game_state& state) {
 
 void update_game(game_state& state, const input_state& input, const float dt) {
     const float clamped_dt = std::max(0.0f, std::min(dt, 0.05f));
+    if (state.round.finished) {
+        update_walk_overlays(state, input);
+        return;
+    }
+
     state.hole_time += clamped_dt;
     update_emote_state(state, input, clamped_dt);
 
@@ -692,6 +702,10 @@ bool rangefinder_should_show(const game_mode mode, const input_state& input) {
 
 bool course_map_should_show(const game_mode mode, const input_state& input) {
     return mode == game_mode::walking && input.enter.is_down;
+}
+
+bool scorecard_should_show(const game_mode mode, const input_state& input) {
+    return mode == game_mode::walking && input.tab.is_down;
 }
 
 bool should_cancel_shot_setup(const game_mode mode, const input_state& input) {

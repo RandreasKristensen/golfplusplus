@@ -66,8 +66,17 @@ void apply_hole_to_tuning(game_tuning& tuning, const hole_data& hole) {
     tuning.terrain.fairway_width = hole.spline.width;
     tuning.terrain.sample_count = 128;
     tuning.terrain_mesh_data = build_terrain_mesh(tuning.terrain, tuning.course.material_zones, tuning.zone_tuning);
+    tuning.terrain_apron_mesh_data = build_outer_rough_apron(tuning.terrain_mesh_data, tuning.terrain.width, 14);
     tuning.wind_seed = hole.wind_seed;
     tuning.ground_y = hole.tee_position.y;
+}
+
+glm::vec3 terrain_anchor_position(const game_tuning& tuning, const glm::vec3& authored_position) {
+    return sample_terrain_anchor(tuning.terrain_mesh_data, authored_position, tuning.ground_y).point;
+}
+
+glm::vec3 tree_base_position(const game_tuning& tuning, const tree_instance& tree) {
+    return terrain_anchor_position(tuning, tree.position);
 }
 
 bool load_hole_runtime(game_tuning& tuning,

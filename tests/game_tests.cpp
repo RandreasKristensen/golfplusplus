@@ -7,6 +7,7 @@
 #include "game/hole_loader.h"
 #include "game/round_state.h"
 #include "game/save_data.h"
+#include "game/scorecard.h"
 #include "physics/terrain.h"
 #include "quest/quest_engine.h"
 #include "quest/quest_loader.h"
@@ -59,6 +60,7 @@ bool near_float(const float a, const float b, const float eps = 0.00001f) {
 
 void rebuild_cached_terrain_mesh(game_tuning& tuning) {
     tuning.terrain_mesh_data = build_terrain_mesh(tuning.terrain, tuning.course.material_zones, tuning.zone_tuning);
+    tuning.terrain_apron_mesh_data = build_outer_rough_apron(tuning.terrain_mesh_data, tuning.terrain.width, 14);
 }
 
 glm::vec3 terrain_clamped_tee(const game_tuning& tuning) {
@@ -581,6 +583,96 @@ TEST_CASE("round state records strokes and finishes after course length") {
     CHECK(round.strokes_per_hole[1] == 5);
 }
 
+TEST_CASE("scorecard data shows played scores and pending holes") {
+    course_definition course;
+    course.id = "three_hole";
+    course.name = "Three Hole";
+    course.hole_count = 3;
+    course.holes = {"holes/test.json", "holes/test2.json", "holes/test3.json"};
+
+    game_state state = make_initial_game_state(asset_root());
+    CHECK(start_game_course(state, course));
+    if (state.active_course.id != course.id) {
+        return;
+    }
+
+    state.round.strokes_per_hole[0] = 4;
+    state.save.hole_scores[0] = 4;
+    state.round.current_hole_index = 1;
+
+    const scorecard_data scorecard = build_scorecard_data(state);
+    CHECK(scorecard.rows.size() == 3);
+    if (scorecard.rows.size() != 3) {
+        return;
+    }
+    CHECK(scorecard.course_name == "Three Hole");
+    CHECK(scorecard.current_hole_index == 1);
+    CHECK(scorecard.rows[0].hole_name == "New Hole");
+    CHECK(scorecard.rows[0].par == 3);
+    CHECK(scorecard.rows[0].played);
+    CHECK(scorecard.rows[0].strokes == 4);
+    CHECK(scorecard.rows[0].relative_label == "+1");
+    CHECK(scorecard.rows[1].hole_name == "The Ditch");
+    CHECK(scorecard.rows[1].par == 3);
+    CHECK(!scorecard.rows[1].played);
+    CHECK(scorecard.rows[1].strokes == 0);
+    CHECK(scorecard.total_par == 3);
+    CHECK(scorecard.total_strokes == 4);
+    CHECK(scorecard.total_relative_label == "+1");
+}
+
+TEST_CASE("scorecard totals count played holes until the round is finished") {
+    course_definition course;
+    course.id = "three_hole";
+    course.name = "Three Hole";
+    course.hole_count = 3;
+    course.holes = {"holes/test.json", "holes/test2.json", "holes/test3.json"};
+
+    game_state state = make_initial_game_state(asset_root());
+    CHECK(start_game_course(state, course));
+    if (state.active_course.id != course.id) {
+        return;
+    }
+
+    state.round.strokes_per_hole[0] = 4;
+    state.round.strokes_per_hole[1] = 2;
+    state.save.hole_scores[0] = 4;
+    state.save.hole_scores[1] = 2;
+    state.round.current_hole_index = 2;
+
+    scorecard_data scorecard = build_scorecard_data(state);
+    CHECK(scorecard.total_par == 6);
+    CHECK(scorecard.total_strokes == 6);
+    CHECK(scorecard.total_relative_label == "EVEN");
+
+    state.round.strokes_per_hole[2] = 3;
+    state.save.hole_scores[2] = 3;
+    state.round.finished = true;
+
+    scorecard = build_scorecard_data(state);
+    CHECK(scorecard.finished);
+    CHECK(scorecard.total_par == 9);
+    CHECK(scorecard.total_strokes == 9);
+    CHECK(scorecard.total_relative_label == "EVEN");
+}
+
+TEST_CASE("relative score labels format over under and even par") {
+    CHECK(format_relative_score(2) == "+2");
+    CHECK(format_relative_score(-1) == "-1");
+    CHECK(format_relative_score(0) == "EVEN");
+}
+
+TEST_CASE("tab scorecard overlay is hold to view while walking") {
+    input_state input;
+    input.tab.is_down = true;
+
+    CHECK(scorecard_should_show(game_mode::walking, input));
+    CHECK(!scorecard_should_show(game_mode::aiming, input));
+
+    input.tab.is_down = false;
+    CHECK(!scorecard_should_show(game_mode::walking, input));
+}
+
 TEST_CASE("game course completion preserves score and resets transient hole state") {
     course_definition course;
     course.id = "two_hole";
@@ -736,6 +828,7 @@ TEST_CASE("final hole cup completion sinks ball and marks round finished") {
     update_game(state, input, 0.016f);
 
     CHECK(state.round.finished);
+    CHECK(state.round.strokes_per_hole[final_hole] == 3);
     CHECK(state.save.hole_scores.at(static_cast<int>(final_hole)) == 3);
     CHECK(state.ball.position.y < pin_anchor.y);
     CHECK(glm::length(state.ball.velocity) == 0.0f);
@@ -1094,6 +1187,72 @@ TEST_CASE("game update resolves ball collision with authored tree") {
 
     CHECK(state.ball.position.x >= tree.trunk_radius + state.ball.radius - 0.0001f);
     CHECK(state.ball.velocity.x > 0.0f);
+}
+
+TEST_CASE("tree render and collision anchors keep authored horizontal position") {
+    game_state state;
+    state.mode = game_mode::following_shot;
+    state.tuning.wind.base_speed = 0.0f;
+    state.tuning.wind.speed_variation = 0.0f;
+    state.tuning.physics.drag_coeff = 0.0f;
+    state.tuning.physics.magnus_coeff = 0.0f;
+    state.tuning.physics.spin_decay = 0.0f;
+    state.tuning.ground_restitution = 0.0f;
+    state.tuning.ground_friction = 0.0f;
+    state.tuning.ground_roll_friction = 0.0f;
+    state.tuning.ground_settle_speed = 10.0f;
+    state.tuning.tree_restitution = 0.25f;
+    state.tuning.tree_friction = 0.35f;
+    state.tuning.stop_speed = 0.01f;
+    state.tuning.terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 6.0f, 20.0f)
+    };
+    state.tuning.terrain.width = 8.0f;
+    state.tuning.terrain.sample_count = 16;
+
+    tree_instance tree;
+    tree.position = glm::vec3(12.0f, 0.0f, 10.0f);
+    tree.trunk_radius = 0.5f;
+    tree.trunk_height = 2.0f;
+    tree.leaf_radius = 1.0f;
+    tree.leaf_height = 2.0f;
+    state.tuning.course.trees = {tree};
+    rebuild_cached_terrain_mesh(state.tuning);
+
+    const glm::vec3 base = tree_base_position(state.tuning, tree);
+    CHECK(near_float(base.x, tree.position.x));
+    CHECK(near_float(base.z, tree.position.z));
+    CHECK(base.y > 1.0f);
+
+    state.ball.radius = 0.1f;
+    state.ball.position = base + glm::vec3(0.35f, 0.8f, 0.0f);
+    state.ball.velocity = glm::vec3(-3.0f, 0.0f, 0.0f);
+
+    input_state input;
+    update_game(state, input, 0.016f);
+
+    CHECK(state.ball.position.x >= tree.position.x + tree.trunk_radius + state.ball.radius - 0.0001f);
+    CHECK(state.ball.velocity.x > 0.0f);
+}
+
+TEST_CASE("downhill course tuning builds rough apron vertices below zero") {
+    game_tuning tuning = default_game_tuning();
+    tuning.ground_y = 0.0f;
+    tuning.terrain.control_points = {
+        glm::vec3(0.0f, 2.0f, 0.0f),
+        glm::vec3(0.0f, -6.0f, 60.0f)
+    };
+    tuning.terrain.width = 30.0f;
+    tuning.terrain.fairway_width = 16.0f;
+    tuning.terrain.sample_count = 32;
+    rebuild_cached_terrain_mesh(tuning);
+
+    bool found_below_zero = false;
+    for (const terrain_vertex& vertex : tuning.terrain_apron_mesh_data.vertices) {
+        found_below_zero = found_below_zero || vertex.position.y < 0.0f;
+    }
+    CHECK(found_below_zero);
 }
 
 TEST_CASE("roll friction preserves slope tangent velocity") {

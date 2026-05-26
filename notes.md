@@ -33,14 +33,6 @@ cmake --build build/test
 
 ## Ideas
 
-**Todo**
-stuff is not getting drawn correctly. the trees are apearing
-  where they arent, the rough doesn't go below 0y for courses
-  that go downhill, and dont come up for courses that are
-  downhill, the courses are stopping too quickly een though the
-  width shows its should be going longer. Try to find these
-  bugs and make a plan to fix them
-
 **bugs**
 the drawn on club is facing the wrong way
 tweak the camera. It doesn't feel correct. Make it have like *FOV* , *height off ground* , and *distance from ball* when standing besides it and swinging settings

@@ -26,6 +26,7 @@ struct input_state {
     button_state shift;
     button_state ctrl;
     button_state enter;
+    button_state tab;
     button_state backspace;
     button_state retee;
     button_state escape;
@@ -44,6 +45,7 @@ struct input_state {
         shift.reset_frame();
         ctrl.reset_frame();
         enter.reset_frame();
+        tab.reset_frame();
         backspace.reset_frame();
         retee.reset_frame();
         escape.reset_frame();

@@ -9,6 +9,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+#include "game/scorecard.h"
 #include "physics/material_zone.h"
 #include "renderer/framebuffer.h"
 #include "renderer/shader.h"
@@ -45,6 +46,7 @@ struct render_tree {
 enum class startup_menu_screen {
     none,
     main,
+    help,
     hole_picker,
     course_picker
 };
@@ -86,7 +88,8 @@ struct render_data {
     std::vector<render_tree> trees;
     std::vector<render_terrain_vertex> terrain_vertices;
     std::vector<std::uint32_t> terrain_indices;
-    std::vector<material_zone> material_zones;
+    std::vector<render_terrain_vertex> material_overlay_vertices;
+    std::vector<std::uint32_t> material_overlay_indices;
     float cup_radius = 0.65f;
     float ball_visual_radius_meters = 0.10f;
     float cup_visual_radius_meters = 0.75f;
@@ -111,6 +114,9 @@ struct render_data {
     float rangefinder_distance_meters = 0.0f;
     std::string rangefinder_distance_label;
     bool show_course_map = false;
+    bool show_scorecard = false;
+    bool show_course_results = false;
+    scorecard_data scorecard;
     bool cart_active = false;
     bool cart_drifting = false;
     float cart_yaw = 0.0f;
@@ -138,6 +144,7 @@ private:
     void render_overlay(const glm::mat4& view, const glm::mat4& proj, const render_data& data);
     void render_crt(int screen_width, int screen_height);
     void upload_terrain_mesh(const render_data& data);
+    void upload_material_overlay_mesh(const render_data& data);
 
     SDL_Window* window_ = nullptr;
     framebuffer scene_fbo_;
@@ -150,6 +157,9 @@ private:
     unsigned int terrain_mesh_vao_ = 0;
     unsigned int terrain_mesh_vbo_ = 0;
     unsigned int terrain_mesh_ebo_ = 0;
+    unsigned int material_overlay_vao_ = 0;
+    unsigned int material_overlay_vbo_ = 0;
+    unsigned int material_overlay_ebo_ = 0;
     unsigned int ball_vao_ = 0;
     unsigned int ball_vbo_ = 0;
     unsigned int flight_path_vao_ = 0;
@@ -167,6 +177,7 @@ private:
     int cylinder_vertex_count_ = 0;
     int cone_vertex_count_ = 0;
     int terrain_mesh_index_count_ = 0;
+    int material_overlay_index_count_ = 0;
 
     int target_width_ = 640;
     int target_height_ = 360;

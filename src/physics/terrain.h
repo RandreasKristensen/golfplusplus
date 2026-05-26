@@ -59,9 +59,14 @@ terrain_mesh build_terrain_mesh(const terrain_spline& terrain);
 terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
                                 const std::vector<material_zone>& zones,
                                 const terrain_zone_tuning& tuning);
+terrain_mesh build_material_overlay_mesh(const terrain_mesh& source_mesh,
+                                         const std::vector<material_zone>& zones,
+                                         float lift);
+terrain_mesh build_outer_rough_apron(const terrain_mesh& mesh, float margin, int grid_resolution);
 terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& position, float fallback_y);
 terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
                                    const glm::vec3& position,
                                    float fallback_y,
                                    const terrain_sample* previous_sample);
+terrain_sample sample_terrain_anchor(const terrain_mesh& mesh, const glm::vec3& position, float fallback_y);
 terrain_sample sample_terrain(const terrain_spline& terrain, const glm::vec3& position, float fallback_y);

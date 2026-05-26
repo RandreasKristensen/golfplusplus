@@ -6,6 +6,7 @@
 #include "game/game_content.h"
 #include "game/hole_data.h"
 #include "game/hole_loader.h"
+#include "game/scorecard.h"
 #include "physics/terrain.h"
 
 #include <SDL.h>
@@ -38,7 +39,7 @@ float terrain_height_at(const game_tuning& tuning, const glm::vec3& position) {
 }
 
 glm::vec3 terrain_anchor_at(const game_tuning& tuning, const glm::vec3& anchor) {
-    return sample_terrain_mesh(tuning.terrain_mesh_data, anchor, tuning.ground_y).point;
+    return terrain_anchor_position(tuning, anchor);
 }
 
 glm::vec3 render_color_for_terrain_material(const terrain_material material, const float distance_from_center, const float width) {
@@ -78,12 +79,37 @@ std::vector<render_terrain_vertex> make_render_terrain_vertices(const terrain_me
     return vertices;
 }
 
+void set_material_overlay_render_mesh(render_data& data, const game_tuning& tuning) {
+    constexpr float overlay_lift = 0.045f;
+    const terrain_mesh overlay_mesh = build_material_overlay_mesh(tuning.terrain_mesh_data,
+                                                                  tuning.course.material_zones,
+                                                                  overlay_lift);
+    data.material_overlay_vertices = make_render_terrain_vertices(overlay_mesh);
+    data.material_overlay_indices = overlay_mesh.indices;
+}
+
+void append_render_terrain_mesh(std::vector<render_terrain_vertex>& vertices,
+                                std::vector<std::uint32_t>& indices,
+                                const terrain_mesh& mesh) {
+    if (mesh.vertices.empty() || mesh.indices.empty()) {
+        return;
+    }
+
+    const std::uint32_t index_offset = static_cast<std::uint32_t>(vertices.size());
+    const std::vector<render_terrain_vertex> appended_vertices = make_render_terrain_vertices(mesh);
+    vertices.insert(vertices.end(), appended_vertices.begin(), appended_vertices.end());
+    indices.reserve(indices.size() + mesh.indices.size());
+    for (const std::uint32_t index : mesh.indices) {
+        indices.push_back(index_offset + index);
+    }
+}
+
 std::vector<render_tree> make_render_trees(const game_tuning& tuning) {
     std::vector<render_tree> trees;
     trees.reserve(tuning.course.trees.size());
     for (const tree_instance& tree : tuning.course.trees) {
         render_tree render;
-        render.base = terrain_anchor_at(tuning, tree.position);
+        render.base = tree_base_position(tuning, tree);
         render.trunk_radius = tree.trunk_radius;
         render.trunk_height = tree.trunk_height;
         render.leaf_radius = tree.leaf_radius;
@@ -191,7 +217,8 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     data.course_extent = game.tuning.course.extent;
     data.terrain_vertices = make_render_terrain_vertices(game.tuning.terrain_mesh_data);
     data.terrain_indices = game.tuning.terrain_mesh_data.indices;
-    data.material_zones = game.tuning.course.material_zones;
+    append_render_terrain_mesh(data.terrain_vertices, data.terrain_indices, game.tuning.terrain_apron_mesh_data);
+    set_material_overlay_render_mesh(data, game.tuning);
     data.trees = make_render_trees(game.tuning);
     data.aim_angle = game.aim_angle;
     data.camera_fov_degrees = 60.0f;
@@ -218,6 +245,9 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     data.rangefinder_distance_meters = game.rangefinder_distance_meters;
     data.rangefinder_distance_label = game.rangefinder_distance_label;
     data.show_course_map = game.course_map_active;
+    data.show_scorecard = game.scorecard_active;
+    data.show_course_results = game.round.finished;
+    data.scorecard = build_scorecard_data(game);
     data.cart_active = game.cart.active;
     data.cart_drifting = game.cart.drift_timer > 0.0f;
     data.cart_yaw = game.cart.active ? game.cart.yaw : game.player.yaw;
@@ -343,6 +373,8 @@ startup_menu_screen startup_screen_for_flow(const startup_flow flow) {
     switch (flow) {
     case startup_flow::main:
         return startup_menu_screen::main;
+    case startup_flow::help:
+        return startup_menu_screen::help;
     case startup_flow::hole_picker:
         return startup_menu_screen::hole_picker;
     case startup_flow::course_picker:
@@ -397,7 +429,10 @@ int startup_item_count(const startup_flow flow,
                        const std::vector<startup_hole_option>& holes,
                        const std::vector<course_definition>& courses) {
     if (flow == startup_flow::main) {
-        return 3;
+        return 4;
+    }
+    if (flow == startup_flow::help) {
+        return 0;
     }
     if (flow == startup_flow::hole_picker) {
         return static_cast<int>(holes.size());
@@ -456,9 +491,10 @@ render_startup_menu make_startup_menu_render_data(const startup_flow flow,
         menu.title = "GOLF++";
         menu.subtitle = "SELECT ROUND TYPE";
         menu.footer = "ARROWS MOVE  ENTER SELECT  ESC QUIT";
-        const std::array<std::pair<const char*, const char*>, 3> items{{
+        const std::array<std::pair<const char*, const char*>, 4> items{{
             {"PLAY HOLE", "PICK ONE HOLE"},
             {"PLAY COURSE", "PLAY ORDERED HOLES"},
+            {"HELP", "SHOW CONTROLS"},
             {"QUIT", "RETURN TO DESKTOP"}
         }};
         for (std::size_t i = 0; i < items.size(); ++i) {
@@ -468,6 +504,13 @@ render_startup_menu make_startup_menu_render_data(const startup_flow flow,
             tile.selected = static_cast<int>(i) == selection;
             menu.tiles.push_back(tile);
         }
+        return menu;
+    }
+
+    if (flow == startup_flow::help) {
+        menu.title = "CONTROLS";
+        menu.subtitle = "CURRENT GAMEPLAY INPUTS";
+        menu.footer = "BACKSPACE BACK  ESC BACK";
         return menu;
     }
 
@@ -598,6 +641,9 @@ void app::run() {
                     } else if (startup_selection_ == 1) {
                         startup_flow_ = startup_flow::course_picker;
                         startup_selection_ = 0;
+                    } else if (startup_selection_ == 2) {
+                        startup_flow_ = startup_flow::help;
+                        startup_selection_ = 0;
                     } else {
                         running_ = false;
                     }
@@ -616,6 +662,34 @@ void app::run() {
             data.show_fps = show_fps_;
             data.fps_label = format_fps_label(displayed_fps_);
             data.startup_menu = make_startup_menu_render_data(startup_flow_, startup_selection_, hole_options_, content_);
+            renderer_.render(data);
+            window_.swap();
+            continue;
+        }
+
+        if (game_.round.finished) {
+            if (input_.quit_requested) {
+                running_ = false;
+            }
+
+            const bool leave_results = input_.enter.pressed ||
+                input_.space.pressed ||
+                input_.escape.pressed ||
+                input_.backspace.pressed;
+            if (leave_results) {
+                startup_flow_ = startup_flow::main;
+                startup_selection_ = 0;
+                confirm_menu_active_ = false;
+                confirm_selection_ = 1;
+                game_ = make_initial_game_state(game_.asset_root);
+            }
+
+            render_data data = make_render_data(game_, input_);
+            data.show_fps = show_fps_;
+            data.fps_label = format_fps_label(displayed_fps_);
+            if (startup_flow_ != startup_flow::playing) {
+                data.startup_menu = make_startup_menu_render_data(startup_flow_, startup_selection_, hole_options_, content_);
+            }
             renderer_.render(data);
             window_.swap();
             continue;

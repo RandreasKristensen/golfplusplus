@@ -199,10 +199,90 @@ glm::vec3 terrain_lateral_at(const terrain_spline& terrain, const float t) {
     return safe_normalize(glm::vec3(-tangent.z, 0.0f, tangent.x), glm::vec3(1.0f, 0.0f, 0.0f));
 }
 
-int terrain_section_count(const terrain_spline& terrain) {
+int terrain_base_section_count(const terrain_spline& terrain) {
     const float length = control_polygon_xz_length(terrain.control_points);
     const int length_sections = static_cast<int>(std::ceil(length)) + 1;
     return std::max(2, std::max(terrain.sample_count, length_sections));
+}
+
+int terrain_cap_section_count(const terrain_spline& terrain) {
+    const float extension = terrain.width * 0.5f;
+    if (extension <= 0.00001f) {
+        return 0;
+    }
+    return std::max(1, static_cast<int>(std::ceil(extension)));
+}
+
+glm::vec3 endpoint_extension_tangent(const terrain_spline& terrain, const bool end) {
+    if (terrain.control_points.size() < 2) {
+        return glm::vec3(0.0f, 0.0f, 1.0f);
+    }
+
+    const glm::vec3 a = end
+        ? terrain.control_points[terrain.control_points.size() - 2U]
+        : terrain.control_points[0];
+    const glm::vec3 b = end
+        ? terrain.control_points.back()
+        : terrain.control_points[1];
+    const glm::vec3 delta = b - a;
+    const float xz_length = std::sqrt(delta.x * delta.x + delta.z * delta.z);
+    if (xz_length <= 0.00001f) {
+        return glm::vec3(0.0f, 0.0f, 1.0f);
+    }
+    return delta / xz_length;
+}
+
+glm::vec3 lateral_from_tangent(const glm::vec3& tangent) {
+    return safe_normalize(glm::vec3(-tangent.z, 0.0f, tangent.x), glm::vec3(1.0f, 0.0f, 0.0f));
+}
+
+struct terrain_section_layout {
+    int base_sections = 0;
+    int cap_sections = 0;
+    float cap_extension = 0.0f;
+};
+
+terrain_section_layout make_section_layout(const terrain_spline& terrain) {
+    terrain_section_layout layout;
+    layout.base_sections = terrain_base_section_count(terrain);
+    layout.cap_sections = terrain_cap_section_count(terrain);
+    layout.cap_extension = terrain.width * 0.5f;
+    return layout;
+}
+
+struct terrain_section_frame {
+    glm::vec3 center{0.0f};
+    glm::vec3 lateral{1.0f, 0.0f, 0.0f};
+};
+
+terrain_section_frame terrain_frame_at_section(const terrain_spline& terrain,
+                                               const terrain_section_layout& layout,
+                                               const int section) {
+    terrain_section_frame frame;
+    const glm::vec3 start_tangent = endpoint_extension_tangent(terrain, false);
+    const glm::vec3 end_tangent = endpoint_extension_tangent(terrain, true);
+
+    if (section < layout.cap_sections) {
+        const float u = static_cast<float>(section) / static_cast<float>(std::max(1, layout.cap_sections));
+        const float distance = -layout.cap_extension * (1.0f - u);
+        frame.center = terrain.control_points.front() + start_tangent * distance;
+        frame.lateral = lateral_from_tangent(start_tangent);
+        return frame;
+    }
+
+    const int base_section = section - layout.cap_sections;
+    if (base_section < layout.base_sections) {
+        const float t = static_cast<float>(base_section) / static_cast<float>(std::max(1, layout.base_sections - 1));
+        frame.center = sample_terrain_spline_point(terrain, t);
+        frame.lateral = terrain_lateral_at(terrain, t);
+        return frame;
+    }
+
+    const int after_section = base_section - layout.base_sections;
+    const float u = static_cast<float>(after_section + 1) / static_cast<float>(std::max(1, layout.cap_sections));
+    frame.center = terrain.control_points.back() + end_tangent * (layout.cap_extension * u);
+    frame.lateral = lateral_from_tangent(end_tangent);
+    return frame;
 }
 
 float cross_section_offset(const int column, const int column_count, const float width) {
@@ -473,21 +553,20 @@ terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
         : terrain.width;
     const float fairway_half_width = fairway_width * 0.5f;
 
-    mesh.section_count = terrain_section_count(terrain);
+    const terrain_section_layout layout = make_section_layout(terrain);
+    mesh.section_count = layout.base_sections + layout.cap_sections * 2;
     mesh.cross_section_count = 9;
     mesh.width = terrain.width;
     mesh.vertices.reserve(static_cast<std::size_t>(mesh.section_count * mesh.cross_section_count));
     mesh.indices.reserve(static_cast<std::size_t>((mesh.section_count - 1) * (mesh.cross_section_count - 1) * 6));
 
     for (int section = 0; section < mesh.section_count; ++section) {
-        const float t = static_cast<float>(section) / static_cast<float>(mesh.section_count - 1);
-        const glm::vec3 center = sample_terrain_spline_point(terrain, t);
-        const glm::vec3 lateral = terrain_lateral_at(terrain, t);
+        const terrain_section_frame frame = terrain_frame_at_section(terrain, layout, section);
 
         for (int column = 0; column < mesh.cross_section_count; ++column) {
             const float offset = cross_section_offset(column, mesh.cross_section_count, terrain.width);
             terrain_vertex vertex;
-            vertex.position = center + lateral * offset;
+            vertex.position = frame.center + frame.lateral * offset;
             vertex.position.y += cross_section_height_offset(offset, terrain.width);
             vertex.normal = glm::vec3(0.0f);
             vertex.distance_from_center = offset;
@@ -550,6 +629,190 @@ terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
     }
 
     return mesh;
+}
+
+terrain_mesh build_material_overlay_mesh(const terrain_mesh& source_mesh,
+                                         const std::vector<material_zone>& zones,
+                                         const float lift) {
+    terrain_mesh mesh;
+    if (source_mesh.vertices.empty() || source_mesh.indices.size() < 3U || zones.empty()) {
+        return mesh;
+    }
+
+    mesh.width = source_mesh.width;
+
+    const auto append_sampled_vertex = [&](const glm::vec3& authored_position,
+                                           const terrain_material material) {
+        const terrain_sample sample = sample_terrain_anchor(source_mesh, authored_position, authored_position.y);
+        terrain_vertex vertex;
+        vertex.position = sample.point + glm::vec3(0.0f, lift, 0.0f);
+        vertex.normal = sample.normal;
+        vertex.distance_from_center = sample.distance_from_center;
+        vertex.material = material;
+        mesh.vertices.push_back(vertex);
+        return static_cast<uint32_t>(mesh.vertices.size() - 1U);
+    };
+
+    constexpr int radius_segments = 32;
+    constexpr int bounds_resolution = 6;
+
+    for (const material_zone& zone : zones) {
+        if (zone.type == material_zone_type::unknown) {
+            continue;
+        }
+
+        const terrain_material material = material_from_zone(zone.type);
+        if (zone.has_radius && zone.radius > 0.00001f) {
+            const uint32_t center_index = append_sampled_vertex(zone.center, material);
+            uint32_t previous_edge = 0U;
+            uint32_t first_edge = 0U;
+
+            for (int i = 0; i < radius_segments; ++i) {
+                const float angle = 2.0f * 3.14159265358979323846f *
+                    static_cast<float>(i) / static_cast<float>(radius_segments);
+                const glm::vec3 edge(zone.center.x + std::cos(angle) * zone.radius,
+                                     zone.center.y,
+                                     zone.center.z + std::sin(angle) * zone.radius);
+                const uint32_t edge_index = append_sampled_vertex(edge, material);
+                if (i == 0) {
+                    first_edge = edge_index;
+                } else {
+                    mesh.indices.push_back(center_index);
+                    mesh.indices.push_back(previous_edge);
+                    mesh.indices.push_back(edge_index);
+                }
+                previous_edge = edge_index;
+            }
+
+            mesh.indices.push_back(center_index);
+            mesh.indices.push_back(previous_edge);
+            mesh.indices.push_back(first_edge);
+            continue;
+        }
+
+        if (zone.has_bounds) {
+            const glm::vec3 min_point(glm::min(zone.bounds_min, zone.bounds_max));
+            const glm::vec3 max_point(glm::max(zone.bounds_min, zone.bounds_max));
+            const std::uint32_t offset = static_cast<std::uint32_t>(mesh.vertices.size());
+
+            for (int row = 0; row < bounds_resolution; ++row) {
+                const float v = static_cast<float>(row) / static_cast<float>(bounds_resolution - 1);
+                const float z = min_point.z + (max_point.z - min_point.z) * v;
+                for (int column = 0; column < bounds_resolution; ++column) {
+                    const float u = static_cast<float>(column) / static_cast<float>(bounds_resolution - 1);
+                    const float x = min_point.x + (max_point.x - min_point.x) * u;
+                    const float y = min_point.y + (max_point.y - min_point.y) * ((u + v) * 0.5f);
+                    append_sampled_vertex(glm::vec3(x, y, z), material);
+                }
+            }
+
+            for (int row = 0; row < bounds_resolution - 1; ++row) {
+                for (int column = 0; column < bounds_resolution - 1; ++column) {
+                    const uint32_t a = offset + static_cast<uint32_t>(row * bounds_resolution + column);
+                    const uint32_t b = offset + static_cast<uint32_t>((row + 1) * bounds_resolution + column);
+                    const uint32_t c = offset + static_cast<uint32_t>(row * bounds_resolution + column + 1);
+                    const uint32_t d = offset + static_cast<uint32_t>((row + 1) * bounds_resolution + column + 1);
+                    mesh.indices.push_back(a);
+                    mesh.indices.push_back(b);
+                    mesh.indices.push_back(c);
+                    mesh.indices.push_back(c);
+                    mesh.indices.push_back(b);
+                    mesh.indices.push_back(d);
+                }
+            }
+        }
+    }
+
+    mesh.section_count = 1;
+    mesh.cross_section_count = 0;
+    return mesh;
+}
+
+terrain_mesh build_outer_rough_apron(const terrain_mesh& source_mesh,
+                                     const float margin,
+                                     const int grid_resolution) {
+    terrain_mesh apron;
+    if (source_mesh.vertices.empty() || source_mesh.indices.size() < 3U) {
+        return apron;
+    }
+
+    glm::vec3 min_point(std::numeric_limits<float>::max());
+    glm::vec3 max_point(std::numeric_limits<float>::lowest());
+    for (const terrain_vertex& vertex : source_mesh.vertices) {
+        min_point.x = std::min(min_point.x, vertex.position.x);
+        min_point.z = std::min(min_point.z, vertex.position.z);
+        max_point.x = std::max(max_point.x, vertex.position.x);
+        max_point.z = std::max(max_point.z, vertex.position.z);
+    }
+
+    const int resolution = std::max(2, grid_resolution);
+    const float apron_margin = std::max(1.0f, margin);
+    min_point.x -= apron_margin;
+    min_point.z -= apron_margin;
+    max_point.x += apron_margin;
+    max_point.z += apron_margin;
+
+    apron.section_count = resolution;
+    apron.cross_section_count = resolution;
+    apron.width = std::max(max_point.x - min_point.x, max_point.z - min_point.z);
+    apron.vertices.reserve(static_cast<std::size_t>(resolution * resolution));
+    apron.indices.reserve(static_cast<std::size_t>((resolution - 1) * (resolution - 1) * 6));
+
+    constexpr float overlap_lowering = 0.12f;
+    for (int row = 0; row < resolution; ++row) {
+        const float v = static_cast<float>(row) / static_cast<float>(resolution - 1);
+        const float z = min_point.z + (max_point.z - min_point.z) * v;
+        for (int column = 0; column < resolution; ++column) {
+            const float u = static_cast<float>(column) / static_cast<float>(resolution - 1);
+            const float x = min_point.x + (max_point.x - min_point.x) * u;
+            const glm::vec3 query(x, 0.0f, z);
+            terrain_sample sample = sample_terrain_anchor(source_mesh, query, 0.0f);
+
+            terrain_vertex vertex;
+            vertex.position = glm::vec3(x, sample.point.y - overlap_lowering, z);
+            vertex.normal = glm::vec3(0.0f);
+            vertex.distance_from_center = source_mesh.width * 0.5f;
+            vertex.material = terrain_material::rough;
+            apron.vertices.push_back(vertex);
+        }
+    }
+
+    for (int row = 0; row < resolution - 1; ++row) {
+        for (int column = 0; column < resolution - 1; ++column) {
+            const uint32_t a = static_cast<uint32_t>(row * resolution + column);
+            const uint32_t b = static_cast<uint32_t>((row + 1) * resolution + column);
+            const uint32_t c = static_cast<uint32_t>(row * resolution + column + 1);
+            const uint32_t d = static_cast<uint32_t>((row + 1) * resolution + column + 1);
+            apron.indices.push_back(a);
+            apron.indices.push_back(b);
+            apron.indices.push_back(c);
+            apron.indices.push_back(c);
+            apron.indices.push_back(b);
+            apron.indices.push_back(d);
+        }
+    }
+
+    for (std::size_t i = 0; i + 2U < apron.indices.size(); i += 3U) {
+        const uint32_t ia = apron.indices[i];
+        const uint32_t ib = apron.indices[i + 1U];
+        const uint32_t ic = apron.indices[i + 2U];
+        glm::vec3 normal = triangle_normal(apron.vertices[ia].position, apron.vertices[ib].position, apron.vertices[ic].position);
+        if (normal.y < 0.0f) {
+            normal = -normal;
+        }
+        add_vertex_normal(apron.vertices, ia, normal);
+        add_vertex_normal(apron.vertices, ib, normal);
+        add_vertex_normal(apron.vertices, ic, normal);
+    }
+
+    for (terrain_vertex& vertex : apron.vertices) {
+        vertex.normal = safe_normalize(vertex.normal, glm::vec3(0.0f, 1.0f, 0.0f));
+        if (vertex.normal.y < 0.0f) {
+            vertex.normal = -vertex.normal;
+        }
+    }
+
+    return apron;
 }
 
 terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& position, const float fallback_y) {
@@ -639,4 +902,11 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
 terrain_sample sample_terrain(const terrain_spline& terrain, const glm::vec3& position, const float fallback_y) {
     const terrain_mesh mesh = build_terrain_mesh(terrain);
     return sample_terrain_mesh(mesh, position, fallback_y);
+}
+
+terrain_sample sample_terrain_anchor(const terrain_mesh& mesh, const glm::vec3& position, const float fallback_y) {
+    terrain_sample sample = sample_terrain_mesh(mesh, position, fallback_y);
+    sample.point.x = position.x;
+    sample.point.z = position.z;
+    return sample;
 }

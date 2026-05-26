@@ -69,6 +69,7 @@ struct game_tuning {
     camera_tuning camera;
     terrain_spline terrain;
     terrain_mesh terrain_mesh_data;
+    terrain_mesh terrain_apron_mesh_data;
     terrain_zone_tuning zone_tuning;
     std::vector<club_definition> clubs;
     physics_tuning physics;
@@ -97,6 +98,8 @@ struct game_tuning {
 std::vector<club_definition> fallback_club_definitions();
 game_tuning default_game_tuning();
 game_tuning default_game_tuning(const std::string& asset_root);
+glm::vec3 terrain_anchor_position(const game_tuning& tuning, const glm::vec3& authored_position);
+glm::vec3 tree_base_position(const game_tuning& tuning, const tree_instance& tree);
 void apply_hole_to_tuning(game_tuning& tuning, const hole_data& hole);
 bool load_hole_runtime(game_tuning& tuning,
                        const course_definition& course,

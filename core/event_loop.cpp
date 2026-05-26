@@ -30,6 +30,8 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
     case SDL_SCANCODE_RETURN:
     case SDL_SCANCODE_KP_ENTER:
         return &input.enter;
+    case SDL_SCANCODE_TAB:
+        return &input.tab;
     case SDL_SCANCODE_BACKSPACE:
         return &input.backspace;
     case SDL_SCANCODE_R:

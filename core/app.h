@@ -12,6 +12,7 @@
 
 enum class startup_flow {
     main,
+    help,
     hole_picker,
     course_picker,
     playing

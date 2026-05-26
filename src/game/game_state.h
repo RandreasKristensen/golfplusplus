@@ -62,6 +62,7 @@ struct game_state {
     float rangefinder_distance_meters = 0.0f;
     std::string rangefinder_distance_label;
     bool course_map_active = false;
+    bool scorecard_active = false;
     std::vector<glm::vec3> flight_path_points;
 };
 
@@ -77,6 +78,7 @@ bool ball_is_moving(const ball_state& ball);
 bool can_interact_with_ball(const game_state& state);
 bool rangefinder_should_show(game_mode mode, const input_state& input);
 bool course_map_should_show(game_mode mode, const input_state& input);
+bool scorecard_should_show(game_mode mode, const input_state& input);
 bool should_cancel_shot_setup(game_mode mode, const input_state& input);
 float compute_rangefinder_distance_meters(const glm::vec3& player_position,
                                           const glm::vec3& pin_anchor,
