@@ -3,6 +3,7 @@
 #include "core/input.h"
 #include "game/asset_resolver.h"
 #include "game/course_loader.h"
+#include "game/course_world_loader.h"
 #include "game/progression.h"
 #include "physics/ball_physics.h"
 #include "physics/collision.h"
@@ -14,6 +15,8 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <limits>
+#include <optional>
 
 #include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
@@ -152,6 +155,64 @@ bool path_intersects_cup(const glm::vec3& start,
 
 bool contains_string(const std::vector<std::string>& values, const std::string& value) {
     return std::find(values.begin(), values.end(), value) != values.end();
+}
+
+void expand_bounds(glm::vec3& min_point, glm::vec3& max_point, const glm::vec3& point) {
+    min_point.x = std::min(min_point.x, point.x);
+    min_point.y = std::min(min_point.y, point.y);
+    min_point.z = std::min(min_point.z, point.z);
+    max_point.x = std::max(max_point.x, point.x);
+    max_point.y = std::max(max_point.y, point.y);
+    max_point.z = std::max(max_point.z, point.z);
+}
+
+void apply_course_world_to_tuning(game_tuning& tuning, const course_world_definition& world) {
+    glm::vec3 min_point = world.spawn.position;
+    glm::vec3 max_point = world.spawn.position;
+
+    for (const course_world_hole_start& start : world.hole_starts) {
+        expand_bounds(min_point, max_point, start.position);
+        expand_bounds(min_point, max_point, start.return_position);
+    }
+    for (const course_world_path& route : world.cart_roads) {
+        for (const glm::vec3& point : route.polyline) {
+            expand_bounds(min_point, max_point, point);
+        }
+    }
+    for (const course_world_path& route : world.walking_shortcuts) {
+        for (const glm::vec3& point : route.polyline) {
+            expand_bounds(min_point, max_point, point);
+        }
+    }
+
+    constexpr float margin = 36.0f;
+    const float center_x = (min_point.x + max_point.x) * 0.5f;
+    const float min_z = min_point.z - margin;
+    const float max_z = max_point.z + margin;
+    const float width = std::max(48.0f, max_point.x - min_point.x + margin * 2.0f);
+
+    tuning.course.id = world.id;
+    tuning.course.name = world.name;
+    tuning.course.par = 0;
+    tuning.course.tee_position = world.spawn.position;
+    tuning.course.pin_position = world.hole_starts.empty() ? world.spawn.position : world.hole_starts.front().position;
+    tuning.course.cup_radius = tuning.scale.cup_physics_radius_meters;
+    tuning.course.extent = std::max(width, max_z - min_z) * 0.65f;
+    tuning.course.spline.control_points = {
+        glm::vec3(center_x, 0.0f, min_z),
+        glm::vec3(center_x, 0.0f, max_z)
+    };
+    tuning.course.spline.width = width;
+    tuning.course.spline.rough_width = width;
+    tuning.course.material_zones.clear();
+    tuning.course.trees.clear();
+    tuning.terrain.control_points = tuning.course.spline.control_points;
+    tuning.terrain.width = width;
+    tuning.terrain.fairway_width = width;
+    tuning.terrain.sample_count = 128;
+    tuning.terrain_mesh_data = build_terrain_mesh(tuning.terrain, tuning.course.material_zones, tuning.zone_tuning);
+    tuning.terrain_apron_mesh_data = build_outer_rough_apron(tuning.terrain_mesh_data, tuning.terrain.width, 10);
+    tuning.ground_y = 0.0f;
 }
 
 bool starter_club_id(const std::string& club_id) {
@@ -435,6 +496,7 @@ void update_cart(game_state& state, const input_state& input, const float dt) {
     }
 
     enter_cart_mode(state);
+    const glm::vec3 position_before = state.player.position;
 
     if (input.space.pressed) {
         state.cart.drift_timer = state.tuning.cart.drift_duration;
@@ -448,7 +510,9 @@ void update_cart(game_state& state, const input_state& input, const float dt) {
     }
 
     const bool drifting = state.cart.drift_timer > 0.0f;
-    const float turn_rate = drifting ? state.tuning.cart.drift_turn_rate : state.tuning.cart.turn_rate;
+    const bool on_road = cart_has_road_bonus(state);
+    const float road_control = on_road ? 1.12f : (state.hub.in_hub ? 0.78f : 1.0f);
+    const float turn_rate = (drifting ? state.tuning.cart.drift_turn_rate : state.tuning.cart.turn_rate) * road_control;
     if (input.left.is_down) {
         state.cart.yaw += turn_rate * dt;
     }
@@ -456,9 +520,10 @@ void update_cart(game_state& state, const input_state& input, const float dt) {
         state.cart.yaw -= turn_rate * dt;
     }
 
+    const float road_speed = on_road ? 1.32f : (state.hub.in_hub ? 0.72f : 1.0f);
     const float target_speed = state.tuning.cart.speed *
-        (drifting ? state.tuning.cart.drift_speed_boost : 1.0f);
-    const float damping = drifting ? state.tuning.cart.drift_damping : state.tuning.cart.normal_damping;
+        (drifting ? state.tuning.cart.drift_speed_boost : 1.0f) * road_speed;
+    const float damping = (drifting ? state.tuning.cart.drift_damping : state.tuning.cart.normal_damping) * road_control;
     const float blend = 1.0f - std::exp(-std::max(0.0f, damping) * dt);
     state.cart.velocity += (target_speed - state.cart.velocity) * blend;
 
@@ -466,6 +531,26 @@ void update_cart(game_state& state, const input_state& input, const float dt) {
     state.player.position += forward * state.cart.velocity * dt;
     state.player.position.y = terrain_height_at(state.tuning, state.player.position);
     state.player.yaw = state.cart.yaw;
+
+    const glm::vec3 moved = state.player.position - position_before;
+    const float distance_meters = glm::length(glm::vec3(moved.x, 0.0f, moved.z)) * state.tuning.scale.meters_per_world_unit;
+    if (on_road && distance_meters > 0.0f) {
+        state.cart_drive_meter_remainder += distance_meters;
+        const int earned_cart_xp = static_cast<int>(std::floor(state.cart_drive_meter_remainder / 20.0f));
+        if (earned_cart_xp > 0) {
+            add_skill_xp(state.save.skills, cart_driving_skill_id(), earned_cart_xp);
+            state.cart_drive_meter_remainder -= static_cast<float>(earned_cart_xp) * 20.0f;
+        }
+
+        if (drifting) {
+            state.cart_drift_meter_remainder += distance_meters;
+            const int earned_drift_xp = static_cast<int>(std::floor(state.cart_drift_meter_remainder / 8.0f));
+            if (earned_drift_xp > 0) {
+                add_skill_xp(state.save.skills, drifting_skill_id(), earned_drift_xp);
+                state.cart_drift_meter_remainder -= static_cast<float>(earned_drift_xp) * 8.0f;
+            }
+        }
+    }
 }
 
 void apply_ground_roll_friction(game_state& state,
@@ -555,6 +640,22 @@ void update_walking(game_state& state, const input_state& input, const float dt)
     if (earned_fitness_xp > 0) {
         add_skill_xp(state.save.skills, fitness_skill_id(), earned_fitness_xp);
         state.fitness_walk_meter_remainder -= static_cast<float>(earned_fitness_xp) * 10.0f;
+    }
+
+    if (state.hub.available && state.hub.in_hub && input.space.pressed) {
+        const int collectible_index = nearby_collectible_index(state);
+        if (collectible_index >= 0) {
+            apply_collectible_reward(state.save,
+                                     state.hub.world.collectibles[static_cast<std::size_t>(collectible_index)],
+                                     static_cast<int>(state.round.current_hole_index));
+            return;
+        }
+
+        const int start_index = nearby_hole_start_index(state);
+        if (start_index >= 0) {
+            start_hub_hole(state, static_cast<std::size_t>(state.hub.world.hole_starts[static_cast<std::size_t>(start_index)].hole_index));
+        }
+        return;
     }
 
     if (input.space.pressed && can_interact_with_ball(state)) {
@@ -677,11 +778,49 @@ void reset_transient_hole_state(game_state& state) {
     state.hole_time = 0.0f;
     state.skills_panel_active = false;
     state.fitness_walk_meter_remainder = 0.0f;
+    state.cart_drive_meter_remainder = 0.0f;
+    state.cart_drift_meter_remainder = 0.0f;
     clear_flight_path(state);
     state.aim_angle = aim_angle_towards(state.ball.position, pin_anchor_position(state.tuning));
     place_player_near_ball(state);
     input_state input;
     update_walk_overlays(state, input);
+}
+
+void reset_transient_hub_state(game_state& state, const glm::vec3& spawn_position) {
+    apply_course_world_to_tuning(state.tuning, state.hub.world);
+    const terrain_sample terrain = terrain_sample_at(state.tuning, spawn_position);
+    state.ball.radius = state.tuning.scale.ball_physics_radius_meters;
+    state.ball.mass = state.tuning.scale.ball_mass_kg;
+    state.ball.position = terrain.point + terrain.normal * state.ball.radius;
+    state.ball.velocity = glm::vec3(0.0f);
+    state.ball.spin = glm::vec3(0.0f);
+    state.shot_camera_position = glm::vec3(0.0f);
+    state.swing = swing_state{};
+    state.cart = cart_state{};
+    clear_emote(state);
+    state.cigarette_effect = cigarette_effect_state{};
+    state.mode = game_mode::walking;
+    state.stroke_count = 0;
+    state.hole_time = 0.0f;
+    state.skills_panel_active = false;
+    state.fitness_walk_meter_remainder = 0.0f;
+    state.cart_drive_meter_remainder = 0.0f;
+    state.cart_drift_meter_remainder = 0.0f;
+    clear_flight_path(state);
+    state.player.position = terrain.point;
+    state.player.yaw = state.hub.world.hole_starts.empty()
+        ? 0.0f
+        : aim_angle_towards(state.player.position, state.hub.world.hole_starts.front().position);
+    state.cart.yaw = state.player.yaw;
+    state.aim_angle = state.player.yaw;
+    state.hub.in_hub = true;
+    input_state input;
+    update_walk_overlays(state, input);
+}
+
+void return_to_hub(game_state& state, const glm::vec3& return_position) {
+    reset_transient_hub_state(state, return_position);
 }
 }
 
@@ -750,7 +889,7 @@ void retee_ball(game_state& state) {
 
 bool start_game_course(game_state& state, const course_definition& course) {
     const round_state next_round = start_course(course);
-    if (next_round.finished || !load_hole_runtime(state.tuning, course, 0, state.asset_root)) {
+    if (next_round.finished) {
         return false;
     }
 
@@ -758,6 +897,50 @@ bool start_game_course(game_state& state, const course_definition& course) {
     state.round = next_round;
     state.save.current_course_id = course.id;
     state.save.current_hole_index = 0;
+
+    state.hub = course_hub_state{};
+    const std::string world_path = course_world_file_path(state.asset_root, course);
+    if (!world_path.empty()) {
+        const std::optional<course_world_definition> world = load_course_world_from_file(world_path, course);
+        if (world) {
+            state.hub.available = true;
+            state.hub.in_hub = true;
+            state.hub.active_hole_index = 0;
+            state.hub.return_position = world->spawn.position;
+            state.hub.world = *world;
+            reset_transient_hub_state(state, state.hub.world.spawn.position);
+            return true;
+        }
+    }
+
+    if (!load_hole_runtime(state.tuning, course, 0, state.asset_root)) {
+        return false;
+    }
+
+    reset_transient_hole_state(state);
+    return true;
+}
+
+bool start_hub_hole(game_state& state, const std::size_t hole_index) {
+    if (!state.hub.available || hole_index >= state.active_course.holes.size()) {
+        return false;
+    }
+    if (!load_hole_runtime(state.tuning, state.active_course, hole_index, state.asset_root)) {
+        return false;
+    }
+
+    state.round.current_hole_index = hole_index;
+    state.save.current_course_id = state.active_course.id;
+    state.save.current_hole_index = static_cast<int>(hole_index);
+    state.hub.in_hub = false;
+    state.hub.active_hole_index = hole_index;
+    state.hub.return_position = state.hub.world.spawn.position;
+    for (const course_world_hole_start& start : state.hub.world.hole_starts) {
+        if (start.hole_index == static_cast<int>(hole_index)) {
+            state.hub.return_position = start.return_position;
+            break;
+        }
+    }
     reset_transient_hole_state(state);
     return true;
 }
@@ -773,6 +956,11 @@ bool complete_current_hole(game_state& state) {
         if (!state.active_course.id.empty() && !contains_string(state.save.completed_course_ids, state.active_course.id)) {
             state.save.completed_course_ids.push_back(state.active_course.id);
         }
+        return true;
+    }
+
+    if (state.hub.available) {
+        return_to_hub(state, state.hub.return_position);
         return true;
     }
 
@@ -881,10 +1069,115 @@ bool ball_is_moving(const ball_state& ball) {
 }
 
 bool can_interact_with_ball(const game_state& state) {
+    if (state.hub.available && state.hub.in_hub) {
+        return false;
+    }
     const glm::vec3 delta = state.player.position - state.ball.position;
     const glm::vec3 horizontal_delta(delta.x, 0.0f, delta.z);
     return glm::length(horizontal_delta) <= state.tuning.ball_interact_radius
         && !ball_is_moving(state.ball, state.tuning);
+}
+
+int nearby_hole_start_index(const game_state& state) {
+    if (!state.hub.available || !state.hub.in_hub) {
+        return -1;
+    }
+
+    int best_index = -1;
+    float best_distance = 0.0f;
+    for (std::size_t i = 0; i < state.hub.world.hole_starts.size(); ++i) {
+        const course_world_hole_start& start = state.hub.world.hole_starts[i];
+        const glm::vec3 delta = state.player.position - start.position;
+        const glm::vec3 horizontal_delta(delta.x, 0.0f, delta.z);
+        const float distance = glm::length(horizontal_delta);
+        if (distance > start.interaction_radius) {
+            continue;
+        }
+        if (best_index < 0 || distance < best_distance) {
+            best_index = static_cast<int>(i);
+            best_distance = distance;
+        }
+    }
+    return best_index;
+}
+
+bool can_interact_with_hole_start(const game_state& state) {
+    return nearby_hole_start_index(state) >= 0;
+}
+
+int nearby_collectible_index(const game_state& state) {
+    if (!state.hub.available || !state.hub.in_hub) {
+        return -1;
+    }
+
+    int best_index = -1;
+    float best_distance = 0.0f;
+    const int current_hole_index = static_cast<int>(state.round.current_hole_index);
+    for (std::size_t i = 0; i < state.hub.world.collectibles.size(); ++i) {
+        const course_world_collectible& collectible = state.hub.world.collectibles[i];
+        if (!collectible_available(state.save, collectible, current_hole_index)) {
+            continue;
+        }
+
+        const glm::vec3 delta = state.player.position - collectible.position;
+        const glm::vec3 horizontal_delta(delta.x, 0.0f, delta.z);
+        const float distance = glm::length(horizontal_delta);
+        if (distance > collectible.interaction_radius) {
+            continue;
+        }
+        if (best_index < 0 || distance < best_distance) {
+            best_index = static_cast<int>(i);
+            best_distance = distance;
+        }
+    }
+    return best_index;
+}
+
+bool can_interact_with_collectible(const game_state& state) {
+    return nearby_collectible_index(state) >= 0;
+}
+
+float cart_road_distance(const game_state& state) {
+    if (!state.hub.available || !state.hub.in_hub || state.hub.world.cart_roads.empty()) {
+        return std::numeric_limits<float>::infinity();
+    }
+
+    float nearest = std::numeric_limits<float>::infinity();
+    for (const course_world_path& road : state.hub.world.cart_roads) {
+        if (road.polyline.empty()) {
+            continue;
+        }
+        if (road.polyline.size() == 1) {
+            const glm::vec3 delta(state.player.position.x - road.polyline.front().x,
+                                  0.0f,
+                                  state.player.position.z - road.polyline.front().z);
+            nearest = std::min(nearest, glm::length(delta));
+            continue;
+        }
+        for (std::size_t i = 0; i + 1 < road.polyline.size(); ++i) {
+            const glm::vec3 a = road.polyline[i];
+            const glm::vec3 b = road.polyline[i + 1];
+            const glm::vec3 ab(b.x - a.x, 0.0f, b.z - a.z);
+            const glm::vec3 ap(state.player.position.x - a.x, 0.0f, state.player.position.z - a.z);
+            const float denom = glm::dot(ab, ab);
+            const float t = denom <= 0.0001f ? 0.0f : std::clamp(glm::dot(ap, ab) / denom, 0.0f, 1.0f);
+            const glm::vec3 closest = a + ab * t;
+            const glm::vec3 delta(state.player.position.x - closest.x, 0.0f, state.player.position.z - closest.z);
+            nearest = std::min(nearest, glm::length(delta));
+        }
+    }
+    return nearest;
+}
+
+bool cart_has_road_bonus(const game_state& state) {
+    if (!state.hub.available || !state.hub.in_hub) {
+        return false;
+    }
+    float influence = 4.0f;
+    for (const course_world_path& road : state.hub.world.cart_roads) {
+        influence = std::max(influence, road.width * 0.5f + 2.5f);
+    }
+    return cart_road_distance(state) <= influence;
 }
 
 bool rangefinder_should_show(const game_mode mode, const input_state& input) {

@@ -85,6 +85,7 @@ set(VCR_GOLF_GAME_SOURCES
     src/game/asset_resolver.cpp
     src/game/club_loader.cpp
     src/game/course_loader.cpp
+    src/game/course_world_loader.cpp
     src/game/game_content.cpp
     src/game/cloud_save.cpp
     src/game/hole_loader.cpp

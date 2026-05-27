@@ -16,6 +16,8 @@ using skill_progression = std::map<std::string, skill_progress>;
 const char* golf_swing_skill_id();
 const char* smoking_skill_id();
 const char* fitness_skill_id();
+const char* cart_driving_skill_id();
+const char* drifting_skill_id();
 const char* rangefinder_unlock_id();
 const char* cart_unlock_id();
 const char* cigarette_filterless_unlock_id();

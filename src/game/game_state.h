@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/course_definition.h"
+#include "game/course_world_definition.h"
 #include "game/game_tuning.h"
 #include "game/round_state.h"
 #include "game/save_data.h"
@@ -44,6 +45,14 @@ struct cigarette_effect_state {
     float remaining_seconds = 0.0f;
 };
 
+struct course_hub_state {
+    bool available = false;
+    bool in_hub = false;
+    std::size_t active_hole_index = 0;
+    glm::vec3 return_position{0.0f};
+    course_world_definition world;
+};
+
 enum class audio_event_type {
     swing_start,
     club_hit,
@@ -74,6 +83,7 @@ struct game_state {
     glm::vec3 shot_camera_position{0.0f};
     std::string asset_root;
     course_definition active_course;
+    course_hub_state hub;
     round_state round;
     save_data save;
     game_tuning tuning;
@@ -92,6 +102,8 @@ struct game_state {
     bool scorecard_active = false;
     bool skills_panel_active = false;
     float fitness_walk_meter_remainder = 0.0f;
+    float cart_drive_meter_remainder = 0.0f;
+    float cart_drift_meter_remainder = 0.0f;
     std::vector<glm::vec3> flight_path_points;
     std::vector<audio_event> audio_events;
 };
@@ -102,11 +114,18 @@ void refresh_unlocked_clubs(game_state& state);
 void update_game(game_state& state, const input_state& input, float dt);
 void retee_ball(game_state& state);
 bool start_game_course(game_state& state, const course_definition& course);
+bool start_hub_hole(game_state& state, std::size_t hole_index);
 bool complete_current_hole(game_state& state);
 bool ball_is_in_cup(const game_state& state);
 bool ball_is_moving(const ball_state& ball, const game_tuning& tuning);
 bool ball_is_moving(const ball_state& ball);
 bool can_interact_with_ball(const game_state& state);
+bool can_interact_with_hole_start(const game_state& state);
+int nearby_hole_start_index(const game_state& state);
+bool can_interact_with_collectible(const game_state& state);
+int nearby_collectible_index(const game_state& state);
+float cart_road_distance(const game_state& state);
+bool cart_has_road_bonus(const game_state& state);
 bool rangefinder_should_show(game_mode mode, const input_state& input);
 bool course_map_should_show(game_mode mode, const input_state& input);
 bool scorecard_should_show(game_mode mode, const input_state& input);

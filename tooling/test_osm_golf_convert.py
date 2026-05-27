@@ -66,10 +66,24 @@ class OsmGolfConvertTests(unittest.TestCase):
         tree = node(30, {"natural": "tree"}, 0.005, 0.005)
 
         with mock.patch.object(conv, "_query", return_value={"elements": [own_hole, neighbor_hole, tree]}):
-            golf, trees = conv._fetch_elements(course)
+            golf, trees, paths = conv._fetch_elements(course)
 
         self.assertEqual([10], [el["id"] for el in golf])
         self.assertEqual([30], [el["id"] for el in trees])
+        self.assertEqual([], paths)
+
+    def test_fetch_elements_includes_course_scoped_paths(self):
+        course = way(1, {"leisure": "golf_course", "name": "Selected"}, [(0, 0), (0, 0.01), (0.01, 0.01), (0.01, 0)])
+        cartpath = way(40, {"golf": "cartpath"}, [(0.002, 0.002), (0.003, 0.003)])
+        service = way(41, {"highway": "service"}, [(0.004, 0.004), (0.005, 0.005)])
+        neighbor = way(42, {"highway": "path"}, [(0.04, 0.04), (0.05, 0.05)])
+
+        with mock.patch.object(conv, "_query", return_value={"elements": [cartpath, service, neighbor]}):
+            golf, trees, paths = conv._fetch_elements(course)
+
+        self.assertEqual([40], [el["id"] for el in golf])
+        self.assertEqual([], trees)
+        self.assertEqual([40, 41], [el["id"] for el in paths])
 
     def test_tree_assignment_excludes_fairway_core_and_keeps_side_trees(self):
         origin_lat = 56.0
@@ -107,6 +121,56 @@ class OsmGolfConvertTests(unittest.TestCase):
         warnings = conv._scale_warnings(h_json)
 
         self.assertGreaterEqual(len(warnings), 2)
+
+    def test_course_world_uses_shared_coordinates_and_osm_paths(self):
+        origin_lat = 56.0
+        origin_lon = 10.0
+        hole_1 = way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.001, 10.0)])
+        tee_1 = node(2, {"golf": "tee", "ref": "1"}, 56.0, 10.0)
+        pin_1 = node(3, {"golf": "pin", "ref": "1"}, 56.001, 10.0)
+        hole_2 = way(4, {"golf": "hole", "ref": "2"}, [(56.001, 10.001), (56.002, 10.001)])
+        service = way(5, {"highway": "service"}, [(56.0, 10.0), (56.001, 10.001)])
+        footway = way(6, {"highway": "footway"}, [(56.001, 10.0), (56.001, 10.001)])
+        holes = conv.group_holes([hole_1, tee_1, pin_1, hole_2])
+
+        world = conv.course_world_to_json("test_course",
+                                          "Test Course",
+                                          way(9, {"leisure": "golf_course"}, [(56.0, 10.0), (56.002, 10.002)]),
+                                          holes,
+                                          [service, footway],
+                                          origin_lat,
+                                          origin_lon)
+
+        self.assertEqual(2, len(world["hole_starts"]))
+        self.assertEqual(0, world["hole_starts"][0]["hole_index"])
+        self.assertNotEqual(world["hole_starts"][0]["position"], world["hole_starts"][1]["position"])
+        self.assertEqual(1, len(world["cart_roads"]))
+        self.assertEqual(1, len(world["walking_shortcuts"]))
+        self.assertEqual("fitness", world["walking_shortcuts"][0]["required_skill_id"])
+        self.assertGreaterEqual(len(world["collectibles"]), 2)
+        self.assertTrue(any(item.get("repeatable") for item in world["collectibles"]))
+        self.assertTrue(any(item.get("requirement", {}).get("skill_id") == "fitness" for item in world["collectibles"]))
+
+    def test_course_world_generates_fallback_roads_when_osm_roads_are_absent(self):
+        origin_lat = 56.0
+        origin_lon = 10.0
+        holes = conv.group_holes([
+            way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.001, 10.0)]),
+            way(2, {"golf": "hole", "ref": "2"}, [(56.001, 10.001), (56.002, 10.001)]),
+        ])
+
+        world = conv.course_world_to_json("test_course",
+                                          "Test Course",
+                                          way(9, {"leisure": "golf_course"}, [(56.0, 10.0), (56.002, 10.002)]),
+                                          holes,
+                                          [],
+                                          origin_lat,
+                                          origin_lon)
+
+        self.assertEqual(2, len(world["hole_starts"]))
+        self.assertEqual(1, len(world["cart_roads"]))
+        self.assertEqual("generated_fallback", world["cart_roads"][0]["source"])
+        self.assertGreaterEqual(len(world["cart_roads"][0]["polyline"]), 5)
 
 
 if __name__ == "__main__":

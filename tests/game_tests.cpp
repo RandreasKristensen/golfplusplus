@@ -2,6 +2,7 @@
 
 #include "core/input.h"
 #include "game/course_loader.h"
+#include "game/course_world_loader.h"
 #include "game/cloud_save.h"
 #include "game/game_state.h"
 #include "game/game_content.h"
@@ -233,6 +234,8 @@ TEST_CASE("skill xp clamps and preserves generic skill ids") {
     CHECK(progression.find(golf_swing_skill_id()) != progression.end());
     CHECK(progression.find(smoking_skill_id()) != progression.end());
     CHECK(progression.find(fitness_skill_id()) != progression.end());
+    CHECK(progression.find(cart_driving_skill_id()) != progression.end());
+    CHECK(progression.find(drifting_skill_id()) != progression.end());
 
     add_skill_xp(progression, "future_skill", skill_max_xp + 10);
     CHECK(skill_xp(progression, "future_skill") == skill_max_xp);
@@ -765,6 +768,76 @@ TEST_CASE("course manifests can reference holes by id") {
     CHECK(!tuning.course.id.empty());
 }
 
+TEST_CASE("course manifest can reference optional course world") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+
+    CHECK(course->id == "marienlyst_golfklub");
+    CHECK(course->world == "course_worlds/marienlyst_golfklub.json");
+}
+
+TEST_CASE("valid course world loads and validates hole starts") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+
+    const std::optional<course_world_definition> world = load_course_world_from_file(course_world_file_path(asset_root(), *course), *course);
+
+    CHECK(world.has_value());
+    if (!world) {
+        return;
+    }
+    CHECK(world->hole_starts.size() == course->holes.size());
+    CHECK(!world->cart_roads.empty());
+    CHECK(!world->collectibles.empty());
+    CHECK(world->hole_starts.front().hole_index == 0);
+}
+
+TEST_CASE("invalid course world hole index is rejected") {
+    course_definition course;
+    course.id = "bad_world_course";
+    course.name = "Bad World Course";
+    course.hole_count = 1;
+    course.holes = {"holes/test.json"};
+
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "golfpp_bad_course_world.json";
+    {
+        std::ofstream file(path);
+        file << R"({
+  "id": "bad",
+  "name": "Bad",
+  "spawn": {"id": "spawn", "position": [0, 0, 0], "radius": 5},
+  "hole_starts": [
+    {"id": "bad_start", "hole_index": 4, "position": [0, 0, 0], "return_position": [1, 0, 1]}
+  ]
+})";
+    }
+
+    CHECK(!load_course_world_from_file(path.string(), course));
+}
+
+TEST_CASE("missing world file falls back to current course behavior") {
+    course_definition course;
+    course.id = "missing_world_course";
+    course.name = "Missing World Course";
+    course.hole_count = 1;
+    course.holes = {"holes/test.json"};
+    course.world = "course_worlds/missing_world.json";
+
+    game_state state = make_initial_game_state();
+
+    CHECK(start_game_course(state, course));
+    CHECK(!state.hub.available);
+    CHECK(!state.hub.in_hub);
+    CHECK(state.tuning.course.id == "hole_01");
+}
+
 TEST_CASE("hole directory loader discovers authored holes") {
     const std::vector<hole_data> holes = load_holes_from_directory(asset_root() + "/holes");
 
@@ -813,6 +886,224 @@ TEST_CASE("round state records strokes and finishes after course length") {
     CHECK(!complete_hole(round, 5));
     CHECK(round.finished);
     CHECK(round.strokes_per_hole[1] == 5);
+}
+
+TEST_CASE("selecting six-hole course enters hub mode") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+
+    game_state state = make_initial_game_state();
+
+    CHECK(start_game_course(state, *course));
+    CHECK(state.hub.available);
+    CHECK(state.hub.in_hub);
+    CHECK(state.round.current_hole_index == 0);
+    CHECK(near_float(state.player.position.x, state.hub.world.spawn.position.x));
+    CHECK(!can_interact_with_ball(state));
+}
+
+TEST_CASE("interacting with hub hole start loads the correct hole") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+
+    game_state state = make_initial_game_state();
+    CHECK(start_game_course(state, *course));
+    if (!state.hub.available || state.hub.world.hole_starts.size() < 2U) {
+        return;
+    }
+    state.player.position = state.hub.world.hole_starts[1].position;
+
+    input_state input;
+    input.space.pressed = true;
+    update_game(state, input, 0.016f);
+
+    CHECK(!state.hub.in_hub);
+    CHECK(state.round.current_hole_index == 1);
+    CHECK(state.tuning.course.id == "marienlyst_golfklub_h02");
+}
+
+TEST_CASE("completing hub hole returns to hub and preserves score") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+
+    game_state state = make_initial_game_state();
+    CHECK(start_game_course(state, *course));
+    CHECK(start_hub_hole(state, 0));
+    if (!state.hub.available) {
+        return;
+    }
+    state.stroke_count = 4;
+
+    CHECK(complete_current_hole(state));
+
+    CHECK(state.hub.in_hub);
+    CHECK(state.round.current_hole_index == 1);
+    CHECK(state.save.hole_scores[0] == 4);
+    CHECK(near_float(state.player.position.x, state.hub.world.hole_starts[0].return_position.x));
+}
+
+TEST_CASE("cart bonus applies near roads and not far from roads") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+
+    game_state on_road = make_initial_game_state();
+    CHECK(start_game_course(on_road, *course));
+    if (!on_road.hub.available || on_road.hub.world.cart_roads.empty()) {
+        return;
+    }
+    on_road.save.unlocked_items.push_back(cart_unlock_id());
+    on_road.player.position = on_road.hub.world.cart_roads.front().polyline.front();
+
+    game_state off_road = on_road;
+    off_road.player.position = glm::vec3(400.0f, 0.0f, 400.0f);
+
+    CHECK(cart_has_road_bonus(on_road));
+    CHECK(!cart_has_road_bonus(off_road));
+
+    input_state input;
+    input.left_shift.is_down = true;
+    input.shift.is_down = true;
+    update_game(on_road, input, 0.20f);
+    update_game(off_road, input, 0.20f);
+
+    CHECK(on_road.cart.velocity > off_road.cart.velocity);
+}
+
+TEST_CASE("locked fitness shortcut is detected from save skill level") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+    const std::optional<course_world_definition> world = load_course_world_from_file(course_world_file_path(asset_root(), *course), *course);
+    CHECK(world.has_value());
+    if (!world || world->walking_shortcuts.empty()) {
+        return;
+    }
+
+    save_data save;
+    CHECK(!shortcut_unlocked(save, world->walking_shortcuts.front()));
+
+    add_skill_xp(save.skills, fitness_skill_id(), xp_for_level(world->walking_shortcuts.front().required_level));
+    CHECK(shortcut_unlocked(save, world->walking_shortcuts.front()));
+}
+
+TEST_CASE("collectibles apply permanent and repeatable rewards") {
+    course_world_collectible permanent;
+    permanent.id = "lost_ball";
+    permanent.money = 3;
+    permanent.world_flag = "found_lost_ball";
+    permanent.skill_rewards.push_back(course_world_skill_reward{fitness_skill_id(), 12});
+
+    save_data save;
+    CHECK(collectible_available(save, permanent, 0));
+    CHECK(apply_collectible_reward(save, permanent, 0));
+    CHECK(save.money == 3);
+    CHECK(skill_xp(save.skills, fitness_skill_id()) == 12);
+    CHECK(save.collected_ids.size() == 1);
+    CHECK(save.world_flags.size() == 1);
+    CHECK(!collectible_available(save, permanent, 0));
+    CHECK(!apply_collectible_reward(save, permanent, 0));
+
+    course_world_collectible repeatable;
+    repeatable.id = "range_token";
+    repeatable.repeatable = true;
+    repeatable.repeatable_cooldown_holes = 2;
+    repeatable.skill_rewards.push_back(course_world_skill_reward{fitness_skill_id(), 5});
+
+    CHECK(collectible_available(save, repeatable, 0));
+    CHECK(apply_collectible_reward(save, repeatable, 0));
+    CHECK(!collectible_available(save, repeatable, 1));
+    CHECK(collectible_available(save, repeatable, 2));
+    CHECK(save.repeatable_collectibles["range_token"].claim_count == 1);
+}
+
+TEST_CASE("collectible requirements use generic skill levels") {
+    course_world_collectible collectible;
+    collectible.id = "fitness_cache";
+    collectible.requirement.skill_id = fitness_skill_id();
+    collectible.requirement.min_level = 2;
+
+    save_data save;
+    CHECK(!collectible_available(save, collectible, 0));
+
+    add_skill_xp(save.skills, fitness_skill_id(), xp_for_level(2));
+    CHECK(collectible_available(save, collectible, 0));
+}
+
+TEST_CASE("hub collectible interaction claims nearest available collectible") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+
+    game_state state = make_initial_game_state();
+    CHECK(start_game_course(state, *course));
+    if (!state.hub.available || state.hub.world.collectibles.empty()) {
+        return;
+    }
+
+    const course_world_collectible& collectible = state.hub.world.collectibles.front();
+    state.player.position = collectible.position;
+
+    input_state input;
+    input.space.pressed = true;
+    update_game(state, input, 0.016f);
+
+    CHECK(!state.save.collected_ids.empty() || !state.save.repeatable_collectibles.empty());
+}
+
+TEST_CASE("cart driving and drifting xp are awarded only on hub paths") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+
+    game_state on_road = make_initial_game_state();
+    CHECK(start_game_course(on_road, *course));
+    if (!on_road.hub.available || on_road.hub.world.cart_roads.empty()) {
+        return;
+    }
+    on_road.save.unlocked_items.push_back(cart_unlock_id());
+    on_road.player.position = on_road.hub.world.cart_roads.front().polyline.front();
+
+    input_state input;
+    input.left_shift.is_down = true;
+    input.shift.is_down = true;
+    input.space.is_down = true;
+    for (int i = 0; i < 80; ++i) {
+        input.space.pressed = i % 6 == 0;
+        update_game(on_road, input, 0.05f);
+    }
+
+    CHECK(skill_xp(on_road.save.skills, cart_driving_skill_id()) > 0);
+    CHECK(skill_xp(on_road.save.skills, drifting_skill_id()) > 0);
+
+    game_state off_road = make_initial_game_state();
+    CHECK(start_game_course(off_road, *course));
+    off_road.save.unlocked_items.push_back(cart_unlock_id());
+    off_road.player.position = glm::vec3(400.0f, 0.0f, 400.0f);
+    for (int i = 0; i < 80; ++i) {
+        input.space.pressed = i % 6 == 0;
+        update_game(off_road, input, 0.05f);
+    }
+
+    CHECK(skill_xp(off_road.save.skills, cart_driving_skill_id()) == 0);
+    CHECK(skill_xp(off_road.save.skills, drifting_skill_id()) == 0);
 }
 
 TEST_CASE("scorecard data shows played scores and pending holes") {
@@ -1104,6 +1395,10 @@ TEST_CASE("save data round trips progress and migrates missing version") {
     save.hole_scores[1] = 5;
     save.skills[golf_swing_skill_id()].xp = 125;
     save.skills["future_skill"].xp = 42;
+    save.collected_ids = {"lost_ball"};
+    save.repeatable_collectibles["range_token"].claim_count = 2;
+    save.repeatable_collectibles["range_token"].last_claimed_hole_index = 1;
+    save.world_flags = {"found_cache"};
 
     const std::optional<save_data> parsed = parse_save_data(save_data_to_json(save));
     CHECK(parsed.has_value());
@@ -1124,6 +1419,12 @@ TEST_CASE("save data round trips progress and migrates missing version") {
     CHECK(skill_xp(parsed->skills, "future_skill") == 42);
     CHECK(parsed->skills.find(smoking_skill_id()) != parsed->skills.end());
     CHECK(parsed->skills.find(fitness_skill_id()) != parsed->skills.end());
+    CHECK(parsed->skills.find(cart_driving_skill_id()) != parsed->skills.end());
+    CHECK(parsed->skills.find(drifting_skill_id()) != parsed->skills.end());
+    CHECK(parsed->collected_ids.size() == 1);
+    CHECK(parsed->repeatable_collectibles.at("range_token").claim_count == 2);
+    CHECK(parsed->repeatable_collectibles.at("range_token").last_claimed_hole_index == 1);
+    CHECK(parsed->world_flags.size() == 1);
 
     const std::optional<save_data> migrated = parse_save_data("{\"money\":5,\"current_hole_index\":-2}");
     CHECK(migrated.has_value());
@@ -1136,6 +1437,8 @@ TEST_CASE("save data round trips progress and migrates missing version") {
     CHECK(skill_xp(migrated->skills, golf_swing_skill_id()) == 0);
     CHECK(skill_xp(migrated->skills, smoking_skill_id()) == 0);
     CHECK(skill_xp(migrated->skills, fitness_skill_id()) == 0);
+    CHECK(skill_xp(migrated->skills, cart_driving_skill_id()) == 0);
+    CHECK(skill_xp(migrated->skills, drifting_skill_id()) == 0);
 
     const std::optional<save_data> clamped = parse_save_data("{\"version\":2,\"skills\":{\"smoking\":-12,\"future_skill\":17}}");
     CHECK(clamped.has_value());

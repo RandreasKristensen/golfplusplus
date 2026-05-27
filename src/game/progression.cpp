@@ -24,6 +24,14 @@ const char* fitness_skill_id() {
     return "fitness";
 }
 
+const char* cart_driving_skill_id() {
+    return "cart_driving";
+}
+
+const char* drifting_skill_id() {
+    return "drifting";
+}
+
 const char* rangefinder_unlock_id() {
     return "rangefinder";
 }
@@ -49,6 +57,8 @@ skill_progression default_skill_progression() {
     progression[golf_swing_skill_id()] = skill_progress{};
     progression[smoking_skill_id()] = skill_progress{};
     progression[fitness_skill_id()] = skill_progress{};
+    progression[cart_driving_skill_id()] = skill_progress{};
+    progression[drifting_skill_id()] = skill_progress{};
     return progression;
 }
 

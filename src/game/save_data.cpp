@@ -62,6 +62,26 @@ skill_progression skills_at(const json& object, const char* key) {
     return progression;
 }
 
+std::map<std::string, repeatable_collectible_state> repeatable_collectibles_at(const json& object, const char* key) {
+    std::map<std::string, repeatable_collectible_state> values;
+    const auto it = object.find(key);
+    if (it == object.end() || !it->is_object()) {
+        return values;
+    }
+
+    for (auto collectible_it = it->begin(); collectible_it != it->end(); ++collectible_it) {
+        if (!collectible_it.value().is_object()) {
+            continue;
+        }
+
+        repeatable_collectible_state state;
+        state.claim_count = int_at(collectible_it.value(), "claim_count").value_or(0);
+        state.last_claimed_hole_index = int_at(collectible_it.value(), "last_claimed_hole_index").value_or(-1);
+        values[collectible_it.key()] = state;
+    }
+    return values;
+}
+
 std::optional<int> parse_int_key(const std::string& key) {
     char* end = nullptr;
     const long parsed = std::strtol(key.c_str(), &end, 10);
@@ -83,10 +103,17 @@ save_data migrate_save_data(save_data save) {
     if (save.version < 3) {
         save.version = 3;
     }
+    if (save.version < 4) {
+        save.version = 4;
+    }
     save.version = current_save_version;
     save.money = std::max(0, save.money);
     save.current_hole_index = std::max(0, save.current_hole_index);
     ensure_default_skills(save.skills);
+    for (auto& repeatable : save.repeatable_collectibles) {
+        repeatable.second.claim_count = std::max(0, repeatable.second.claim_count);
+        repeatable.second.last_claimed_hole_index = std::max(-1, repeatable.second.last_claimed_hole_index);
+    }
     return save;
 }
 
@@ -105,6 +132,9 @@ std::optional<save_data> parse_save_data(const std::string& text) {
     save.current_course_id = string_at(root, "current_course_id").value_or("");
     save.current_hole_index = int_at(root, "current_hole_index").value_or(0);
     save.skills = skills_at(root, "skills");
+    save.collected_ids = string_array_at(root, "collected_ids");
+    save.repeatable_collectibles = repeatable_collectibles_at(root, "repeatable_collectibles");
+    save.world_flags = string_array_at(root, "world_flags");
 
     const auto scores_it = root.find("hole_scores");
     if (scores_it != root.end() && scores_it->is_object()) {
@@ -132,6 +162,8 @@ std::string save_data_to_json(const save_data& save) {
     root["completed_course_ids"] = save.completed_course_ids;
     root["current_course_id"] = save.current_course_id;
     root["current_hole_index"] = std::max(0, save.current_hole_index);
+    root["collected_ids"] = save.collected_ids;
+    root["world_flags"] = save.world_flags;
 
     json scores = json::object();
     for (const auto& score : save.hole_scores) {
@@ -146,6 +178,15 @@ std::string save_data_to_json(const save_data& save) {
         skills[skill.first] = std::max(0, std::min(skill_max_xp, skill.second.xp));
     }
     root["skills"] = skills;
+
+    json repeatable_collectibles = json::object();
+    for (const auto& collectible : save.repeatable_collectibles) {
+        json value = json::object();
+        value["claim_count"] = std::max(0, collectible.second.claim_count);
+        value["last_claimed_hole_index"] = std::max(-1, collectible.second.last_claimed_hole_index);
+        repeatable_collectibles[collectible.first] = value;
+    }
+    root["repeatable_collectibles"] = repeatable_collectibles;
 
     return root.dump(2) + "\n";
 }

@@ -7,7 +7,12 @@
 #include <string>
 #include <vector>
 
-constexpr int current_save_version = 3;
+constexpr int current_save_version = 4;
+
+struct repeatable_collectible_state {
+    int claim_count = 0;
+    int last_claimed_hole_index = -1;
+};
 
 struct save_data {
     int version = current_save_version;
@@ -19,6 +24,9 @@ struct save_data {
     int current_hole_index = 0;
     std::map<int, int> hole_scores;
     skill_progression skills = default_skill_progression();
+    std::vector<std::string> collected_ids;
+    std::map<std::string, repeatable_collectible_state> repeatable_collectibles;
+    std::vector<std::string> world_flags;
 };
 
 save_data migrate_save_data(save_data save);

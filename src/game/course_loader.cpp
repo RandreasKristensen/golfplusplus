@@ -54,6 +54,7 @@ std::optional<course_definition> course_from_json(const json& root) {
     course_definition course;
     course.id = string_at(root, "id").value_or("");
     course.name = string_at(root, "name").value_or(course.id);
+    course.world = string_at(root, "world").value_or("");
     course.hole_count = int_at(root, "hole_count").value_or(static_cast<int>(holes_it->size()));
 
     for (const json& hole : *holes_it) {

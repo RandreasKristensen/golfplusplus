@@ -291,6 +291,12 @@ def _is_tree_feature(el: dict) -> bool:
             tags.get("landuse") == "forest")
 
 
+def _is_path_feature(el: dict) -> bool:
+    tags = el.get("tags", {})
+    highway = tags.get("highway")
+    return tags.get("golf") == "cartpath" or highway in ("path", "service", "track", "footway", "pedestrian")
+
+
 def _dedupe_elements(elements: list[dict]) -> list[dict]:
     out = []
     seen = set()
@@ -303,8 +309,8 @@ def _dedupe_elements(elements: list[dict]) -> list[dict]:
     return out
 
 
-def _fetch_elements(course_el: dict) -> tuple[list, list]:
-    """Fetch golf and vegetation elements scoped to the selected course."""
+def _fetch_elements(course_el: dict) -> tuple[list, list, list]:
+    """Fetch golf, vegetation, and path/service elements scoped to the selected course."""
     relation_elements = []
     used_relation_scope = False
     if course_el.get("type") == "relation":
@@ -337,6 +343,10 @@ relation({rel_id})->.course;
   relation["landuse"="forest"](area.courseArea);
   way["natural"="scrub"](area.courseArea);
   relation["natural"="scrub"](area.courseArea);
+  way["highway"~"^(path|service|track|footway|pedestrian)$"](area.courseArea);
+  relation["highway"~"^(path|service|track|footway|pedestrian)$"](area.courseArea);
+  way["golf"="cartpath"](area.courseArea);
+  relation["golf"="cartpath"](area.courseArea);
 );
 out geom;"""
     else:
@@ -354,6 +364,10 @@ out geom;"""
   relation["landuse"="forest"]({bbox});
   way["natural"="scrub"]({bbox});
   relation["natural"="scrub"]({bbox});
+  way["highway"~"^(path|service|track|footway|pedestrian)$"]({bbox});
+  relation["highway"~"^(path|service|track|footway|pedestrian)$"]({bbox});
+  way["golf"="cartpath"]({bbox});
+  relation["golf"="cartpath"]({bbox});
 );
 out geom;"""
 
@@ -362,12 +376,13 @@ out geom;"""
     scoped = [el for el in fetched if _element_in_course_footprint(el, course_el)]
     golf = [el for el in scoped if _is_golf_feature(el)]
     trees = [el for el in scoped if _is_tree_feature(el)]
+    paths = [el for el in scoped if _is_path_feature(el)]
 
     if course_el.get("type") == "relation" and not used_relation_scope:
         print("  [warn] relation members were unavailable; relied on course-area query", file=sys.stderr)
     if not scoped and course_el.get("type") != "relation":
         print("  [warn] course has weak boundary data; bbox fallback may miss edge features", file=sys.stderr)
-    return golf, trees
+    return golf, trees, paths
 
 
 # ── Geometry helpers ──────────────────────────────────────────────────────────
@@ -1118,6 +1133,419 @@ def _scale_warnings(h_json: dict) -> list[str]:
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+def _xyz(xz: tuple[float, float]) -> list[float]:
+    return [_r(xz[0]), 0.0, _r(xz[1])]
+
+
+def _hole_tee_xz(h: dict, origin_lat: float, origin_lon: float) -> tuple[float, float]:
+    tee_pts = _to_xz_list(h["tees"], origin_lat, origin_lon)
+    if tee_pts:
+        return _centroid(tee_pts)
+    line = _oriented_hole_line_xz(h, origin_lat, origin_lon)
+    if line:
+        return line[0]
+    return _hole_anchor_xz(h, origin_lat, origin_lon)
+
+
+def _hole_return_xz(h: dict, origin_lat: float, origin_lon: float) -> tuple[float, float]:
+    pin_pts = _to_xz_list(h["pins"], origin_lat, origin_lon)
+    if pin_pts:
+        return _centroid(pin_pts)
+    green_pts = _to_xz_list(h["greens"][:1], origin_lat, origin_lon)
+    if green_pts:
+        return _centroid(green_pts)
+    line = _oriented_hole_line_xz(h, origin_lat, origin_lon)
+    if line:
+        return line[-1]
+    return _hole_anchor_xz(h, origin_lat, origin_lon)
+
+
+def _path_kind(el: dict) -> str:
+    tags = el.get("tags", {})
+    if tags.get("golf") == "cartpath" or tags.get("highway") in ("service", "track"):
+        return "cart_road"
+    return "walking_shortcut"
+
+
+def _path_surface(el: dict) -> str:
+    tags = el.get("tags", {})
+    if tags.get("surface"):
+        return tags["surface"]
+    if tags.get("highway") in ("service", "track"):
+        return "gravel"
+    return "dirt"
+
+
+def _route_from_path(el: dict, origin_lat: float, origin_lon: float, index: int) -> dict | None:
+    pts = _to_xz_list([el], origin_lat, origin_lon)
+    if len(pts) < 2:
+        return None
+    kind = _path_kind(el)
+    route = {
+        "id": f"{kind}_{index:02d}",
+        "source": f"osm:{el.get('type', '?')}/{el.get('id', '?')}",
+        "surface": _path_surface(el),
+        "width": 3.2 if kind == "cart_road" else 1.6,
+        "points": [_xyz(pt) for pt in pts],
+    }
+    if kind == "walking_shortcut":
+        route["required_skill_id"] = "fitness"
+        route["required_level"] = 2
+    return route
+
+
+def _fallback_cart_roads(course_id: str, hole_starts: list[dict]) -> list[dict]:
+    if not hole_starts:
+        return []
+
+    points = [hole_starts[0]["position"]]
+    for start in hole_starts:
+        if points[-1] != start["position"]:
+            points.append(start["position"])
+        points.append(start["return_position"])
+
+    return [{
+        "id": f"{course_id}_fallback_cart_loop",
+        "source": "generated:fallback",
+        "surface": "gravel",
+        "width": 3.4,
+        "points": points,
+    }]
+
+
+def course_world_to_json(course_id: str,
+                         course_name: str,
+                         course_el: dict,
+                         holes: dict,
+                         path_elements: list,
+                         origin_lat: float,
+                         origin_lon: float) -> dict:
+    hole_starts = []
+    for num in sorted(holes.keys()):
+        tee = _hole_tee_xz(holes[num], origin_lat, origin_lon)
+        ret = _hole_return_xz(holes[num], origin_lat, origin_lon)
+        hole_starts.append({
+            "id": f"hole_{num:02d}_start",
+            "hole_index": len(hole_starts),
+            "label": f"Hole {num}",
+            "position": _xyz(tee),
+            "return_position": _xyz(ret),
+            "interaction_radius": 5.0,
+        })
+
+    if hole_starts:
+        first = hole_starts[0]["position"]
+        clubhouse_spawn = [_r(first[0] - 16.0), 0.0, _r(first[2] - 12.0)]
+    else:
+        clubhouse_spawn = [0.0, 0.0, 0.0]
+
+    cart_roads = []
+    walking_shortcuts = []
+    for index, el in enumerate(path_elements, start=1):
+        route = _route_from_path(el, origin_lat, origin_lon, index)
+        if not route:
+            continue
+        if _path_kind(el) == "cart_road":
+            cart_roads.append(route)
+        else:
+            walking_shortcuts.append(route)
+
+    if not cart_roads:
+        cart_roads = _fallback_cart_roads(course_id, [{"position": clubhouse_spawn, "return_position": clubhouse_spawn}] + hole_starts)
+
+    if not walking_shortcuts and len(hole_starts) >= 2:
+        walking_shortcuts.append({
+            "id": f"{course_id}_fitness_cut_01",
+            "source": "generated:fallback",
+            "surface": "rough",
+            "width": 1.4,
+            "required_skill_id": "fitness",
+            "required_level": 2,
+            "points": [hole_starts[0]["return_position"], hole_starts[1]["position"]],
+        })
+
+    return {
+        "id": course_id,
+        "name": course_name,
+        "origin": {
+            "lat": origin_lat,
+            "lon": origin_lon,
+            "projection": "equirectangular_meters_xz",
+            "osm_ref": _format_osm_ref(course_el),
+        },
+        "clubhouse_spawn": clubhouse_spawn,
+        "hole_starts": hole_starts,
+        "cart_roads": cart_roads,
+        "walking_shortcuts": walking_shortcuts,
+        "spawn_zones": [
+            {
+                "id": f"{course_id}_roadside_collectibles",
+                "type": "collectible",
+                "placement_hint": "near_roads",
+                "center": clubhouse_spawn,
+                "radius": 120.0,
+            },
+            {
+                "id": f"{course_id}_clubhouse_interactables",
+                "type": "npc_sign_shop",
+                "placement_hint": "near_clubhouse",
+                "center": clubhouse_spawn,
+                "radius": 24.0,
+            },
+        ],
+    }
+
+
+def _hole_world_anchors(hole_num: int, h: dict, origin_lat: float, origin_lon: float) -> tuple[tuple[float, float], tuple[float, float]]:
+    line_pts = _oriented_hole_line_xz(h, origin_lat, origin_lon)
+
+    tee_xz = None
+    if h["tees"]:
+        pts = _to_xz_list(h["tees"][:1], origin_lat, origin_lon)
+        if pts:
+            tee_xz = pts[0]
+    if tee_xz is None and line_pts:
+        tee_xz = line_pts[0]
+    if tee_xz is None and h["fairways"]:
+        pts = _to_xz_list(h["fairways"], origin_lat, origin_lon)
+        if pts:
+            tee_xz = min(pts, key=lambda p: math.hypot(p[0], p[1]))
+    if tee_xz is None:
+        print(f"  [warn] hole {hole_num}: no world tee anchor, using course origin", file=sys.stderr)
+        tee_xz = (0.0, 0.0)
+
+    pin_xz = None
+    if h["pins"]:
+        pts = _to_xz_list(h["pins"][:1], origin_lat, origin_lon)
+        if pts:
+            pin_xz = pts[0]
+    if pin_xz is None and h["greens"]:
+        pts = _to_xz_list(h["greens"][:1], origin_lat, origin_lon)
+        if pts:
+            pin_xz = _centroid(pts)
+    if pin_xz is None and line_pts:
+        pin_xz = line_pts[-1]
+    if pin_xz is None:
+        pin_xz = (tee_xz[0], tee_xz[1] + 100.0)
+
+    return tee_xz, pin_xz
+
+
+def _xyz_from_xz(pt: tuple[float, float]) -> list[float]:
+    return [_r(pt[0]), 0.0, _r(pt[1])]
+
+
+def _path_polyline(el: dict, origin_lat: float, origin_lon: float) -> list[tuple[float, float]]:
+    pts = _to_xz_list([el], origin_lat, origin_lon)
+    if len(pts) < 2:
+        return []
+    deduped = [pts[0]]
+    for pt in pts[1:]:
+        if math.hypot(pt[0] - deduped[-1][0], pt[1] - deduped[-1][1]) >= 0.25:
+            deduped.append(pt)
+    return deduped if len(deduped) >= 2 and _polyline_length(deduped) >= 5.0 else []
+
+
+def _is_cart_road(el: dict) -> bool:
+    tags = el.get("tags", {})
+    return tags.get("golf") == "cartpath" or tags.get("highway") in ("service", "track")
+
+
+def _smooth_connection(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    if len(points) < 2:
+        return points
+    smoothed = [points[0]]
+    for a, b in zip(points, points[1:]):
+        smoothed.append(((a[0] * 0.35) + (b[0] * 0.65), (a[1] * 0.35) + (b[1] * 0.65)))
+    return smoothed
+
+
+def _fallback_cart_roads(spawn: tuple[float, float], hole_anchors: list[dict]) -> list[dict]:
+    if not hole_anchors:
+        return []
+
+    chain = [spawn]
+    for anchor in hole_anchors:
+        chain.append(anchor["start_xz"])
+        chain.append(anchor["return_xz"])
+
+    return [{
+        "id": "fallback_main_cart_loop",
+        "surface": "gravel",
+        "width": 4.0,
+        "source": "generated_fallback",
+        "polyline": [_xyz_from_xz(pt) for pt in _smooth_connection(chain)]
+    }]
+
+
+def fitness_skill_id_for_world() -> str:
+    return "fitness"
+
+
+def _world_paths_from_osm(path_elements: list, origin_lat: float, origin_lon: float) -> tuple[list[dict], list[dict]]:
+    cart_roads = []
+    shortcuts = []
+    for el in path_elements:
+        pts = _path_polyline(el, origin_lat, origin_lon)
+        if not pts:
+            continue
+        tags = el.get("tags", {})
+        osm_ref = f"{el.get('type', '?')}/{el.get('id', '?')}"
+        if _is_cart_road(el):
+            cart_roads.append({
+                "id": f"cart_{el.get('type', 'way')}_{el.get('id')}",
+                "surface": "asphalt" if tags.get("surface") in ("asphalt", "paved", "concrete") else "gravel",
+                "width": 4.0,
+                "source": "osm",
+                "osm_ref": osm_ref,
+                "polyline": [_xyz_from_xz(pt) for pt in pts]
+            })
+        else:
+            shortcuts.append({
+                "id": f"shortcut_{el.get('type', 'way')}_{el.get('id')}",
+                "surface": tags.get("surface", "dirt"),
+                "width": 2.0,
+                "source": "osm",
+                "osm_ref": osm_ref,
+                "required_skill_id": fitness_skill_id_for_world(),
+                "required_level": 2,
+                "polyline": [_xyz_from_xz(pt) for pt in pts]
+            })
+    return cart_roads, shortcuts
+
+
+def _collectible_candidates(course_id: str,
+                            spawn: tuple[float, float],
+                            hole_anchors: list[dict]) -> list[dict]:
+    collectibles = [
+        {
+            "id": f"{course_id}_clubhouse_token",
+            "kind": "range_token",
+            "position": _xyz_from_xz((spawn[0] + 2.0, spawn[1] + 2.0)),
+            "interaction_radius": 3.0,
+            "repeatable": True,
+            "repeatable_cooldown_holes": 1,
+            "reward": {
+                "money": 1,
+                "skill_xp": {"fitness": 5}
+            }
+        }
+    ]
+
+    if hole_anchors:
+        first = hole_anchors[0]["start_xz"]
+        collectibles.append({
+            "id": f"{course_id}_lost_ball_01",
+            "kind": "lost_ball",
+            "position": _xyz_from_xz(((spawn[0] + first[0]) * 0.5, (spawn[1] + first[1]) * 0.5)),
+            "interaction_radius": 3.0,
+            "repeatable": False,
+            "reward": {
+                "money": 3,
+                "skill_xp": {"fitness": 12},
+                "world_flag": f"{course_id}_found_lost_ball_01"
+            }
+        })
+
+    if len(hole_anchors) >= 2:
+        a = hole_anchors[0]["return_xz"]
+        b = hole_anchors[1]["start_xz"]
+        collectibles.append({
+            "id": f"{course_id}_fitness_cache_01",
+            "kind": "cache",
+            "position": _xyz_from_xz(((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5)),
+            "interaction_radius": 3.0,
+            "repeatable": False,
+            "requirement": {
+                "skill_id": "fitness",
+                "min_level": 2
+            },
+            "reward": {
+                "money": 8,
+                "skill_xp": {"fitness": 20},
+                "world_flag": f"{course_id}_found_fitness_cache_01"
+            }
+        })
+
+    return collectibles
+
+
+def course_world_to_json(course_id: str,
+                         course_name: str,
+                         course_el: dict,
+                         holes: dict,
+                         path_elements: list,
+                         origin_lat: float,
+                         origin_lon: float) -> dict:
+    hole_anchors = []
+    for output_index, hole_num in enumerate(sorted(holes.keys())):
+        tee_xz, pin_xz = _hole_world_anchors(hole_num, holes[hole_num], origin_lat, origin_lon)
+        hole_anchors.append({
+            "hole_num": hole_num,
+            "hole_index": output_index,
+            "start_xz": tee_xz,
+            "return_xz": pin_xz,
+        })
+
+    if hole_anchors:
+        first = hole_anchors[0]["start_xz"]
+        spawn = (first[0] - 18.0, first[1] - 14.0)
+    else:
+        spawn = (0.0, 0.0)
+
+    cart_roads, shortcuts = _world_paths_from_osm(path_elements, origin_lat, origin_lon)
+    if not cart_roads:
+        cart_roads = _fallback_cart_roads(spawn, hole_anchors)
+
+    hole_starts = []
+    for anchor in hole_anchors:
+        hole_starts.append({
+            "id": f"hole_{anchor['hole_num']:02d}_start",
+            "hole_index": anchor["hole_index"],
+            "position": _xyz_from_xz(anchor["start_xz"]),
+            "return_position": _xyz_from_xz(anchor["return_xz"]),
+            "interaction_radius": 4.0
+        })
+
+    return {
+        "id": course_id,
+        "name": course_name,
+        "source": {
+            "type": "osm",
+            "osm_ref": _format_osm_ref(course_el)
+        },
+        "projection": {
+            "type": "equirectangular",
+            "origin_lat": origin_lat,
+            "origin_lon": origin_lon,
+            "units": "meters"
+        },
+        "spawn": {
+            "id": "clubhouse_spawn",
+            "position": _xyz_from_xz(spawn),
+            "radius": 5.0
+        },
+        "hole_starts": hole_starts,
+        "cart_roads": cart_roads,
+        "walking_shortcuts": shortcuts,
+        "collectibles": _collectible_candidates(course_id, spawn, hole_anchors),
+        "spawn_zones": [
+            {"id": "road_collectibles", "kind": "collectible", "near": "cart_roads", "count": 8},
+            {"id": "tree_signs", "kind": "sign", "near": "trees", "count": 4},
+            {"id": "clubhouse_npcs", "kind": "npc", "near": "spawn", "count": 2}
+        ],
+        "interactables": [
+            {
+                "id": "clubhouse_notice",
+                "kind": "sign",
+                "position": _xyz_from_xz((spawn[0] + 3.0, spawn[1] + 1.5)),
+                "interaction_radius": 3.0,
+                "content_id": "clubhouse_notice"
+            }
+        ]
+    }
+
+
 def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
@@ -1146,14 +1574,19 @@ Examples:
     ap.add_argument("--lon",  type=float,    help="Longitude for nearest-course search")
     default_holes = _project_root() / "assets" / "holes"
     default_courses = _project_root() / "assets" / "courses"
+    default_worlds = _project_root() / "assets" / "course_worlds"
     ap.add_argument("-o", "--out", default=str(default_holes), metavar="DIR",
                     help=f"Output directory for hole JSON files (default: {default_holes})")
     ap.add_argument("--course-out", default=str(default_courses), metavar="DIR",
                     help=f"Output directory for course manifest JSON (default: {default_courses})")
+    ap.add_argument("--world-out", default=str(default_worlds), metavar="DIR",
+                    help=f"Output directory for course-world JSON (default: {default_worlds})")
     ap.add_argument("--overpass", metavar="URL",
                     help="Custom Overpass API URL (default: overpass-api.de)")
     ap.add_argument("--no-course", action="store_true",
                     help="Skip writing the course manifest JSON")
+    ap.add_argument("--no-world", action="store_true",
+                    help="Skip writing the course-world JSON")
     args = ap.parse_args()
 
     if not any([args.name, args.id, args.lat is not None, args.lon is not None]):
@@ -1174,8 +1607,8 @@ Examples:
 
     # ── 2. Fetch golf elements ────────────────────────────────────────────────
     print("→ Fetching golf elements...", file=sys.stderr)
-    elements, tree_elements = _fetch_elements(course_el)
-    print(f"  Retrieved {len(elements)} golf elements and {len(tree_elements)} tree/wood elements", file=sys.stderr)
+    elements, tree_elements, path_elements = _fetch_elements(course_el)
+    print(f"  Retrieved {len(elements)} golf elements, {len(tree_elements)} tree/wood elements, and {len(path_elements)} path elements", file=sys.stderr)
 
     if not elements:
         print("\nNo golf elements found inside the course boundary.\n"
@@ -1212,6 +1645,9 @@ Examples:
     course_dir = Path(args.course_out)
     if not args.no_course:
         course_dir.mkdir(parents=True, exist_ok=True)
+    world_dir = Path(args.world_out)
+    if not args.no_world:
+        world_dir.mkdir(parents=True, exist_ok=True)
     hole_paths = []
 
     for num in sorted(holes.keys()):
@@ -1230,6 +1666,20 @@ Examples:
             print(f"      [warn] {warning}", file=sys.stderr)
 
     # ── 6. Write course manifest ──────────────────────────────────────────────
+    world_reference = f"course_worlds/{course_id}.json"
+    if not args.no_world:
+        world_json = course_world_to_json(course_id,
+                                          course_name,
+                                          course_el,
+                                          holes,
+                                          path_elements,
+                                          origin_lat,
+                                          origin_lon)
+        world_file = world_dir / f"{course_id}.json"
+        with open(world_file, "w", encoding="utf-8") as f:
+            json.dump(world_json, f, indent=2)
+        print(f"\n-> Course world: {world_file}", file=sys.stderr)
+
     if not args.no_course:
         course_json = {
             "id": course_id,
@@ -1237,6 +1687,8 @@ Examples:
             "hole_count": len(holes),
             "holes": hole_paths
         }
+        if not args.no_world:
+            course_json["world"] = world_reference
         course_file = course_dir / f"{course_id}.json"
         with open(course_file, "w", encoding="utf-8") as f:
             json.dump(course_json, f, indent=2)

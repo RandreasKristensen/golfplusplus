@@ -3,6 +3,7 @@
 #include "core/event_loop.h"
 #include "game/asset_resolver.h"
 #include "game/course_loader.h"
+#include "game/course_world_loader.h"
 #include "game/game_content.h"
 #include "game/hole_data.h"
 #include "game/hole_loader.h"
@@ -107,6 +108,122 @@ void append_render_terrain_mesh(std::vector<render_terrain_vertex>& vertices,
     }
 }
 
+void append_overlay_vertex(std::vector<render_terrain_vertex>& vertices,
+                           const glm::vec3& position,
+                           const glm::vec3& color) {
+    render_terrain_vertex vertex;
+    vertex.position = position;
+    vertex.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+    vertex.color = color;
+    vertices.push_back(vertex);
+}
+
+void append_route_strip(std::vector<render_terrain_vertex>& vertices,
+                        std::vector<std::uint32_t>& indices,
+                        const game_tuning& tuning,
+                        const course_world_path& route,
+                        const glm::vec3& color) {
+    if (route.polyline.size() < 2) {
+        return;
+    }
+
+    const float half_width = std::max(0.1f, route.width * 0.5f);
+    for (std::size_t i = 1; i < route.polyline.size(); ++i) {
+        const glm::vec3 a = route.polyline[i - 1U];
+        const glm::vec3 b = route.polyline[i];
+        glm::vec3 direction(b.x - a.x, 0.0f, b.z - a.z);
+        if (glm::length(direction) <= 0.0001f) {
+            continue;
+        }
+        direction = glm::normalize(direction);
+        const glm::vec3 lateral(-direction.z, 0.0f, direction.x);
+        const glm::vec3 corners[4] = {
+            a + lateral * half_width,
+            a - lateral * half_width,
+            b + lateral * half_width,
+            b - lateral * half_width
+        };
+
+        const std::uint32_t offset = static_cast<std::uint32_t>(vertices.size());
+        for (const glm::vec3& corner : corners) {
+            const glm::vec3 anchored = terrain_anchor_at(tuning, corner) + glm::vec3(0.0f, 0.055f, 0.0f);
+            append_overlay_vertex(vertices, anchored, color);
+        }
+        indices.push_back(offset);
+        indices.push_back(offset + 1U);
+        indices.push_back(offset + 2U);
+        indices.push_back(offset + 2U);
+        indices.push_back(offset + 1U);
+        indices.push_back(offset + 3U);
+    }
+}
+
+void append_hub_marker(std::vector<render_terrain_vertex>& vertices,
+                       std::vector<std::uint32_t>& indices,
+                       const game_tuning& tuning,
+                       const glm::vec3& position,
+                       const glm::vec3& color) {
+    constexpr float half_size = 2.2f;
+    const glm::vec3 corners[4] = {
+        position + glm::vec3(-half_size, 0.0f, -half_size),
+        position + glm::vec3(half_size, 0.0f, -half_size),
+        position + glm::vec3(-half_size, 0.0f, half_size),
+        position + glm::vec3(half_size, 0.0f, half_size)
+    };
+    const std::uint32_t offset = static_cast<std::uint32_t>(vertices.size());
+    for (const glm::vec3& corner : corners) {
+        append_overlay_vertex(vertices, terrain_anchor_at(tuning, corner) + glm::vec3(0.0f, 0.07f, 0.0f), color);
+    }
+    indices.push_back(offset);
+    indices.push_back(offset + 1U);
+    indices.push_back(offset + 2U);
+    indices.push_back(offset + 2U);
+    indices.push_back(offset + 1U);
+    indices.push_back(offset + 3U);
+}
+
+void append_course_world_overlays(render_data& data, const game_state& game) {
+    if (!game.hub.available || !game.hub.in_hub) {
+        return;
+    }
+
+    for (const course_world_path& route : game.hub.world.cart_roads) {
+        append_route_strip(data.material_overlay_vertices,
+                           data.material_overlay_indices,
+                           game.tuning,
+                           route,
+                           glm::vec3(0.34f, 0.33f, 0.28f));
+    }
+    for (const course_world_path& route : game.hub.world.walking_shortcuts) {
+        const bool unlocked = shortcut_unlocked(game.save, route);
+        append_route_strip(data.material_overlay_vertices,
+                           data.material_overlay_indices,
+                           game.tuning,
+                           route,
+                           unlocked ? glm::vec3(0.29f, 0.34f, 0.18f) : glm::vec3(0.20f, 0.17f, 0.12f));
+    }
+    for (const course_world_hole_start& start : game.hub.world.hole_starts) {
+        append_hub_marker(data.material_overlay_vertices,
+                          data.material_overlay_indices,
+                          game.tuning,
+                          start.position,
+                          glm::vec3(0.82f, 0.68f, 0.28f));
+    }
+    for (const course_world_collectible& collectible : game.hub.world.collectibles) {
+        const bool available = collectible_available(game.save,
+                                                     collectible,
+                                                     static_cast<int>(game.round.current_hole_index));
+        if (!available && !collectible.repeatable) {
+            continue;
+        }
+        append_hub_marker(data.material_overlay_vertices,
+                          data.material_overlay_indices,
+                          game.tuning,
+                          collectible.position,
+                          available ? glm::vec3(0.78f, 0.30f, 0.72f) : glm::vec3(0.22f, 0.18f, 0.24f));
+    }
+}
+
 std::vector<render_tree> make_render_trees(const game_tuning& tuning) {
     std::vector<render_tree> trees;
     trees.reserve(tuning.course.trees.size());
@@ -206,10 +323,12 @@ controls_overlay_state make_controls_overlay_state(const input_state& input) {
 }
 
 std::vector<render_skill_progress> make_render_skills(const skill_progression& progression) {
-    const std::array<std::pair<const char*, const char*>, 3> skills{{
+    const std::array<std::pair<const char*, const char*>, 5> skills{{
         {golf_swing_skill_id(), "GOLF SWING"},
         {smoking_skill_id(), "SMOKING"},
-        {fitness_skill_id(), "FITNESS"}
+        {fitness_skill_id(), "FITNESS"},
+        {cart_driving_skill_id(), "CART DRIVING"},
+        {drifting_skill_id(), "DRIFTING"}
     }};
 
     std::vector<render_skill_progress> rows;
@@ -241,6 +360,7 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     data.terrain_indices = game.tuning.terrain_mesh_data.indices;
     append_render_terrain_mesh(data.terrain_vertices, data.terrain_indices, game.tuning.terrain_apron_mesh_data);
     set_material_overlay_render_mesh(data, game.tuning);
+    append_course_world_overlays(data, game);
     data.trees = make_render_trees(game.tuning);
     data.aim_angle = game.aim_angle;
     data.camera_fov_degrees = 60.0f;
@@ -253,7 +373,8 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     data.flight_path_alpha = game.tuning.flight_path.alpha;
     data.flight_path_width = game.tuning.flight_path.line_width;
     data.show_flight_path = data.ball_moving && !data.flight_path_points.empty();
-    data.show_interact_prompt = game.mode == game_mode::walking && can_interact_with_ball(game);
+    data.show_interact_prompt = game.mode == game_mode::walking &&
+        (can_interact_with_ball(game) || can_interact_with_hole_start(game) || can_interact_with_collectible(game));
     data.show_aim_indicator = game.mode == game_mode::aiming || game.mode == game_mode::addressing;
     data.shot_addressing = game.mode == game_mode::addressing;
     data.swing_timing = game.swing.phase == swing_phase::timing;
