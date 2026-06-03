@@ -28,6 +28,7 @@ struct course_world_hole_start {
     glm::vec3 position{0.0f};
     glm::vec3 return_position{0.0f};
     float interaction_radius = 4.0f;
+    float rotation_degrees = 0.0f;
 };
 
 struct course_world_spawn_zone {

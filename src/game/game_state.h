@@ -9,6 +9,8 @@
 #include "physics/ball_state.h"
 
 #include <cstddef>
+#include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -40,9 +42,27 @@ struct emote_state {
     bool active = false;
 };
 
+struct course_hub_hole_marker {
+    glm::vec3 tee_position{0.0f};
+    glm::vec3 pin_position{0.0f};
+    glm::vec3 start_position{0.0f};
+};
+
 struct cigarette_effect_state {
     std::string unlock_id;
     float remaining_seconds = 0.0f;
+};
+
+struct xp_drop {
+    std::string skill_id;
+    int xp = 0;
+    float age = 0.0f;
+    float lifetime = 2.4f;
+};
+
+enum class xp_drop_policy {
+    show,
+    hidden
 };
 
 struct course_hub_state {
@@ -51,6 +71,7 @@ struct course_hub_state {
     std::size_t active_hole_index = 0;
     glm::vec3 return_position{0.0f};
     course_world_definition world;
+    std::vector<course_hub_hole_marker> hole_markers;
 };
 
 enum class audio_event_type {
@@ -87,6 +108,7 @@ struct game_state {
     round_state round;
     save_data save;
     game_tuning tuning;
+    std::uint64_t terrain_render_revision = 0;
     std::vector<club_definition> club_catalog;
     game_mode mode = game_mode::walking;
     float aim_angle = 0.0f;
@@ -104,6 +126,8 @@ struct game_state {
     float fitness_walk_meter_remainder = 0.0f;
     float cart_drive_meter_remainder = 0.0f;
     float cart_drift_meter_remainder = 0.0f;
+    std::vector<xp_drop> xp_drops;
+    std::map<std::string, int> pending_xp_drop_amounts;
     std::vector<glm::vec3> flight_path_points;
     std::vector<audio_event> audio_events;
 };
@@ -112,6 +136,8 @@ game_state make_initial_game_state();
 game_state make_initial_game_state(const std::string& asset_root);
 void refresh_unlocked_clubs(game_state& state);
 void update_game(game_state& state, const input_state& input, float dt);
+void award_skill_xp(game_state& state, const std::string& skill_id, int amount, xp_drop_policy policy = xp_drop_policy::show);
+void update_xp_drops(game_state& state, float dt);
 void retee_ball(game_state& state);
 bool start_game_course(game_state& state, const course_definition& course);
 bool start_hub_hole(game_state& state, std::size_t hole_index);

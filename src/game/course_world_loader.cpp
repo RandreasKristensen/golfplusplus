@@ -148,6 +148,7 @@ std::optional<course_world_hole_start> hole_start_from_json(const json& value, c
     start.position = *position;
     start.return_position = *return_position;
     start.interaction_radius = float_at(value, "interaction_radius").value_or(4.0f);
+    start.rotation_degrees = float_at(value, "rotation_degrees").value_or(0.0f);
     return start;
 }
 

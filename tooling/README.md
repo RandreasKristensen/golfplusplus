@@ -132,7 +132,75 @@ py -3 osm_golf_convert.py "Aarhus Golf Klub" -o ../assets/holes --course-out ../
 
 # Skip writing the course manifest
 py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-course
+
+# Use generator tuning, including tree dimensions and hub path filtering
+py -3 osm_golf_convert.py "Marienlyst Golfklub" --config osm_golf_config.json
 ```
+
+### Generator config
+
+`osm_golf_config.json` controls values that should survive regeneration:
+
+```json
+{
+  "tree": {
+    "trunk_radius": 0.65,
+    "trunk_height": 5.0,
+    "leaf_radius": 4.7,
+    "leaf_height": 6.0,
+    "max_per_hole": 60
+  },
+  "hole": {
+    "fallback_width": 20.0,
+    "fallback_rough_width": 32.0,
+    "rough_width_multiplier": 1.55
+  },
+  "world": {
+    "max_shortcut_length": 180.0,
+    "max_cart_road_length": 280.0,
+    "max_path_distance_from_holes": 75.0,
+    "fairway_avoidance_clearance": 8.0,
+    "fallback_road_extra_offset": 8.0,
+    "max_shortcut_count": 12
+  },
+  "courses": {
+    "marienlyst_golfklub": {
+      "tree": {
+        "trunk_height": 5.0,
+        "leaf_radius": 4.7
+      }
+    }
+  }
+}
+```
+
+The top-level values are defaults. Entries under `courses` are keyed by the
+generated course id and override only the fields listed there.
+
+The HTML hole editor also loads this file when you open the project root. Use
+its generator config panel for tree defaults and path filtering values, then
+save config before running the OSM converter again. When a course is selected,
+the editor writes the active course override as well as the default value so
+regenerating Marienlyst does not silently keep stale course-specific settings.
+
+### Course-world editing
+
+`hole-editor.html` has a world view for course hub data. Open the project root,
+select a course with a `world` manifest entry, then switch to world view to edit:
+
+- cart road polylines
+- walking shortcut polylines and unlock level
+- collectible positions and simple reward fields
+- interactable/sign positions
+
+Use area select in either hole view or world view to drag a selection rectangle
+around editable points/items. The editor highlights everything inside the box
+and can bulk-delete selected route points, trees, zones, collectibles, and
+interactables. Fixed anchors such as tees, pins, spawn, and hole starts are
+selectable for inspection but are not bulk-deleted.
+
+Save hole, save world, and save config are separate on purpose. Hole JSON uses
+per-hole local coordinates, while world JSON uses shared course coordinates.
 
 ### Output
 

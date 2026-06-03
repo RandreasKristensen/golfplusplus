@@ -6,14 +6,23 @@
 #include "game/hole_loader.h"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace {
+constexpr float pi = 3.14159265358979323846f;
+
 std::string asset_path(const std::string& asset_root, const char* relative) {
     return (std::filesystem::path(asset_root) / relative).string();
+}
+
+glm::vec3 rotate_y(const glm::vec3& point, const float radians) {
+    const float c = std::cos(radians);
+    const float s = std::sin(radians);
+    return glm::vec3(point.x * c - point.z * s, point.y, point.x * s + point.z * c);
 }
 
 hole_data fallback_hole() {
@@ -77,6 +86,92 @@ glm::vec3 terrain_anchor_position(const game_tuning& tuning, const glm::vec3& au
 
 glm::vec3 tree_base_position(const game_tuning& tuning, const tree_instance& tree) {
     return terrain_anchor_position(tuning, tree.position);
+}
+
+glm::vec3 course_world_hole_translation(const hole_data& hole, const course_world_hole_start& start) {
+    return start.position - hole.tee_position;
+}
+
+glm::vec3 course_world_hole_point(const hole_data& hole,
+                                  const course_world_hole_start& start,
+                                  const glm::vec3& local_point) {
+    const float radians = start.rotation_degrees * pi / 180.0f;
+    return start.position + rotate_y(local_point - hole.tee_position, radians);
+}
+
+terrain_mesh translate_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& translation) {
+    terrain_mesh translated = mesh;
+    for (terrain_vertex& vertex : translated.vertices) {
+        vertex.position += translation;
+    }
+    return translated;
+}
+
+material_zone translate_material_zone(const material_zone& zone, const glm::vec3& translation) {
+    material_zone translated = zone;
+    translated.center += translation;
+    translated.bounds_min += translation;
+    translated.bounds_max += translation;
+    return translated;
+}
+
+tree_instance translate_tree_instance(const tree_instance& tree, const glm::vec3& translation) {
+    tree_instance translated = tree;
+    translated.position += translation;
+    return translated;
+}
+
+terrain_mesh transform_course_world_terrain_mesh(const terrain_mesh& mesh,
+                                                 const hole_data& hole,
+                                                 const course_world_hole_start& start) {
+    terrain_mesh transformed = mesh;
+    const float radians = start.rotation_degrees * pi / 180.0f;
+    for (terrain_vertex& vertex : transformed.vertices) {
+        vertex.position = course_world_hole_point(hole, start, vertex.position);
+        vertex.normal = rotate_y(vertex.normal, radians);
+    }
+    return transformed;
+}
+
+material_zone transform_course_world_material_zone(const material_zone& zone,
+                                                   const hole_data& hole,
+                                                   const course_world_hole_start& start) {
+    material_zone transformed = zone;
+    transformed.center = course_world_hole_point(hole, start, zone.center);
+    if (zone.has_bounds) {
+        const glm::vec3 corners[] = {
+            glm::vec3(zone.bounds_min.x, zone.bounds_min.y, zone.bounds_min.z),
+            glm::vec3(zone.bounds_max.x, zone.bounds_min.y, zone.bounds_min.z),
+            glm::vec3(zone.bounds_min.x, zone.bounds_min.y, zone.bounds_max.z),
+            glm::vec3(zone.bounds_max.x, zone.bounds_min.y, zone.bounds_max.z),
+            glm::vec3(zone.bounds_min.x, zone.bounds_max.y, zone.bounds_min.z),
+            glm::vec3(zone.bounds_max.x, zone.bounds_max.y, zone.bounds_min.z),
+            glm::vec3(zone.bounds_min.x, zone.bounds_max.y, zone.bounds_max.z),
+            glm::vec3(zone.bounds_max.x, zone.bounds_max.y, zone.bounds_max.z)
+        };
+        glm::vec3 min_point = course_world_hole_point(hole, start, corners[0]);
+        glm::vec3 max_point = min_point;
+        for (const glm::vec3& corner : corners) {
+            const glm::vec3 world_corner = course_world_hole_point(hole, start, corner);
+            min_point.x = std::min(min_point.x, world_corner.x);
+            min_point.y = std::min(min_point.y, world_corner.y);
+            min_point.z = std::min(min_point.z, world_corner.z);
+            max_point.x = std::max(max_point.x, world_corner.x);
+            max_point.y = std::max(max_point.y, world_corner.y);
+            max_point.z = std::max(max_point.z, world_corner.z);
+        }
+        transformed.bounds_min = min_point;
+        transformed.bounds_max = max_point;
+    }
+    return transformed;
+}
+
+tree_instance transform_course_world_tree_instance(const tree_instance& tree,
+                                                   const hole_data& hole,
+                                                   const course_world_hole_start& start) {
+    tree_instance transformed = tree;
+    transformed.position = course_world_hole_point(hole, start, tree.position);
+    return transformed;
 }
 
 bool load_hole_runtime(game_tuning& tuning,

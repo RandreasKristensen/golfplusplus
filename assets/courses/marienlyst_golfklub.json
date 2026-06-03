@@ -2,7 +2,6 @@
   "id": "marienlyst_golfklub",
   "name": "Marienlyst Golfklub",
   "hole_count": 6,
-  "world": "course_worlds/marienlyst_golfklub.json",
   "holes": [
     "holes/marienlyst_golfklub_h01.json",
     "holes/marienlyst_golfklub_h02.json",
@@ -10,5 +9,6 @@
     "holes/marienlyst_golfklub_h04.json",
     "holes/marienlyst_golfklub_h05.json",
     "holes/marienlyst_golfklub_h06.json"
-  ]
+  ],
+  "world": "course_worlds/marienlyst_golfklub.json"
 }

@@ -1,0 +1,44 @@
+{
+  "tree": {
+    "trunk_radius": 0.65,
+    "trunk_height": 5.0,
+    "leaf_radius": 4.7,
+    "leaf_height": 6.0,
+    "max_per_hole": 60
+  },
+  "hole": {
+    "fallback_width": 20.0,
+    "fallback_rough_width": 32.0,
+    "rough_width_multiplier": 1.55
+  },
+  "world": {
+    "hole_start_interaction_radius": 4.0,
+    "fallback_cart_width": 4.0,
+    "shortcut_width": 2.0,
+    "max_shortcut_length": 180.0,
+    "max_cart_road_length": 280.0,
+    "max_path_distance_from_holes": 75.0,
+    "fairway_avoidance_clearance": 8.0,
+    "fallback_road_extra_offset": 8.0,
+    "max_shortcut_count": 12
+  },
+  "courses": {
+    "marienlyst_golfklub": {
+      "tree": {
+        "trunk_radius": 0.65,
+        "trunk_height": 5.0,
+        "leaf_radius": 4.7,
+        "leaf_height": 6.0,
+        "max_per_hole": 60
+      },
+      "world": {
+      "max_shortcut_length": 160.0,
+      "max_cart_road_length": 240.0,
+      "max_path_distance_from_holes": 65.0,
+      "fairway_avoidance_clearance": 10.0,
+      "fallback_road_extra_offset": 10.0,
+      "max_shortcut_count": 8
+    }
+  }
+}
+}

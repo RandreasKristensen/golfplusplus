@@ -13,6 +13,12 @@ struct skill_progress {
 
 using skill_progression = std::map<std::string, skill_progress>;
 
+struct add_skill_xp_result {
+    int before_xp = 0;
+    int after_xp = 0;
+    int applied_xp = 0;
+};
+
 const char* golf_swing_skill_id();
 const char* smoking_skill_id();
 const char* fitness_skill_id();
@@ -31,4 +37,4 @@ int skill_level(int xp);
 int skill_xp(const skill_progression& progression, const std::string& skill_id);
 int xp_to_next_level(const skill_progression& progression, const std::string& skill_id);
 void ensure_default_skills(skill_progression& progression);
-void add_skill_xp(skill_progression& progression, const std::string& skill_id, int amount);
+add_skill_xp_result add_skill_xp(skill_progression& progression, const std::string& skill_id, int amount);

@@ -2,6 +2,7 @@
 
 #include "game/club_definition.h"
 #include "game/course_definition.h"
+#include "game/course_world_definition.h"
 #include "game/hole_data.h"
 #include "physics/physics_tuning.h"
 #include "physics/terrain.h"
@@ -100,6 +101,14 @@ game_tuning default_game_tuning();
 game_tuning default_game_tuning(const std::string& asset_root);
 glm::vec3 terrain_anchor_position(const game_tuning& tuning, const glm::vec3& authored_position);
 glm::vec3 tree_base_position(const game_tuning& tuning, const tree_instance& tree);
+glm::vec3 course_world_hole_translation(const hole_data& hole, const course_world_hole_start& start);
+glm::vec3 course_world_hole_point(const hole_data& hole, const course_world_hole_start& start, const glm::vec3& local_point);
+terrain_mesh translate_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& translation);
+material_zone translate_material_zone(const material_zone& zone, const glm::vec3& translation);
+tree_instance translate_tree_instance(const tree_instance& tree, const glm::vec3& translation);
+terrain_mesh transform_course_world_terrain_mesh(const terrain_mesh& mesh, const hole_data& hole, const course_world_hole_start& start);
+material_zone transform_course_world_material_zone(const material_zone& zone, const hole_data& hole, const course_world_hole_start& start);
+tree_instance transform_course_world_tree_instance(const tree_instance& tree, const hole_data& hole, const course_world_hole_start& start);
 void apply_hole_to_tuning(game_tuning& tuning, const hole_data& hole);
 bool load_hole_runtime(game_tuning& tuning,
                        const course_definition& course,

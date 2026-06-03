@@ -190,6 +190,12 @@ body {
 .zone-dot.bunker { background: #c8a840; }
 .zone-dot.water  { background: #4060c8; }
 .zone-dot.tree   { background: #286838; border-radius: 2px; }
+.zone-dot.cart   { background: #8f8f86; border-radius: 2px; }
+.zone-dot.shortcut { background: #b89458; border-radius: 2px; }
+.zone-dot.collectible { background: #d0b450; }
+.zone-dot.interactable { background: #6aa0c8; }
+.zone-dot.start { background: #70b050; }
+.zone-dot.spawn { background: #c87050; }
 
 .subfield {
   display: flex;
@@ -245,8 +251,14 @@ body {
   <div class="sep"></div>
   <button class="btn"        onclick="openProjectFolder()">open project</button>
   <button class="btn primary" id="btn-save-file" onclick="saveCurrentHole()" disabled>save hole</button>
+  <button class="btn primary" id="btn-save-world" onclick="saveCurrentWorld()" disabled>save world</button>
+  <button class="btn primary" id="btn-save-config" onclick="saveGeneratorConfig()" disabled>save config</button>
+  <div class="sep"></div>
+  <button class="btn active" id="btn-hole-view" onclick="setViewScope('hole')">hole view</button>
+  <button class="btn"        id="btn-world-view" onclick="setViewScope('world')">world view</button>
   <div class="sep"></div>
   <button class="btn active" id="btn-select"  onclick="setMode('select')">select</button>
+  <button class="btn"        id="btn-area-select" onclick="setMode('area_select')">area select</button>
   <button class="btn"        id="btn-addcp"   onclick="setMode('add_cp')">+ point</button>
   <button class="btn"        id="btn-measure" onclick="setMode('measure')">measure</button>
   <div class="sep"></div>
@@ -254,6 +266,9 @@ body {
   <button class="btn"        id="btn-bunker"  onclick="setMode('add_zone','bunker')">+ bunker</button>
   <button class="btn"        id="btn-water"   onclick="setMode('add_zone','water')">+ water</button>
   <button class="btn"        id="btn-tree"    onclick="setMode('add_tree')">+ tree</button>
+  <button class="btn"        id="btn-cart"    onclick="setMode('add_cart_point')">+ cart pt</button>
+  <button class="btn"        id="btn-shortcut" onclick="setMode('add_shortcut_point')">+ shortcut pt</button>
+  <button class="btn"        id="btn-collectible" onclick="setMode('add_collectible')">+ collectible</button>
   <div class="sep"></div>
   <button class="btn"        onclick="fitView();render()">fit</button>
   <button class="btn"        onclick="newHole()">new</button>
@@ -282,7 +297,16 @@ body {
         <div id="project-status" class="panel-note warn">Open the golf++ project folder to edit existing course holes in place.</div>
       </div>
 
-      <div class="section">
+      <div class="section" id="area-selection-section">
+        <div class="section-title">area selection</div>
+        <div id="area-selection-status" class="panel-note">No area selection.</div>
+        <div class="field-row">
+          <button class="mini-btn" onclick="clearAreaSelection()">clear</button>
+          <button class="mini-btn" onclick="deleteAreaSelection()">delete selected</button>
+        </div>
+      </div>
+
+      <div class="section hole-panel-section">
         <div class="section-title">hole info</div>
         <div class="field"><label>id</label>     <input type="text"   id="f-id"    oninput="hole.id=this.value; markDirty()"></div>
         <div class="field"><label>name</label>   <input type="text"   id="f-name"  oninput="hole.name=this.value; markDirty()"></div>
@@ -292,19 +316,19 @@ body {
         <div class="field"><label>rough width</label><input type="number" id="f-rough-width" step="0.5" min="2" oninput="setRoughWidth(+this.value)"></div>
       </div>
 
-      <div class="section">
+      <div class="section hole-panel-section">
         <div class="section-title">control points</div>
         <div id="cp-list"></div>
         <div id="cp-edit"></div>
       </div>
 
-      <div class="section">
+      <div class="section hole-panel-section">
         <div class="section-title">material zones</div>
         <div id="zone-list"></div>
         <div id="zone-edit"></div>
       </div>
 
-      <div class="section">
+      <div class="section hole-panel-section">
         <div class="section-title">trees</div>
         <div class="field-row">
           <div class="field compact"><label>leaf r</label><input type="number" id="tree-default-leaf-radius" step="0.1" min="0.1" oninput="setTreeDefault('leaf_radius',+this.value)"></div>
@@ -317,6 +341,42 @@ body {
         <div class="panel-note">Tree mode stays active, so click repeatedly to paint trees.</div>
         <div id="tree-list"></div>
         <div id="tree-edit"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">course world</div>
+        <div class="field-row">
+          <button class="mini-btn" onclick="setViewScope('world')">show world</button>
+          <button class="mini-btn" onclick="fitView();render()">fit world</button>
+        </div>
+        <div id="world-status" class="panel-note warn">Open a project course with a world file to edit hole placement.</div>
+        <div class="panel-note">World view is limited to moving and rotating complete holes for v1 layout editing.</div>
+        <div class="section-title" style="margin-top:10px">hole placements</div>
+        <div id="hole-start-list"></div>
+        <div id="hole-start-edit"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">generator config</div>
+        <div class="field-row">
+          <div class="field compact"><label>leaf r</label><input type="number" id="cfg-tree-leaf-radius" step="0.1" min="0.1" oninput="setConfigValue(['tree','leaf_radius'],+this.value)"></div>
+          <div class="field compact"><label>leaf h</label><input type="number" id="cfg-tree-leaf-height" step="0.1" min="0.1" oninput="setConfigValue(['tree','leaf_height'],+this.value)"></div>
+        </div>
+        <div class="field-row">
+          <div class="field compact"><label>trunk r</label><input type="number" id="cfg-tree-trunk-radius" step="0.05" min="0.05" oninput="setConfigValue(['tree','trunk_radius'],+this.value)"></div>
+          <div class="field compact"><label>trunk h</label><input type="number" id="cfg-tree-trunk-height" step="0.1" min="0.1" oninput="setConfigValue(['tree','trunk_height'],+this.value)"></div>
+        </div>
+        <div class="field"><label>max trees</label><input type="number" id="cfg-tree-max" step="1" min="0" oninput="setConfigValue(['tree','max_per_hole'],+this.value)"></div>
+        <div class="field"><label>cart width</label><input type="number" id="cfg-cart-width" step="0.25" min="0.5" oninput="setConfigValue(['world','fallback_cart_width'],+this.value)"></div>
+        <div class="field"><label>shortcut w</label><input type="number" id="cfg-shortcut-width" step="0.25" min="0.5" oninput="setConfigValue(['world','shortcut_width'],+this.value)"></div>
+        <div class="field"><label>max shortcut</label><input type="number" id="cfg-max-shortcut" step="5" min="0" oninput="setConfigValue(['world','max_shortcut_length'],+this.value)"></div>
+        <div class="field"><label>max cart</label><input type="number" id="cfg-max-cart" step="5" min="0" oninput="setConfigValue(['world','max_cart_road_length'],+this.value)"></div>
+        <div class="field"><label>path range</label><input type="number" id="cfg-path-range" step="5" min="0" oninput="setConfigValue(['world','max_path_distance_from_holes'],+this.value)"></div>
+        <div class="field"><label>fairway gap</label><input type="number" id="cfg-fairway-gap" step="1" min="0" oninput="setConfigValue(['world','fairway_avoidance_clearance'],+this.value)"></div>
+        <div class="field"><label>road offset</label><input type="number" id="cfg-road-offset" step="1" min="0" oninput="setConfigValue(['world','fallback_road_extra_offset'],+this.value)"></div>
+        <div class="field"><label>max paths</label><input type="number" id="cfg-max-shortcut-count" step="1" min="0" oninput="setConfigValue(['world','max_shortcut_count'],+this.value)"></div>
+        <button class="mini-btn" style="width:100%;margin-top:6px" onclick="applyConfigTreeDefaults()">use config tree defaults</button>
+        <div id="config-status" class="panel-note warn">Open the project root to edit tooling/osm_golf_config.json.</div>
       </div>
 
       <div class="section">
@@ -356,11 +416,14 @@ let hole = {
 };
 
 let view   = { ox: 0, oz: 40, scale: 5 };
+let viewScope = 'hole';
 let mode   = 'select';
 let ztype  = null;
 let sel    = null;    // { type, index? }
 let drag   = null;
 let pan    = null;
+let areaSelect = null;
+let selectedAreaItems = [];
 let mouseWorld = null;
 let measure = { a: null, b: null };
 let isDirty = false;
@@ -369,17 +432,27 @@ let projectDirHandle = null;
 let assetsDirHandle = null;
 let holesDirHandle = null;
 let coursesDirHandle = null;
+let courseWorldsDirHandle = null;
+let toolingDirHandle = null;
 let courseManifests = [];
 let activeCourseIndex = -1;
 let activeHoleIndex = -1;
 let activeHoleRef = "";
 let activeHoleHandle = null;
+let activeWorldRef = "";
+let activeWorldHandle = null;
+let courseWorld = null;
+let courseHoleOutlines = [];
+let isWorldDirty = false;
+let generatorConfig = null;
+let activeConfigHandle = null;
+let isConfigDirty = false;
 
 let treeDefaults = {
-  trunk_radius: 0.35,
-  trunk_height: 2.4,
-  leaf_radius: 1.6,
-  leaf_height: 3.2
+  trunk_radius: 0.65,
+  trunk_height: 5.0,
+  leaf_radius: 4.7,
+  leaf_height: 6.0
 };
 
 // ── canvas ───────────────────────────────────────────────────────────────────
@@ -429,6 +502,129 @@ function waterRectWorld(z) {
   };
 }
 
+function vec3(value, fallback = [0, 0, 0]) {
+  if (!Array.isArray(value)) return [...fallback];
+  return [
+    Number.isFinite(+value[0]) ? +value[0] : fallback[0],
+    Number.isFinite(+value[1]) ? +value[1] : fallback[1],
+    Number.isFinite(+value[2]) ? +value[2] : fallback[2]
+  ];
+}
+
+function setVec3XZ(value, x, z) {
+  value[0] = r2(x);
+  value[2] = r2(z);
+}
+
+function routePoints(route) {
+  return Array.isArray(route?.polyline) ? route.polyline : [];
+}
+
+function holeStartRotation(start) {
+  return Number.isFinite(+start?.rotation_degrees) ? +start.rotation_degrees : 0;
+}
+
+function normalizeDegrees(value) {
+  if (!Number.isFinite(+value)) return 0;
+  let out = +value % 360;
+  if (out < 0) out += 360;
+  return r2(out);
+}
+
+function normalizeHoleOutline(data) {
+  const controlPoints = Array.isArray(data?.spline?.control_points) ? data.spline.control_points.map(p => vec3(p)) : [];
+  return {
+    id: data?.id || '',
+    name: data?.name || data?.id || '',
+    tee: vec3(data?.tee),
+    pin: vec3(data?.pin, [0, 0, 80]),
+    spline: {
+      control_points: controlPoints,
+      width: Number.isFinite(+data?.spline?.width) ? Math.max(1, +data.spline.width) : 18,
+      rough_width: Number.isFinite(+data?.spline?.rough_width) ? Math.max(1, +data.spline.rough_width) : Math.max(18, +data?.spline?.width || 18)
+    }
+  };
+}
+
+function activeHoleOutline(index) {
+  if (index === activeHoleIndex && hole?.spline?.control_points) return normalizeHoleOutline(hole);
+  return courseHoleOutlines[index] || null;
+}
+
+function transformHolePoint(outline, start, point) {
+  const p = pointXZ(point);
+  const tee = pointXZ(outline?.tee || [0, 0, 0]);
+  const pos = vec3(start?.position);
+  const rad = holeStartRotation(start) * Math.PI / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = p.x - tee.x;
+  const dz = p.z - tee.z;
+  return {
+    x: pos[0] + dx * cos - dz * sin,
+    z: pos[2] + dx * sin + dz * cos
+  };
+}
+
+function syncHoleStartReturnPosition(index) {
+  const start = courseWorld?.hole_starts?.[index];
+  if (!start) return;
+  const outline = activeHoleOutline(start.hole_index);
+  if (!outline) return;
+  const finish = transformHolePoint(outline, start, outline.pin);
+  start.return_position = [r2(finish.x), start.return_position?.[1] || start.position?.[1] || 0, r2(finish.z)];
+}
+
+function setHoleStartPosition(index, x, z) {
+  const start = courseWorld?.hole_starts?.[index];
+  if (!start) return;
+  setVec3XZ(start.position, x, z);
+  syncHoleStartReturnPosition(index);
+}
+
+function splinePtsForControlPoints(controlPoints, n = 100) {
+  if (!Array.isArray(controlPoints) || controlPoints.length < 2) return [];
+  const out = [];
+  for (let i = 0; i <= n; i++) out.push(catmullSample(controlPoints, i / n));
+  return out;
+}
+
+function collectionForSelection(s) {
+  if (!courseWorld || !s) return null;
+  if (s.type === 'cart_point' || s.type === 'cart_route') return courseWorld.cart_roads;
+  if (s.type === 'shortcut_point' || s.type === 'shortcut_route') return courseWorld.walking_shortcuts;
+  if (s.type === 'collectible') return courseWorld.collectibles;
+  if (s.type === 'interactable') return courseWorld.interactables;
+  if (s.type === 'hole_start') return courseWorld.hole_starts;
+  return null;
+}
+
+function sameSelectionRef(a, b) {
+  return a?.type === b?.type &&
+    (a.index ?? -1) === (b.index ?? -1) &&
+    (a.routeIndex ?? -1) === (b.routeIndex ?? -1) &&
+    (a.pointIndex ?? -1) === (b.pointIndex ?? -1);
+}
+
+function isAreaSelected(ref) {
+  return selectedAreaItems.some(item => sameSelectionRef(item, ref));
+}
+
+function areaSelectionRectWorld() {
+  if (!areaSelect) return null;
+  return {
+    minX: Math.min(areaSelect.start.x, areaSelect.current.x),
+    maxX: Math.max(areaSelect.start.x, areaSelect.current.x),
+    minZ: Math.min(areaSelect.start.z, areaSelect.current.z),
+    maxZ: Math.max(areaSelect.start.z, areaSelect.current.z)
+  };
+}
+
+function pointInRectXZ(pos, rect) {
+  const p = pointXZ(pos);
+  return p.x >= rect.minX && p.x <= rect.maxX && p.z >= rect.minZ && p.z <= rect.maxZ;
+}
+
 function setWaterRect(index, rect) {
   const z = hole.material_zones[index];
   z.bounds = [
@@ -465,8 +661,124 @@ function normalizeHole() {
   }));
 }
 
+function normalizeCourseWorld() {
+  if (!courseWorld) return;
+  if (!courseWorld.spawn) courseWorld.spawn = { id: 'clubhouse_spawn', position: [0,0,0], radius: 5 };
+  courseWorld.spawn = {
+    ...courseWorld.spawn,
+    position: vec3(courseWorld.spawn.position)
+  };
+  if (!Number.isFinite(+courseWorld.spawn.radius)) courseWorld.spawn.radius = 5;
+  if (!Array.isArray(courseWorld.hole_starts)) courseWorld.hole_starts = [];
+  if (!Array.isArray(courseWorld.cart_roads)) courseWorld.cart_roads = [];
+  if (!Array.isArray(courseWorld.walking_shortcuts)) courseWorld.walking_shortcuts = [];
+  if (!Array.isArray(courseWorld.collectibles)) courseWorld.collectibles = [];
+  if (!Array.isArray(courseWorld.spawn_zones)) courseWorld.spawn_zones = [];
+  if (!Array.isArray(courseWorld.interactables)) courseWorld.interactables = [];
+
+  courseWorld.hole_starts = courseWorld.hole_starts.map((start, i) => ({
+    ...start,
+    id: start.id || `hole_${String(i + 1).padStart(2, '0')}_start`,
+    hole_index: Number.isInteger(+start.hole_index) ? +start.hole_index : i,
+    position: vec3(start.position),
+    return_position: vec3(start.return_position),
+    interaction_radius: Number.isFinite(+start.interaction_radius) ? Math.max(0.5, +start.interaction_radius) : 4,
+    rotation_degrees: normalizeDegrees(start.rotation_degrees)
+  }));
+
+  const normalizePath = (route, i, prefix, shortcut) => ({
+    ...route,
+    id: route.id || `${prefix}_${i + 1}`,
+    surface: route.surface || (shortcut ? 'dirt' : 'gravel'),
+    width: Number.isFinite(+route.width) ? Math.max(0.5, +route.width) : (shortcut ? 2 : 4),
+    source: route.source || 'manual',
+    osm_ref: route.osm_ref || '',
+    required_skill_id: route.required_skill_id || (shortcut ? 'fitness' : ''),
+    required_level: Number.isInteger(+route.required_level) ? Math.max(1, +route.required_level) : 1,
+    polyline: routePoints(route).map(p => vec3(p)).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[2]))
+  });
+  courseWorld.cart_roads = courseWorld.cart_roads.map((r, i) => normalizePath(r, i, 'cart_road', false));
+  courseWorld.walking_shortcuts = courseWorld.walking_shortcuts.map((r, i) => normalizePath(r, i, 'shortcut', true));
+
+  courseWorld.collectibles = courseWorld.collectibles.map((c, i) => ({
+    ...c,
+    id: c.id || `collectible_${i + 1}`,
+    kind: c.kind || 'collectible',
+    position: vec3(c.position),
+    interaction_radius: Number.isFinite(+c.interaction_radius) ? Math.max(0.5, +c.interaction_radius) : 3,
+    repeatable: !!c.repeatable,
+    repeatable_cooldown_holes: Number.isInteger(+c.repeatable_cooldown_holes) ? Math.max(0, +c.repeatable_cooldown_holes) : 0,
+    reward: c.reward || {}
+  }));
+  courseWorld.interactables = courseWorld.interactables.map((it, i) => ({
+    ...it,
+    id: it.id || `interactable_${i + 1}`,
+    kind: it.kind || 'sign',
+    content_id: it.content_id || it.id || `interactable_${i + 1}`,
+    position: vec3(it.position),
+    interaction_radius: Number.isFinite(+it.interaction_radius) ? Math.max(0.5, +it.interaction_radius) : 3
+  }));
+}
+
+function defaultGeneratorConfig() {
+  return {
+    tree: { trunk_radius: 0.65, trunk_height: 5.0, leaf_radius: 4.7, leaf_height: 6.0, max_per_hole: 60 },
+    hole: { fallback_width: 20.0, fallback_rough_width: 32.0, rough_width_multiplier: 1.55 },
+    world: {
+      hole_start_interaction_radius: 4.0,
+      fallback_cart_width: 4.0,
+      shortcut_width: 2.0,
+      max_shortcut_length: 180.0,
+      max_cart_road_length: 280.0,
+      max_path_distance_from_holes: 75.0,
+      fairway_avoidance_clearance: 8.0,
+      fallback_road_extra_offset: 8.0,
+      max_shortcut_count: 12
+    },
+    courses: {}
+  };
+}
+
+function normalizeGeneratorConfig() {
+  if (!generatorConfig) generatorConfig = defaultGeneratorConfig();
+  generatorConfig.tree = { ...defaultGeneratorConfig().tree, ...(generatorConfig.tree || {}) };
+  generatorConfig.hole = { ...defaultGeneratorConfig().hole, ...(generatorConfig.hole || {}) };
+  generatorConfig.world = { ...defaultGeneratorConfig().world, ...(generatorConfig.world || {}) };
+  if (!generatorConfig.courses || typeof generatorConfig.courses !== 'object') generatorConfig.courses = {};
+}
+
+function deepMergeObject(base, override) {
+  const out = { ...(base || {}) };
+  for (const [key, value] of Object.entries(override || {})) {
+    out[key] = value && typeof value === 'object' && !Array.isArray(value)
+      ? deepMergeObject(out[key] || {}, value)
+      : value;
+  }
+  return out;
+}
+
+function activeCourseId() {
+  const active = courseManifests[activeCourseIndex];
+  return active?.data?.id || active?.name?.replace(/\.json$/, '') || '';
+}
+
+function effectiveGeneratorConfig() {
+  normalizeGeneratorConfig();
+  const id = activeCourseId();
+  return id && generatorConfig.courses?.[id]
+    ? deepMergeObject(generatorConfig, generatorConfig.courses[id])
+    : generatorConfig;
+}
+
 function setProjectStatus(text, warn = false) {
   const el = document.getElementById('project-status');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('warn', warn);
+}
+
+function setWorldStatus(text, warn = false) {
+  const el = document.getElementById('world-status');
   if (!el) return;
   el.textContent = text;
   el.classList.toggle('warn', warn);
@@ -481,6 +793,21 @@ function markDirty(value = true, updateExport = true) {
 function refreshSaveState() {
   const btn = document.getElementById('btn-save-file');
   if (btn) btn.disabled = !activeHoleHandle || !isDirty;
+  const worldBtn = document.getElementById('btn-save-world');
+  if (worldBtn) worldBtn.disabled = !activeWorldHandle || !isWorldDirty;
+  const configBtn = document.getElementById('btn-save-config');
+  if (configBtn) configBtn.disabled = !activeConfigHandle || !isConfigDirty;
+}
+
+function markWorldDirty(value = true) {
+  isWorldDirty = value;
+  refreshSaveState();
+  if (value) refreshExport();
+}
+
+function markConfigDirty(value = true) {
+  isConfigDirty = value;
+  refreshSaveState();
 }
 
 async function getOptionalDirectory(parent, name) {
@@ -509,6 +836,15 @@ function holeReferenceToAssetPath(reference) {
   return ref;
 }
 
+function worldReferenceToAssetPath(reference, courseId = '') {
+  let ref = String(reference || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!ref && courseId) ref = `course_worlds/${courseId}.json`;
+  if (!ref) return '';
+  if (!ref.includes('/') && !ref.endsWith('.json')) ref = `course_worlds/${ref}.json`;
+  else if (!ref.includes('/')) ref = `course_worlds/${ref}`;
+  return ref;
+}
+
 async function readJsonFile(handle) {
   const file = await handle.getFile();
   return JSON.parse(await file.text());
@@ -531,15 +867,49 @@ async function openProjectFolder() {
 
   holesDirHandle = await getOptionalDirectory(assetsDirHandle, 'holes');
   coursesDirHandle = await getOptionalDirectory(assetsDirHandle, 'courses');
+  courseWorldsDirHandle = await getOptionalDirectory(assetsDirHandle, 'course_worlds');
+  toolingDirHandle = await getOptionalDirectory(dir, 'tooling');
   if (!holesDirHandle || !coursesDirHandle) {
     setProjectStatus('Expected assets/holes and assets/courses.', true);
     return;
   }
 
+  await loadGeneratorConfig();
   await loadCourseManifests();
   updateProjectPanel();
   if (courseManifests.length > 0) await selectCourse(0);
   else setProjectStatus('No valid course manifests found in assets/courses.', true);
+}
+
+async function loadGeneratorConfig() {
+  activeConfigHandle = null;
+  generatorConfig = defaultGeneratorConfig();
+  const status = document.getElementById('config-status');
+  if (!toolingDirHandle) {
+    if (status) status.textContent = 'Select the project root, not assets/, to edit tooling/osm_golf_config.json.';
+    updatePanel();
+    return;
+  }
+  try {
+    activeConfigHandle = await toolingDirHandle.getFileHandle('osm_golf_config.json', { create: true });
+    const file = await activeConfigHandle.getFile();
+    const text = await file.text();
+    generatorConfig = text.trim() ? JSON.parse(text) : defaultGeneratorConfig();
+    normalizeGeneratorConfig();
+    applyConfigTreeDefaults(false);
+    markConfigDirty(false);
+    if (status) {
+      status.textContent = 'Loaded tooling/osm_golf_config.json.';
+      status.classList.remove('warn');
+    }
+  } catch (e) {
+    activeConfigHandle = null;
+    if (status) {
+      status.textContent = `Could not load generator config: ${e.message}`;
+      status.classList.add('warn');
+    }
+  }
+  updatePanel();
 }
 
 async function loadCourseManifests() {
@@ -587,10 +957,60 @@ function updateProjectPanel() {
 
 async function selectCourse(index) {
   if (index < 0 || index >= courseManifests.length) return;
+  if ((isDirty || isWorldDirty) && !confirm('Discard unsaved hole/world changes for the current course?')) {
+    updateProjectPanel();
+    return;
+  }
   activeCourseIndex = index;
   activeHoleIndex = -1;
+  applyConfigTreeDefaults(false);
+  await loadActiveCourseWorld();
   updateProjectPanel();
   await selectCourseHole(0);
+}
+
+async function loadActiveCourseWorld() {
+  const active = courseManifests[activeCourseIndex];
+  activeWorldHandle = null;
+  activeWorldRef = '';
+  courseWorld = null;
+  courseHoleOutlines = [];
+  isWorldDirty = false;
+  if (!active) return;
+  await loadCourseHoleOutlines(active);
+
+  const assetPath = worldReferenceToAssetPath(active.data.world, active.data.id || active.name.replace(/\.json$/,''));
+  activeWorldRef = assetPath;
+  if (!assetPath) {
+    setWorldStatus('Course manifest has no world reference.', true);
+    refreshSaveState();
+    return;
+  }
+  try {
+    activeWorldHandle = await getFileHandleFromPath(assetsDirHandle, assetPath);
+    courseWorld = await readJsonFile(activeWorldHandle);
+    normalizeCourseWorld();
+    markWorldDirty(false);
+    setWorldStatus(`Loaded ${assetPath}.`);
+  } catch (e) {
+    setWorldStatus(`Could not load ${assetPath}: ${e.message}`, true);
+    refreshSaveState();
+  }
+}
+
+async function loadCourseHoleOutlines(active) {
+  courseHoleOutlines = [];
+  if (!active?.data?.holes || !assetsDirHandle) return;
+  for (let i = 0; i < active.data.holes.length; i++) {
+    try {
+      const assetPath = holeReferenceToAssetPath(active.data.holes[i]);
+      const handle = await getFileHandleFromPath(assetsDirHandle, assetPath);
+      const data = await readJsonFile(handle);
+      courseHoleOutlines[i] = normalizeHoleOutline(data);
+    } catch (e) {
+      courseHoleOutlines[i] = null;
+    }
+  }
 }
 
 async function selectCourseHole(index) {
@@ -658,6 +1078,44 @@ async function saveCurrentHole() {
   setProjectStatus(`Saved ${holeReferenceToAssetPath(activeHoleRef)}`);
 }
 
+async function saveCurrentWorld() {
+  if (!activeWorldHandle) {
+    alert('Open a project course world before saving in place.');
+    return;
+  }
+  if (!(await ensureWritable(activeWorldHandle))) {
+    setWorldStatus('Write permission was not granted.', true);
+    return;
+  }
+  const writable = await activeWorldHandle.createWritable();
+  await writable.write(buildWorldJSON());
+  await writable.close();
+  markWorldDirty(false);
+  setWorldStatus(`Saved ${activeWorldRef}.`);
+}
+
+async function saveGeneratorConfig() {
+  if (!activeConfigHandle) {
+    alert('Open the project root before saving generator config.');
+    return;
+  }
+  if (!(await ensureWritable(activeConfigHandle))) {
+    const status = document.getElementById('config-status');
+    if (status) status.textContent = 'Write permission was not granted.';
+    return;
+  }
+  normalizeGeneratorConfig();
+  const writable = await activeConfigHandle.createWritable();
+  await writable.write(JSON.stringify(generatorConfig, null, 2) + '\n');
+  await writable.close();
+  markConfigDirty(false);
+  const status = document.getElementById('config-status');
+  if (status) {
+    status.textContent = 'Saved tooling/osm_golf_config.json.';
+    status.classList.remove('warn');
+  }
+}
+
 // ── spline ───────────────────────────────────────────────────────────────────
 
 function catmullSample(pts, t) {
@@ -699,6 +1157,10 @@ const ZONE = {
 function render() {
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
+  if (viewScope === 'world') {
+    renderWorld(W, H);
+    return;
+  }
   normalizeHole();
 
   // grid
@@ -751,7 +1213,7 @@ function render() {
   // material zones
   hole.material_zones.forEach((z, i) => {
     const col    = ZONE[z.type];
-    const isSel  = sel && sel.type === 'zone' && sel.index === i;
+    const isSel  = (sel && sel.type === 'zone' && sel.index === i) || isAreaSelected({type:'zone', index:i});
     ctx.lineWidth = isSel ? 1.5 : 0.8;
 
     if (z.type === 'water' && z.bounds) {
@@ -799,18 +1261,18 @@ function render() {
   }
 
   // tee
-  drawTee(hole.tee, sel && sel.type === 'tee');
+  drawTee(hole.tee, (sel && sel.type === 'tee') || isAreaSelected({type:'tee'}));
 
   // pin
-  drawPin(hole.pin, sel && sel.type === 'pin');
+  drawPin(hole.pin, (sel && sel.type === 'pin') || isAreaSelected({type:'pin'}));
 
   // trees
-  hole.trees.forEach((tree, i) => drawTree(tree, sel && sel.type === 'tree' && sel.index === i));
+  hole.trees.forEach((tree, i) => drawTree(tree, (sel && sel.type === 'tree' && sel.index === i) || isAreaSelected({type:'tree', index:i})));
 
   // control points
   hole.spline.control_points.forEach((pt, i) => {
     const c     = w2c(pt[0], pt[2]);
-    const isSel = sel && sel.type === 'cp' && sel.index === i;
+    const isSel = (sel && sel.type === 'cp' && sel.index === i) || isAreaSelected({type:'cp', index:i});
     ctx.fillStyle   = isSel ? '#f0c060' : (i===0||i===hole.spline.control_points.length-1) ? '#70b050' : '#7070b0';
     ctx.strokeStyle = isSel ? '#fff' : '#000';
     ctx.lineWidth = 1;
@@ -850,9 +1312,11 @@ function render() {
     });
   }
 
+  drawAreaSelectionRect();
+
   // mode hint on canvas
   if (mode !== 'select') {
-    const hints = { add_cp: 'click to add control point', add_zone: `click to place ${ztype}`, add_tree: 'click to place tree', measure: 'click point A, click point B, right-click clears' };
+    const hints = { add_cp: 'click to add control point', add_zone: `click to place ${ztype}`, add_tree: 'click to place tree', measure: 'click point A, click point B, right-click clears', area_select: 'drag a box to select editable items' };
     ctx.fillStyle = '#f0c060';
     ctx.font = '11px Courier New';
     ctx.fillText(hints[mode] || '', 10, H - 10);
@@ -970,9 +1434,29 @@ function drawScaleBar() {
   ctx.restore();
 }
 
+function drawAreaSelectionRect() {
+  const rect = areaSelectionRectWorld();
+  if (!rect) return;
+  const a = w2c(rect.minX, rect.minZ);
+  const b = w2c(rect.maxX, rect.maxZ);
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  const w = Math.abs(b.x - a.x);
+  const h = Math.abs(b.y - a.y);
+  ctx.save();
+  ctx.fillStyle = 'rgba(240,192,96,0.08)';
+  ctx.strokeStyle = 'rgba(240,192,96,0.8)';
+  ctx.setLineDash([6, 4]);
+  ctx.lineWidth = 1;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeRect(x, y, w, h);
+  ctx.restore();
+}
+
 // ── hit test ─────────────────────────────────────────────────────────────────
 
 function hit(cx, cy) {
+  if (viewScope === 'world') return hitWorld(cx, cy);
   const D = 10;
   for (let i=hole.trees.length-1; i>=0; i--) {
     const t = hole.trees[i];
@@ -1030,6 +1514,15 @@ function hit(cx, cy) {
   return null;
 }
 
+function hitWorld(cx, cy) {
+  if (!courseWorld) return null;
+  for (let i = (courseWorld.hole_starts || []).length - 1; i >= 0; i--) {
+    const hit = hitWorldHolePlacement(cx, cy, courseWorld.hole_starts[i], i);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 // ── mouse ────────────────────────────────────────────────────────────────────
 
 function getpos(e) {
@@ -1048,6 +1541,16 @@ canvas.addEventListener('mousedown', e => {
     if (mode === 'measure') {
       measure = { a: null, b: null };
       render(); return;
+    }
+    if (mode === 'area_select') {
+      clearAreaSelection();
+      render(); return;
+    }
+    if (viewScope === 'world') {
+      sel = null;
+      selectedAreaItems = [];
+      updatePanel(); render();
+      return;
     }
     const h2 = hit(cx,cy);
     let deleted = false;
@@ -1068,6 +1571,21 @@ canvas.addEventListener('mousedown', e => {
     updatePanel(); render(); return;
   }
   if (e.button !== 0) return;
+
+  if (mode === 'area_select') {
+    if (viewScope === 'world') {
+      setMode('select');
+      return;
+    }
+    areaSelect = {
+      start: { x: r2(w.x), z: r2(w.z) },
+      current: { x: r2(w.x), z: r2(w.z) }
+    };
+    selectedAreaItems = [];
+    updatePanel(); render(); return;
+  }
+
+  if (viewScope === 'world' && handleWorldLeftClick(w, cx, cy)) return;
 
   if (mode === 'measure') {
     if (!measure.a || measure.b) {
@@ -1115,6 +1633,7 @@ canvas.addEventListener('mousedown', e => {
   // select / drag
   const h2 = hit(cx,cy);
   if (h2) {
+    selectedAreaItems = [];
     sel = (h2.type==='zone_resize' || h2.type==='water_resize') ? { type:'zone', index:h2.index } : h2;
     const op = origPos(h2);
     drag = { ...h2, cx0:cx, cy0:cy, ox:op.x, oz:op.z };
@@ -1128,6 +1647,12 @@ canvas.addEventListener('mousedown', e => {
 });
 
 function origPos(h2) {
+  if (viewScope === 'world' && courseWorld) {
+    if (h2.type === 'hole_start') {
+      const p = courseWorld.hole_starts[h2.index].position;
+      return { x:p[0], z:p[2] };
+    }
+  }
   if (h2.type==='cp') { const p=hole.spline.control_points[h2.index]; return {x:p[0],z:p[2]}; }
   if (h2.type==='tee') return {x:hole.tee[0],z:hole.tee[2]};
   if (h2.type==='pin') return {x:hole.pin[0],z:hole.pin[2]};
@@ -1146,6 +1671,176 @@ function origPos(h2) {
   }
   if (h2.type==='tree') { const t=hole.trees[h2.index]; return {x:t.position[0],z:t.position[2]}; }
   return {x:0,z:0};
+}
+
+function renderGrid(W, H) {
+  const gs = 10;
+  ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 0.5;
+  const x0 = Math.floor((view.ox - W/2/view.scale) / gs) * gs;
+  const x1 = Math.ceil ((view.ox + W/2/view.scale) / gs) * gs;
+  const z0 = Math.floor((view.oz - H/2/view.scale) / gs) * gs;
+  const z1 = Math.ceil ((view.oz + H/2/view.scale) / gs) * gs;
+  for (let wx = x0; wx <= x1; wx += gs) {
+    const {x} = w2c(wx, 0); ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+  for (let wz = z0; wz <= z1; wz += gs) {
+    const {y} = w2c(0, wz); ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+  ctx.fillStyle = '#2e2e2e'; ctx.font = '9px Courier New';
+  for (let wx = x0; wx <= x1; wx += gs) { const {x}=w2c(wx,0); ctx.fillText(`${fmtMeters(toMeters(wx))}`,x+2,H-4); }
+  for (let wz = z0; wz <= z1; wz += gs) { const {y}=w2c(0,wz); ctx.fillText(`${fmtMeters(toMeters(wz))}`,4,y-2); }
+}
+
+function drawWorldPath(route, collectionName, routeIndex, color, fillColor) {
+  const pts = routePoints(route);
+  if (pts.length > 1) {
+    ctx.lineWidth = Math.max(2, (route.width || 2) * view.scale);
+    ctx.strokeStyle = fillColor;
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath();
+    pts.forEach((p, i) => { const c = w2c(p[0], p[2]); i ? ctx.lineTo(c.x, c.y) : ctx.moveTo(c.x, c.y); });
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    pts.forEach((p, i) => { const c = w2c(p[0], p[2]); i ? ctx.lineTo(c.x, c.y) : ctx.moveTo(c.x, c.y); });
+    ctx.stroke();
+  }
+  pts.forEach((p, pointIndex) => {
+    const c = w2c(p[0], p[2]);
+    const pointType = collectionName === 'cart_roads' ? 'cart_point' : 'shortcut_point';
+    const ref = {type: pointType, routeIndex, pointIndex};
+    const isSel = (sel?.type === pointType && sel.routeIndex === routeIndex && sel.pointIndex === pointIndex) || isAreaSelected(ref);
+    ctx.fillStyle = isSel ? '#f0c060' : color;
+    ctx.strokeStyle = '#101010';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.rect(c.x - 4, c.y - 4, 8, 8); ctx.fill(); ctx.stroke();
+  });
+}
+
+function drawWorldPoint(pos, label, color, selected = false, radius = 5) {
+  const c = w2c(pos[0], pos[2]);
+  ctx.fillStyle = selected ? '#f0c060' : color;
+  ctx.strokeStyle = '#101010';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(c.x, c.y, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  if (label) {
+    ctx.font = '9px Courier New';
+    ctx.fillStyle = selected ? '#f0c060' : 'rgba(230,230,210,0.68)';
+    ctx.fillText(label, c.x + radius + 3, c.y - radius - 2);
+  }
+}
+
+function drawWorldHolePlacement(start, index) {
+  const outline = activeHoleOutline(start.hole_index);
+  const selected = sel?.type === 'hole_start' && sel.index === index;
+  const holeNumber = Number.isInteger(+start.hole_index) ? +start.hole_index + 1 : index + 1;
+  if (!outline || outline.spline.control_points.length < 2) {
+    drawWorldPoint(start.position, `h${holeNumber}`, '#70b050', selected, 7);
+    return;
+  }
+
+  const localSpline = splinePtsForControlPoints(outline.spline.control_points, 96);
+  const worldSpline = localSpline.map(p => transformHolePoint(outline, start, p));
+  const drawSpline = (width, color) => {
+    if (worldSpline.length < 2) return;
+    ctx.lineWidth = Math.max(1, width * view.scale);
+    ctx.strokeStyle = color;
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath();
+    worldSpline.forEach((p, i) => {
+      const c = w2c(p.x, p.z);
+      i ? ctx.lineTo(c.x, c.y) : ctx.moveTo(c.x, c.y);
+    });
+    ctx.stroke();
+  };
+
+  drawSpline(Math.max(outline.spline.rough_width, outline.spline.width), selected ? 'rgba(90,90,35,0.52)' : 'rgba(24,58,26,0.46)');
+  drawSpline(outline.spline.width, selected ? 'rgba(100,150,45,0.62)' : 'rgba(45,90,35,0.48)');
+
+  ctx.lineWidth = selected ? 1.4 : 0.8;
+  ctx.strokeStyle = selected ? '#f0c060' : 'rgba(100,180,70,0.42)';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  worldSpline.forEach((p, i) => {
+    const c = w2c(p.x, p.z);
+    i ? ctx.lineTo(c.x, c.y) : ctx.moveTo(c.x, c.y);
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const tee = transformHolePoint(outline, start, outline.tee);
+  const pin = transformHolePoint(outline, start, outline.pin);
+  drawWorldPoint([tee.x, 0, tee.z], `h${holeNumber}`, '#70b050', selected, selected ? 8 : 6);
+  drawWorldPoint([pin.x, 0, pin.z], `pin${holeNumber}`, '#d05848', false, 4);
+
+  const tc = w2c(tee.x, tee.z);
+  const pc = w2c(pin.x, pin.z);
+  ctx.strokeStyle = selected ? 'rgba(240,192,96,0.7)' : 'rgba(230,210,160,0.28)';
+  ctx.lineWidth = selected ? 1.2 : 0.8;
+  ctx.beginPath();
+  ctx.moveTo(tc.x, tc.y);
+  ctx.lineTo(pc.x, pc.y);
+  ctx.stroke();
+
+  if (selected) {
+    ctx.fillStyle = '#f0c060';
+    ctx.font = '10px Courier New';
+    ctx.fillText(`${normalizeDegrees(start.rotation_degrees).toFixed(1)} deg`, tc.x + 10, tc.y + 14);
+  }
+}
+
+function distancePointToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 <= 0.0001) return Math.hypot(px - ax, py - ay);
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+function hitWorldHolePlacement(cx, cy, start, index) {
+  const outline = activeHoleOutline(start.hole_index);
+  const c = w2c(start.position[0], start.position[2]);
+  if (Math.hypot(cx - c.x, cy - c.y) <= 10) return { type:'hole_start', index };
+  if (!outline || outline.spline.control_points.length < 2) return null;
+  const worldSpline = splinePtsForControlPoints(outline.spline.control_points, 48)
+    .map(p => transformHolePoint(outline, start, p))
+    .map(p => w2c(p.x, p.z));
+  const threshold = Math.max(10, (outline.spline.width * view.scale) * 0.5 + 4);
+  for (let i = 1; i < worldSpline.length; i++) {
+    if (distancePointToSegment(cx, cy, worldSpline[i - 1].x, worldSpline[i - 1].y, worldSpline[i].x, worldSpline[i].y) <= threshold) {
+      return { type:'hole_start', index };
+    }
+  }
+  return null;
+}
+
+function renderWorld(W, H) {
+  renderGrid(W, H);
+  if (!courseWorld) {
+    ctx.fillStyle = '#b88a50';
+    ctx.font = '12px Courier New';
+    ctx.fillText('No course world loaded.', 12, 22);
+    drawScaleBar();
+    return;
+  }
+
+  (courseWorld.hole_starts || []).forEach((start, i) => drawWorldHolePlacement(start, i));
+
+  if (mode !== 'select') {
+    const hints = {
+      measure: 'click point A, click point B, right-click clears'
+    };
+    ctx.fillStyle = '#f0c060';
+    ctx.font = '11px Courier New';
+    ctx.fillText(hints[mode] || '', 10, H - 10);
+  }
+
+  const cursor = mouseWorld ? `  |  x:${mouseWorld.x.toFixed(1)} z:${mouseWorld.z.toFixed(1)}` : '';
+  document.getElementById('status').textContent =
+    `${view.scale.toFixed(1)}px/m  |  course layout holes:${(courseWorld.hole_starts || []).length}${cursor}`;
+  drawScaleBar();
 }
 
 function resizeWaterFromCorner(index, corner, nx, nz, startRect) {
@@ -1171,17 +1866,28 @@ canvas.addEventListener('mousemove', e => {
   const {cx,cy} = getpos(e);
   const w = c2w(cx,cy);
   mouseWorld = { x: r2(w.x), z: r2(w.z) };
+  if (areaSelect) {
+    areaSelect.current = { x: r2(w.x), z: r2(w.z) };
+    render(); return;
+  }
   if (pan) {
     view.ox = pan.vox - (cx-pan.cx0)/view.scale;
     view.oz = pan.voz - (cy-pan.cy0)/view.scale;
     render(); return;
   }
   if (!drag) {
-    render();
+    if (viewScope === 'hole' && (mode === 'add_cp' || mode === 'measure')) render();
     return;
   }
   const dx = (cx-drag.cx0)/view.scale, dz = (cy-drag.cy0)/view.scale;
   const nx = r2(drag.ox+dx), nz = r2(drag.oz+dz);
+
+  if (viewScope === 'world' && courseWorld) {
+    if (drag.type === 'hole_start') setHoleStartPosition(drag.index, nx, nz);
+    markWorldDirty();
+    render();
+    return;
+  }
 
   if (drag.type==='cp') { hole.spline.control_points[drag.index][0]=nx; hole.spline.control_points[drag.index][2]=nz; }
   else if (drag.type==='tee') { hole.tee[0]=nx; hole.tee[2]=nz; }
@@ -1208,38 +1914,291 @@ canvas.addEventListener('mousemove', e => {
   updatePanel(); render();
 });
 
+function selectedWorldRoute(collectionName) {
+  if (!courseWorld) return null;
+  const collection = courseWorld[collectionName] || [];
+  if ((sel?.type === 'cart_point' || sel?.type === 'cart_route') && collectionName === 'cart_roads') {
+    return collection[sel.routeIndex ?? sel.index];
+  }
+  if ((sel?.type === 'shortcut_point' || sel?.type === 'shortcut_route') && collectionName === 'walking_shortcuts') {
+    return collection[sel.routeIndex ?? sel.index];
+  }
+  return collection[collection.length - 1] || null;
+}
+
+function ensureWorldRoute(collectionName) {
+  if (!courseWorld) return null;
+  const collection = courseWorld[collectionName];
+  let route = selectedWorldRoute(collectionName);
+  if (!route) {
+    newWorldRoute(collectionName, false);
+    route = courseWorld[collectionName][courseWorld[collectionName].length - 1];
+  }
+  return route;
+}
+
+function handleWorldLeftClick(w, cx, cy) {
+  if (!courseWorld) return false;
+  if (mode === 'measure') {
+    if (!measure.a || measure.b) measure = { a: { x: r2(w.x), z: r2(w.z) }, b: null };
+    else measure.b = { x: r2(w.x), z: r2(w.z) };
+    render(); return true;
+  }
+
+  const h2 = hit(cx, cy);
+  if (h2) {
+    selectedAreaItems = [];
+    sel = h2;
+    const op = origPos(h2);
+    drag = { ...h2, cx0:cx, cy0:cy, ox:op.x, oz:op.z };
+  } else {
+    sel = null;
+    selectedAreaItems = [];
+    pan = { cx0:cx, cy0:cy, vox:view.ox, voz:view.oz };
+    canvas.style.cursor = 'grabbing';
+  }
+  updatePanel(); render();
+  return true;
+}
+
+function deleteWorldSelection(h2) {
+  if (!courseWorld || !h2) return false;
+  if (h2.type === 'cart_point') {
+    const route = courseWorld.cart_roads[h2.routeIndex];
+    if (!route) return false;
+    route.polyline.splice(h2.pointIndex, 1);
+    if (route.polyline.length === 0) courseWorld.cart_roads.splice(h2.routeIndex, 1);
+    sel = null;
+    return true;
+  }
+  if (h2.type === 'shortcut_point') {
+    const route = courseWorld.walking_shortcuts[h2.routeIndex];
+    if (!route) return false;
+    route.polyline.splice(h2.pointIndex, 1);
+    if (route.polyline.length === 0) courseWorld.walking_shortcuts.splice(h2.routeIndex, 1);
+    sel = null;
+    return true;
+  }
+  if (h2.type === 'collectible') {
+    courseWorld.collectibles.splice(h2.index, 1);
+    sel = null;
+    return true;
+  }
+  if (h2.type === 'interactable') {
+    courseWorld.interactables.splice(h2.index, 1);
+    sel = null;
+    return true;
+  }
+  return false;
+}
+
+function finishAreaSelection() {
+  const rect = areaSelectionRectWorld();
+  if (!rect) return;
+  selectedAreaItems = viewScope === 'world' ? collectWorldItemsInRect(rect) : collectHoleItemsInRect(rect);
+  sel = selectedAreaItems[0] || null;
+}
+
+function collectHoleItemsInRect(rect) {
+  const items = [];
+  if (pointInRectXZ(hole.tee, rect)) items.push({ type:'tee' });
+  if (pointInRectXZ(hole.pin, rect)) items.push({ type:'pin' });
+  hole.spline.control_points.forEach((pt, index) => {
+    if (pointInRectXZ(pt, rect)) items.push({ type:'cp', index });
+  });
+  hole.material_zones.forEach((zone, index) => {
+    const pos = zone.center || (() => {
+      const r = waterRectWorld(zone);
+      return [(r.minX + r.maxX) * 0.5, 0, (r.minZ + r.maxZ) * 0.5];
+    })();
+    if (pointInRectXZ(pos, rect)) items.push({ type:'zone', index });
+  });
+  hole.trees.forEach((tree, index) => {
+    if (pointInRectXZ(tree.position, rect)) items.push({ type:'tree', index });
+  });
+  return items;
+}
+
+function collectWorldItemsInRect(rect) {
+  const items = [];
+  if (courseWorld?.spawn?.position && pointInRectXZ(courseWorld.spawn.position, rect)) items.push({ type:'spawn' });
+  (courseWorld?.hole_starts || []).forEach((start, index) => {
+    if (pointInRectXZ(start.position, rect)) items.push({ type:'hole_start', index });
+  });
+  (courseWorld?.cart_roads || []).forEach((route, routeIndex) => {
+    routePoints(route).forEach((pt, pointIndex) => {
+      if (pointInRectXZ(pt, rect)) items.push({ type:'cart_point', routeIndex, pointIndex });
+    });
+  });
+  (courseWorld?.walking_shortcuts || []).forEach((route, routeIndex) => {
+    routePoints(route).forEach((pt, pointIndex) => {
+      if (pointInRectXZ(pt, rect)) items.push({ type:'shortcut_point', routeIndex, pointIndex });
+    });
+  });
+  (courseWorld?.collectibles || []).forEach((item, index) => {
+    if (pointInRectXZ(item.position, rect)) items.push({ type:'collectible', index });
+  });
+  (courseWorld?.interactables || []).forEach((item, index) => {
+    if (pointInRectXZ(item.position, rect)) items.push({ type:'interactable', index });
+  });
+  return items;
+}
+
+function clearAreaSelection() {
+  selectedAreaItems = [];
+  areaSelect = null;
+  updatePanel();
+  render();
+}
+
+function deleteAreaSelection() {
+  if (selectedAreaItems.length === 0) return;
+  if (viewScope === 'world') deleteSelectedWorldItems();
+  else deleteSelectedHoleItems();
+  selectedAreaItems = [];
+  sel = null;
+  updatePanel();
+  render();
+}
+
+function deleteSelectedHoleItems() {
+  const byType = type => selectedAreaItems
+    .filter(item => item.type === type && Number.isInteger(item.index))
+    .map(item => item.index)
+    .sort((a, b) => b - a);
+  for (const i of byType('tree')) hole.trees.splice(i, 1);
+  for (const i of byType('zone')) hole.material_zones.splice(i, 1);
+  for (const i of byType('cp')) {
+    if (hole.spline.control_points.length > 2) hole.spline.control_points.splice(i, 1);
+  }
+  markDirty();
+}
+
+function deleteSelectedWorldItems() {
+  if (!courseWorld) return;
+  for (const i of selectedAreaItems.filter(item => item.type === 'collectible').map(item => item.index).sort((a,b)=>b-a)) {
+    courseWorld.collectibles.splice(i, 1);
+  }
+  for (const i of selectedAreaItems.filter(item => item.type === 'interactable').map(item => item.index).sort((a,b)=>b-a)) {
+    courseWorld.interactables.splice(i, 1);
+  }
+  const routePointsByType = (type, routes) => {
+    const refs = selectedAreaItems.filter(item => item.type === type)
+      .sort((a, b) => (b.routeIndex - a.routeIndex) || (b.pointIndex - a.pointIndex));
+    for (const ref of refs) {
+      const route = routes[ref.routeIndex];
+      if (!route) continue;
+      route.polyline.splice(ref.pointIndex, 1);
+      if (route.polyline.length === 0) routes.splice(ref.routeIndex, 1);
+    }
+  };
+  routePointsByType('cart_point', courseWorld.cart_roads);
+  routePointsByType('shortcut_point', courseWorld.walking_shortcuts);
+  markWorldDirty();
+}
+
 canvas.addEventListener('mouseup', () => {
+  if (areaSelect) {
+    finishAreaSelection();
+    areaSelect = null;
+  }
   drag=null; pan=null; canvas.style.cursor='crosshair';
+  updatePanel(); render();
 });
-canvas.addEventListener('mouseleave', () => { drag=null; pan=null; mouseWorld=null; render(); });
+canvas.addEventListener('mouseleave', () => { drag=null; pan=null; areaSelect=null; mouseWorld=null; render(); });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
   const {cx,cy} = getpos(e);
   const wb = c2w(cx,cy);
-  view.scale = Math.max(1, Math.min(50, view.scale * (e.deltaY<0 ? 1.12 : 0.89)));
+  view.scale = Math.max(viewScope === 'world' ? 0.25 : 1, Math.min(50, view.scale * (e.deltaY<0 ? 1.12 : 0.89)));
   const wa = c2w(cx,cy);
   view.ox += wb.x-wa.x; view.oz += wb.z-wa.z;
   render();
 }, {passive:false});
 
+window.addEventListener('keydown', e => {
+  if (viewScope !== 'world' || sel?.type !== 'hole_start') return;
+  if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+  if (e.key.toLowerCase() === 'q') {
+    e.preventDefault();
+    rotateHoleStart(sel.index, -5);
+  } else if (e.key.toLowerCase() === 'e') {
+    e.preventDefault();
+    rotateHoleStart(sel.index, 5);
+  }
+});
+
 // ── mode ─────────────────────────────────────────────────────────────────────
 
 function setMode(m, zt) {
+  if (viewScope === 'world' && !['select', 'measure'].includes(m)) {
+    m = 'select';
+    zt = null;
+  }
   mode=m; ztype=zt||null;
-  const map = { select:'btn-select', add_cp:'btn-addcp',
+  const map = { select:'btn-select', area_select:'btn-area-select', add_cp:'btn-addcp',
     measure:'btn-measure', add_tree:'btn-tree',
+    add_cart_point:'btn-cart', add_shortcut_point:'btn-shortcut', add_collectible:'btn-collectible',
     'add_zone:green':'btn-green','add_zone:bunker':'btn-bunker','add_zone:water':'btn-water' };
   document.querySelectorAll('#toolbar .btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(viewScope === 'world' ? 'btn-world-view' : 'btn-hole-view')?.classList.add('active');
   const k = m==='add_zone'?`add_zone:${zt}`:m;
   document.getElementById(map[k])?.classList.add('active');
+  updateToolbarForScope();
   render();
+}
+
+function updateToolbarForScope() {
+  const legacyWorldTools = ['btn-cart', 'btn-shortcut', 'btn-collectible'];
+  legacyWorldTools.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const hideInWorld = ['btn-area-select', 'btn-addcp', 'btn-green', 'btn-bunker', 'btn-water', 'btn-tree'];
+  hideInWorld.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = viewScope === 'world' ? 'none' : '';
+  });
+}
+
+function setViewScope(scope) {
+  if (scope !== 'hole' && scope !== 'world') return;
+  const changed = viewScope !== scope;
+  viewScope = scope;
+  if (changed) sel = null;
+  if (changed) selectedAreaItems = [];
+  drag = null;
+  pan = null;
+  if (scope === 'world') {
+    if (!['select', 'measure'].includes(mode)) mode = 'select';
+  } else if (mode === 'add_cart_point' || mode === 'add_shortcut_point' || mode === 'add_collectible') {
+    mode = 'select';
+  }
+  fitView();
+  updatePanel();
+  setMode(mode, ztype);
 }
 
 // ── panel ────────────────────────────────────────────────────────────────────
 
 function updatePanel() {
+  document.querySelectorAll('.hole-panel-section').forEach(el => {
+    el.style.display = viewScope === 'world' ? 'none' : '';
+  });
+  const areaSection = document.getElementById('area-selection-section');
+  if (areaSection) areaSection.style.display = viewScope === 'world' ? 'none' : '';
+
+  const areaStatus = document.getElementById('area-selection-status');
+  if (areaStatus) {
+    const deletable = selectedAreaItems.filter(item =>
+      !['tee', 'pin', 'spawn', 'hole_start'].includes(item.type)).length;
+    areaStatus.textContent = selectedAreaItems.length
+      ? `${selectedAreaItems.length} selected (${deletable} deletable).`
+      : 'No area selection.';
+  }
+
   // metadata fields
   setValue('f-id',   hole.id);
   setValue('f-name', hole.name);
@@ -1389,7 +2348,185 @@ function updatePanel() {
       `<button class="mini-btn" style="width:100%;margin-top:6px" onclick="useSelectedTreeAsDefault(${sel.index})">use as new tree default</button>`;
   } else { tEdit.innerHTML=''; }
 
+  updateWorldPanel();
+  updateConfigPanel();
   refreshExport();
+}
+
+function updateWorldPanel() {
+  const startList = document.getElementById('hole-start-list');
+  const startEdit = document.getElementById('hole-start-edit');
+  if (!startList || !startEdit) return;
+  startList.innerHTML = '';
+  startEdit.innerHTML = '';
+  if (!courseWorld) return;
+  (courseWorld.hole_starts || []).forEach((start, i) => {
+    const isSel = sel?.type === 'hole_start' && sel.index === i;
+    const outline = activeHoleOutline(start.hole_index);
+    const label = outline?.name || start.id || `hole ${+start.hole_index + 1}`;
+    const p = vec3(start.position);
+    const el = document.createElement('div');
+    el.className = 'list-item' + (isSel ? ' selected' : '');
+    el.innerHTML =
+      `<span class="zone-dot start"></span>` +
+      `<span class="item-label">${+start.hole_index + 1}</span>` +
+      `<span class="item-coords">${escapeHtml(label)} @ ${(+p[0]).toFixed(1)},${(+p[2]).toFixed(1)} r${holeStartRotation(start).toFixed(1)}</span>`;
+    el.addEventListener('click', () => {
+      setViewScope('world');
+      sel = { type:'hole_start', index:i };
+      updatePanel(); render();
+    });
+    startList.appendChild(el);
+  });
+
+  if (sel?.type === 'hole_start') renderHoleStartEdit(startEdit, sel.index);
+}
+
+function renderHoleStartEdit(container, index) {
+  const start = courseWorld?.hole_starts?.[index];
+  if (!start) return;
+  const p = vec3(start.position);
+  const outline = activeHoleOutline(start.hole_index);
+  const label = outline?.name || start.id || `hole ${+start.hole_index + 1}`;
+  container.innerHTML =
+    `<div class="panel-note">Selected ${escapeHtml(label)}. Drag the outline to move it, or rotate it here.</div>` +
+    `<div class="field-row">` +
+    `<button class="mini-btn" onclick="rotateHoleStart(${index},-15)">rotate -15</button>` +
+    `<button class="mini-btn" onclick="rotateHoleStart(${index},15)">rotate +15</button>` +
+    `</div>` +
+    `<div class="field-row three">` +
+    `<div class="field compact"><label>x</label><input type="number" step="0.1" value="${p[0]}" oninput="setHoleStartAxis(${index},0,+this.value)"></div>` +
+    `<div class="field compact"><label>z</label><input type="number" step="0.1" value="${p[2]}" oninput="setHoleStartAxis(${index},2,+this.value)"></div>` +
+    `<div class="field compact"><label>rot</label><input type="number" step="1" value="${holeStartRotation(start)}" oninput="setHoleStartRotation(${index},+this.value)"></div>` +
+    `</div>`;
+}
+
+function renderRouteList(collectionName, container, pointType, dotClass) {
+  const collection = courseWorld[collectionName] || [];
+  collection.forEach((route, i) => {
+    const isSel = (sel?.type === pointType && sel.routeIndex === i) || (sel?.type === (collectionName === 'cart_roads' ? 'cart_route' : 'shortcut_route') && sel.index === i);
+    const el = document.createElement('div');
+    el.className = 'list-item' + (isSel ? ' selected' : '');
+    el.innerHTML =
+      `<span class="zone-dot ${dotClass}"></span>` +
+      `<span class="item-coords">${escapeHtml(route.id)} (${routePoints(route).length} pts, w${(+route.width || 0).toFixed(1)})</span>` +
+      `<span class="item-del" data-i="${i}">x</span>`;
+    el.addEventListener('click', ev => {
+      if (ev.target.dataset.i !== undefined) return;
+      setViewScope('world');
+      sel = { type: collectionName === 'cart_roads' ? 'cart_route' : 'shortcut_route', index:i };
+      updatePanel(); render();
+    });
+    container.appendChild(el);
+  });
+  container.querySelectorAll('.item-del').forEach(el =>
+    el.addEventListener('click', () => {
+      collection.splice(+el.dataset.i, 1);
+      sel = null;
+      markWorldDirty();
+      updatePanel(); render();
+    })
+  );
+}
+
+function renderPointList(collection, container, type, dotClass) {
+  collection.forEach((item, i) => {
+    const isSel = sel?.type === type && sel.index === i;
+    const p = item.position || [0,0,0];
+    const el = document.createElement('div');
+    el.className = 'list-item' + (isSel ? ' selected' : '');
+    el.innerHTML =
+      `<span class="zone-dot ${dotClass}"></span>` +
+      `<span class="item-coords">${escapeHtml(item.id || type)} @ ${(+p[0]).toFixed(1)},${(+p[2]).toFixed(1)}</span>` +
+      `<span class="item-del" data-i="${i}">x</span>`;
+    el.addEventListener('click', ev => {
+      if (ev.target.dataset.i !== undefined) return;
+      setViewScope('world');
+      sel = { type, index:i };
+      updatePanel(); render();
+    });
+    container.appendChild(el);
+  });
+  container.querySelectorAll('.item-del').forEach(el =>
+    el.addEventListener('click', () => {
+      collection.splice(+el.dataset.i, 1);
+      sel = null;
+      markWorldDirty();
+      updatePanel(); render();
+    })
+  );
+}
+
+function renderRouteEdit(collectionName, container, index, shortcut) {
+  const route = courseWorld[collectionName]?.[index];
+  if (!route) return;
+  container.innerHTML =
+    `<div class="subfield"><label>id</label><input type="text" value="${escapeAttr(route.id)}" oninput="setRouteValue('${collectionName}',${index},'id',this.value)"></div>` +
+    `<div class="field-row">` +
+    `<div class="field compact"><label>width</label><input type="number" step="0.25" min="0.5" value="${route.width}" oninput="setRouteValue('${collectionName}',${index},'width',+this.value)"></div>` +
+    `<div class="field compact"><label>surface</label><input type="text" value="${escapeAttr(route.surface)}" oninput="setRouteValue('${collectionName}',${index},'surface',this.value)"></div>` +
+    `</div>` +
+    (shortcut ?
+      `<div class="field-row">` +
+      `<div class="field compact"><label>skill</label><input type="text" value="${escapeAttr(route.required_skill_id || '')}" oninput="setRouteValue('${collectionName}',${index},'required_skill_id',this.value)"></div>` +
+      `<div class="field compact"><label>level</label><input type="number" step="1" min="1" value="${route.required_level || 1}" oninput="setRouteValue('${collectionName}',${index},'required_level',+this.value)"></div>` +
+      `</div>` : '') +
+    `<div class="panel-note">Select route points in world view to drag them. Right-click a route point to remove it.</div>`;
+}
+
+function renderCollectibleEdit(container, index) {
+  const c = courseWorld.collectibles[index];
+  if (!c) return;
+  const reward = c.reward || {};
+  container.innerHTML =
+    `<div class="subfield"><label>id</label><input type="text" value="${escapeAttr(c.id)}" oninput="setCollectibleValue(${index},'id',this.value)"></div>` +
+    `<div class="field-row">` +
+    `<div class="field compact"><label>kind</label><input type="text" value="${escapeAttr(c.kind)}" oninput="setCollectibleValue(${index},'kind',this.value)"></div>` +
+    `<div class="field compact"><label>radius</label><input type="number" step="0.25" min="0.5" value="${c.interaction_radius}" oninput="setCollectibleValue(${index},'interaction_radius',+this.value)"></div>` +
+    `</div>` +
+    `<div class="field-row three">` +
+    `<div class="field compact"><label>x</label><input type="number" step="0.1" value="${c.position[0]}" oninput="setWorldPointValue('collectible',${index},0,+this.value)"></div>` +
+    `<div class="field compact"><label>y</label><input type="number" step="0.1" value="${c.position[1]}" oninput="setWorldPointValue('collectible',${index},1,+this.value)"></div>` +
+    `<div class="field compact"><label>z</label><input type="number" step="0.1" value="${c.position[2]}" oninput="setWorldPointValue('collectible',${index},2,+this.value)"></div>` +
+    `</div>` +
+    `<div class="field"><label>repeatable</label><input type="checkbox" ${c.repeatable ? 'checked' : ''} onchange="setCollectibleValue(${index},'repeatable',this.checked)"></div>` +
+    `<div class="field"><label>cooldown</label><input type="number" step="1" min="0" value="${c.repeatable_cooldown_holes || 0}" oninput="setCollectibleValue(${index},'repeatable_cooldown_holes',+this.value)"></div>` +
+    `<div class="field"><label>money</label><input type="number" step="1" min="0" value="${reward.money || 0}" oninput="setCollectibleRewardValue(${index},'money',+this.value)"></div>`;
+}
+
+function renderInteractableEdit(container, index) {
+  const it = courseWorld.interactables[index];
+  if (!it) return;
+  container.innerHTML =
+    `<div class="subfield"><label>id</label><input type="text" value="${escapeAttr(it.id)}" oninput="setInteractableValue(${index},'id',this.value)"></div>` +
+    `<div class="field-row">` +
+    `<div class="field compact"><label>kind</label><input type="text" value="${escapeAttr(it.kind)}" oninput="setInteractableValue(${index},'kind',this.value)"></div>` +
+    `<div class="field compact"><label>radius</label><input type="number" step="0.25" min="0.5" value="${it.interaction_radius}" oninput="setInteractableValue(${index},'interaction_radius',+this.value)"></div>` +
+    `</div>` +
+    `<div class="subfield"><label>content</label><input type="text" value="${escapeAttr(it.content_id)}" oninput="setInteractableValue(${index},'content_id',this.value)"></div>` +
+    `<div class="field-row three">` +
+    `<div class="field compact"><label>x</label><input type="number" step="0.1" value="${it.position[0]}" oninput="setWorldPointValue('interactable',${index},0,+this.value)"></div>` +
+    `<div class="field compact"><label>y</label><input type="number" step="0.1" value="${it.position[1]}" oninput="setWorldPointValue('interactable',${index},1,+this.value)"></div>` +
+    `<div class="field compact"><label>z</label><input type="number" step="0.1" value="${it.position[2]}" oninput="setWorldPointValue('interactable',${index},2,+this.value)"></div>` +
+    `</div>`;
+}
+
+function updateConfigPanel() {
+  if (!generatorConfig) return;
+  const config = effectiveGeneratorConfig();
+  setValue('cfg-tree-trunk-radius', config.tree.trunk_radius);
+  setValue('cfg-tree-trunk-height', config.tree.trunk_height);
+  setValue('cfg-tree-leaf-radius', config.tree.leaf_radius);
+  setValue('cfg-tree-leaf-height', config.tree.leaf_height);
+  setValue('cfg-tree-max', config.tree.max_per_hole);
+  setValue('cfg-cart-width', config.world.fallback_cart_width);
+  setValue('cfg-shortcut-width', config.world.shortcut_width);
+  setValue('cfg-max-shortcut', config.world.max_shortcut_length);
+  setValue('cfg-max-cart', config.world.max_cart_road_length);
+  setValue('cfg-path-range', config.world.max_path_distance_from_holes);
+  setValue('cfg-fairway-gap', config.world.fairway_avoidance_clearance);
+  setValue('cfg-road-offset', config.world.fallback_road_extra_offset);
+  setValue('cfg-max-shortcut-count', config.world.max_shortcut_count);
 }
 
 function setValue(id,v) {
@@ -1397,6 +2534,12 @@ function setValue(id,v) {
   if(el && el!==document.activeElement) el.value=v;
 }
 const fmt = v => (v>=0?'+':'')+v.toFixed(1);
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, '&#96;');
+}
 
 function setCpY(i,v) { setCpValue(i, 1, v); }
 function setCpValue(i,k,v) { hole.spline.control_points[i][k]=r2(v); markDirty(); render(); }
@@ -1438,6 +2581,143 @@ function useSelectedTreeAsDefault(i) {
   updatePanel();
 }
 
+function newWorldRoute(collectionName, makeDirty = true) {
+  if (!courseWorld) {
+    alert('Load a course world before adding routes.');
+    return;
+  }
+  const isShortcut = collectionName === 'walking_shortcuts';
+  const collection = courseWorld[collectionName];
+  const config = effectiveGeneratorConfig();
+  const route = {
+    id: `${isShortcut ? 'manual_shortcut' : 'manual_cart_road'}_${String(collection.length + 1).padStart(2, '0')}`,
+    surface: isShortcut ? 'dirt' : 'gravel',
+    width: isShortcut ? +(config.world.shortcut_width || 2.0) : +(config.world.fallback_cart_width || 4.0),
+    source: 'manual',
+    polyline: []
+  };
+  if (isShortcut) {
+    route.required_skill_id = 'fitness';
+    route.required_level = 1;
+  }
+  collection.push(route);
+  setViewScope('world');
+  sel = { type: isShortcut ? 'shortcut_route' : 'cart_route', index: collection.length - 1 };
+  if (makeDirty) markWorldDirty();
+  updatePanel(); render();
+}
+
+function setRouteValue(collectionName, index, key, value) {
+  const route = courseWorld?.[collectionName]?.[index];
+  if (!route) return;
+  if (key === 'width') route[key] = Math.max(0.5, Number.isFinite(value) ? value : route[key]);
+  else if (key === 'required_level') route[key] = Math.max(1, Number.isFinite(value) ? Math.round(value) : route[key]);
+  else route[key] = value;
+  markWorldDirty();
+  render();
+}
+
+function setCollectibleValue(index, key, value) {
+  const c = courseWorld?.collectibles?.[index];
+  if (!c) return;
+  if (key === 'interaction_radius') c[key] = Math.max(0.5, Number.isFinite(value) ? value : c[key]);
+  else if (key === 'repeatable_cooldown_holes') c[key] = Math.max(0, Number.isFinite(value) ? Math.round(value) : c[key]);
+  else c[key] = value;
+  markWorldDirty();
+  render();
+}
+
+function setCollectibleRewardValue(index, key, value) {
+  const c = courseWorld?.collectibles?.[index];
+  if (!c) return;
+  if (!c.reward) c.reward = {};
+  c.reward[key] = key === 'money' ? Math.max(0, Number.isFinite(value) ? Math.round(value) : 0) : value;
+  markWorldDirty();
+}
+
+function setInteractableValue(index, key, value) {
+  const it = courseWorld?.interactables?.[index];
+  if (!it) return;
+  if (key === 'interaction_radius') it[key] = Math.max(0.5, Number.isFinite(value) ? value : it[key]);
+  else it[key] = value;
+  markWorldDirty();
+  render();
+}
+
+function setWorldPointValue(type, index, axis, value) {
+  const collection = type === 'collectible' ? courseWorld?.collectibles : courseWorld?.interactables;
+  const item = collection?.[index];
+  if (!item) return;
+  item.position[axis] = r2(value);
+  markWorldDirty();
+  render();
+}
+
+function setHoleStartAxis(index, axis, value) {
+  const start = courseWorld?.hole_starts?.[index];
+  if (!start) return;
+  const p = vec3(start.position);
+  p[axis] = r2(value);
+  start.position = p;
+  syncHoleStartReturnPosition(index);
+  markWorldDirty();
+  render();
+}
+
+function setHoleStartRotation(index, value) {
+  const start = courseWorld?.hole_starts?.[index];
+  if (!start) return;
+  start.rotation_degrees = normalizeDegrees(value);
+  syncHoleStartReturnPosition(index);
+  markWorldDirty();
+  render();
+}
+
+function rotateHoleStart(index, deltaDegrees) {
+  const start = courseWorld?.hole_starts?.[index];
+  if (!start) return;
+  setHoleStartRotation(index, holeStartRotation(start) + deltaDegrees);
+  updatePanel();
+}
+
+function setConfigValue(path, value) {
+  normalizeGeneratorConfig();
+  const setAtPath = root => {
+    let target = root;
+    for (let i = 0; i < path.length - 1; i++) {
+      if (!target[path[i]] || typeof target[path[i]] !== 'object') target[path[i]] = {};
+      target = target[path[i]];
+    }
+    return target;
+  };
+  const key = path[path.length - 1];
+  const assign = target => {
+    if (Number.isFinite(value)) {
+      if (key === 'max_per_hole' || key === 'max_shortcut_count') target[key] = Math.max(0, Math.round(value));
+      else target[key] = Math.max(key.includes('width') || key.includes('radius') ? 0.1 : 0, value);
+    }
+  };
+  assign(setAtPath(generatorConfig));
+  const id = activeCourseId();
+  if (id) {
+    if (!generatorConfig.courses[id]) generatorConfig.courses[id] = {};
+    assign(setAtPath(generatorConfig.courses[id]));
+  }
+  markConfigDirty();
+  if (path[0] === 'tree') applyConfigTreeDefaults(false);
+}
+
+function applyConfigTreeDefaults(updateInputs = true) {
+  const config = effectiveGeneratorConfig();
+  treeDefaults = {
+    trunk_radius: +config.tree.trunk_radius,
+    trunk_height: +config.tree.trunk_height,
+    leaf_radius: +config.tree.leaf_radius,
+    leaf_height: +config.tree.leaf_height
+  };
+  if (updateInputs) updatePanel();
+}
+
 // ── export / import ──────────────────────────────────────────────────────────
 
 function buildJSON() {
@@ -1468,12 +2748,47 @@ function buildJSON() {
   return JSON.stringify(h, null, 2);
 }
 
+function buildWorldJSON() {
+  if (!courseWorld) return '{}';
+  normalizeCourseWorld();
+  const w = JSON.parse(JSON.stringify(courseWorld));
+  if (w.spawn?.position) w.spawn.position = w.spawn.position.map(r2);
+  if (Number.isFinite(+w.spawn?.radius)) w.spawn.radius = r2(w.spawn.radius);
+  w.hole_starts = (w.hole_starts || []).map(start => {
+    start.position = start.position.map(r2);
+    start.return_position = start.return_position.map(r2);
+    start.interaction_radius = r2(start.interaction_radius);
+    start.hole_index = Math.round(start.hole_index);
+    start.rotation_degrees = normalizeDegrees(start.rotation_degrees);
+    return start;
+  });
+  const cleanPath = route => {
+    route.width = r2(route.width);
+    route.polyline = routePoints(route).map(p => p.map(r2));
+    return route;
+  };
+  w.cart_roads = (w.cart_roads || []).map(cleanPath);
+  w.walking_shortcuts = (w.walking_shortcuts || []).map(cleanPath);
+  w.collectibles = (w.collectibles || []).map(c => {
+    c.position = c.position.map(r2);
+    c.interaction_radius = r2(c.interaction_radius);
+    c.repeatable_cooldown_holes = Math.max(0, Math.round(c.repeatable_cooldown_holes || 0));
+    return c;
+  });
+  w.interactables = (w.interactables || []).map(it => {
+    it.position = it.position.map(r2);
+    it.interaction_radius = r2(it.interaction_radius);
+    return it;
+  });
+  return JSON.stringify(w, null, 2);
+}
+
 function refreshExport() {
-  document.getElementById('export-out').value = buildJSON();
+  document.getElementById('export-out').value = viewScope === 'world' ? buildWorldJSON() : buildJSON();
 }
 
 function doExport() {
-  const json = buildJSON();
+  const json = viewScope === 'world' ? buildWorldJSON() : buildJSON();
   navigator.clipboard?.writeText(json).then(()=>{
     const b = document.querySelector('button.primary');
     const orig = b.textContent;
@@ -1487,6 +2802,14 @@ function doExport() {
 function doImport() {
   try {
     const parsed = JSON.parse(document.getElementById('import-in').value.trim());
+    if (viewScope === 'world') {
+      courseWorld = parsed;
+      normalizeCourseWorld();
+      sel = null;
+      markWorldDirty(true);
+      fitView(); updatePanel(); render();
+      return;
+    }
     if (!parsed?.spline?.control_points) throw new Error('missing spline.control_points');
     hole = parsed;
     if (!hole.tee) hole.tee=[0,0,0];
@@ -1499,6 +2822,30 @@ function doImport() {
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function fitView() {
+  if (viewScope === 'world') {
+    const pts = [];
+    (courseWorld?.hole_starts || []).forEach(start => {
+      pts.push([start.position[0], start.position[2]]);
+      const outline = activeHoleOutline(start.hole_index);
+      if (outline) {
+        outline.spline.control_points.forEach(point => {
+          const worldPoint = transformHolePoint(outline, start, point);
+          pts.push([worldPoint.x, worldPoint.z]);
+        });
+        const pin = transformHolePoint(outline, start, outline.pin);
+        pts.push([pin.x, pin.z]);
+      } else if (Array.isArray(start.return_position)) {
+        pts.push([start.return_position[0], start.return_position[2]]);
+      }
+    });
+    if (pts.length === 0) pts.push([0, 0]);
+    const xs = pts.map(p => p[0]), zs = pts.map(p => p[1]);
+    view.ox = (Math.min(...xs) + Math.max(...xs)) / 2;
+    view.oz = (Math.min(...zs) + Math.max(...zs)) / 2;
+    const rng = Math.max(Math.max(...xs) - Math.min(...xs) + 40, Math.max(...zs) - Math.min(...zs) + 40);
+    view.scale = Math.max(0.25, Math.min(16, Math.min(canvas.width, canvas.height) / rng));
+    return;
+  }
   const pts = [
     ...hole.spline.control_points.map(p=>[p[0],p[2]]),
     [hole.tee[0],hole.tee[2]], [hole.pin[0],hole.pin[2]],
@@ -1528,6 +2875,7 @@ function newHole() {
 // ── init ─────────────────────────────────────────────────────────────────────
 
 updateProjectPanel();
+updateToolbarForScope();
 updatePanel();
 setTimeout(()=>{ fitView(); render(); }, 60);
 </script>

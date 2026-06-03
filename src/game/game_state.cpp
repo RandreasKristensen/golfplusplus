@@ -4,6 +4,7 @@
 #include "game/asset_resolver.h"
 #include "game/course_loader.h"
 #include "game/course_world_loader.h"
+#include "game/hole_loader.h"
 #include "game/progression.h"
 #include "physics/ball_physics.h"
 #include "physics/collision.h"
@@ -23,6 +24,8 @@
 
 namespace {
 constexpr float pi = 3.14159265358979323846f;
+constexpr int min_visible_xp_drop = 5;
+constexpr float default_xp_drop_lifetime = 2.4f;
 
 glm::vec3 aim_direction(const float aim_angle) {
     return glm::normalize(glm::vec3(std::sin(aim_angle), 0.0f, std::cos(aim_angle)));
@@ -89,6 +92,27 @@ void push_ball_land_audio_event(game_state& state, const terrain_material materi
     event.type = audio_event_type::ball_land;
     event.material = material;
     state.audio_events.push_back(event);
+}
+
+void emit_xp_drop(game_state& state, const std::string& skill_id, const int xp) {
+    if (skill_id.empty() || xp <= 0) {
+        return;
+    }
+
+    for (xp_drop& drop : state.xp_drops) {
+        if (drop.skill_id == skill_id) {
+            drop.xp += xp;
+            drop.age = 0.0f;
+            drop.lifetime = default_xp_drop_lifetime;
+            return;
+        }
+    }
+
+    xp_drop drop;
+    drop.skill_id = skill_id;
+    drop.xp = xp;
+    drop.lifetime = default_xp_drop_lifetime;
+    state.xp_drops.push_back(drop);
 }
 
 float terrain_height_at(const game_tuning& tuning, const glm::vec3& position) {
@@ -166,53 +190,120 @@ void expand_bounds(glm::vec3& min_point, glm::vec3& max_point, const glm::vec3& 
     max_point.z = std::max(max_point.z, point.z);
 }
 
-void apply_course_world_to_tuning(game_tuning& tuning, const course_world_definition& world) {
+const course_world_hole_start* find_hole_start(const course_world_definition& world, const std::size_t hole_index) {
+    for (const course_world_hole_start& start : world.hole_starts) {
+        if (start.hole_index == static_cast<int>(hole_index)) {
+            return &start;
+        }
+    }
+    if (hole_index < world.hole_starts.size()) {
+        return &world.hole_starts[hole_index];
+    }
+    return nullptr;
+}
+
+void append_terrain_mesh(terrain_mesh& target, const terrain_mesh& source) {
+    if (source.vertices.empty() || source.indices.empty()) {
+        return;
+    }
+
+    const std::uint32_t index_offset = static_cast<std::uint32_t>(target.vertices.size());
+    target.vertices.insert(target.vertices.end(), source.vertices.begin(), source.vertices.end());
+    target.indices.reserve(target.indices.size() + source.indices.size());
+    for (const std::uint32_t index : source.indices) {
+        target.indices.push_back(index_offset + index);
+    }
+    target.section_count += source.section_count;
+    target.cross_section_count = source.cross_section_count;
+    target.width = std::max(target.width, source.width);
+}
+
+bool apply_course_world_to_tuning(game_state& state) {
+    game_tuning& tuning = state.tuning;
+    const course_world_definition& world = state.hub.world;
+    const course_definition& course = state.active_course;
+
+    terrain_mesh combined_terrain;
+    terrain_mesh combined_apron;
+    std::vector<material_zone> combined_zones;
+    std::vector<tree_instance> combined_trees;
+    std::vector<course_hub_hole_marker> markers;
+
     glm::vec3 min_point = world.spawn.position;
     glm::vec3 max_point = world.spawn.position;
 
-    for (const course_world_hole_start& start : world.hole_starts) {
-        expand_bounds(min_point, max_point, start.position);
-        expand_bounds(min_point, max_point, start.return_position);
-    }
-    for (const course_world_path& route : world.cart_roads) {
-        for (const glm::vec3& point : route.polyline) {
-            expand_bounds(min_point, max_point, point);
+    for (std::size_t hole_index = 0; hole_index < course.holes.size(); ++hole_index) {
+        const course_world_hole_start* start = find_hole_start(world, hole_index);
+        if (start == nullptr) {
+            return false;
         }
-    }
-    for (const course_world_path& route : world.walking_shortcuts) {
-        for (const glm::vec3& point : route.polyline) {
-            expand_bounds(min_point, max_point, point);
+
+        const std::string path = course_hole_path(state.asset_root, course, hole_index);
+        const std::optional<hole_data> hole = load_hole_from_file(path);
+        if (!hole) {
+            return false;
         }
+
+        terrain_spline local_terrain;
+        local_terrain.control_points = hole->spline.control_points;
+        local_terrain.width = std::max(hole->spline.width, hole->spline.rough_width);
+        local_terrain.fairway_width = hole->spline.width;
+        local_terrain.sample_count = 128;
+
+        const terrain_mesh local_mesh = build_terrain_mesh(local_terrain, hole->material_zones, tuning.zone_tuning);
+        const terrain_mesh local_apron = build_outer_rough_apron(local_mesh, local_terrain.width, 14);
+        const terrain_mesh world_mesh = transform_course_world_terrain_mesh(local_mesh, *hole, *start);
+        const terrain_mesh world_apron = transform_course_world_terrain_mesh(local_apron, *hole, *start);
+        append_terrain_mesh(combined_terrain, world_mesh);
+        append_terrain_mesh(combined_apron, world_apron);
+
+        for (const terrain_vertex& vertex : world_mesh.vertices) {
+            expand_bounds(min_point, max_point, vertex.position);
+        }
+
+        for (const material_zone& zone : hole->material_zones) {
+            combined_zones.push_back(transform_course_world_material_zone(zone, *hole, *start));
+        }
+        for (const tree_instance& tree : hole->trees) {
+            combined_trees.push_back(transform_course_world_tree_instance(tree, *hole, *start));
+        }
+
+        course_hub_hole_marker marker;
+        marker.tee_position = course_world_hole_point(*hole, *start, hole->tee_position);
+        marker.pin_position = course_world_hole_point(*hole, *start, hole->pin_position);
+        marker.start_position = start->position;
+        markers.push_back(marker);
     }
 
-    constexpr float margin = 36.0f;
-    const float center_x = (min_point.x + max_point.x) * 0.5f;
-    const float min_z = min_point.z - margin;
-    const float max_z = max_point.z + margin;
-    const float width = std::max(48.0f, max_point.x - min_point.x + margin * 2.0f);
+    if (combined_terrain.vertices.empty() || combined_terrain.indices.empty()) {
+        return false;
+    }
 
     tuning.course.id = world.id;
     tuning.course.name = world.name;
     tuning.course.par = 0;
     tuning.course.tee_position = world.spawn.position;
-    tuning.course.pin_position = world.hole_starts.empty() ? world.spawn.position : world.hole_starts.front().position;
+    tuning.course.pin_position = markers.empty() ? world.spawn.position : markers.front().pin_position;
     tuning.course.cup_radius = tuning.scale.cup_physics_radius_meters;
-    tuning.course.extent = std::max(width, max_z - min_z) * 0.65f;
-    tuning.course.spline.control_points = {
-        glm::vec3(center_x, 0.0f, min_z),
-        glm::vec3(center_x, 0.0f, max_z)
-    };
-    tuning.course.spline.width = width;
-    tuning.course.spline.rough_width = width;
-    tuning.course.material_zones.clear();
-    tuning.course.trees.clear();
-    tuning.terrain.control_points = tuning.course.spline.control_points;
-    tuning.terrain.width = width;
-    tuning.terrain.fairway_width = width;
+    tuning.course.extent = std::max(max_point.x - min_point.x, max_point.z - min_point.z) * 0.65f;
+    tuning.course.spline.control_points.clear();
+    tuning.course.spline.width = combined_terrain.width;
+    tuning.course.spline.rough_width = combined_terrain.width;
+    tuning.course.material_zones = combined_zones;
+    tuning.course.trees = combined_trees;
+    tuning.terrain.control_points.clear();
+    tuning.terrain.width = combined_terrain.width;
+    tuning.terrain.fairway_width = combined_terrain.width;
     tuning.terrain.sample_count = 128;
-    tuning.terrain_mesh_data = build_terrain_mesh(tuning.terrain, tuning.course.material_zones, tuning.zone_tuning);
-    tuning.terrain_apron_mesh_data = build_outer_rough_apron(tuning.terrain_mesh_data, tuning.terrain.width, 10);
+    tuning.terrain_mesh_data = combined_terrain;
+    tuning.terrain_apron_mesh_data = combined_apron;
     tuning.ground_y = 0.0f;
+    state.hub.hole_markers = markers;
+    return true;
+}
+
+void mark_terrain_render_dirty(game_state& state) {
+    ++state.terrain_render_revision;
 }
 
 bool starter_club_id(const std::string& club_id) {
@@ -361,7 +452,7 @@ void update_emote_state(game_state& state, const input_state& input, const float
             trigger_emote(state.smoke_emote);
             state.cigarette_effect.unlock_id = cigarette_id;
             state.cigarette_effect.remaining_seconds = cigarette_effect_duration(cigarette_id);
-            add_skill_xp(state.save.skills, smoking_skill_id(), 10);
+            award_skill_xp(state, smoking_skill_id(), 10);
             push_audio_event(state, audio_event_type::emote_smoke);
         }
     }
@@ -447,7 +538,7 @@ void launch_ball(game_state& state) {
     clear_flight_path(state);
     append_flight_path_point(state, state.ball.position);
     ++state.stroke_count;
-    add_skill_xp(state.save.skills, golf_swing_skill_id(), 25);
+    award_skill_xp(state, golf_swing_skill_id(), 25);
     push_club_audio_event(state, audio_event_type::club_hit);
 }
 
@@ -538,7 +629,7 @@ void update_cart(game_state& state, const input_state& input, const float dt) {
         state.cart_drive_meter_remainder += distance_meters;
         const int earned_cart_xp = static_cast<int>(std::floor(state.cart_drive_meter_remainder / 20.0f));
         if (earned_cart_xp > 0) {
-            add_skill_xp(state.save.skills, cart_driving_skill_id(), earned_cart_xp);
+            award_skill_xp(state, cart_driving_skill_id(), earned_cart_xp);
             state.cart_drive_meter_remainder -= static_cast<float>(earned_cart_xp) * 20.0f;
         }
 
@@ -546,7 +637,7 @@ void update_cart(game_state& state, const input_state& input, const float dt) {
             state.cart_drift_meter_remainder += distance_meters;
             const int earned_drift_xp = static_cast<int>(std::floor(state.cart_drift_meter_remainder / 8.0f));
             if (earned_drift_xp > 0) {
-                add_skill_xp(state.save.skills, drifting_skill_id(), earned_drift_xp);
+                award_skill_xp(state, drifting_skill_id(), earned_drift_xp);
                 state.cart_drift_meter_remainder -= static_cast<float>(earned_drift_xp) * 8.0f;
             }
         }
@@ -638,16 +729,19 @@ void update_walking(game_state& state, const input_state& input, const float dt)
     state.fitness_walk_meter_remainder += glm::length(horizontal_delta) * state.tuning.scale.meters_per_world_unit;
     const int earned_fitness_xp = static_cast<int>(std::floor(state.fitness_walk_meter_remainder / 10.0f));
     if (earned_fitness_xp > 0) {
-        add_skill_xp(state.save.skills, fitness_skill_id(), earned_fitness_xp);
+        award_skill_xp(state, fitness_skill_id(), earned_fitness_xp);
         state.fitness_walk_meter_remainder -= static_cast<float>(earned_fitness_xp) * 10.0f;
     }
 
     if (state.hub.available && state.hub.in_hub && input.space.pressed) {
         const int collectible_index = nearby_collectible_index(state);
         if (collectible_index >= 0) {
-            apply_collectible_reward(state.save,
-                                     state.hub.world.collectibles[static_cast<std::size_t>(collectible_index)],
-                                     static_cast<int>(state.round.current_hole_index));
+            const bool collected = apply_collectible_reward(state.save,
+                                                            state.hub.world.collectibles[static_cast<std::size_t>(collectible_index)],
+                                                            static_cast<int>(state.round.current_hole_index));
+            if (collected) {
+                mark_terrain_render_dirty(state);
+            }
             return;
         }
 
@@ -787,9 +881,14 @@ void reset_transient_hole_state(game_state& state) {
     update_walk_overlays(state, input);
 }
 
-void reset_transient_hub_state(game_state& state, const glm::vec3& spawn_position) {
-    apply_course_world_to_tuning(state.tuning, state.hub.world);
-    const terrain_sample terrain = terrain_sample_at(state.tuning, spawn_position);
+bool reset_transient_hub_state(game_state& state, const glm::vec3& spawn_position) {
+    if (!apply_course_world_to_tuning(state)) {
+        return false;
+    }
+    mark_terrain_render_dirty(state);
+    terrain_sample terrain = terrain_sample_at(state.tuning, spawn_position);
+    terrain.point.x = spawn_position.x;
+    terrain.point.z = spawn_position.z;
     state.ball.radius = state.tuning.scale.ball_physics_radius_meters;
     state.ball.mass = state.tuning.scale.ball_mass_kg;
     state.ball.position = terrain.point + terrain.normal * state.ball.radius;
@@ -817,6 +916,7 @@ void reset_transient_hub_state(game_state& state, const glm::vec3& spawn_positio
     state.hub.in_hub = true;
     input_state input;
     update_walk_overlays(state, input);
+    return true;
 }
 
 void return_to_hub(game_state& state, const glm::vec3& return_position) {
@@ -866,6 +966,43 @@ void refresh_unlocked_clubs(game_state& state) {
     }
 }
 
+void award_skill_xp(game_state& state, const std::string& skill_id, const int amount, const xp_drop_policy policy) {
+    const add_skill_xp_result result = add_skill_xp(state.save.skills, skill_id, amount);
+    if (policy == xp_drop_policy::hidden || result.applied_xp <= 0 || skill_id.empty()) {
+        return;
+    }
+
+    int visible_xp = result.applied_xp;
+    int& pending_xp = state.pending_xp_drop_amounts[skill_id];
+    if (visible_xp < min_visible_xp_drop) {
+        pending_xp += visible_xp;
+        if (pending_xp < min_visible_xp_drop) {
+            return;
+        }
+        visible_xp = pending_xp;
+        pending_xp = 0;
+    } else if (pending_xp > 0) {
+        visible_xp += pending_xp;
+        pending_xp = 0;
+    }
+
+    emit_xp_drop(state, skill_id, visible_xp);
+}
+
+void update_xp_drops(game_state& state, const float dt) {
+    const float clamped_dt = std::max(0.0f, dt);
+    for (xp_drop& drop : state.xp_drops) {
+        drop.age += clamped_dt;
+    }
+
+    state.xp_drops.erase(std::remove_if(state.xp_drops.begin(),
+                                        state.xp_drops.end(),
+                                        [](const xp_drop& drop) {
+                                            return drop.age >= drop.lifetime;
+                                        }),
+                         state.xp_drops.end());
+}
+
 game_state make_initial_game_state(const std::string& asset_root) {
     game_state state;
     state.asset_root = asset_root;
@@ -875,6 +1012,7 @@ game_state make_initial_game_state(const std::string& asset_root) {
     state.save.current_course_id = state.active_course.id;
     state.save.current_hole_index = 0;
     state.tuning = default_game_tuning(asset_root);
+    mark_terrain_render_dirty(state);
     state.club_catalog = state.tuning.clubs;
     refresh_unlocked_clubs(state);
     reset_transient_hole_state(state);
@@ -908,14 +1046,17 @@ bool start_game_course(game_state& state, const course_definition& course) {
             state.hub.active_hole_index = 0;
             state.hub.return_position = world->spawn.position;
             state.hub.world = *world;
-            reset_transient_hub_state(state, state.hub.world.spawn.position);
-            return true;
+            if (reset_transient_hub_state(state, state.hub.world.spawn.position)) {
+                return true;
+            }
+            state.hub = course_hub_state{};
         }
     }
 
     if (!load_hole_runtime(state.tuning, course, 0, state.asset_root)) {
         return false;
     }
+    mark_terrain_render_dirty(state);
 
     reset_transient_hole_state(state);
     return true;
@@ -928,6 +1069,7 @@ bool start_hub_hole(game_state& state, const std::size_t hole_index) {
     if (!load_hole_runtime(state.tuning, state.active_course, hole_index, state.asset_root)) {
         return false;
     }
+    mark_terrain_render_dirty(state);
 
     state.round.current_hole_index = hole_index;
     state.save.current_course_id = state.active_course.id;
@@ -971,6 +1113,7 @@ bool complete_current_hole(game_state& state) {
     if (!load_hole_runtime(state.tuning, state.active_course, state.round.current_hole_index, state.asset_root)) {
         return false;
     }
+    mark_terrain_render_dirty(state);
 
     reset_transient_hole_state(state);
     return true;
@@ -986,6 +1129,7 @@ bool ball_is_in_cup(const game_state& state) {
 void update_game(game_state& state, const input_state& input, const float dt) {
     state.audio_events.clear();
     const float clamped_dt = std::max(0.0f, std::min(dt, 0.05f));
+    update_xp_drops(state, clamped_dt);
     if (state.round.finished) {
         update_walk_overlays(state, input);
         return;

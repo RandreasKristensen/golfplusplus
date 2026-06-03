@@ -39,6 +39,64 @@ OVERPASS_INSTANCES = [
 
 _HEADERS = {"User-Agent": "osm_golf_convert/1.0 (golf course converter; github.com/RandreasKristensen)"}
 EARTH_METERS_PER_DEGREE_LAT = 111_320.0
+DEFAULT_CONFIG = {
+    "tree": {
+        "trunk_radius": 0.65,
+        "trunk_height": 5.0,
+        "leaf_radius": 4.7,
+        "leaf_height": 6.0,
+        "max_per_hole": 60,
+    },
+    "hole": {
+        "fallback_width": 20.0,
+        "fallback_rough_width": 32.0,
+        "rough_width_multiplier": 1.55,
+    },
+    "world": {
+        "hole_start_interaction_radius": 4.0,
+        "fallback_cart_width": 4.0,
+        "shortcut_width": 2.0,
+        "max_shortcut_length": 180.0,
+        "max_cart_road_length": 280.0,
+        "max_path_distance_from_holes": 75.0,
+        "fairway_avoidance_clearance": 8.0,
+        "fallback_road_extra_offset": 8.0,
+        "max_shortcut_count": 12,
+    },
+    "courses": {},
+}
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    result = {key: _deep_merge(value, {}) if isinstance(value, dict) else value for key, value in base.items()}
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(result[key], value)
+        elif isinstance(value, dict):
+            result[key] = _deep_merge(value, {})
+        else:
+            result[key] = value
+    return result
+
+
+def load_generation_config(path: str | None, course_id: str | None = None) -> dict:
+    config = _deep_merge({}, DEFAULT_CONFIG)
+    if path:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                config = _deep_merge(config, loaded)
+        except FileNotFoundError:
+            print(f"  [warn] config not found: {path}; using defaults", file=sys.stderr)
+        except json.JSONDecodeError as e:
+            print(f"  [warn] config parse failed: {path}: {e}; using defaults", file=sys.stderr)
+
+    if course_id:
+        course_overrides = config.get("courses", {}).get(course_id, {})
+        if isinstance(course_overrides, dict):
+            config = _deep_merge(config, course_overrides)
+    return config
 
 # ── Overpass queries ──────────────────────────────────────────────────────────
 
@@ -903,7 +961,7 @@ def _nearest_hole_for_tree(pt, hole_shapes: dict[int, tuple[list, tuple]]) -> tu
 
 
 def assign_trees_to_holes(holes: dict, tree_elements: list, origin_lat: float, origin_lon: float,
-                          course_key: str):
+                          course_key: str, max_per_hole: int = 60):
     hole_shapes = {}
     for num, h in holes.items():
         line = _oriented_hole_line_xz(h, origin_lat, origin_lon)
@@ -954,7 +1012,7 @@ def assign_trees_to_holes(holes: dict, tree_elements: list, origin_lat: float, o
             deduped.append(pt)
         line = hole_shapes[num][0]
         deduped.sort(key=lambda p: (_point_polyline_distance(p, line) if line else 0.0, p[0], p[1]))
-        h["trees_abs"] = deduped[:60]
+        h["trees_abs"] = deduped[:max(0, max_per_hole)]
 
 
 # ── Hole → JSON ───────────────────────────────────────────────────────────────
@@ -963,7 +1021,10 @@ def _r(v): return round(v, 2)
 
 
 def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
-                 course_id: str) -> dict:
+                 course_id: str, config: dict | None = None) -> dict:
+    config = config or DEFAULT_CONFIG
+    tree_config = config.get("tree", {})
+    hole_config = config.get("hole", {})
 
     line_pts = _oriented_hole_line_xz(h, origin_lat, origin_lon)
 
@@ -1026,17 +1087,17 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
     if len(fw_pts) >= 4:
         ctrl_xz = _fairway_centerline(fw_pts, tee_xz, pin_xz, n=5)
         width = _fairway_width(fw_pts, tee_xz, pin_xz)
-        rough_width = round(width * 1.55, 1)
+        rough_width = round(width * float(hole_config.get("rough_width_multiplier", 1.55)), 1)
     elif len(line_pts) >= 2:
         ctrl_xz = _resample_polyline(line_pts, n=5)
-        width = 20.0
-        rough_width = 32.0
+        width = float(hole_config.get("fallback_width", 20.0))
+        rough_width = float(hole_config.get("fallback_rough_width", 32.0))
     else:
         # Straight interpolation: 4 evenly-spaced points
         ctrl_xz = [(tee_x + (pin_x-tee_x)*i/3,
                     tee_z + (pin_z-tee_z)*i/3) for i in range(4)]
-        width = 20.0
-        rough_width = 32.0
+        width = float(hole_config.get("fallback_width", 20.0))
+        rough_width = float(hole_config.get("fallback_rough_width", 32.0))
         if not h["fairways"]:
             print(f"  [warn] hole {hole_num}: no fairway data, using straight spline", file=sys.stderr)
 
@@ -1086,17 +1147,17 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
 
     trees = [{
         "position": [_r(x - tee_x), 0.0, _r(z - tee_z)],
-        "trunk_radius": 0.35,
-        "trunk_height": 2.4,
-        "leaf_radius": 1.6,
-        "leaf_height": 3.2
+        "trunk_radius": float(tree_config.get("trunk_radius", 0.65)),
+        "trunk_height": float(tree_config.get("trunk_height", 5.0)),
+        "leaf_radius": float(tree_config.get("leaf_radius", 4.7)),
+        "leaf_height": float(tree_config.get("leaf_height", 6.0))
     } for x, z in h.get("trees_abs", [])]
 
     return {
         "id": f"{course_id}_h{hole_num:02d}",
         "name": h["tags"].get("name", f"Hole {hole_num}"),
         "par": par,
-        "wind_seed": random.randint(1, 9999),
+        "wind_seed": _stable_int_seed(course_id, hole_num, "wind") % 9999 + 1,
         "tee": [0.0, 0.0, 0.0],
         "pin": [_r(pin_x-tee_x), 0.0, _r(pin_z-tee_z)],
         "spline": {
@@ -1213,13 +1274,13 @@ def _fallback_cart_roads(course_id: str, hole_starts: list[dict]) -> list[dict]:
     }]
 
 
-def course_world_to_json(course_id: str,
-                         course_name: str,
-                         course_el: dict,
-                         holes: dict,
-                         path_elements: list,
-                         origin_lat: float,
-                         origin_lon: float) -> dict:
+def _unused_course_world_to_json_v2_schema(course_id: str,
+                                           course_name: str,
+                                           course_el: dict,
+                                           holes: dict,
+                                           path_elements: list,
+                                           origin_lat: float,
+                                           origin_lon: float) -> dict:
     hole_starts = []
     for num in sorted(holes.keys()):
         tee = _hole_tee_xz(holes[num], origin_lat, origin_lon)
@@ -1331,6 +1392,106 @@ def _hole_world_anchors(hole_num: int, h: dict, origin_lat: float, origin_lon: f
     return tee_xz, pin_xz
 
 
+def _hole_fairway_corridor(h: dict,
+                           tee_xz: tuple[float, float],
+                           pin_xz: tuple[float, float],
+                           origin_lat: float,
+                           origin_lon: float,
+                           config: dict) -> dict:
+    hole_config = config.get("hole", {})
+    world_config = config.get("world", {})
+    fw_pts = _to_xz_list(h["fairways"], origin_lat, origin_lon)
+    if len(fw_pts) >= 4:
+        line = _fairway_centerline(fw_pts, tee_xz, pin_xz, n=8)
+        width = _fairway_width(fw_pts, tee_xz, pin_xz)
+    else:
+        line = _oriented_hole_line_xz(h, origin_lat, origin_lon)
+        if len(line) < 2:
+            line = [tee_xz, pin_xz]
+        width = float(hole_config.get("fallback_width", 20.0))
+
+    clearance = float(world_config.get("fairway_avoidance_clearance", 8.0))
+    return {
+        "line": line,
+        "radius": max(8.0, width * 0.5 + clearance),
+        "width": width,
+    }
+
+
+def _polyline_direction(line: list[tuple[float, float]], from_start: bool) -> tuple[float, float]:
+    if len(line) < 2:
+        return (0.0, 1.0)
+    indices = range(0, len(line) - 1) if from_start else range(len(line) - 2, -1, -1)
+    for i in indices:
+        a, b = line[i], line[i + 1]
+        dx, dz = b[0] - a[0], b[1] - a[1]
+        length = math.hypot(dx, dz)
+        if length > 0.001:
+            return (dx / length, dz / length)
+    return (0.0, 1.0)
+
+
+def _offset_from_fairway(point: tuple[float, float],
+                         corridor: dict,
+                         side: float,
+                         from_start: bool,
+                         extra_offset: float) -> tuple[float, float]:
+    dx, dz = _polyline_direction(corridor.get("line", []), from_start)
+    px, pz = -dz * side, dx * side
+    offset = float(corridor.get("radius", 16.0)) + extra_offset
+    return (point[0] + px * offset, point[1] + pz * offset)
+
+
+def _detour_point_away_from_fairways(a: tuple[float, float],
+                                     b: tuple[float, float],
+                                     fairway_corridors: list[dict],
+                                     extra_offset: float) -> tuple[float, float] | None:
+    if not fairway_corridors:
+        return None
+    segment = [a, b]
+    if not _route_overlaps_fairway(segment, fairway_corridors):
+        return None
+
+    mid = ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5)
+    corridor = min(fairway_corridors,
+                   key=lambda c: _point_polyline_distance(mid, c.get("line", [])))
+    line = corridor.get("line", [])
+    dx, dz = _polyline_direction(line, True)
+    px, pz = -dz, dx
+    ref = line[0] if line else mid
+    side = 1.0 if ((mid[0] - ref[0]) * px + (mid[1] - ref[1]) * pz) >= 0.0 else -1.0
+    offset = float(corridor.get("radius", 16.0)) + extra_offset
+    return (mid[0] + px * side * offset, mid[1] + pz * side * offset)
+
+
+def _detour_polyline_away_from_fairways(points: list[tuple[float, float]],
+                                        fairway_corridors: list[dict],
+                                        extra_offset: float) -> list[tuple[float, float]]:
+    if len(points) < 2:
+        return points
+    out = [points[0]]
+    for a, b in zip(points, points[1:]):
+        detour = _detour_point_away_from_fairways(a, b, fairway_corridors, extra_offset)
+        if detour is not None:
+            out.append(detour)
+        out.append(b)
+    return out
+
+
+def _route_overlaps_fairway(pts: list[tuple[float, float]],
+                            fairway_corridors: list[dict],
+                            sample_spacing: float = 4.0) -> bool:
+    if not pts or not fairway_corridors:
+        return False
+    sample_count = max(2, min(120, int(max(1.0, _polyline_length(pts)) / sample_spacing) + 1))
+    samples = pts + _resample_polyline(pts, sample_count)
+    for sample in samples:
+        for corridor in fairway_corridors:
+            if _point_polyline_distance(sample, corridor.get("line", [])) <= float(corridor.get("radius", 0.0)):
+                return True
+    return False
+
+
 def _xyz_from_xz(pt: tuple[float, float]) -> list[float]:
     return [_r(pt[0]), 0.0, _r(pt[1])]
 
@@ -1360,21 +1521,36 @@ def _smooth_connection(points: list[tuple[float, float]]) -> list[tuple[float, f
     return smoothed
 
 
-def _fallback_cart_roads(spawn: tuple[float, float], hole_anchors: list[dict]) -> list[dict]:
+def _fallback_cart_roads(spawn: tuple[float, float],
+                         hole_anchors: list[dict],
+                         width: float = 4.0,
+                         fairway_corridors: list[dict] | None = None,
+                         extra_offset: float = 8.0) -> list[dict]:
     if not hole_anchors:
         return []
 
-    chain = [spawn]
-    for anchor in hole_anchors:
-        chain.append(anchor["start_xz"])
-        chain.append(anchor["return_xz"])
+    if fairway_corridors:
+        fairway_points = [pt for corridor in fairway_corridors for pt in corridor.get("line", [])]
+        max_radius = max(float(corridor.get("radius", 0.0)) for corridor in fairway_corridors)
+        spine_x = min([spawn[0]] + [pt[0] for pt in fairway_points]) - max_radius - extra_offset - 12.0
+        chain = [(spine_x, spawn[1])]
+        for anchor in hole_anchors:
+            chain.append((spine_x, anchor["start_xz"][1]))
+            chain.append((spine_x, anchor["return_xz"][1]))
+        road_points = chain
+    else:
+        chain = [spawn]
+        for anchor in hole_anchors:
+            chain.append(anchor.get("road_start_xz", anchor["start_xz"]))
+            chain.append(anchor.get("road_return_xz", anchor["return_xz"]))
+        road_points = _detour_polyline_away_from_fairways(chain, [], extra_offset)
 
     return [{
         "id": "fallback_main_cart_loop",
         "surface": "gravel",
-        "width": 4.0,
+        "width": width,
         "source": "generated_fallback",
-        "polyline": [_xyz_from_xz(pt) for pt in _smooth_connection(chain)]
+        "polyline": [_xyz_from_xz(pt) for pt in road_points]
     }]
 
 
@@ -1382,35 +1558,68 @@ def fitness_skill_id_for_world() -> str:
     return "fitness"
 
 
-def _world_paths_from_osm(path_elements: list, origin_lat: float, origin_lon: float) -> tuple[list[dict], list[dict]]:
+def _path_near_holes(pts: list[tuple[float, float]], hole_anchors: list[dict], max_distance: float) -> bool:
+    if not hole_anchors:
+        return True
+    route_refs = []
+    for anchor in hole_anchors:
+        route_refs.append(anchor["start_xz"])
+        route_refs.append(anchor["return_xz"])
+    return any(_point_polyline_distance(ref, pts) <= max_distance for ref in route_refs)
+
+
+def _world_paths_from_osm(path_elements: list,
+                          origin_lat: float,
+                          origin_lon: float,
+                          hole_anchors: list[dict],
+                          fairway_corridors: list[dict],
+                          config: dict) -> tuple[list[dict], list[dict]]:
     cart_roads = []
     shortcuts = []
+    world_config = config.get("world", {})
+    max_distance = float(world_config.get("max_path_distance_from_holes", 75.0))
+    max_shortcut_length = float(world_config.get("max_shortcut_length", 180.0))
+    max_cart_road_length = float(world_config.get("max_cart_road_length", 280.0))
+    shortcut_width = float(world_config.get("shortcut_width", 2.0))
+    max_shortcut_count = int(world_config.get("max_shortcut_count", 12))
     for el in path_elements:
         pts = _path_polyline(el, origin_lat, origin_lon)
         if not pts:
             continue
+        if not _path_near_holes(pts, hole_anchors, max_distance):
+            continue
+        if _route_overlaps_fairway(pts, fairway_corridors):
+            continue
+        length = _polyline_length(pts)
         tags = el.get("tags", {})
         osm_ref = f"{el.get('type', '?')}/{el.get('id', '?')}"
         if _is_cart_road(el):
+            if length > max_cart_road_length:
+                continue
             cart_roads.append({
                 "id": f"cart_{el.get('type', 'way')}_{el.get('id')}",
                 "surface": "asphalt" if tags.get("surface") in ("asphalt", "paved", "concrete") else "gravel",
-                "width": 4.0,
+                "width": float(world_config.get("fallback_cart_width", 4.0)),
                 "source": "osm",
                 "osm_ref": osm_ref,
                 "polyline": [_xyz_from_xz(pt) for pt in pts]
             })
         else:
+            if length > max_shortcut_length:
+                continue
             shortcuts.append({
                 "id": f"shortcut_{el.get('type', 'way')}_{el.get('id')}",
                 "surface": tags.get("surface", "dirt"),
-                "width": 2.0,
+                "width": shortcut_width,
                 "source": "osm",
                 "osm_ref": osm_ref,
                 "required_skill_id": fitness_skill_id_for_world(),
                 "required_level": 2,
                 "polyline": [_xyz_from_xz(pt) for pt in pts]
             })
+    shortcuts.sort(key=lambda route: _polyline_length([(pt[0], pt[2]) for pt in route.get("polyline", [])]))
+    if max_shortcut_count >= 0:
+        shortcuts = shortcuts[:max_shortcut_count]
     return cart_roads, shortcuts
 
 
@@ -1476,26 +1685,47 @@ def course_world_to_json(course_id: str,
                          holes: dict,
                          path_elements: list,
                          origin_lat: float,
-                         origin_lon: float) -> dict:
+                         origin_lon: float,
+                         config: dict | None = None) -> dict:
+    config = config or DEFAULT_CONFIG
+    world_config = config.get("world", {})
     hole_anchors = []
+    fairway_corridors = []
     for output_index, hole_num in enumerate(sorted(holes.keys())):
         tee_xz, pin_xz = _hole_world_anchors(hole_num, holes[hole_num], origin_lat, origin_lon)
+        corridor = _hole_fairway_corridor(holes[hole_num], tee_xz, pin_xz, origin_lat, origin_lon, config)
+        side = 1.0
+        extra_offset = float(world_config.get("fallback_road_extra_offset", 8.0))
         hole_anchors.append({
             "hole_num": hole_num,
             "hole_index": output_index,
             "start_xz": tee_xz,
             "return_xz": pin_xz,
+            "road_start_xz": _offset_from_fairway(tee_xz, corridor, side, True, extra_offset),
+            "road_return_xz": _offset_from_fairway(pin_xz, corridor, side, False, extra_offset),
         })
+        fairway_corridors.append(corridor)
 
     if hole_anchors:
-        first = hole_anchors[0]["start_xz"]
-        spawn = (first[0] - 18.0, first[1] - 14.0)
+        first = hole_anchors[0]
+        dx, dz = _polyline_direction(fairway_corridors[0].get("line", []), True) if fairway_corridors else (0.0, 1.0)
+        road_start = first.get("road_start_xz", first["start_xz"])
+        spawn = (road_start[0] - dx * 18.0, road_start[1] - dz * 18.0)
     else:
         spawn = (0.0, 0.0)
 
-    cart_roads, shortcuts = _world_paths_from_osm(path_elements, origin_lat, origin_lon)
+    cart_roads, shortcuts = _world_paths_from_osm(path_elements,
+                                                  origin_lat,
+                                                  origin_lon,
+                                                  hole_anchors,
+                                                  fairway_corridors,
+                                                  config)
     if not cart_roads:
-        cart_roads = _fallback_cart_roads(spawn, hole_anchors)
+        cart_roads = _fallback_cart_roads(spawn,
+                                          hole_anchors,
+                                          float(world_config.get("fallback_cart_width", 4.0)),
+                                          fairway_corridors,
+                                          float(world_config.get("fallback_road_extra_offset", 8.0)))
 
     hole_starts = []
     for anchor in hole_anchors:
@@ -1504,7 +1734,7 @@ def course_world_to_json(course_id: str,
             "hole_index": anchor["hole_index"],
             "position": _xyz_from_xz(anchor["start_xz"]),
             "return_position": _xyz_from_xz(anchor["return_xz"]),
-            "interaction_radius": 4.0
+            "interaction_radius": float(world_config.get("hole_start_interaction_radius", 4.0))
         })
 
     return {
@@ -1575,12 +1805,15 @@ Examples:
     default_holes = _project_root() / "assets" / "holes"
     default_courses = _project_root() / "assets" / "courses"
     default_worlds = _project_root() / "assets" / "course_worlds"
+    default_config = Path(__file__).resolve().parent / "osm_golf_config.json"
     ap.add_argument("-o", "--out", default=str(default_holes), metavar="DIR",
                     help=f"Output directory for hole JSON files (default: {default_holes})")
     ap.add_argument("--course-out", default=str(default_courses), metavar="DIR",
                     help=f"Output directory for course manifest JSON (default: {default_courses})")
     ap.add_argument("--world-out", default=str(default_worlds), metavar="DIR",
                     help=f"Output directory for course-world JSON (default: {default_worlds})")
+    ap.add_argument("--config", default=str(default_config), metavar="FILE",
+                    help=f"Generation tuning JSON (default: {default_config})")
     ap.add_argument("--overpass", metavar="URL",
                     help="Custom Overpass API URL (default: overpass-api.de)")
     ap.add_argument("--no-course", action="store_true",
@@ -1603,6 +1836,7 @@ Examples:
     print("→ Locating course on OSM...", file=sys.stderr)
     course_el, course_name = _find_course(args)
     course_id = slugify(course_name)
+    config = load_generation_config(args.config, course_id)
     print(f"  Found: {course_name}  (id: {course_id})", file=sys.stderr)
 
     # ── 2. Fetch golf elements ────────────────────────────────────────────────
@@ -1637,7 +1871,12 @@ Examples:
         sys.exit(1)
 
     print(f"  Identified {len(holes)} hole(s)", file=sys.stderr)
-    assign_trees_to_holes(holes, tree_elements, origin_lat, origin_lon, f"{course_el.get('type')}:{course_el.get('id')}")
+    assign_trees_to_holes(holes,
+                          tree_elements,
+                          origin_lat,
+                          origin_lon,
+                          f"{course_el.get('type')}:{course_el.get('id')}",
+                          int(config.get("tree", {}).get("max_per_hole", 60)))
 
     # ── 5. Write hole files ───────────────────────────────────────────────────
     out_dir = Path(args.out)
@@ -1652,7 +1891,7 @@ Examples:
 
     for num in sorted(holes.keys()):
         print(f"  Processing hole {num}...", file=sys.stderr)
-        h_json = hole_to_json(num, holes[num], origin_lat, origin_lon, course_id)
+        h_json = hole_to_json(num, holes[num], origin_lat, origin_lon, course_id, config)
         fname = f"{course_id}_h{num:02d}.json"
         fpath = out_dir / fname
         with open(fpath, "w", encoding="utf-8") as f:
@@ -1674,7 +1913,8 @@ Examples:
                                           holes,
                                           path_elements,
                                           origin_lat,
-                                          origin_lon)
+                                          origin_lon,
+                                          config)
         world_file = world_dir / f"{course_id}.json"
         with open(world_file, "w", encoding="utf-8") as f:
             json.dump(world_json, f, indent=2)

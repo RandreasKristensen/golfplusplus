@@ -2,133 +2,445 @@
   "id": "marienlyst_golfklub",
   "name": "Marienlyst Golfklub",
   "source": {
-    "type": "generated",
-    "osm_ref": "generated:current_asset"
+    "type": "osm",
+    "osm_ref": "way/1408711156"
   },
   "projection": {
-    "type": "shared_meters_xz",
-    "origin_lat": 56.0,
-    "origin_lon": 10.0,
+    "type": "equirectangular",
+    "origin_lat": 56.180570251260505,
+    "origin_lon": 10.157279357142857,
     "units": "meters"
   },
   "spawn": {
     "id": "clubhouse_spawn",
-    "position": [-18.0, 0.0, -16.0],
+    "position": [
+      190.72,
+      0.0,
+      2.49
+    ],
     "radius": 5.0
   },
   "hole_starts": [
     {
       "id": "hole_01_start",
       "hole_index": 0,
-      "position": [0.0, 0.0, 0.0],
-      "return_position": [-73.9, 0.0, 6.68],
-      "interaction_radius": 6.0
+      "position": [
+        176.29,
+        0.0,
+        34.36
+      ],
+      "return_position": [
+        105.05,
+        0.0,
+        42.61
+      ],
+      "interaction_radius": 4.0
     },
     {
       "id": "hole_02_start",
       "hole_index": 1,
-      "position": [-96.0, 0.0, 26.0],
-      "return_position": [-163.55, 0.0, -33.8],
-      "interaction_radius": 6.0
+      "position": [
+        77.03,
+        0.0,
+        63.44
+      ],
+      "return_position": [
+        2.62,
+        0.0,
+        -0.05
+      ],
+      "interaction_radius": 4.0
     },
     {
       "id": "hole_03_start",
       "hole_index": 2,
-      "position": [-172.0, 0.0, -58.0],
-      "return_position": [-137.71, 0.0, -114.28],
-      "interaction_radius": 6.0
+      "position": [
+        -22.31,
+        0.0,
+        -12.89
+      ],
+      "return_position": [
+        11.98,
+        0.0,
+        -69.17
+      ],
+      "interaction_radius": 4.0
     },
     {
       "id": "hole_04_start",
       "hole_index": 3,
-      "position": [-116.0, 0.0, -126.0],
-      "return_position": [-191.48, 0.0, -85.29],
-      "interaction_radius": 6.0
+      "position": [
+        29.4,
+        0.0,
+        -111.86
+      ],
+      "return_position": [
+        -53.76,
+        0.0,
+        -64.86
+      ],
+      "interaction_radius": 4.0
     },
     {
       "id": "hole_05_start",
       "hole_index": 4,
-      "position": [-208.0, 0.0, -62.0],
-      "return_position": [-253.06, 0.0, 1.14],
-      "interaction_radius": 6.0
+      "position": [
+        -45.74,
+        0.0,
+        -34.1
+      ],
+      "return_position": [
+        -83.41,
+        0.0,
+        19.24
+      ],
+      "interaction_radius": 4.0
     },
     {
       "id": "hole_06_start",
       "hole_index": 5,
-      "position": [-228.0, 0.0, 30.0],
-      "return_position": [-154.2, 0.0, 50.93],
-      "interaction_radius": 6.0
+      "position": [
+        -120.38,
+        0.0,
+        57.11
+      ],
+      "return_position": [
+        -46.58,
+        0.0,
+        78.04
+      ],
+      "interaction_radius": 4.0
     }
   ],
   "cart_roads": [
     {
-      "id": "marienlyst_main_cart_loop",
-      "source": "generated_fallback",
+      "id": "fallback_main_cart_loop",
       "surface": "gravel",
-      "width": 3.6,
+      "width": 4.0,
+      "source": "generated_fallback",
       "polyline": [
-        [-18.0, 0.0, -16.0],
-        [0.0, 0.0, 0.0],
-        [-73.9, 0.0, 6.68],
-        [-96.0, 0.0, 26.0],
-        [-163.55, 0.0, -33.8],
-        [-172.0, 0.0, -58.0],
-        [-137.71, 0.0, -114.28],
-        [-116.0, 0.0, -126.0],
-        [-191.48, 0.0, -85.29],
-        [-208.0, 0.0, -62.0],
-        [-253.06, 0.0, 1.14],
-        [-228.0, 0.0, 30.0],
-        [-154.2, 0.0, 50.93],
-        [-18.0, 0.0, -16.0]
+        [
+          -162.38,
+          0.0,
+          2.49
+        ],
+        [
+          -162.38,
+          0.0,
+          34.36
+        ],
+        [
+          -162.38,
+          0.0,
+          42.61
+        ],
+        [
+          -162.38,
+          0.0,
+          63.44
+        ],
+        [
+          -162.38,
+          0.0,
+          -0.05
+        ],
+        [
+          -162.38,
+          0.0,
+          -12.89
+        ],
+        [
+          -162.38,
+          0.0,
+          -69.17
+        ],
+        [
+          -162.38,
+          0.0,
+          -111.86
+        ],
+        [
+          -162.38,
+          0.0,
+          -64.86
+        ],
+        [
+          -162.38,
+          0.0,
+          -34.1
+        ],
+        [
+          -162.38,
+          0.0,
+          19.24
+        ],
+        [
+          -162.38,
+          0.0,
+          57.11
+        ],
+        [
+          -162.38,
+          0.0,
+          78.04
+        ]
       ]
     }
   ],
   "walking_shortcuts": [
     {
-      "id": "fitness_cut_01_to_02",
-      "source": "generated_fallback",
-      "surface": "rough",
-      "width": 1.4,
+      "id": "shortcut_way_1111759768",
+      "surface": "gravel",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/1111759768",
       "required_skill_id": "fitness",
       "required_level": 2,
       "polyline": [
-        [-73.9, 0.0, 6.68],
-        [-96.0, 0.0, 26.0]
+        [
+          -142.55,
+          0.0,
+          84.32
+        ],
+        [
+          -140.54,
+          0.0,
+          90.95
+        ]
       ]
     },
     {
-      "id": "fitness_cut_03_to_04",
-      "source": "generated_fallback",
-      "surface": "rough",
-      "width": 1.4,
+      "id": "shortcut_way_824219236",
+      "surface": "paving_stones",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/824219236",
       "required_skill_id": "fitness",
-      "required_level": 3,
+      "required_level": 2,
       "polyline": [
-        [-137.71, 0.0, -114.28],
-        [-116.0, 0.0, -126.0]
+        [
+          174.53,
+          0.0,
+          93.86
+        ],
+        [
+          171.9,
+          0.0,
+          95.6
+        ],
+        [
+          170.28,
+          0.0,
+          97.44
+        ],
+        [
+          167.75,
+          0.0,
+          101.43
+        ],
+        [
+          166.12,
+          0.0,
+          104.12
+        ],
+        [
+          164.38,
+          0.0,
+          105.46
+        ],
+        [
+          162.87,
+          0.0,
+          106.47
+        ],
+        [
+          161.42,
+          0.0,
+          107.24
+        ]
+      ]
+    },
+    {
+      "id": "shortcut_way_939089405",
+      "surface": "gravel",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/939089405",
+      "required_skill_id": "fitness",
+      "required_level": 2,
+      "polyline": [
+        [
+          -157.06,
+          0.0,
+          63.41
+        ],
+        [
+          -161.15,
+          0.0,
+          76.87
+        ],
+        [
+          -162.35,
+          0.0,
+          79.31
+        ],
+        [
+          -164.75,
+          0.0,
+          84.2
+        ]
+      ]
+    },
+    {
+      "id": "shortcut_way_890784528",
+      "surface": "gravel",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/890784528",
+      "required_skill_id": "fitness",
+      "required_level": 2,
+      "polyline": [
+        [
+          -157.06,
+          0.0,
+          63.41
+        ],
+        [
+          -142.55,
+          0.0,
+          84.32
+        ]
+      ]
+    },
+    {
+      "id": "shortcut_way_32639689",
+      "surface": "paving_stones",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/32639689",
+      "required_skill_id": "fitness",
+      "required_level": 2,
+      "polyline": [
+        [
+          -137.13,
+          0.0,
+          -4.77
+        ],
+        [
+          -158.91,
+          0.0,
+          -20.63
+        ],
+        [
+          -161.45,
+          0.0,
+          -24.43
+        ]
+      ]
+    },
+    {
+      "id": "shortcut_way_818043294",
+      "surface": "asphalt",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/818043294",
+      "required_skill_id": "fitness",
+      "required_level": 2,
+      "polyline": [
+        [
+          239.5,
+          0.0,
+          103.31
+        ],
+        [
+          212.82,
+          0.0,
+          85.11
+        ],
+        [
+          211.89,
+          0.0,
+          85.83
+        ],
+        [
+          211.31,
+          0.0,
+          88.13
+        ]
+      ]
+    },
+    {
+      "id": "shortcut_way_818044726",
+      "surface": "gravel",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/818044726",
+      "required_skill_id": "fitness",
+      "required_level": 2,
+      "polyline": [
+        [
+          -157.59,
+          0.0,
+          47.83
+        ],
+        [
+          -157.28,
+          0.0,
+          56.99
+        ],
+        [
+          -157.06,
+          0.0,
+          63.41
+        ],
+        [
+          -156.48,
+          0.0,
+          80.75
+        ],
+        [
+          -156.24,
+          0.0,
+          87.75
+        ]
+      ]
+    },
+    {
+      "id": "shortcut_way_32639057",
+      "surface": "paving_stones",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/32639057",
+      "required_skill_id": "fitness",
+      "required_level": 2,
+      "polyline": [
+        [
+          -86.03,
+          0.0,
+          -60.13
+        ],
+        [
+          -115.37,
+          0.0,
+          -82.05
+        ],
+        [
+          -117.95,
+          0.0,
+          -86.26
+        ]
       ]
     }
   ],
   "collectibles": [
     {
-      "id": "marienlyst_lost_ball_01",
-      "kind": "lost_ball",
-      "position": [-36.0, 0.0, -8.0],
-      "interaction_radius": 3.0,
-      "repeatable": false,
-      "reward": {
-        "money": 3,
-        "skill_xp": {
-          "fitness": 12
-        },
-        "world_flag": "found_marienlyst_lost_ball_01"
-      }
-    },
-    {
-      "id": "marienlyst_range_token",
+      "id": "marienlyst_golfklub_clubhouse_token",
       "kind": "range_token",
-      "position": [-18.0, 0.0, -12.0],
+      "position": [
+        192.72,
+        0.0,
+        4.49
+      ],
       "interaction_radius": 3.0,
       "repeatable": true,
       "repeatable_cooldown_holes": 1,
@@ -140,9 +452,31 @@
       }
     },
     {
-      "id": "marienlyst_shortcut_cache_01",
+      "id": "marienlyst_golfklub_lost_ball_01",
+      "kind": "lost_ball",
+      "position": [
+        183.51,
+        0.0,
+        18.42
+      ],
+      "interaction_radius": 3.0,
+      "repeatable": false,
+      "reward": {
+        "money": 3,
+        "skill_xp": {
+          "fitness": 12
+        },
+        "world_flag": "marienlyst_golfklub_found_lost_ball_01"
+      }
+    },
+    {
+      "id": "marienlyst_golfklub_fitness_cache_01",
       "kind": "cache",
-      "position": [-85.0, 0.0, 16.0],
+      "position": [
+        91.04,
+        0.0,
+        53.02
+      ],
       "interaction_radius": 3.0,
       "repeatable": false,
       "requirement": {
@@ -154,20 +488,39 @@
         "skill_xp": {
           "fitness": 20
         },
-        "world_flag": "found_marienlyst_shortcut_cache_01"
+        "world_flag": "marienlyst_golfklub_found_fitness_cache_01"
       }
     }
   ],
   "spawn_zones": [
-    {"id": "road_collectibles", "kind": "collectible", "near": "cart_roads", "count": 8},
-    {"id": "tree_signs", "kind": "sign", "near": "trees", "count": 4},
-    {"id": "clubhouse_npcs", "kind": "npc", "near": "spawn", "count": 2}
+    {
+      "id": "road_collectibles",
+      "kind": "collectible",
+      "near": "cart_roads",
+      "count": 8
+    },
+    {
+      "id": "tree_signs",
+      "kind": "sign",
+      "near": "trees",
+      "count": 4
+    },
+    {
+      "id": "clubhouse_npcs",
+      "kind": "npc",
+      "near": "spawn",
+      "count": 2
+    }
   ],
   "interactables": [
     {
       "id": "clubhouse_notice",
       "kind": "sign",
-      "position": [-15.0, 0.0, -14.5],
+      "position": [
+        193.72,
+        0.0,
+        3.99
+      ],
       "interaction_radius": 3.0,
       "content_id": "clubhouse_notice"
     }

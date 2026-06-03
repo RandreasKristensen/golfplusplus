@@ -241,6 +241,33 @@ TEST_CASE("skill xp clamps and preserves generic skill ids") {
     CHECK(skill_xp(progression, "future_skill") == skill_max_xp);
 }
 
+TEST_CASE("add skill xp reports before after and applied xp") {
+    skill_progression progression;
+
+    add_skill_xp_result ignored = add_skill_xp(progression, golf_swing_skill_id(), 0);
+    CHECK(ignored.before_xp == 0);
+    CHECK(ignored.after_xp == 0);
+    CHECK(ignored.applied_xp == 0);
+    CHECK(skill_xp(progression, golf_swing_skill_id()) == 0);
+
+    add_skill_xp_result unknown = add_skill_xp(progression, "future_skill", 12);
+    CHECK(unknown.before_xp == 0);
+    CHECK(unknown.after_xp == 12);
+    CHECK(unknown.applied_xp == 12);
+    CHECK(skill_xp(progression, "future_skill") == 12);
+
+    progression[smoking_skill_id()].xp = skill_max_xp - 3;
+    add_skill_xp_result clamped = add_skill_xp(progression, smoking_skill_id(), 10);
+    CHECK(clamped.before_xp == skill_max_xp - 3);
+    CHECK(clamped.after_xp == skill_max_xp);
+    CHECK(clamped.applied_xp == 3);
+
+    add_skill_xp_result maxed = add_skill_xp(progression, smoking_skill_id(), 10);
+    CHECK(maxed.before_xp == skill_max_xp);
+    CHECK(maxed.after_xp == skill_max_xp);
+    CHECK(maxed.applied_xp == 0);
+}
+
 TEST_CASE("shop purchase applies generic unlock requirements") {
     const std::vector<shop_definition> shops = fallback_shop_definitions();
     CHECK(shops.size() >= 2);
@@ -436,6 +463,62 @@ TEST_CASE("walking on foot awards fitness xp but cart driving does not") {
 
     CHECK(cart.cart.active);
     CHECK(skill_xp(cart.save.skills, fitness_skill_id()) == 0);
+}
+
+TEST_CASE("xp drops aggregate repeated same skill gains") {
+    game_state state = make_initial_game_state();
+
+    award_skill_xp(state, smoking_skill_id(), 10);
+    CHECK(state.xp_drops.size() == 1);
+    if (state.xp_drops.size() == 1) {
+        CHECK(state.xp_drops[0].skill_id == smoking_skill_id());
+        CHECK(state.xp_drops[0].xp == 10);
+    }
+
+    update_xp_drops(state, 0.5f);
+    CHECK(state.xp_drops[0].age > 0.0f);
+
+    award_skill_xp(state, smoking_skill_id(), 15);
+    CHECK(state.xp_drops.size() == 1);
+    if (state.xp_drops.size() == 1) {
+        CHECK(state.xp_drops[0].xp == 25);
+        CHECK(state.xp_drops[0].age == 0.0f);
+    }
+}
+
+TEST_CASE("tiny xp gains award immediately but throttle visible drops") {
+    game_state state = make_initial_game_state();
+
+    award_skill_xp(state, fitness_skill_id(), 1);
+    CHECK(skill_xp(state.save.skills, fitness_skill_id()) == 1);
+    CHECK(state.xp_drops.empty());
+    CHECK(state.pending_xp_drop_amounts[fitness_skill_id()] == 1);
+
+    for (int i = 0; i < 4; ++i) {
+        award_skill_xp(state, fitness_skill_id(), 1);
+    }
+
+    CHECK(skill_xp(state.save.skills, fitness_skill_id()) == 5);
+    CHECK(state.xp_drops.size() == 1);
+    if (state.xp_drops.size() == 1) {
+        CHECK(state.xp_drops[0].skill_id == fitness_skill_id());
+        CHECK(state.xp_drops[0].xp == 5);
+    }
+    CHECK(state.pending_xp_drop_amounts[fitness_skill_id()] == 0);
+}
+
+TEST_CASE("xp drops expire after lifetime") {
+    game_state state = make_initial_game_state();
+
+    award_skill_xp(state, golf_swing_skill_id(), 25);
+    CHECK(state.xp_drops.size() == 1);
+    const float lifetime = state.xp_drops.empty() ? 0.0f : state.xp_drops[0].lifetime;
+
+    update_xp_drops(state, lifetime - 0.01f);
+    CHECK(state.xp_drops.size() == 1);
+
+    update_xp_drops(state, 0.02f);
+    CHECK(state.xp_drops.empty());
 }
 
 TEST_CASE("caps lock holds the skills panel open") {
@@ -903,6 +986,65 @@ TEST_CASE("selecting six-hole course enters hub mode") {
     CHECK(state.round.current_hole_index == 0);
     CHECK(near_float(state.player.position.x, state.hub.world.spawn.position.x));
     CHECK(!can_interact_with_ball(state));
+}
+
+TEST_CASE("course world hole translation lands local tee at world start") {
+    hole_data hole;
+    hole.tee_position = glm::vec3(2.0f, 0.5f, -3.0f);
+    course_world_hole_start start;
+    start.position = glm::vec3(120.0f, 4.0f, -40.0f);
+
+    const glm::vec3 translation = course_world_hole_translation(hole, start);
+    const glm::vec3 translated_tee = hole.tee_position + translation;
+
+    CHECK(near_float(translated_tee.x, start.position.x));
+    CHECK(near_float(translated_tee.y, start.position.y));
+    CHECK(near_float(translated_tee.z, start.position.z));
+}
+
+TEST_CASE("course world hole rotation pivots around local tee") {
+    hole_data hole;
+    hole.tee_position = glm::vec3(10.0f, 0.0f, 20.0f);
+    hole.pin_position = glm::vec3(10.0f, 0.0f, 30.0f);
+    course_world_hole_start start;
+    start.position = glm::vec3(100.0f, 0.0f, 200.0f);
+    start.rotation_degrees = 90.0f;
+
+    const glm::vec3 transformed_tee = course_world_hole_point(hole, start, hole.tee_position);
+    const glm::vec3 transformed_pin = course_world_hole_point(hole, start, hole.pin_position);
+
+    CHECK(near_float(transformed_tee.x, start.position.x));
+    CHECK(near_float(transformed_tee.z, start.position.z));
+    CHECK(near_float(transformed_pin.x, 90.0f));
+    CHECK(near_float(transformed_pin.z, 200.0f));
+}
+
+TEST_CASE("six-hole hub terrain is translated to each world hole start") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+
+    game_state state = make_initial_game_state();
+    CHECK(start_game_course(state, *course));
+    CHECK(state.hub.available);
+    CHECK(state.hub.in_hub);
+    CHECK(state.hub.hole_markers.size() == state.hub.world.hole_starts.size());
+    if (!state.hub.available ||
+        !state.hub.in_hub ||
+        state.hub.hole_markers.size() != state.hub.world.hole_starts.size()) {
+        return;
+    }
+
+    for (const course_world_hole_start& start : state.hub.world.hole_starts) {
+        const terrain_sample sample = sample_terrain_mesh(state.tuning.terrain_mesh_data,
+                                                          start.position,
+                                                          state.tuning.ground_y);
+        CHECK(sample.inside_surface);
+        CHECK(near_float(sample.point.x, start.position.x));
+        CHECK(near_float(sample.point.z, start.position.z));
+    }
 }
 
 TEST_CASE("interacting with hub hole start loads the correct hole") {

@@ -84,12 +84,12 @@ stuff like hole in ones, course clubhousea with npcs and driving ranges where yo
 
 ## Scratchpad Migrated From Notes
 
-### Map Editor
+### tooling
 
 - Water cannot be resized in the editor.
 - Make an auto map generator from top-down pictures of courses. Can this be done?
 - Maybe asking Codex or Claude to generate some courses would work.
-- Mangler.
+- Make the OSM converter make courses.
 
 ### Textures
 
@@ -121,3 +121,4 @@ stuff like hole in ones, course clubhousea with npcs and driving ranges where yo
 - Improve the testing framework for Codex to run tests better.
 - Generate holes through the generator and maybe play the game to check it actually builds.
 - Investigate whether SDL interaction automation or an MCP-style tool can help.
+why are the run times of the tests so high?

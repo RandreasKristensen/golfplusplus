@@ -10,6 +10,7 @@
 #include "game/save_manager.h"
 #include "renderer/renderer.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -37,6 +38,7 @@ private:
     void mark_current_save_dirty();
     bool persist_current_save();
     void sync_current_save();
+    void refresh_render_mesh_cache();
 
     window window_;
     renderer renderer_;
@@ -54,9 +56,13 @@ private:
     bool confirm_menu_active_ = false;
     int confirm_selection_ = 1;
     bool show_fps_ = false;
+    std::uint64_t cached_terrain_revision_ = 0;
+    render_static_mesh cached_terrain_mesh_;
+    render_static_mesh cached_material_overlay_mesh_;
     float fps_elapsed_seconds_ = 0.0f;
     int fps_frame_count_ = 0;
     int displayed_fps_ = 0;
+    int displayed_frame_ms_ = 0;
     bool running_ = false;
     bool save_initialized_ = false;
 };

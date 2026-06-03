@@ -83,13 +83,13 @@ std::vector<render_terrain_vertex> make_render_terrain_vertices(const terrain_me
     return vertices;
 }
 
-void set_material_overlay_render_mesh(render_data& data, const game_tuning& tuning) {
+void set_material_overlay_render_mesh(render_static_mesh& mesh, const game_tuning& tuning) {
     constexpr float overlay_lift = 0.045f;
     const terrain_mesh overlay_mesh = build_material_overlay_mesh(tuning.terrain_mesh_data,
                                                                   tuning.course.material_zones,
                                                                   overlay_lift);
-    data.material_overlay_vertices = make_render_terrain_vertices(overlay_mesh);
-    data.material_overlay_indices = overlay_mesh.indices;
+    mesh.vertices = make_render_terrain_vertices(overlay_mesh);
+    mesh.indices = overlay_mesh.indices;
 }
 
 void append_render_terrain_mesh(std::vector<render_terrain_vertex>& vertices,
@@ -108,120 +108,24 @@ void append_render_terrain_mesh(std::vector<render_terrain_vertex>& vertices,
     }
 }
 
-void append_overlay_vertex(std::vector<render_terrain_vertex>& vertices,
-                           const glm::vec3& position,
-                           const glm::vec3& color) {
-    render_terrain_vertex vertex;
-    vertex.position = position;
-    vertex.normal = glm::vec3(0.0f, 1.0f, 0.0f);
-    vertex.color = color;
-    vertices.push_back(vertex);
+void append_course_world_overlays(render_static_mesh& mesh, const game_state& game) {
+    (void)mesh;
+    (void)game;
+    return;
 }
 
-void append_route_strip(std::vector<render_terrain_vertex>& vertices,
-                        std::vector<std::uint32_t>& indices,
-                        const game_tuning& tuning,
-                        const course_world_path& route,
-                        const glm::vec3& color) {
-    if (route.polyline.size() < 2) {
-        return;
+std::vector<glm::vec3> anchored_hub_marker_positions(const game_tuning& tuning,
+                                                     const std::vector<course_hub_hole_marker>& markers,
+                                                     const int marker_kind) {
+    std::vector<glm::vec3> positions;
+    positions.reserve(markers.size());
+    for (const course_hub_hole_marker& marker : markers) {
+        const glm::vec3 authored = marker_kind == 0
+            ? marker.tee_position
+            : (marker_kind == 1 ? marker.pin_position : marker.start_position);
+        positions.push_back(terrain_anchor_at(tuning, authored));
     }
-
-    const float half_width = std::max(0.1f, route.width * 0.5f);
-    for (std::size_t i = 1; i < route.polyline.size(); ++i) {
-        const glm::vec3 a = route.polyline[i - 1U];
-        const glm::vec3 b = route.polyline[i];
-        glm::vec3 direction(b.x - a.x, 0.0f, b.z - a.z);
-        if (glm::length(direction) <= 0.0001f) {
-            continue;
-        }
-        direction = glm::normalize(direction);
-        const glm::vec3 lateral(-direction.z, 0.0f, direction.x);
-        const glm::vec3 corners[4] = {
-            a + lateral * half_width,
-            a - lateral * half_width,
-            b + lateral * half_width,
-            b - lateral * half_width
-        };
-
-        const std::uint32_t offset = static_cast<std::uint32_t>(vertices.size());
-        for (const glm::vec3& corner : corners) {
-            const glm::vec3 anchored = terrain_anchor_at(tuning, corner) + glm::vec3(0.0f, 0.055f, 0.0f);
-            append_overlay_vertex(vertices, anchored, color);
-        }
-        indices.push_back(offset);
-        indices.push_back(offset + 1U);
-        indices.push_back(offset + 2U);
-        indices.push_back(offset + 2U);
-        indices.push_back(offset + 1U);
-        indices.push_back(offset + 3U);
-    }
-}
-
-void append_hub_marker(std::vector<render_terrain_vertex>& vertices,
-                       std::vector<std::uint32_t>& indices,
-                       const game_tuning& tuning,
-                       const glm::vec3& position,
-                       const glm::vec3& color) {
-    constexpr float half_size = 2.2f;
-    const glm::vec3 corners[4] = {
-        position + glm::vec3(-half_size, 0.0f, -half_size),
-        position + glm::vec3(half_size, 0.0f, -half_size),
-        position + glm::vec3(-half_size, 0.0f, half_size),
-        position + glm::vec3(half_size, 0.0f, half_size)
-    };
-    const std::uint32_t offset = static_cast<std::uint32_t>(vertices.size());
-    for (const glm::vec3& corner : corners) {
-        append_overlay_vertex(vertices, terrain_anchor_at(tuning, corner) + glm::vec3(0.0f, 0.07f, 0.0f), color);
-    }
-    indices.push_back(offset);
-    indices.push_back(offset + 1U);
-    indices.push_back(offset + 2U);
-    indices.push_back(offset + 2U);
-    indices.push_back(offset + 1U);
-    indices.push_back(offset + 3U);
-}
-
-void append_course_world_overlays(render_data& data, const game_state& game) {
-    if (!game.hub.available || !game.hub.in_hub) {
-        return;
-    }
-
-    for (const course_world_path& route : game.hub.world.cart_roads) {
-        append_route_strip(data.material_overlay_vertices,
-                           data.material_overlay_indices,
-                           game.tuning,
-                           route,
-                           glm::vec3(0.34f, 0.33f, 0.28f));
-    }
-    for (const course_world_path& route : game.hub.world.walking_shortcuts) {
-        const bool unlocked = shortcut_unlocked(game.save, route);
-        append_route_strip(data.material_overlay_vertices,
-                           data.material_overlay_indices,
-                           game.tuning,
-                           route,
-                           unlocked ? glm::vec3(0.29f, 0.34f, 0.18f) : glm::vec3(0.20f, 0.17f, 0.12f));
-    }
-    for (const course_world_hole_start& start : game.hub.world.hole_starts) {
-        append_hub_marker(data.material_overlay_vertices,
-                          data.material_overlay_indices,
-                          game.tuning,
-                          start.position,
-                          glm::vec3(0.82f, 0.68f, 0.28f));
-    }
-    for (const course_world_collectible& collectible : game.hub.world.collectibles) {
-        const bool available = collectible_available(game.save,
-                                                     collectible,
-                                                     static_cast<int>(game.round.current_hole_index));
-        if (!available && !collectible.repeatable) {
-            continue;
-        }
-        append_hub_marker(data.material_overlay_vertices,
-                          data.material_overlay_indices,
-                          game.tuning,
-                          collectible.position,
-                          available ? glm::vec3(0.78f, 0.30f, 0.72f) : glm::vec3(0.22f, 0.18f, 0.24f));
-    }
+    return positions;
 }
 
 std::vector<render_tree> make_render_trees(const game_tuning& tuning) {
@@ -344,7 +248,41 @@ std::vector<render_skill_progress> make_render_skills(const skill_progression& p
     return rows;
 }
 
-render_data make_render_data(const game_state& game, const input_state& input) {
+skill_icon_id skill_icon_for_id(const std::string& skill_id) {
+    if (skill_id == golf_swing_skill_id()) {
+        return skill_icon_id::golf_swing;
+    }
+    if (skill_id == smoking_skill_id()) {
+        return skill_icon_id::smoking;
+    }
+    if (skill_id == fitness_skill_id()) {
+        return skill_icon_id::fitness;
+    }
+    return skill_icon_id::generic;
+}
+
+std::vector<render_xp_drop> make_render_xp_drops(const std::vector<xp_drop>& drops) {
+    std::vector<render_xp_drop> rows;
+    rows.reserve(drops.size());
+    for (const xp_drop& drop : drops) {
+        if (drop.xp <= 0 || drop.age >= drop.lifetime) {
+            continue;
+        }
+
+        render_xp_drop row;
+        row.icon = skill_icon_for_id(drop.skill_id);
+        row.xp = drop.xp;
+        row.age = drop.age;
+        row.lifetime = drop.lifetime;
+        rows.push_back(row);
+    }
+    return rows;
+}
+
+render_data make_render_data(const game_state& game,
+                             const input_state& input,
+                             const render_static_mesh& terrain_mesh,
+                             const render_static_mesh& material_overlay_mesh) {
     render_data data;
     data.ball_position = game.ball.position;
     data.player_position = game.player.position;
@@ -356,11 +294,8 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     data.cup_visual_radius_meters = game.tuning.scale.cup_visual_radius_meters;
     data.pin_visual_height_meters = game.tuning.scale.pin_visual_height_meters;
     data.course_extent = game.tuning.course.extent;
-    data.terrain_vertices = make_render_terrain_vertices(game.tuning.terrain_mesh_data);
-    data.terrain_indices = game.tuning.terrain_mesh_data.indices;
-    append_render_terrain_mesh(data.terrain_vertices, data.terrain_indices, game.tuning.terrain_apron_mesh_data);
-    set_material_overlay_render_mesh(data, game.tuning);
-    append_course_world_overlays(data, game);
+    data.terrain_mesh = &terrain_mesh;
+    data.material_overlay_mesh = &material_overlay_mesh;
     data.trees = make_render_trees(game.tuning);
     data.aim_angle = game.aim_angle;
     data.camera_fov_degrees = 60.0f;
@@ -374,7 +309,7 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     data.flight_path_width = game.tuning.flight_path.line_width;
     data.show_flight_path = data.ball_moving && !data.flight_path_points.empty();
     data.show_interact_prompt = game.mode == game_mode::walking &&
-        (can_interact_with_ball(game) || can_interact_with_hole_start(game) || can_interact_with_collectible(game));
+        (can_interact_with_ball(game) || can_interact_with_hole_start(game));
     data.show_aim_indicator = game.mode == game_mode::aiming || game.mode == game_mode::addressing;
     data.shot_addressing = game.mode == game_mode::addressing;
     data.swing_timing = game.swing.phase == swing_phase::timing;
@@ -393,6 +328,7 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     data.show_course_results = game.round.finished;
     data.scorecard = build_scorecard_data(game);
     data.skills = make_render_skills(game.save.skills);
+    data.xp_drops = game.round.finished ? std::vector<render_xp_drop>{} : make_render_xp_drops(game.xp_drops);
     data.cart_active = game.cart.active;
     data.cart_drifting = game.cart.drift_timer > 0.0f;
     data.cart_yaw = game.cart.active ? game.cart.yaw : game.player.yaw;
@@ -402,6 +338,13 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     data.smoke_emote_elapsed = game.smoke_emote.elapsed;
     data.beer_emote_elapsed = game.beer_emote.elapsed;
     data.controls = make_controls_overlay_state(input);
+
+    if (game.hub.available && game.hub.in_hub) {
+        data.show_primary_hole_markers = false;
+        data.tee_markers = anchored_hub_marker_positions(game.tuning, game.hub.hole_markers, 0);
+        data.pin_markers = anchored_hub_marker_positions(game.tuning, game.hub.hole_markers, 1);
+        data.start_markers = anchored_hub_marker_positions(game.tuning, game.hub.hole_markers, 2);
+    }
 
     if (game.mode == game_mode::walking && game.cart.active) {
         set_cart_camera(data, game);
@@ -418,9 +361,9 @@ render_data make_render_data(const game_state& game, const input_state& input) {
     return data;
 }
 
-std::string format_fps_label(const int fps) {
-    char buffer[16] = {};
-    std::snprintf(buffer, sizeof(buffer), "FPS %d", std::max(0, fps));
+std::string format_fps_label(const int fps, const int frame_ms) {
+    char buffer[32] = {};
+    std::snprintf(buffer, sizeof(buffer), "FPS %d  %dMS", std::max(0, fps), std::max(0, frame_ms));
     return std::string(buffer);
 }
 
@@ -895,6 +838,27 @@ void app::sync_current_save() {
     cloud_save_.sync(request);
 }
 
+void app::refresh_render_mesh_cache() {
+    if (cached_terrain_revision_ == game_.terrain_render_revision &&
+        cached_terrain_mesh_.revision == game_.terrain_render_revision &&
+        cached_material_overlay_mesh_.revision == game_.terrain_render_revision) {
+        return;
+    }
+
+    cached_terrain_mesh_.vertices = make_render_terrain_vertices(game_.tuning.terrain_mesh_data);
+    cached_terrain_mesh_.indices = game_.tuning.terrain_mesh_data.indices;
+    append_render_terrain_mesh(cached_terrain_mesh_.vertices,
+                               cached_terrain_mesh_.indices,
+                               game_.tuning.terrain_apron_mesh_data);
+    cached_terrain_mesh_.revision = game_.terrain_render_revision;
+
+    set_material_overlay_render_mesh(cached_material_overlay_mesh_, game_.tuning);
+    append_course_world_overlays(cached_material_overlay_mesh_, game_);
+    cached_material_overlay_mesh_.revision = game_.terrain_render_revision;
+
+    cached_terrain_revision_ = game_.terrain_render_revision;
+}
+
 bool app::init() {
     if (!window_.init("golf++", 1280, 720)) {
         return false;
@@ -946,9 +910,10 @@ void app::run() {
 
     while (running_) {
         const Uint64 current_counter = SDL_GetPerformanceCounter();
-        const double elapsed = static_cast<double>(current_counter - previous_counter) / performance_frequency;
+        const double raw_elapsed_seconds = static_cast<double>(current_counter - previous_counter) / performance_frequency;
         previous_counter = current_counter;
-        const float dt = std::min(static_cast<float>(elapsed), 0.05f);
+        const float raw_dt = std::max(0.0f, static_cast<float>(raw_elapsed_seconds));
+        const float simulation_dt = std::min(raw_dt, 0.05f);
 
         input_.reset_frame();
         poll_events(input_);
@@ -957,10 +922,11 @@ void app::run() {
             show_fps_ = !show_fps_;
         }
 
-        fps_elapsed_seconds_ += std::max(0.0f, dt);
+        fps_elapsed_seconds_ += raw_dt;
         ++fps_frame_count_;
         if (fps_elapsed_seconds_ >= 0.25f) {
             displayed_fps_ = static_cast<int>(std::floor(static_cast<float>(fps_frame_count_) / fps_elapsed_seconds_ + 0.5f));
+            displayed_frame_ms_ = static_cast<int>(std::floor(fps_elapsed_seconds_ * 1000.0f / static_cast<float>(fps_frame_count_) + 0.5f));
             fps_elapsed_seconds_ = 0.0f;
             fps_frame_count_ = 0;
         }
@@ -1048,9 +1014,10 @@ void app::run() {
                 }
             }
 
-            render_data data = make_render_data(game_, input_);
+            refresh_render_mesh_cache();
+            render_data data = make_render_data(game_, input_, cached_terrain_mesh_, cached_material_overlay_mesh_);
             data.show_fps = show_fps_;
-            data.fps_label = format_fps_label(displayed_fps_);
+            data.fps_label = format_fps_label(displayed_fps_, displayed_frame_ms_);
             data.startup_menu = make_startup_menu_render_data(startup_flow_,
                                                               startup_selection_,
                                                               hole_options_,
@@ -1085,9 +1052,10 @@ void app::run() {
                 audio_.start_ambience("ambience_menu_vcr");
             }
 
-            render_data data = make_render_data(game_, input_);
+            refresh_render_mesh_cache();
+            render_data data = make_render_data(game_, input_, cached_terrain_mesh_, cached_material_overlay_mesh_);
             data.show_fps = show_fps_;
-            data.fps_label = format_fps_label(displayed_fps_);
+            data.fps_label = format_fps_label(displayed_fps_, displayed_frame_ms_);
             if (startup_flow_ != startup_flow::playing) {
                 data.startup_menu = make_startup_menu_render_data(startup_flow_,
                                                                   startup_selection_,
@@ -1147,9 +1115,10 @@ void app::run() {
                 }
             }
 
-            render_data data = make_render_data(game_, input_);
+            refresh_render_mesh_cache();
+            render_data data = make_render_data(game_, input_, cached_terrain_mesh_, cached_material_overlay_mesh_);
             data.show_fps = show_fps_;
-            data.fps_label = format_fps_label(displayed_fps_);
+            data.fps_label = format_fps_label(displayed_fps_, displayed_frame_ms_);
             data.startup_menu = make_confirm_menu_render_data(confirm_selection_);
             renderer_.render(data);
             window_.swap();
@@ -1157,7 +1126,7 @@ void app::run() {
         }
 
         const save_data save_before_update = game_.save;
-        update_game(game_, input_, dt);
+        update_game(game_, input_, simulation_dt);
         if (save_completion_progress_changed(save_before_update, game_.save)) {
             mark_current_save_dirty();
             persist_current_save();
@@ -1177,9 +1146,10 @@ void app::run() {
             running_ = false;
         }
 
-        render_data data = make_render_data(game_, input_);
+        refresh_render_mesh_cache();
+        render_data data = make_render_data(game_, input_, cached_terrain_mesh_, cached_material_overlay_mesh_);
         data.show_fps = show_fps_;
-        data.fps_label = format_fps_label(displayed_fps_);
+        data.fps_label = format_fps_label(displayed_fps_, displayed_frame_ms_);
         renderer_.render(data);
         window_.swap();
     }

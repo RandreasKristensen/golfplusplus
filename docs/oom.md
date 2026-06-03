@@ -1,162 +1,292 @@
-# Add RuneScape-Style XP Drops
+# Renderer Speedup Agent Prompts
 
-  ## Summary
+## 1. Add renderer performance instrumentation
 
-  Add transient top-right XP drops that show a small skill
-  icon plus earned XP. Drops are gameplay UI only, not saved,
-  and do not change XP progression rules. First version is XP-
-  only: no level-up rows.
+Prompt:
 
-  ## Key Changes
+Read `AGENTS.md` first. Work in `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
 
-  - Change add_skill_xp(...) in progression to return an
-    add_skill_xp_result containing before XP, after XP, and
-    actual applied XP after clamping. Existing callers may
-    ignore the return value.
-  - Add transient XP drop state to game_state, for example
-    std::vector<xp_drop> xp_drops, with skill_id, visible XP
-    amount, age, and lifetime. Do not persist it in save_data.
-  - Add a small game-side helper, e.g.
-    award_skill_xp(game_state&, skill_id, amount,
-    drop_policy), and replace direct gameplay XP calls in
-    smoking, swing, and walking with it.
-  - Use top-right stacked drops. Same-skill gains aggregate
-    while visible by adding to that row and resetting its
-    timer.
-  - Apply the requested tiny-gain throttle: gains below 5 XP
-    do not immediately show a drop; they accumulate per skill
-    in transient state until they reach 5 XP, then emit one
-    aggregated drop. XP is still awarded immediately.
-  - Add render structs for XP drops, e.g. render_xp_drop
-    { skill_icon_id icon; int xp; float age; float
-    lifetime; }, and copy active game drops into render_data.
-  - Draw drops in renderer.cpp after panels/overlays but
-    before controls/power meter, using bitmap/pixel UI. Each
-    row shows a hand-drawn pixel icon plus +N XP.
-  - Add built-in pixel icons for current skills:
-      - golf_swing: simple club/ball mark
-      - smoking: cigarette mark
-      - fitness: shoe/stride mark
-      - unknown future skill IDs: generic diamond/dot icon
-  - Keep icons code-native in the renderer for now. No new
-    dependencies and no asset pipeline change.
+Add lightweight profiling instrumentation so we can prove where the 2 FPS course mode is spending time before changing behavior. Keep it behind the existing FPS/debug UI path or a small compile/runtime flag, and do not introduce new dependencies.
 
-  ## Public Interfaces
+Measure CPU time for:
 
-  - add_skill_xp changes from void to returning a small result
-    struct.
-  - New non-persisted types in game/render layers for XP
-    drops.
-  - No save version bump, because XP drops are transient UI
-    state.
+- `update_game`
+- `refresh_render_mesh_cache`
+- `make_render_data`
+- `renderer::render`
+- `renderer::render_scene`
+- `renderer::render_overlay`
+- `renderer::render_crt`
+- `window::swap`
 
-  ## Test Plan
+Add counters for:
 
-  - Unit test add_skill_xp result values, including normal
-    gains, ignored non-positive gains, unknown skill IDs, and
-    clamping at skill_max_xp.
-  - Unit test XP drop aggregation: repeated same-skill gains
-    merge into one visible drop and reset its timer.
-  - Unit test tiny-gain throttling: fitness +1 awards XP but
-    does not show until accumulated visible XP reaches 5.
-  - Unit test expiry: drops age out after their lifetime and
-    are removed.
-  - Run cmake --preset test, cmake --build build/test, and
-    build/test/golf++-tests.
+- terrain sample calls per frame
+- terrain triangles tested per frame
+- GL draw calls per frame
+- GL uniform sets per frame
+- dynamic `glBufferData` uploads per frame
 
-  ## Assumptions
-    remain visible during normal gameplay unless the course-
-    results screen is showing.
+If practical within this task, add optional OpenGL timer queries for terrain, trees, overlay, and CRT. Keep this optional and robust if timer queries are unavailable.
 
+Display a compact debug overlay when FPS display is enabled. Keep the normal game UI unchanged when FPS display is off.
 
+Verification:
 
+- Run `cmake --preset test` from `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
+- Run `cmake --build C:\Users\arand\Desktop\AU\sjov\golfplusplus\build\test`.
+- Run `C:\Users\arand\Desktop\AU\sjov\golfplusplus\build\test\golf++-tests`.
+- Build release with `cmake --preset release` and `cmake --build C:\Users\arand\Desktop\AU\sjov\golfplusplus\build\release`.
+- Report the measured bottlenecks for single-hole mode and 6-hole course mode.
 
+## 2. Add a spatial index for terrain sampling
 
+Prompt:
 
+Read `AGENTS.md` first. Work in `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
 
-# port to web
+Optimize `sample_terrain_mesh` in `src/physics/terrain.cpp`. It currently scans every triangle for every sample, which makes course mode far too slow. Add a deterministic acceleration structure to `terrain_mesh` that lets sampling test only nearby triangles.
 
-  Use Emscripten to compile the C++ client to WebAssembly, keep
-  SDL2 as the window/input layer, render through WebGL2, and
-  package assets/ into Emscripten’s virtual filesystem.
+Preferred approach:
 
-  Main requirements:
+- Add XZ bounds and a simple uniform grid or section-range index to `terrain_mesh`.
+- Build the index when terrain meshes are created or transformed.
+- Keep `src/physics/` pure: no global state, no mutation of function parameters, no I/O, no static locals.
+- Preserve deterministic sampling results as closely as possible.
+- Make the `previous_sample` path fast by checking the previous triangle and nearby candidates before falling back.
+- Keep a safe fallback path for malformed or empty meshes.
 
-  1. Add a web build target
-      - Add an Emscripten CMake preset/toolchain path.
-      - Build with emcmake cmake / emmake cmake --build.
-      - Link with SDL2 / SDL_mixer Emscripten ports.
-      - Output .html, .js, .wasm, .data.
-  2. Refactor the app loop
-      - Browser games cannot own an infinite blocking loop like
-        app::run().
-      - Split core/app.cpp into something like:
-          - app::init()
-          - app::tick()
-          - app::shutdown()
-      - Native builds can keep while (running_) tick();
-      - Web builds register tick() with
-        emscripten_set_main_loop_arg.
-  3. Port OpenGL 3.3 usage to WebGL2-compatible GL
-      - Current window setup asks for desktop OpenGL 3.3 in
-        core/window.cpp.
-      - Web builds need an OpenGL ES / WebGL2 context.
-      - Most renderer concepts should survive: VAOs, VBOs, FBOs,
-        shaders, GL_UNSIGNED_INT indices, nearest framebuffer
-        upscale.
-      - The shaders in assets/shaders/*.vert / *.frag are
-        #version 330 core; browser builds need GLSL ES 300
-        variants, likely #version 300 es.
-      - The CRT pipeline can remain intact. That is good news
-        for the game identity.
-  4. Remove GLAD from the web build
-      - Native uses GLAD via core/gl_loader.cpp.
-      - Emscripten exposes GLES/WebGL functions directly.
-      - Keep GLAD for Windows/native, compile a different path
-        for __EMSCRIPTEN__.
-  5. Package assets into the browser filesystem
-      - Current code reads shaders, holes, audio, JSON, saves
-        from disk.
-      - For web, preload assets:
-          - --preload-file assets@/assets
-      - Set VCR_GOLF_ASSETS_DIR to /assets for the web build.
-      - Existing std::ifstream loading in shader/content loaders
-        can mostly keep working if assets are mounted correctly.
-  6. Adapt save storage
-      - Current saves go through SDL_GetPrefPath and
-        std::filesystem in src/game/save_manager.cpp.
-      - In browser, writes initially go to an in-memory
-        filesystem.
-      - Use Emscripten IDBFS and call FS.syncfs():
-          - once before loading saves
-          - after save writes
-      - This preserves the current JSON save architecture and
-        keeps it client-side/offline-playable.
-  7. Handle browser audio restrictions
-      - Current audio uses SDL_mixer in src/audio/
-        audio_engine.cpp.
-      - SDL_mixer can work through Emscripten, but browsers
-        often require a user gesture before audio playback.
-      - The practical fix is to initialize/resume audio after
-        first click/key press, or tolerate muted audio until
-        interaction.
-  8. Expect some C++ filesystem friction
-      - std::filesystem::directory_iterator over preloaded files
-        may work, but it is a common source of portability
-        issues.
-      - If it gets flaky, replace runtime asset discovery with a
-        generated manifest JSON, for example:
-          - assets/holes/manifest.json
-          - assets/courses/manifest.json
-      - That would actually fit the project’s data-driven
-        direction well.
+Tests:
 
-  I would estimate the work like this:
+- Existing terrain sample behavior still passes.
+- Add tests showing sampled height/material matches the old full-scan behavior on representative fairway, rough, green, bunker, water, edge, and outside-surface positions.
+- Add tests showing repeated samples with `previous_sample` are deterministic.
 
-  - Proof of concept: 2-4 days
-    Get it compiling to WASM, open a canvas, load one hole,
-    render something, basic input.
-  - Playable browser build: 1-2 weeks
-    Main loop refactor, WebGL shader variants, asset preloading,
-    save persistence, audio unlock handling.
-  - Production-quality web build: 2-4 weeks
+Verification:
+
+- Run `cmake --preset test` from `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
+- Run `cmake --build C:\Users\arand\Desktop\AU\sjov\golfplusplus\build\test`.
+- Run `C:\Users\arand\Desktop\AU\sjov\golfplusplus\build\test\golf++-tests`.
+- Report before/after terrain sample call counts, triangle tests per frame, and FPS in course mode using the instrumentation from prompt 1 if available.
+
+## 3. Cache static terrain-anchored render and collision data
+
+Prompt:
+
+Read `AGENTS.md` first. Work in `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
+
+Remove per-frame terrain anchoring for static objects. `make_render_data` currently recomputes tee/pin positions, tree render bases, and hub markers every frame, and `anchored_tree_bodies` rebuilds collision data during ball update. Cache these when terrain/course state changes.
+
+Implement a cache owned outside the renderer, likely in `app` and/or `game_state`, keyed by `terrain_render_revision`.
+
+Cache:
+
+- anchored tee position
+- anchored pin position
+- hub tee markers
+- hub pin markers
+- hub start markers
+- `std::vector<render_tree>`
+- `std::vector<tree_collision_body>`
+- any other static terrain-anchored positions discovered while working
+
+Rules:
+
+- Do not add global mutable state.
+- Do not put game logic in the renderer.
+- Do not change save data for this transient cache.
+- Keep cache invalidation explicit when `terrain_render_revision` changes.
+
+Verification:
+
+- Run the full test command chain from prompt 2.
+- Confirm course start, single-hole start, hub walking, tree collision, and hole markers still behave correctly.
+- Report before/after `make_render_data` CPU time and terrain sample count per frame.
+
+## 4. Cache render mesh bounds and remove per-frame static scans
+
+Prompt:
+
+Read `AGENTS.md` first. Work in `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
+
+Remove full static mesh scans from the render loop. `renderer::render_scene` scans terrain vertices each frame to find `terrain_min_y`. Move this into cached render mesh metadata built in `refresh_render_mesh_cache`.
+
+Implement:
+
+- Add bounds/min/max metadata to `render_static_mesh`.
+- Populate it when cached terrain and overlay meshes are built.
+- Use cached bounds in `renderer::render_scene` instead of iterating vertices.
+- Keep fallback behavior for empty mesh data.
+
+Verification:
+
+- Run the full test command chain from prompt 2.
+- Build release.
+- Confirm visual output still has the background ground below the course.
+- Report whether render scene CPU time changed.
+
+## 5. Cache shader uniform locations and reduce GL state churn
+
+Prompt:
+
+Read `AGENTS.md` first. Work in `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
+
+Optimize `src/renderer/shader.cpp` so uniform setters do not call `glGetUniformLocation` every time. Uniform locations are stable after successful program link until relink, so cache them per shader program.
+
+Implement:
+
+- Add a uniform location cache to `shader_program`.
+- Preserve current setter API if possible.
+- Clear the cache on `shutdown` and reload.
+- Avoid excessive allocations in hot paths. A small fixed known-uniform table is acceptable if cleaner than a map.
+- Optionally track redundant `glUseProgram`, `glBindVertexArray`, blend/depth state changes if this stays small and low risk.
+
+Verification:
+
+- Run the full test command chain from prompt 2.
+- Build release.
+- Use instrumentation to report before/after uniform location queries and uniform sets per frame.
+
+## 6. Instance or batch tree rendering
+
+Prompt:
+
+Read `AGENTS.md` first. Work in `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
+
+Replace per-tree draw submission with batched or instanced rendering. The course currently draws each tree as one cylinder trunk draw plus one cone leaf draw. For 99 trees, that is 198 draw calls before markers, UI, ball, cart, and CRT.
+
+Preferred approach:
+
+- Add instance buffers for tree trunks and tree leaves.
+- Upload per-tree model/color data when tree render cache revision changes.
+- Draw all trunks in one instanced draw and all leaves in one instanced draw.
+- Keep OpenGL 3.3 core compatibility.
+- Do not add new dependencies.
+- Keep tree visuals equivalent or close enough for the VCR/CRT aesthetic.
+
+If instancing is too invasive, batch tree geometry into one static mesh per revision instead.
+
+Verification:
+
+- Run the full test command chain from prompt 2.
+- Build release.
+- Confirm trees render in the correct positions/heights in single-hole and course mode.
+- Report before/after draw calls and FPS.
+
+## 7. Batch markers, pins, aim dots, and simple world panels
+
+Prompt:
+
+Read `AGENTS.md` first. Work in `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
+
+Reduce draw calls for repeated small world geometry after tree batching is complete. Target markers, pin poles/flags, aim dots, and simple panels that currently issue separate uniform updates and draw calls.
+
+Implement:
+
+- Add a small world-quad/marker batch path, or use instancing for repeated disc/panel geometry.
+- Preserve existing colors, alpha behavior, and depth behavior.
+- Keep dynamic aim dots efficient without reallocating more than needed.
+- Avoid changing gameplay logic.
+
+Verification:
+
+- Run the full test command chain from prompt 2.
+- Build release.
+- Check tee markers, pin markers, start markers, aim indicator, swing club, and flight path visuals.
+- Report before/after draw calls and render scene CPU time.
+
+## 8. Replace per-glyph-pixel UI draws with a batched pixel UI buffer
+
+Prompt:
+
+Read `AGENTS.md` first. Work in `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
+
+The current pixel text renderer draws one quad per lit glyph pixel, with uniform updates and draw calls per quad. Replace this with a batched overlay path while preserving the bitmap/pixel aesthetic.
+
+Implement:
+
+- Build a dynamic overlay vertex buffer each frame for UI quads.
+- Accumulate pixel glyph quads, panels, ticks, and simple overlay rectangles into batches.
+- Draw by color/layer in as few draw calls as practical.
+- Preallocate/reuse CPU vectors and GL buffers where possible.
+- Keep all existing UI screens visually equivalent: startup menus, controls overlay, power meter, FPS/debug overlay, scorecard, course map, rangefinder, XP drops.
+
+Do not add SDL_ttf or smooth font rendering.
+
+Verification:
+
+- Run the full test command chain from prompt 2.
+- Build release.
+- Manually check menus, scorecard, course map, and gameplay HUD.
+- Report before/after overlay draw calls and CPU time.
+
+## 9. Preallocate and stream dynamic buffers safely
+
+Prompt:
+
+Read `AGENTS.md` first. Work in `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
+
+Clean up dynamic buffer uploads so hot-path data does not repeatedly allocate GPU storage. Focus on flight path, UI overlay batches, and any dynamic instance buffers added by earlier prompts.
+
+Implement:
+
+- Track dynamic buffer capacity.
+- Use `glBufferSubData` when data fits existing capacity.
+- Orphan with `glBufferData(..., nullptr, GL_DYNAMIC_DRAW)` only when resizing or intentionally avoiding synchronization.
+- Avoid per-frame heap churn in CPU-side temporary vectors where practical.
+- Keep behavior identical.
+
+Verification:
+
+- Run the full test command chain from prompt 2.
+- Build release.
+- Report dynamic buffer upload count, bytes uploaded per frame, and any FPS/render-time change.
+
+## 10. Add coarse culling and course render chunking
+
+Prompt:
+
+Read `AGENTS.md` first. Work in `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
+
+Add culling and render chunking so the renderer scales beyond the current 6-hole course. This should be done after sampling and batching optimizations, not before.
+
+Implement:
+
+- Split course terrain into logical chunks, preferably per hole plus apron or spatial chunks with bounds.
+- Store bounds per chunk.
+- Frustum-cull chunks against the current camera before drawing.
+- Frustum-cull tree/marker batches or split them into chunks.
+- Keep the current CRT framebuffer pipeline intact.
+- Do not implement a seamless open world or backend.
+
+Verification:
+
+- Run the full test command chain from prompt 2.
+- Build release.
+- Confirm single-hole and 6-hole course rendering still look correct.
+- Report visible chunk count, culled chunk count, draw calls, and FPS.
+
+## 11. Add a release-mode performance acceptance pass
+
+Prompt:
+
+Read `AGENTS.md` first. Work in `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
+
+After the renderer optimizations are complete, add a repeatable release-mode performance check and document the expected budgets. This is not a formal benchmark framework; keep it simple and useful for future agents.
+
+Implement:
+
+- Add a documented manual or automated way to start the 6-hole course and collect a short performance sample.
+- Record target budgets in docs:
+  - course mode should hit vsync at 60 FPS on the current development machine
+  - normal world draw calls should stay under roughly 50 before UI
+  - `make_render_data` should be well under 1 ms
+  - terrain triangle tests per frame should be near the number of actual local candidates, not full mesh size times sample calls
+- Add notes on how to temporarily disable vsync for profiling if implemented.
+- Do not hardcode machine-specific assumptions into gameplay code.
+
+Verification:
+
+- Run the full test command chain from prompt 2.
+- Build release.
+- Run the performance check and paste the final numbers into the docs.

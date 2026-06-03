@@ -121,15 +121,26 @@ void ensure_default_skills(skill_progression& progression) {
     }
 }
 
-void add_skill_xp(skill_progression& progression, const std::string& skill_id, const int amount) {
-    if (amount <= 0 || skill_id.empty()) {
-        return;
+add_skill_xp_result add_skill_xp(skill_progression& progression, const std::string& skill_id, const int amount) {
+    add_skill_xp_result result;
+    if (skill_id.empty()) {
+        return result;
+    }
+    if (amount <= 0) {
+        result.before_xp = skill_xp(progression, skill_id);
+        result.after_xp = result.before_xp;
+        return result;
     }
 
     skill_progress& progress = progression[skill_id];
+    progress.xp = clamp_xp(progress.xp);
+    result.before_xp = progress.xp;
     if (progress.xp > skill_max_xp - amount) {
         progress.xp = skill_max_xp;
     } else {
         progress.xp = clamp_xp(progress.xp + amount);
     }
+    result.after_xp = progress.xp;
+    result.applied_xp = std::max(0, result.after_xp - result.before_xp);
+    return result;
 }

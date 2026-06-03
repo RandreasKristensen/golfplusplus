@@ -1635,6 +1635,115 @@ void draw_skills_panel(shader_program& shader, const std::vector<render_skill_pr
     draw_pixel_text_centered(shader, "CAPS LOCK", center + glm::vec2(0.0f, -half.y + 0.055f), 0.009f, muted_color);
 }
 
+void draw_xp_icon_cell(shader_program& shader,
+                       const glm::vec2 icon_center,
+                       const int x,
+                       const int y,
+                       const float cell_size,
+                       const glm::vec3 color,
+                       const float alpha) {
+    draw_overlay_quad(shader,
+                      icon_center + glm::vec2((static_cast<float>(x) - 2.0f) * cell_size,
+                                              (2.0f - static_cast<float>(y)) * cell_size),
+                      glm::vec2(cell_size * 0.43f),
+                      color,
+                      alpha);
+}
+
+void draw_xp_icon_pattern(shader_program& shader,
+                          const glm::vec2 icon_center,
+                          const std::array<const char*, 5>& pattern,
+                          const float cell_size,
+                          const glm::vec3 color,
+                          const float alpha) {
+    for (int y = 0; y < 5; ++y) {
+        for (int x = 0; x < 5; ++x) {
+            if (pattern[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)] == '#') {
+                draw_xp_icon_cell(shader, icon_center, x, y, cell_size, color, alpha);
+            }
+        }
+    }
+}
+
+void draw_xp_icon(shader_program& shader,
+                  const skill_icon_id icon,
+                  const glm::vec2 center,
+                  const float alpha) {
+    const float cell = 0.010f;
+    switch (icon) {
+    case skill_icon_id::golf_swing:
+        draw_xp_icon_pattern(shader,
+                             center,
+                             std::array<const char*, 5>{{"..#..", "..#..", ".##..", "...#.", "...##"}},
+                             cell,
+                             glm::vec3(0.92f, 0.78f, 0.38f),
+                             alpha);
+        draw_overlay_quad(shader, center + glm::vec2(-0.016f, -0.020f), glm::vec2(0.008f), glm::vec3(0.92f), alpha);
+        break;
+    case skill_icon_id::smoking:
+        draw_xp_icon_pattern(shader,
+                             center,
+                             std::array<const char*, 5>{{".....", ".###.", "...#.", "####.", "....."}},
+                             cell,
+                             glm::vec3(0.90f, 0.84f, 0.66f),
+                             alpha);
+        draw_xp_icon_cell(shader, center, 4, 2, cell, glm::vec3(0.86f, 0.38f, 0.22f), alpha);
+        break;
+    case skill_icon_id::fitness:
+        draw_xp_icon_pattern(shader,
+                             center,
+                             std::array<const char*, 5>{{".....", ".##..", ".###.", "..###", "....."}},
+                             cell,
+                             glm::vec3(0.52f, 0.82f, 0.58f),
+                             alpha);
+        break;
+    case skill_icon_id::generic:
+    default:
+        draw_xp_icon_pattern(shader,
+                             center,
+                             std::array<const char*, 5>{{"..#..", ".###.", "#####", ".###.", "..#.."}},
+                             cell,
+                             glm::vec3(0.70f, 0.78f, 0.92f),
+                             alpha);
+        break;
+    }
+}
+
+void draw_xp_drops(shader_program& shader, const std::vector<render_xp_drop>& drops) {
+    if (drops.empty()) {
+        return;
+    }
+
+    const glm::vec3 panel_color(0.035f, 0.040f, 0.040f);
+    const glm::vec3 outline_color(0.68f, 0.70f, 0.56f);
+    const glm::vec3 text_color(0.96f, 0.86f, 0.38f);
+    const glm::vec2 row_half(0.155f, 0.043f);
+    const float row_gap = 0.092f;
+    const float right = 0.585f;
+    const float start_y = 0.565f;
+    const float travel_y = 0.62f;
+
+    for (std::size_t i = 0; i < drops.size(); ++i) {
+        const render_xp_drop& drop = drops[i];
+        if (drop.xp <= 0) {
+            continue;
+        }
+
+        const float progress = drop.lifetime <= 0.0f ? 1.0f : std::clamp(drop.age / drop.lifetime, 0.0f, 1.0f);
+        const float alpha = progress > 0.78f ? std::max(0.16f, 1.0f - (progress - 0.78f) / 0.22f) : 1.0f;
+        const glm::vec2 center(right - row_half.x, start_y - static_cast<float>(i) * row_gap + progress * travel_y);
+
+        draw_overlay_quad(shader, center + glm::vec2(0.010f, -0.010f), row_half, glm::vec3(0.0f), 0.18f * alpha);
+        draw_overlay_quad(shader, center, row_half, panel_color, 0.72f * alpha);
+        draw_button_outline(shader, center, row_half, outline_color, 0.42f * alpha);
+        draw_xp_icon(shader, drop.icon, center + glm::vec2(-0.105f, 0.0f), alpha);
+
+        const std::string label = "+" + std::to_string(std::max(0, drop.xp)) + " XP";
+        const float pixel_size = fit_pixel_size(label, glm::vec2(0.100f, 0.030f), 0.013f, 0.008f);
+        draw_pixel_text_left(shader, label, center + glm::vec2(-0.055f, 0.021f), pixel_size, text_color * alpha);
+    }
+}
+
 glm::vec3 thumbnail_zone_color(const material_zone_type type) {
     switch (type) {
     case material_zone_type::green:
@@ -1912,8 +2021,10 @@ course_map_layout make_course_map_layout(const render_data& data) {
     expand_map_bounds(data.player_position, min_point, max_point);
     expand_map_bounds(data.ball_position, min_point, max_point);
 
-    for (const render_terrain_vertex& vertex : data.terrain_vertices) {
-        expand_map_bounds(vertex.position, min_point, max_point);
+    if (data.terrain_mesh != nullptr) {
+        for (const render_terrain_vertex& vertex : data.terrain_mesh->vertices) {
+            expand_map_bounds(vertex.position, min_point, max_point);
+        }
     }
 
     for (const render_tree& tree : data.trees) {
@@ -2024,23 +2135,24 @@ void draw_filled_map_triangle(shader_program& shader,
 }
 
 void draw_filled_map_terrain(shader_program& shader, const course_map_layout& layout, const render_data& data) {
-    if (data.terrain_vertices.empty() || data.terrain_indices.size() < 3) {
+    const render_static_mesh* terrain_mesh = data.terrain_mesh;
+    if (terrain_mesh == nullptr || terrain_mesh->vertices.empty() || terrain_mesh->indices.size() < 3) {
         return;
     }
 
-    for (std::size_t i = 0; i + 2 < data.terrain_indices.size(); i += 3) {
-        const std::uint32_t ia = data.terrain_indices[i];
-        const std::uint32_t ib = data.terrain_indices[i + 1];
-        const std::uint32_t ic = data.terrain_indices[i + 2];
-        if (ia >= data.terrain_vertices.size() ||
-            ib >= data.terrain_vertices.size() ||
-            ic >= data.terrain_vertices.size()) {
+    for (std::size_t i = 0; i + 2 < terrain_mesh->indices.size(); i += 3) {
+        const std::uint32_t ia = terrain_mesh->indices[i];
+        const std::uint32_t ib = terrain_mesh->indices[i + 1];
+        const std::uint32_t ic = terrain_mesh->indices[i + 2];
+        if (ia >= terrain_mesh->vertices.size() ||
+            ib >= terrain_mesh->vertices.size() ||
+            ic >= terrain_mesh->vertices.size()) {
             continue;
         }
 
-        const render_terrain_vertex& va = data.terrain_vertices[ia];
-        const render_terrain_vertex& vb = data.terrain_vertices[ib];
-        const render_terrain_vertex& vc = data.terrain_vertices[ic];
+        const render_terrain_vertex& va = terrain_mesh->vertices[ia];
+        const render_terrain_vertex& vb = terrain_mesh->vertices[ib];
+        const render_terrain_vertex& vc = terrain_mesh->vertices[ic];
         const glm::vec3 average_color = (va.color + vb.color + vc.color) / 3.0f;
         const glm::vec3 ink = average_color * 0.72f + glm::vec3(0.10f, 0.08f, 0.04f);
         draw_filled_map_triangle(shader,
@@ -2700,49 +2812,77 @@ bool renderer::ensure_framebuffer_size(const int screen_width, const int screen_
 }
 
 void renderer::upload_terrain_mesh(const render_data& data) {
-    if (terrain_mesh_vao_ == 0 || terrain_mesh_vbo_ == 0 || terrain_mesh_ebo_ == 0 ||
-        data.terrain_vertices.empty() || data.terrain_indices.empty()) {
+    const render_static_mesh* mesh = data.terrain_mesh;
+    if (mesh == nullptr) {
         terrain_mesh_index_count_ = 0;
+        terrain_mesh_uploaded_ = false;
+        uploaded_terrain_revision_ = 0;
+        return;
+    }
+    if (terrain_mesh_uploaded_ && uploaded_terrain_revision_ == mesh->revision) {
+        return;
+    }
+    if (terrain_mesh_vao_ == 0 || terrain_mesh_vbo_ == 0 || terrain_mesh_ebo_ == 0 ||
+        mesh->vertices.empty() || mesh->indices.empty()) {
+        terrain_mesh_index_count_ = 0;
+        terrain_mesh_uploaded_ = true;
+        uploaded_terrain_revision_ = mesh->revision;
         return;
     }
 
-    terrain_mesh_index_count_ = static_cast<int>(data.terrain_indices.size());
+    terrain_mesh_index_count_ = static_cast<int>(mesh->indices.size());
 
     glBindVertexArray(terrain_mesh_vao_);
     glBindBuffer(GL_ARRAY_BUFFER, terrain_mesh_vbo_);
     glBufferData(GL_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(data.terrain_vertices.size() * sizeof(render_terrain_vertex)),
-                 data.terrain_vertices.data(),
-                 GL_DYNAMIC_DRAW);
+                 static_cast<GLsizeiptr>(mesh->vertices.size() * sizeof(render_terrain_vertex)),
+                 mesh->vertices.data(),
+                 GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, terrain_mesh_ebo_);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(data.terrain_indices.size() * sizeof(std::uint32_t)),
-                 data.terrain_indices.data(),
-                 GL_DYNAMIC_DRAW);
+                 static_cast<GLsizeiptr>(mesh->indices.size() * sizeof(std::uint32_t)),
+                 mesh->indices.data(),
+                 GL_STATIC_DRAW);
     glBindVertexArray(0);
+    terrain_mesh_uploaded_ = true;
+    uploaded_terrain_revision_ = mesh->revision;
 }
 
 void renderer::upload_material_overlay_mesh(const render_data& data) {
-    if (material_overlay_vao_ == 0 || material_overlay_vbo_ == 0 || material_overlay_ebo_ == 0 ||
-        data.material_overlay_vertices.empty() || data.material_overlay_indices.empty()) {
+    const render_static_mesh* mesh = data.material_overlay_mesh;
+    if (mesh == nullptr) {
         material_overlay_index_count_ = 0;
+        material_overlay_mesh_uploaded_ = false;
+        uploaded_material_overlay_revision_ = 0;
+        return;
+    }
+    if (material_overlay_mesh_uploaded_ && uploaded_material_overlay_revision_ == mesh->revision) {
+        return;
+    }
+    if (material_overlay_vao_ == 0 || material_overlay_vbo_ == 0 || material_overlay_ebo_ == 0 ||
+        mesh->vertices.empty() || mesh->indices.empty()) {
+        material_overlay_index_count_ = 0;
+        material_overlay_mesh_uploaded_ = true;
+        uploaded_material_overlay_revision_ = mesh->revision;
         return;
     }
 
-    material_overlay_index_count_ = static_cast<int>(data.material_overlay_indices.size());
+    material_overlay_index_count_ = static_cast<int>(mesh->indices.size());
 
     glBindVertexArray(material_overlay_vao_);
     glBindBuffer(GL_ARRAY_BUFFER, material_overlay_vbo_);
     glBufferData(GL_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(data.material_overlay_vertices.size() * sizeof(render_terrain_vertex)),
-                 data.material_overlay_vertices.data(),
-                 GL_DYNAMIC_DRAW);
+                 static_cast<GLsizeiptr>(mesh->vertices.size() * sizeof(render_terrain_vertex)),
+                 mesh->vertices.data(),
+                 GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, material_overlay_ebo_);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(data.material_overlay_indices.size() * sizeof(std::uint32_t)),
-                 data.material_overlay_indices.data(),
-                 GL_DYNAMIC_DRAW);
+                 static_cast<GLsizeiptr>(mesh->indices.size() * sizeof(std::uint32_t)),
+                 mesh->indices.data(),
+                 GL_STATIC_DRAW);
     glBindVertexArray(0);
+    material_overlay_mesh_uploaded_ = true;
+    uploaded_material_overlay_revision_ = mesh->revision;
 }
 
 void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const render_data& data) {
@@ -2751,8 +2891,10 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
 
     const float course_scale = std::max(1.0f, data.course_extent / 12.0f);
     float terrain_min_y = 0.0f;
-    for (const render_terrain_vertex& vertex : data.terrain_vertices) {
-        terrain_min_y = std::min(terrain_min_y, vertex.position.y);
+    if (data.terrain_mesh != nullptr) {
+        for (const render_terrain_vertex& vertex : data.terrain_mesh->vertices) {
+            terrain_min_y = std::min(terrain_min_y, vertex.position.y);
+        }
     }
     const float background_ground_y = std::min(-0.08f, terrain_min_y - 2.0f);
     const glm::mat4 ground_model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, background_ground_y, 0.0f)),
@@ -2814,45 +2956,62 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     draw_emote_world_model(terrain_shader_, view, proj, data, primitives);
     glBindVertexArray(0);
 
-    const glm::mat4 tee_model = glm::scale(glm::translate(glm::mat4(1.0f),
-                                                          data.tee_position + glm::vec3(0.0f, 0.01f, 0.0f)),
-                                           glm::vec3(1.8f, 1.0f, 1.8f));
-    set_terrain_draw_state(terrain_shader_, tee_model, view, proj, glm::vec3(0.45f, 0.30f, 0.16f), false);
+    const auto draw_ground_marker = [&](const glm::vec3& position, const float scale, const glm::vec3& color) {
+        const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1.0f),
+                                                          position + glm::vec3(0.0f, 0.01f, 0.0f)),
+                                           glm::vec3(scale, 1.0f, scale));
+        set_terrain_draw_state(terrain_shader_, model, view, proj, color, false);
+        glBindVertexArray(marker_vao_);
+        glDrawArrays(GL_TRIANGLES, 0, marker_vertex_count_);
+        glBindVertexArray(0);
+    };
 
-    glBindVertexArray(marker_vao_);
-    glDrawArrays(GL_TRIANGLES, 0, marker_vertex_count_);
-    glBindVertexArray(0);
+    const auto draw_pin_marker = [&](const glm::vec3& position) {
+        const float cup_scale = std::max(data.cup_visual_radius_meters * 2.0f, data.cup_radius * 2.0f);
+        const glm::mat4 cup_model = glm::scale(glm::translate(glm::mat4(1.0f),
+                                                              position + glm::vec3(0.0f, 0.09f, 0.0f)),
+                                               glm::vec3(cup_scale, 1.0f, cup_scale));
+        set_terrain_draw_state(terrain_shader_, cup_model, view, proj, glm::vec3(0.03f, 0.03f, 0.035f), false);
 
-    const float cup_scale = std::max(data.cup_visual_radius_meters * 2.0f, data.cup_radius * 2.0f);
-    const glm::mat4 cup_model = glm::scale(glm::translate(glm::mat4(1.0f),
-                                                          data.pin_position + glm::vec3(0.0f, 0.09f, 0.0f)),
-                                           glm::vec3(cup_scale, 1.0f, cup_scale));
-    set_terrain_draw_state(terrain_shader_, cup_model, view, proj, glm::vec3(0.03f, 0.03f, 0.035f), false);
+        glDepthMask(GL_FALSE);
+        glBindVertexArray(marker_vao_);
+        glDrawArrays(GL_TRIANGLES, 0, marker_vertex_count_);
+        glBindVertexArray(0);
+        glDepthMask(GL_TRUE);
 
-    glDepthMask(GL_FALSE);
-    glBindVertexArray(marker_vao_);
-    glDrawArrays(GL_TRIANGLES, 0, marker_vertex_count_);
-    glBindVertexArray(0);
-    glDepthMask(GL_TRUE);
+        glBindVertexArray(screen_vao_);
+        const float pin_height = std::max(0.1f, data.pin_visual_height_meters);
+        const glm::vec3 pin_base = position + glm::vec3(0.0f, pin_height * 0.5f, 0.0f);
+        const glm::mat4 pin_pole = panel_model(pin_base, 0.0f, glm::vec3(0.045f, pin_height * 0.5f, 1.0f));
+        const glm::mat4 pin_pole_cross = panel_model(pin_base, 90.0f, glm::vec3(0.045f, pin_height * 0.5f, 1.0f));
+        set_terrain_draw_state(terrain_shader_, pin_pole, view, proj, glm::vec3(0.95f, 0.90f, 0.68f), false);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        set_terrain_draw_state(terrain_shader_, pin_pole_cross, view, proj, glm::vec3(0.95f, 0.90f, 0.68f), false);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    glBindVertexArray(screen_vao_);
-    const float pin_height = std::max(0.1f, data.pin_visual_height_meters);
-    const glm::vec3 pin_base = data.pin_position + glm::vec3(0.0f, pin_height * 0.5f, 0.0f);
-    const glm::mat4 pin_pole = panel_model(pin_base, 0.0f, glm::vec3(0.045f, pin_height * 0.5f, 1.0f));
-    const glm::mat4 pin_pole_cross = panel_model(pin_base, 90.0f, glm::vec3(0.045f, pin_height * 0.5f, 1.0f));
-    set_terrain_draw_state(terrain_shader_, pin_pole, view, proj, glm::vec3(0.95f, 0.90f, 0.68f), false);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    set_terrain_draw_state(terrain_shader_, pin_pole_cross, view, proj, glm::vec3(0.95f, 0.90f, 0.68f), false);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+        const glm::vec3 flag_center = position + glm::vec3(0.34f, pin_height * 0.86f, 0.0f);
+        const glm::mat4 flag_panel = panel_model(flag_center, 0.0f, glm::vec3(0.36f, 0.24f, 1.0f));
+        const glm::mat4 flag_panel_cross = panel_model(flag_center, 90.0f, glm::vec3(0.36f, 0.24f, 1.0f));
+        set_terrain_draw_state(terrain_shader_, flag_panel, view, proj, glm::vec3(0.96f, 0.78f, 0.20f), false);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        set_terrain_draw_state(terrain_shader_, flag_panel_cross, view, proj, glm::vec3(0.96f, 0.78f, 0.20f), false);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindVertexArray(0);
+    };
 
-    const glm::vec3 flag_center = data.pin_position + glm::vec3(0.34f, pin_height * 0.86f, 0.0f);
-    const glm::mat4 flag_panel = panel_model(flag_center, 0.0f, glm::vec3(0.36f, 0.24f, 1.0f));
-    const glm::mat4 flag_panel_cross = panel_model(flag_center, 90.0f, glm::vec3(0.36f, 0.24f, 1.0f));
-    set_terrain_draw_state(terrain_shader_, flag_panel, view, proj, glm::vec3(0.96f, 0.78f, 0.20f), false);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    set_terrain_draw_state(terrain_shader_, flag_panel_cross, view, proj, glm::vec3(0.96f, 0.78f, 0.20f), false);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    glBindVertexArray(0);
+    if (data.show_primary_hole_markers) {
+        draw_ground_marker(data.tee_position, 1.8f, glm::vec3(0.45f, 0.30f, 0.16f));
+        draw_pin_marker(data.pin_position);
+    }
+    for (const glm::vec3& position : data.start_markers) {
+        draw_ground_marker(position, 2.2f, glm::vec3(0.82f, 0.68f, 0.28f));
+    }
+    for (const glm::vec3& position : data.tee_markers) {
+        draw_ground_marker(position, 1.45f, glm::vec3(0.45f, 0.30f, 0.16f));
+    }
+    for (const glm::vec3& position : data.pin_markers) {
+        draw_pin_marker(position);
+    }
 
     if (data.show_aim_indicator && !data.aim_arc_points.empty()) {
         glBindVertexArray(marker_vao_);
@@ -2976,6 +3135,8 @@ void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, cons
     if (data.show_interact_prompt) {
         draw_interact_prompt(terrain_shader_);
     }
+
+    draw_xp_drops(terrain_shader_, data.xp_drops);
 
     draw_controls_overlay(terrain_shader_, data.controls);
 

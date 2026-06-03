@@ -20,6 +20,12 @@ struct render_terrain_vertex {
     glm::vec3 color = glm::vec3(0.18f, 0.42f, 0.18f);
 };
 
+struct render_static_mesh {
+    std::vector<render_terrain_vertex> vertices;
+    std::vector<std::uint32_t> indices;
+    std::uint64_t revision = 0;
+};
+
 struct controls_overlay_state {
     bool visible = true;
     bool key_1_down = false;
@@ -84,6 +90,20 @@ struct render_skill_progress {
     int xp_to_next = 0;
 };
 
+enum class skill_icon_id {
+    golf_swing,
+    smoking,
+    fitness,
+    generic
+};
+
+struct render_xp_drop {
+    skill_icon_id icon = skill_icon_id::generic;
+    int xp = 0;
+    float age = 0.0f;
+    float lifetime = 2.4f;
+};
+
 struct render_data {
     glm::vec3 ball_position = glm::vec3(0.0f);
     glm::vec3 player_position = glm::vec3(0.0f);
@@ -92,13 +112,14 @@ struct render_data {
     glm::vec3 camera_target = glm::vec3(0.0f);
     glm::vec3 tee_position = glm::vec3(0.0f);
     glm::vec3 pin_position = glm::vec3(0.0f);
+    std::vector<glm::vec3> tee_markers;
+    std::vector<glm::vec3> pin_markers;
+    std::vector<glm::vec3> start_markers;
     std::vector<glm::vec3> aim_arc_points;
     std::vector<glm::vec3> flight_path_points;
     std::vector<render_tree> trees;
-    std::vector<render_terrain_vertex> terrain_vertices;
-    std::vector<std::uint32_t> terrain_indices;
-    std::vector<render_terrain_vertex> material_overlay_vertices;
-    std::vector<std::uint32_t> material_overlay_indices;
+    const render_static_mesh* terrain_mesh = nullptr;
+    const render_static_mesh* material_overlay_mesh = nullptr;
     float cup_radius = 0.65f;
     float ball_visual_radius_meters = 0.10f;
     float cup_visual_radius_meters = 0.75f;
@@ -107,6 +128,7 @@ struct render_data {
     float aim_angle = 0.0f;
     float camera_fov_degrees = 60.0f;
     bool ball_moving = false;
+    bool show_primary_hole_markers = true;
     bool show_flight_path = false;
     glm::vec3 flight_path_color = glm::vec3(0.92f, 0.18f, 0.16f);
     float flight_path_alpha = 0.45f;
@@ -128,6 +150,7 @@ struct render_data {
     bool show_course_results = false;
     scorecard_data scorecard;
     std::vector<render_skill_progress> skills;
+    std::vector<render_xp_drop> xp_drops;
     bool cart_active = false;
     bool cart_drifting = false;
     float cart_yaw = 0.0f;
@@ -190,6 +213,10 @@ private:
     int cone_vertex_count_ = 0;
     int terrain_mesh_index_count_ = 0;
     int material_overlay_index_count_ = 0;
+    std::uint64_t uploaded_terrain_revision_ = 0;
+    std::uint64_t uploaded_material_overlay_revision_ = 0;
+    bool terrain_mesh_uploaded_ = false;
+    bool material_overlay_mesh_uploaded_ = false;
 
     int target_width_ = 640;
     int target_height_ = 360;

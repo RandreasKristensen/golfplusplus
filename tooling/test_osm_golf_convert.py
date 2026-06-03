@@ -122,6 +122,28 @@ class OsmGolfConvertTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(warnings), 2)
 
+    def test_hole_generation_uses_configured_tree_sizes(self):
+        origin_lat = 56.0
+        origin_lon = 10.0
+        hole_line = way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.001, 10.0)])
+        holes = conv.group_holes([hole_line])
+        holes[1]["trees_abs"] = [(5.0, 8.0)]
+        config = conv.load_generation_config(None)
+        config["tree"] = {
+            "trunk_radius": 0.9,
+            "trunk_height": 7.0,
+            "leaf_radius": 5.5,
+            "leaf_height": 8.5,
+            "max_per_hole": 20,
+        }
+
+        h_json = conv.hole_to_json(1, holes[1], origin_lat, origin_lon, "test_course", config)
+
+        self.assertEqual(0.9, h_json["trees"][0]["trunk_radius"])
+        self.assertEqual(7.0, h_json["trees"][0]["trunk_height"])
+        self.assertEqual(5.5, h_json["trees"][0]["leaf_radius"])
+        self.assertEqual(8.5, h_json["trees"][0]["leaf_height"])
+
     def test_course_world_uses_shared_coordinates_and_osm_paths(self):
         origin_lat = 56.0
         origin_lon = 10.0
@@ -129,8 +151,8 @@ class OsmGolfConvertTests(unittest.TestCase):
         tee_1 = node(2, {"golf": "tee", "ref": "1"}, 56.0, 10.0)
         pin_1 = node(3, {"golf": "pin", "ref": "1"}, 56.001, 10.0)
         hole_2 = way(4, {"golf": "hole", "ref": "2"}, [(56.001, 10.001), (56.002, 10.001)])
-        service = way(5, {"highway": "service"}, [(56.0, 10.0), (56.001, 10.001)])
-        footway = way(6, {"highway": "footway"}, [(56.001, 10.0), (56.001, 10.001)])
+        service = way(5, {"highway": "service"}, [(56.0, 10.0005), (56.001, 10.0005)])
+        footway = way(6, {"highway": "footway"}, [(56.001, 10.0015), (56.002, 10.0015)])
         holes = conv.group_holes([hole_1, tee_1, pin_1, hole_2])
 
         world = conv.course_world_to_json("test_course",
@@ -171,6 +193,56 @@ class OsmGolfConvertTests(unittest.TestCase):
         self.assertEqual(1, len(world["cart_roads"]))
         self.assertEqual("generated_fallback", world["cart_roads"][0]["source"])
         self.assertGreaterEqual(len(world["cart_roads"][0]["polyline"]), 5)
+
+        corridors = []
+        for num in sorted(holes.keys()):
+            tee_xz, pin_xz = conv._hole_world_anchors(num, holes[num], origin_lat, origin_lon)
+            corridors.append(conv._hole_fairway_corridor(holes[num], tee_xz, pin_xz, origin_lat, origin_lon, conv.load_generation_config(None)))
+        road_xz = [(p[0], p[2]) for p in world["cart_roads"][0]["polyline"]]
+        self.assertFalse(conv._route_overlaps_fairway(road_xz, corridors))
+
+    def test_course_world_rejects_paths_crossing_fairways(self):
+        origin_lat = 56.0
+        origin_lon = 10.0
+        holes = conv.group_holes([
+            way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.001, 10.0)]),
+        ])
+        crossing_service = way(5, {"highway": "service"}, [(56.0, 10.0), (56.001, 10.0)])
+        side_service = way(6, {"highway": "service"}, [(56.0, 10.0005), (56.001, 10.0005)])
+
+        world = conv.course_world_to_json("test_course",
+                                          "Test Course",
+                                          way(9, {"leisure": "golf_course"}, [(56.0, 10.0), (56.002, 10.002)]),
+                                          holes,
+                                          [crossing_service, side_service],
+                                          origin_lat,
+                                          origin_lon)
+
+        self.assertEqual(["cart_way_6"], [route["id"] for route in world["cart_roads"]])
+
+    def test_course_world_filters_long_outlying_osm_paths(self):
+        origin_lat = 56.0
+        origin_lon = 10.0
+        holes = conv.group_holes([
+            way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.001, 10.0)]),
+        ])
+        near_short = way(5, {"highway": "footway"}, [(56.0001, 10.0005), (56.0002, 10.0005)])
+        near_too_long = way(6, {"highway": "footway"}, [(56.0, 10.0005), (56.004, 10.0005)])
+        far_short = way(7, {"highway": "footway"}, [(56.01, 10.01), (56.0102, 10.01)])
+        config = conv.load_generation_config(None)
+        config["world"]["max_shortcut_length"] = 80.0
+        config["world"]["max_path_distance_from_holes"] = 60.0
+
+        world = conv.course_world_to_json("test_course",
+                                          "Test Course",
+                                          way(9, {"leisure": "golf_course"}, [(56.0, 10.0), (56.002, 10.002)]),
+                                          holes,
+                                          [near_short, near_too_long, far_short],
+                                          origin_lat,
+                                          origin_lon,
+                                          config)
+
+        self.assertEqual(["shortcut_way_5"], [route["id"] for route in world["walking_shortcuts"]])
 
 
 if __name__ == "__main__":
