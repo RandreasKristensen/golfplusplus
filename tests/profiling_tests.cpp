@@ -59,9 +59,12 @@ TEST_CASE("counters accumulate onto an explicit frame profile") {
     record_terrain_sample(&profile, 120);
     record_terrain_sample(&profile, 80);
     record_terrain_sample(&profile, -3);
+    record_uniform_location_query(&profile);
+    record_uniform_location_query(&profile);
 
     CHECK(profile.draw_calls == 5U);
     CHECK(profile.uniform_sets == 10U);
+    CHECK(profile.uniform_location_queries == 2U);
     CHECK(profile.buffer_uploads == 2U);
     CHECK(profile.buffer_upload_bytes == 96U);
     CHECK(profile.terrain_sample_calls == 3U);
@@ -177,6 +180,7 @@ TEST_CASE("overlay lines only use glyphs the bitmap font can render") {
     profile.stage_ms[static_cast<std::size_t>(profile_stage::update_game)] = 1.5;
     profile.draw_calls = 268U;
     profile.uniform_sets = 1904U;
+    profile.uniform_location_queries = 7U;
     profile.terrain_sample_calls = 105U;
     profile.terrain_triangles_tested = 1250400U;
 
@@ -184,6 +188,7 @@ TEST_CASE("overlay lines only use glyphs the bitmap font can render") {
     CHECK(!(lines.empty()));
     CHECK(any_line_contains(lines, "DRAW 268"));
     CHECK(any_line_contains(lines, "UNI 1904"));
+    CHECK(any_line_contains(lines, "ULOC 7"));
     CHECK(any_line_contains(lines, "TSAMP 105"));
     CHECK(any_line_contains(lines, "TTRI 1250400"));
     CHECK(any_line_contains(lines, "1500US"));

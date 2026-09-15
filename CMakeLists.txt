@@ -154,6 +154,7 @@ if (VCR_GOLF_BUILD_TESTS)
         tests/physics_tests.cpp
         tests/game_tests.cpp
         tests/profiling_tests.cpp
+        tests/shader_tests.cpp
         tests/audio_manifest_tests.cpp
         src/audio/audio_manifest.cpp
     )

@@ -30,6 +30,7 @@
 // Counting GL work:
 //     record_draw_call(profile);                 // one glDraw* submission
 //     record_uniform_set(profile);               // one glUniform* set
+//     record_uniform_location_query(profile);    // one glGetUniformLocation
 //     record_buffer_upload(profile, byte_count); // one dynamic glBufferData
 //
 // Accumulating terrain sampling work at the call site:
@@ -82,6 +83,8 @@ struct frame_profile {
     std::uint64_t terrain_triangles_tested = 0;
     std::uint32_t draw_calls = 0;
     std::uint32_t uniform_sets = 0;
+    // Actual glGetUniformLocation calls (uniform location cache misses).
+    std::uint32_t uniform_location_queries = 0;
     std::uint32_t buffer_uploads = 0;
     std::uint64_t buffer_upload_bytes = 0;
     // Draw/uniform work spent on the debug overlay itself, kept out of the
@@ -128,6 +131,12 @@ inline void record_draw_call(frame_profile* profile, const std::uint32_t count =
 inline void record_uniform_set(frame_profile* profile, const std::uint32_t count = 1) {
     if (profile != nullptr) {
         profile->uniform_sets += count;
+    }
+}
+
+inline void record_uniform_location_query(frame_profile* profile) {
+    if (profile != nullptr) {
+        profile->uniform_location_queries += 1U;
     }
 }
 
