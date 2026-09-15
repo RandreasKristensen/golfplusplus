@@ -51,30 +51,6 @@ std::string asset_path(const char* relative) {
     return base + relative;
 }
 
-glm::vec3 aim_direction(const float aim_angle) {
-    return glm::normalize(glm::vec3(std::sin(aim_angle), 0.0f, std::cos(aim_angle)));
-}
-
-std::vector<float> make_disc_vertices(const int segments) {
-    std::vector<float> vertices;
-    vertices.reserve(static_cast<std::size_t>(segments) * 9);
-
-    constexpr float radius = 0.5f;
-    constexpr float pi = 3.14159265358979323846f;
-    for (int i = 0; i < segments; ++i) {
-        const float a0 = 2.0f * pi * static_cast<float>(i) / static_cast<float>(segments);
-        const float a1 = 2.0f * pi * static_cast<float>(i + 1) / static_cast<float>(segments);
-
-        vertices.insert(vertices.end(), {
-            0.0f, 0.0f, 0.0f,
-            std::cos(a0) * radius, 0.0f, std::sin(a0) * radius,
-            std::cos(a1) * radius, 0.0f, std::sin(a1) * radius
-        });
-    }
-
-    return vertices;
-}
-
 void append_sphere_vertex(std::vector<float>& vertices, const glm::vec3 normal) {
     constexpr float radius = 1.0f;
     const glm::vec3 position = normal * radius;
@@ -203,114 +179,6 @@ void set_terrain_draw_state(shader_program& shader,
                             const glm::vec3& color,
                             const bool use_vertex_color) {
     set_terrain_draw_state(shader, model, view, proj, color, 1.0f, use_vertex_color);
-}
-
-glm::mat4 panel_model(const glm::vec3 center, const float yaw_degrees, const glm::vec3 scale) {
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), center);
-    model = glm::rotate(model, glm::radians(yaw_degrees), glm::vec3(0.0f, 1.0f, 0.0f));
-    return glm::scale(model, scale);
-}
-
-float axis_x_yaw_radians(const glm::vec3& axis) {
-    glm::vec3 flat(axis.x, 0.0f, axis.z);
-    if (glm::length(flat) <= 0.0001f) {
-        flat = glm::vec3(1.0f, 0.0f, 0.0f);
-    } else {
-        flat = glm::normalize(flat);
-    }
-    return std::atan2(-flat.z, flat.x);
-}
-
-void draw_world_panel(shader_program& shader,
-                      const glm::mat4& view,
-                      const glm::mat4& proj,
-                      const glm::vec3& center,
-                      const glm::vec3& axis_x,
-                      const float local_z_rotation,
-                      const glm::vec2& half_size,
-                      const glm::vec3& color) {
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), center);
-    model = glm::rotate(model, axis_x_yaw_radians(axis_x), glm::vec3(0.0f, 1.0f, 0.0f));
-    model = glm::rotate(model, local_z_rotation, glm::vec3(0.0f, 0.0f, 1.0f));
-    model = glm::scale(model, glm::vec3(half_size, 1.0f));
-    set_terrain_draw_state(shader, model, view, proj, color, false);
-    draw_arrays(shader, GL_TRIANGLES, 0, 6);
-}
-
-glm::vec3 rotate_top_down_ccw_90_y(const glm::vec3& axis) {
-    glm::vec3 rotated(-axis.z, 0.0f, axis.x);
-    if (glm::length(rotated) <= 0.0001f) {
-        return glm::vec3(1.0f, 0.0f, 0.0f);
-    }
-    return glm::normalize(rotated);
-}
-
-void draw_swing_club(shader_program& shader,
-                     const glm::mat4& view,
-                     const glm::mat4& proj,
-                     const render_data& data) {
-    if (!data.shot_addressing && !data.swing_timing) {
-        return;
-    }
-
-    const float power = std::clamp(data.swing_power, 0.0f, 1.0f);
-    const glm::vec3 forward = aim_direction(data.aim_angle);
-    const glm::vec3 up(0.0f, 1.0f, 0.0f);
-    glm::vec3 player_side = glm::normalize(glm::cross(up, forward));
-    if (glm::length(player_side) <= 0.0001f) {
-        player_side = glm::vec3(1.0f, 0.0f, 0.0f);
-    }
-
-    const glm::vec3 club_swing_side = -rotate_top_down_ccw_90_y(player_side);
-    const glm::vec3 club_head_axis = rotate_top_down_ccw_90_y(forward);
-    const glm::vec3 club_face_axis = club_head_axis;
-
-    const float ball_radius = std::max(0.02f, data.ball_visual_radius_meters);
-    const float shaft_length = 1.10f;
-    const float swing_angle = glm::radians(12.0f + power * 60.0f);
-
-    const glm::vec3 grip_position = data.ball_position
-        + club_swing_side * (ball_radius + 0.10f)
-        - club_head_axis * 0.36f
-        + up * (shaft_length * 0.92f + ball_radius * 0.35f);
-
-    const glm::vec3 shaft_direction = glm::normalize(club_swing_side * std::sin(swing_angle) -
-                                                     up * std::cos(swing_angle));
-    const glm::vec3 shaft_center = grip_position + shaft_direction * (shaft_length * 0.5f);
-    const glm::vec3 head_center = grip_position + shaft_direction * shaft_length;
-
-    draw_world_panel(shader,
-                     view,
-                     proj,
-                     shaft_center,
-                     club_swing_side,
-                     swing_angle,
-                     glm::vec2(0.018f, shaft_length * 0.5f),
-                     glm::vec3(0.82f, 0.78f, 0.62f));
-    draw_world_panel(shader,
-                     view,
-                     proj,
-                     head_center + club_head_axis * 0.03f,
-                     club_face_axis,
-                     0.0f,
-                     glm::vec2(0.16f, 0.040f),
-                     glm::vec3(0.16f, 0.15f, 0.13f));
-    draw_world_panel(shader,
-                     view,
-                     proj,
-                     head_center + club_head_axis * 0.055f,
-                     -club_face_axis,
-                     0.0f,
-                     glm::vec2(0.14f, 0.045f),
-                     glm::vec3(0.20f, 0.19f, 0.17f));
-    draw_world_panel(shader,
-                     view,
-                     proj,
-                     head_center - club_swing_side * 0.02f,
-                     club_face_axis,
-                     0.0f,
-                     glm::vec2(0.13f, 0.035f),
-                     glm::vec3(0.09f, 0.085f, 0.075f));
 }
 
 struct primitive_geometry {
@@ -2458,6 +2326,12 @@ bool renderer::init(SDL_Window* window) {
         return false;
     }
 
+    const std::string world_marker_vert = asset_path("shaders/world_marker.vert");
+    const std::string world_marker_frag = asset_path("shaders/world_marker.frag");
+    if (!world_marker_renderer_.init(world_marker_vert.c_str(), world_marker_frag.c_str())) {
+        return false;
+    }
+
     // Optional: profiling still works fully on the CPU side if this fails.
     gpu_timers_.init();
 
@@ -2467,6 +2341,7 @@ bool renderer::init(SDL_Window* window) {
 void renderer::shutdown() {
     gpu_timers_.shutdown();
     tree_renderer_.shutdown();
+    world_marker_renderer_.shutdown();
     terrain_shader_.shutdown();
     ball_shader_.shutdown();
     crt_shader_.shutdown();
@@ -2529,16 +2404,6 @@ void renderer::shutdown() {
     if (flight_path_vao_ != 0) {
         glDeleteVertexArrays(1, &flight_path_vao_);
         flight_path_vao_ = 0;
-    }
-
-    if (marker_vbo_ != 0) {
-        glDeleteBuffers(1, &marker_vbo_);
-        marker_vbo_ = 0;
-    }
-
-    if (marker_vao_ != 0) {
-        glDeleteVertexArrays(1, &marker_vao_);
-        marker_vao_ = 0;
     }
 
     if (cylinder_vbo_ != 0) {
@@ -2778,21 +2643,6 @@ bool renderer::init_geometry() {
                           reinterpret_cast<void*>(offsetof(render_terrain_vertex, color)));
     glBindVertexArray(0);
 
-    const std::vector<float> marker_vertices = make_disc_vertices(18);
-    marker_vertex_count_ = static_cast<int>(marker_vertices.size() / 3);
-
-    glGenVertexArrays(1, &marker_vao_);
-    glGenBuffers(1, &marker_vbo_);
-    glBindVertexArray(marker_vao_);
-    glBindBuffer(GL_ARRAY_BUFFER, marker_vbo_);
-    glBufferData(GL_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(marker_vertices.size() * sizeof(float)),
-                 marker_vertices.data(),
-                 GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), reinterpret_cast<void*>(0));
-    glBindVertexArray(0);
-
     const std::vector<float> cylinder_vertices = make_cylinder_vertices(8);
     cylinder_vertex_count_ = static_cast<int>(cylinder_vertices.size() / 6);
 
@@ -3006,82 +2856,25 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     draw_emote_world_model(terrain_shader_, view, proj, data, primitives);
     glBindVertexArray(0);
 
-    const auto draw_ground_marker = [&](const glm::vec3& position, const float scale, const glm::vec3& color) {
-        const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1.0f),
-                                                          position + glm::vec3(0.0f, 0.01f, 0.0f)),
-                                           glm::vec3(scale, 1.0f, scale));
-        set_terrain_draw_state(terrain_shader_, model, view, proj, color, false);
-        glBindVertexArray(marker_vao_);
-        draw_arrays(terrain_shader_, GL_TRIANGLES, 0, marker_vertex_count_);
-        glBindVertexArray(0);
-    };
-
-    const auto draw_pin_marker = [&](const glm::vec3& position) {
-        const float cup_scale = std::max(data.cup_visual_radius_meters * 2.0f, data.cup_radius * 2.0f);
-        const glm::mat4 cup_model = glm::scale(glm::translate(glm::mat4(1.0f),
-                                                              position + glm::vec3(0.0f, 0.09f, 0.0f)),
-                                               glm::vec3(cup_scale, 1.0f, cup_scale));
-        set_terrain_draw_state(terrain_shader_, cup_model, view, proj, glm::vec3(0.03f, 0.03f, 0.035f), false);
-
-        glDepthMask(GL_FALSE);
-        glBindVertexArray(marker_vao_);
-        draw_arrays(terrain_shader_, GL_TRIANGLES, 0, marker_vertex_count_);
-        glBindVertexArray(0);
-        glDepthMask(GL_TRUE);
-
-        glBindVertexArray(screen_vao_);
-        const float pin_height = std::max(0.1f, data.pin_visual_height_meters);
-        const glm::vec3 pin_base = position + glm::vec3(0.0f, pin_height * 0.5f, 0.0f);
-        const glm::mat4 pin_pole = panel_model(pin_base, 0.0f, glm::vec3(0.045f, pin_height * 0.5f, 1.0f));
-        const glm::mat4 pin_pole_cross = panel_model(pin_base, 90.0f, glm::vec3(0.045f, pin_height * 0.5f, 1.0f));
-        set_terrain_draw_state(terrain_shader_, pin_pole, view, proj, glm::vec3(0.95f, 0.90f, 0.68f), false);
-        draw_arrays(terrain_shader_, GL_TRIANGLES, 0, 6);
-        set_terrain_draw_state(terrain_shader_, pin_pole_cross, view, proj, glm::vec3(0.95f, 0.90f, 0.68f), false);
-        draw_arrays(terrain_shader_, GL_TRIANGLES, 0, 6);
-
-        const glm::vec3 flag_center = position + glm::vec3(0.34f, pin_height * 0.86f, 0.0f);
-        const glm::mat4 flag_panel = panel_model(flag_center, 0.0f, glm::vec3(0.36f, 0.24f, 1.0f));
-        const glm::mat4 flag_panel_cross = panel_model(flag_center, 90.0f, glm::vec3(0.36f, 0.24f, 1.0f));
-        set_terrain_draw_state(terrain_shader_, flag_panel, view, proj, glm::vec3(0.96f, 0.78f, 0.20f), false);
-        draw_arrays(terrain_shader_, GL_TRIANGLES, 0, 6);
-        set_terrain_draw_state(terrain_shader_, flag_panel_cross, view, proj, glm::vec3(0.96f, 0.78f, 0.20f), false);
-        draw_arrays(terrain_shader_, GL_TRIANGLES, 0, 6);
-        glBindVertexArray(0);
-    };
-
-    if (data.show_primary_hole_markers) {
-        draw_ground_marker(data.tee_position, 1.8f, glm::vec3(0.45f, 0.30f, 0.16f));
-        draw_pin_marker(data.pin_position);
-    }
-    for (const glm::vec3& position : data.start_markers) {
-        draw_ground_marker(position, 2.2f, glm::vec3(0.82f, 0.68f, 0.28f));
-    }
-    for (const glm::vec3& position : data.tee_markers) {
-        draw_ground_marker(position, 1.45f, glm::vec3(0.45f, 0.30f, 0.16f));
-    }
-    for (const glm::vec3& position : data.pin_markers) {
-        draw_pin_marker(position);
-    }
-
-    if (data.show_aim_indicator && !data.aim_arc_points.empty()) {
-        glBindVertexArray(marker_vao_);
-        for (std::size_t i = 0; i < data.aim_arc_points.size(); ++i) {
-            const float scale = 0.35f + static_cast<float>(i % 3) * 0.04f;
-            const glm::mat4 arc_model = glm::scale(glm::translate(glm::mat4(1.0f), data.aim_arc_points[i] + glm::vec3(0.0f, 0.05f, 0.0f)),
-                                                   glm::vec3(scale, 1.0f, scale));
-            set_terrain_draw_state(terrain_shader_, arc_model, view, proj, glm::vec3(0.95f, 0.78f, 0.22f), false);
-            draw_arrays(terrain_shader_, GL_TRIANGLES, 0, marker_vertex_count_);
-        }
-        glBindVertexArray(0);
-    }
-
-    if (data.shot_addressing || data.swing_timing) {
-        terrain_shader_.use();
-        terrain_shader_.set_vec3("u_light_dir", glm::normalize(glm::vec3(-0.35f, 0.80f, 0.42f)));
-        glBindVertexArray(screen_vao_);
-        draw_swing_club(terrain_shader_, view, proj, data);
-        glBindVertexArray(0);
-    }
+    world_marker_scene markers;
+    markers.show_primary_hole_markers = data.show_primary_hole_markers;
+    markers.tee_position = data.tee_position;
+    markers.pin_position = data.pin_position;
+    markers.start_markers = &data.start_markers;
+    markers.tee_markers = &data.tee_markers;
+    markers.pin_markers = &data.pin_markers;
+    markers.cup_radius = data.cup_radius;
+    markers.cup_visual_radius_meters = data.cup_visual_radius_meters;
+    markers.pin_visual_height_meters = data.pin_visual_height_meters;
+    markers.show_aim_indicator = data.show_aim_indicator;
+    markers.aim_arc_points = &data.aim_arc_points;
+    markers.show_swing_club = data.shot_addressing || data.swing_timing;
+    markers.ball_position = data.ball_position;
+    markers.ball_visual_radius_meters = data.ball_visual_radius_meters;
+    markers.aim_angle = data.aim_angle;
+    markers.swing_power = data.swing_power;
+    build_world_marker_batch(world_marker_batch_, markers);
+    world_marker_renderer_.draw(world_marker_batch_, proj * view, profile);
 
     if (data.show_flight_path && data.flight_path_points.size() > 1 && flight_path_vao_ != 0) {
         std::vector<render_terrain_vertex> path_vertices;

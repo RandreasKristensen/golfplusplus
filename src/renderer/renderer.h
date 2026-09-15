@@ -18,6 +18,8 @@
 #include "renderer/render_tree.h"
 #include "renderer/shader.h"
 #include "renderer/tree_renderer.h"
+#include "renderer/world_marker_batch.h"
+#include "renderer/world_marker_renderer.h"
 
 struct controls_overlay_state {
     bool visible = true;
@@ -179,6 +181,9 @@ private:
     shader_program ball_shader_;
     shader_program crt_shader_;
     tree_renderer tree_renderer_;
+    world_marker_renderer world_marker_renderer_;
+    // Rebuilt every frame; kept as a member so its vectors keep their capacity.
+    world_marker_batch world_marker_batch_;
 
     unsigned int ground_vao_ = 0;
     unsigned int ground_vbo_ = 0;
@@ -192,8 +197,6 @@ private:
     unsigned int ball_vbo_ = 0;
     unsigned int flight_path_vao_ = 0;
     unsigned int flight_path_vbo_ = 0;
-    unsigned int marker_vao_ = 0;
-    unsigned int marker_vbo_ = 0;
     unsigned int cylinder_vao_ = 0;
     unsigned int cylinder_vbo_ = 0;
     unsigned int cone_vao_ = 0;
@@ -201,7 +204,6 @@ private:
     unsigned int screen_vao_ = 0;
     unsigned int screen_vbo_ = 0;
     int ball_vertex_count_ = 0;
-    int marker_vertex_count_ = 0;
     int cylinder_vertex_count_ = 0;
     int cone_vertex_count_ = 0;
     int terrain_mesh_index_count_ = 0;

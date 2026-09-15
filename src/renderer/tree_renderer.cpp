@@ -8,6 +8,7 @@
 #include <type_traits>
 
 #include "core/gl_loader.h"
+#include "renderer/gl_proc.h"
 
 namespace {
 // Instancing entry points are core since GL 3.1/3.3 but are not part of the
@@ -23,10 +24,6 @@ constexpr GLuint instance_scale_location = 4;
 // Same flat colors the per-tree draws used.
 const glm::vec3 trunk_color(0.31f, 0.20f, 0.11f);
 const glm::vec3 leaf_color(0.06f, 0.24f, 0.11f);
-
-void* load_proc(const char* name) {
-    return reinterpret_cast<void*>(SDL_GL_GetProcAddress(name));
-}
 }
 
 // The instance buffer is uploaded as raw floats: offset.xyz then scale.xyz.
@@ -40,8 +37,8 @@ bool tree_renderer::init(const char* vertex_path,
                          const mesh_source leaf_mesh) {
     shutdown();
 
-    vertex_attrib_divisor_ = load_proc("glVertexAttribDivisor");
-    draw_arrays_instanced_ = load_proc("glDrawArraysInstanced");
+    vertex_attrib_divisor_ = load_gl_proc("glVertexAttribDivisor");
+    draw_arrays_instanced_ = load_gl_proc("glDrawArraysInstanced");
     if (vertex_attrib_divisor_ == nullptr || draw_arrays_instanced_ == nullptr) {
         SDL_Log("Instanced rendering entry points unavailable; tree rendering requires OpenGL 3.3.");
         shutdown();
