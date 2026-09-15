@@ -140,7 +140,7 @@ float terrain_height_at(const game_tuning& tuning, const glm::vec3& position, fr
     return terrain_sample_at(tuning, position, profile).point.y;
 }
 
-std::vector<tree_collision_body> anchored_tree_bodies(const game_tuning& tuning, frame_profile* profile = nullptr) {
+std::vector<tree_collision_body> anchored_tree_bodies(const game_tuning& tuning, frame_profile* profile) {
     std::vector<tree_collision_body> trees;
     trees.reserve(tuning.course.trees.size());
     for (const tree_instance& tree : tuning.course.trees) {
@@ -155,8 +155,25 @@ std::vector<tree_collision_body> anchored_tree_bodies(const game_tuning& tuning,
     return trees;
 }
 
-glm::vec3 pin_anchor_position(const game_tuning& tuning) {
-    return terrain_anchor_position(tuning, tuning.course.pin_position);
+enum class hub_marker_kind {
+    tee,
+    pin,
+    start
+};
+
+std::vector<glm::vec3> anchored_hub_marker_positions(const game_tuning& tuning,
+                                                     const std::vector<course_hub_hole_marker>& markers,
+                                                     const hub_marker_kind kind,
+                                                     frame_profile* profile) {
+    std::vector<glm::vec3> positions;
+    positions.reserve(markers.size());
+    for (const course_hub_hole_marker& marker : markers) {
+        const glm::vec3& authored = kind == hub_marker_kind::tee
+            ? marker.tee_position
+            : (kind == hub_marker_kind::pin ? marker.pin_position : marker.start_position);
+        positions.push_back(terrain_anchor_position(tuning, authored, profile));
+    }
+    return positions;
 }
 
 float effective_cup_radius(const game_tuning& tuning) {
@@ -315,10 +332,6 @@ bool apply_course_world_to_tuning(game_state& state) {
     return true;
 }
 
-void mark_terrain_render_dirty(game_state& state) {
-    ++state.terrain_render_revision;
-}
-
 bool starter_club_id(const std::string& club_id) {
     return club_id == "putter" || club_id == "pitching_wedge" || club_id == "seven_iron";
 }
@@ -377,7 +390,7 @@ club_stats apply_cigarette_effect(const club_stats& base, const cigarette_effect
 
 void sink_ball_in_cup(game_state& state) {
     push_audio_event(state, audio_event_type::ball_cup);
-    const glm::vec3 pin_anchor = pin_anchor_position(state.tuning);
+    const glm::vec3 pin_anchor = pin_anchor_position(state);
     state.ball.position = pin_anchor - glm::vec3(0.0f, state.ball.radius * 2.0f, 0.0f);
     state.ball.velocity = glm::vec3(0.0f);
     state.ball.spin = glm::vec3(0.0f);
@@ -391,7 +404,7 @@ bool complete_if_ball_reached_cup(game_state& state, const glm::vec3& previous_b
         return false;
     }
 
-    const glm::vec3 pin_anchor = pin_anchor_position(state.tuning);
+    const glm::vec3 pin_anchor = pin_anchor_position(state);
     if (!path_intersects_cup(previous_ball_position,
                              state.ball.position,
                              pin_anchor,
@@ -408,7 +421,7 @@ bool complete_if_ball_reached_cup(game_state& state, const glm::vec3& previous_b
 void update_rangefinder_state(game_state& state, const input_state& input) {
     state.rangefinder_active = rangefinder_unlocked(state.save) && rangefinder_should_show(state.mode, input);
     state.rangefinder_distance_meters = compute_rangefinder_distance_meters(state.player.position,
-                                                                            pin_anchor_position(state.tuning),
+                                                                            pin_anchor_position(state),
                                                                             state.tuning.scale.meters_per_world_unit);
     state.rangefinder_distance_label = format_rangefinder_distance(state.rangefinder_distance_meters);
 }
@@ -860,9 +873,10 @@ void step_ball(game_state& state, const float dt, frame_profile* profile) {
         push_ball_land_audio_event(state, terrain.material);
     }
 
+    refresh_static_anchor_cache(state, profile);
     const ball_state before_tree_collision = state.ball;
     state.ball = resolve_tree_collisions(state.ball,
-                                         anchored_tree_bodies(state.tuning, profile),
+                                         state.static_anchors.tree_bodies,
                                          state.tuning.tree_restitution,
                                          state.tuning.tree_friction);
     if (glm::length(state.ball.velocity - before_tree_collision.velocity) > 0.01f ||
@@ -891,7 +905,7 @@ void reset_transient_hole_state(game_state& state) {
     state.cart_drive_meter_remainder = 0.0f;
     state.cart_drift_meter_remainder = 0.0f;
     clear_flight_path(state);
-    state.aim_angle = aim_angle_towards(state.ball.position, pin_anchor_position(state.tuning));
+    state.aim_angle = aim_angle_towards(state.ball.position, pin_anchor_position(state));
     place_player_near_ball(state);
     input_state input;
     update_walk_overlays(state, input);
@@ -942,6 +956,48 @@ void return_to_hub(game_state& state, const glm::vec3& return_position) {
 
 game_state make_initial_game_state() {
     return make_initial_game_state(resolve_asset_root(""));
+}
+
+static_anchor_cache build_static_anchor_cache(const game_tuning& tuning,
+                                              const std::vector<course_hub_hole_marker>& hub_markers,
+                                              const std::uint64_t revision,
+                                              frame_profile* profile) {
+    static_anchor_cache cache;
+    cache.valid = true;
+    cache.revision = revision;
+    cache.tee_anchor = terrain_anchor_position(tuning, tuning.course.tee_position, profile);
+    cache.pin_anchor = terrain_anchor_position(tuning, tuning.course.pin_position, profile);
+    cache.tree_bodies = anchored_tree_bodies(tuning, profile);
+    cache.hub_tee_markers = anchored_hub_marker_positions(tuning, hub_markers, hub_marker_kind::tee, profile);
+    cache.hub_pin_markers = anchored_hub_marker_positions(tuning, hub_markers, hub_marker_kind::pin, profile);
+    cache.hub_start_markers = anchored_hub_marker_positions(tuning, hub_markers, hub_marker_kind::start, profile);
+    return cache;
+}
+
+bool static_anchor_cache_is_current(const game_state& state) {
+    return state.static_anchors.valid && state.static_anchors.revision == state.terrain_render_revision;
+}
+
+void refresh_static_anchor_cache(game_state& state, frame_profile* profile) {
+    if (static_anchor_cache_is_current(state)) {
+        return;
+    }
+    state.static_anchors = build_static_anchor_cache(state.tuning,
+                                                     state.hub.hole_markers,
+                                                     state.terrain_render_revision,
+                                                     profile);
+}
+
+void mark_terrain_render_dirty(game_state& state) {
+    ++state.terrain_render_revision;
+    refresh_static_anchor_cache(state);
+}
+
+glm::vec3 pin_anchor_position(const game_state& state) {
+    if (static_anchor_cache_is_current(state)) {
+        return state.static_anchors.pin_anchor;
+    }
+    return terrain_anchor_position(state.tuning, state.tuning.course.pin_position);
 }
 
 void refresh_unlocked_clubs(game_state& state) {
@@ -1070,6 +1126,8 @@ bool start_game_course(game_state& state, const course_definition& course) {
     }
 
     if (!load_hole_runtime(state.tuning, course, 0, state.asset_root)) {
+        // state.hub was cleared above; invalidate so cached hub markers match it.
+        mark_terrain_render_dirty(state);
         return false;
     }
     mark_terrain_render_dirty(state);
@@ -1136,7 +1194,7 @@ bool complete_current_hole(game_state& state) {
 }
 
 bool ball_is_in_cup(const game_state& state) {
-    const glm::vec3 pin_anchor = pin_anchor_position(state.tuning);
+    const glm::vec3 pin_anchor = pin_anchor_position(state);
     const glm::vec3 delta = state.ball.position - pin_anchor;
     const glm::vec3 horizontal_delta(delta.x, 0.0f, delta.z);
     return glm::length(horizontal_delta) <= effective_cup_radius(state.tuning);
@@ -1144,6 +1202,7 @@ bool ball_is_in_cup(const game_state& state) {
 
 void update_game(game_state& state, const input_state& input, const float dt, frame_profile* profile) {
     state.audio_events.clear();
+    refresh_static_anchor_cache(state, profile);
     const float clamped_dt = std::max(0.0f, std::min(dt, 0.05f));
     update_xp_drops(state, clamped_dt);
     if (state.round.finished) {
