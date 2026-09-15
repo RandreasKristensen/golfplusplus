@@ -3,6 +3,7 @@
 #include <SDL.h>
 
 #include "core/gl_loader.h"
+#include "renderer/gl_proc.h"
 
 #ifndef GL_TIME_ELAPSED
 #define GL_TIME_ELAPSED 0x88BF
@@ -21,21 +22,17 @@ using begin_query_fn = void (APIENTRY*)(GLenum, GLuint);
 using end_query_fn = void (APIENTRY*)(GLenum);
 using get_query_object_uiv_fn = void (APIENTRY*)(GLuint, GLenum, GLuint*);
 using get_query_object_ui64v_fn = void (APIENTRY*)(GLuint, GLenum, GLuint64*);
-
-void* load_proc(const char* name) {
-    return reinterpret_cast<void*>(SDL_GL_GetProcAddress(name));
-}
 }
 
 bool gl_timer_pool::init() {
     shutdown();
 
-    gen_queries_ = load_proc("glGenQueries");
-    delete_queries_ = load_proc("glDeleteQueries");
-    begin_query_ = load_proc("glBeginQuery");
-    end_query_ = load_proc("glEndQuery");
-    get_query_object_uiv_ = load_proc("glGetQueryObjectuiv");
-    get_query_object_ui64v_ = load_proc("glGetQueryObjectui64v");
+    gen_queries_ = load_gl_proc("glGenQueries");
+    delete_queries_ = load_gl_proc("glDeleteQueries");
+    begin_query_ = load_gl_proc("glBeginQuery");
+    end_query_ = load_gl_proc("glEndQuery");
+    get_query_object_uiv_ = load_gl_proc("glGetQueryObjectuiv");
+    get_query_object_ui64v_ = load_gl_proc("glGetQueryObjectui64v");
 
     if (gen_queries_ == nullptr || delete_queries_ == nullptr || begin_query_ == nullptr ||
         end_query_ == nullptr || get_query_object_uiv_ == nullptr || get_query_object_ui64v_ == nullptr) {

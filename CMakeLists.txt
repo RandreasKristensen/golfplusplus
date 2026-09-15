@@ -20,6 +20,8 @@ set(VCR_GOLF_SOURCES
     src/renderer/overlay_pass.cpp
     src/renderer/renderer.cpp
     src/renderer/tree_renderer.cpp
+    src/renderer/world_marker_batch.cpp
+    src/renderer/world_marker_renderer.cpp
 )
 
 add_executable(golfpp ${VCR_GOLF_SOURCES})
@@ -169,9 +171,11 @@ if (VCR_GOLF_BUILD_TESTS)
         tests/game_tests.cpp
         tests/profiling_tests.cpp
         tests/shader_tests.cpp
+        tests/world_marker_tests.cpp
         tests/audio_manifest_tests.cpp
         tests/overlay_batch_tests.cpp
         src/audio/audio_manifest.cpp
+        src/renderer/world_marker_batch.cpp
     )
     set_target_properties(golfpp-tests PROPERTIES OUTPUT_NAME "golf++-tests")
     target_link_libraries(golfpp-tests PRIVATE vcr-golf-physics vcr-golf-game vcr-golf-profiling)
