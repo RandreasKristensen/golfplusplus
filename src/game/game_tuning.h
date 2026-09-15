@@ -6,6 +6,7 @@
 #include "game/hole_data.h"
 #include "physics/physics_tuning.h"
 #include "physics/terrain.h"
+#include "profiling/profiling.h"
 
 #include <cstdint>
 #include <string>
@@ -99,8 +100,12 @@ struct game_tuning {
 std::vector<club_definition> fallback_club_definitions();
 game_tuning default_game_tuning();
 game_tuning default_game_tuning(const std::string& asset_root);
-glm::vec3 terrain_anchor_position(const game_tuning& tuning, const glm::vec3& authored_position);
-glm::vec3 tree_base_position(const game_tuning& tuning, const tree_instance& tree);
+glm::vec3 terrain_anchor_position(const game_tuning& tuning,
+                                  const glm::vec3& authored_position,
+                                  frame_profile* profile = nullptr);
+glm::vec3 tree_base_position(const game_tuning& tuning,
+                             const tree_instance& tree,
+                             frame_profile* profile = nullptr);
 glm::vec3 course_world_hole_translation(const hole_data& hole, const course_world_hole_start& start);
 glm::vec3 course_world_hole_point(const hole_data& hole, const course_world_hole_start& start, const glm::vec3& local_point);
 terrain_mesh translate_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& translation);

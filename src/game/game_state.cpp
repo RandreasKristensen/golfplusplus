@@ -116,26 +116,36 @@ void emit_xp_drop(game_state& state, const std::string& skill_id, const int xp) 
     state.xp_drops.push_back(drop);
 }
 
-float terrain_height_at(const game_tuning& tuning, const glm::vec3& position) {
-    return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y).point.y;
-}
-
-terrain_sample terrain_sample_at(const game_tuning& tuning, const glm::vec3& position) {
-    return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y);
+terrain_sample terrain_sample_at(const game_tuning& tuning,
+                                 const glm::vec3& position,
+                                 frame_profile* profile = nullptr) {
+    const terrain_sample sample = sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y);
+    record_terrain_sample(profile, sample.triangles_tested);
+    return sample;
 }
 
 terrain_sample terrain_sample_at(const game_tuning& tuning,
                                  const glm::vec3& position,
-                                 const terrain_sample* previous_sample) {
-    return sample_terrain_mesh(tuning.terrain_mesh_data, position, tuning.ground_y, previous_sample);
+                                 const terrain_sample* previous_sample,
+                                 frame_profile* profile = nullptr) {
+    const terrain_sample sample = sample_terrain_mesh(tuning.terrain_mesh_data,
+                                                     position,
+                                                     tuning.ground_y,
+                                                     previous_sample);
+    record_terrain_sample(profile, sample.triangles_tested);
+    return sample;
 }
 
-std::vector<tree_collision_body> anchored_tree_bodies(const game_tuning& tuning) {
+float terrain_height_at(const game_tuning& tuning, const glm::vec3& position, frame_profile* profile = nullptr) {
+    return terrain_sample_at(tuning, position, profile).point.y;
+}
+
+std::vector<tree_collision_body> anchored_tree_bodies(const game_tuning& tuning, frame_profile* profile = nullptr) {
     std::vector<tree_collision_body> trees;
     trees.reserve(tuning.course.trees.size());
     for (const tree_instance& tree : tuning.course.trees) {
         tree_collision_body body;
-        body.base = tree_base_position(tuning, tree);
+        body.base = tree_base_position(tuning, tree, profile);
         body.trunk_radius = tree.trunk_radius;
         body.trunk_height = tree.trunk_height;
         body.leaf_radius = tree.leaf_radius;
@@ -476,8 +486,11 @@ void update_walk_overlays(game_state& state, const input_state& input) {
     update_skills_panel_state(state, input);
 }
 
-glm::vec3 ball_rest_position(const game_tuning& tuning, const glm::vec3& position, const float radius) {
-    const terrain_sample terrain = terrain_sample_at(tuning, position);
+glm::vec3 ball_rest_position(const game_tuning& tuning,
+                             const glm::vec3& position,
+                             const float radius,
+                             frame_profile* profile = nullptr) {
+    const terrain_sample terrain = terrain_sample_at(tuning, position, profile);
     const glm::vec3 normal = glm::length(terrain.normal) > 0.00001f
         ? glm::normalize(terrain.normal)
         : glm::vec3(0.0f, 1.0f, 0.0f);
@@ -491,11 +504,11 @@ float ball_support_distance(const ball_state& ball, const terrain_sample& terrai
     return glm::dot(ball.position - terrain.point, normal);
 }
 
-glm::vec3 address_player_position(const game_state& state) {
+glm::vec3 address_player_position(const game_state& state, frame_profile* profile = nullptr) {
     const glm::vec3 forward = aim_direction(state.aim_angle);
     const glm::vec3 left = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
     glm::vec3 position = state.ball.position + left * state.tuning.player_stand_off_distance - forward * 0.4f;
-    position.y = terrain_height_at(state.tuning, position);
+    position.y = terrain_height_at(state.tuning, position, profile);
     return position;
 }
 
@@ -556,10 +569,10 @@ club_stats effective_selected_club_stats(const game_state& state) {
     return apply_cigarette_effect(selected_club_stats(state), state.cigarette_effect);
 }
 
-void place_player_near_ball(game_state& state) {
+void place_player_near_ball(game_state& state, frame_profile* profile = nullptr) {
     const glm::vec3 forward = aim_direction(state.aim_angle);
     state.player.position = state.ball.position - forward * state.tuning.player_stand_off_distance;
-    state.player.position.y = terrain_height_at(state.tuning, state.player.position);
+    state.player.position.y = terrain_height_at(state.tuning, state.player.position, profile);
     state.player.yaw = state.aim_angle;
     state.cart.yaw = state.player.yaw;
 }
@@ -583,7 +596,7 @@ void exit_cart_mode(game_state& state) {
     state.cart.yaw = state.player.yaw;
 }
 
-void update_cart(game_state& state, const input_state& input, const float dt) {
+void update_cart(game_state& state, const input_state& input, const float dt, frame_profile* profile) {
     if (!input.left_shift.is_down) {
         exit_cart_mode(state);
         return;
@@ -623,7 +636,7 @@ void update_cart(game_state& state, const input_state& input, const float dt) {
 
     const glm::vec3 forward = aim_direction(state.cart.yaw);
     state.player.position += forward * state.cart.velocity * dt;
-    state.player.position.y = terrain_height_at(state.tuning, state.player.position);
+    state.player.position.y = terrain_height_at(state.tuning, state.player.position, profile);
     state.player.yaw = state.cart.yaw;
 
     const glm::vec3 moved = state.player.position - position_before;
@@ -700,9 +713,9 @@ void update_swing(game_state& state, const input_state& input, const float dt) {
     launch_ball(state);
 }
 
-void update_walking(game_state& state, const input_state& input, const float dt) {
+void update_walking(game_state& state, const input_state& input, const float dt, frame_profile* profile) {
     if (cart_unlocked(state.save) && (input.left_shift.is_down || state.cart.active)) {
-        update_cart(state, input, dt);
+        update_cart(state, input, dt, profile);
         return;
     }
 
@@ -725,7 +738,7 @@ void update_walking(game_state& state, const input_state& input, const float dt)
         state.player.position -= forward * state.tuning.player_walk_speed * dt;
     }
 
-    state.player.position.y = terrain_height_at(state.tuning, state.player.position);
+    state.player.position.y = terrain_height_at(state.tuning, state.player.position, profile);
 
     const glm::vec3 walk_delta = state.player.position - position_before;
     const glm::vec3 horizontal_delta(walk_delta.x, 0.0f, walk_delta.z);
@@ -762,7 +775,7 @@ void update_walking(game_state& state, const input_state& input, const float dt)
     }
 }
 
-void update_aiming(game_state& state, const input_state& input, const float dt) {
+void update_aiming(game_state& state, const input_state& input, const float dt, frame_profile* profile) {
     if (input.left.is_down) {
         state.aim_angle += state.tuning.aim_turn_rate * dt;
     }
@@ -782,7 +795,7 @@ void update_aiming(game_state& state, const input_state& input, const float dt) 
     }
 
     if (input.space.pressed) {
-        state.player.position = address_player_position(state);
+        state.player.position = address_player_position(state, profile);
         state.mode = game_mode::addressing;
         state.swing = swing_state{};
     }
@@ -800,9 +813,9 @@ void update_addressing(game_state& state, const input_state& input, const float 
     update_swing(state, input, dt);
 }
 
-void step_ball(game_state& state, const float dt) {
+void step_ball(game_state& state, const float dt, frame_profile* profile) {
     if (!ball_is_moving(state.ball, state.tuning)) {
-        const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position);
+        const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position, profile);
         const bool in_water = terrain.material == terrain_material::water;
         const float restitution = in_water ? state.tuning.water_restitution : state.tuning.ground_restitution;
         const float friction = in_water ? state.tuning.water_friction : state.tuning.ground_friction;
@@ -817,7 +830,7 @@ void step_ball(game_state& state, const float dt) {
 
     const club_stats launched_club = selected_club_stats(state);
     const wind_state wind = sample_wind(state.tuning.wind_seed, state.hole_time, state.tuning.wind);
-    const terrain_sample terrain_before = terrain_sample_at(state.tuning, state.ball.position);
+    const terrain_sample terrain_before = terrain_sample_at(state.tuning, state.ball.position, profile);
     const bool was_airborne = ball_support_distance(state.ball, terrain_before) > state.ball.radius + 0.001f;
     const bool water_zone = terrain_before.material == terrain_material::water;
     const float water_depth = std::max(0.0f, state.tuning.zone_tuning.water_depth);
@@ -832,7 +845,7 @@ void step_ball(game_state& state, const float dt) {
     }
 
     state.ball = step(state.ball, wind, dt, physics);
-    const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position, &terrain_before);
+    const terrain_sample terrain = terrain_sample_at(state.tuning, state.ball.position, &terrain_before, profile);
     const bool in_water = terrain.material == terrain_material::water;
     const float restitution = in_water ? state.tuning.water_restitution : state.tuning.ground_restitution;
     const float friction = in_water
@@ -849,7 +862,7 @@ void step_ball(game_state& state, const float dt) {
 
     const ball_state before_tree_collision = state.ball;
     state.ball = resolve_tree_collisions(state.ball,
-                                         anchored_tree_bodies(state.tuning),
+                                         anchored_tree_bodies(state.tuning, profile),
                                          state.tuning.tree_restitution,
                                          state.tuning.tree_friction);
     if (glm::length(state.ball.velocity - before_tree_collision.velocity) > 0.01f ||
@@ -1129,7 +1142,7 @@ bool ball_is_in_cup(const game_state& state) {
     return glm::length(horizontal_delta) <= effective_cup_radius(state.tuning);
 }
 
-void update_game(game_state& state, const input_state& input, const float dt) {
+void update_game(game_state& state, const input_state& input, const float dt, frame_profile* profile) {
     state.audio_events.clear();
     const float clamped_dt = std::max(0.0f, std::min(dt, 0.05f));
     update_xp_drops(state, clamped_dt);
@@ -1156,9 +1169,9 @@ void update_game(game_state& state, const input_state& input, const float dt) {
     }
 
     if (state.mode == game_mode::walking) {
-        update_walking(state, input, clamped_dt);
+        update_walking(state, input, clamped_dt, profile);
     } else if (state.mode == game_mode::aiming) {
-        update_aiming(state, input, clamped_dt);
+        update_aiming(state, input, clamped_dt, profile);
     } else if (state.mode == game_mode::addressing) {
         update_addressing(state, input, clamped_dt);
     }
@@ -1170,7 +1183,7 @@ void update_game(game_state& state, const input_state& input, const float dt) {
     if (state.mode == game_mode::following_shot || ball_is_moving(state.ball, state.tuning)) {
         state.mode = game_mode::following_shot;
         const glm::vec3 previous_ball_position = state.ball.position;
-        step_ball(state, clamped_dt);
+        step_ball(state, clamped_dt, profile);
         append_flight_path_point(state, state.ball.position);
 
         if (complete_if_ball_reached_cup(state, previous_ball_position)) {

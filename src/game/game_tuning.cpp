@@ -80,12 +80,18 @@ void apply_hole_to_tuning(game_tuning& tuning, const hole_data& hole) {
     tuning.ground_y = hole.tee_position.y;
 }
 
-glm::vec3 terrain_anchor_position(const game_tuning& tuning, const glm::vec3& authored_position) {
-    return sample_terrain_anchor(tuning.terrain_mesh_data, authored_position, tuning.ground_y).point;
+glm::vec3 terrain_anchor_position(const game_tuning& tuning,
+                                  const glm::vec3& authored_position,
+                                  frame_profile* profile) {
+    const terrain_sample sample = sample_terrain_anchor(tuning.terrain_mesh_data, authored_position, tuning.ground_y);
+    record_terrain_sample(profile, sample.triangles_tested);
+    return sample.point;
 }
 
-glm::vec3 tree_base_position(const game_tuning& tuning, const tree_instance& tree) {
-    return terrain_anchor_position(tuning, tree.position);
+glm::vec3 tree_base_position(const game_tuning& tuning,
+                             const tree_instance& tree,
+                             frame_profile* profile) {
+    return terrain_anchor_position(tuning, tree.position, profile);
 }
 
 glm::vec3 course_world_hole_translation(const hole_data& hole, const course_world_hole_start& start) {
