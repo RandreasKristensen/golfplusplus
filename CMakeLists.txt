@@ -16,6 +16,7 @@ set(VCR_GOLF_SOURCES
     src/audio/audio_engine.cpp
     src/renderer/shader.cpp
     src/renderer/framebuffer.cpp
+    src/renderer/gl_timer.cpp
     src/renderer/renderer.cpp
 )
 
@@ -117,6 +118,13 @@ file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/assets" VCR_GOLF_ASSETS_DIR)
 target_include_directories(golfpp PRIVATE ${GLM_INCLUDE_DIR})
 target_compile_definitions(golfpp PRIVATE VCR_GOLF_ASSETS_DIR=\"${VCR_GOLF_ASSETS_DIR}\")
 
+add_library(vcr-golf-profiling src/profiling/profiling.cpp)
+target_include_directories(vcr-golf-profiling PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(golfpp PRIVATE vcr-golf-profiling)
+
 add_library(vcr-golf-physics ${VCR_GOLF_PHYSICS_SOURCES})
 target_include_directories(vcr-golf-physics PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -132,7 +140,7 @@ target_include_directories(vcr-golf-game PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor
     ${GLM_INCLUDE_DIR}
 )
-target_link_libraries(vcr-golf-game PUBLIC vcr-golf-physics)
+target_link_libraries(vcr-golf-game PUBLIC vcr-golf-physics vcr-golf-profiling)
 target_compile_definitions(vcr-golf-game PUBLIC VCR_GOLF_ASSETS_DIR=\"${VCR_GOLF_ASSETS_DIR}\")
 
 target_link_libraries(golfpp PRIVATE vcr-golf-game)
@@ -145,11 +153,12 @@ if (VCR_GOLF_BUILD_TESTS)
     add_executable(golfpp-tests
         tests/physics_tests.cpp
         tests/game_tests.cpp
+        tests/profiling_tests.cpp
         tests/audio_manifest_tests.cpp
         src/audio/audio_manifest.cpp
     )
     set_target_properties(golfpp-tests PROPERTIES OUTPUT_NAME "golf++-tests")
-    target_link_libraries(golfpp-tests PRIVATE vcr-golf-physics vcr-golf-game)
+    target_link_libraries(golfpp-tests PRIVATE vcr-golf-physics vcr-golf-game vcr-golf-profiling)
     target_include_directories(golfpp-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_include_directories(golfpp-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 endif()

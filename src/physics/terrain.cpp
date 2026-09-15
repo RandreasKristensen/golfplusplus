@@ -839,8 +839,10 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
     terrain_candidate best_inside;
     terrain_candidate best_edge;
     best_edge.sample.point = query_point;
+    int triangles_tested = 0;
 
     for (std::size_t i = 0; i + 2U < mesh.indices.size(); i += 3U) {
+        ++triangles_tested;
         const terrain_vertex& a = mesh.vertices[mesh.indices[i]];
         const terrain_vertex& b = mesh.vertices[mesh.indices[i + 1U]];
         const terrain_vertex& c = mesh.vertices[mesh.indices[i + 2U]];
@@ -884,6 +886,7 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
     }
 
     if (has_inside_candidate) {
+        best_inside.sample.triangles_tested = triangles_tested;
         return best_inside.sample;
     }
 
@@ -891,11 +894,13 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
         best_edge.sample.has_spline = true;
         best_edge.sample.inside_surface = false;
         best_edge.sample.material = terrain_material::rough;
+        best_edge.sample.triangles_tested = triangles_tested;
         return best_edge.sample;
     }
 
     terrain_sample sample;
     sample.point = query_point;
+    sample.triangles_tested = triangles_tested;
     return sample;
 }
 

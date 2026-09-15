@@ -7,6 +7,7 @@
 #include "game/save_data.h"
 #include "game/swing.h"
 #include "physics/ball_state.h"
+#include "profiling/profiling.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -135,7 +136,7 @@ struct game_state {
 game_state make_initial_game_state();
 game_state make_initial_game_state(const std::string& asset_root);
 void refresh_unlocked_clubs(game_state& state);
-void update_game(game_state& state, const input_state& input, float dt);
+void update_game(game_state& state, const input_state& input, float dt, frame_profile* profile = nullptr);
 void award_skill_xp(game_state& state, const std::string& skill_id, int amount, xp_drop_policy policy = xp_drop_policy::show);
 void update_xp_drops(game_state& state, float dt);
 void retee_ball(game_state& state);

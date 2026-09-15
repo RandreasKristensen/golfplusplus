@@ -11,7 +11,9 @@
 
 #include "game/scorecard.h"
 #include "physics/material_zone.h"
+#include "profiling/profiling.h"
 #include "renderer/framebuffer.h"
+#include "renderer/gl_timer.h"
 #include "renderer/shader.h"
 
 struct render_terrain_vertex {
@@ -161,6 +163,9 @@ struct render_data {
     float beer_emote_elapsed = 0.0f;
     bool show_fps = false;
     std::string fps_label;
+    // Averaged profiling summary rendered by the debug overlay. Only drawn when
+    // show_fps is set, so the normal UI is untouched when FPS display is off.
+    frame_profile profile_summary;
     controls_overlay_state controls;
     render_startup_menu startup_menu;
 };
@@ -168,21 +173,23 @@ struct render_data {
 struct renderer {
     bool init(SDL_Window* window);
     void shutdown();
-    void render(const render_data& data);
+    // `profile` is optional: null disables all profiling work.
+    void render(const render_data& data, frame_profile* profile = nullptr);
 
 private:
     bool init_shaders();
     bool init_geometry();
     bool init_framebuffer();
     bool ensure_framebuffer_size(int screen_width, int screen_height);
-    void render_scene(const glm::mat4& view, const glm::mat4& proj, const render_data& data);
-    void render_overlay(const glm::mat4& view, const glm::mat4& proj, const render_data& data);
-    void render_crt(int screen_width, int screen_height);
-    void upload_terrain_mesh(const render_data& data);
-    void upload_material_overlay_mesh(const render_data& data);
+    void render_scene(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile);
+    void render_overlay(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile);
+    void render_crt(int screen_width, int screen_height, frame_profile* profile);
+    void upload_terrain_mesh(const render_data& data, frame_profile* profile);
+    void upload_material_overlay_mesh(const render_data& data, frame_profile* profile);
 
     SDL_Window* window_ = nullptr;
     framebuffer scene_fbo_;
+    gl_timer_pool gpu_timers_;
     shader_program terrain_shader_;
     shader_program ball_shader_;
     shader_program crt_shader_;

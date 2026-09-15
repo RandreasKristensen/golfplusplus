@@ -121,6 +121,7 @@ void shader_program::set_mat4(const char* name, const glm::mat4& value) const {
     const int location = glGetUniformLocation(program_, name);
     if (location >= 0) {
         glUniformMatrix4fv(location, 1, GL_FALSE, &value[0][0]);
+        record_uniform_set(profile_);
     }
 }
 
@@ -128,6 +129,7 @@ void shader_program::set_vec3(const char* name, const glm::vec3& value) const {
     const int location = glGetUniformLocation(program_, name);
     if (location >= 0) {
         glUniform3fv(location, 1, &value[0]);
+        record_uniform_set(profile_);
     }
 }
 
@@ -135,6 +137,7 @@ void shader_program::set_vec2(const char* name, const glm::vec2& value) const {
     const int location = glGetUniformLocation(program_, name);
     if (location >= 0) {
         glUniform2fv(location, 1, &value[0]);
+        record_uniform_set(profile_);
     }
 }
 
@@ -142,6 +145,7 @@ void shader_program::set_float(const char* name, const float value) const {
     const int location = glGetUniformLocation(program_, name);
     if (location >= 0) {
         glUniform1f(location, value);
+        record_uniform_set(profile_);
     }
 }
 
@@ -149,5 +153,6 @@ void shader_program::set_int(const char* name, int value) const {
     const int location = glGetUniformLocation(program_, name);
     if (location >= 0) {
         glUniform1i(location, value);
+        record_uniform_set(profile_);
     }
 }

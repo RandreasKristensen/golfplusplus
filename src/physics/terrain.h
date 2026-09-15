@@ -49,6 +49,9 @@ struct terrain_sample {
     glm::vec3 barycentric{0.0f};
     float distance_from_center = 0.0f;
     int triangle_index = -1;
+    // Pure output: how many mesh triangles the sample had to test. Callers that
+    // profile accumulate this; physics itself stays free of counters.
+    int triangles_tested = 0;
     terrain_material material = terrain_material::rough;
     bool has_spline = false;
     bool inside_surface = false;

@@ -8,6 +8,7 @@
 #include "game/game_state.h"
 #include "game/hole_data.h"
 #include "game/save_manager.h"
+#include "profiling/profiling.h"
 #include "renderer/renderer.h"
 
 #include <cstdint>
@@ -38,7 +39,8 @@ private:
     void mark_current_save_dirty();
     bool persist_current_save();
     void sync_current_save();
-    void refresh_render_mesh_cache();
+    void refresh_render_mesh_cache(frame_profile* profile);
+    void present_frame(render_data& data, frame_profile* profile);
 
     window window_;
     renderer renderer_;
@@ -56,6 +58,8 @@ private:
     bool confirm_menu_active_ = false;
     int confirm_selection_ = 1;
     bool show_fps_ = false;
+    // Owned here, never global. Handed out as a nullable frame_profile*.
+    profiler profiler_;
     std::uint64_t cached_terrain_revision_ = 0;
     render_static_mesh cached_terrain_mesh_;
     render_static_mesh cached_material_overlay_mesh_;
