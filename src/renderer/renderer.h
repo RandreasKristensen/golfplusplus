@@ -15,7 +15,9 @@
 #include "renderer/framebuffer.h"
 #include "renderer/gl_timer.h"
 #include "renderer/render_mesh.h"
+#include "renderer/render_tree.h"
 #include "renderer/shader.h"
+#include "renderer/tree_renderer.h"
 
 struct controls_overlay_state {
     bool visible = true;
@@ -30,14 +32,6 @@ struct controls_overlay_state {
     bool enter_down = false;
     bool backspace_down = false;
     bool retee_down = false;
-};
-
-struct render_tree {
-    glm::vec3 base = glm::vec3(0.0f);
-    float trunk_radius = 0.35f;
-    float trunk_height = 2.4f;
-    float leaf_radius = 1.6f;
-    float leaf_height = 3.2f;
 };
 
 enum class startup_menu_screen {
@@ -109,6 +103,8 @@ struct render_data {
     std::vector<glm::vec3> aim_arc_points;
     std::vector<glm::vec3> flight_path_points;
     std::vector<render_tree> trees;
+    // Instance data for `trees` is re-uploaded only when this (or the tree count) changes.
+    std::uint64_t trees_revision = 0;
     const render_static_mesh* terrain_mesh = nullptr;
     const render_static_mesh* material_overlay_mesh = nullptr;
     float cup_radius = 0.65f;
@@ -182,6 +178,7 @@ private:
     shader_program terrain_shader_;
     shader_program ball_shader_;
     shader_program crt_shader_;
+    tree_renderer tree_renderer_;
 
     unsigned int ground_vao_ = 0;
     unsigned int ground_vbo_ = 0;

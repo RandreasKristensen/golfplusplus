@@ -2449,6 +2449,15 @@ bool renderer::init(SDL_Window* window) {
         return false;
     }
 
+    const std::string tree_vert = asset_path("shaders/tree_instanced.vert");
+    const std::string tree_frag = asset_path("shaders/terrain.frag");
+    if (!tree_renderer_.init(tree_vert.c_str(),
+                             tree_frag.c_str(),
+                             tree_renderer::mesh_source{cylinder_vbo_, cylinder_vertex_count_},
+                             tree_renderer::mesh_source{cone_vbo_, cone_vertex_count_})) {
+        return false;
+    }
+
     // Optional: profiling still works fully on the CPU side if this fails.
     gpu_timers_.init();
 
@@ -2457,6 +2466,7 @@ bool renderer::init(SDL_Window* window) {
 
 void renderer::shutdown() {
     gpu_timers_.shutdown();
+    tree_renderer_.shutdown();
     terrain_shader_.shutdown();
     ball_shader_.shutdown();
     crt_shader_.shutdown();
@@ -2980,26 +2990,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     gpu_timers_.end();
 
     gpu_timers_.begin(gpu_profile_stage::trees);
-    for (const render_tree& tree : data.trees) {
-        const float trunk_radius = std::max(0.01f, tree.trunk_radius);
-        const float trunk_height = std::max(0.01f, tree.trunk_height);
-        const float leaf_radius = std::max(0.01f, tree.leaf_radius);
-        const float leaf_height = std::max(0.01f, tree.leaf_height);
-
-        const glm::mat4 trunk_model = glm::scale(glm::translate(glm::mat4(1.0f), tree.base),
-                                                 glm::vec3(trunk_radius, trunk_height, trunk_radius));
-        set_terrain_draw_state(terrain_shader_, trunk_model, view, proj, glm::vec3(0.31f, 0.20f, 0.11f), false);
-        glBindVertexArray(cylinder_vao_);
-        draw_arrays(terrain_shader_, GL_TRIANGLES, 0, cylinder_vertex_count_);
-
-        const glm::mat4 leaf_model = glm::scale(glm::translate(glm::mat4(1.0f),
-                                                               tree.base + glm::vec3(0.0f, trunk_height, 0.0f)),
-                                                glm::vec3(leaf_radius, leaf_height, leaf_radius));
-        set_terrain_draw_state(terrain_shader_, leaf_model, view, proj, glm::vec3(0.06f, 0.24f, 0.11f), false);
-        glBindVertexArray(cone_vao_);
-        draw_arrays(terrain_shader_, GL_TRIANGLES, 0, cone_vertex_count_);
-    }
-    glBindVertexArray(0);
+    tree_renderer_.draw(data.trees, data.trees_revision, view, proj, profile);
     gpu_timers_.end();
 
     const primitive_geometry primitives{

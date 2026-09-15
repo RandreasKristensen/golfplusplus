@@ -18,6 +18,7 @@ set(VCR_GOLF_SOURCES
     src/renderer/framebuffer.cpp
     src/renderer/gl_timer.cpp
     src/renderer/renderer.cpp
+    src/renderer/tree_renderer.cpp
 )
 
 add_executable(golfpp ${VCR_GOLF_SOURCES})

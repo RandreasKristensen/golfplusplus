@@ -1,11 +1,17 @@
 #include "doctest.h"
 
 #include "renderer/render_mesh.h"
+#include "renderer/render_tree.h"
 #include "renderer/shader.h"
 
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -172,4 +178,103 @@ TEST_CASE("render mesh min y keeps the old min(0, vertex y) semantics") {
         scanned_min_y = std::min(scanned_min_y, vertex.position.y);
     }
     CHECK(render_mesh_min_y_or_zero(&mesh) == scanned_min_y);
+}
+
+namespace {
+// The model matrices the renderer used when it drew each tree separately.
+glm::mat4 legacy_trunk_model(const render_tree& tree) {
+    const float trunk_radius = std::max(0.01f, tree.trunk_radius);
+    const float trunk_height = std::max(0.01f, tree.trunk_height);
+    return glm::scale(glm::translate(glm::mat4(1.0f), tree.base),
+                      glm::vec3(trunk_radius, trunk_height, trunk_radius));
+}
+
+glm::mat4 legacy_leaf_model(const render_tree& tree) {
+    const float trunk_height = std::max(0.01f, tree.trunk_height);
+    const float leaf_radius = std::max(0.01f, tree.leaf_radius);
+    const float leaf_height = std::max(0.01f, tree.leaf_height);
+    return glm::scale(glm::translate(glm::mat4(1.0f), tree.base + glm::vec3(0.0f, trunk_height, 0.0f)),
+                      glm::vec3(leaf_radius, leaf_height, leaf_radius));
+}
+
+// What tree_instanced.vert computes for a local vertex.
+glm::vec3 instance_world_position(const render_tree_instance& instance, const glm::vec3& local) {
+    return instance.offset + local * instance.scale;
+}
+
+void check_instance_matches_model(const render_tree_instance& instance, const glm::mat4& model) {
+    const glm::mat4 instance_model = glm::scale(glm::translate(glm::mat4(1.0f), instance.offset), instance.scale);
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            CHECK(instance_model[column][row] == model[column][row]);
+        }
+    }
+
+    const std::vector<glm::vec3> local_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(1.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 1.0f, 0.0f),
+        glm::vec3(-0.70710677f, 1.0f, 0.70710677f),
+    };
+    for (const glm::vec3& local : local_points) {
+        const glm::vec4 expected = model * glm::vec4(local, 1.0f);
+        const glm::vec3 actual = instance_world_position(instance, local);
+        CHECK(std::abs(actual.x - expected.x) <= 1e-5f);
+        CHECK(std::abs(actual.y - expected.y) <= 1e-5f);
+        CHECK(std::abs(actual.z - expected.z) <= 1e-5f);
+    }
+}
+}
+
+TEST_CASE("tree instances reproduce the per-tree model matrices") {
+    std::vector<render_tree> trees(4);
+    trees[0].base = glm::vec3(12.5f, 3.25f, -40.0f);
+
+    trees[1].base = glm::vec3(-7.0f, 0.5f, 18.0f);
+    trees[1].trunk_radius = 0.2f;
+    trees[1].trunk_height = 1.75f;
+    trees[1].leaf_radius = 2.4f;
+    trees[1].leaf_height = 4.5f;
+
+    // Degenerate sizes hit the 0.01 clamp.
+    trees[2].base = glm::vec3(100.0f, -2.0f, 3.0f);
+    trees[2].trunk_radius = 0.0f;
+    trees[2].trunk_height = -1.0f;
+    trees[2].leaf_radius = 0.005f;
+    trees[2].leaf_height = 0.0f;
+
+    trees[3].base = glm::vec3(0.0f);
+    trees[3].trunk_radius = 0.01f;
+    trees[3].trunk_height = 0.009f;
+    trees[3].leaf_radius = -3.0f;
+    trees[3].leaf_height = 0.011f;
+
+    const render_tree_instance_batch batch = build_tree_instances(trees);
+    CHECK(batch.trunks.size() == trees.size());
+    CHECK(batch.leaves.size() == trees.size());
+    if (batch.trunks.size() != trees.size() || batch.leaves.size() != trees.size()) {
+        return;
+    }
+
+    for (std::size_t i = 0; i < trees.size(); ++i) {
+        check_instance_matches_model(batch.trunks[i], legacy_trunk_model(trees[i]));
+        check_instance_matches_model(batch.leaves[i], legacy_leaf_model(trees[i]));
+    }
+
+    CHECK(batch.trunks[2].scale == glm::vec3(0.01f, 0.01f, 0.01f));
+    CHECK(batch.leaves[2].scale == glm::vec3(0.01f, 0.01f, 0.01f));
+    CHECK(batch.leaves[2].offset == glm::vec3(100.0f, -1.99f, 3.0f));
+    CHECK(batch.trunks[3].scale == glm::vec3(0.01f, 0.01f, 0.01f));
+    CHECK(batch.leaves[3].scale == glm::vec3(0.01f, 0.011f, 0.01f));
+}
+
+TEST_CASE("tree instances are empty for no trees") {
+    const render_tree_instance_batch batch = build_tree_instances({});
+    CHECK(batch.trunks.empty());
+    CHECK(batch.leaves.empty());
+}
+
+TEST_CASE("tree instance packs into six floats for the instance buffer") {
+    CHECK(sizeof(render_tree_instance) == 6 * sizeof(float));
+    CHECK(offsetof(render_tree_instance, scale) == 3 * sizeof(float));
 }

@@ -287,6 +287,7 @@ render_data make_render_data(const game_state& game,
     data.terrain_mesh = &terrain_mesh;
     data.material_overlay_mesh = &material_overlay_mesh;
     data.trees = make_render_trees(anchors.tree_bodies);
+    data.trees_revision = anchors.revision;
     data.aim_angle = game.aim_angle;
     data.camera_fov_degrees = 60.0f;
     if (game.mode == game_mode::aiming) {
