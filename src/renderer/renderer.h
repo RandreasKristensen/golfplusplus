@@ -14,19 +14,8 @@
 #include "profiling/profiling.h"
 #include "renderer/framebuffer.h"
 #include "renderer/gl_timer.h"
+#include "renderer/render_mesh.h"
 #include "renderer/shader.h"
-
-struct render_terrain_vertex {
-    glm::vec3 position = glm::vec3(0.0f);
-    glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::vec3 color = glm::vec3(0.18f, 0.42f, 0.18f);
-};
-
-struct render_static_mesh {
-    std::vector<render_terrain_vertex> vertices;
-    std::vector<std::uint32_t> indices;
-    std::uint64_t revision = 0;
-};
 
 struct controls_overlay_state {
     bool visible = true;

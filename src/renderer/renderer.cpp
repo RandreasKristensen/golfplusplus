@@ -2054,10 +2054,10 @@ course_map_layout make_course_map_layout(const render_data& data) {
     expand_map_bounds(data.player_position, min_point, max_point);
     expand_map_bounds(data.ball_position, min_point, max_point);
 
-    if (data.terrain_mesh != nullptr) {
-        for (const render_terrain_vertex& vertex : data.terrain_mesh->vertices) {
-            expand_map_bounds(vertex.position, min_point, max_point);
-        }
+    if (data.terrain_mesh != nullptr && data.terrain_mesh->bounds.valid) {
+        // Per-axis min/max of the cached AABB equals expanding by every vertex.
+        expand_map_bounds(data.terrain_mesh->bounds.min, min_point, max_point);
+        expand_map_bounds(data.terrain_mesh->bounds.max, min_point, max_point);
     }
 
     for (const render_tree& tree : data.trees) {
@@ -2949,12 +2949,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     upload_material_overlay_mesh(data, profile);
 
     const float course_scale = std::max(1.0f, data.course_extent / 12.0f);
-    float terrain_min_y = 0.0f;
-    if (data.terrain_mesh != nullptr) {
-        for (const render_terrain_vertex& vertex : data.terrain_mesh->vertices) {
-            terrain_min_y = std::min(terrain_min_y, vertex.position.y);
-        }
-    }
+    const float terrain_min_y = render_mesh_min_y_or_zero(data.terrain_mesh);
     const float background_ground_y = std::min(-0.08f, terrain_min_y - 2.0f);
     const glm::mat4 ground_model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, background_ground_y, 0.0f)),
                                               glm::vec3(course_scale, 1.0f, course_scale));
