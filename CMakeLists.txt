@@ -17,6 +17,7 @@ set(VCR_GOLF_SOURCES
     src/renderer/shader.cpp
     src/renderer/framebuffer.cpp
     src/renderer/gl_timer.cpp
+    src/renderer/overlay_pass.cpp
     src/renderer/renderer.cpp
 )
 
@@ -125,6 +126,18 @@ target_include_directories(vcr-golf-profiling PUBLIC
 
 target_link_libraries(golfpp PRIVATE vcr-golf-profiling)
 
+# GL-free overlay batch builder + bitmap pixel font (unit tested).
+add_library(vcr-golf-overlay
+    src/renderer/overlay_batch.cpp
+    src/renderer/pixel_font.cpp
+)
+target_include_directories(vcr-golf-overlay PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${GLM_INCLUDE_DIR}
+)
+
+target_link_libraries(golfpp PRIVATE vcr-golf-overlay)
+
 add_library(vcr-golf-physics ${VCR_GOLF_PHYSICS_SOURCES})
 target_include_directories(vcr-golf-physics PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -156,10 +169,12 @@ if (VCR_GOLF_BUILD_TESTS)
         tests/profiling_tests.cpp
         tests/shader_tests.cpp
         tests/audio_manifest_tests.cpp
+        tests/overlay_batch_tests.cpp
         src/audio/audio_manifest.cpp
     )
     set_target_properties(golfpp-tests PROPERTIES OUTPUT_NAME "golf++-tests")
     target_link_libraries(golfpp-tests PRIVATE vcr-golf-physics vcr-golf-game vcr-golf-profiling)
+    target_link_libraries(golfpp-tests PRIVATE vcr-golf-overlay)
     target_include_directories(golfpp-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_include_directories(golfpp-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 endif()

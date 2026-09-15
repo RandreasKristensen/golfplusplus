@@ -14,6 +14,7 @@
 #include "profiling/profiling.h"
 #include "renderer/framebuffer.h"
 #include "renderer/gl_timer.h"
+#include "renderer/overlay_pass.h"
 #include "renderer/render_mesh.h"
 #include "renderer/shader.h"
 
@@ -177,6 +178,8 @@ private:
     void upload_material_overlay_mesh(const render_data& data, frame_profile* profile);
 
     SDL_Window* window_ = nullptr;
+    // Batched 2D overlay (HUD, menus, pixel text): one dynamic VBO, one draw.
+    overlay_pass overlay_pass_;
     framebuffer scene_fbo_;
     gl_timer_pool gpu_timers_;
     shader_program terrain_shader_;
