@@ -45,10 +45,6 @@ float terrain_height_at(const game_tuning& tuning, const glm::vec3& position, fr
     return sample.point.y;
 }
 
-glm::vec3 terrain_anchor_at(const game_tuning& tuning, const glm::vec3& anchor, frame_profile* profile = nullptr) {
-    return terrain_anchor_position(tuning, anchor, profile);
-}
-
 glm::vec3 render_color_for_terrain_material(const terrain_material material, const float distance_from_center, const float width) {
     const float half_width = std::max(0.001f, width * 0.5f);
     const float edge_amount = std::max(0.0f, std::min(1.0f, std::abs(distance_from_center) / half_width));
@@ -117,31 +113,17 @@ void append_course_world_overlays(render_static_mesh& mesh, const game_state& ga
     return;
 }
 
-std::vector<glm::vec3> anchored_hub_marker_positions(const game_tuning& tuning,
-                                                     const std::vector<course_hub_hole_marker>& markers,
-                                                     const int marker_kind,
-                                                     frame_profile* profile = nullptr) {
-    std::vector<glm::vec3> positions;
-    positions.reserve(markers.size());
-    for (const course_hub_hole_marker& marker : markers) {
-        const glm::vec3 authored = marker_kind == 0
-            ? marker.tee_position
-            : (marker_kind == 1 ? marker.pin_position : marker.start_position);
-        positions.push_back(terrain_anchor_at(tuning, authored, profile));
-    }
-    return positions;
-}
-
-std::vector<render_tree> make_render_trees(const game_tuning& tuning, frame_profile* profile = nullptr) {
+// Pure field copy from the cached, already terrain-anchored collision bodies.
+std::vector<render_tree> make_render_trees(const std::vector<tree_collision_body>& bodies) {
     std::vector<render_tree> trees;
-    trees.reserve(tuning.course.trees.size());
-    for (const tree_instance& tree : tuning.course.trees) {
+    trees.reserve(bodies.size());
+    for (const tree_collision_body& body : bodies) {
         render_tree render;
-        render.base = tree_base_position(tuning, tree, profile);
-        render.trunk_radius = tree.trunk_radius;
-        render.trunk_height = tree.trunk_height;
-        render.leaf_radius = tree.leaf_radius;
-        render.leaf_height = tree.leaf_height;
+        render.base = body.base;
+        render.trunk_radius = body.trunk_radius;
+        render.trunk_height = body.trunk_height;
+        render.leaf_radius = body.leaf_radius;
+        render.leaf_height = body.leaf_height;
         trees.push_back(render);
     }
     return trees;
@@ -283,8 +265,11 @@ std::vector<render_xp_drop> make_render_xp_drops(const std::vector<xp_drop>& dro
     return rows;
 }
 
+// `anchors` must be current for `game` (see refresh_static_anchor_cache); static
+// objects are read from it so this function does no per-object terrain sampling.
 render_data make_render_data(const game_state& game,
                              const input_state& input,
+                             const static_anchor_cache& anchors,
                              const render_static_mesh& terrain_mesh,
                              const render_static_mesh& material_overlay_mesh,
                              frame_profile* profile = nullptr) {
@@ -292,8 +277,8 @@ render_data make_render_data(const game_state& game,
     data.ball_position = game.ball.position;
     data.player_position = game.player.position;
     data.player_yaw = game.player.yaw;
-    data.tee_position = terrain_anchor_at(game.tuning, game.tuning.course.tee_position, profile);
-    data.pin_position = terrain_anchor_at(game.tuning, game.tuning.course.pin_position, profile);
+    data.tee_position = anchors.tee_anchor;
+    data.pin_position = anchors.pin_anchor;
     data.cup_radius = game.tuning.course.cup_radius;
     data.ball_visual_radius_meters = game.tuning.scale.ball_visual_radius_meters;
     data.cup_visual_radius_meters = game.tuning.scale.cup_visual_radius_meters;
@@ -301,7 +286,7 @@ render_data make_render_data(const game_state& game,
     data.course_extent = game.tuning.course.extent;
     data.terrain_mesh = &terrain_mesh;
     data.material_overlay_mesh = &material_overlay_mesh;
-    data.trees = make_render_trees(game.tuning, profile);
+    data.trees = make_render_trees(anchors.tree_bodies);
     data.aim_angle = game.aim_angle;
     data.camera_fov_degrees = 60.0f;
     if (game.mode == game_mode::aiming) {
@@ -346,9 +331,9 @@ render_data make_render_data(const game_state& game,
 
     if (game.hub.available && game.hub.in_hub) {
         data.show_primary_hole_markers = false;
-        data.tee_markers = anchored_hub_marker_positions(game.tuning, game.hub.hole_markers, 0, profile);
-        data.pin_markers = anchored_hub_marker_positions(game.tuning, game.hub.hole_markers, 1, profile);
-        data.start_markers = anchored_hub_marker_positions(game.tuning, game.hub.hole_markers, 2, profile);
+        data.tee_markers = anchors.hub_tee_markers;
+        data.pin_markers = anchors.hub_pin_markers;
+        data.start_markers = anchors.hub_start_markers;
     }
 
     if (game.mode == game_mode::walking && game.cart.active) {
@@ -927,7 +912,14 @@ void app::run() {
 
     const auto make_frame_render_data = [this](frame_profile* profile) {
         const profile_scope timer(profile, profile_stage::make_render_data);
-        return make_render_data(game_, input_, cached_terrain_mesh_, cached_material_overlay_mesh_, profile);
+        // No-op unless terrain_render_revision changed without a rebuild.
+        refresh_static_anchor_cache(game_, profile);
+        return make_render_data(game_,
+                                input_,
+                                game_.static_anchors,
+                                cached_terrain_mesh_,
+                                cached_material_overlay_mesh_,
+                                profile);
     };
 
     while (running_) {

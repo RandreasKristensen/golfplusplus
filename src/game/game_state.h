@@ -7,6 +7,7 @@
 #include "game/save_data.h"
 #include "game/swing.h"
 #include "physics/ball_state.h"
+#include "physics/tree_collision.h"
 #include "profiling/profiling.h"
 
 #include <cstddef>
@@ -95,6 +96,23 @@ struct audio_event {
     std::string club_id;
 };
 
+// Terrain-anchored positions of static course objects. Transient: never saved,
+// rebuilt only when game_state::terrain_render_revision changes. Every input it
+// reads (tuning.terrain_mesh_data, tuning.ground_y, tuning.course.tee_position,
+// tuning.course.pin_position, tuning.course.trees, hub.hole_markers) is only
+// written by code that bumps the revision afterwards. Code that mutates those
+// inputs directly must bump terrain_render_revision to invalidate this cache.
+struct static_anchor_cache {
+    bool valid = false;
+    std::uint64_t revision = 0;
+    glm::vec3 tee_anchor{0.0f};
+    glm::vec3 pin_anchor{0.0f};
+    std::vector<tree_collision_body> tree_bodies;
+    std::vector<glm::vec3> hub_tee_markers;
+    std::vector<glm::vec3> hub_pin_markers;
+    std::vector<glm::vec3> hub_start_markers;
+};
+
 struct game_state {
     // ball_state.position is the center of the ball; see physics/ball_state.h.
     ball_state ball;
@@ -110,6 +128,7 @@ struct game_state {
     save_data save;
     game_tuning tuning;
     std::uint64_t terrain_render_revision = 0;
+    static_anchor_cache static_anchors;
     std::vector<club_definition> club_catalog;
     game_mode mode = game_mode::walking;
     float aim_angle = 0.0f;
@@ -136,6 +155,17 @@ struct game_state {
 game_state make_initial_game_state();
 game_state make_initial_game_state(const std::string& asset_root);
 void refresh_unlocked_clubs(game_state& state);
+static_anchor_cache build_static_anchor_cache(const game_tuning& tuning,
+                                              const std::vector<course_hub_hole_marker>& hub_markers,
+                                              std::uint64_t revision,
+                                              frame_profile* profile = nullptr);
+bool static_anchor_cache_is_current(const game_state& state);
+// Rebuilds state.static_anchors if it was built for a different terrain_render_revision.
+void refresh_static_anchor_cache(game_state& state, frame_profile* profile = nullptr);
+// Bumps terrain_render_revision and eagerly rebuilds the static anchor cache.
+void mark_terrain_render_dirty(game_state& state);
+// Terrain-anchored pin; served from the cache when current, sampled fresh otherwise.
+glm::vec3 pin_anchor_position(const game_state& state);
 void update_game(game_state& state, const input_state& input, float dt, frame_profile* profile = nullptr);
 void award_skill_xp(game_state& state, const std::string& skill_id, int amount, xp_drop_policy policy = xp_drop_policy::show);
 void update_xp_drops(game_state& state, float dt);

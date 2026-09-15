@@ -14,6 +14,7 @@
 #include "game/scorecard.h"
 #include "game/shop.h"
 #include "physics/terrain.h"
+#include "physics/tree_collision.h"
 #include "quest/quest_engine.h"
 #include "quest/quest_loader.h"
 
@@ -22,6 +23,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -66,6 +69,88 @@ bool near_float(const float a, const float b, const float eps = 0.00001f) {
 void rebuild_cached_terrain_mesh(game_tuning& tuning) {
     tuning.terrain_mesh_data = build_terrain_mesh(tuning.terrain, tuning.course.material_zones, tuning.zone_tuning);
     tuning.terrain_apron_mesh_data = build_outer_rough_apron(tuning.terrain_mesh_data, tuning.terrain.width, 14);
+}
+
+// Tests that edit terrain or course objects on a live game_state must invalidate
+// the static anchor cache the same way production course loads do.
+void rebuild_cached_terrain_mesh(game_state& state) {
+    rebuild_cached_terrain_mesh(state.tuning);
+    ++state.terrain_render_revision;
+}
+
+bool same_vec3(const glm::vec3& a, const glm::vec3& b) {
+    return a.x == b.x && a.y == b.y && a.z == b.z;
+}
+
+bool same_positions(const std::vector<glm::vec3>& a, const std::vector<glm::vec3>& b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        if (!same_vec3(a[i], b[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool same_tree_bodies(const std::vector<tree_collision_body>& a, const std::vector<tree_collision_body>& b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        if (!same_vec3(a[i].base, b[i].base) ||
+            a[i].trunk_radius != b[i].trunk_radius ||
+            a[i].trunk_height != b[i].trunk_height ||
+            a[i].leaf_radius != b[i].leaf_radius ||
+            a[i].leaf_height != b[i].leaf_height) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Compares the cached static anchors against values sampled fresh from the
+// current tuning, so a stale cache after any course/terrain change fails here.
+void check_static_anchor_cache_is_fresh(const game_state& state) {
+    CHECK(static_anchor_cache_is_current(state));
+    const static_anchor_cache& cached = state.static_anchors;
+    CHECK(cached.revision == state.terrain_render_revision);
+
+    CHECK(same_vec3(cached.tee_anchor, terrain_anchor_position(state.tuning, state.tuning.course.tee_position)));
+    CHECK(same_vec3(cached.pin_anchor, terrain_anchor_position(state.tuning, state.tuning.course.pin_position)));
+    CHECK(same_vec3(pin_anchor_position(state), cached.pin_anchor));
+
+    std::vector<tree_collision_body> fresh_trees;
+    for (const tree_instance& tree : state.tuning.course.trees) {
+        tree_collision_body body;
+        body.base = tree_base_position(state.tuning, tree);
+        body.trunk_radius = tree.trunk_radius;
+        body.trunk_height = tree.trunk_height;
+        body.leaf_radius = tree.leaf_radius;
+        body.leaf_height = tree.leaf_height;
+        fresh_trees.push_back(body);
+    }
+    CHECK(same_tree_bodies(cached.tree_bodies, fresh_trees));
+
+    std::vector<glm::vec3> fresh_tee_markers;
+    std::vector<glm::vec3> fresh_pin_markers;
+    std::vector<glm::vec3> fresh_start_markers;
+    for (const course_hub_hole_marker& marker : state.hub.hole_markers) {
+        fresh_tee_markers.push_back(terrain_anchor_position(state.tuning, marker.tee_position));
+        fresh_pin_markers.push_back(terrain_anchor_position(state.tuning, marker.pin_position));
+        fresh_start_markers.push_back(terrain_anchor_position(state.tuning, marker.start_position));
+    }
+    CHECK(same_positions(cached.hub_tee_markers, fresh_tee_markers));
+    CHECK(same_positions(cached.hub_pin_markers, fresh_pin_markers));
+    CHECK(same_positions(cached.hub_start_markers, fresh_start_markers));
+
+    const static_anchor_cache rebuilt = build_static_anchor_cache(state.tuning,
+                                                                  state.hub.hole_markers,
+                                                                  state.terrain_render_revision);
+    CHECK(same_vec3(rebuilt.tee_anchor, cached.tee_anchor));
+    CHECK(same_vec3(rebuilt.pin_anchor, cached.pin_anchor));
+    CHECK(same_tree_bodies(rebuilt.tree_bodies, cached.tree_bodies));
 }
 
 glm::vec3 terrain_clamped_tee(const game_tuning& tuning) {
@@ -1861,7 +1946,7 @@ TEST_CASE("walking height uses cached terrain mesh instead of flat ground") {
     };
     state.tuning.terrain.width = 8.0f;
     state.tuning.terrain.sample_count = 16;
-    rebuild_cached_terrain_mesh(state.tuning);
+    rebuild_cached_terrain_mesh(state);
     state.player.position = glm::vec3(0.0f, 0.0f, 5.0f);
 
     input_state input;
@@ -1888,7 +1973,7 @@ TEST_CASE("game update collides ball against spline terrain height") {
     };
     state.tuning.terrain.width = 8.0f;
     state.tuning.terrain.sample_count = 16;
-    rebuild_cached_terrain_mesh(state.tuning);
+    rebuild_cached_terrain_mesh(state);
     state.ball.position = glm::vec3(0.0f, 4.05f, 5.0f);
     state.ball.velocity = glm::vec3(0.0f, -2.0f, 0.0f);
 
@@ -1931,7 +2016,7 @@ TEST_CASE("game update resolves ball collision with authored tree") {
     tree.leaf_radius = 1.0f;
     tree.leaf_height = 2.0f;
     state.tuning.course.trees = {tree};
-    rebuild_cached_terrain_mesh(state.tuning);
+    rebuild_cached_terrain_mesh(state);
 
     state.ball.radius = 0.1f;
     state.ball.position = glm::vec3(0.35f, 0.8f, 5.0f);
@@ -1973,7 +2058,7 @@ TEST_CASE("tree render and collision anchors keep authored horizontal position")
     tree.leaf_radius = 1.0f;
     tree.leaf_height = 2.0f;
     state.tuning.course.trees = {tree};
-    rebuild_cached_terrain_mesh(state.tuning);
+    rebuild_cached_terrain_mesh(state);
 
     const glm::vec3 base = tree_base_position(state.tuning, tree);
     CHECK(near_float(base.x, tree.position.x));
@@ -1989,6 +2074,164 @@ TEST_CASE("tree render and collision anchors keep authored horizontal position")
 
     CHECK(state.ball.position.x >= tree.position.x + tree.trunk_radius + state.ball.radius - 0.0001f);
     CHECK(state.ball.velocity.x > 0.0f);
+    CHECK(state.static_anchors.tree_bodies.size() == 1U);
+    if (!(state.static_anchors.tree_bodies.size() == 1U)) {
+        return;
+    }
+    CHECK(same_vec3(state.static_anchors.tree_bodies.front().base, base));
+}
+
+TEST_CASE("static anchor cache matches fresh anchors across course and hole loads") {
+    game_state state = make_initial_game_state();
+    check_static_anchor_cache_is_fresh(state);
+
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+    CHECK(course.has_value());
+    if (!(course.has_value())) {
+        return;
+    }
+
+    std::uint64_t previous_revision = state.terrain_render_revision;
+    const bool started_course = start_game_course(state, *course);
+    CHECK(started_course);
+    if (!started_course) {
+        return;
+    }
+    CHECK(state.hub.in_hub);
+    if (!(state.hub.in_hub)) {
+        return;
+    }
+    CHECK(state.terrain_render_revision != previous_revision);
+    check_static_anchor_cache_is_fresh(state);
+    CHECK(!state.static_anchors.tree_bodies.empty());
+    CHECK(state.static_anchors.tree_bodies.size() == state.tuning.course.trees.size());
+    CHECK(state.static_anchors.hub_start_markers.size() == state.hub.hole_markers.size());
+    CHECK(!state.static_anchors.hub_start_markers.empty());
+    const std::vector<tree_collision_body> hub_trees = state.static_anchors.tree_bodies;
+
+    // Walking to a hole start and pressing space loads the hole mid-update.
+    CHECK(state.hub.world.hole_starts.size() >= 2U);
+    if (!(state.hub.world.hole_starts.size() >= 2U)) {
+        return;
+    }
+    previous_revision = state.terrain_render_revision;
+    state.player.position = state.hub.world.hole_starts[1].position;
+    input_state input;
+    input.space.pressed = true;
+    update_game(state, input, 0.016f);
+    CHECK(!state.hub.in_hub);
+    if (!(!state.hub.in_hub)) {
+        return;
+    }
+    CHECK(state.terrain_render_revision != previous_revision);
+    check_static_anchor_cache_is_fresh(state);
+    CHECK(!same_tree_bodies(state.static_anchors.tree_bodies, hub_trees));
+
+    previous_revision = state.terrain_render_revision;
+    const bool started_hole = start_hub_hole(state, 0);
+    CHECK(started_hole);
+    if (!started_hole) {
+        return;
+    }
+    CHECK(state.terrain_render_revision != previous_revision);
+    check_static_anchor_cache_is_fresh(state);
+
+    previous_revision = state.terrain_render_revision;
+    const bool completed_hole = complete_current_hole(state);
+    CHECK(completed_hole);
+    if (!completed_hole) {
+        return;
+    }
+    CHECK(state.hub.in_hub);
+    if (!(state.hub.in_hub)) {
+        return;
+    }
+    CHECK(state.terrain_render_revision != previous_revision);
+    check_static_anchor_cache_is_fresh(state);
+    CHECK(same_tree_bodies(state.static_anchors.tree_bodies, hub_trees));
+
+    course_definition single;
+    single.id = "single_hole_02";
+    single.name = "Single";
+    single.hole_count = 1;
+    single.holes = {"holes/test2.json"};
+    previous_revision = state.terrain_render_revision;
+    const bool started_single = start_game_course(state, single);
+    CHECK(started_single);
+    if (!started_single) {
+        return;
+    }
+    CHECK(!state.hub.available);
+    CHECK(state.terrain_render_revision != previous_revision);
+    check_static_anchor_cache_is_fresh(state);
+    CHECK(state.static_anchors.hub_start_markers.empty());
+}
+
+TEST_CASE("static anchor cache rebuilds after an explicit terrain revision bump") {
+    game_state state = make_initial_game_state();
+    check_static_anchor_cache_is_fresh(state);
+
+    state.mode = game_mode::following_shot;
+    state.tuning.wind.base_speed = 0.0f;
+    state.tuning.wind.speed_variation = 0.0f;
+    state.tuning.physics.drag_coeff = 0.0f;
+    state.tuning.physics.magnus_coeff = 0.0f;
+    state.tuning.physics.spin_decay = 0.0f;
+    state.tuning.ground_restitution = 0.0f;
+    state.tuning.ground_friction = 0.0f;
+    state.tuning.ground_roll_friction = 0.0f;
+    state.tuning.ground_settle_speed = 10.0f;
+    state.tuning.tree_restitution = 0.25f;
+    state.tuning.tree_friction = 0.35f;
+    state.tuning.stop_speed = 0.01f;
+    state.tuning.ground_y = 0.0f;
+    state.tuning.terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 6.0f, 20.0f)
+    };
+    state.tuning.terrain.width = 8.0f;
+    state.tuning.terrain.sample_count = 16;
+    state.tuning.course.tee_position = glm::vec3(0.0f, 0.0f, 2.0f);
+    state.tuning.course.pin_position = glm::vec3(0.0f, 0.0f, 18.0f);
+
+    tree_instance tree;
+    tree.position = glm::vec3(1.0f, 0.0f, 10.0f);
+    tree.trunk_radius = 0.5f;
+    tree.trunk_height = 2.0f;
+    tree.leaf_radius = 1.0f;
+    tree.leaf_height = 2.0f;
+    state.tuning.course.trees = {tree};
+
+    const glm::vec3 old_pin = state.static_anchors.pin_anchor;
+    rebuild_cached_terrain_mesh(state);
+    CHECK(!static_anchor_cache_is_current(state));
+    // Stale cache is never served: the pin falls back to a fresh sample.
+    CHECK(same_vec3(pin_anchor_position(state), terrain_anchor_position(state.tuning, state.tuning.course.pin_position)));
+    CHECK(!same_vec3(pin_anchor_position(state), old_pin));
+
+    const glm::vec3 base = tree_base_position(state.tuning, tree);
+    CHECK(base.y > 1.0f);
+    state.ball.radius = 0.1f;
+    state.ball.position = base + glm::vec3(0.35f, 0.8f, 0.0f);
+    state.ball.velocity = glm::vec3(-3.0f, 0.0f, 0.0f);
+
+    input_state input;
+    update_game(state, input, 0.016f);
+
+    check_static_anchor_cache_is_fresh(state);
+    CHECK(state.static_anchors.tree_bodies.size() == 1U);
+    if (!(state.static_anchors.tree_bodies.size() == 1U)) {
+        return;
+    }
+    CHECK(same_vec3(state.static_anchors.tree_bodies.front().base, base));
+    CHECK(state.ball.position.x >= tree.position.x + tree.trunk_radius + state.ball.radius - 0.0001f);
+    CHECK(state.ball.velocity.x > 0.0f);
+
+    // Rebuilding with an unchanged revision is a no-op.
+    const std::uint64_t revision = state.terrain_render_revision;
+    refresh_static_anchor_cache(state);
+    CHECK(state.static_anchors.revision == revision);
+    CHECK(static_anchor_cache_is_current(state));
 }
 
 TEST_CASE("downhill course tuning builds rough apron vertices below zero") {
@@ -2022,7 +2265,7 @@ TEST_CASE("roll friction preserves slope tangent velocity") {
     };
     state.tuning.terrain.width = 8.0f;
     state.tuning.terrain.sample_count = 16;
-    rebuild_cached_terrain_mesh(state.tuning);
+    rebuild_cached_terrain_mesh(state);
 
     const terrain_sample terrain = sample_terrain_mesh(state.tuning.terrain_mesh_data, glm::vec3(0.0f, 0.0f, 5.0f), 0.0f);
     const glm::vec3 tangent = glm::normalize(glm::vec3(0.0f, 5.0f, 10.0f));
@@ -2351,7 +2594,7 @@ TEST_CASE("water drag slows ball more than fairway") {
 
     game_state dry_state = wet_state;
     dry_state.tuning.course.material_zones.clear();
-    rebuild_cached_terrain_mesh(dry_state.tuning);
+    rebuild_cached_terrain_mesh(dry_state);
 
     input_state input;
     update_game(wet_state, input, 0.016f);
