@@ -11,11 +11,13 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
-#include <cctype>
 #include <string>
 #include <vector>
 
 #include "core/gl_loader.h"
+#include "renderer/overlay_batch.h"
+#include "renderer/overlay_pass.h"
+#include "renderer/pixel_font.h"
 
 namespace {
 // All GL draw submissions go through these so draw calls are counted from the
@@ -548,505 +550,7 @@ void draw_emote_world_model(shader_program& shader,
     }
 }
 
-const std::array<const char*, 7>& glyph_rows(const char value) {
-    static const std::array<const char*, 7> glyph_a = {
-        "0110",
-        "1001",
-        "1001",
-        "1111",
-        "1001",
-        "1001",
-        "1001"
-    };
-    static const std::array<const char*, 7> glyph_b = {
-        "1110",
-        "1001",
-        "1001",
-        "1110",
-        "1001",
-        "1001",
-        "1110"
-    };
-    static const std::array<const char*, 7> glyph_g = {
-        "0111",
-        "1000",
-        "1000",
-        "1011",
-        "1001",
-        "1001",
-        "0111"
-    };
-    static const std::array<const char*, 7> glyph_h = {
-        "1001",
-        "1001",
-        "1001",
-        "1111",
-        "1001",
-        "1001",
-        "1001"
-    };
-    static const std::array<const char*, 7> glyph_k = {
-        "1001",
-        "1010",
-        "1100",
-        "1100",
-        "1010",
-        "1001",
-        "1001"
-    };
-    static const std::array<const char*, 7> glyph_l = {
-        "1000",
-        "1000",
-        "1000",
-        "1000",
-        "1000",
-        "1000",
-        "1111"
-    };
-    static const std::array<const char*, 7> glyph_n = {
-        "1001",
-        "1101",
-        "1101",
-        "1011",
-        "1011",
-        "1001",
-        "1001"
-    };
-    static const std::array<const char*, 7> glyph_p = {
-        "1110",
-        "1001",
-        "1001",
-        "1110",
-        "1000",
-        "1000",
-        "1000"
-    };
-    static const std::array<const char*, 7> glyph_q = {
-        "0110",
-        "1001",
-        "1001",
-        "1001",
-        "1011",
-        "1001",
-        "0111"
-    };
-    static const std::array<const char*, 7> glyph_o = {
-        "0110",
-        "1001",
-        "1001",
-        "1001",
-        "1001",
-        "1001",
-        "0110"
-    };
-    static const std::array<const char*, 7> glyph_f = {
-        "1111",
-        "1000",
-        "1000",
-        "1110",
-        "1000",
-        "1000",
-        "1000"
-    };
-    static const std::array<const char*, 7> glyph_w = {
-        "10001",
-        "10001",
-        "10001",
-        "10101",
-        "10101",
-        "10101",
-        "01010"
-    };
-    static const std::array<const char*, 7> glyph_7 = {
-        "1111",
-        "0001",
-        "0010",
-        "0010",
-        "0100",
-        "0100",
-        "0100"
-    };
-    static const std::array<const char*, 7> glyph_i = {
-        "111",
-        "010",
-        "010",
-        "010",
-        "010",
-        "010",
-        "111"
-    };
-    static const std::array<const char*, 7> glyph_j = {
-        "1111",
-        "0001",
-        "0001",
-        "0001",
-        "1001",
-        "1001",
-        "0110"
-    };
-    static const std::array<const char*, 7> glyph_e = {
-        "1111",
-        "1000",
-        "1000",
-        "1110",
-        "1000",
-        "1000",
-        "1111"
-    };
-    static const std::array<const char*, 7> glyph_r = {
-        "1110",
-        "1001",
-        "1001",
-        "1110",
-        "1010",
-        "1001",
-        "1001"
-    };
-    static const std::array<const char*, 7> glyph_t = {
-        "11111",
-        "00100",
-        "00100",
-        "00100",
-        "00100",
-        "00100",
-        "00100"
-    };
-    static const std::array<const char*, 7> glyph_u = {
-        "1001",
-        "1001",
-        "1001",
-        "1001",
-        "1001",
-        "1001",
-        "0110"
-    };
-    static const std::array<const char*, 7> glyph_v = {
-        "1001",
-        "1001",
-        "1001",
-        "1001",
-        "1001",
-        "0110",
-        "0110"
-    };
-    static const std::array<const char*, 7> glyph_y = {
-        "1001",
-        "1001",
-        "0110",
-        "0010",
-        "0010",
-        "0010",
-        "0010"
-    };
-    static const std::array<const char*, 7> glyph_x = {
-        "1001",
-        "1001",
-        "0110",
-        "0110",
-        "0110",
-        "1001",
-        "1001"
-    };
-    static const std::array<const char*, 7> glyph_s = {
-        "1110",
-        "1000",
-        "1000",
-        "1110",
-        "0001",
-        "0001",
-        "1110"
-    };
-    static const std::array<const char*, 7> glyph_plus = {
-        "00100",
-        "00100",
-        "11111",
-        "00100",
-        "00100",
-        "00000",
-        "00000"
-    };
-    static const std::array<const char*, 7> glyph_dash = {
-        "0000",
-        "0000",
-        "0000",
-        "1111",
-        "0000",
-        "0000",
-        "0000"
-    };
-    static const std::array<const char*, 7> glyph_slash = {
-        "0001",
-        "0001",
-        "0010",
-        "0010",
-        "0100",
-        "0100",
-        "1000"
-    };
-    static const std::array<const char*, 7> glyph_colon = {
-        "000",
-        "010",
-        "010",
-        "000",
-        "010",
-        "010",
-        "000"
-    };
-    static const std::array<const char*, 7> glyph_c = {
-        "0111",
-        "1000",
-        "1000",
-        "1000",
-        "1000",
-        "1000",
-        "0111"
-    };
-    static const std::array<const char*, 7> glyph_d = {
-        "1110",
-        "1001",
-        "1001",
-        "1001",
-        "1001",
-        "1001",
-        "1110"
-    };
-    static const std::array<const char*, 7> glyph_m = {
-        "10001",
-        "11011",
-        "10101",
-        "10101",
-        "10001",
-        "10001",
-        "10001"
-    };
-    static const std::array<const char*, 7> glyph_0 = {
-        "0110",
-        "1001",
-        "1001",
-        "1001",
-        "1001",
-        "1001",
-        "0110"
-    };
-    static const std::array<const char*, 7> glyph_1 = {
-        "010",
-        "110",
-        "010",
-        "010",
-        "010",
-        "010",
-        "111"
-    };
-    static const std::array<const char*, 7> glyph_2 = {
-        "1110",
-        "0001",
-        "0001",
-        "0110",
-        "1000",
-        "1000",
-        "1111"
-    };
-    static const std::array<const char*, 7> glyph_3 = {
-        "1110",
-        "0001",
-        "0001",
-        "0110",
-        "0001",
-        "0001",
-        "1110"
-    };
-    static const std::array<const char*, 7> glyph_4 = {
-        "1001",
-        "1001",
-        "1001",
-        "1111",
-        "0001",
-        "0001",
-        "0001"
-    };
-    static const std::array<const char*, 7> glyph_5 = {
-        "1111",
-        "1000",
-        "1000",
-        "1110",
-        "0001",
-        "0001",
-        "1110"
-    };
-    static const std::array<const char*, 7> glyph_6 = {
-        "0111",
-        "1000",
-        "1000",
-        "1110",
-        "1001",
-        "1001",
-        "0110"
-    };
-    static const std::array<const char*, 7> glyph_8 = {
-        "0110",
-        "1001",
-        "1001",
-        "0110",
-        "1001",
-        "1001",
-        "0110"
-    };
-    static const std::array<const char*, 7> glyph_9 = {
-        "0110",
-        "1001",
-        "1001",
-        "0111",
-        "0001",
-        "0001",
-        "1110"
-    };
-
-    switch (value) {
-    case '0':
-        return glyph_0;
-    case '1':
-        return glyph_1;
-    case '2':
-        return glyph_2;
-    case '3':
-        return glyph_3;
-    case '4':
-        return glyph_4;
-    case '5':
-        return glyph_5;
-    case '6':
-        return glyph_6;
-    case '7':
-        return glyph_7;
-    case '8':
-        return glyph_8;
-    case '9':
-        return glyph_9;
-    case 'A':
-        return glyph_a;
-    case 'B':
-        return glyph_b;
-    case 'G':
-        return glyph_g;
-    case 'H':
-        return glyph_h;
-    case 'K':
-        return glyph_k;
-    case 'L':
-        return glyph_l;
-    case 'N':
-        return glyph_n;
-    case 'P':
-        return glyph_p;
-    case 'Q':
-        return glyph_q;
-    case 'O':
-        return glyph_o;
-    case 'F':
-        return glyph_f;
-    case 'W':
-        return glyph_w;
-    case 'E':
-        return glyph_e;
-    case 'R':
-        return glyph_r;
-    case 'T':
-        return glyph_t;
-    case 'U':
-        return glyph_u;
-    case 'V':
-        return glyph_v;
-    case 'Y':
-        return glyph_y;
-    case 'S':
-        return glyph_s;
-    case '+':
-        return glyph_plus;
-    case 'C':
-        return glyph_c;
-    case 'D':
-        return glyph_d;
-    case 'M':
-    case 'm':
-        return glyph_m;
-    case 'I':
-        return glyph_i;
-    case 'J':
-        return glyph_j;
-    case 'X':
-        return glyph_x;
-    case '-':
-        return glyph_dash;
-    case '/':
-        return glyph_slash;
-    case ':':
-        return glyph_colon;
-    default:
-        return glyph_i;
-    }
-}
-
-int glyph_width(const char value) {
-    if (value == ' ') {
-        return 3;
-    }
-    const char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(value)));
-    return static_cast<int>(std::string(glyph_rows(upper)[0]).size());
-}
-
-void draw_overlay_quad(shader_program& shader,
-                       const glm::vec2 center,
-                       const glm::vec2 half_size,
-                       const glm::vec3 color,
-                       const float alpha = 1.0f) {
-    const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(center, 0.0f)),
-                                       glm::vec3(half_size, 1.0f));
-    shader.set_mat4("u_model", glm::mat4(1.0f));
-    shader.set_mat4("u_mvp", model);
-    shader.set_vec3("u_color", color);
-    shader.set_float("u_alpha", alpha);
-    shader.set_int("u_use_vertex_color", 0);
-    draw_arrays(shader, GL_TRIANGLES, 0, 6);
-}
-
-void draw_overlay_rotated_quad(shader_program& shader,
-                               const glm::vec2 center,
-                               const glm::vec2 half_size,
-                               const float angle_radians,
-                               const glm::vec3 color,
-                               const float alpha) {
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(center, 0.0f));
-    model = glm::rotate(model, angle_radians, glm::vec3(0.0f, 0.0f, 1.0f));
-    model = glm::scale(model, glm::vec3(half_size, 1.0f));
-    shader.set_mat4("u_model", glm::mat4(1.0f));
-    shader.set_mat4("u_mvp", model);
-    shader.set_vec3("u_color", color);
-    shader.set_float("u_alpha", alpha);
-    shader.set_int("u_use_vertex_color", 0);
-    draw_arrays(shader, GL_TRIANGLES, 0, 6);
-}
-
-void draw_overlay_segment(shader_program& shader,
-                          const glm::vec2 start,
-                          const glm::vec2 end,
-                          const float thickness,
-                          const glm::vec3 color,
-                          const float alpha) {
-    const glm::vec2 delta = end - start;
-    const float length = glm::length(delta);
-    if (length <= 0.00001f) {
-        return;
-    }
-
-    draw_overlay_rotated_quad(shader,
-                              (start + end) * 0.5f,
-                              glm::vec2(length * 0.5f, thickness * 0.5f),
-                              std::atan2(delta.y, delta.x),
-                              color,
-                              alpha);
-}
-
-void draw_button_outline(shader_program& shader,
+void draw_button_outline(overlay_batch& batch,
                          const glm::vec2 center,
                          const glm::vec2 half_size,
                          const glm::vec3 color,
@@ -1057,13 +561,13 @@ void draw_button_outline(shader_program& shader,
     const glm::vec2 bottom_left(center.x - half_size.x, center.y - half_size.y);
     const glm::vec2 bottom_right(center.x + half_size.x, center.y - half_size.y);
 
-    draw_overlay_segment(shader, top_left, top_right, line_thickness, color, alpha);
-    draw_overlay_segment(shader, top_right, bottom_right, line_thickness, color, alpha);
-    draw_overlay_segment(shader, bottom_right, bottom_left, line_thickness, color, alpha);
-    draw_overlay_segment(shader, bottom_left, top_left, line_thickness, color, alpha);
+    draw_overlay_segment(batch, top_left, top_right, line_thickness, color, alpha);
+    draw_overlay_segment(batch, top_right, bottom_right, line_thickness, color, alpha);
+    draw_overlay_segment(batch, bottom_right, bottom_left, line_thickness, color, alpha);
+    draw_overlay_segment(batch, bottom_left, top_left, line_thickness, color, alpha);
 }
 
-void draw_control_button_base(shader_program& shader,
+void draw_control_button_base(overlay_batch& batch,
                               const glm::vec2 center,
                               const glm::vec2 half_size,
                               const bool is_down) {
@@ -1071,12 +575,12 @@ void draw_control_button_base(shader_program& shader,
     const glm::vec3 pressed_color(0.88f, 0.70f, 0.30f);
 
     if (is_down) {
-        draw_overlay_quad(shader, center, half_size, pressed_color, 0.90f);
+        draw_overlay_quad(batch, center, half_size, pressed_color, 0.90f);
     } else {
-        draw_overlay_quad(shader, center, half_size, glm::vec3(0.12f, 0.13f, 0.13f), 0.08f);
+        draw_overlay_quad(batch, center, half_size, glm::vec3(0.12f, 0.13f, 0.13f), 0.08f);
     }
 
-    draw_button_outline(shader, center, half_size, outline_color, is_down ? 0.95f : 0.58f);
+    draw_button_outline(batch, center, half_size, outline_color, is_down ? 0.95f : 0.58f);
 }
 
 glm::vec3 control_icon_color(const bool is_down) {
@@ -1087,7 +591,7 @@ float control_icon_alpha(const bool is_down) {
     return is_down ? 1.0f : 0.58f;
 }
 
-void draw_arrow_icon(shader_program& shader,
+void draw_arrow_icon(overlay_batch& batch,
                      const glm::vec2 center,
                      const glm::vec2 direction,
                      const glm::vec2 half_size,
@@ -1102,12 +606,12 @@ void draw_arrow_icon(shader_program& shader,
     const glm::vec3 color = control_icon_color(is_down);
     const float alpha = control_icon_alpha(is_down);
 
-    draw_overlay_segment(shader, tail, tip, thickness, color, alpha);
-    draw_overlay_segment(shader, tip, shoulder + side * (radius * 0.34f), thickness, color, alpha);
-    draw_overlay_segment(shader, tip, shoulder - side * (radius * 0.34f), thickness, color, alpha);
+    draw_overlay_segment(batch, tail, tip, thickness, color, alpha);
+    draw_overlay_segment(batch, tip, shoulder + side * (radius * 0.34f), thickness, color, alpha);
+    draw_overlay_segment(batch, tip, shoulder - side * (radius * 0.34f), thickness, color, alpha);
 }
 
-void draw_space_icon(shader_program& shader,
+void draw_space_icon(overlay_batch& batch,
                      const glm::vec2 center,
                      const glm::vec2 half_size,
                      const glm::vec3 color,
@@ -1118,16 +622,16 @@ void draw_space_icon(shader_program& shader,
     const glm::vec2 left(center.x - width * 0.5f, center.y - height * 0.15f);
     const glm::vec2 right(center.x + width * 0.5f, center.y - height * 0.15f);
 
-    draw_overlay_segment(shader, left, right, thickness, color, alpha);
-    draw_overlay_segment(shader, left, left + glm::vec2(0.0f, height), thickness, color, alpha);
-    draw_overlay_segment(shader, right, right + glm::vec2(0.0f, height), thickness, color, alpha);
+    draw_overlay_segment(batch, left, right, thickness, color, alpha);
+    draw_overlay_segment(batch, left, left + glm::vec2(0.0f, height), thickness, color, alpha);
+    draw_overlay_segment(batch, right, right + glm::vec2(0.0f, height), thickness, color, alpha);
 }
 
-void draw_space_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
-    draw_space_icon(shader, center, half_size, control_icon_color(is_down), control_icon_alpha(is_down));
+void draw_space_icon(overlay_batch& batch, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
+    draw_space_icon(batch, center, half_size, control_icon_color(is_down), control_icon_alpha(is_down));
 }
 
-void draw_shift_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
+void draw_shift_icon(overlay_batch& batch, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
     const glm::vec3 color = control_icon_color(is_down);
     const float alpha = control_icon_alpha(is_down);
     const float thickness = 0.010f;
@@ -1139,14 +643,14 @@ void draw_shift_icon(shader_program& shader, const glm::vec2 center, const glm::
     const glm::vec2 left_base = center + glm::vec2(-width * 0.20f, -height * 0.48f);
     const glm::vec2 right_base = center + glm::vec2(width * 0.20f, -height * 0.48f);
 
-    draw_overlay_segment(shader, tip, left_shoulder, thickness, color, alpha);
-    draw_overlay_segment(shader, tip, right_shoulder, thickness, color, alpha);
-    draw_overlay_segment(shader, left_shoulder, left_base, thickness, color, alpha);
-    draw_overlay_segment(shader, right_shoulder, right_base, thickness, color, alpha);
-    draw_overlay_segment(shader, left_base, right_base, thickness, color, alpha);
+    draw_overlay_segment(batch, tip, left_shoulder, thickness, color, alpha);
+    draw_overlay_segment(batch, tip, right_shoulder, thickness, color, alpha);
+    draw_overlay_segment(batch, left_shoulder, left_base, thickness, color, alpha);
+    draw_overlay_segment(batch, right_shoulder, right_base, thickness, color, alpha);
+    draw_overlay_segment(batch, left_base, right_base, thickness, color, alpha);
 }
 
-void draw_enter_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
+void draw_enter_icon(overlay_batch& batch, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
     const glm::vec3 color = control_icon_color(is_down);
     const float alpha = control_icon_alpha(is_down);
     const float thickness = 0.010f;
@@ -1155,23 +659,23 @@ void draw_enter_icon(shader_program& shader, const glm::vec2 center, const glm::
     const glm::vec2 tip = center + glm::vec2(-half_size.x * 0.42f, -half_size.y * 0.10f);
     const glm::vec2 shoulder = tip + glm::vec2(half_size.x * 0.30f, 0.0f);
 
-    draw_overlay_segment(shader, top, turn, thickness, color, alpha);
-    draw_overlay_segment(shader, turn, tip, thickness, color, alpha);
-    draw_overlay_segment(shader, tip, shoulder + glm::vec2(0.0f, half_size.y * 0.22f), thickness, color, alpha);
-    draw_overlay_segment(shader, tip, shoulder - glm::vec2(0.0f, half_size.y * 0.22f), thickness, color, alpha);
+    draw_overlay_segment(batch, top, turn, thickness, color, alpha);
+    draw_overlay_segment(batch, turn, tip, thickness, color, alpha);
+    draw_overlay_segment(batch, tip, shoulder + glm::vec2(0.0f, half_size.y * 0.22f), thickness, color, alpha);
+    draw_overlay_segment(batch, tip, shoulder - glm::vec2(0.0f, half_size.y * 0.22f), thickness, color, alpha);
 }
 
-void draw_backspace_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
+void draw_backspace_icon(overlay_batch& batch, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
     const glm::vec3 color = control_icon_color(is_down);
     const float alpha = control_icon_alpha(is_down);
     const float thickness = 0.010f;
     const glm::vec2 tip = center + glm::vec2(-half_size.x * 0.44f, 0.0f);
     const glm::vec2 mid = center + glm::vec2(half_size.x * 0.20f, 0.0f);
 
-    draw_overlay_segment(shader, tip, mid, thickness, color, alpha);
-    draw_overlay_segment(shader, tip, center + glm::vec2(-half_size.x * 0.10f, half_size.y * 0.28f), thickness, color, alpha);
-    draw_overlay_segment(shader, tip, center + glm::vec2(-half_size.x * 0.10f, -half_size.y * 0.28f), thickness, color, alpha);
-    draw_overlay_segment(shader,
+    draw_overlay_segment(batch, tip, mid, thickness, color, alpha);
+    draw_overlay_segment(batch, tip, center + glm::vec2(-half_size.x * 0.10f, half_size.y * 0.28f), thickness, color, alpha);
+    draw_overlay_segment(batch, tip, center + glm::vec2(-half_size.x * 0.10f, -half_size.y * 0.28f), thickness, color, alpha);
+    draw_overlay_segment(batch,
                          center + glm::vec2(half_size.x * 0.36f, half_size.y * 0.34f),
                          center + glm::vec2(half_size.x * 0.36f, -half_size.y * 0.34f),
                          thickness,
@@ -1179,7 +683,7 @@ void draw_backspace_icon(shader_program& shader, const glm::vec2 center, const g
                          alpha);
 }
 
-void draw_retee_icon(shader_program& shader, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
+void draw_retee_icon(overlay_batch& batch, const glm::vec2 center, const glm::vec2 half_size, const bool is_down) {
     const glm::vec3 color = control_icon_color(is_down);
     const float alpha = control_icon_alpha(is_down);
     const float radius = std::min(half_size.x, half_size.y) * 0.52f;
@@ -1193,27 +697,16 @@ void draw_retee_icon(shader_program& shader, const glm::vec2 center, const glm::
         const float t = static_cast<float>(i) / static_cast<float>(segment_count);
         const float angle = start_angle + (end_angle - start_angle) * t;
         const glm::vec2 next = center + glm::vec2(std::cos(angle), std::sin(angle)) * radius;
-        draw_overlay_segment(shader, previous, next, thickness, color, alpha);
+        draw_overlay_segment(batch, previous, next, thickness, color, alpha);
         previous = next;
     }
 
     const glm::vec2 tip = center + glm::vec2(std::cos(end_angle), std::sin(end_angle)) * radius;
-    draw_overlay_segment(shader, tip, tip + glm::vec2(half_size.x * 0.18f, half_size.y * 0.08f), thickness, color, alpha);
-    draw_overlay_segment(shader, tip, tip + glm::vec2(half_size.x * 0.04f, -half_size.y * 0.22f), thickness, color, alpha);
+    draw_overlay_segment(batch, tip, tip + glm::vec2(half_size.x * 0.18f, half_size.y * 0.08f), thickness, color, alpha);
+    draw_overlay_segment(batch, tip, tip + glm::vec2(half_size.x * 0.04f, -half_size.y * 0.22f), thickness, color, alpha);
 }
 
-float fit_pixel_size(const std::string& label,
-                     const glm::vec2& max_half_size,
-                     float max_pixel_size,
-                     float min_pixel_size,
-                     float padding);
-void draw_pixel_text_centered(shader_program& shader,
-                              const std::string& label,
-                              glm::vec2 center,
-                              float pixel_size,
-                              glm::vec3 color);
-
-void draw_controls_overlay(shader_program& shader, const controls_overlay_state& controls) {
+void draw_controls_overlay(overlay_batch& batch, const controls_overlay_state& controls) {
     if (!controls.visible) {
         return;
     }
@@ -1223,43 +716,43 @@ void draw_controls_overlay(shader_program& shader, const controls_overlay_state&
     const glm::vec2 wide_half(0.138f, 0.052f);
     const glm::vec2 dpad_center(0.79f, 0.02f);
 
-    draw_control_button_base(shader, dpad_center + glm::vec2(0.0f, 0.126f), dpad_half, controls.up_down);
-    draw_arrow_icon(shader, dpad_center + glm::vec2(0.0f, 0.126f), glm::vec2(0.0f, 1.0f), dpad_half, controls.up_down);
+    draw_control_button_base(batch, dpad_center + glm::vec2(0.0f, 0.126f), dpad_half, controls.up_down);
+    draw_arrow_icon(batch, dpad_center + glm::vec2(0.0f, 0.126f), glm::vec2(0.0f, 1.0f), dpad_half, controls.up_down);
 
-    draw_control_button_base(shader, dpad_center + glm::vec2(-0.070f, 0.0f), dpad_half, controls.left_down);
-    draw_arrow_icon(shader, dpad_center + glm::vec2(-0.070f, 0.0f), glm::vec2(-1.0f, 0.0f), dpad_half, controls.left_down);
+    draw_control_button_base(batch, dpad_center + glm::vec2(-0.070f, 0.0f), dpad_half, controls.left_down);
+    draw_arrow_icon(batch, dpad_center + glm::vec2(-0.070f, 0.0f), glm::vec2(-1.0f, 0.0f), dpad_half, controls.left_down);
 
-    draw_control_button_base(shader, dpad_center + glm::vec2(0.070f, 0.0f), dpad_half, controls.right_down);
-    draw_arrow_icon(shader, dpad_center + glm::vec2(0.070f, 0.0f), glm::vec2(1.0f, 0.0f), dpad_half, controls.right_down);
+    draw_control_button_base(batch, dpad_center + glm::vec2(0.070f, 0.0f), dpad_half, controls.right_down);
+    draw_arrow_icon(batch, dpad_center + glm::vec2(0.070f, 0.0f), glm::vec2(1.0f, 0.0f), dpad_half, controls.right_down);
 
-    draw_control_button_base(shader, dpad_center + glm::vec2(0.0f, -0.126f), dpad_half, controls.down_down);
-    draw_arrow_icon(shader, dpad_center + glm::vec2(0.0f, -0.126f), glm::vec2(0.0f, -1.0f), dpad_half, controls.down_down);
+    draw_control_button_base(batch, dpad_center + glm::vec2(0.0f, -0.126f), dpad_half, controls.down_down);
+    draw_arrow_icon(batch, dpad_center + glm::vec2(0.0f, -0.126f), glm::vec2(0.0f, -1.0f), dpad_half, controls.down_down);
 
-    draw_control_button_base(shader, glm::vec2(0.79f, -0.32f), wide_half, controls.space_down);
-    draw_space_icon(shader, glm::vec2(0.79f, -0.32f), wide_half, controls.space_down);
+    draw_control_button_base(batch, glm::vec2(0.79f, -0.32f), wide_half, controls.space_down);
+    draw_space_icon(batch, glm::vec2(0.79f, -0.32f), wide_half, controls.space_down);
 
-    draw_control_button_base(shader, glm::vec2(0.70f, -0.46f), small_half, controls.shift_down);
-    draw_shift_icon(shader, glm::vec2(0.70f, -0.46f), small_half, controls.shift_down);
+    draw_control_button_base(batch, glm::vec2(0.70f, -0.46f), small_half, controls.shift_down);
+    draw_shift_icon(batch, glm::vec2(0.70f, -0.46f), small_half, controls.shift_down);
 
-    draw_control_button_base(shader, glm::vec2(0.88f, -0.46f), small_half, controls.enter_down);
-    draw_enter_icon(shader, glm::vec2(0.88f, -0.46f), small_half, controls.enter_down);
+    draw_control_button_base(batch, glm::vec2(0.88f, -0.46f), small_half, controls.enter_down);
+    draw_enter_icon(batch, glm::vec2(0.88f, -0.46f), small_half, controls.enter_down);
 
-    draw_control_button_base(shader, glm::vec2(0.70f, -0.60f), small_half, controls.backspace_down);
-    draw_backspace_icon(shader, glm::vec2(0.70f, -0.60f), small_half, controls.backspace_down);
+    draw_control_button_base(batch, glm::vec2(0.70f, -0.60f), small_half, controls.backspace_down);
+    draw_backspace_icon(batch, glm::vec2(0.70f, -0.60f), small_half, controls.backspace_down);
 
-    draw_control_button_base(shader, glm::vec2(0.88f, -0.60f), small_half, controls.retee_down);
-    draw_retee_icon(shader, glm::vec2(0.88f, -0.60f), small_half, controls.retee_down);
+    draw_control_button_base(batch, glm::vec2(0.88f, -0.60f), small_half, controls.retee_down);
+    draw_retee_icon(batch, glm::vec2(0.88f, -0.60f), small_half, controls.retee_down);
 
     const glm::vec2 key_half(0.052f, 0.046f);
-    draw_control_button_base(shader, glm::vec2(0.70f, -0.74f), key_half, controls.key_1_down);
-    draw_pixel_text_centered(shader,
+    draw_control_button_base(batch, glm::vec2(0.70f, -0.74f), key_half, controls.key_1_down);
+    draw_pixel_text_centered(batch,
                              "1",
                              glm::vec2(0.70f, -0.74f),
                              fit_pixel_size("1", key_half, 0.020f, 0.010f, 0.88f),
                              control_icon_color(controls.key_1_down));
 
-    draw_control_button_base(shader, glm::vec2(0.88f, -0.74f), key_half, controls.key_2_down);
-    draw_pixel_text_centered(shader,
+    draw_control_button_base(batch, glm::vec2(0.88f, -0.74f), key_half, controls.key_2_down);
+    draw_pixel_text_centered(batch,
                              "2",
                              glm::vec2(0.88f, -0.74f),
                              fit_pixel_size("2", key_half, 0.020f, 0.010f, 0.88f),
@@ -1277,85 +770,7 @@ enum class help_control_icon {
     key_2
 };
 
-void draw_pixel_glyph(shader_program& shader,
-                      const char value,
-                      const glm::vec2 top_left,
-                      const float pixel_size,
-                      const glm::vec3 color) {
-    if (value == ' ') {
-        return;
-    }
-
-    const char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(value)));
-    const std::array<const char*, 7>& rows = glyph_rows(upper);
-    for (int y = 0; y < static_cast<int>(rows.size()); ++y) {
-        const char* row = rows[y];
-        for (int x = 0; row[x] != '\0'; ++x) {
-            if (row[x] != '1') {
-                continue;
-            }
-
-            draw_overlay_quad(shader,
-                              top_left + glm::vec2((static_cast<float>(x) + 0.5f) * pixel_size,
-                                                   -(static_cast<float>(y) + 0.5f) * pixel_size),
-                              glm::vec2(pixel_size * 0.42f),
-                              color);
-        }
-    }
-}
-
-float pixel_text_width(const std::string& label, const float pixel_size) {
-    float width = 0.0f;
-    for (const char c : label) {
-        width += static_cast<float>(glyph_width(c) + 1) * pixel_size;
-    }
-    return std::max(0.0f, width - pixel_size);
-}
-
-float fit_pixel_size(const std::string& label,
-                     const glm::vec2& max_half_size,
-                     const float max_pixel_size,
-                     const float min_pixel_size,
-                     const float padding = 0.88f) {
-    if (label.empty()) {
-        return min_pixel_size;
-    }
-
-    const float max_width = max_half_size.x * 2.0f * padding;
-    const float max_height = max_half_size.y * 2.0f * padding;
-    const float base_width = std::max(1.0f, pixel_text_width(label, 1.0f));
-    const float width_scale = max_width / base_width;
-    const float height_scale = max_height / 7.0f;
-    const float target = std::min(width_scale, height_scale);
-    return std::clamp(target, min_pixel_size, max_pixel_size);
-}
-
-void draw_pixel_text_centered(shader_program& shader,
-                              const std::string& label,
-                              const glm::vec2 center,
-                              const float pixel_size,
-                              const glm::vec3 color) {
-    const float width = pixel_text_width(label, pixel_size);
-    glm::vec2 cursor(center.x - width * 0.5f, center.y + 3.5f * pixel_size);
-    for (const char c : label) {
-        draw_pixel_glyph(shader, c, cursor, pixel_size, color);
-        cursor.x += static_cast<float>(glyph_width(c) + 1) * pixel_size;
-    }
-}
-
-void draw_pixel_text_left(shader_program& shader,
-                          const std::string& label,
-                          const glm::vec2 top_left,
-                          const float pixel_size,
-                          const glm::vec3 color) {
-    glm::vec2 cursor = top_left;
-    for (const char c : label) {
-        draw_pixel_glyph(shader, c, cursor, pixel_size, color);
-        cursor.x += static_cast<float>(glyph_width(c) + 1) * pixel_size;
-    }
-}
-
-void draw_help_text_lines(shader_program& shader,
+void draw_help_text_lines(overlay_batch& batch,
                           const glm::vec2 top_left,
                           const std::array<const char*, 4>& lines,
                           const float pixel_size,
@@ -1365,7 +780,7 @@ void draw_help_text_lines(shader_program& shader,
         if (lines[i] == nullptr || lines[i][0] == '\0') {
             continue;
         }
-        draw_pixel_text_left(shader,
+        draw_pixel_text_left(batch,
                              lines[i],
                              top_left - glm::vec2(0.0f, static_cast<float>(i) * pixel_size * line_gap),
                              pixel_size,
@@ -1373,7 +788,7 @@ void draw_help_text_lines(shader_program& shader,
     }
 }
 
-void draw_help_control_icon(shader_program& shader,
+void draw_help_control_icon(overlay_batch& batch,
                             const help_control_icon icon,
                             const glm::vec2 center) {
     const bool is_down = false;
@@ -1385,119 +800,119 @@ void draw_help_control_icon(shader_program& shader,
     case help_control_icon::arrows: {
         const glm::vec2 dpad_half(0.043f, 0.043f);
         const float offset = 0.052f;
-        draw_control_button_base(shader, center + glm::vec2(0.0f, offset), dpad_half, is_down);
-        draw_arrow_icon(shader, center + glm::vec2(0.0f, offset), glm::vec2(0.0f, 1.0f), dpad_half, is_down);
-        draw_control_button_base(shader, center + glm::vec2(-offset, 0.0f), dpad_half, is_down);
-        draw_arrow_icon(shader, center + glm::vec2(-offset, 0.0f), glm::vec2(-1.0f, 0.0f), dpad_half, is_down);
-        draw_control_button_base(shader, center + glm::vec2(offset, 0.0f), dpad_half, is_down);
-        draw_arrow_icon(shader, center + glm::vec2(offset, 0.0f), glm::vec2(1.0f, 0.0f), dpad_half, is_down);
-        draw_control_button_base(shader, center + glm::vec2(0.0f, -offset), dpad_half, is_down);
-        draw_arrow_icon(shader, center + glm::vec2(0.0f, -offset), glm::vec2(0.0f, -1.0f), dpad_half, is_down);
+        draw_control_button_base(batch, center + glm::vec2(0.0f, offset), dpad_half, is_down);
+        draw_arrow_icon(batch, center + glm::vec2(0.0f, offset), glm::vec2(0.0f, 1.0f), dpad_half, is_down);
+        draw_control_button_base(batch, center + glm::vec2(-offset, 0.0f), dpad_half, is_down);
+        draw_arrow_icon(batch, center + glm::vec2(-offset, 0.0f), glm::vec2(-1.0f, 0.0f), dpad_half, is_down);
+        draw_control_button_base(batch, center + glm::vec2(offset, 0.0f), dpad_half, is_down);
+        draw_arrow_icon(batch, center + glm::vec2(offset, 0.0f), glm::vec2(1.0f, 0.0f), dpad_half, is_down);
+        draw_control_button_base(batch, center + glm::vec2(0.0f, -offset), dpad_half, is_down);
+        draw_arrow_icon(batch, center + glm::vec2(0.0f, -offset), glm::vec2(0.0f, -1.0f), dpad_half, is_down);
         break;
     }
     case help_control_icon::space:
-        draw_control_button_base(shader, center, wide_half, is_down);
-        draw_space_icon(shader, center, wide_half, is_down);
+        draw_control_button_base(batch, center, wide_half, is_down);
+        draw_space_icon(batch, center, wide_half, is_down);
         break;
     case help_control_icon::shift:
-        draw_control_button_base(shader, center, small_half, is_down);
-        draw_shift_icon(shader, center, small_half, is_down);
+        draw_control_button_base(batch, center, small_half, is_down);
+        draw_shift_icon(batch, center, small_half, is_down);
         break;
     case help_control_icon::enter:
-        draw_control_button_base(shader, center, small_half, is_down);
-        draw_enter_icon(shader, center, small_half, is_down);
+        draw_control_button_base(batch, center, small_half, is_down);
+        draw_enter_icon(batch, center, small_half, is_down);
         break;
     case help_control_icon::backspace:
-        draw_control_button_base(shader, center, small_half, is_down);
-        draw_backspace_icon(shader, center, small_half, is_down);
+        draw_control_button_base(batch, center, small_half, is_down);
+        draw_backspace_icon(batch, center, small_half, is_down);
         break;
     case help_control_icon::retee:
-        draw_control_button_base(shader, center, small_half, is_down);
-        draw_retee_icon(shader, center, small_half, is_down);
+        draw_control_button_base(batch, center, small_half, is_down);
+        draw_retee_icon(batch, center, small_half, is_down);
         break;
     case help_control_icon::key_1:
-        draw_control_button_base(shader, center, key_half, is_down);
-        draw_pixel_text_centered(shader, "1", center, 0.020f, control_icon_color(is_down));
+        draw_control_button_base(batch, center, key_half, is_down);
+        draw_pixel_text_centered(batch, "1", center, 0.020f, control_icon_color(is_down));
         break;
     case help_control_icon::key_2:
-        draw_control_button_base(shader, center, key_half, is_down);
-        draw_pixel_text_centered(shader, "2", center, 0.020f, control_icon_color(is_down));
+        draw_control_button_base(batch, center, key_half, is_down);
+        draw_pixel_text_centered(batch, "2", center, 0.020f, control_icon_color(is_down));
         break;
     }
 }
 
-void draw_help_control_row(shader_program& shader,
+void draw_help_control_row(overlay_batch& batch,
                            const help_control_icon icon,
                            const glm::vec2 icon_center,
                            const glm::vec2 label_top_left,
                            const std::array<const char*, 4>& lines) {
-    draw_help_control_icon(shader, icon, icon_center);
-    draw_help_text_lines(shader, label_top_left, lines, 0.0092f, glm::vec3(0.84f, 0.84f, 0.74f));
+    draw_help_control_icon(batch, icon, icon_center);
+    draw_help_text_lines(batch, label_top_left, lines, 0.0092f, glm::vec3(0.84f, 0.84f, 0.74f));
 }
 
-void draw_startup_help_screen(shader_program& shader) {
+void draw_startup_help_screen(overlay_batch& batch) {
     const glm::vec2 left_icon(-0.66f, 0.0f);
     const glm::vec2 left_label(-0.46f, 0.0f);
     const glm::vec2 right_icon(0.30f, 0.0f);
     const glm::vec2 right_label(0.45f, 0.0f);
 
-    draw_help_control_row(shader,
+    draw_help_control_row(batch,
                           help_control_icon::arrows,
                           left_icon + glm::vec2(0.0f, 0.42f),
                           left_label + glm::vec2(0.0f, 0.51f),
                           {{"ARROWS", "WALK / AIM", "CLUB UP / DOWN", ""}});
-    draw_help_control_row(shader,
+    draw_help_control_row(batch,
                           help_control_icon::space,
                           left_icon + glm::vec2(0.0f, 0.15f),
                           left_label + glm::vec2(0.0f, 0.22f),
                           {{"INTERACT", "START SWING", "SET POWER", "DRIFT CART"}});
-    draw_help_control_row(shader,
+    draw_help_control_row(batch,
                           help_control_icon::shift,
                           left_icon + glm::vec2(0.0f, -0.22f),
                           left_label + glm::vec2(0.0f, -0.18f),
                           {{"LEFT SHIFT", "HOLD CART", "", ""}});
-    draw_help_control_row(shader,
+    draw_help_control_row(batch,
                           help_control_icon::shift,
                           left_icon + glm::vec2(0.0f, -0.43f),
                           left_label + glm::vec2(0.0f, -0.39f),
                           {{"SHIFT", "RANGEFINDER", "", ""}});
 
-    draw_help_control_row(shader,
+    draw_help_control_row(batch,
                           help_control_icon::enter,
                           right_icon + glm::vec2(0.0f, 0.43f),
                           right_label + glm::vec2(0.0f, 0.50f),
                           {{"ENTER", "COURSE MAP", "MENU SELECT", ""}});
-    draw_help_control_row(shader,
+    draw_help_control_row(batch,
                           help_control_icon::backspace,
                           right_icon + glm::vec2(0.0f, 0.22f),
                           right_label + glm::vec2(0.0f, 0.25f),
                           {{"BACKSPACE /", "ESCAPE", "CANCEL /", "BACK"}});
-    draw_help_control_row(shader,
+    draw_help_control_row(batch,
                           help_control_icon::retee,
                           right_icon + glm::vec2(0.0f, -0.12f),
                           right_label + glm::vec2(0.0f, -0.12f),
                           {{"R", "RETEE", "", ""}});
-    draw_help_control_row(shader,
+    draw_help_control_row(batch,
                           help_control_icon::key_1,
                           right_icon + glm::vec2(0.0f, -0.32f),
                           right_label + glm::vec2(0.0f, -0.30f),
                           {{"1", "SMOKE", "", ""}});
-    draw_help_control_row(shader,
+    draw_help_control_row(batch,
                           help_control_icon::key_2,
                           right_icon + glm::vec2(0.0f, -0.52f),
                           right_label + glm::vec2(0.0f, -0.50f),
                           {{"2", "BEER", "", ""}});
 }
 
-void draw_fps_counter(shader_program& shader, const std::string& label) {
+void draw_fps_counter(overlay_batch& batch, const std::string& label) {
     if (label.empty()) {
         return;
     }
 
-    draw_pixel_text_left(shader, label, glm::vec2(-0.96f, 0.92f), 0.009f, glm::vec3(0.96f, 0.78f, 0.18f));
+    draw_pixel_text_left(batch, label, glm::vec2(-0.96f, 0.92f), 0.009f, glm::vec3(0.96f, 0.78f, 0.18f));
 }
 
-void draw_profile_overlay(shader_program& shader, const frame_profile& profile) {
+void draw_profile_overlay(overlay_batch& batch, const frame_profile& profile) {
     const std::vector<std::string> lines = format_profile_overlay_lines(profile);
     if (lines.empty()) {
         return;
@@ -1508,28 +923,28 @@ void draw_profile_overlay(shader_program& shader, const frame_profile& profile) 
     const glm::vec3 color(0.62f, 0.90f, 0.72f);
     glm::vec2 cursor(-0.96f, 0.855f);
     for (const std::string& line : lines) {
-        draw_pixel_text_left(shader, line, cursor, pixel_size, color);
+        draw_pixel_text_left(batch, line, cursor, pixel_size, color);
         cursor.y -= line_step;
     }
 }
 
-void draw_club_label(shader_program& shader, const std::string& label) {
+void draw_club_label(overlay_batch& batch, const std::string& label) {
     const glm::vec3 label_color(0.90f, 0.88f, 0.76f);
     const glm::vec3 panel_color(0.055f, 0.06f, 0.07f);
     const glm::vec2 panel_center(0.78f, 0.78f);
     const glm::vec2 panel_half(0.17f, 0.12f);
-    draw_overlay_quad(shader, panel_center, panel_half, panel_color);
+    draw_overlay_quad(batch, panel_center, panel_half, panel_color);
 
     const float pixel_size = fit_pixel_size(label, panel_half, 0.022f, 0.010f);
-    draw_pixel_text_centered(shader, label, panel_center, pixel_size, label_color);
+    draw_pixel_text_centered(batch, label, panel_center, pixel_size, label_color);
 }
 
-void draw_interact_prompt(shader_program& shader) {
+void draw_interact_prompt(overlay_batch& batch) {
     const glm::vec3 prompt_color(0.95f, 0.82f, 0.28f);
-    draw_space_icon(shader, glm::vec2(0.0f, -0.56f), glm::vec2(0.16f, 0.075f), prompt_color, 1.0f);
+    draw_space_icon(batch, glm::vec2(0.0f, -0.56f), glm::vec2(0.16f, 0.075f), prompt_color, 1.0f);
 }
 
-void draw_power_meter(shader_program& shader, const float swing_power) {
+void draw_power_meter(overlay_batch& batch, const float swing_power) {
     const float power = std::clamp(swing_power, 0.0f, 1.0f);
     const glm::vec3 panel_color(0.055f, 0.060f, 0.065f);
     const glm::vec3 outline_color(0.62f, 0.64f, 0.60f);
@@ -1538,11 +953,11 @@ void draw_power_meter(shader_program& shader, const float swing_power) {
 
     const glm::vec2 panel_center(-0.62f, -0.72f);
     const glm::vec2 panel_half(0.32f, 0.155f);
-    draw_overlay_quad(shader, panel_center + glm::vec2(0.012f, -0.014f), panel_half, glm::vec3(0.0f), 0.22f);
-    draw_overlay_quad(shader, panel_center, panel_half, panel_color, 0.78f);
-    draw_button_outline(shader, panel_center, panel_half, outline_color, 0.54f);
+    draw_overlay_quad(batch, panel_center + glm::vec2(0.012f, -0.014f), panel_half, glm::vec3(0.0f), 0.22f);
+    draw_overlay_quad(batch, panel_center, panel_half, panel_color, 0.78f);
+    draw_button_outline(batch, panel_center, panel_half, outline_color, 0.54f);
 
-    draw_pixel_text_left(shader, "POWER", panel_center + glm::vec2(-0.275f, 0.105f), 0.015f, text_color);
+    draw_pixel_text_left(batch, "POWER", panel_center + glm::vec2(-0.275f, 0.105f), 0.015f, text_color);
 
     const glm::vec2 track_center = panel_center + glm::vec2(0.020f, -0.012f);
     const glm::vec2 track_half(0.245f, 0.035f);
@@ -1550,17 +965,17 @@ void draw_power_meter(shader_program& shader, const float swing_power) {
     const float track_right = track_center.x + track_half.x;
     const float track_width = track_half.x * 2.0f;
 
-    draw_overlay_quad(shader, track_center, track_half, glm::vec3(0.030f, 0.032f, 0.034f), 0.92f);
-    draw_button_outline(shader, track_center, track_half, outline_color, 0.56f);
+    draw_overlay_quad(batch, track_center, track_half, glm::vec3(0.030f, 0.032f, 0.034f), 0.92f);
+    draw_button_outline(batch, track_center, track_half, outline_color, 0.56f);
 
     if (power > 0.0f) {
         const float fill_half_width = track_half.x * power;
         const glm::vec2 fill_center(track_left + fill_half_width, track_center.y);
-        draw_overlay_quad(shader, fill_center, glm::vec2(fill_half_width, track_half.y * 0.58f), amber, 0.92f);
+        draw_overlay_quad(batch, fill_center, glm::vec2(fill_half_width, track_half.y * 0.58f), amber, 0.92f);
     }
 
     const float sweet_x = track_left + track_width * 0.86f;
-    draw_overlay_segment(shader,
+    draw_overlay_segment(batch,
                          glm::vec2(sweet_x, track_center.y - track_half.y * 1.08f),
                          glm::vec2(sweet_x, track_center.y + track_half.y * 1.08f),
                          0.006f,
@@ -1568,7 +983,7 @@ void draw_power_meter(shader_program& shader, const float swing_power) {
                          0.88f);
 
     const float needle_x = track_left + track_width * power;
-    draw_overlay_segment(shader,
+    draw_overlay_segment(batch,
                          glm::vec2(needle_x, track_center.y - 0.055f),
                          glm::vec2(needle_x, track_center.y + 0.055f),
                          0.008f,
@@ -1578,7 +993,7 @@ void draw_power_meter(shader_program& shader, const float swing_power) {
     const std::array<float, 3> ticks{0.0f, 0.5f, 1.0f};
     for (const float tick : ticks) {
         const float x = track_left + track_width * tick;
-        draw_overlay_segment(shader,
+        draw_overlay_segment(batch,
                              glm::vec2(x, track_center.y - 0.058f),
                              glm::vec2(x, track_center.y - 0.080f),
                              0.005f,
@@ -1586,12 +1001,12 @@ void draw_power_meter(shader_program& shader, const float swing_power) {
                              0.72f);
     }
 
-    draw_pixel_text_centered(shader, "0", glm::vec2(track_left, panel_center.y - 0.112f), 0.011f, text_color);
-    draw_pixel_text_centered(shader, "50", glm::vec2(track_center.x, panel_center.y - 0.112f), 0.011f, text_color);
-    draw_pixel_text_centered(shader, "100", glm::vec2(track_right, panel_center.y - 0.112f), 0.011f, text_color);
+    draw_pixel_text_centered(batch, "0", glm::vec2(track_left, panel_center.y - 0.112f), 0.011f, text_color);
+    draw_pixel_text_centered(batch, "50", glm::vec2(track_center.x, panel_center.y - 0.112f), 0.011f, text_color);
+    draw_pixel_text_centered(batch, "100", glm::vec2(track_right, panel_center.y - 0.112f), 0.011f, text_color);
 }
 
-void draw_cart_hud(shader_program& shader, const render_data& data) {
+void draw_cart_hud(overlay_batch& batch, const render_data& data) {
     if (!data.cart_active) {
         return;
     }
@@ -1603,12 +1018,12 @@ void draw_cart_hud(shader_program& shader, const render_data& data) {
 
     const glm::vec2 panel_center(-0.74f, 0.72f);
     const glm::vec2 panel_half(0.19f, 0.13f);
-    draw_overlay_quad(shader, panel_center + glm::vec2(0.012f, -0.012f), panel_half, glm::vec3(0.0f), 0.18f);
-    draw_overlay_quad(shader, panel_center, panel_half, panel_color, 0.82f);
-    draw_button_outline(shader, panel_center, panel_half, outline_color, 0.52f);
+    draw_overlay_quad(batch, panel_center + glm::vec2(0.012f, -0.012f), panel_half, glm::vec3(0.0f), 0.18f);
+    draw_overlay_quad(batch, panel_center, panel_half, panel_color, 0.82f);
+    draw_button_outline(batch, panel_center, panel_half, outline_color, 0.52f);
 
-    draw_pixel_text_left(shader, "CART", panel_center + glm::vec2(-0.150f, 0.082f), 0.015f, text_color);
-    draw_pixel_text_left(shader,
+    draw_pixel_text_left(batch, "CART", panel_center + glm::vec2(-0.150f, 0.082f), 0.015f, text_color);
+    draw_pixel_text_left(batch,
                          data.cart_drifting ? "DRIFT" : "DRIVE",
                          panel_center + glm::vec2(-0.150f, 0.020f),
                          0.013f,
@@ -1616,13 +1031,13 @@ void draw_cart_hud(shader_program& shader, const render_data& data) {
 
     const glm::vec2 track_center = panel_center + glm::vec2(0.030f, -0.046f);
     const glm::vec2 track_half(0.120f, 0.024f);
-    draw_overlay_quad(shader, track_center, track_half, glm::vec3(0.028f, 0.030f, 0.032f), 0.92f);
-    draw_button_outline(shader, track_center, track_half, outline_color, 0.46f);
+    draw_overlay_quad(batch, track_center, track_half, glm::vec3(0.028f, 0.030f, 0.032f), 0.92f);
+    draw_button_outline(batch, track_center, track_half, outline_color, 0.46f);
 
     const float speed_ratio = std::clamp(data.cart_speed / 18.0f, 0.0f, 1.0f);
     if (speed_ratio > 0.0f) {
         const float fill_half_width = track_half.x * speed_ratio;
-        draw_overlay_quad(shader,
+        draw_overlay_quad(batch,
                           glm::vec2(track_center.x - track_half.x + fill_half_width, track_center.y),
                           glm::vec2(fill_half_width, track_half.y * 0.60f),
                           meter_color,
@@ -1630,7 +1045,7 @@ void draw_cart_hud(shader_program& shader, const render_data& data) {
     }
 }
 
-void draw_skills_panel(shader_program& shader, const std::vector<render_skill_progress>& skills) {
+void draw_skills_panel(overlay_batch& batch, const std::vector<render_skill_progress>& skills) {
     if (skills.empty()) {
         return;
     }
@@ -1643,39 +1058,39 @@ void draw_skills_panel(shader_program& shader, const std::vector<render_skill_pr
     const glm::vec3 text_color(0.88f, 0.86f, 0.72f);
     const glm::vec3 muted_color(0.58f, 0.60f, 0.56f);
 
-    draw_overlay_quad(shader, center + glm::vec2(0.018f, -0.020f), half, glm::vec3(0.0f), 0.32f);
-    draw_overlay_quad(shader, center, half, panel_color, 0.88f);
-    draw_button_outline(shader, center, half, outline_color, 0.64f);
+    draw_overlay_quad(batch, center + glm::vec2(0.018f, -0.020f), half, glm::vec3(0.0f), 0.32f);
+    draw_overlay_quad(batch, center, half, panel_color, 0.88f);
+    draw_button_outline(batch, center, half, outline_color, 0.64f);
 
-    draw_pixel_text_centered(shader, "SKILLS", center + glm::vec2(0.0f, half.y - 0.070f), 0.020f, title_color);
-    draw_pixel_text_left(shader, "NAME", center + glm::vec2(-0.48f, half.y - 0.145f), 0.010f, muted_color);
-    draw_pixel_text_left(shader, "LV", center + glm::vec2(0.02f, half.y - 0.145f), 0.010f, muted_color);
-    draw_pixel_text_left(shader, "XP", center + glm::vec2(0.16f, half.y - 0.145f), 0.010f, muted_color);
-    draw_pixel_text_left(shader, "NEXT", center + glm::vec2(0.36f, half.y - 0.145f), 0.010f, muted_color);
+    draw_pixel_text_centered(batch, "SKILLS", center + glm::vec2(0.0f, half.y - 0.070f), 0.020f, title_color);
+    draw_pixel_text_left(batch, "NAME", center + glm::vec2(-0.48f, half.y - 0.145f), 0.010f, muted_color);
+    draw_pixel_text_left(batch, "LV", center + glm::vec2(0.02f, half.y - 0.145f), 0.010f, muted_color);
+    draw_pixel_text_left(batch, "XP", center + glm::vec2(0.16f, half.y - 0.145f), 0.010f, muted_color);
+    draw_pixel_text_left(batch, "NEXT", center + glm::vec2(0.36f, half.y - 0.145f), 0.010f, muted_color);
 
     constexpr float row_gap = 0.105f;
     for (std::size_t i = 0; i < skills.size(); ++i) {
         const render_skill_progress& skill = skills[i];
         const float y = center.y + half.y - 0.225f - static_cast<float>(i) * row_gap;
         const glm::vec3 row_color = i % 2 == 0 ? glm::vec3(0.075f, 0.080f, 0.078f) : glm::vec3(0.060f, 0.064f, 0.066f);
-        draw_overlay_quad(shader, glm::vec2(center.x, y - 0.016f), glm::vec2(0.50f, 0.038f), row_color, 0.74f);
-        draw_pixel_text_left(shader, skill.label, glm::vec2(center.x - 0.48f, y), 0.012f, text_color);
-        draw_pixel_text_left(shader, std::to_string(std::max(1, skill.level)), glm::vec2(center.x + 0.02f, y), 0.012f, text_color);
-        draw_pixel_text_left(shader, std::to_string(std::max(0, skill.xp)), glm::vec2(center.x + 0.16f, y), 0.012f, text_color);
-        draw_pixel_text_left(shader, std::to_string(std::max(0, skill.xp_to_next)), glm::vec2(center.x + 0.36f, y), 0.012f, text_color);
+        draw_overlay_quad(batch, glm::vec2(center.x, y - 0.016f), glm::vec2(0.50f, 0.038f), row_color, 0.74f);
+        draw_pixel_text_left(batch, skill.label, glm::vec2(center.x - 0.48f, y), 0.012f, text_color);
+        draw_pixel_text_left(batch, std::to_string(std::max(1, skill.level)), glm::vec2(center.x + 0.02f, y), 0.012f, text_color);
+        draw_pixel_text_left(batch, std::to_string(std::max(0, skill.xp)), glm::vec2(center.x + 0.16f, y), 0.012f, text_color);
+        draw_pixel_text_left(batch, std::to_string(std::max(0, skill.xp_to_next)), glm::vec2(center.x + 0.36f, y), 0.012f, text_color);
     }
 
-    draw_pixel_text_centered(shader, "CAPS LOCK", center + glm::vec2(0.0f, -half.y + 0.055f), 0.009f, muted_color);
+    draw_pixel_text_centered(batch, "CAPS LOCK", center + glm::vec2(0.0f, -half.y + 0.055f), 0.009f, muted_color);
 }
 
-void draw_xp_icon_cell(shader_program& shader,
+void draw_xp_icon_cell(overlay_batch& batch,
                        const glm::vec2 icon_center,
                        const int x,
                        const int y,
                        const float cell_size,
                        const glm::vec3 color,
                        const float alpha) {
-    draw_overlay_quad(shader,
+    draw_overlay_quad(batch,
                       icon_center + glm::vec2((static_cast<float>(x) - 2.0f) * cell_size,
                                               (2.0f - static_cast<float>(y)) * cell_size),
                       glm::vec2(cell_size * 0.43f),
@@ -1683,7 +1098,7 @@ void draw_xp_icon_cell(shader_program& shader,
                       alpha);
 }
 
-void draw_xp_icon_pattern(shader_program& shader,
+void draw_xp_icon_pattern(overlay_batch& batch,
                           const glm::vec2 icon_center,
                           const std::array<const char*, 5>& pattern,
                           const float cell_size,
@@ -1692,38 +1107,38 @@ void draw_xp_icon_pattern(shader_program& shader,
     for (int y = 0; y < 5; ++y) {
         for (int x = 0; x < 5; ++x) {
             if (pattern[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)] == '#') {
-                draw_xp_icon_cell(shader, icon_center, x, y, cell_size, color, alpha);
+                draw_xp_icon_cell(batch, icon_center, x, y, cell_size, color, alpha);
             }
         }
     }
 }
 
-void draw_xp_icon(shader_program& shader,
+void draw_xp_icon(overlay_batch& batch,
                   const skill_icon_id icon,
                   const glm::vec2 center,
                   const float alpha) {
     const float cell = 0.010f;
     switch (icon) {
     case skill_icon_id::golf_swing:
-        draw_xp_icon_pattern(shader,
+        draw_xp_icon_pattern(batch,
                              center,
                              std::array<const char*, 5>{{"..#..", "..#..", ".##..", "...#.", "...##"}},
                              cell,
                              glm::vec3(0.92f, 0.78f, 0.38f),
                              alpha);
-        draw_overlay_quad(shader, center + glm::vec2(-0.016f, -0.020f), glm::vec2(0.008f), glm::vec3(0.92f), alpha);
+        draw_overlay_quad(batch, center + glm::vec2(-0.016f, -0.020f), glm::vec2(0.008f), glm::vec3(0.92f), alpha);
         break;
     case skill_icon_id::smoking:
-        draw_xp_icon_pattern(shader,
+        draw_xp_icon_pattern(batch,
                              center,
                              std::array<const char*, 5>{{".....", ".###.", "...#.", "####.", "....."}},
                              cell,
                              glm::vec3(0.90f, 0.84f, 0.66f),
                              alpha);
-        draw_xp_icon_cell(shader, center, 4, 2, cell, glm::vec3(0.86f, 0.38f, 0.22f), alpha);
+        draw_xp_icon_cell(batch, center, 4, 2, cell, glm::vec3(0.86f, 0.38f, 0.22f), alpha);
         break;
     case skill_icon_id::fitness:
-        draw_xp_icon_pattern(shader,
+        draw_xp_icon_pattern(batch,
                              center,
                              std::array<const char*, 5>{{".....", ".##..", ".###.", "..###", "....."}},
                              cell,
@@ -1732,7 +1147,7 @@ void draw_xp_icon(shader_program& shader,
         break;
     case skill_icon_id::generic:
     default:
-        draw_xp_icon_pattern(shader,
+        draw_xp_icon_pattern(batch,
                              center,
                              std::array<const char*, 5>{{"..#..", ".###.", "#####", ".###.", "..#.."}},
                              cell,
@@ -1742,7 +1157,7 @@ void draw_xp_icon(shader_program& shader,
     }
 }
 
-void draw_xp_drops(shader_program& shader, const std::vector<render_xp_drop>& drops) {
+void draw_xp_drops(overlay_batch& batch, const std::vector<render_xp_drop>& drops) {
     if (drops.empty()) {
         return;
     }
@@ -1766,14 +1181,14 @@ void draw_xp_drops(shader_program& shader, const std::vector<render_xp_drop>& dr
         const float alpha = progress > 0.78f ? std::max(0.16f, 1.0f - (progress - 0.78f) / 0.22f) : 1.0f;
         const glm::vec2 center(right - row_half.x, start_y - static_cast<float>(i) * row_gap + progress * travel_y);
 
-        draw_overlay_quad(shader, center + glm::vec2(0.010f, -0.010f), row_half, glm::vec3(0.0f), 0.18f * alpha);
-        draw_overlay_quad(shader, center, row_half, panel_color, 0.72f * alpha);
-        draw_button_outline(shader, center, row_half, outline_color, 0.42f * alpha);
-        draw_xp_icon(shader, drop.icon, center + glm::vec2(-0.105f, 0.0f), alpha);
+        draw_overlay_quad(batch, center + glm::vec2(0.010f, -0.010f), row_half, glm::vec3(0.0f), 0.18f * alpha);
+        draw_overlay_quad(batch, center, row_half, panel_color, 0.72f * alpha);
+        draw_button_outline(batch, center, row_half, outline_color, 0.42f * alpha);
+        draw_xp_icon(batch, drop.icon, center + glm::vec2(-0.105f, 0.0f), alpha);
 
         const std::string label = "+" + std::to_string(std::max(0, drop.xp)) + " XP";
         const float pixel_size = fit_pixel_size(label, glm::vec2(0.100f, 0.030f), 0.013f, 0.008f);
-        draw_pixel_text_left(shader, label, center + glm::vec2(-0.055f, 0.021f), pixel_size, text_color * alpha);
+        draw_pixel_text_left(batch, label, center + glm::vec2(-0.055f, 0.021f), pixel_size, text_color * alpha);
     }
 }
 
@@ -1815,12 +1230,12 @@ glm::vec2 preview_point(const glm::vec3& point,
                               (world.y - min_point.y) * scale - half_size.y);
 }
 
-void draw_hole_thumbnail(shader_program& shader,
+void draw_hole_thumbnail(overlay_batch& batch,
                          const render_hole_preview& preview,
                          const glm::vec2 center,
                          const glm::vec2 half_size) {
-    draw_overlay_quad(shader, center, half_size, glm::vec3(0.028f, 0.034f, 0.030f), 0.96f);
-    draw_button_outline(shader, center, half_size, glm::vec3(0.42f, 0.44f, 0.40f), 0.42f);
+    draw_overlay_quad(batch, center, half_size, glm::vec3(0.028f, 0.034f, 0.030f), 0.96f);
+    draw_button_outline(batch, center, half_size, glm::vec3(0.42f, 0.44f, 0.40f), 0.42f);
 
     glm::vec2 raw_min(preview.tee_position.x, preview.tee_position.z);
     glm::vec2 raw_max = raw_min;
@@ -1867,8 +1282,8 @@ void draw_hole_thumbnail(shader_program& shader,
         for (std::size_t i = 1; i < preview.control_points.size(); ++i) {
             const glm::vec2 a = preview_point(preview.control_points[i - 1], center, inset_half, padded_min, scale, rotate_long_axis);
             const glm::vec2 b = preview_point(preview.control_points[i], center, inset_half, padded_min, scale, rotate_long_axis);
-            draw_overlay_segment(shader, a, b, fairway_width, glm::vec3(0.18f, 0.46f, 0.18f), 0.82f);
-            draw_overlay_segment(shader, a, b, 0.006f, glm::vec3(0.62f, 0.78f, 0.38f), 0.55f);
+            draw_overlay_segment(batch, a, b, fairway_width, glm::vec3(0.18f, 0.46f, 0.18f), 0.82f);
+            draw_overlay_segment(batch, a, b, 0.006f, glm::vec3(0.62f, 0.78f, 0.38f), 0.55f);
         }
     }
 
@@ -1877,18 +1292,18 @@ void draw_hole_thumbnail(shader_program& shader,
         if (zone.has_bounds) {
             const glm::vec2 a = preview_point(zone.bounds_min, center, inset_half, padded_min, scale, rotate_long_axis);
             const glm::vec2 b = preview_point(zone.bounds_max, center, inset_half, padded_min, scale, rotate_long_axis);
-            draw_overlay_quad(shader, (a + b) * 0.5f, glm::abs(b - a) * 0.5f, color, 0.64f);
+            draw_overlay_quad(batch, (a + b) * 0.5f, glm::abs(b - a) * 0.5f, color, 0.64f);
         } else if (zone.has_radius) {
             const glm::vec2 p = preview_point(zone.center, center, inset_half, padded_min, scale, rotate_long_axis);
             const float radius = std::max(0.010f, zone.radius * scale);
-            draw_overlay_quad(shader, p, glm::vec2(radius), color, 0.64f);
+            draw_overlay_quad(batch, p, glm::vec2(radius), color, 0.64f);
         }
     }
 
     const glm::vec2 tee = preview_point(preview.tee_position, center, inset_half, padded_min, scale, rotate_long_axis);
     const glm::vec2 pin = preview_point(preview.pin_position, center, inset_half, padded_min, scale, rotate_long_axis);
-    draw_overlay_quad(shader, tee, glm::vec2(0.014f), glm::vec3(0.88f, 0.80f, 0.48f), 0.94f);
-    draw_overlay_quad(shader, pin, glm::vec2(0.012f, 0.028f), glm::vec3(0.88f, 0.18f, 0.12f), 0.94f);
+    draw_overlay_quad(batch, tee, glm::vec2(0.014f), glm::vec3(0.88f, 0.80f, 0.48f), 0.94f);
+    draw_overlay_quad(batch, pin, glm::vec2(0.012f, 0.028f), glm::vec3(0.88f, 0.18f, 0.12f), 0.94f);
 }
 
 glm::vec2 startup_tile_center(const startup_menu_screen screen, const int index) {
@@ -1907,22 +1322,22 @@ glm::vec2 startup_tile_half_size(const startup_menu_screen screen) {
     return screen == startup_menu_screen::main ? glm::vec2(0.42f, 0.095f) : glm::vec2(0.25f, 0.165f);
 }
 
-void draw_startup_menu(shader_program& shader, const render_startup_menu& menu) {
+void draw_startup_menu(overlay_batch& batch, const render_startup_menu& menu) {
     if (menu.screen == startup_menu_screen::none) {
         return;
     }
 
-    draw_overlay_quad(shader, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.0f, 0.0f, 0.0f), 0.72f);
-    draw_overlay_quad(shader, glm::vec2(0.0f, 0.0f), glm::vec2(0.86f, 0.88f), glm::vec3(0.012f, 0.014f, 0.014f), 0.30f);
+    draw_overlay_quad(batch, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.0f, 0.0f, 0.0f), 0.72f);
+    draw_overlay_quad(batch, glm::vec2(0.0f, 0.0f), glm::vec2(0.86f, 0.88f), glm::vec3(0.012f, 0.014f, 0.014f), 0.30f);
     const float menu_title_pixel = fit_pixel_size(menu.title, glm::vec2(0.78f, 0.10f), 0.028f, 0.014f);
-    draw_pixel_text_centered(shader, menu.title, glm::vec2(0.0f, 0.80f), menu_title_pixel, glm::vec3(0.95f, 0.78f, 0.28f));
+    draw_pixel_text_centered(batch, menu.title, glm::vec2(0.0f, 0.80f), menu_title_pixel, glm::vec3(0.95f, 0.78f, 0.28f));
     if (!menu.subtitle.empty()) {
         const float menu_subtitle_pixel = fit_pixel_size(menu.subtitle, glm::vec2(0.70f, 0.065f), 0.015f, 0.010f);
-        draw_pixel_text_centered(shader, menu.subtitle, glm::vec2(0.0f, 0.68f), menu_subtitle_pixel, glm::vec3(0.72f, 0.72f, 0.62f));
+        draw_pixel_text_centered(batch, menu.subtitle, glm::vec2(0.0f, 0.68f), menu_subtitle_pixel, glm::vec3(0.72f, 0.72f, 0.62f));
     }
 
     if (menu.screen == startup_menu_screen::help) {
-        draw_startup_help_screen(shader);
+        draw_startup_help_screen(batch);
     }
 
     const glm::vec2 tile_half = startup_tile_half_size(menu.screen);
@@ -1931,23 +1346,23 @@ void draw_startup_menu(shader_program& shader, const render_startup_menu& menu) 
         const glm::vec2 center = startup_tile_center(menu.screen, static_cast<int>(i));
         const glm::vec3 panel_color = tile.selected ? glm::vec3(0.20f, 0.16f, 0.065f) : glm::vec3(0.070f, 0.075f, 0.075f);
         const glm::vec3 outline = tile.selected ? glm::vec3(0.94f, 0.72f, 0.22f) : glm::vec3(0.50f, 0.52f, 0.48f);
-        draw_overlay_quad(shader, center, tile_half, panel_color, tile.selected ? 0.94f : 0.76f);
-        draw_button_outline(shader, center, tile_half, outline, tile.selected ? 0.94f : 0.44f);
+        draw_overlay_quad(batch, center, tile_half, panel_color, tile.selected ? 0.94f : 0.76f);
+        draw_button_outline(batch, center, tile_half, outline, tile.selected ? 0.94f : 0.44f);
 
         if (tile.has_preview) {
-            draw_hole_thumbnail(shader, tile.preview, center + glm::vec2(0.0f, 0.030f), glm::vec2(tile_half.x * 0.86f, tile_half.y * 0.48f));
+            draw_hole_thumbnail(batch, tile.preview, center + glm::vec2(0.0f, 0.030f), glm::vec2(tile_half.x * 0.86f, tile_half.y * 0.48f));
 
             const glm::vec2 title_half(tile_half.x * 0.86f, tile_half.y * 0.22f);
             const glm::vec2 subtitle_half(tile_half.x * 0.86f, tile_half.y * 0.18f);
             const float title_pixel = fit_pixel_size(tile.title, title_half, 0.012f, 0.008f);
             const float subtitle_pixel = fit_pixel_size(tile.subtitle, subtitle_half, 0.010f, 0.007f);
 
-            draw_pixel_text_left(shader,
+            draw_pixel_text_left(batch,
                                  tile.title,
                                  center + glm::vec2(-tile_half.x * 0.86f, -tile_half.y * 0.28f),
                                  title_pixel,
                                  glm::vec3(0.90f, 0.88f, 0.76f));
-            draw_pixel_text_left(shader,
+            draw_pixel_text_left(batch,
                                  tile.subtitle,
                                  center + glm::vec2(-tile_half.x * 0.86f, -tile_half.y * 0.58f),
                                  subtitle_pixel,
@@ -1958,12 +1373,12 @@ void draw_startup_menu(shader_program& shader, const render_startup_menu& menu) 
             const float title_pixel = fit_pixel_size(tile.title, title_half, 0.020f, 0.010f);
             const float subtitle_pixel = fit_pixel_size(tile.subtitle, subtitle_half, 0.012f, 0.008f);
 
-            draw_pixel_text_centered(shader,
+            draw_pixel_text_centered(batch,
                                      tile.title,
                                      center + glm::vec2(0.0f, 0.018f),
                                      title_pixel,
                                      glm::vec3(0.90f, 0.88f, 0.76f));
-            draw_pixel_text_centered(shader,
+            draw_pixel_text_centered(batch,
                                      tile.subtitle,
                                      center + glm::vec2(0.0f, -0.050f),
                                      subtitle_pixel,
@@ -1973,7 +1388,7 @@ void draw_startup_menu(shader_program& shader, const render_startup_menu& menu) 
 
     if (!menu.footer.empty()) {
         const float footer_pixel = fit_pixel_size(menu.footer, glm::vec2(0.78f, 0.05f), 0.013f, 0.009f);
-        draw_pixel_text_centered(shader, menu.footer, glm::vec2(0.0f, -0.86f), footer_pixel, glm::vec3(0.56f, 0.57f, 0.52f));
+        draw_pixel_text_centered(batch, menu.footer, glm::vec2(0.0f, -0.86f), footer_pixel, glm::vec3(0.56f, 0.57f, 0.52f));
     }
 }
 
@@ -1995,23 +1410,23 @@ bool project_to_screen(const glm::mat4& view,
     return true;
 }
 
-void draw_rangefinder_view(shader_program& shader,
+void draw_rangefinder_view(overlay_batch& batch,
                            const glm::mat4& view,
                            const glm::mat4& proj,
                            const render_data& data) {
-    draw_overlay_quad(shader, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.16f, 0.34f, 0.24f), 0.18f);
-    draw_overlay_quad(shader, glm::vec2(-0.91f, 0.0f), glm::vec2(0.18f, 1.0f), glm::vec3(0.01f, 0.018f, 0.014f), 0.52f);
-    draw_overlay_quad(shader, glm::vec2(0.91f, 0.0f), glm::vec2(0.18f, 1.0f), glm::vec3(0.01f, 0.018f, 0.014f), 0.52f);
-    draw_overlay_quad(shader, glm::vec2(0.0f, 0.89f), glm::vec2(1.0f, 0.22f), glm::vec3(0.01f, 0.018f, 0.014f), 0.45f);
-    draw_overlay_quad(shader, glm::vec2(0.0f, -0.89f), glm::vec2(1.0f, 0.22f), glm::vec3(0.01f, 0.018f, 0.014f), 0.45f);
+    draw_overlay_quad(batch, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.16f, 0.34f, 0.24f), 0.18f);
+    draw_overlay_quad(batch, glm::vec2(-0.91f, 0.0f), glm::vec2(0.18f, 1.0f), glm::vec3(0.01f, 0.018f, 0.014f), 0.52f);
+    draw_overlay_quad(batch, glm::vec2(0.91f, 0.0f), glm::vec2(0.18f, 1.0f), glm::vec3(0.01f, 0.018f, 0.014f), 0.52f);
+    draw_overlay_quad(batch, glm::vec2(0.0f, 0.89f), glm::vec2(1.0f, 0.22f), glm::vec3(0.01f, 0.018f, 0.014f), 0.45f);
+    draw_overlay_quad(batch, glm::vec2(0.0f, -0.89f), glm::vec2(1.0f, 0.22f), glm::vec3(0.01f, 0.018f, 0.014f), 0.45f);
 
     const glm::vec3 reticle_color(0.62f, 0.96f, 0.64f);
-    draw_overlay_quad(shader, glm::vec2(0.0f, 0.0f), glm::vec2(0.006f, 0.11f), reticle_color, 0.72f);
-    draw_overlay_quad(shader, glm::vec2(0.0f, 0.0f), glm::vec2(0.11f, 0.006f), reticle_color, 0.72f);
-    draw_overlay_quad(shader, glm::vec2(-0.18f, 0.0f), glm::vec2(0.055f, 0.006f), reticle_color, 0.56f);
-    draw_overlay_quad(shader, glm::vec2(0.18f, 0.0f), glm::vec2(0.055f, 0.006f), reticle_color, 0.56f);
-    draw_overlay_quad(shader, glm::vec2(0.0f, -0.18f), glm::vec2(0.006f, 0.055f), reticle_color, 0.56f);
-    draw_overlay_quad(shader, glm::vec2(0.0f, 0.18f), glm::vec2(0.006f, 0.055f), reticle_color, 0.56f);
+    draw_overlay_quad(batch, glm::vec2(0.0f, 0.0f), glm::vec2(0.006f, 0.11f), reticle_color, 0.72f);
+    draw_overlay_quad(batch, glm::vec2(0.0f, 0.0f), glm::vec2(0.11f, 0.006f), reticle_color, 0.72f);
+    draw_overlay_quad(batch, glm::vec2(-0.18f, 0.0f), glm::vec2(0.055f, 0.006f), reticle_color, 0.56f);
+    draw_overlay_quad(batch, glm::vec2(0.18f, 0.0f), glm::vec2(0.055f, 0.006f), reticle_color, 0.56f);
+    draw_overlay_quad(batch, glm::vec2(0.0f, -0.18f), glm::vec2(0.006f, 0.055f), reticle_color, 0.56f);
+    draw_overlay_quad(batch, glm::vec2(0.0f, 0.18f), glm::vec2(0.006f, 0.055f), reticle_color, 0.56f);
 
     glm::vec2 pin_screen(0.0f);
     const glm::vec3 label_anchor = data.pin_position + glm::vec3(0.0f, data.pin_visual_height_meters + 0.36f, 0.0f);
@@ -2025,8 +1440,8 @@ void draw_rangefinder_view(shader_program& shader,
     const float pixel_size = fit_pixel_size(data.rangefinder_distance_label, label_max_half, 0.020f, 0.010f);
     const float label_width = pixel_text_width(data.rangefinder_distance_label, pixel_size);
     const glm::vec2 panel_half(std::max(0.12f, label_width * 0.5f + 0.035f), 0.070f);
-    draw_overlay_quad(shader, pin_screen + glm::vec2(0.0f, 0.015f), panel_half, glm::vec3(0.015f, 0.032f, 0.024f), 0.78f);
-    draw_pixel_text_centered(shader,
+    draw_overlay_quad(batch, pin_screen + glm::vec2(0.0f, 0.015f), panel_half, glm::vec3(0.015f, 0.032f, 0.024f), 0.78f);
+    draw_pixel_text_centered(batch,
                              data.rangefinder_distance_label,
                              pin_screen + glm::vec2(0.0f, 0.015f),
                              pixel_size,
@@ -2084,12 +1499,12 @@ glm::vec2 map_point(const course_map_layout& layout, const glm::vec3& position) 
     return layout.center + delta * layout.scale;
 }
 
-void draw_map_marker(shader_program& shader,
+void draw_map_marker(overlay_batch& batch,
                      const glm::vec2 position,
                      const glm::vec3 color,
                      const float radius) {
-    draw_overlay_quad(shader, position, glm::vec2(radius), glm::vec3(0.04f, 0.035f, 0.025f), 0.55f);
-    draw_overlay_quad(shader, position, glm::vec2(radius * 0.64f), color, 1.0f);
+    draw_overlay_quad(batch, position, glm::vec2(radius), glm::vec3(0.04f, 0.035f, 0.025f), 0.55f);
+    draw_overlay_quad(batch, position, glm::vec2(radius * 0.64f), color, 1.0f);
 }
 
 void add_triangle_scan_intersection(const glm::vec2 a,
@@ -2108,7 +1523,7 @@ void add_triangle_scan_intersection(const glm::vec2 a,
     ++intersection_count;
 }
 
-void draw_filled_map_triangle(shader_program& shader,
+void draw_filled_map_triangle(overlay_batch& batch,
                               const course_map_layout& layout,
                               const glm::vec2 a,
                               const glm::vec2 b,
@@ -2159,7 +1574,7 @@ void draw_filled_map_triangle(shader_program& shader,
             continue;
         }
 
-        draw_overlay_quad(shader,
+        draw_overlay_quad(batch,
                           glm::vec2((x0 + x1) * 0.5f, y),
                           glm::vec2((x1 - x0) * 0.5f, strip_height * 0.56f),
                           color,
@@ -2167,7 +1582,7 @@ void draw_filled_map_triangle(shader_program& shader,
     }
 }
 
-void draw_filled_map_terrain(shader_program& shader, const course_map_layout& layout, const render_data& data) {
+void draw_filled_map_terrain(overlay_batch& batch, const course_map_layout& layout, const render_data& data) {
     const render_static_mesh* terrain_mesh = data.terrain_mesh;
     if (terrain_mesh == nullptr || terrain_mesh->vertices.empty() || terrain_mesh->indices.size() < 3) {
         return;
@@ -2188,7 +1603,7 @@ void draw_filled_map_terrain(shader_program& shader, const course_map_layout& la
         const render_terrain_vertex& vc = terrain_mesh->vertices[ic];
         const glm::vec3 average_color = (va.color + vb.color + vc.color) / 3.0f;
         const glm::vec3 ink = average_color * 0.72f + glm::vec3(0.10f, 0.08f, 0.04f);
-        draw_filled_map_triangle(shader,
+        draw_filled_map_triangle(batch,
                                  layout,
                                  map_point(layout, va.position),
                                  map_point(layout, vb.position),
@@ -2197,53 +1612,53 @@ void draw_filled_map_terrain(shader_program& shader, const course_map_layout& la
     }
 }
 
-void draw_paper_course_map(shader_program& shader, const render_data& data) {
+void draw_paper_course_map(overlay_batch& batch, const render_data& data) {
     const course_map_layout layout = make_course_map_layout(data);
     const glm::vec3 paper(0.76f, 0.72f, 0.55f);
     const glm::vec3 paper_shadow(0.14f, 0.12f, 0.09f);
-    draw_overlay_quad(shader, layout.center + glm::vec2(0.035f, -0.035f), layout.half_size, paper_shadow, 0.42f);
-    draw_overlay_quad(shader, layout.center, layout.half_size, paper, 0.96f);
+    draw_overlay_quad(batch, layout.center + glm::vec2(0.035f, -0.035f), layout.half_size, paper_shadow, 0.42f);
+    draw_overlay_quad(batch, layout.center, layout.half_size, paper, 0.96f);
 
     const glm::vec3 fold(0.42f, 0.35f, 0.24f);
-    draw_overlay_quad(shader, layout.center, glm::vec2(layout.half_size.x, 0.006f), fold, 0.18f);
-    draw_overlay_quad(shader, layout.center, glm::vec2(0.006f, layout.half_size.y), fold, 0.18f);
-    draw_overlay_quad(shader,
+    draw_overlay_quad(batch, layout.center, glm::vec2(layout.half_size.x, 0.006f), fold, 0.18f);
+    draw_overlay_quad(batch, layout.center, glm::vec2(0.006f, layout.half_size.y), fold, 0.18f);
+    draw_overlay_quad(batch,
                       layout.center + glm::vec2(0.0f, layout.half_size.y),
                       glm::vec2(layout.half_size.x, 0.012f),
                       fold,
                       0.46f);
-    draw_overlay_quad(shader,
+    draw_overlay_quad(batch,
                       layout.center - glm::vec2(0.0f, layout.half_size.y),
                       glm::vec2(layout.half_size.x, 0.012f),
                       fold,
                       0.46f);
-    draw_overlay_quad(shader,
+    draw_overlay_quad(batch,
                       layout.center + glm::vec2(layout.half_size.x, 0.0f),
                       glm::vec2(0.012f, layout.half_size.y),
                       fold,
                       0.46f);
-    draw_overlay_quad(shader,
+    draw_overlay_quad(batch,
                       layout.center - glm::vec2(layout.half_size.x, 0.0f),
                       glm::vec2(0.012f, layout.half_size.y),
                       fold,
                       0.46f);
 
-    draw_filled_map_terrain(shader, layout, data);
+    draw_filled_map_terrain(batch, layout, data);
 
     for (const render_tree& tree : data.trees) {
         const glm::vec2 p = map_point(layout, tree.base);
         const float radius = std::max(0.012f, std::min(0.028f, tree.leaf_radius * layout.scale));
-        draw_map_marker(shader, p, glm::vec3(0.08f, 0.24f, 0.11f), radius);
+        draw_map_marker(batch, p, glm::vec3(0.08f, 0.24f, 0.11f), radius);
     }
 
-    draw_map_marker(shader, map_point(layout, data.tee_position), glm::vec3(0.34f, 0.21f, 0.12f), 0.023f);
-    draw_map_marker(shader, map_point(layout, data.ball_position), glm::vec3(0.94f, 0.93f, 0.82f), 0.020f);
-    draw_map_marker(shader, map_point(layout, data.player_position), glm::vec3(0.22f, 0.46f, 0.72f), 0.024f);
+    draw_map_marker(batch, map_point(layout, data.tee_position), glm::vec3(0.34f, 0.21f, 0.12f), 0.023f);
+    draw_map_marker(batch, map_point(layout, data.ball_position), glm::vec3(0.94f, 0.93f, 0.82f), 0.020f);
+    draw_map_marker(batch, map_point(layout, data.player_position), glm::vec3(0.22f, 0.46f, 0.72f), 0.024f);
 
     const glm::vec2 pin = map_point(layout, data.pin_position);
-    draw_overlay_quad(shader, pin + glm::vec2(0.0f, 0.028f), glm::vec2(0.004f, 0.042f), glm::vec3(0.06f, 0.04f, 0.025f), 0.92f);
-    draw_overlay_quad(shader, pin + glm::vec2(0.022f, 0.055f), glm::vec2(0.028f, 0.018f), glm::vec3(0.76f, 0.17f, 0.12f), 0.96f);
-    draw_map_marker(shader, pin, glm::vec3(0.94f, 0.78f, 0.22f), 0.018f);
+    draw_overlay_quad(batch, pin + glm::vec2(0.0f, 0.028f), glm::vec2(0.004f, 0.042f), glm::vec3(0.06f, 0.04f, 0.025f), 0.92f);
+    draw_overlay_quad(batch, pin + glm::vec2(0.022f, 0.055f), glm::vec2(0.028f, 0.018f), glm::vec3(0.76f, 0.17f, 0.12f), 0.96f);
+    draw_map_marker(batch, pin, glm::vec3(0.94f, 0.78f, 0.22f), 0.018f);
 }
 
 std::string int_label(const int value) {
@@ -2267,7 +1682,7 @@ std::string hole_label(const scorecard_row& row, const bool compact) {
     return int_label(row.hole_number) + " " + row.hole_name;
 }
 
-void draw_paper_card_base(shader_program& shader,
+void draw_paper_card_base(overlay_batch& batch,
                           const glm::vec2 center,
                           const glm::vec2 half_size,
                           const float alpha) {
@@ -2275,14 +1690,14 @@ void draw_paper_card_base(shader_program& shader,
     const glm::vec3 paper_shadow(0.12f, 0.095f, 0.065f);
     const glm::vec3 fold(0.42f, 0.35f, 0.24f);
 
-    draw_overlay_quad(shader, center + glm::vec2(0.030f, -0.034f), half_size, paper_shadow, 0.40f * alpha);
-    draw_overlay_quad(shader, center, half_size, paper, 0.97f * alpha);
-    draw_overlay_quad(shader, center + glm::vec2(-half_size.x * 0.28f, 0.0f), glm::vec2(0.004f, half_size.y), fold, 0.14f * alpha);
-    draw_overlay_quad(shader, center + glm::vec2(half_size.x * 0.22f, 0.0f), glm::vec2(0.003f, half_size.y), fold, 0.10f * alpha);
-    draw_button_outline(shader, center, half_size, fold, 0.44f * alpha);
+    draw_overlay_quad(batch, center + glm::vec2(0.030f, -0.034f), half_size, paper_shadow, 0.40f * alpha);
+    draw_overlay_quad(batch, center, half_size, paper, 0.97f * alpha);
+    draw_overlay_quad(batch, center + glm::vec2(-half_size.x * 0.28f, 0.0f), glm::vec2(0.004f, half_size.y), fold, 0.14f * alpha);
+    draw_overlay_quad(batch, center + glm::vec2(half_size.x * 0.22f, 0.0f), glm::vec2(0.003f, half_size.y), fold, 0.10f * alpha);
+    draw_button_outline(batch, center, half_size, fold, 0.44f * alpha);
 }
 
-void draw_scorecard_grid_lines(shader_program& shader,
+void draw_scorecard_grid_lines(overlay_batch& batch,
                                const glm::vec2 center,
                                const glm::vec2 half_size,
                                const std::array<float, 5>& x_edges,
@@ -2294,27 +1709,27 @@ void draw_scorecard_grid_lines(shader_program& shader,
     const float top = header_y + row_height * 0.62f;
     const float bottom = header_y - row_height * (static_cast<float>(row_count) + 0.62f);
     for (float x : x_edges) {
-        draw_overlay_segment(shader, glm::vec2(x, top), glm::vec2(x, bottom), 0.004f, ink, 0.38f * alpha);
+        draw_overlay_segment(batch, glm::vec2(x, top), glm::vec2(x, bottom), 0.004f, ink, 0.38f * alpha);
     }
     for (int i = 0; i <= row_count + 1; ++i) {
         const float y = top - static_cast<float>(i) * row_height;
-        draw_overlay_segment(shader, glm::vec2(x_edges.front(), y), glm::vec2(x_edges.back(), y), 0.004f, ink, 0.34f * alpha);
+        draw_overlay_segment(batch, glm::vec2(x_edges.front(), y), glm::vec2(x_edges.back(), y), 0.004f, ink, 0.34f * alpha);
     }
-    draw_button_outline(shader, center, half_size, ink, 0.22f * alpha);
+    draw_button_outline(batch, center, half_size, ink, 0.22f * alpha);
 }
 
-void draw_scorecard_headers(shader_program& shader,
+void draw_scorecard_headers(overlay_batch& batch,
                             const std::array<float, 5>& x_edges,
                             const float y,
                             const float pixel,
                             const glm::vec3 color) {
-    draw_pixel_text_centered(shader, "HOLE", glm::vec2((x_edges[0] + x_edges[1]) * 0.5f, y), pixel, color);
-    draw_pixel_text_centered(shader, "PAR", glm::vec2((x_edges[1] + x_edges[2]) * 0.5f, y), pixel, color);
-    draw_pixel_text_centered(shader, "SCORE", glm::vec2((x_edges[2] + x_edges[3]) * 0.5f, y), pixel, color);
-    draw_pixel_text_centered(shader, "+/-", glm::vec2((x_edges[3] + x_edges[4]) * 0.5f, y), pixel, color);
+    draw_pixel_text_centered(batch, "HOLE", glm::vec2((x_edges[0] + x_edges[1]) * 0.5f, y), pixel, color);
+    draw_pixel_text_centered(batch, "PAR", glm::vec2((x_edges[1] + x_edges[2]) * 0.5f, y), pixel, color);
+    draw_pixel_text_centered(batch, "SCORE", glm::vec2((x_edges[2] + x_edges[3]) * 0.5f, y), pixel, color);
+    draw_pixel_text_centered(batch, "+/-", glm::vec2((x_edges[3] + x_edges[4]) * 0.5f, y), pixel, color);
 }
 
-void draw_scorecard_row_text(shader_program& shader,
+void draw_scorecard_row_text(overlay_batch& batch,
                              const scorecard_row& row,
                              const std::array<float, 5>& x_edges,
                              const float y,
@@ -2329,25 +1744,25 @@ void draw_scorecard_row_text(shader_program& shader,
                                             glm::vec2((x_edges[1] - x_edges[0]) * 0.48f, 0.030f),
                                             pixel,
                                             0.0055f);
-    draw_pixel_text_left(shader, hole, glm::vec2(x_edges[0] + 0.014f, y + 3.5f * hole_pixel), hole_pixel, ink);
-    draw_pixel_text_centered(shader, int_label(row.par), glm::vec2((x_edges[1] + x_edges[2]) * 0.5f, y), pixel, ink);
-    draw_pixel_text_centered(shader, score_label(row), glm::vec2((x_edges[2] + x_edges[3]) * 0.5f, y), pixel, score_ink);
-    draw_pixel_text_centered(shader, relative_label(row), glm::vec2((x_edges[3] + x_edges[4]) * 0.5f, y), pixel, score_ink);
+    draw_pixel_text_left(batch, hole, glm::vec2(x_edges[0] + 0.014f, y + 3.5f * hole_pixel), hole_pixel, ink);
+    draw_pixel_text_centered(batch, int_label(row.par), glm::vec2((x_edges[1] + x_edges[2]) * 0.5f, y), pixel, ink);
+    draw_pixel_text_centered(batch, score_label(row), glm::vec2((x_edges[2] + x_edges[3]) * 0.5f, y), pixel, score_ink);
+    draw_pixel_text_centered(batch, relative_label(row), glm::vec2((x_edges[3] + x_edges[4]) * 0.5f, y), pixel, score_ink);
 }
 
-void draw_scorecard_totals(shader_program& shader,
+void draw_scorecard_totals(overlay_batch& batch,
                            const scorecard_data& scorecard,
                            const std::array<float, 5>& x_edges,
                            const float y,
                            const float pixel) {
     const glm::vec3 ink(0.12f, 0.09f, 0.06f);
-    draw_pixel_text_left(shader, "TOTAL", glm::vec2(x_edges[0] + 0.014f, y + 3.5f * pixel), pixel, ink);
-    draw_pixel_text_centered(shader, int_label(scorecard.total_par), glm::vec2((x_edges[1] + x_edges[2]) * 0.5f, y), pixel, ink);
-    draw_pixel_text_centered(shader, int_label(scorecard.total_strokes), glm::vec2((x_edges[2] + x_edges[3]) * 0.5f, y), pixel, ink);
-    draw_pixel_text_centered(shader, scorecard.total_relative_label, glm::vec2((x_edges[3] + x_edges[4]) * 0.5f, y), pixel, ink);
+    draw_pixel_text_left(batch, "TOTAL", glm::vec2(x_edges[0] + 0.014f, y + 3.5f * pixel), pixel, ink);
+    draw_pixel_text_centered(batch, int_label(scorecard.total_par), glm::vec2((x_edges[1] + x_edges[2]) * 0.5f, y), pixel, ink);
+    draw_pixel_text_centered(batch, int_label(scorecard.total_strokes), glm::vec2((x_edges[2] + x_edges[3]) * 0.5f, y), pixel, ink);
+    draw_pixel_text_centered(batch, scorecard.total_relative_label, glm::vec2((x_edges[3] + x_edges[4]) * 0.5f, y), pixel, ink);
 }
 
-void draw_scorecard_card(shader_program& shader,
+void draw_scorecard_card(overlay_batch& batch,
                          const scorecard_data& scorecard,
                          const glm::vec2 center,
                          const glm::vec2 half_size,
@@ -2356,13 +1771,13 @@ void draw_scorecard_card(shader_program& shader,
         return;
     }
 
-    draw_paper_card_base(shader, center, half_size, 1.0f);
+    draw_paper_card_base(batch, center, half_size, 1.0f);
 
     const glm::vec3 title_color(0.20f, 0.12f, 0.06f);
     const glm::vec3 muted(0.35f, 0.30f, 0.20f);
     const float title_pixel = fit_pixel_size(scorecard.course_name, glm::vec2(half_size.x * 0.78f, 0.055f), compact ? 0.014f : 0.020f, 0.007f);
-    draw_pixel_text_centered(shader, scorecard.course_name, center + glm::vec2(0.0f, half_size.y - 0.070f), title_pixel, title_color);
-    draw_pixel_text_centered(shader,
+    draw_pixel_text_centered(batch, scorecard.course_name, center + glm::vec2(0.0f, half_size.y - 0.070f), title_pixel, title_color);
+    draw_pixel_text_centered(batch,
                              compact ? "SCORECARD" : "COURSE RESULTS",
                              center + glm::vec2(0.0f, half_size.y - (compact ? 0.126f : 0.142f)),
                              compact ? 0.010f : 0.012f,
@@ -2394,8 +1809,8 @@ void draw_scorecard_card(shader_program& shader,
         x4
     }};
 
-    draw_scorecard_grid_lines(shader, center, half_size, x_edges, header_y, row_height, static_cast<int>(row_limit), 1.0f);
-    draw_scorecard_headers(shader, x_edges, header_y, compact ? 0.0075f : 0.0090f, muted);
+    draw_scorecard_grid_lines(batch, center, half_size, x_edges, header_y, row_height, static_cast<int>(row_limit), 1.0f);
+    draw_scorecard_headers(batch, x_edges, header_y, compact ? 0.0075f : 0.0090f, muted);
 
     const float row_pixel = std::min(compact ? 0.0090f : 0.0105f, row_height * 0.18f);
     for (std::size_t row_index = 0; row_index < row_limit; ++row_index) {
@@ -2403,14 +1818,14 @@ void draw_scorecard_card(shader_program& shader,
         const scorecard_row& row = scorecard.rows[source_index];
         const float y = header_y - row_height * (static_cast<float>(row_index) + 1.0f);
         const bool current = !scorecard.finished && source_index == scorecard.current_hole_index;
-        draw_scorecard_row_text(shader, row, x_edges, y, row_pixel, compact, current);
+        draw_scorecard_row_text(batch, row, x_edges, y, row_pixel, compact, current);
     }
 
     const float total_y = center.y - half_size.y + (compact ? 0.060f : 0.076f);
-    draw_scorecard_totals(shader, scorecard, x_edges, total_y, compact ? 0.0085f : 0.0105f);
+    draw_scorecard_totals(batch, scorecard, x_edges, total_y, compact ? 0.0085f : 0.0105f);
 
     if (!compact) {
-        draw_pixel_text_centered(shader,
+        draw_pixel_text_centered(batch,
                                  "ENTER / SPACE / ESC / BACKSPACE",
                                  center + glm::vec2(0.0f, -half_size.y + 0.034f),
                                  0.0070f,
@@ -2418,13 +1833,43 @@ void draw_scorecard_card(shader_program& shader,
     }
 }
 
-void draw_compact_scorecard(shader_program& shader, const scorecard_data& scorecard) {
-    draw_scorecard_card(shader, scorecard, glm::vec2(-0.48f, 0.32f), glm::vec2(0.44f, 0.44f), true);
+void draw_compact_scorecard(overlay_batch& batch, const scorecard_data& scorecard) {
+    draw_scorecard_card(batch, scorecard, glm::vec2(-0.48f, 0.32f), glm::vec2(0.44f, 0.44f), true);
 }
 
-void draw_course_results(shader_program& shader, const scorecard_data& scorecard) {
-    draw_overlay_quad(shader, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.015f, 0.013f, 0.012f), 0.70f);
-    draw_scorecard_card(shader, scorecard, glm::vec2(0.0f, 0.0f), glm::vec2(0.74f, 0.80f), false);
+void draw_course_results(overlay_batch& batch, const scorecard_data& scorecard) {
+    draw_overlay_quad(batch, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.015f, 0.013f, 0.012f), 0.70f);
+    draw_scorecard_card(batch, scorecard, glm::vec2(0.0f, 0.0f), glm::vec2(0.74f, 0.80f), false);
+}
+
+void draw_stroke_ticks(overlay_batch& batch, const int stroke_count) {
+    // These used to inherit u_alpha from the previous overlay quad; the club
+    // label panel and its text (always drawn just before) leave it at 1.0.
+    const int strokes = std::max(stroke_count, 0);
+    const int ten_marks = std::min(strokes / 10, 8);
+    for (int i = 0; i < ten_marks; ++i) {
+        const float x = -0.92f + static_cast<float>(i) * 0.07f;
+        draw_overlay_quad(batch, glm::vec2(x, 0.86f), glm::vec2(0.026f, 0.08f), glm::vec3(0.92f, 0.70f, 0.18f), 1.0f);
+    }
+
+    const int one_marks = strokes % 10;
+    for (int i = 0; i < one_marks; ++i) {
+        const float x = -0.92f + static_cast<float>(i) * 0.055f;
+        draw_overlay_quad(batch, glm::vec2(x, 0.76f), glm::vec2(0.015f, 0.06f), glm::vec3(0.88f, 0.88f, 0.78f), 1.0f);
+    }
+}
+
+// The debug overlay is flushed as its own draw so its GL cost can be moved
+// into the DBGUI bucket: flush what is queued underneath it, mark, queue and
+// flush the debug text, reclaim. Layering is unchanged; showing it costs one
+// extra overlay draw call (the split) in the frame counters.
+void draw_debug_overlay(overlay_pass& pass, const render_data& data, frame_profile* profile) {
+    pass.flush();
+    const debug_overlay_cost_mark mark = mark_debug_overlay_cost(profile);
+    draw_fps_counter(pass.batch(), data.fps_label);
+    draw_profile_overlay(pass.batch(), data.profile_summary);
+    pass.flush();
+    reclaim_debug_overlay_cost(profile, mark);
 }
 }
 
@@ -2458,6 +1903,12 @@ bool renderer::init(SDL_Window* window) {
         return false;
     }
 
+    const std::string overlay_vert = asset_path("shaders/overlay.vert");
+    const std::string overlay_frag = asset_path("shaders/overlay.frag");
+    if (!overlay_pass_.init(overlay_vert.c_str(), overlay_frag.c_str())) {
+        return false;
+    }
+
     // Optional: profiling still works fully on the CPU side if this fails.
     gpu_timers_.init();
 
@@ -2467,6 +1918,7 @@ bool renderer::init(SDL_Window* window) {
 void renderer::shutdown() {
     gpu_timers_.shutdown();
     tree_renderer_.shutdown();
+    overlay_pass_.shutdown();
     terrain_shader_.shutdown();
     ball_shader_.shutdown();
     crt_shader_.shutdown();
@@ -3143,22 +2595,18 @@ void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, cons
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    terrain_shader_.use();
-    terrain_shader_.set_mat4("u_model", glm::mat4(1.0f));
-    terrain_shader_.set_int("u_use_vertex_color", 0);
-    terrain_shader_.set_float("u_alpha", 1.0f);
-    terrain_shader_.set_vec3("u_light_dir", glm::vec3(0.0f, 1.0f, 0.0f));
-    glBindVertexArray(screen_vao_);
+    // Every overlay primitive appends to one vertex stream in submission order
+    // (per-vertex colour + alpha), so painter's-order blending is preserved
+    // and the whole overlay normally goes out in a single draw call. Nothing
+    // below touches GL state except the explicit flushes.
+    overlay_batch& batch = overlay_pass_.begin(profile);
 
     if (data.show_course_results) {
-        draw_course_results(terrain_shader_, data.scorecard);
+        draw_course_results(batch, data.scorecard);
         if (data.show_fps) {
-            const debug_overlay_cost_mark mark = mark_debug_overlay_cost(profile);
-            draw_fps_counter(terrain_shader_, data.fps_label);
-            draw_profile_overlay(terrain_shader_, data.profile_summary);
-            reclaim_debug_overlay_cost(profile, mark);
+            draw_debug_overlay(overlay_pass_, data, profile);
         }
-        glBindVertexArray(0);
+        overlay_pass_.flush();
         glDisable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);
         gpu_timers_.end();
@@ -3166,67 +2614,45 @@ void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, cons
     }
 
     if (data.show_course_map) {
-        draw_paper_course_map(terrain_shader_, data);
+        draw_paper_course_map(batch, data);
     }
 
     if (data.show_scorecard) {
-        draw_compact_scorecard(terrain_shader_, data.scorecard);
+        draw_compact_scorecard(batch, data.scorecard);
     }
 
     if (data.show_skills_panel) {
-        draw_skills_panel(terrain_shader_, data.skills);
+        draw_skills_panel(batch, data.skills);
     }
 
     if (data.show_fps) {
-        const debug_overlay_cost_mark mark = mark_debug_overlay_cost(profile);
-        draw_fps_counter(terrain_shader_, data.fps_label);
-        draw_profile_overlay(terrain_shader_, data.profile_summary);
-        reclaim_debug_overlay_cost(profile, mark);
+        draw_debug_overlay(overlay_pass_, data, profile);
     }
 
     if (data.show_rangefinder) {
-        draw_rangefinder_view(terrain_shader_, view, proj, data);
+        draw_rangefinder_view(batch, view, proj, data);
     }
 
-    draw_cart_hud(terrain_shader_, data);
-    draw_club_label(terrain_shader_, data.selected_club_label);
+    draw_cart_hud(batch, data);
+    draw_club_label(batch, data.selected_club_label);
 
     if (data.show_interact_prompt) {
-        draw_interact_prompt(terrain_shader_);
+        draw_interact_prompt(batch);
     }
 
-    draw_xp_drops(terrain_shader_, data.xp_drops);
+    draw_xp_drops(batch, data.xp_drops);
 
-    draw_controls_overlay(terrain_shader_, data.controls);
+    draw_controls_overlay(batch, data.controls);
 
     if (data.show_power_meter) {
-        draw_power_meter(terrain_shader_, data.swing_power);
+        draw_power_meter(batch, data.swing_power);
     }
 
-    const int strokes = std::max(data.stroke_count, 0);
-    const int ten_marks = std::min(strokes / 10, 8);
-    for (int i = 0; i < ten_marks; ++i) {
-        const float x = -0.92f + static_cast<float>(i) * 0.07f;
-        const glm::mat4 tick_model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.86f, 0.0f)),
-                                                glm::vec3(0.026f, 0.08f, 1.0f));
-        terrain_shader_.set_mat4("u_mvp", tick_model);
-        terrain_shader_.set_vec3("u_color", glm::vec3(0.92f, 0.70f, 0.18f));
-        draw_arrays(terrain_shader_, GL_TRIANGLES, 0, 6);
-    }
+    draw_stroke_ticks(batch, data.stroke_count);
 
-    const int one_marks = strokes % 10;
-    for (int i = 0; i < one_marks; ++i) {
-        const float x = -0.92f + static_cast<float>(i) * 0.055f;
-        const glm::mat4 tick_model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.76f, 0.0f)),
-                                                glm::vec3(0.015f, 0.06f, 1.0f));
-        terrain_shader_.set_mat4("u_mvp", tick_model);
-        terrain_shader_.set_vec3("u_color", glm::vec3(0.88f, 0.88f, 0.78f));
-        draw_arrays(terrain_shader_, GL_TRIANGLES, 0, 6);
-    }
+    draw_startup_menu(batch, data.startup_menu);
 
-    draw_startup_menu(terrain_shader_, data.startup_menu);
-
-    glBindVertexArray(0);
+    overlay_pass_.flush();
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
     gpu_timers_.end();
