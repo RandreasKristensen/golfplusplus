@@ -8,7 +8,12 @@
 #include "physics/tree_collision.h"
 #include "physics/wind.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <iostream>
+#include <vector>
 
 #include <glm/geometric.hpp>
 
@@ -647,4 +652,462 @@ TEST_CASE("tree collision leaves distant ball unchanged") {
     const ball_state result = resolve_tree_collision(ball, tree, 0.25f, 0.35f);
     CHECK(near_vec3(result.position, ball.position));
     CHECK(near_vec3(result.velocity, ball.velocity));
+}
+
+// ---------------------------------------------------------------------------
+// Terrain spatial index
+//
+// The reference behaviour is the original full scan, which is still the code
+// path taken whenever a mesh has no usable index. Clearing spatial_index gives
+// us that exact reference implementation to compare the indexed result against.
+// ---------------------------------------------------------------------------
+
+namespace {
+terrain_mesh without_spatial_index(terrain_mesh mesh) {
+    mesh.spatial_index = terrain_mesh_index{};
+    return mesh;
+}
+
+bool same_terrain_sample(const terrain_sample& a, const terrain_sample& b) {
+    return a.point == b.point
+        && a.normal == b.normal
+        && a.barycentric == b.barycentric
+        && a.distance_from_center == b.distance_from_center
+        && a.triangle_index == b.triangle_index
+        && a.material == b.material
+        && a.has_spline == b.has_spline
+        && a.inside_surface == b.inside_surface;
+}
+
+terrain_spline index_test_spline() {
+    terrain_spline terrain;
+    terrain.control_points = {
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(6.0f, 1.5f, 20.0f),
+        glm::vec3(-4.0f, 0.5f, 40.0f),
+        glm::vec3(2.0f, 2.0f, 60.0f)
+    };
+    terrain.width = 22.0f;
+    terrain.fairway_width = 10.0f;
+    terrain.sample_count = 40;
+    return terrain;
+}
+
+std::vector<material_zone> index_test_zones() {
+    material_zone green_zone;
+    green_zone.type = material_zone_type::green;
+    green_zone.center = glm::vec3(2.0f, 0.0f, 58.0f);
+    green_zone.radius = 6.0f;
+    green_zone.has_radius = true;
+
+    material_zone bunker_zone;
+    bunker_zone.type = material_zone_type::bunker;
+    bunker_zone.center = glm::vec3(5.0f, 0.0f, 44.0f);
+    bunker_zone.radius = 4.0f;
+    bunker_zone.has_radius = true;
+
+    material_zone water_zone;
+    water_zone.type = material_zone_type::water;
+    water_zone.center = glm::vec3(-3.0f, 0.0f, 26.0f);
+    water_zone.radius = 5.0f;
+    water_zone.has_radius = true;
+
+    return {green_zone, bunker_zone, water_zone};
+}
+
+terrain_mesh index_test_mesh() {
+    terrain_zone_tuning tuning;
+    tuning.bunker_depth = 0.6f;
+    tuning.water_depth = 0.4f;
+    return build_terrain_mesh(index_test_spline(), index_test_zones(), tuning);
+}
+}
+
+TEST_CASE("terrain spatial index is built by the mesh builders") {
+    const terrain_mesh mesh = index_test_mesh();
+    CHECK(mesh.indices.size() >= 3U);
+    if (mesh.indices.size() < 3U) {
+        return;
+    }
+
+    CHECK(mesh.spatial_index.cells_x > 0);
+    CHECK(mesh.spatial_index.cells_z > 0);
+    CHECK(mesh.spatial_index.vertex_count == static_cast<uint32_t>(mesh.vertices.size()));
+    CHECK(mesh.spatial_index.triangle_count == static_cast<uint32_t>(mesh.indices.size() / 3U));
+    CHECK(mesh.spatial_index.cell_starts.size()
+          == static_cast<std::size_t>(mesh.spatial_index.cells_x) * static_cast<std::size_t>(mesh.spatial_index.cells_z) + 1U);
+    CHECK(mesh.spatial_index.cell_triangles.size() >= mesh.indices.size() / 3U);
+
+    const terrain_mesh apron = build_outer_rough_apron(mesh, 12.0f, 10);
+    CHECK(apron.spatial_index.cells_x > 0);
+    CHECK(apron.spatial_index.triangle_count == static_cast<uint32_t>(apron.indices.size() / 3U));
+
+    const terrain_mesh overlay = build_material_overlay_mesh(mesh, index_test_zones(), 0.02f);
+    CHECK(overlay.spatial_index.cells_x > 0);
+    CHECK(overlay.spatial_index.triangle_count == static_cast<uint32_t>(overlay.indices.size() / 3U));
+}
+
+TEST_CASE("indexed terrain sampling matches the full scan across the whole surface") {
+    const terrain_mesh mesh = index_test_mesh();
+    const terrain_mesh reference_mesh = without_spatial_index(mesh);
+    CHECK(mesh.indices.size() >= 3U);
+    if (mesh.indices.size() < 3U) {
+        return;
+    }
+
+    int inside_samples = 0;
+    int outside_samples = 0;
+    int fairway_samples = 0;
+    int rough_samples = 0;
+    int green_samples = 0;
+    int bunker_samples = 0;
+    int water_samples = 0;
+    int mismatches = 0;
+    long long indexed_triangles = 0;
+    long long reference_triangles = 0;
+    int sample_count = 0;
+
+    for (int xi = -14; xi <= 14; ++xi) {
+        for (int zi = -4; zi <= 34; ++zi) {
+            const glm::vec3 position(static_cast<float>(xi) * 1.75f, 0.0f, static_cast<float>(zi) * 2.0f);
+            const float fallback_y = (xi + zi) % 2 == 0 ? 0.0f : -3.0f;
+
+            const terrain_sample indexed = sample_terrain_mesh(mesh, position, fallback_y);
+            const terrain_sample reference = sample_terrain_mesh(reference_mesh, position, fallback_y);
+
+            ++sample_count;
+            indexed_triangles += indexed.triangles_tested;
+            reference_triangles += reference.triangles_tested;
+            if (!same_terrain_sample(indexed, reference)) {
+                ++mismatches;
+            }
+
+            if (reference.inside_surface) {
+                ++inside_samples;
+            } else {
+                ++outside_samples;
+            }
+            switch (reference.material) {
+            case terrain_material::fairway: ++fairway_samples; break;
+            case terrain_material::rough: ++rough_samples; break;
+            case terrain_material::green: ++green_samples; break;
+            case terrain_material::bunker: ++bunker_samples; break;
+            case terrain_material::water: ++water_samples; break;
+            }
+        }
+    }
+
+    CHECK(mismatches == 0);
+
+    // The comparison is only meaningful if the sweep really covered every
+    // material, the surface interior, and positions off the surface entirely.
+    CHECK(inside_samples > 0);
+    CHECK(outside_samples > 0);
+    CHECK(fairway_samples > 0);
+    CHECK(rough_samples > 0);
+    CHECK(green_samples > 0);
+    CHECK(bunker_samples > 0);
+    CHECK(water_samples > 0);
+
+    CHECK(indexed_triangles < reference_triangles);
+    std::cout << "  [terrain index] samples: " << sample_count
+            << " | triangles in mesh: " << (mesh.indices.size() / 3U)
+            << " | avg triangles tested full scan: "
+            << (static_cast<double>(reference_triangles) / static_cast<double>(sample_count))
+            << " | avg triangles tested indexed: "
+            << (static_cast<double>(indexed_triangles) / static_cast<double>(sample_count)) << "\n";
+}
+
+TEST_CASE("indexed terrain sampling matches the full scan on mesh edges and beyond") {
+    const terrain_mesh mesh = index_test_mesh();
+    const terrain_mesh reference_mesh = without_spatial_index(mesh);
+    CHECK(mesh.indices.size() >= 3U);
+    if (mesh.indices.size() < 3U) {
+        return;
+    }
+
+    float min_x = mesh.vertices.front().position.x;
+    float max_x = mesh.vertices.front().position.x;
+    float min_z = mesh.vertices.front().position.z;
+    float max_z = mesh.vertices.front().position.z;
+    for (const terrain_vertex& vertex : mesh.vertices) {
+        min_x = std::min(min_x, vertex.position.x);
+        max_x = std::max(max_x, vertex.position.x);
+        min_z = std::min(min_z, vertex.position.z);
+        max_z = std::max(max_z, vertex.position.z);
+    }
+
+    std::vector<glm::vec3> probes;
+    // Exactly on the bounding edges, just inside, just outside, and far away.
+    const float offsets[5] = {-2.0f, -0.001f, 0.0f, 0.001f, 2.0f};
+    for (const float offset : offsets) {
+        for (int step = 0; step <= 10; ++step) {
+            const float t = static_cast<float>(step) / 10.0f;
+            const float x = min_x + (max_x - min_x) * t;
+            const float z = min_z + (max_z - min_z) * t;
+            probes.push_back(glm::vec3(min_x + offset, 0.0f, z));
+            probes.push_back(glm::vec3(max_x - offset, 0.0f, z));
+            probes.push_back(glm::vec3(x, 0.0f, min_z + offset));
+            probes.push_back(glm::vec3(x, 0.0f, max_z - offset));
+        }
+    }
+    probes.push_back(glm::vec3(min_x - 500.0f, 0.0f, min_z - 500.0f));
+    probes.push_back(glm::vec3(max_x + 500.0f, 0.0f, max_z + 500.0f));
+    probes.push_back(glm::vec3(0.0f, 0.0f, max_z + 250.0f));
+    probes.push_back(glm::vec3(min_x - 250.0f, 0.0f, 20.0f));
+
+    int mismatches = 0;
+    for (const glm::vec3& probe : probes) {
+        const terrain_sample indexed = sample_terrain_mesh(mesh, probe, -1.0f);
+        const terrain_sample reference = sample_terrain_mesh(reference_mesh, probe, -1.0f);
+        if (!same_terrain_sample(indexed, reference)) {
+            ++mismatches;
+        }
+    }
+    CHECK(mismatches == 0);
+
+    // sample_terrain_anchor shares the same path and must agree too.
+    int anchor_mismatches = 0;
+    for (const glm::vec3& probe : probes) {
+        const terrain_sample indexed = sample_terrain_anchor(mesh, probe, 0.0f);
+        const terrain_sample reference = sample_terrain_anchor(reference_mesh, probe, 0.0f);
+        if (!same_terrain_sample(indexed, reference)) {
+            ++anchor_mismatches;
+        }
+    }
+    CHECK(anchor_mismatches == 0);
+}
+
+TEST_CASE("indexed terrain sampling matches the full scan on the apron mesh") {
+    const terrain_mesh mesh = index_test_mesh();
+    const terrain_mesh apron = build_outer_rough_apron(mesh, 12.0f, 10);
+    const terrain_mesh reference_apron = without_spatial_index(apron);
+    CHECK(apron.indices.size() >= 3U);
+    if (apron.indices.size() < 3U) {
+        return;
+    }
+
+    int mismatches = 0;
+    for (int xi = -16; xi <= 16; ++xi) {
+        for (int zi = -6; zi <= 36; ++zi) {
+            const glm::vec3 position(static_cast<float>(xi) * 2.25f, 0.0f, static_cast<float>(zi) * 2.25f);
+            const terrain_sample indexed = sample_terrain_mesh(apron, position, 0.0f);
+            const terrain_sample reference = sample_terrain_mesh(reference_apron, position, 0.0f);
+            if (!same_terrain_sample(indexed, reference)) {
+                ++mismatches;
+            }
+        }
+    }
+    CHECK(mismatches == 0);
+}
+
+TEST_CASE("indexed terrain sampling matches the full scan when walking with previous_sample") {
+    const terrain_mesh mesh = index_test_mesh();
+    const terrain_mesh reference_mesh = without_spatial_index(mesh);
+    CHECK(mesh.indices.size() >= 3U);
+    if (mesh.indices.size() < 3U) {
+        return;
+    }
+
+    int mismatches = 0;
+    int hinted_samples = 0;
+    long long indexed_triangles = 0;
+    long long reference_triangles = 0;
+
+    for (int lane = -8; lane <= 8; ++lane) {
+        terrain_sample indexed_previous;
+        terrain_sample reference_previous;
+        bool has_previous = false;
+
+        for (int step = -4; step <= 64; ++step) {
+            const glm::vec3 position(static_cast<float>(lane) * 2.5f, 0.0f, static_cast<float>(step));
+            const terrain_sample indexed =
+                sample_terrain_mesh(mesh, position, -1.0f, has_previous ? &indexed_previous : nullptr);
+            const terrain_sample reference =
+                sample_terrain_mesh(reference_mesh, position, -1.0f, has_previous ? &reference_previous : nullptr);
+
+            if (has_previous) {
+                ++hinted_samples;
+                indexed_triangles += indexed.triangles_tested;
+                reference_triangles += reference.triangles_tested;
+            }
+            if (!same_terrain_sample(indexed, reference)) {
+                ++mismatches;
+            }
+
+            indexed_previous = indexed;
+            reference_previous = reference;
+            has_previous = true;
+        }
+    }
+
+    CHECK(mismatches == 0);
+    CHECK(hinted_samples > 0);
+    CHECK(indexed_triangles < reference_triangles);
+    std::cout << "  [terrain index] previous_sample walk: " << hinted_samples
+            << " hinted samples | avg triangles tested full scan: "
+            << (static_cast<double>(reference_triangles) / static_cast<double>(hinted_samples))
+            << " | avg triangles tested indexed: "
+            << (static_cast<double>(indexed_triangles) / static_cast<double>(hinted_samples)) << "\n";
+}
+
+TEST_CASE("repeated indexed samples with previous_sample are deterministic") {
+    const terrain_mesh mesh = index_test_mesh();
+    CHECK(mesh.indices.size() >= 3U);
+    if (mesh.indices.size() < 3U) {
+        return;
+    }
+
+    const glm::vec3 probes[6] = {
+        glm::vec3(0.0f, 0.0f, 10.0f),   // fairway
+        glm::vec3(-3.0f, 0.0f, 26.0f),  // water
+        glm::vec3(5.0f, 0.0f, 44.0f),   // bunker
+        glm::vec3(2.0f, 0.0f, 58.0f),   // green
+        glm::vec3(10.0f, 0.0f, 30.0f),  // rough / ribbon edge
+        glm::vec3(40.0f, 0.0f, 30.0f)   // off the surface
+    };
+
+    for (const glm::vec3& probe : probes) {
+        const terrain_sample seed = sample_terrain_mesh(mesh, probe, 0.0f);
+        const terrain_sample first = sample_terrain_mesh(mesh, probe, 0.0f, &seed);
+        for (int repeat = 0; repeat < 16; ++repeat) {
+            const terrain_sample again = sample_terrain_mesh(mesh, probe, 0.0f, &seed);
+            CHECK(same_terrain_sample(again, first));
+            CHECK(again.triangles_tested == first.triangles_tested);
+        }
+
+        // Feeding a sample back into itself must reach a fixed point too.
+        terrain_sample chained = first;
+        for (int repeat = 0; repeat < 16; ++repeat) {
+            const terrain_sample next = sample_terrain_mesh(mesh, probe, 0.0f, &chained);
+            CHECK(same_terrain_sample(next, chained));
+            chained = next;
+        }
+    }
+}
+
+TEST_CASE("terrain sampling falls back to the full scan when the index is stale") {
+    const terrain_mesh mesh = index_test_mesh();
+    CHECK(mesh.indices.size() >= 3U);
+    if (mesh.indices.size() < 3U) {
+        return;
+    }
+
+    // A caller that moves vertices without rebuilding the index leaves a stale
+    // index behind. Sampling must notice and stay correct.
+    terrain_mesh moved = mesh;
+    for (terrain_vertex& vertex : moved.vertices) {
+        vertex.position += glm::vec3(120.0f, 0.0f, -75.0f);
+    }
+    const terrain_mesh moved_reference = without_spatial_index(moved);
+    const terrain_mesh moved_reindexed = build_terrain_mesh_index(moved);
+
+    int stale_mismatches = 0;
+    int reindexed_mismatches = 0;
+    long long stale_triangles = 0;
+    long long reindexed_triangles = 0;
+    int probes = 0;
+
+    for (int xi = -6; xi <= 6; ++xi) {
+        for (int zi = -4; zi <= 20; ++zi) {
+            const glm::vec3 position(120.0f + static_cast<float>(xi) * 3.0f,
+                                     0.0f,
+                                     -75.0f + static_cast<float>(zi) * 3.0f);
+            const terrain_sample reference = sample_terrain_mesh(moved_reference, position, 0.0f);
+            const terrain_sample stale = sample_terrain_mesh(moved, position, 0.0f);
+            const terrain_sample reindexed = sample_terrain_mesh(moved_reindexed, position, 0.0f);
+            if (!same_terrain_sample(stale, reference)) {
+                ++stale_mismatches;
+            }
+            if (!same_terrain_sample(reindexed, reference)) {
+                ++reindexed_mismatches;
+            }
+            stale_triangles += stale.triangles_tested;
+            reindexed_triangles += reindexed.triangles_tested;
+            ++probes;
+        }
+    }
+
+    CHECK(stale_mismatches == 0);
+    CHECK(reindexed_mismatches == 0);
+    CHECK(probes > 0);
+    // The stale index degrades to the full scan, the rebuilt one does not.
+    CHECK(reindexed_triangles < stale_triangles);
+}
+
+TEST_CASE("terrain sampling tolerates empty and malformed meshes") {
+    const terrain_mesh empty_mesh;
+    const terrain_sample empty_sample = sample_terrain_mesh(empty_mesh, glm::vec3(1.0f, 0.0f, 2.0f), 3.0f);
+    CHECK(empty_sample.point == glm::vec3(1.0f, 3.0f, 2.0f));
+    CHECK(empty_sample.has_spline == false);
+    CHECK(empty_sample.triangle_index == -1);
+
+    terrain_mesh degenerate;
+    degenerate.vertices.resize(3);
+    for (terrain_vertex& vertex : degenerate.vertices) {
+        vertex.position = glm::vec3(4.0f, 1.0f, 4.0f);
+        vertex.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+    }
+    degenerate.indices = {0U, 1U, 2U};
+    const terrain_mesh degenerate_indexed = build_terrain_mesh_index(degenerate);
+    const terrain_sample degenerate_sample =
+        sample_terrain_mesh(degenerate_indexed, glm::vec3(0.0f, 0.0f, 0.0f), -2.0f);
+    const terrain_sample degenerate_reference =
+        sample_terrain_mesh(degenerate, glm::vec3(0.0f, 0.0f, 0.0f), -2.0f);
+    CHECK(same_terrain_sample(degenerate_sample, degenerate_reference));
+
+    // Index count that is not a multiple of three must not be trusted.
+    terrain_mesh ragged = index_test_mesh();
+    ragged.indices.pop_back();
+    const terrain_sample ragged_sample = sample_terrain_mesh(ragged, glm::vec3(0.0f, 0.0f, 10.0f), 0.0f);
+    const terrain_sample ragged_reference =
+        sample_terrain_mesh(without_spatial_index(ragged), glm::vec3(0.0f, 0.0f, 10.0f), 0.0f);
+    CHECK(same_terrain_sample(ragged_sample, ragged_reference));
+}
+
+TEST_CASE("terrain spatial index keeps triangles tested per sample near constant as the mesh grows") {
+    terrain_spline small_spline = index_test_spline();
+    small_spline.sample_count = 24;
+    terrain_spline large_spline = index_test_spline();
+    large_spline.sample_count = 256;
+
+    const terrain_zone_tuning tuning;
+    const terrain_mesh small_mesh = build_terrain_mesh(small_spline, index_test_zones(), tuning);
+    const terrain_mesh large_mesh = build_terrain_mesh(large_spline, index_test_zones(), tuning);
+    CHECK(large_mesh.indices.size() > small_mesh.indices.size() * 2U);
+    if (small_mesh.indices.size() < 3U || large_mesh.indices.size() < 3U) {
+        return;
+    }
+
+    long long small_tested = 0;
+    long long large_tested = 0;
+    long long large_full_scan_tested = 0;
+    int probes = 0;
+    const terrain_mesh large_reference = without_spatial_index(large_mesh);
+
+    for (int xi = -4; xi <= 4; ++xi) {
+        for (int zi = 0; zi <= 28; ++zi) {
+            const glm::vec3 position(static_cast<float>(xi), 0.0f, static_cast<float>(zi) * 2.0f);
+            small_tested += sample_terrain_mesh(small_mesh, position, 0.0f).triangles_tested;
+            large_tested += sample_terrain_mesh(large_mesh, position, 0.0f).triangles_tested;
+            large_full_scan_tested += sample_terrain_mesh(large_reference, position, 0.0f).triangles_tested;
+            ++probes;
+        }
+    }
+
+    CHECK(probes > 0);
+    if (probes <= 0) {
+        return;
+    }
+    const double small_average = static_cast<double>(small_tested) / static_cast<double>(probes);
+    const double large_average = static_cast<double>(large_tested) / static_cast<double>(probes);
+    const double full_scan_average = static_cast<double>(large_full_scan_tested) / static_cast<double>(probes);
+
+    std::cout << "  [terrain index] small mesh (" << (small_mesh.indices.size() / 3U) << " tris) avg tested: " << small_average
+            << " | large mesh (" << (large_mesh.indices.size() / 3U) << " tris) avg tested indexed: " << large_average
+            << " | large mesh avg tested full scan: " << full_scan_average << "\n";
+
+    CHECK(large_average < 32.0);
+    CHECK(large_average < full_scan_average * 0.05);
+    CHECK(large_average < small_average * 4.0);
 }

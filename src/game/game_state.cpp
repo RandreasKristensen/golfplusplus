@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <limits>
 #include <optional>
+#include <utility>
 
 #include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
@@ -295,8 +296,10 @@ bool apply_course_world_to_tuning(game_state& state) {
     tuning.terrain.width = combined_terrain.width;
     tuning.terrain.fairway_width = combined_terrain.width;
     tuning.terrain.sample_count = 128;
-    tuning.terrain_mesh_data = combined_terrain;
-    tuning.terrain_apron_mesh_data = combined_apron;
+    // append_terrain_mesh builds these by hand, so the sampling index has to be
+    // built once the combined meshes are final.
+    tuning.terrain_mesh_data = build_terrain_mesh_index(std::move(combined_terrain));
+    tuning.terrain_apron_mesh_data = build_terrain_mesh_index(std::move(combined_apron));
     tuning.ground_y = 0.0f;
     state.hub.hole_markers = markers;
     return true;

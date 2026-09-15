@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
+#include <vector>
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
@@ -507,6 +509,374 @@ bool is_better_edge_candidate(const terrain_candidate& candidate,
     }
     return candidate.sample.triangle_index < best.sample.triangle_index;
 }
+
+// ---------------------------------------------------------------------------
+// Spatial index (uniform XZ grid, CSR storage)
+// ---------------------------------------------------------------------------
+
+constexpr int max_index_cells_per_axis = 256;
+constexpr std::size_t max_index_entries = 8000000U;
+// Slack used when pruning the ring search. Must be >= the epsilon the candidate
+// comparators use so ties are never pruned away.
+constexpr float index_prune_slack = 0.0001f;
+
+struct triangle_xz_bounds {
+    float min_x = 0.0f;
+    float max_x = 0.0f;
+    float min_z = 0.0f;
+    float max_z = 0.0f;
+};
+
+float rect_distance_xz_squared(const float x,
+                               const float z,
+                               const float min_x,
+                               const float min_z,
+                               const float max_x,
+                               const float max_z) {
+    const float dx = std::max(0.0f, std::max(min_x - x, x - max_x));
+    const float dz = std::max(0.0f, std::max(min_z - z, z - max_z));
+    return dx * dx + dz * dz;
+}
+
+int index_cell_coord(const float value, const float min_value, const float cell_size, const int cell_count) {
+    if (cell_count <= 1 || !(cell_size > 0.0f)) {
+        return 0;
+    }
+    const float relative = (value - min_value) / cell_size;
+    if (!(relative > 0.0f)) {
+        return 0;
+    }
+    const float coord = std::floor(relative);
+    if (!(coord < static_cast<float>(cell_count - 1))) {
+        return cell_count - 1;
+    }
+    return static_cast<int>(coord);
+}
+
+triangle_xz_bounds padded_triangle_bounds(const terrain_mesh& mesh, const int triangle_index) {
+    const std::size_t base = static_cast<std::size_t>(triangle_index) * 3U;
+    const glm::vec3& a = mesh.vertices[mesh.indices[base]].position;
+    const glm::vec3& b = mesh.vertices[mesh.indices[base + 1U]].position;
+    const glm::vec3& c = mesh.vertices[mesh.indices[base + 2U]].position;
+
+    triangle_xz_bounds bounds;
+    bounds.min_x = std::min(a.x, std::min(b.x, c.x));
+    bounds.max_x = std::max(a.x, std::max(b.x, c.x));
+    bounds.min_z = std::min(a.z, std::min(b.z, c.z));
+    bounds.max_z = std::max(a.z, std::max(b.z, c.z));
+
+    // barycentric_xz accepts a small negative tolerance, so a point marginally
+    // outside the raw bounding box can still count as inside the triangle.
+    // Pad the box so those triangles are still found in the queried cell.
+    const float span = std::max(bounds.max_x - bounds.min_x, bounds.max_z - bounds.min_z);
+    const float pad = 0.001f + 0.001f * std::max(0.0f, span);
+    bounds.min_x -= pad;
+    bounds.max_x += pad;
+    bounds.min_z -= pad;
+    bounds.max_z += pad;
+    return bounds;
+}
+
+terrain_mesh_index make_terrain_mesh_index(const terrain_mesh& mesh) {
+    terrain_mesh_index built;
+    const std::size_t triangle_count = mesh.indices.size() / 3U;
+    const std::size_t vertex_count = mesh.vertices.size();
+    if (vertex_count == 0U || triangle_count == 0U) {
+        return built;
+    }
+    if (triangle_count * 3U != mesh.indices.size()) {
+        return built;
+    }
+    if (triangle_count > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return built;
+    }
+    for (const uint32_t index : mesh.indices) {
+        if (static_cast<std::size_t>(index) >= vertex_count) {
+            return terrain_mesh_index{};
+        }
+    }
+
+    float min_x = std::numeric_limits<float>::max();
+    float max_x = std::numeric_limits<float>::lowest();
+    float min_z = std::numeric_limits<float>::max();
+    float max_z = std::numeric_limits<float>::lowest();
+    for (const terrain_vertex& vertex : mesh.vertices) {
+        min_x = std::min(min_x, vertex.position.x);
+        max_x = std::max(max_x, vertex.position.x);
+        min_z = std::min(min_z, vertex.position.z);
+        max_z = std::max(max_z, vertex.position.z);
+    }
+    if (!(min_x <= max_x) || !(min_z <= max_z)) {
+        return terrain_mesh_index{};
+    }
+
+    const float extent_x = std::max(0.0f, max_x - min_x);
+    const float extent_z = std::max(0.0f, max_z - min_z);
+    const float target_cells = static_cast<float>(triangle_count);
+
+    const auto axis_cells = [](const float extent, const float cell_size) {
+        if (!(extent > 0.0f) || !(cell_size > 0.0f)) {
+            return 1;
+        }
+        const float count = std::ceil(extent / cell_size);
+        if (!(count > 1.0f)) {
+            return 1;
+        }
+        if (!(count < static_cast<float>(max_index_cells_per_axis))) {
+            return max_index_cells_per_axis;
+        }
+        return static_cast<int>(count);
+    };
+
+    int cells_x = 1;
+    int cells_z = 1;
+    if (extent_x > 0.0f && extent_z > 0.0f) {
+        const float cell_size = std::sqrt((extent_x * extent_z) / target_cells);
+        cells_x = axis_cells(extent_x, cell_size);
+        cells_z = axis_cells(extent_z, cell_size);
+    } else if (extent_x > 0.0f) {
+        cells_x = axis_cells(extent_x, extent_x / std::min(target_cells, static_cast<float>(max_index_cells_per_axis)));
+    } else if (extent_z > 0.0f) {
+        cells_z = axis_cells(extent_z, extent_z / std::min(target_cells, static_cast<float>(max_index_cells_per_axis)));
+    }
+
+    built.min_x = min_x;
+    built.min_z = min_z;
+    built.max_x = max_x;
+    built.max_z = max_z;
+    built.cells_x = cells_x;
+    built.cells_z = cells_z;
+    built.cell_size_x = extent_x / static_cast<float>(cells_x);
+    built.cell_size_z = extent_z / static_cast<float>(cells_z);
+
+    const std::size_t cell_count = static_cast<std::size_t>(cells_x) * static_cast<std::size_t>(cells_z);
+    std::vector<uint32_t> counts(cell_count, 0U);
+    std::size_t total_entries = 0U;
+    for (std::size_t triangle = 0U; triangle < triangle_count; ++triangle) {
+        const triangle_xz_bounds bounds = padded_triangle_bounds(mesh, static_cast<int>(triangle));
+        const int x0 = index_cell_coord(bounds.min_x, min_x, built.cell_size_x, cells_x);
+        const int x1 = index_cell_coord(bounds.max_x, min_x, built.cell_size_x, cells_x);
+        const int z0 = index_cell_coord(bounds.min_z, min_z, built.cell_size_z, cells_z);
+        const int z1 = index_cell_coord(bounds.max_z, min_z, built.cell_size_z, cells_z);
+        for (int cz = z0; cz <= z1; ++cz) {
+            for (int cx = x0; cx <= x1; ++cx) {
+                ++counts[static_cast<std::size_t>(cz) * static_cast<std::size_t>(cells_x) + static_cast<std::size_t>(cx)];
+                ++total_entries;
+            }
+        }
+        if (total_entries > max_index_entries) {
+            return terrain_mesh_index{};
+        }
+    }
+
+    built.cell_starts.assign(cell_count + 1U, 0U);
+    uint32_t running = 0U;
+    for (std::size_t cell = 0U; cell < cell_count; ++cell) {
+        built.cell_starts[cell] = running;
+        running += counts[cell];
+    }
+    built.cell_starts[cell_count] = running;
+
+    std::vector<uint32_t> cursors(built.cell_starts.begin(), built.cell_starts.end() - 1);
+    built.cell_triangles.assign(static_cast<std::size_t>(running), 0U);
+    for (std::size_t triangle = 0U; triangle < triangle_count; ++triangle) {
+        const triangle_xz_bounds bounds = padded_triangle_bounds(mesh, static_cast<int>(triangle));
+        const int x0 = index_cell_coord(bounds.min_x, min_x, built.cell_size_x, cells_x);
+        const int x1 = index_cell_coord(bounds.max_x, min_x, built.cell_size_x, cells_x);
+        const int z0 = index_cell_coord(bounds.min_z, min_z, built.cell_size_z, cells_z);
+        const int z1 = index_cell_coord(bounds.max_z, min_z, built.cell_size_z, cells_z);
+        for (int cz = z0; cz <= z1; ++cz) {
+            for (int cx = x0; cx <= x1; ++cx) {
+                const std::size_t cell = static_cast<std::size_t>(cz) * static_cast<std::size_t>(cells_x) + static_cast<std::size_t>(cx);
+                built.cell_triangles[cursors[cell]] = static_cast<uint32_t>(triangle);
+                ++cursors[cell];
+            }
+        }
+    }
+
+    built.vertex_count = static_cast<uint32_t>(vertex_count);
+    built.triangle_count = static_cast<uint32_t>(triangle_count);
+    built.fingerprint_first = mesh.vertices.front().position;
+    built.fingerprint_middle = mesh.vertices[vertex_count / 2U].position;
+    built.fingerprint_last = mesh.vertices.back().position;
+    return built;
+}
+
+bool same_position(const glm::vec3& a, const glm::vec3& b) {
+    return a.x == b.x && a.y == b.y && a.z == b.z;
+}
+
+bool terrain_index_matches(const terrain_mesh& mesh, const terrain_mesh_index& index) {
+    if (index.cells_x <= 0 || index.cells_z <= 0) {
+        return false;
+    }
+    const std::size_t cell_count = static_cast<std::size_t>(index.cells_x) * static_cast<std::size_t>(index.cells_z);
+    if (index.cell_starts.size() != cell_count + 1U) {
+        return false;
+    }
+    if (mesh.vertices.empty()) {
+        return false;
+    }
+    if (static_cast<std::size_t>(index.vertex_count) != mesh.vertices.size()) {
+        return false;
+    }
+    if (static_cast<std::size_t>(index.triangle_count) * 3U != mesh.indices.size()) {
+        return false;
+    }
+    if (static_cast<std::size_t>(index.cell_starts.back()) != index.cell_triangles.size()) {
+        return false;
+    }
+    return same_position(index.fingerprint_first, mesh.vertices.front().position)
+        && same_position(index.fingerprint_middle, mesh.vertices[mesh.vertices.size() / 2U].position)
+        && same_position(index.fingerprint_last, mesh.vertices.back().position);
+}
+
+// Cheap version of the edge candidate distance, used only to prune the ring
+// search. Produces exactly the distance the full candidate evaluation would.
+float triangle_edge_distance_squared(const terrain_mesh& mesh,
+                                     const int triangle_index,
+                                     const glm::vec3& position,
+                                     const glm::vec3& query_point) {
+    const std::size_t base = static_cast<std::size_t>(triangle_index) * 3U;
+    const glm::vec3& a = mesh.vertices[mesh.indices[base]].position;
+    const glm::vec3& b = mesh.vertices[mesh.indices[base + 1U]].position;
+    const glm::vec3& c = mesh.vertices[mesh.indices[base + 2U]].position;
+
+    float best = std::numeric_limits<float>::max();
+    for (int edge = 0; edge < 3; ++edge) {
+        const glm::vec3 barycentric = closest_barycentric_on_edge(position, a, b, c, edge);
+        const glm::vec3 point = a * barycentric.x + b * barycentric.y + c * barycentric.z;
+        best = std::min(best, distance_squared(query_point, point));
+    }
+    return best;
+}
+
+// ---------------------------------------------------------------------------
+// Scan state — accumulates the same "best candidate" decision the original full
+// scan made, but as a pure value so the traversal order can be narrowed down.
+// ---------------------------------------------------------------------------
+
+struct terrain_scan_state {
+    terrain_candidate best_inside;
+    terrain_candidate best_edge;
+    bool has_inside = false;
+    bool has_edge = false;
+    int triangles_tested = 0;
+};
+
+terrain_scan_state scan_triangle(const terrain_mesh& mesh,
+                                 const glm::vec3& position,
+                                 const glm::vec3& query_point,
+                                 const float fallback_y,
+                                 const int preferred_section,
+                                 const int triangle_index,
+                                 const bool collect_inside,
+                                 const bool collect_edge,
+                                 const terrain_scan_state state) {
+    terrain_scan_state next = state;
+    ++next.triangles_tested;
+
+    const std::size_t base = static_cast<std::size_t>(triangle_index) * 3U;
+    const terrain_vertex& a = mesh.vertices[mesh.indices[base]];
+    const terrain_vertex& b = mesh.vertices[mesh.indices[base + 1U]];
+    const terrain_vertex& c = mesh.vertices[mesh.indices[base + 2U]];
+
+    glm::vec3 barycentric(0.0f);
+    if (barycentric_xz(position, a.position, b.position, c.position, barycentric)) {
+        if (!collect_inside) {
+            return next;
+        }
+        const int section_index = triangle_section_index(mesh, triangle_index);
+        terrain_sample sample = sample_from_barycentric(mesh, triangle_index, barycentric, true);
+        sample.point.x = position.x;
+        sample.point.z = position.z;
+        terrain_candidate candidate;
+        candidate.sample = sample;
+        candidate.section_index = section_index;
+        candidate.section_distance = distance_xz_squared(query_point, section_center_point(mesh, section_index));
+        candidate.height_distance = std::abs(sample.point.y - fallback_y);
+        if (!next.has_inside || is_better_inside_candidate(candidate, next.best_inside, preferred_section)) {
+            next.best_inside = candidate;
+            next.has_inside = true;
+        }
+        return next;
+    }
+
+    if (!collect_edge) {
+        return next;
+    }
+
+    const int section_index = triangle_section_index(mesh, triangle_index);
+    const float section_distance = distance_xz_squared(query_point, section_center_point(mesh, section_index));
+    for (int edge = 0; edge < 3; ++edge) {
+        const glm::vec3 edge_barycentric = closest_barycentric_on_edge(position, a.position, b.position, c.position, edge);
+        terrain_sample edge_sample = sample_from_barycentric(mesh, triangle_index, edge_barycentric, false);
+        const float distance = distance_squared(query_point, edge_sample.point);
+        edge_sample.distance_from_center += std::sqrt(distance);
+        terrain_candidate candidate;
+        candidate.sample = edge_sample;
+        candidate.section_index = section_index;
+        candidate.section_distance = section_distance;
+        candidate.edge_distance = distance;
+        if (!next.has_edge || is_better_edge_candidate(candidate, next.best_edge, preferred_section)) {
+            next.best_edge = candidate;
+            next.has_edge = true;
+        }
+    }
+    return next;
+}
+
+terrain_sample finish_terrain_scan(const terrain_scan_state& state, const glm::vec3& query_point) {
+    if (state.has_inside) {
+        terrain_sample sample = state.best_inside.sample;
+        sample.triangles_tested = state.triangles_tested;
+        return sample;
+    }
+    if (state.has_edge) {
+        terrain_sample sample = state.best_edge.sample;
+        sample.has_spline = true;
+        sample.inside_surface = false;
+        sample.material = terrain_material::rough;
+        sample.triangles_tested = state.triangles_tested;
+        return sample;
+    }
+    terrain_sample sample;
+    sample.point = query_point;
+    sample.triangles_tested = state.triangles_tested;
+    return sample;
+}
+
+// Lower bound on the squared distance from the query point to anything the ring
+// search has not visited yet. Every triangle outside the visited cell block has
+// its padded bounding box outside that block, so its closest edge point cannot
+// be nearer than the closest unvisited part of the grid.
+float unvisited_lower_bound(const terrain_mesh_index& index,
+                            const int x0,
+                            const int x1,
+                            const int z0,
+                            const int z1,
+                            const float x,
+                            const float z) {
+    const float block_min_x = x0 <= 0 ? index.min_x : index.min_x + index.cell_size_x * static_cast<float>(x0);
+    const float block_max_x = x1 >= index.cells_x - 1 ? index.max_x : index.min_x + index.cell_size_x * static_cast<float>(x1 + 1);
+    const float block_min_z = z0 <= 0 ? index.min_z : index.min_z + index.cell_size_z * static_cast<float>(z0);
+    const float block_max_z = z1 >= index.cells_z - 1 ? index.max_z : index.min_z + index.cell_size_z * static_cast<float>(z1 + 1);
+
+    float best = std::numeric_limits<float>::max();
+    if (x0 > 0) {
+        best = std::min(best, rect_distance_xz_squared(x, z, index.min_x, index.min_z, block_min_x, index.max_z));
+    }
+    if (x1 < index.cells_x - 1) {
+        best = std::min(best, rect_distance_xz_squared(x, z, block_max_x, index.min_z, index.max_x, index.max_z));
+    }
+    if (z0 > 0) {
+        best = std::min(best, rect_distance_xz_squared(x, z, block_min_x, index.min_z, block_max_x, block_min_z));
+    }
+    if (z1 < index.cells_z - 1) {
+        best = std::min(best, rect_distance_xz_squared(x, z, block_min_x, block_max_z, block_max_x, index.max_z));
+    }
+    return best;
+}
 }
 
 glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, const float t) {
@@ -628,6 +998,7 @@ terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
         }
     }
 
+    mesh.spatial_index = make_terrain_mesh_index(mesh);
     return mesh;
 }
 
@@ -725,6 +1096,7 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& source_mesh,
 
     mesh.section_count = 1;
     mesh.cross_section_count = 0;
+    mesh.spatial_index = make_terrain_mesh_index(mesh);
     return mesh;
 }
 
@@ -812,7 +1184,13 @@ terrain_mesh build_outer_rough_apron(const terrain_mesh& source_mesh,
         }
     }
 
+    apron.spatial_index = make_terrain_mesh_index(apron);
     return apron;
+}
+
+terrain_mesh build_terrain_mesh_index(terrain_mesh mesh) {
+    mesh.spatial_index = make_terrain_mesh_index(mesh);
+    return mesh;
 }
 
 terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& position, const float fallback_y) {
@@ -829,74 +1207,118 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
         return sample;
     }
 
+    const int triangle_count = static_cast<int>(mesh.indices.size() / 3U);
     const glm::vec3 query_point(position.x, fallback_y, position.z);
     const int preferred_section = previous_sample && previous_sample->triangle_index >= 0
         ? triangle_section_index(mesh, previous_sample->triangle_index)
         : -1;
 
-    bool has_inside_candidate = false;
-    bool has_edge_candidate = false;
-    terrain_candidate best_inside;
-    terrain_candidate best_edge;
-    best_edge.sample.point = query_point;
+    const terrain_mesh_index& index = mesh.spatial_index;
 
-    for (std::size_t i = 0; i + 2U < mesh.indices.size(); i += 3U) {
-        const terrain_vertex& a = mesh.vertices[mesh.indices[i]];
-        const terrain_vertex& b = mesh.vertices[mesh.indices[i + 1U]];
-        const terrain_vertex& c = mesh.vertices[mesh.indices[i + 2U]];
-        const int triangle_index = static_cast<int>(i / 3U);
-        const int section_index = triangle_section_index(mesh, triangle_index);
-        const glm::vec3 section_center = section_center_point(mesh, section_index);
-        const float section_distance = distance_xz_squared(query_point, section_center);
+    // Fallback: no index, or an index that no longer describes this mesh.
+    // Exactly the original full scan.
+    if (!terrain_index_matches(mesh, index)) {
+        terrain_scan_state state;
+        state.best_edge.sample.point = query_point;
+        for (int triangle = 0; triangle < triangle_count; ++triangle) {
+            state = scan_triangle(mesh, position, query_point, fallback_y, preferred_section,
+                                  triangle, true, true, state);
+        }
+        return finish_terrain_scan(state, query_point);
+    }
 
-        glm::vec3 barycentric(0.0f);
-        if (barycentric_xz(position, a.position, b.position, c.position, barycentric)) {
-            terrain_sample sample = sample_from_barycentric(mesh, triangle_index, barycentric, true);
-            sample.point.x = position.x;
-            sample.point.z = position.z;
-            terrain_candidate candidate;
-            candidate.sample = sample;
-            candidate.section_index = section_index;
-            candidate.section_distance = section_distance;
-            candidate.height_distance = std::abs(sample.point.y - fallback_y);
-            if (!has_inside_candidate || is_better_inside_candidate(candidate, best_inside, preferred_section)) {
-                best_inside = candidate;
-                has_inside_candidate = true;
+    // Pass 1 — containing triangles.
+    // A triangle can only contain the query in XZ if its padded bounding box
+    // contains it, so every candidate the full scan would find lives in the
+    // single cell the query falls into. Cell lists are stored in ascending
+    // triangle order, so the winner is bit-identical to the full scan's.
+    terrain_scan_state state;
+    state.best_edge.sample.point = query_point;
+    const int cell_x = index_cell_coord(position.x, index.min_x, index.cell_size_x, index.cells_x);
+    const int cell_z = index_cell_coord(position.z, index.min_z, index.cell_size_z, index.cells_z);
+    const std::size_t cell = static_cast<std::size_t>(cell_z) * static_cast<std::size_t>(index.cells_x)
+        + static_cast<std::size_t>(cell_x);
+    for (uint32_t slot = index.cell_starts[cell]; slot < index.cell_starts[cell + 1U]; ++slot) {
+        state = scan_triangle(mesh, position, query_point, fallback_y, preferred_section,
+                              static_cast<int>(index.cell_triangles[slot]), true, false, state);
+    }
+    if (state.has_inside) {
+        return finish_terrain_scan(state, query_point);
+    }
+
+    // Pass 2 — no triangle contains the query, so fall back to the nearest
+    // triangle edge. This is the only place the original scan looked at
+    // faraway geometry.
+    const bool has_real_sections = mesh.section_count > 0 && mesh.cross_section_count >= 2;
+    if (preferred_section >= 0 && has_real_sections) {
+        // is_better_edge_candidate ranks any candidate from the previous
+        // sample's section above every other candidate, and with no containing
+        // triangle every triangle in that section produces edge candidates.
+        // So the full scan's winner is decided entirely inside that section's
+        // contiguous triangle range.
+        const int per_section = (mesh.cross_section_count - 1) * 2;
+        const int first = per_section > 0 ? preferred_section * per_section : triangle_count;
+        if (first < triangle_count) {
+            const int last = preferred_section >= mesh.section_count - 1
+                ? triangle_count
+                : std::min(first + per_section, triangle_count);
+            for (int triangle = first; triangle < last; ++triangle) {
+                state = scan_triangle(mesh, position, query_point, fallback_y, preferred_section,
+                                      triangle, false, true, state);
             }
-            continue;
+            if (state.has_edge) {
+                return finish_terrain_scan(state, query_point);
+            }
+        }
+    }
+
+    // Expanding-ring search over the grid. Stops once nothing unvisited can be
+    // closer than the best edge distance found so far, so the gathered set is a
+    // superset of every triangle that could win.
+    std::vector<uint32_t> candidates;
+    float best_distance = std::numeric_limits<float>::max();
+    const int max_radius = std::max(index.cells_x, index.cells_z);
+    for (int radius = 0; radius <= max_radius; ++radius) {
+        const int x0 = std::max(0, cell_x - radius);
+        const int x1 = std::min(index.cells_x - 1, cell_x + radius);
+        const int z0 = std::max(0, cell_z - radius);
+        const int z1 = std::min(index.cells_z - 1, cell_z + radius);
+        for (int cz = z0; cz <= z1; ++cz) {
+            const bool interior_row = cz > cell_z - radius && cz < cell_z + radius;
+            for (int cx = x0; cx <= x1; ++cx) {
+                if (radius > 0 && interior_row && cx > cell_x - radius && cx < cell_x + radius) {
+                    continue;
+                }
+                const std::size_t ring_cell = static_cast<std::size_t>(cz) * static_cast<std::size_t>(index.cells_x)
+                    + static_cast<std::size_t>(cx);
+                for (uint32_t slot = index.cell_starts[ring_cell]; slot < index.cell_starts[ring_cell + 1U]; ++slot) {
+                    const uint32_t triangle = index.cell_triangles[slot];
+                    candidates.push_back(triangle);
+                    best_distance = std::min(best_distance,
+                                             triangle_edge_distance_squared(mesh, static_cast<int>(triangle),
+                                                                            position, query_point));
+                }
+            }
         }
 
-        for (int edge = 0; edge < 3; ++edge) {
-            const glm::vec3 edge_barycentric = closest_barycentric_on_edge(position, a.position, b.position, c.position, edge);
-            terrain_sample edge_sample = sample_from_barycentric(mesh, triangle_index, edge_barycentric, false);
-            const float distance = distance_squared(query_point, edge_sample.point);
-            edge_sample.distance_from_center += std::sqrt(distance);
-            terrain_candidate candidate;
-            candidate.sample = edge_sample;
-            candidate.section_index = section_index;
-            candidate.section_distance = section_distance;
-            candidate.edge_distance = distance;
-            if (!has_edge_candidate || is_better_edge_candidate(candidate, best_edge, preferred_section)) {
-                best_edge = candidate;
-                has_edge_candidate = true;
-            }
+        if (x0 == 0 && z0 == 0 && x1 == index.cells_x - 1 && z1 == index.cells_z - 1) {
+            break;
+        }
+        const float lower_bound = unvisited_lower_bound(index, x0, x1, z0, z1, position.x, position.z);
+        if (lower_bound > best_distance + index_prune_slack) {
+            break;
         }
     }
 
-    if (has_inside_candidate) {
-        return best_inside.sample;
+    // Replay the gathered triangles in ascending order, exactly the relative
+    // order the full scan visited them in.
+    std::sort(candidates.begin(), candidates.end());
+    candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+    for (const uint32_t triangle : candidates) {
+        state = scan_triangle(mesh, position, query_point, fallback_y, preferred_section,
+                              static_cast<int>(triangle), false, true, state);
     }
-
-    if (has_edge_candidate) {
-        best_edge.sample.has_spline = true;
-        best_edge.sample.inside_surface = false;
-        best_edge.sample.material = terrain_material::rough;
-        return best_edge.sample;
-    }
-
-    terrain_sample sample;
-    sample.point = query_point;
-    return sample;
+    return finish_terrain_scan(state, query_point);
 }
 
 terrain_sample sample_terrain(const terrain_spline& terrain, const glm::vec3& position, const float fallback_y) {
