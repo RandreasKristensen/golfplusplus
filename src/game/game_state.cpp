@@ -993,6 +993,20 @@ void mark_terrain_render_dirty(game_state& state) {
     refresh_static_anchor_cache(state);
 }
 
+void continue_terrain_render_revision(game_state& state, const std::uint64_t previous_revision) {
+    if (state.terrain_render_revision > previous_revision) {
+        return;
+    }
+    // The anchors were built for this state's own tuning, so only the key moves.
+    const bool anchors_current = static_anchor_cache_is_current(state);
+    state.terrain_render_revision = previous_revision + 1;
+    if (anchors_current) {
+        state.static_anchors.revision = state.terrain_render_revision;
+    } else {
+        refresh_static_anchor_cache(state);
+    }
+}
+
 glm::vec3 pin_anchor_position(const game_state& state) {
     if (static_anchor_cache_is_current(state)) {
         return state.static_anchors.pin_anchor;

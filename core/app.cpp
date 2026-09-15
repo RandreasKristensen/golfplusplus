@@ -1061,7 +1061,9 @@ void app::run() {
                 startup_selection_ = 0;
                 confirm_menu_active_ = false;
                 confirm_selection_ = 1;
+                const std::uint64_t previous_render_revision = game_.terrain_render_revision;
                 game_ = make_initial_game_state(game_.asset_root);
+                continue_terrain_render_revision(game_, previous_render_revision);
                 game_.save = save_slot_.save;
                 refresh_unlocked_clubs(game_);
                 audio_.stop_loop("cart_drive_loop");
@@ -1115,7 +1117,9 @@ void app::run() {
                         confirm_menu_active_ = false;
                         startup_flow_ = startup_flow::main;
                         startup_selection_ = 0;
+                        const std::uint64_t previous_render_revision = game_.terrain_render_revision;
                         game_ = make_initial_game_state(game_.asset_root);
+                        continue_terrain_render_revision(game_, previous_render_revision);
                         game_.save = save_slot_.save;
                         refresh_unlocked_clubs(game_);
                         audio_.stop_loop("cart_drive_loop");

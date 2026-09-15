@@ -2234,6 +2234,28 @@ TEST_CASE("static anchor cache rebuilds after an explicit terrain revision bump"
     CHECK(static_anchor_cache_is_current(state));
 }
 
+TEST_CASE("replacement game state continues the terrain render revision") {
+    // Revision-keyed render caches live outside game_state, so a fresh state
+    // must never reuse a revision number the previous state already published.
+    game_state previous = make_initial_game_state();
+    for (int i = 0; i < 5; ++i) {
+        mark_terrain_render_dirty(previous);
+    }
+    const std::uint64_t previous_revision = previous.terrain_render_revision;
+
+    game_state replacement = make_initial_game_state();
+    CHECK(replacement.terrain_render_revision <= previous_revision);
+    continue_terrain_render_revision(replacement, previous_revision);
+    CHECK(replacement.terrain_render_revision == previous_revision + 1);
+    CHECK(static_anchor_cache_is_current(replacement));
+    check_static_anchor_cache_is_fresh(replacement);
+
+    // A state already past the previous revision is left alone.
+    const std::uint64_t advanced = replacement.terrain_render_revision;
+    continue_terrain_render_revision(replacement, previous_revision);
+    CHECK(replacement.terrain_render_revision == advanced);
+}
+
 TEST_CASE("downhill course tuning builds rough apron vertices below zero") {
     game_tuning tuning = default_game_tuning();
     tuning.ground_y = 0.0f;

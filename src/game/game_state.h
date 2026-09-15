@@ -164,6 +164,10 @@ bool static_anchor_cache_is_current(const game_state& state);
 void refresh_static_anchor_cache(game_state& state, frame_profile* profile = nullptr);
 // Bumps terrain_render_revision and eagerly rebuilds the static anchor cache.
 void mark_terrain_render_dirty(game_state& state);
+// A fresh game_state restarts terrain_render_revision, but render caches outside
+// game_state key on it. Call this on a replacement state so the revision keeps
+// increasing past `previous_revision` and those caches rebuild.
+void continue_terrain_render_revision(game_state& state, std::uint64_t previous_revision);
 // Terrain-anchored pin; served from the cache when current, sampled fresh otherwise.
 glm::vec3 pin_anchor_position(const game_state& state);
 void update_game(game_state& state, const input_state& input, float dt, frame_profile* profile = nullptr);
