@@ -219,6 +219,49 @@ TEST_CASE("overlay lines only use glyphs the bitmap font can render") {
     }
 }
 
+TEST_CASE("chunk culling counters are averaged and shown on the overlay") {
+    profiler profile;
+    profile.enabled = true;
+
+    // Two frames: the first sees the trees, the second has them culled away.
+    profiler_begin_frame(profile);
+    profile.frame.visible_chunks = 80U;
+    profile.frame.culled_chunks = 280U;
+    profile.frame.chunk_draw_ranges = 4U;
+    profile.frame.chunk_indices_drawn = 11000U;
+    profile.frame.chunk_indices_total = 51876U;
+    profile.frame.trees_visible = true;
+    profiler_end_frame(profile, 0.2f);
+
+    profiler_begin_frame(profile);
+    profile.frame.visible_chunks = 90U;
+    profile.frame.culled_chunks = 270U;
+    profile.frame.chunk_draw_ranges = 4U;
+    profile.frame.chunk_indices_drawn = 12000U;
+    profile.frame.chunk_indices_total = 51876U;
+    profile.frame.trees_visible = false;
+    profiler_end_frame(profile, 0.2f);
+
+    CHECK(profile.has_published);
+    CHECK(profile.published.visible_chunks == 85U);
+    CHECK(profile.published.culled_chunks == 275U);
+    CHECK(profile.published.chunk_draw_ranges == 4U);
+    CHECK(profile.published.chunk_indices_drawn == 11500U);
+    CHECK(profile.published.chunk_indices_total == 51876U);
+    // Visible in any frame of the window counts as visible, like gpu availability.
+    CHECK(profile.published.trees_visible);
+
+    const std::vector<std::string> lines = format_profile_overlay_lines(profile.published);
+    CHECK(any_line_contains(lines, "CHUNK 85/275"));
+    CHECK(any_line_contains(lines, "R 4"));
+    CHECK(any_line_contains(lines, "IDX 11500"));
+    CHECK(any_line_contains(lines, "TREE ON"));
+
+    frame_profile culled;
+    culled.trees_visible = false;
+    CHECK(any_line_contains(format_profile_overlay_lines(culled), "TREE OFF"));
+}
+
 TEST_CASE("byte counts are formatted compactly for the overlay") {
     CHECK(format_byte_count(0U) == "0B");
     CHECK(format_byte_count(512U) == "512B");

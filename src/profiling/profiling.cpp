@@ -34,6 +34,12 @@ void add_frame(frame_profile& total, const frame_profile& frame) {
     total.debug_overlay_uniform_sets += frame.debug_overlay_uniform_sets;
     total.debug_overlay_buffer_calls += frame.debug_overlay_buffer_calls;
     total.debug_overlay_buffer_bytes += frame.debug_overlay_buffer_bytes;
+    total.visible_chunks += frame.visible_chunks;
+    total.culled_chunks += frame.culled_chunks;
+    total.chunk_draw_ranges += frame.chunk_draw_ranges;
+    total.chunk_indices_drawn += frame.chunk_indices_drawn;
+    total.chunk_indices_total += frame.chunk_indices_total;
+    total.trees_visible = total.trees_visible || frame.trees_visible;
     total.frame_ms += frame.frame_ms;
 }
 
@@ -78,7 +84,13 @@ frame_profile averaged(const frame_profile& total, const int frames) {
     result.debug_overlay_uniform_sets = average_u32(total.debug_overlay_uniform_sets, frames);
     result.debug_overlay_buffer_calls = average_u32(total.debug_overlay_buffer_calls, frames);
     result.debug_overlay_buffer_bytes = average_u64(total.debug_overlay_buffer_bytes, frames);
-    result.frame_ms = static_cast<float>(static_cast<double>(total.frame_ms) / divisor);
+    result.visible_chunks = average_u32(total.visible_chunks, frames);
+    result.culled_chunks = average_u32(total.culled_chunks, frames);
+    result.chunk_draw_ranges = average_u32(total.chunk_draw_ranges, frames);
+    result.chunk_indices_drawn = average_u64(total.chunk_indices_drawn, frames);
+    result.chunk_indices_total = average_u64(total.chunk_indices_total, frames);
+    result.trees_visible = total.trees_visible;
+    result.frame_ms =static_cast<float>(static_cast<double>(total.frame_ms) / divisor);
     return result;
 }
 
@@ -198,6 +210,13 @@ std::vector<std::string> format_profile_overlay_lines(const frame_profile& profi
                     " DBGUI " + std::to_string(profile.debug_overlay_draw_calls));
     lines.push_back("TSAMP " + std::to_string(profile.terrain_sample_calls) +
                     " TTRI " + std::to_string(profile.terrain_triangles_tested));
+    // Chunks drawn/culled, merged draw ranges, indices drawn, and whether the
+    // tree batch survived the frustum test.
+    lines.push_back("CHUNK " + std::to_string(profile.visible_chunks) +
+                    "/" + std::to_string(profile.culled_chunks) +
+                    " R " + std::to_string(profile.chunk_draw_ranges) +
+                    " IDX " + std::to_string(profile.chunk_indices_drawn) +
+                    " TREE " + std::string(profile.trees_visible ? "ON" : "OFF"));
 
     if (profile.gpu_timers_available) {
         lines.push_back("GPU " + gpu(gpu_profile_stage::terrain) + " " + gpu(gpu_profile_stage::trees));

@@ -101,6 +101,15 @@ struct frame_profile {
     // Buffer calls (writes + reallocations) and bytes of the debug text.
     std::uint32_t debug_overlay_buffer_calls = 0;
     std::uint64_t debug_overlay_buffer_bytes = 0;
+    // Frustum culling of the chunked static meshes (terrain + material overlay
+    // summed). Filled by the owner from renderer::cull_stats() after render().
+    std::uint32_t visible_chunks = 0;
+    std::uint32_t culled_chunks = 0;
+    std::uint32_t chunk_draw_ranges = 0;
+    std::uint64_t chunk_indices_drawn = 0;
+    std::uint64_t chunk_indices_total = 0;
+    // False when the whole tree batch was culled (both instanced draws skipped).
+    bool trees_visible = false;
 
     float frame_ms = 0.0f;
 };

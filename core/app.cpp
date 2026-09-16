@@ -886,6 +886,16 @@ void app::present_frame(render_data& data, frame_profile* profile) {
     data.fps_label = format_fps_label(displayed_fps_, displayed_frame_ms_);
     data.profile_summary = profiler_.published;
     renderer_.render(data, profile);
+    if (profile != nullptr) {
+        // Culling happens inside the renderer; the profile only records it.
+        const renderer_cull_stats& cull = renderer_.cull_stats();
+        profile->visible_chunks = cull.terrain.chunks_visible + cull.material_overlay.chunks_visible;
+        profile->culled_chunks = cull.terrain.chunks_culled + cull.material_overlay.chunks_culled;
+        profile->chunk_draw_ranges = cull.terrain.draw_ranges + cull.material_overlay.draw_ranges;
+        profile->chunk_indices_drawn = cull.terrain.indices_drawn + cull.material_overlay.indices_drawn;
+        profile->chunk_indices_total = cull.terrain.indices_total + cull.material_overlay.indices_total;
+        profile->trees_visible = cull.trees_visible;
+    }
     {
         const profile_scope timer(profile, profile_stage::window_swap);
         window_.swap();
