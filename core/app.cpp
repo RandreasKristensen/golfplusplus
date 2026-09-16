@@ -902,8 +902,32 @@ void app::present_frame(render_data& data, frame_profile* profile) {
     }
 }
 
-bool app::init() {
-    if (!window_.init("golf++", 1280, 720)) {
+bool app::boot_into_course(const std::string& course_id) {
+    const auto match = std::find_if(content_.courses.begin(),
+                                    content_.courses.end(),
+                                    [&course_id](const course_definition& course) {
+                                        return course.id == course_id;
+                                    });
+    if (match == content_.courses.end()) {
+        SDL_Log("GOLFPP_COURSE=%s: no such course, starting at the menu", course_id.c_str());
+        return false;
+    }
+
+    if (!start_game_course(game_, *match)) {
+        SDL_Log("GOLFPP_COURSE=%s: course failed to load, starting at the menu", course_id.c_str());
+        return false;
+    }
+
+    startup_flow_ = startup_flow::playing;
+    SDL_Log("GOLFPP_COURSE=%s: booted straight into '%s' (%d holes)",
+            course_id.c_str(),
+            match->name.c_str(),
+            match->hole_count);
+    return true;
+}
+
+bool app::init(const startup_options& options) {
+    if (!window_.init("golf++", 1280, 720, options.vsync)) {
         return false;
     }
 
@@ -936,9 +960,14 @@ bool app::init() {
         SDL_free(pref_path);
     }
 
+    // Startup-only shortcut for the release performance pass: skip the menu
+    // and open the requested course directly. Falls through to the menu when
+    // the id is empty or unknown, so gameplay behaviour is otherwise identical.
+    const bool booted_course = !options.boot_course_id.empty() && boot_into_course(options.boot_course_id);
+
     audio_.init();
     audio_.load_manifest(std::filesystem::path(asset_root) / "audio" / "sounds.json");
-    audio_.start_ambience("ambience_menu_vcr");
+    audio_.start_ambience(booted_course ? "ambience_course_day" : "ambience_menu_vcr");
     if (base_path != nullptr) {
         SDL_free(base_path);
     }

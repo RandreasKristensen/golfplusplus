@@ -9,6 +9,7 @@ option(VCR_GOLF_BUILD_TESTS "Build tests" OFF)
 set(VCR_GOLF_SOURCES
     core/main.cpp
     core/app.cpp
+    core/startup_options.cpp
     core/window.cpp
     core/event_loop.cpp
     core/gl_loader.cpp
@@ -172,6 +173,7 @@ endif()
 if (VCR_GOLF_BUILD_TESTS)
     add_executable(golfpp-tests
         tests/physics_tests.cpp
+        tests/startup_options_tests.cpp
         tests/game_tests.cpp
         tests/profiling_tests.cpp
         tests/shader_tests.cpp
@@ -182,6 +184,7 @@ if (VCR_GOLF_BUILD_TESTS)
         tests/dynamic_buffer_tests.cpp
         tests/course_map_fill_tests.cpp
         src/audio/audio_manifest.cpp
+        core/startup_options.cpp
         src/renderer/world_marker_batch.cpp
         src/renderer/frustum.cpp
         src/renderer/render_mesh_chunks.cpp

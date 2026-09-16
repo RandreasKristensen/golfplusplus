@@ -21,7 +21,7 @@ void set_window_icon(SDL_Window* window) {
 }
 }
 
-bool window::init(const char* title, int width, int height) {
+bool window::init(const char* title, int width, int height, const bool vsync) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return false;
@@ -57,7 +57,14 @@ bool window::init(const char* title, int width, int height) {
         return false;
     }
 
-    SDL_GL_SetSwapInterval(1);
+    // Swap interval 0 is the profiling escape hatch: it lets the renderer run
+    // past the display refresh so frame times are the renderer's, not the
+    // monitor's. Nothing else in the build depends on which one is chosen.
+    const int requested_swap_interval = vsync ? 1 : 0;
+    if (SDL_GL_SetSwapInterval(requested_swap_interval) != 0) {
+        SDL_Log("SDL_GL_SetSwapInterval(%d) failed: %s", requested_swap_interval, SDL_GetError());
+    }
+    SDL_Log("vsync %s (swap interval %d)", vsync ? "on" : "off (GOLFPP_VSYNC)", SDL_GL_GetSwapInterval());
 
     if (!load_gl_functions()) {
         SDL_Log("OpenGL loader init failed.");

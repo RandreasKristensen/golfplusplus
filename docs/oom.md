@@ -1,5 +1,34 @@
 # Renderer Speedup Agent Prompts
 
+## Status: all 11 tasks implemented — do not redo them
+
+This file is kept for reference. The original prompts below are unchanged, but
+**every task in it has been implemented and merged.** Read
+[`performance.md`](performance.md) before acting on anything here: it has the
+budgets, the overlay counter reference, the regression symptoms, and a
+per-task summary of what actually landed.
+
+| # | Task | Status | Landed in |
+|---|---|---|---|
+| 1 | Renderer performance instrumentation | done | `src/profiling/profiling.*`, `src/renderer/gl_timer.*`, debug overlay on `Ctrl` |
+| 2 | Spatial index for terrain sampling | done | `src/physics/terrain.cpp` (uniform XZ grid, CSR, `previous_sample` fast path) |
+| 3 | Cache static terrain-anchored data | done | `game_state::static_anchors`, keyed on `terrain_render_revision` |
+| 4 | Cache render mesh bounds | done | `render_static_mesh::bounds`, `compute_render_mesh_bounds` |
+| 5 | Cache shader uniform locations | done | `src/renderer/shader.cpp`, `uniform_location_cache` |
+| 6 | Instance or batch tree rendering | done | `src/renderer/tree_renderer.*` — 2 instanced draws total |
+| 7 | Batch markers, pins, aim dots, panels | done | `src/renderer/world_marker_batch.*`, `world_marker_renderer.*` |
+| 8 | Batched pixel UI buffer | done | `src/renderer/overlay_pass.*`, `overlay_batch.*`, `pixel_font.*` |
+| 9 | Preallocate and stream dynamic buffers | done | `src/renderer/dynamic_buffer.*`, `course_map_fill.*` |
+| 10 | Coarse culling and course render chunking | done | `src/renderer/render_mesh_chunks.*`, `frustum.*`, `renderer::cull_stats()` |
+| 11 | Release-mode performance acceptance pass | done | `docs/performance.md`, `core/startup_options.*` (`GOLFPP_VSYNC`, `GOLFPP_COURSE`) |
+
+Outstanding, and deliberately not closed: **nobody has launched the GUI yet.**
+The budgets in `performance.md` are derived from code and unit tests, not
+measured in game, and the `measured` columns there are waiting to be filled in
+on the first real run. See its "Open follow-ups" section.
+
+---
+
 ## 1. Add renderer performance instrumentation
 
 Prompt:

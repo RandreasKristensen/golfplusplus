@@ -2,6 +2,7 @@
 
 #include "audio/audio_engine.h"
 #include "core/input.h"
+#include "core/startup_options.h"
 #include "core/window.h"
 #include "game/cloud_save.h"
 #include "game/game_content.h"
@@ -41,7 +42,9 @@ struct render_tree_cache {
 };
 
 struct app {
-    bool init();
+    // `options` carries profiling-only startup switches (vsync, boot course).
+    // They are consumed here and never reach game state or the renderer.
+    bool init(const startup_options& options = startup_options{});
     void run();
     void shutdown();
 
@@ -49,6 +52,9 @@ private:
     void mark_current_save_dirty();
     bool persist_current_save();
     void sync_current_save();
+    // Startup-only: boots straight into the course with this id when it exists.
+    // Returns false when no course matched, so the menu is shown instead.
+    bool boot_into_course(const std::string& course_id);
     void refresh_render_mesh_cache(frame_profile* profile);
     void present_frame(render_data& data, frame_profile* profile);
 

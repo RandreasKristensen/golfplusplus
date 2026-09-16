@@ -41,6 +41,13 @@ cmake --build build/debug
 .\gb -rr  # build release, stop running copy from this build, relaunch
 ```
 
+## Performance
+
+`docs/performance.md` has the release-mode performance pass: how to boot the
+6-hole course (`GOLFPP_COURSE`), disable vsync for profiling (`GOLFPP_VSYNC=0`),
+read the in-game profiling overlay (`Ctrl`), the per-scenario budgets, and what
+each counter regressing means.
+
 ## Dependencies
 
 CMake 3.25+, SDL2, SDL_mixer, OpenGL, and GLM. GLAD + doctest are vendored.
