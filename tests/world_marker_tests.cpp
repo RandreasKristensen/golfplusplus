@@ -1,5 +1,7 @@
 #include "doctest.h"
 
+#include "renderer/cart_batch.h"
+#include "renderer/primitive_mesh.h"
 #include "renderer/world_marker_batch.h"
 
 #include <glm/geometric.hpp>
@@ -10,6 +12,7 @@
 #include <glm/vec4.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <vector>
@@ -446,4 +449,332 @@ TEST_CASE("world marker alpha and appends extend runs only on equal state") {
     check_run(batch.runs()[0], true, 0, quad_vertex_count + disc_vertex_count);
     check_run(batch.runs()[1], false, quad_vertex_count + disc_vertex_count, disc_vertex_count);
     check_run(batch.runs()[2], true, quad_vertex_count + 2 * disc_vertex_count, quad_vertex_count);
+}
+
+// --- Golf cart ------------------------------------------------------------
+//
+// The cart used to be sixteen immediate-mode draws in renderer.cpp. The
+// oracles below are that code copied verbatim: the pre-refactor
+// make_cylinder_vertices / make_sphere_vertices generators, the pre-refactor
+// local_model, and the exact draw_local_panel / draw_local_cylinder /
+// draw_local_sphere matrix composition, with every literal from
+// draw_cart_model.
+
+namespace {
+constexpr std::size_t cart_cylinder_vertex_count = 96;   // 8 segments * 12
+constexpr std::size_t cart_sphere_vertex_count = 576;    // 8 * 12 * 6
+
+void old_mesh_vertex(std::vector<float>& vertices, const glm::vec3 position, const glm::vec3 normal) {
+    vertices.insert(vertices.end(), {
+        position.x, position.y, position.z,
+        normal.x, normal.y, normal.z
+    });
+}
+
+// renderer.cpp's make_cylinder_vertices, before it moved to primitive_mesh.
+std::vector<float> old_cylinder_vertices(const int segments) {
+    std::vector<float> vertices;
+    constexpr float pi = 3.14159265358979323846f;
+    for (int i = 0; i < segments; ++i) {
+        const float a0 = 2.0f * pi * static_cast<float>(i) / static_cast<float>(segments);
+        const float a1 = 2.0f * pi * static_cast<float>(i + 1) / static_cast<float>(segments);
+        const glm::vec3 n0(std::cos(a0), 0.0f, std::sin(a0));
+        const glm::vec3 n1(std::cos(a1), 0.0f, std::sin(a1));
+        const glm::vec3 p00(n0.x, 0.0f, n0.z);
+        const glm::vec3 p01(n1.x, 0.0f, n1.z);
+        const glm::vec3 p10(n0.x, 1.0f, n0.z);
+        const glm::vec3 p11(n1.x, 1.0f, n1.z);
+
+        old_mesh_vertex(vertices, p00, n0);
+        old_mesh_vertex(vertices, p01, n1);
+        old_mesh_vertex(vertices, p11, n1);
+        old_mesh_vertex(vertices, p00, n0);
+        old_mesh_vertex(vertices, p11, n1);
+        old_mesh_vertex(vertices, p10, n0);
+
+        old_mesh_vertex(vertices, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f));
+        old_mesh_vertex(vertices, p01, glm::vec3(0.0f, -1.0f, 0.0f));
+        old_mesh_vertex(vertices, p00, glm::vec3(0.0f, -1.0f, 0.0f));
+
+        old_mesh_vertex(vertices, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        old_mesh_vertex(vertices, p10, glm::vec3(0.0f, 1.0f, 0.0f));
+        old_mesh_vertex(vertices, p11, glm::vec3(0.0f, 1.0f, 0.0f));
+    }
+    return vertices;
+}
+
+// renderer.cpp's make_sphere_vertices, before it moved to primitive_mesh.
+std::vector<float> old_sphere_vertices(const int latitude_segments, const int longitude_segments) {
+    std::vector<float> vertices;
+    constexpr float pi = 3.14159265358979323846f;
+    const auto append = [&vertices](const glm::vec3 normal) {
+        constexpr float radius = 1.0f;
+        const glm::vec3 position = normal * radius;
+        vertices.insert(vertices.end(), {
+            position.x, position.y, position.z,
+            normal.x, normal.y, normal.z
+        });
+    };
+
+    for (int lat = 0; lat < latitude_segments; ++lat) {
+        const float theta0 = pi * static_cast<float>(lat) / static_cast<float>(latitude_segments);
+        const float theta1 = pi * static_cast<float>(lat + 1) / static_cast<float>(latitude_segments);
+        for (int lon = 0; lon < longitude_segments; ++lon) {
+            const float phi0 = 2.0f * pi * static_cast<float>(lon) / static_cast<float>(longitude_segments);
+            const float phi1 = 2.0f * pi * static_cast<float>(lon + 1) / static_cast<float>(longitude_segments);
+
+            const glm::vec3 p00(std::sin(theta0) * std::cos(phi0), std::cos(theta0), std::sin(theta0) * std::sin(phi0));
+            const glm::vec3 p01(std::sin(theta0) * std::cos(phi1), std::cos(theta0), std::sin(theta0) * std::sin(phi1));
+            const glm::vec3 p10(std::sin(theta1) * std::cos(phi0), std::cos(theta1), std::sin(theta1) * std::sin(phi0));
+            const glm::vec3 p11(std::sin(theta1) * std::cos(phi1), std::cos(theta1), std::sin(theta1) * std::sin(phi1));
+
+            append(p00);
+            append(p10);
+            append(p11);
+            append(p00);
+            append(p11);
+            append(p01);
+        }
+    }
+    return vertices;
+}
+
+std::vector<glm::vec3> positions_of(const std::vector<float>& interleaved) {
+    std::vector<glm::vec3> positions;
+    for (std::size_t i = 0; i + 5 < interleaved.size(); i += 6) {
+        positions.emplace_back(interleaved[i], interleaved[i + 1], interleaved[i + 2]);
+    }
+    return positions;
+}
+
+// renderer.cpp's local_model, before it moved to cart_batch.
+glm::mat4 old_local_model(const glm::vec3& camera_position,
+                          const glm::vec3& camera_target,
+                          const glm::vec3& local,
+                          const glm::vec3& rotation,
+                          const glm::vec3& scale) {
+    glm::vec3 forward = camera_target - camera_position;
+    forward.y = 0.0f;
+    forward = glm::normalize(glm::length(forward) > 0.0001f ? forward : glm::vec3(0.0f, 0.0f, 1.0f));
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const glm::vec3 right = glm::normalize(glm::cross(up, forward));
+    const glm::vec3 position = camera_position + right * local.x + up * local.y + forward * local.z;
+
+    glm::mat4 model(1.0f);
+    model[0] = glm::vec4(right, 0.0f);
+    model[1] = glm::vec4(up, 0.0f);
+    model[2] = glm::vec4(forward, 0.0f);
+    model[3] = glm::vec4(position, 1.0f);
+    model = glm::rotate(model, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::rotate(model, rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
+    model = glm::rotate(model, rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
+    return glm::scale(model, scale);
+}
+
+enum class cart_shape { quad, cylinder, sphere };
+
+struct old_cart_piece {
+    cart_shape shape = cart_shape::quad;
+    glm::mat4 model = glm::mat4(1.0f);
+    glm::vec3 color = glm::vec3(1.0f);
+};
+
+// The old draw_cart_model, reduced to (shape, model, color) in draw order.
+std::vector<old_cart_piece> old_cart_pieces(const glm::vec3& camera_position, const glm::vec3& camera_target) {
+    const glm::vec3 body(0.36f, 0.46f, 0.20f);
+    const glm::vec3 trim(0.08f, 0.09f, 0.08f);
+    const glm::vec3 cream(0.76f, 0.72f, 0.56f);
+
+    std::vector<old_cart_piece> pieces;
+    const auto panel = [&](const glm::vec3& local,
+                           const glm::vec3& rotation,
+                           const glm::vec2& half_size,
+                           const glm::vec3& color) {
+        // draw_local_panel
+        pieces.push_back({cart_shape::quad,
+                          old_local_model(camera_position, camera_target, local, rotation, glm::vec3(half_size, 1.0f)),
+                          color});
+    };
+    const auto cylinder = [&](const glm::vec3& local,
+                              const glm::vec3& rotation,
+                              const glm::vec3& scale,
+                              const glm::vec3& color) {
+        // draw_local_cylinder: basis, then scale, then translate half down.
+        glm::mat4 model = old_local_model(camera_position, camera_target, local, rotation, glm::vec3(1.0f));
+        model = glm::scale(model, scale);
+        model = glm::translate(model, glm::vec3(0.0f, -0.5f, 0.0f));
+        pieces.push_back({cart_shape::cylinder, model, color});
+    };
+    const auto sphere = [&](const glm::vec3& local, const float radius, const glm::vec3& color) {
+        // draw_local_sphere
+        pieces.push_back({cart_shape::sphere,
+                          old_local_model(camera_position, camera_target, local, glm::vec3(0.0f), glm::vec3(radius)),
+                          color});
+    };
+
+    panel(glm::vec3(0.0f, -0.79f, 1.08f), glm::vec3(glm::radians(78.0f), 0.0f, 0.0f), glm::vec2(0.74f, 0.48f), body);
+    panel(glm::vec3(0.0f, -0.63f, 0.58f), glm::vec3(glm::radians(82.0f), 0.0f, 0.0f), glm::vec2(0.68f, 0.18f), trim);
+    panel(glm::vec3(0.0f, -0.50f, 0.72f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec2(0.64f, 0.13f), cream);
+    panel(glm::vec3(-0.78f, -0.63f, 0.86f), glm::vec3(0.0f, glm::radians(90.0f), 0.0f), glm::vec2(0.42f, 0.16f), body);
+    panel(glm::vec3(0.78f, -0.63f, 0.86f), glm::vec3(0.0f, glm::radians(90.0f), 0.0f), glm::vec2(0.42f, 0.16f), body);
+    panel(glm::vec3(0.0f, 0.23f, 0.72f), glm::vec3(glm::radians(88.0f), 0.0f, 0.0f), glm::vec2(0.84f, 0.42f), glm::vec3(0.72f, 0.68f, 0.47f));
+    cylinder(glm::vec3(0.0f, -0.63f, 0.40f), glm::vec3(glm::radians(68.0f), 0.0f, glm::radians(90.0f)), glm::vec3(0.22f, 0.035f, 0.22f), glm::vec3(0.025f, 0.025f, 0.025f));
+    cylinder(glm::vec3(0.0f, -0.73f, 0.48f), glm::vec3(glm::radians(22.0f), 0.0f, 0.0f), glm::vec3(0.024f, 0.30f, 0.024f), trim);
+
+    const std::array<float, 2> post_x{-0.56f, 0.56f};
+    const std::array<float, 2> post_z{0.46f, 1.10f};
+    for (const float x : post_x) {
+        for (const float z : post_z) {
+            cylinder(glm::vec3(x, -0.17f, z), glm::vec3(0.0f), glm::vec3(0.035f, 0.84f, 0.035f), cream);
+        }
+    }
+
+    const std::array<float, 2> wheel_x{-0.68f, 0.68f};
+    const std::array<float, 1> wheel_z{1.30f};
+    for (const float x : wheel_x) {
+        for (const float z : wheel_z) {
+            cylinder(glm::vec3(x, -1.08f, z), glm::vec3(0.0f, 0.0f, glm::radians(-90.0f)), glm::vec3(0.23f, 0.16f, 0.23f), glm::vec3(0.025f, 0.025f, 0.025f));
+            sphere(glm::vec3(x, -1.08f, z), 0.085f, glm::vec3(0.58f, 0.56f, 0.48f));
+        }
+    }
+    return pieces;
+}
+
+const std::vector<glm::vec3>& cart_shape_positions(const cart_shape shape) {
+    static const std::vector<glm::vec3> quad = old_quad_positions();
+    static const std::vector<glm::vec3> cylinder = positions_of(old_cylinder_vertices(8));
+    static const std::vector<glm::vec3> sphere = positions_of(old_sphere_vertices(8, 12));
+    switch (shape) {
+    case cart_shape::cylinder:
+        return cylinder;
+    case cart_shape::sphere:
+        return sphere;
+    case cart_shape::quad:
+    default:
+        return quad;
+    }
+}
+
+const glm::vec3 test_camera_position(12.5f, 2.25f, -37.0f);
+const glm::vec3 test_camera_target(14.0f, 1.80f, -20.0f);
+}
+
+TEST_CASE("cart unit primitives are the same data the renderer uploads to its VBOs") {
+    // The batch's cylinder/sphere positions must be the position half of the
+    // interleaved buffers renderer.cpp uploads — one generator, no fork.
+    const std::vector<float> cylinder_interleaved = make_cylinder_vertices(primitive_cylinder_segments);
+    const std::vector<glm::vec3> cylinder = make_cylinder_positions(primitive_cylinder_segments);
+    WORLD_MARKER_REQUIRE(cylinder.size() == cart_cylinder_vertex_count);
+    CHECK(cylinder_interleaved.size() == cart_cylinder_vertex_count * 6U);
+    CHECK(cylinder == mesh_positions_of(cylinder_interleaved));
+
+    const std::vector<float> sphere_interleaved = make_sphere_vertices(primitive_sphere_latitude_segments,
+                                                                      primitive_sphere_longitude_segments);
+    const std::vector<glm::vec3> sphere = make_sphere_positions(primitive_sphere_latitude_segments,
+                                                               primitive_sphere_longitude_segments);
+    WORLD_MARKER_REQUIRE(sphere.size() == cart_sphere_vertex_count);
+    CHECK(sphere_interleaved.size() == cart_sphere_vertex_count * 6U);
+    CHECK(sphere == mesh_positions_of(sphere_interleaved));
+
+    // And the values themselves still match the pre-refactor generators.
+    CHECK(primitive_cylinder_segments == 8);
+    CHECK(primitive_sphere_latitude_segments == 8);
+    CHECK(primitive_sphere_longitude_segments == 12);
+    CHECK(cylinder_interleaved == old_cylinder_vertices(8));
+    CHECK(sphere_interleaved == old_sphere_vertices(8, 12));
+}
+
+TEST_CASE("world marker batch reproduces the golf cart's sixteen draws") {
+    world_marker_scene scene;
+    scene.show_primary_hole_markers = false;
+    scene.cart_active = true;
+    scene.camera_position = test_camera_position;
+    scene.camera_target = test_camera_target;
+
+    world_marker_batch batch;
+    build_world_marker_batch(batch, scene);
+
+    const std::vector<old_cart_piece> pieces = old_cart_pieces(test_camera_position, test_camera_target);
+    WORLD_MARKER_REQUIRE(pieces.size() == 16U);
+    CHECK(batch.vertices().size() == cart_model_vertex_count());
+    CHECK(cart_model_vertex_count() == 6U * quad_vertex_count +
+                                       8U * cart_cylinder_vertex_count +
+                                       2U * cart_sphere_vertex_count);
+
+    std::size_t index = 0;
+    for (const old_cart_piece& piece : pieces) {
+        index = check_piece(batch, index, cart_shape_positions(piece.shape), piece.model, piece.color, 1.0f);
+    }
+    CHECK(index == batch.vertices().size());
+
+    // One opaque, depth-writing run for the whole cart.
+    WORLD_MARKER_REQUIRE(batch.runs().size() == 1U);
+    check_run(batch.runs()[0], true, 0, batch.vertices().size());
+}
+
+TEST_CASE("golf cart is submitted ahead of the world markers in a depth-writing run") {
+    const std::vector<glm::vec3> pins = {glm::vec3(4.0f, 0.0f, 12.0f)};
+
+    world_marker_scene scene;
+    scene.show_primary_hole_markers = true;
+    scene.tee_position = glm::vec3(2.0f, 0.5f, -3.0f);
+    scene.pin_position = glm::vec3(-6.0f, 0.25f, 44.0f);
+    scene.pin_markers = &pins;
+    scene.cart_active = true;
+    scene.camera_position = test_camera_position;
+    scene.camera_target = test_camera_target;
+
+    world_marker_batch batch;
+    build_world_marker_batch(batch, scene);
+
+    const std::size_t cart_vertices = cart_model_vertex_count();
+    // Cart first, then the primary tee disc, all in the leading depth-writing
+    // run — exactly the order render_scene drew them in before batching.
+    WORLD_MARKER_REQUIRE(batch.vertices().size() > cart_vertices);
+    const std::vector<old_cart_piece> pieces = old_cart_pieces(test_camera_position, test_camera_target);
+    std::size_t index = 0;
+    for (const old_cart_piece& piece : pieces) {
+        index = check_piece(batch, index, cart_shape_positions(piece.shape), piece.model, piece.color, 1.0f);
+    }
+    CHECK(index == cart_vertices);
+    check_piece(batch,
+                cart_vertices,
+                old_disc_positions(),
+                old_ground_marker_model(scene.tee_position, 1.8f),
+                glm::vec3(0.45f, 0.30f, 0.16f));
+
+    // Cart + primary tee | primary cup | primary flagstick | hub cup | hub flagstick.
+    WORLD_MARKER_REQUIRE(batch.runs().size() == 5U);
+    const std::vector<bool> depth_writes = {true, false, true, false, true};
+    for (std::size_t i = 0; i < depth_writes.size(); ++i) {
+        CHECK(batch.runs()[i].depth_write == depth_writes[i]);
+    }
+    // The cart lives entirely inside the first run, which starts at vertex 0
+    // and ends after the tee disc, so the depth-write-off cup run still comes
+    // after the whole cart.
+    CHECK(batch.runs()[0].first == 0U);
+    CHECK(batch.runs()[0].count == cart_vertices + disc_vertex_count);
+}
+
+TEST_CASE("inactive golf cart appends nothing") {
+    world_marker_scene scene;
+    scene.show_primary_hole_markers = false;
+    scene.cart_active = false;
+    scene.camera_position = test_camera_position;
+    scene.camera_target = test_camera_target;
+
+    world_marker_batch batch;
+    build_world_marker_batch(batch, scene);
+    CHECK(batch.empty());
+    CHECK(batch.runs().empty());
+
+    // And an inactive cart leaves the marker layout untouched.
+    scene.show_primary_hole_markers = true;
+    build_world_marker_batch(batch, scene);
+    const std::size_t markers_only = batch.vertices().size();
+    CHECK(markers_only == 2U * disc_vertex_count + flagstick_vertex_count);
+
+    scene.cart_active = true;
+    build_world_marker_batch(batch, scene);
+    CHECK(batch.vertices().size() == markers_only + cart_model_vertex_count());
 }

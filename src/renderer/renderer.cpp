@@ -16,10 +16,12 @@
 #include <vector>
 
 #include "core/gl_loader.h"
+#include "renderer/cart_batch.h"
 #include "renderer/course_map_fill.h"
 #include "renderer/overlay_batch.h"
 #include "renderer/overlay_pass.h"
 #include "renderer/pixel_font.h"
+#include "renderer/primitive_mesh.h"
 
 namespace {
 // All GL draw submissions go through these so draw calls are counted from the
@@ -80,113 +82,6 @@ std::string asset_path(const char* relative) {
     return base + relative;
 }
 
-void append_sphere_vertex(std::vector<float>& vertices, const glm::vec3 normal) {
-    constexpr float radius = 1.0f;
-    const glm::vec3 position = normal * radius;
-    vertices.insert(vertices.end(), {
-        position.x, position.y, position.z,
-        normal.x, normal.y, normal.z
-    });
-}
-
-void append_mesh_vertex(std::vector<float>& vertices, const glm::vec3 position, const glm::vec3 normal) {
-    vertices.insert(vertices.end(), {
-        position.x, position.y, position.z,
-        normal.x, normal.y, normal.z
-    });
-}
-
-std::vector<float> make_sphere_vertices(const int latitude_segments, const int longitude_segments) {
-    std::vector<float> vertices;
-    vertices.reserve(static_cast<std::size_t>(latitude_segments) *
-                     static_cast<std::size_t>(longitude_segments) * 36);
-
-    constexpr float pi = 3.14159265358979323846f;
-    for (int lat = 0; lat < latitude_segments; ++lat) {
-        const float theta0 = pi * static_cast<float>(lat) / static_cast<float>(latitude_segments);
-        const float theta1 = pi * static_cast<float>(lat + 1) / static_cast<float>(latitude_segments);
-
-        for (int lon = 0; lon < longitude_segments; ++lon) {
-            const float phi0 = 2.0f * pi * static_cast<float>(lon) / static_cast<float>(longitude_segments);
-            const float phi1 = 2.0f * pi * static_cast<float>(lon + 1) / static_cast<float>(longitude_segments);
-
-            const glm::vec3 p00(std::sin(theta0) * std::cos(phi0), std::cos(theta0), std::sin(theta0) * std::sin(phi0));
-            const glm::vec3 p01(std::sin(theta0) * std::cos(phi1), std::cos(theta0), std::sin(theta0) * std::sin(phi1));
-            const glm::vec3 p10(std::sin(theta1) * std::cos(phi0), std::cos(theta1), std::sin(theta1) * std::sin(phi0));
-            const glm::vec3 p11(std::sin(theta1) * std::cos(phi1), std::cos(theta1), std::sin(theta1) * std::sin(phi1));
-
-            append_sphere_vertex(vertices, p00);
-            append_sphere_vertex(vertices, p10);
-            append_sphere_vertex(vertices, p11);
-
-            append_sphere_vertex(vertices, p00);
-            append_sphere_vertex(vertices, p11);
-            append_sphere_vertex(vertices, p01);
-        }
-    }
-
-    return vertices;
-}
-
-std::vector<float> make_cylinder_vertices(const int segments) {
-    std::vector<float> vertices;
-    vertices.reserve(static_cast<std::size_t>(segments) * 72);
-
-    constexpr float pi = 3.14159265358979323846f;
-    for (int i = 0; i < segments; ++i) {
-        const float a0 = 2.0f * pi * static_cast<float>(i) / static_cast<float>(segments);
-        const float a1 = 2.0f * pi * static_cast<float>(i + 1) / static_cast<float>(segments);
-        const glm::vec3 n0(std::cos(a0), 0.0f, std::sin(a0));
-        const glm::vec3 n1(std::cos(a1), 0.0f, std::sin(a1));
-        const glm::vec3 p00(n0.x, 0.0f, n0.z);
-        const glm::vec3 p01(n1.x, 0.0f, n1.z);
-        const glm::vec3 p10(n0.x, 1.0f, n0.z);
-        const glm::vec3 p11(n1.x, 1.0f, n1.z);
-
-        append_mesh_vertex(vertices, p00, n0);
-        append_mesh_vertex(vertices, p01, n1);
-        append_mesh_vertex(vertices, p11, n1);
-        append_mesh_vertex(vertices, p00, n0);
-        append_mesh_vertex(vertices, p11, n1);
-        append_mesh_vertex(vertices, p10, n0);
-
-        append_mesh_vertex(vertices, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f));
-        append_mesh_vertex(vertices, p01, glm::vec3(0.0f, -1.0f, 0.0f));
-        append_mesh_vertex(vertices, p00, glm::vec3(0.0f, -1.0f, 0.0f));
-
-        append_mesh_vertex(vertices, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        append_mesh_vertex(vertices, p10, glm::vec3(0.0f, 1.0f, 0.0f));
-        append_mesh_vertex(vertices, p11, glm::vec3(0.0f, 1.0f, 0.0f));
-    }
-
-    return vertices;
-}
-
-std::vector<float> make_cone_vertices(const int segments) {
-    std::vector<float> vertices;
-    vertices.reserve(static_cast<std::size_t>(segments) * 54);
-
-    constexpr float pi = 3.14159265358979323846f;
-    const glm::vec3 tip(0.0f, 1.0f, 0.0f);
-    for (int i = 0; i < segments; ++i) {
-        const float a0 = 2.0f * pi * static_cast<float>(i) / static_cast<float>(segments);
-        const float a1 = 2.0f * pi * static_cast<float>(i + 1) / static_cast<float>(segments);
-        const glm::vec3 p0(std::cos(a0), 0.0f, std::sin(a0));
-        const glm::vec3 p1(std::cos(a1), 0.0f, std::sin(a1));
-        const glm::vec3 face_normal = glm::normalize(glm::cross(p1 - p0, tip - p0));
-
-        append_mesh_vertex(vertices, p0, face_normal);
-        append_mesh_vertex(vertices, p1, face_normal);
-        append_mesh_vertex(vertices, tip, face_normal);
-
-        append_mesh_vertex(vertices, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f));
-        append_mesh_vertex(vertices, p0, glm::vec3(0.0f, -1.0f, 0.0f));
-        append_mesh_vertex(vertices, p1, glm::vec3(0.0f, -1.0f, 0.0f));
-    }
-
-    return vertices;
-}
-
 void set_terrain_draw_state(shader_program& shader,
                             const glm::mat4& model,
                             const glm::mat4& view,
@@ -218,33 +113,13 @@ struct primitive_geometry {
     int ball_vertex_count = 0;
 };
 
+// The emote props are still immediate-mode draws (the smoke puffs blend, and
+// the world marker batch is opaque-only), but they share the camera-local
+// placement with the batched cart, so both read the same implementation.
 glm::vec3 local_point_world(const render_data& data, const glm::vec3& local) {
-    glm::vec3 forward = data.camera_target - data.camera_position;
-    forward.y = 0.0f;
-    forward = glm::normalize(glm::length(forward) > 0.0001f ? forward : glm::vec3(0.0f, 0.0f, 1.0f));
-    const glm::vec3 up(0.0f, 1.0f, 0.0f);
-    const glm::vec3 right = glm::normalize(glm::cross(up, forward));
-    return data.camera_position + right * local.x + up * local.y + forward * local.z;
+    return camera_local_point(data.camera_position, data.camera_target, local);
 }
 
-glm::mat4 local_model(const render_data& data, const glm::vec3& local, const glm::vec3& rotation, const glm::vec3& scale) {
-    glm::vec3 forward = data.camera_target - data.camera_position;
-    forward.y = 0.0f;
-    forward = glm::normalize(glm::length(forward) > 0.0001f ? forward : glm::vec3(0.0f, 0.0f, 1.0f));
-    const glm::vec3 up(0.0f, 1.0f, 0.0f);
-    const glm::vec3 right = glm::normalize(glm::cross(up, forward));
-    const glm::vec3 position = data.camera_position + right * local.x + up * local.y + forward * local.z;
-
-    glm::mat4 model(1.0f);
-    model[0] = glm::vec4(right, 0.0f);
-    model[1] = glm::vec4(up, 0.0f);
-    model[2] = glm::vec4(forward, 0.0f);
-    model[3] = glm::vec4(position, 1.0f);
-    model = glm::rotate(model, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
-    model = glm::rotate(model, rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
-    model = glm::rotate(model, rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
-    return glm::scale(model, scale);
-}
 
 void draw_local_panel(shader_program& shader,
                       const glm::mat4& view,
@@ -255,7 +130,7 @@ void draw_local_panel(shader_program& shader,
                       const glm::vec2& half_size,
                       const glm::vec3& color,
                       const float alpha = 1.0f) {
-    const glm::mat4 model = local_model(data, local, rotation, glm::vec3(half_size, 1.0f));
+    const glm::mat4 model = local_panel_model(data.camera_position, data.camera_target, local, rotation, half_size);
     set_terrain_draw_state(shader, model, view, proj, color, alpha, false);
     draw_arrays(shader, GL_TRIANGLES, 0, 6);
 }
@@ -270,9 +145,7 @@ void draw_local_cylinder(shader_program& shader,
                          const glm::vec3& scale,
                          const glm::vec3& color,
                          const float alpha = 1.0f) {
-    glm::mat4 model = local_model(data, local, rotation, glm::vec3(1.0f));
-    model = glm::scale(model, scale);
-    model = glm::translate(model, glm::vec3(0.0f, -0.5f, 0.0f));
+    const glm::mat4 model = local_cylinder_model(data.camera_position, data.camera_target, local, rotation, scale);
     set_terrain_draw_state(shader, model, view, proj, color, alpha, false);
     glBindVertexArray(geometry.cylinder_vao);
     draw_arrays(shader, GL_TRIANGLES, 0, geometry.cylinder_vertex_count);
@@ -323,51 +196,10 @@ void draw_local_sphere(shader_program& shader,
                        const float radius,
                        const glm::vec3& color,
                        const float alpha = 1.0f) {
-    const glm::mat4 model = local_model(data, local, glm::vec3(0.0f), glm::vec3(radius));
+    const glm::mat4 model = local_sphere_model(data.camera_position, data.camera_target, local, radius);
     set_terrain_draw_state(shader, model, view, proj, color, alpha, false);
     glBindVertexArray(geometry.ball_vao);
     draw_arrays(shader, GL_TRIANGLES, 0, geometry.ball_vertex_count);
-}
-
-void draw_cart_model(shader_program& shader,
-                     const glm::mat4& view,
-                     const glm::mat4& proj,
-                     const render_data& data,
-                     const primitive_geometry& geometry) {
-    if (!data.cart_active) {
-        return;
-    }
-
-    glBindVertexArray(geometry.screen_vao);
-    const glm::vec3 body(0.36f, 0.46f, 0.20f);
-    const glm::vec3 trim(0.08f, 0.09f, 0.08f);
-    const glm::vec3 cream(0.76f, 0.72f, 0.56f);
-
-    draw_local_panel(shader, view, proj, data, glm::vec3(0.0f, -0.79f, 1.08f), glm::vec3(glm::radians(78.0f), 0.0f, 0.0f), glm::vec2(0.74f, 0.48f), body);
-    draw_local_panel(shader, view, proj, data, glm::vec3(0.0f, -0.63f, 0.58f), glm::vec3(glm::radians(82.0f), 0.0f, 0.0f), glm::vec2(0.68f, 0.18f), trim);
-    draw_local_panel(shader, view, proj, data, glm::vec3(0.0f, -0.50f, 0.72f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec2(0.64f, 0.13f), cream);
-    draw_local_panel(shader, view, proj, data, glm::vec3(-0.78f, -0.63f, 0.86f), glm::vec3(0.0f, glm::radians(90.0f), 0.0f), glm::vec2(0.42f, 0.16f), body);
-    draw_local_panel(shader, view, proj, data, glm::vec3(0.78f, -0.63f, 0.86f), glm::vec3(0.0f, glm::radians(90.0f), 0.0f), glm::vec2(0.42f, 0.16f), body);
-    draw_local_panel(shader, view, proj, data, glm::vec3(0.0f, 0.23f, 0.72f), glm::vec3(glm::radians(88.0f), 0.0f, 0.0f), glm::vec2(0.84f, 0.42f), glm::vec3(0.72f, 0.68f, 0.47f));
-    draw_local_cylinder(shader, view, proj, data, geometry, glm::vec3(0.0f, -0.63f, 0.40f), glm::vec3(glm::radians(68.0f), 0.0f, glm::radians(90.0f)), glm::vec3(0.22f, 0.035f, 0.22f), glm::vec3(0.025f, 0.025f, 0.025f));
-    draw_local_cylinder(shader, view, proj, data, geometry, glm::vec3(0.0f, -0.73f, 0.48f), glm::vec3(glm::radians(22.0f), 0.0f, 0.0f), glm::vec3(0.024f, 0.30f, 0.024f), trim);
-
-    const std::array<float, 2> post_x{-0.56f, 0.56f};
-    const std::array<float, 2> post_z{0.46f, 1.10f};
-    for (const float x : post_x) {
-        for (const float z : post_z) {
-            draw_local_cylinder(shader, view, proj, data, geometry, glm::vec3(x, -0.17f, z), glm::vec3(0.0f), glm::vec3(0.035f, 0.84f, 0.035f), cream);
-        }
-    }
-
-    const std::array<float, 2> wheel_x{-0.68f, 0.68f};
-    const std::array<float, 2> wheel_z{1.30f};
-    for (const float x : wheel_x) {
-        for (const float z : wheel_z) {
-            draw_local_cylinder(shader, view, proj, data, geometry, glm::vec3(x, -1.08f, z), glm::vec3(0.0f, 0.0f, glm::radians(-90.0f)), glm::vec3(0.23f, 0.16f, 0.23f), glm::vec3(0.025f, 0.025f, 0.025f));
-            draw_local_sphere(shader, view, proj, data, geometry, glm::vec3(x, -1.08f, z), 0.085f, glm::vec3(0.58f, 0.56f, 0.48f));
-        }
-    }
 }
 
 void draw_smoke_emote_model(shader_program& shader,
@@ -1956,7 +1788,8 @@ bool renderer::init_geometry() {
                           reinterpret_cast<void*>(offsetof(render_terrain_vertex, color)));
     glBindVertexArray(0);
 
-    const std::vector<float> ball_vertices = make_sphere_vertices(8, 12);
+    const std::vector<float> ball_vertices = make_sphere_vertices(primitive_sphere_latitude_segments,
+                                                                 primitive_sphere_longitude_segments);
     ball_vertex_count_ = static_cast<int>(ball_vertices.size() / 6);
 
     glGenVertexArrays(1, &ball_vao_);
@@ -2004,7 +1837,7 @@ bool renderer::init_geometry() {
                           reinterpret_cast<void*>(offsetof(render_terrain_vertex, color)));
     glBindVertexArray(0);
 
-    const std::vector<float> cylinder_vertices = make_cylinder_vertices(8);
+    const std::vector<float> cylinder_vertices = make_cylinder_vertices(primitive_cylinder_segments);
     cylinder_vertex_count_ = static_cast<int>(cylinder_vertices.size() / 6);
 
     glGenVertexArrays(1, &cylinder_vao_);
@@ -2023,7 +1856,7 @@ bool renderer::init_geometry() {
 
     // Cone vertices are only ever drawn through tree_renderer's instanced VAO,
     // which describes this buffer itself, so no VAO is created here.
-    const std::vector<float> cone_vertices = make_cone_vertices(10);
+    const std::vector<float> cone_vertices = make_cone_vertices(primitive_cone_segments);
     cone_vertex_count_ = static_cast<int>(cone_vertices.size() / 6);
 
     glGenBuffers(1, &cone_vbo_);
@@ -2234,9 +2067,6 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     };
     terrain_shader_.use();
     terrain_shader_.set_vec3("u_light_dir", glm::normalize(glm::vec3(-0.35f, 0.80f, 0.42f)));
-    draw_cart_model(terrain_shader_, view, proj, data, primitives);
-    draw_emote_world_model(terrain_shader_, view, proj, data, primitives);
-    glBindVertexArray(0);
 
     world_marker_scene markers;
     markers.show_primary_hole_markers = data.show_primary_hole_markers;
@@ -2255,8 +2085,19 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     markers.ball_visual_radius_meters = data.ball_visual_radius_meters;
     markers.aim_angle = data.aim_angle;
     markers.swing_power = data.swing_power;
+    markers.cart_active = data.cart_active;
+    markers.camera_position = data.camera_position;
+    markers.camera_target = data.camera_target;
     build_world_marker_batch(world_marker_batch_, markers);
     world_marker_renderer_.draw(world_marker_batch_, proj * view, profile);
+
+    // The emote props stay immediate-mode: the smoke puffs alpha-blend, and
+    // the batch is opaque-only. They are submitted after the batch so that the
+    // blended puffs composite over the opaque scene behind them, which is what
+    // the cart (previously drawn immediately before them) gave them too.
+    terrain_shader_.use();
+    draw_emote_world_model(terrain_shader_, view, proj, data, primitives);
+    glBindVertexArray(0);
 
     const std::vector<glm::vec3>& flight_path_points = flight_path_points_or_empty(data);
     if (data.show_flight_path && flight_path_points.size() > 1 && flight_path_vao_ != 0) {

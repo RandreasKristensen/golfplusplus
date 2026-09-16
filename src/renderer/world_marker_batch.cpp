@@ -1,5 +1,8 @@
 #include "renderer/world_marker_batch.h"
 
+#include "renderer/cart_batch.h"
+#include "renderer/primitive_mesh.h"
+
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/trigonometric.hpp>
@@ -79,7 +82,10 @@ std::vector<glm::vec3> make_unit_quad_positions() {
 
 world_marker_batch::world_marker_batch()
     : unit_disc_(make_unit_disc_positions(world_marker_disc_segments)),
-      unit_quad_(make_unit_quad_positions()) {}
+      unit_quad_(make_unit_quad_positions()),
+      unit_cylinder_(make_cylinder_positions(primitive_cylinder_segments)),
+      unit_sphere_(make_sphere_positions(primitive_sphere_latitude_segments,
+                                         primitive_sphere_longitude_segments)) {}
 
 void world_marker_batch::clear() {
     vertices_.clear();
@@ -103,6 +109,20 @@ void world_marker_batch::append_quad(const glm::mat4& model,
                                      const float alpha,
                                      const bool depth_write) {
     append_triangles(unit_quad_, model, glm::vec4(color, alpha), depth_write);
+}
+
+void world_marker_batch::append_cylinder(const glm::mat4& model,
+                                         const glm::vec3& color,
+                                         const float alpha,
+                                         const bool depth_write) {
+    append_triangles(unit_cylinder_, model, glm::vec4(color, alpha), depth_write);
+}
+
+void world_marker_batch::append_sphere(const glm::mat4& model,
+                                       const glm::vec3& color,
+                                       const float alpha,
+                                       const bool depth_write) {
+    append_triangles(unit_sphere_, model, glm::vec4(color, alpha), depth_write);
 }
 
 void world_marker_batch::append_triangles(const std::vector<glm::vec3>& local_positions,
@@ -248,6 +268,11 @@ void append_swing_club(world_marker_batch& batch,
 
 void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene) {
     batch.clear();
+
+    // First, exactly as render_scene drew the cart before the marker pass. It
+    // writes depth, so it opens the leading depth-writing run and everything
+    // that used to follow it still follows it.
+    append_cart_model(batch, scene.cart_active, scene.camera_position, scene.camera_target);
 
     if (scene.show_primary_hole_markers) {
         append_ground_marker(batch, scene.tee_position, primary_tee_scale, primary_tee_color);

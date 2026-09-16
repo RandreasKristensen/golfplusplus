@@ -215,6 +215,7 @@ Scenario definitions, all on **Marienlyst Golfklub** (6 holes) in release:
 | Scenario | How to get there |
 |---|---|
 | **Hub walking** | Boot the course, walk around the hub on foot (not in the cart) |
+| **Driving the cart** | Board the golf cart in the hub and drive it around |
 | **Aiming on a hole** | Walk to a hole start, interact, <kbd>Space</kbd> to enter aiming |
 | **Ball in flight** | Take a shot, read the overlay while the ball is moving |
 | **Course map open** | Hold <kbd>Enter</kbd> while walking |
@@ -225,6 +226,7 @@ Scenario definitions, all on **Marienlyst Golfklub** (6 holes) in release:
 | Scenario | Target FPS (vsync on) | Target frame ms | `MRD` | measured |
 |---|---|---|---|---|
 | Hub walking | 60 (vsync-locked) | 16.7 | < 0.30 ms | |
+| Driving the cart | 60 (vsync-locked) | 16.7 | < 0.30 ms | |
 | Aiming on a hole | 60 | 16.7 | < 0.60 ms | |
 | Ball in flight | 60 | 16.7 | < 0.30 ms | |
 | Course map open | 60 | 16.7 | < 0.40 ms | |
@@ -237,28 +239,38 @@ terrain-samples each one.
 
 ### GL and sampling budget — all values DERIVED
 
-| Counter | Hub walking | Aiming | Ball in flight | Course map | Main menu | measured |
-|---|---|---|---|---|---|---|
-| `DRAW` before UI | 11-13 | 13-15 | 12-16 | 11-13 | 8-12 | |
-| `DRAW` total (incl. UI) | 12-14 | 14-16 | 13-17 | 14-17 | 9-13 | |
-| `UNI` | 40-70 | 50-80 | 50-85 | 40-70 | 35-60 | |
-| `ULOC` | 0 | 0 | 0 | 0 | 0 | |
-| `TSAMP` | 1-4 | 29-34 | 3-6 | 1-4 | 0-2 | |
-| `TTRI` | < 200 | < 1400 | < 300 | < 200 | < 100 | |
-| `BUF` writes | 2-3 | 2-3 | 3-4 | 2-3 | 1-2 | |
-| `BUF` reallocs | 0 | 0 | 0 | 0 | 0 | |
-| `BUF` bytes | < 64KB | < 96KB | < 96KB | < 128KB | < 64KB | |
-| `DBGUI` | 1 | 1 | 1 | 1-2 | 1 | |
-| `CHUNK` culled | > 0 | > 0 | > 0 | > 0 | ≥ 0 | |
-| `TREE` | ON (OFF facing away) | ON | ON | ON | ON/OFF | |
+| Counter | Hub walking | Driving the cart | Aiming | Ball in flight | Course map | Main menu | measured |
+|---|---|---|---|---|---|---|---|
+| `DRAW` before UI | 11-13 | 11-13 | 13-15 | 12-16 | 11-13 | 8-12 | |
+| `DRAW` total (incl. UI) | 12-14 | 12-14 | 14-16 | 13-17 | 14-17 | 9-13 | |
+| `UNI` | 40-70 | 40-70 | 50-80 | 50-85 | 40-70 | 35-60 | |
+| `ULOC` | 0 | 0 | 0 | 0 | 0 | 0 | |
+| `TSAMP` | 1-4 | 1-4 | 29-34 | 3-6 | 1-4 | 0-2 | |
+| `TTRI` | < 200 | < 200 | < 1400 | < 300 | < 200 | < 100 | |
+| `BUF` writes | 2-3 | 2-3 | 2-3 | 3-4 | 2-3 | 1-2 | |
+| `BUF` reallocs | 0 | 0 | 0 | 0 | 0 | 0 | |
+| `BUF` bytes | < 64KB | < 128KB | < 96KB | < 96KB | < 128KB | < 64KB | |
+| `DBGUI` | 1 | 1 | 1 | 1 | 1-2 | 1 | |
+| `CHUNK` culled | > 0 | > 0 | > 0 | > 0 | > 0 | ≥ 0 | |
+| `TREE` | ON (OFF facing away) | ON | ON | ON | ON | ON/OFF | |
 
 **Hard ceiling from task 11: world draw calls before UI stay under roughly 50.**
-Every scenario above is far under that, and the only thing that can push it up
-is the golf cart — `draw_cart_model` is 16 immediate-mode draws (6 panels, 2
-detail cylinders, 4 canopy posts, 2 wheels × cylinder + hub cap). Driving the
-cart therefore lands around **27-32 draws before UI**, still inside the budget
-but by far the largest single contributor. It is the obvious next batching
-target if the budget is ever threatened.
+Every scenario above is far under that, with a wide margin.
+
+The golf cart used to be the exception. `draw_cart_model` was 16 immediate-mode
+draws (6 panels, 2 detail cylinders, 4 canopy posts, 2 wheels × cylinder + hub
+cap) with 5 uniform sets each, so driving the cart landed around **27-32 draws
+before UI** and roughly **80 extra `UNI`**. Task 12 folded the cart into the
+existing world marker batch: every piece is opaque, flat-colored
+(`u_use_vertex_color = 0`, which is unlit) and depth-writing, so the cart is now
+pre-transformed on the CPU and rides along in the marker pass's leading
+depth-writing run. Driving costs **0 extra draws and 0 extra uniform sets** —
+it is indistinguishable from walking on the overlay, except for `BUF` bytes
+(1956 extra vertices × 28 B ≈ 55 KB per frame in the same grow-only buffer,
+whose initial capacity was raised to 4096 vertices so it still never
+reallocates). The one degenerate case is a frame with no markers at all, where
+the batch goes from 0 draws to 1; the hub and every hole always draw markers,
+so in practice `DRAW` drops by exactly 16 when the cart is active.
 
 ### Where the draw calls come from (`render_scene`, in order)
 
@@ -268,9 +280,8 @@ target if the budget is ever threatened.
 | Chunked course terrain + apron | 1-4 | `max_terrain_draw_ranges = 4` |
 | Chunked material overlay | 0-2 | `max_material_overlay_draw_ranges = 2` |
 | Trees | 0 or 2 | instanced trunk + canopy, whole batch frustum culled (task 6/10) |
-| Cart model | 0 or 16 | only while `cart_active` |
-| Emote props (smoke/beer) | 0-8 | only while an emote plays |
-| World markers | 3-5 | one `glDrawArrays` per depth-write run in the batch (task 7) |
+| World markers + cart | 3-5 | one `glDrawArrays` per depth-write run in the batch (task 7). The golf cart is appended first, into the leading depth-writing run, so `cart_active` adds vertices but no draws (task 12) |
+| Emote props (smoke/beer) | 0-8 | only while an emote plays; still immediate-mode, because the smoke puffs alpha-blend and the batch is opaque-only |
 | Flight path line strip | 0 or 1 | only while the ball is moving |
 | Ball | 1 | always |
 | **UI overlay** | 1 | one batched draw for the whole 2D overlay (task 8) |
@@ -318,7 +329,7 @@ Read these off the overlay. Each one maps to a specific optimisation.
 | `TSAMP` grows with the number of trees / hub markers | The static anchor cache is being rebuilt every frame — `terrain_render_revision` is being bumped per frame, or `static_anchor_cache_is_current` returns false | `src/game/game_state.cpp`, `refresh_static_anchor_cache` (task 3) |
 | `MESH` non-zero every frame | Same root cause as above, seen from the render side: the cached terrain/overlay mesh and its chunks are being rebuilt each frame | `core/app.cpp`, `app::refresh_render_mesh_cache` (task 4/10) |
 | `BUF` reallocs > 0 every frame | A dynamic buffer is re-specifying storage every frame instead of streaming. Either the stream genuinely grows without bound, or `glBufferSubData` failed to resolve (a log line says so at startup and the fallback re-specifies on every upload) | `src/renderer/dynamic_buffer.cpp` (task 9) |
-| `DRAW` jumps by hundreds | A batch path regressed. ~200 extra draws with ~105 trees on the hub = instancing fell back to per-tree draws; ~50+ extra = the world marker batch broke into per-marker draws; hundreds on a text-heavy screen = the overlay batch broke into per-glyph or per-quad draws | `tree_renderer.cpp` (6), `world_marker_*.cpp` (7), `overlay_pass.cpp` / `overlay_batch.cpp` (8) |
+| `DRAW` jumps by hundreds | A batch path regressed. ~200 extra draws with ~105 trees on the hub = instancing fell back to per-tree draws; ~16 extra only while driving = the cart fell back to immediate draws; ~50+ extra = the world marker batch broke into per-marker draws; hundreds on a text-heavy screen = the overlay batch broke into per-glyph or per-quad draws | `tree_renderer.cpp` (6), `world_marker_*.cpp` / `cart_batch.cpp` (7, 12), `overlay_pass.cpp` / `overlay_batch.cpp` (8) |
 | `CHUNK culled` always 0 while you turn on the spot | Frustum culling is not rejecting anything: the chunk list is empty (so the mesh draws as one range), the chunk bounds are invalid, or the frustum planes are wrong | `render_mesh_chunks.cpp`, `frustum.cpp` (task 10) |
 | `R` pinned at its cap (4 / 2) with `IDX` ≈ the mesh total | Ranges are being merged so aggressively that culling buys nothing — the chunks are not spatially coherent any more | `build_render_mesh_chunks`, `limit_render_index_ranges` |
 | `TREE OFF` while trees are clearly on screen | The whole-batch tree bounds are wrong | `tree_renderer::draw` |
@@ -351,6 +362,12 @@ overlapping coplanar material zones and overlapping hole/apron terrain in the
 hub resolve by draw order under `GL_LESS`, so a spatial re-sort would flip which
 surface wins. Chunks are contiguous index ranges over the authored order.
 
+Task 12, after this document was first written:
+
+| # | Change | Before | After |
+|---|---|---|---|
+| 12 | Golf cart folded into `world_marker_batch` (`cart_batch.cpp`); unit cylinder/sphere generators moved to `primitive_mesh.cpp` so the GPU VBOs and the CPU batch share one source | 16 draws + 80 uniform sets while `cart_active` | **0 extra draws, 0 extra uniform sets** |
+
 ---
 
 ## 9. Open follow-ups — be honest about these
@@ -371,8 +388,20 @@ surface wins. Chunks are contiguous index ranges over the authored order.
   indicator, swing club and ball position genuinely change every frame. It is
   cheap (a few hundred vertices into a reused vector, no allocation in steady
   state) but it is not cached, and it shows up in `SCN`.
-- **The golf cart is the one unbatched model left** at 16 draws. It is inside
-  budget but it is the largest remaining single source of draw calls.
+- **The emote props are the only unbatched models left** (0-8 draws, and only
+  while an emote plays). They stay immediate-mode on purpose: the smoke puffs
+  alpha-blend, and `world_marker_batch` is documented opaque-only. Batching them
+  would mean giving the batch a blended, order-dependent run type.
+- **Folding the cart into the marker batch moved the *markers* ahead of the
+  emotes.** The batch (cart first, then markers) is now drawn at the point in
+  `render_scene` where the cart used to be, and the emotes are submitted after
+  it. That keeps the cart in exactly its old position relative to the blended
+  smoke — which matters, because the puffs rise through the canopy roof — and
+  it is strictly more correct overall, since all opaque geometry is now drawn
+  before the only blended geometry. But it is a visual change nobody has looked
+  at: a smoke puff in front of a distant flagstick now composites over the
+  flagstick instead of over the terrain behind it. Worth a glance next time
+  someone runs the game.
 - **GPU timer lines are 2 frames late** and are absent entirely on drivers
   without `GL_ARB_timer_query`. Do not correlate them with a one-frame spike.
 - **Vsync can be forced on by the driver** regardless of `GOLFPP_VSYNC`. The

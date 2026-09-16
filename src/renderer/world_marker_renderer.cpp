@@ -12,8 +12,9 @@ constexpr GLuint position_location = 0;
 constexpr GLuint color_location = 1;
 
 // Covers single-hole aiming (~1.7k vertices: tee, cup, flagstick, 28 aim
-// dots, club) and a six-hole hub (~1.1k) without growing on early frames.
-constexpr std::size_t initial_vertex_capacity = 2048;
+// dots, club) and a six-hole hub (~1.1k) without growing on early frames,
+// plus the 1956-vertex golf cart on top of either.
+constexpr std::size_t initial_vertex_capacity = 4096;
 }
 
 // The vertex buffer is uploaded as raw floats: position.xyz then color.rgba.

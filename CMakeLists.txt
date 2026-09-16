@@ -24,6 +24,8 @@ set(VCR_GOLF_SOURCES
     src/renderer/overlay_pass.cpp
     src/renderer/renderer.cpp
     src/renderer/tree_renderer.cpp
+    src/renderer/primitive_mesh.cpp
+    src/renderer/cart_batch.cpp
     src/renderer/world_marker_batch.cpp
     src/renderer/world_marker_renderer.cpp
 )
@@ -185,6 +187,8 @@ if (VCR_GOLF_BUILD_TESTS)
         tests/course_map_fill_tests.cpp
         src/audio/audio_manifest.cpp
         core/startup_options.cpp
+        src/renderer/primitive_mesh.cpp
+        src/renderer/cart_batch.cpp
         src/renderer/world_marker_batch.cpp
         src/renderer/frustum.cpp
         src/renderer/render_mesh_chunks.cpp

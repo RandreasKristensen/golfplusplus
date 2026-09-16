@@ -9,9 +9,10 @@
 #include <glm/vec4.hpp>
 
 // GL-free CPU batch for small, repeated, flat-colored world geometry: ground
-// markers, pin cups, flagsticks, aim dots and the swing club. Every piece used
-// to be its own draw call with five uniform sets (model, mvp, color, alpha,
-// vertex-color flag) against the terrain shader's flat-color path. Here each
+// markers, pin cups, flagsticks, aim dots, the swing club and the golf cart
+// model. Every piece used to be its own draw call with five uniform sets
+// (model, mvp, color, alpha, vertex-color flag) against the terrain shader's
+// flat-color path (u_use_vertex_color = 0, which is unlit). Here each
 // piece is pre-transformed on the CPU into world-space triangles carrying
 // their color, appended in submission order, and grouped into runs that share
 // render state. The GL side uploads one buffer and issues one draw per run.
@@ -53,6 +54,10 @@ struct world_marker_batch {
     // per-draw u_model did. Alpha is written as-is; blending stays off.
     void append_disc(const glm::mat4& model, const glm::vec3& color, float alpha, bool depth_write);
     void append_quad(const glm::mat4& model, const glm::vec3& color, float alpha, bool depth_write);
+    // The unit cylinder and unit sphere the renderer's static VBOs are built
+    // from (see renderer/primitive_mesh.h), transformed the same way.
+    void append_cylinder(const glm::mat4& model, const glm::vec3& color, float alpha, bool depth_write);
+    void append_sphere(const glm::mat4& model, const glm::vec3& color, float alpha, bool depth_write);
 
     const std::vector<world_marker_vertex>& vertices() const { return vertices_; }
     const std::vector<world_marker_run>& runs() const { return runs_; }
@@ -66,6 +71,8 @@ private:
 
     std::vector<glm::vec3> unit_disc_;
     std::vector<glm::vec3> unit_quad_;
+    std::vector<glm::vec3> unit_cylinder_;
+    std::vector<glm::vec3> unit_sphere_;
     std::vector<world_marker_vertex> vertices_;
     std::vector<world_marker_run> runs_;
 };
@@ -102,6 +109,12 @@ struct world_marker_scene {
     float ball_visual_radius_meters = 0.10f;
     float aim_angle = 0.0f;
     float swing_power = 0.0f;
+
+    // The golf cart is drawn in camera-local space, so it needs the camera
+    // basis rather than a world position. See renderer/cart_batch.h.
+    bool cart_active = false;
+    glm::vec3 camera_position = glm::vec3(0.0f);
+    glm::vec3 camera_target = glm::vec3(0.0f, 0.0f, 1.0f);
 };
 
 // Pieces, in the order the old render_scene drew them.
@@ -115,8 +128,10 @@ void append_swing_club(world_marker_batch& batch,
                        float aim_angle,
                        float swing_power);
 
-// Clears `batch` and fills it for one frame. Draw order matches the old
-// per-draw code except that hub pin cups (depth write off) are all submitted
-// before the hub flagsticks, so the whole hub collapses into three runs; see
-// the comment in the implementation for why that is visually identical.
+// Clears `batch` and fills it for one frame. The cart goes in first, because
+// render_scene drew it before the markers. Draw order otherwise matches the
+// old per-draw code except that hub pin cups (depth write off) are all
+// submitted before the hub flagsticks, so the whole hub collapses into three
+// runs; see the comment in the implementation for why that is visually
+// identical.
 void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene);
