@@ -301,10 +301,3 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
                           scene.swing_power);
     }
 }
-
-std::size_t grow_buffer_capacity(const std::size_t current, const std::size_t required) {
-    if (required <= current) {
-        return current;
-    }
-    return std::max(required, current * 2U);
-}

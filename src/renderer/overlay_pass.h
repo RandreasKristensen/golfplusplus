@@ -12,8 +12,11 @@
 // (other shaders, VAOs, blend/depth/scissor changes) so painter's order holds.
 
 #include <cstddef>
+#include <cstdint>
+#include <vector>
 
 #include "profiling/profiling.h"
+#include "renderer/dynamic_buffer.h"
 #include "renderer/overlay_batch.h"
 #include "renderer/shader.h"
 
@@ -29,17 +32,28 @@ struct overlay_pass {
     // the batch (capacity is kept). No-op when empty.
     void flush();
 
+    // Draws overlay geometry that is rebuilt rarely (the course map terrain
+    // fill) from its own retained buffer: the vertices are uploaded only when
+    // `revision` changes, not every frame. Flushes the streaming batch first
+    // so the retained geometry lands in submission order.
+    void draw_retained(const std::vector<overlay_vertex>& vertices, std::uint64_t revision);
+
 private:
-    void ensure_gpu_capacity(std::size_t byte_count);
+    // One VAO over one dynamic buffer; the overlay vertex layout for both.
+    struct vertex_stream {
+        unsigned int vao = 0;
+        dynamic_vertex_buffer buffer;
+    };
+
+    bool init_stream(vertex_stream& stream, std::size_t initial_capacity_bytes);
+    void shutdown_stream(vertex_stream& stream);
 
     shader_program shader_;
     overlay_batch batch_;
     frame_profile* profile_ = nullptr;
-    unsigned int vao_ = 0;
-    unsigned int vbo_ = 0;
-    std::size_t gpu_capacity_bytes_ = 0;
-    // glBufferSubData is not part of the SDL fallback loader table, so it is
-    // resolved locally (like gl_timer does for query objects). When missing,
-    // flush() falls back to re-specifying the buffer with glBufferData.
-    void* buffer_sub_data_ = nullptr;
+    vertex_stream stream_;
+    vertex_stream retained_stream_;
+    std::size_t retained_vertex_count_ = 0;
+    std::uint64_t retained_revision_ = 0;
+    bool retained_uploaded_ = false;
 };

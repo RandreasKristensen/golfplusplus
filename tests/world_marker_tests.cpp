@@ -447,13 +447,3 @@ TEST_CASE("world marker alpha and appends extend runs only on equal state") {
     check_run(batch.runs()[1], false, quad_vertex_count + disc_vertex_count, disc_vertex_count);
     check_run(batch.runs()[2], true, quad_vertex_count + 2 * disc_vertex_count, quad_vertex_count);
 }
-
-TEST_CASE("world marker GPU buffer capacity only grows") {
-    CHECK(grow_buffer_capacity(0, 0) == 0U);
-    CHECK(grow_buffer_capacity(0, 100) == 100U);
-    CHECK(grow_buffer_capacity(1000, 999) == 1000U);
-    CHECK(grow_buffer_capacity(1000, 1000) == 1000U);
-    CHECK(grow_buffer_capacity(1000, 1001) == 2000U);
-    CHECK(grow_buffer_capacity(1000, 5000) == 5000U);
-    CHECK(grow_buffer_capacity(1000, 10) == 1000U);
-}

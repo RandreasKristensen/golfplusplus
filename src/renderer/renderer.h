@@ -12,6 +12,8 @@
 #include "game/scorecard.h"
 #include "physics/material_zone.h"
 #include "profiling/profiling.h"
+#include "renderer/course_map_fill.h"
+#include "renderer/dynamic_buffer.h"
 #include "renderer/framebuffer.h"
 #include "renderer/gl_timer.h"
 #include "renderer/overlay_pass.h"
@@ -100,12 +102,16 @@ struct render_data {
     glm::vec3 camera_target = glm::vec3(0.0f);
     glm::vec3 tee_position = glm::vec3(0.0f);
     glm::vec3 pin_position = glm::vec3(0.0f);
-    std::vector<glm::vec3> tee_markers;
-    std::vector<glm::vec3> pin_markers;
-    std::vector<glm::vec3> start_markers;
+    // Borrowed, never owned: these point at caches owned by the game/app that
+    // outlive the render call, so building a frame copies no vectors. Null
+    // means "none this frame".
+    const std::vector<glm::vec3>* tee_markers = nullptr;
+    const std::vector<glm::vec3>* pin_markers = nullptr;
+    const std::vector<glm::vec3>* start_markers = nullptr;
+    const std::vector<glm::vec3>* flight_path_points = nullptr;
+    const std::vector<render_tree>* trees = nullptr;
+    // Built per frame while aiming, so it stays a value.
     std::vector<glm::vec3> aim_arc_points;
-    std::vector<glm::vec3> flight_path_points;
-    std::vector<render_tree> trees;
     // Instance data for `trees` is re-uploaded only when this (or the tree count) changes.
     std::uint64_t trees_revision = 0;
     const render_static_mesh* terrain_mesh = nullptr;
@@ -158,6 +164,17 @@ struct render_data {
     render_startup_menu startup_menu;
 };
 
+// Borrowed-list accessors: an empty list stands in for a null pointer.
+inline const std::vector<render_tree>& render_trees(const render_data& data) {
+    static const std::vector<render_tree> none;
+    return data.trees != nullptr ? *data.trees : none;
+}
+
+inline const std::vector<glm::vec3>& flight_path_points_or_empty(const render_data& data) {
+    static const std::vector<glm::vec3> none;
+    return data.flight_path_points != nullptr ? *data.flight_path_points : none;
+}
+
 struct renderer {
     bool init(SDL_Window* window);
     void shutdown();
@@ -187,6 +204,12 @@ private:
     world_marker_renderer world_marker_renderer_;
     // Rebuilt every frame; kept as a member so its vectors keep their capacity.
     world_marker_batch world_marker_batch_;
+    // Course map terrain fill: rebuilt only when the map layout or the terrain
+    // mesh changes, and uploaded only on rebuild.
+    course_map_fill_cache course_map_fill_cache_;
+    // Reused CPU staging for the flight path line strip.
+    std::vector<render_terrain_vertex> flight_path_vertices_;
+    dynamic_vertex_buffer flight_path_buffer_;
 
     unsigned int ground_vao_ = 0;
     unsigned int ground_vbo_ = 0;
@@ -199,10 +222,9 @@ private:
     unsigned int ball_vao_ = 0;
     unsigned int ball_vbo_ = 0;
     unsigned int flight_path_vao_ = 0;
-    unsigned int flight_path_vbo_ = 0;
     unsigned int cylinder_vao_ = 0;
     unsigned int cylinder_vbo_ = 0;
-    unsigned int cone_vao_ = 0;
+    // Only ever drawn instanced through tree_renderer, which owns its VAO.
     unsigned int cone_vbo_ = 0;
     unsigned int screen_vao_ = 0;
     unsigned int screen_vbo_ = 0;

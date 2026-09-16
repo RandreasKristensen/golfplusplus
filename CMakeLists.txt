@@ -16,6 +16,7 @@ set(VCR_GOLF_SOURCES
     src/audio/audio_engine.cpp
     src/renderer/shader.cpp
     src/renderer/framebuffer.cpp
+    src/renderer/dynamic_buffer.cpp
     src/renderer/gl_timer.cpp
     src/renderer/overlay_pass.cpp
     src/renderer/renderer.cpp
@@ -132,6 +133,7 @@ target_link_libraries(golfpp PRIVATE vcr-golf-profiling)
 # GL-free overlay batch builder + bitmap pixel font (unit tested).
 add_library(vcr-golf-overlay
     src/renderer/overlay_batch.cpp
+    src/renderer/course_map_fill.cpp
     src/renderer/pixel_font.cpp
 )
 target_include_directories(vcr-golf-overlay PUBLIC
@@ -174,6 +176,8 @@ if (VCR_GOLF_BUILD_TESTS)
         tests/world_marker_tests.cpp
         tests/audio_manifest_tests.cpp
         tests/overlay_batch_tests.cpp
+        tests/dynamic_buffer_tests.cpp
+        tests/course_map_fill_tests.cpp
         src/audio/audio_manifest.cpp
         src/renderer/world_marker_batch.cpp
     )

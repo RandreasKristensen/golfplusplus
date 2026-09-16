@@ -114,19 +114,31 @@ void append_course_world_overlays(render_static_mesh& mesh, const game_state& ga
 }
 
 // Pure field copy from the cached, already terrain-anchored collision bodies.
-std::vector<render_tree> make_render_trees(const std::vector<tree_collision_body>& bodies) {
-    std::vector<render_tree> trees;
-    trees.reserve(bodies.size());
-    for (const tree_collision_body& body : bodies) {
+// Refreshed only when the static anchor cache is rebuilt (same key the tree
+// instance buffers use), so a normal frame neither allocates nor converts.
+const std::vector<render_tree>& refresh_render_tree_cache(render_tree_cache& cache,
+                                                          const static_anchor_cache& anchors) {
+    if (cache.valid &&
+        cache.revision == anchors.revision &&
+        cache.source_count == anchors.tree_bodies.size()) {
+        return cache.trees;
+    }
+
+    cache.trees.clear();
+    cache.trees.reserve(anchors.tree_bodies.size());
+    for (const tree_collision_body& body : anchors.tree_bodies) {
         render_tree render;
         render.base = body.base;
         render.trunk_radius = body.trunk_radius;
         render.trunk_height = body.trunk_height;
         render.leaf_radius = body.leaf_radius;
         render.leaf_height = body.leaf_height;
-        trees.push_back(render);
+        cache.trees.push_back(render);
     }
-    return trees;
+    cache.revision = anchors.revision;
+    cache.source_count = anchors.tree_bodies.size();
+    cache.valid = true;
+    return cache.trees;
 }
 
 
@@ -267,9 +279,13 @@ std::vector<render_xp_drop> make_render_xp_drops(const std::vector<xp_drop>& dro
 
 // `anchors` must be current for `game` (see refresh_static_anchor_cache); static
 // objects are read from it so this function does no per-object terrain sampling.
+// Everything `data` borrows (trees, marker lists, flight path, meshes) is owned
+// by `game`/`anchors`/the caches passed in, which all outlive the render call
+// the returned data is handed to.
 render_data make_render_data(const game_state& game,
                              const input_state& input,
                              const static_anchor_cache& anchors,
+                             const std::vector<render_tree>& trees,
                              const render_static_mesh& terrain_mesh,
                              const render_static_mesh& material_overlay_mesh,
                              frame_profile* profile = nullptr) {
@@ -286,7 +302,7 @@ render_data make_render_data(const game_state& game,
     data.course_extent = game.tuning.course.extent;
     data.terrain_mesh = &terrain_mesh;
     data.material_overlay_mesh = &material_overlay_mesh;
-    data.trees = make_render_trees(anchors.tree_bodies);
+    data.trees = &trees;
     data.trees_revision = anchors.revision;
     data.aim_angle = game.aim_angle;
     data.camera_fov_degrees = 60.0f;
@@ -294,11 +310,11 @@ render_data make_render_data(const game_state& game,
         data.aim_arc_points = estimate_aim_arc(game, profile);
     }
     data.ball_moving = ball_is_moving(game.ball, game.tuning);
-    data.flight_path_points = game.flight_path_points;
+    data.flight_path_points = &game.flight_path_points;
     data.flight_path_color = game.tuning.flight_path.color;
     data.flight_path_alpha = game.tuning.flight_path.alpha;
     data.flight_path_width = game.tuning.flight_path.line_width;
-    data.show_flight_path = data.ball_moving && !data.flight_path_points.empty();
+    data.show_flight_path = data.ball_moving && !game.flight_path_points.empty();
     data.show_interact_prompt = game.mode == game_mode::walking &&
         (can_interact_with_ball(game) || can_interact_with_hole_start(game));
     data.show_aim_indicator = game.mode == game_mode::aiming || game.mode == game_mode::addressing;
@@ -317,8 +333,13 @@ render_data make_render_data(const game_state& game,
     data.show_scorecard = game.scorecard_active;
     data.show_skills_panel = game.skills_panel_active;
     data.show_course_results = game.round.finished;
-    data.scorecard = build_scorecard_data(game);
-    data.skills = make_render_skills(game.save.skills);
+    // Both are string-building; only pay for them on the frames that draw them.
+    if (data.show_scorecard || data.show_course_results) {
+        data.scorecard = build_scorecard_data(game);
+    }
+    if (data.show_skills_panel) {
+        data.skills = make_render_skills(game.save.skills);
+    }
     data.xp_drops = game.round.finished ? std::vector<render_xp_drop>{} : make_render_xp_drops(game.xp_drops);
     data.cart_active = game.cart.active;
     data.cart_drifting = game.cart.drift_timer > 0.0f;
@@ -332,9 +353,9 @@ render_data make_render_data(const game_state& game,
 
     if (game.hub.available && game.hub.in_hub) {
         data.show_primary_hole_markers = false;
-        data.tee_markers = anchors.hub_tee_markers;
-        data.pin_markers = anchors.hub_pin_markers;
-        data.start_markers = anchors.hub_start_markers;
+        data.tee_markers = &anchors.hub_tee_markers;
+        data.pin_markers = &anchors.hub_pin_markers;
+        data.start_markers = &anchors.hub_start_markers;
     }
 
     if (game.mode == game_mode::walking && game.cart.active) {
@@ -920,6 +941,7 @@ void app::run() {
         return make_render_data(game_,
                                 input_,
                                 game_.static_anchors,
+                                refresh_render_tree_cache(render_trees_, game_.static_anchors),
                                 cached_terrain_mesh_,
                                 cached_material_overlay_mesh_,
                                 profile);

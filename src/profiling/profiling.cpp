@@ -27,10 +27,13 @@ void add_frame(frame_profile& total, const frame_profile& frame) {
     total.draw_calls += frame.draw_calls;
     total.uniform_sets += frame.uniform_sets;
     total.uniform_location_queries += frame.uniform_location_queries;
-    total.buffer_uploads += frame.buffer_uploads;
+    total.buffer_reallocations += frame.buffer_reallocations;
+    total.buffer_writes += frame.buffer_writes;
     total.buffer_upload_bytes += frame.buffer_upload_bytes;
     total.debug_overlay_draw_calls += frame.debug_overlay_draw_calls;
     total.debug_overlay_uniform_sets += frame.debug_overlay_uniform_sets;
+    total.debug_overlay_buffer_calls += frame.debug_overlay_buffer_calls;
+    total.debug_overlay_buffer_bytes += frame.debug_overlay_buffer_bytes;
     total.frame_ms += frame.frame_ms;
 }
 
@@ -68,10 +71,13 @@ frame_profile averaged(const frame_profile& total, const int frames) {
     result.draw_calls = average_u32(total.draw_calls, frames);
     result.uniform_sets = average_u32(total.uniform_sets, frames);
     result.uniform_location_queries = average_u32(total.uniform_location_queries, frames);
-    result.buffer_uploads = average_u32(total.buffer_uploads, frames);
+    result.buffer_reallocations = average_u32(total.buffer_reallocations, frames);
+    result.buffer_writes = average_u32(total.buffer_writes, frames);
     result.buffer_upload_bytes = average_u64(total.buffer_upload_bytes, frames);
     result.debug_overlay_draw_calls = average_u32(total.debug_overlay_draw_calls, frames);
     result.debug_overlay_uniform_sets = average_u32(total.debug_overlay_uniform_sets, frames);
+    result.debug_overlay_buffer_calls = average_u32(total.debug_overlay_buffer_calls, frames);
+    result.debug_overlay_buffer_bytes = average_u64(total.debug_overlay_buffer_bytes, frames);
     result.frame_ms = static_cast<float>(static_cast<double>(total.frame_ms) / divisor);
     return result;
 }
@@ -157,6 +163,18 @@ const char* gpu_profile_stage_label(const gpu_profile_stage stage) {
     return "";
 }
 
+std::string format_byte_count(const std::uint64_t bytes) {
+    constexpr std::uint64_t kilobyte = 1024U;
+    constexpr std::uint64_t megabyte = kilobyte * kilobyte;
+    if (bytes < kilobyte) {
+        return std::to_string(bytes) + "B";
+    }
+    if (bytes < 10U * megabyte) {
+        return std::to_string((bytes + kilobyte / 2U) / kilobyte) + "KB";
+    }
+    return std::to_string((bytes + megabyte / 2U) / megabyte) + "MB";
+}
+
 std::vector<std::string> format_profile_overlay_lines(const frame_profile& profile) {
     const auto cpu = [&profile](const profile_stage stage) {
         return std::string(profile_stage_label(stage)) + " " + microseconds_text(stage_value(profile, stage));
@@ -173,8 +191,10 @@ std::vector<std::string> format_profile_overlay_lines(const frame_profile& profi
     lines.push_back(cpu(profile_stage::render_scene) + " " + cpu(profile_stage::render_overlay));
     lines.push_back("DRAW " + std::to_string(profile.draw_calls) + " UNI " + std::to_string(profile.uniform_sets) +
                     " ULOC " + std::to_string(profile.uniform_location_queries));
-    lines.push_back("BUF " + std::to_string(profile.buffer_uploads) +
-                    "/" + std::to_string(profile.buffer_upload_bytes) +
+    // BUF glBufferSubData writes / glBufferData reallocations, then bytes.
+    lines.push_back("BUF " + std::to_string(profile.buffer_writes) +
+                    "/" + std::to_string(profile.buffer_reallocations) +
+                    " " + format_byte_count(profile.buffer_upload_bytes) +
                     " DBGUI " + std::to_string(profile.debug_overlay_draw_calls));
     lines.push_back("TSAMP " + std::to_string(profile.terrain_sample_calls) +
                     " TTRI " + std::to_string(profile.terrain_triangles_tested));

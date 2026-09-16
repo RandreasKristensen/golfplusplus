@@ -30,6 +30,16 @@ struct startup_hole_option {
     hole_data hole;
 };
 
+// Renderable copy of the static anchor cache's trees. Rebuilt only when that
+// cache is (see refresh_render_tree_cache), so the render path borrows it
+// instead of rebuilding a tree vector every frame.
+struct render_tree_cache {
+    std::vector<render_tree> trees;
+    std::uint64_t revision = 0;
+    std::size_t source_count = 0;
+    bool valid = false;
+};
+
 struct app {
     bool init();
     void run();
@@ -60,6 +70,7 @@ private:
     bool show_fps_ = false;
     // Owned here, never global. Handed out as a nullable frame_profile*.
     profiler profiler_;
+    render_tree_cache render_trees_;
     std::uint64_t cached_terrain_revision_ = 0;
     render_static_mesh cached_terrain_mesh_;
     render_static_mesh cached_material_overlay_mesh_;

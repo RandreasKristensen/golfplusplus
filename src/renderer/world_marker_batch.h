@@ -120,7 +120,3 @@ void append_swing_club(world_marker_batch& batch,
 // before the hub flagsticks, so the whole hub collapses into three runs; see
 // the comment in the implementation for why that is visually identical.
 void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene);
-
-// Grow-only GPU buffer sizing: returns `current` when `required` fits,
-// otherwise at least double `current` (and at least `required`).
-std::size_t grow_buffer_capacity(std::size_t current, std::size_t required);

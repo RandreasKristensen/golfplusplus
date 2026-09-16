@@ -31,7 +31,10 @@
 //     record_draw_call(profile);                 // one glDraw* submission
 //     record_uniform_set(profile);               // one glUniform* set
 //     record_uniform_location_query(profile);    // one glGetUniformLocation
-//     record_buffer_upload(profile, byte_count); // one dynamic glBufferData
+//     record_buffer_upload(profile, byte_count); // one glBufferData: storage
+//                                                // (re)allocation, 0 bytes for
+//                                                // a nullptr orphan
+//     record_buffer_write(profile, byte_count);  // one glBufferSubData
 //
 // Accumulating terrain sampling work at the call site:
 //     const terrain_sample sample = sample_terrain_mesh(mesh, position, y);
@@ -85,12 +88,19 @@ struct frame_profile {
     std::uint32_t uniform_sets = 0;
     // Actual glGetUniformLocation calls (uniform location cache misses).
     std::uint32_t uniform_location_queries = 0;
-    std::uint32_t buffer_uploads = 0;
+    // glBufferData calls: GPU storage (re)allocations, with or without data.
+    std::uint32_t buffer_reallocations = 0;
+    // glBufferSubData calls: streaming writes into existing storage.
+    std::uint32_t buffer_writes = 0;
+    // Bytes of vertex/index data sent by either call.
     std::uint64_t buffer_upload_bytes = 0;
-    // Draw/uniform work spent on the debug overlay itself, kept out of the
-    // counters above so the numbers describe the real frame.
+    // GL work spent on the debug overlay itself, kept out of the counters
+    // above so the numbers describe the real frame.
     std::uint32_t debug_overlay_draw_calls = 0;
     std::uint32_t debug_overlay_uniform_sets = 0;
+    // Buffer calls (writes + reallocations) and bytes of the debug text.
+    std::uint32_t debug_overlay_buffer_calls = 0;
+    std::uint64_t debug_overlay_buffer_bytes = 0;
 
     float frame_ms = 0.0f;
 };
@@ -140,9 +150,19 @@ inline void record_uniform_location_query(frame_profile* profile) {
     }
 }
 
+// One glBufferData: (re)allocates storage and uploads `bytes` of data (0 for
+// an orphan with nullptr).
 inline void record_buffer_upload(frame_profile* profile, const std::size_t bytes) {
     if (profile != nullptr) {
-        profile->buffer_uploads += 1U;
+        profile->buffer_reallocations += 1U;
+        profile->buffer_upload_bytes += static_cast<std::uint64_t>(bytes);
+    }
+}
+
+// One glBufferSubData streaming `bytes` into existing storage.
+inline void record_buffer_write(frame_profile* profile, const std::size_t bytes) {
+    if (profile != nullptr) {
+        profile->buffer_writes += 1U;
         profile->buffer_upload_bytes += static_cast<std::uint64_t>(bytes);
     }
 }
@@ -169,6 +189,9 @@ inline void record_gpu_stage(frame_profile* profile, const gpu_profile_stage sta
 struct debug_overlay_cost_mark {
     std::uint32_t draw_calls = 0;
     std::uint32_t uniform_sets = 0;
+    std::uint32_t buffer_reallocations = 0;
+    std::uint32_t buffer_writes = 0;
+    std::uint64_t buffer_upload_bytes = 0;
 };
 
 inline debug_overlay_cost_mark mark_debug_overlay_cost(const frame_profile* profile) {
@@ -176,6 +199,9 @@ inline debug_overlay_cost_mark mark_debug_overlay_cost(const frame_profile* prof
     if (profile != nullptr) {
         mark.draw_calls = profile->draw_calls;
         mark.uniform_sets = profile->uniform_sets;
+        mark.buffer_reallocations = profile->buffer_reallocations;
+        mark.buffer_writes = profile->buffer_writes;
+        mark.buffer_upload_bytes = profile->buffer_upload_bytes;
     }
     return mark;
 }
@@ -186,10 +212,18 @@ inline void reclaim_debug_overlay_cost(frame_profile* profile, const debug_overl
     }
     const std::uint32_t draws = profile->draw_calls - mark.draw_calls;
     const std::uint32_t uniforms = profile->uniform_sets - mark.uniform_sets;
+    const std::uint32_t buffer_calls = (profile->buffer_writes - mark.buffer_writes) +
+                                       (profile->buffer_reallocations - mark.buffer_reallocations);
+    const std::uint64_t buffer_bytes = profile->buffer_upload_bytes - mark.buffer_upload_bytes;
     profile->draw_calls = mark.draw_calls;
     profile->uniform_sets = mark.uniform_sets;
+    profile->buffer_writes = mark.buffer_writes;
+    profile->buffer_reallocations = mark.buffer_reallocations;
+    profile->buffer_upload_bytes = mark.buffer_upload_bytes;
     profile->debug_overlay_draw_calls += draws;
     profile->debug_overlay_uniform_sets += uniforms;
+    profile->debug_overlay_buffer_calls += buffer_calls;
+    profile->debug_overlay_buffer_bytes += buffer_bytes;
 }
 
 // RAII CPU timer. Accumulates into `stage`, so calling it twice in one frame
@@ -224,6 +258,9 @@ private:
 
 const char* profile_stage_label(profile_stage stage);
 const char* gpu_profile_stage_label(gpu_profile_stage stage);
+
+// Rounded, glyph-safe byte count for the overlay: "512B", "12KB", "34MB".
+std::string format_byte_count(std::uint64_t bytes);
 
 // Compact uppercase lines for the bitmap-font debug overlay. The glyph table in
 // the renderer has no '.' so timings are printed as whole microseconds.

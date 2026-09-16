@@ -40,6 +40,7 @@ TEST_CASE("record helpers are no-ops on a null profile") {
     record_draw_call(nullptr);
     record_uniform_set(nullptr, 5);
     record_buffer_upload(nullptr, 128);
+    record_buffer_write(nullptr, 128);
     record_terrain_sample(nullptr, 42);
     record_gpu_stage(nullptr, gpu_profile_stage::terrain, 1.0);
 
@@ -55,7 +56,7 @@ TEST_CASE("counters accumulate onto an explicit frame profile") {
     record_uniform_set(&profile);
     record_uniform_set(&profile, 9);
     record_buffer_upload(&profile, 64);
-    record_buffer_upload(&profile, 32);
+    record_buffer_write(&profile, 32);
     record_terrain_sample(&profile, 120);
     record_terrain_sample(&profile, 80);
     record_terrain_sample(&profile, -3);
@@ -65,7 +66,8 @@ TEST_CASE("counters accumulate onto an explicit frame profile") {
     CHECK(profile.draw_calls == 5U);
     CHECK(profile.uniform_sets == 10U);
     CHECK(profile.uniform_location_queries == 2U);
-    CHECK(profile.buffer_uploads == 2U);
+    CHECK(profile.buffer_reallocations == 1U);
+    CHECK(profile.buffer_writes == 1U);
     CHECK(profile.buffer_upload_bytes == 96U);
     CHECK(profile.terrain_sample_calls == 3U);
     CHECK(profile.terrain_triangles_tested == 200U);
@@ -164,15 +166,25 @@ TEST_CASE("debug overlay cost is moved out of the frame counters") {
     record_draw_call(&profile, 40);
     record_uniform_set(&profile, 90);
 
+    record_buffer_write(&profile, 2048);
+
     const debug_overlay_cost_mark mark = mark_debug_overlay_cost(&profile);
     record_draw_call(&profile, 700);
     record_uniform_set(&profile, 3500);
+    record_buffer_write(&profile, 512);
+    record_buffer_upload(&profile, 0U);
     reclaim_debug_overlay_cost(&profile, mark);
 
     CHECK(profile.draw_calls == 40U);
     CHECK(profile.uniform_sets == 90U);
     CHECK(profile.debug_overlay_draw_calls == 700U);
     CHECK(profile.debug_overlay_uniform_sets == 3500U);
+    // The overlay's own upload leaves the frame buffer counters untouched.
+    CHECK(profile.buffer_writes == 1U);
+    CHECK(profile.buffer_reallocations == 0U);
+    CHECK(profile.buffer_upload_bytes == 2048U);
+    CHECK(profile.debug_overlay_buffer_calls == 2U);
+    CHECK(profile.debug_overlay_buffer_bytes == 512U);
 }
 
 TEST_CASE("overlay lines only use glyphs the bitmap font can render") {
@@ -183,6 +195,9 @@ TEST_CASE("overlay lines only use glyphs the bitmap font can render") {
     profile.uniform_location_queries = 7U;
     profile.terrain_sample_calls = 105U;
     profile.terrain_triangles_tested = 1250400U;
+    profile.buffer_writes = 3U;
+    profile.buffer_reallocations = 1U;
+    profile.buffer_upload_bytes = 12288U;
 
     const std::vector<std::string> lines = format_profile_overlay_lines(profile);
     CHECK(!(lines.empty()));
@@ -192,6 +207,7 @@ TEST_CASE("overlay lines only use glyphs the bitmap font can render") {
     CHECK(any_line_contains(lines, "TSAMP 105"));
     CHECK(any_line_contains(lines, "TTRI 1250400"));
     CHECK(any_line_contains(lines, "1500US"));
+    CHECK(any_line_contains(lines, "BUF 3/1 12KB"));
 
     for (const std::string& line : lines) {
         for (const char c : line) {
@@ -201,6 +217,16 @@ TEST_CASE("overlay lines only use glyphs the bitmap font can render") {
             CHECK(ok);
         }
     }
+}
+
+TEST_CASE("byte counts are formatted compactly for the overlay") {
+    CHECK(format_byte_count(0U) == "0B");
+    CHECK(format_byte_count(512U) == "512B");
+    CHECK(format_byte_count(1023U) == "1023B");
+    CHECK(format_byte_count(1024U) == "1KB");
+    CHECK(format_byte_count(12288U) == "12KB");
+    CHECK(format_byte_count(1600000U) == "1563KB");
+    CHECK(format_byte_count(64U * 1024U * 1024U) == "64MB");
 }
 
 TEST_CASE("gpu lines only appear once timer queries have reported") {

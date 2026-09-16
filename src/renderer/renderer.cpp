@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "core/gl_loader.h"
+#include "renderer/course_map_fill.h"
 #include "renderer/overlay_batch.h"
 #include "renderer/overlay_pass.h"
 #include "renderer/pixel_font.h"
@@ -1316,13 +1317,6 @@ void draw_rangefinder_view(overlay_batch& batch,
                              glm::vec3(0.76f, 1.0f, 0.72f));
 }
 
-struct course_map_layout {
-    glm::vec2 center{0.0f, 0.02f};
-    glm::vec2 half_size{0.68f, 0.76f};
-    glm::vec3 world_center{0.0f};
-    float scale = 0.01f;
-};
-
 void expand_map_bounds(const glm::vec3& position, glm::vec2& min_point, glm::vec2& max_point) {
     min_point.x = std::min(min_point.x, position.x);
     min_point.y = std::min(min_point.y, position.z);
@@ -1343,7 +1337,7 @@ course_map_layout make_course_map_layout(const render_data& data) {
         expand_map_bounds(data.terrain_mesh->bounds.max, min_point, max_point);
     }
 
-    for (const render_tree& tree : data.trees) {
+    for (const render_tree& tree : render_trees(data)) {
         expand_map_bounds(tree.base, min_point, max_point);
         expand_map_bounds(tree.base + glm::vec3(tree.leaf_radius, 0.0f, tree.leaf_radius), min_point, max_point);
         expand_map_bounds(tree.base - glm::vec3(tree.leaf_radius, 0.0f, tree.leaf_radius), min_point, max_point);
@@ -1361,12 +1355,6 @@ course_map_layout make_course_map_layout(const render_data& data) {
     return layout;
 }
 
-glm::vec2 map_point(const course_map_layout& layout, const glm::vec3& position) {
-    // Paper map reads from the player's perspective, so world +X maps left.
-    const glm::vec2 delta(layout.world_center.x - position.x, position.z - layout.world_center.z);
-    return layout.center + delta * layout.scale;
-}
-
 void draw_map_marker(overlay_batch& batch,
                      const glm::vec2 position,
                      const glm::vec3 color,
@@ -1375,112 +1363,11 @@ void draw_map_marker(overlay_batch& batch,
     draw_overlay_quad(batch, position, glm::vec2(radius * 0.64f), color, 1.0f);
 }
 
-void add_triangle_scan_intersection(const glm::vec2 a,
-                                    const glm::vec2 b,
-                                    const float y,
-                                    std::array<float, 3>& intersections,
-                                    int& intersection_count) {
-    const float min_y = std::min(a.y, b.y);
-    const float max_y = std::max(a.y, b.y);
-    if (std::abs(a.y - b.y) < 0.00001f || y < min_y || y >= max_y || intersection_count >= 3) {
-        return;
-    }
-
-    const float t = (y - a.y) / (b.y - a.y);
-    intersections[static_cast<std::size_t>(intersection_count)] = a.x + (b.x - a.x) * t;
-    ++intersection_count;
-}
-
-void draw_filled_map_triangle(overlay_batch& batch,
-                              const course_map_layout& layout,
-                              const glm::vec2 a,
-                              const glm::vec2 b,
-                              const glm::vec2 c,
-                              const glm::vec3 color) {
-    const float inset = 0.025f;
-    const glm::vec2 clip_min = layout.center - layout.half_size + glm::vec2(inset);
-    const glm::vec2 clip_max = layout.center + layout.half_size - glm::vec2(inset);
-
-    const float min_x = std::min({a.x, b.x, c.x});
-    const float max_x = std::max({a.x, b.x, c.x});
-    const float min_y = std::min({a.y, b.y, c.y});
-    const float max_y = std::max({a.y, b.y, c.y});
-    if (max_x < clip_min.x || min_x > clip_max.x || max_y < clip_min.y || min_y > clip_max.y) {
-        return;
-    }
-
-    const float area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-    if (std::abs(area) < 0.000001f) {
-        return;
-    }
-
-    const float strip_height = std::max(0.0045f, std::min(0.011f, layout.scale * 0.72f));
-    const float y_start = std::max(min_y, clip_min.y);
-    const float y_end = std::min(max_y, clip_max.y);
-    const int first_strip = static_cast<int>(std::floor((y_start - clip_min.y) / strip_height));
-    const int last_strip = static_cast<int>(std::ceil((y_end - clip_min.y) / strip_height));
-
-    for (int strip = first_strip; strip < last_strip; ++strip) {
-        const float y = clip_min.y + (static_cast<float>(strip) + 0.5f) * strip_height;
-        if (y < y_start || y > y_end) {
-            continue;
-        }
-
-        std::array<float, 3> intersections{};
-        int intersection_count = 0;
-        add_triangle_scan_intersection(a, b, y, intersections, intersection_count);
-        add_triangle_scan_intersection(b, c, y, intersections, intersection_count);
-        add_triangle_scan_intersection(c, a, y, intersections, intersection_count);
-        if (intersection_count < 2) {
-            continue;
-        }
-
-        std::sort(intersections.begin(), intersections.begin() + intersection_count);
-        const float x0 = std::max(intersections[0], clip_min.x);
-        const float x1 = std::min(intersections[static_cast<std::size_t>(intersection_count - 1)], clip_max.x);
-        if (x1 <= x0) {
-            continue;
-        }
-
-        draw_overlay_quad(batch,
-                          glm::vec2((x0 + x1) * 0.5f, y),
-                          glm::vec2((x1 - x0) * 0.5f, strip_height * 0.56f),
-                          color,
-                          0.82f);
-    }
-}
-
-void draw_filled_map_terrain(overlay_batch& batch, const course_map_layout& layout, const render_data& data) {
-    const render_static_mesh* terrain_mesh = data.terrain_mesh;
-    if (terrain_mesh == nullptr || terrain_mesh->vertices.empty() || terrain_mesh->indices.size() < 3) {
-        return;
-    }
-
-    for (std::size_t i = 0; i + 2 < terrain_mesh->indices.size(); i += 3) {
-        const std::uint32_t ia = terrain_mesh->indices[i];
-        const std::uint32_t ib = terrain_mesh->indices[i + 1];
-        const std::uint32_t ic = terrain_mesh->indices[i + 2];
-        if (ia >= terrain_mesh->vertices.size() ||
-            ib >= terrain_mesh->vertices.size() ||
-            ic >= terrain_mesh->vertices.size()) {
-            continue;
-        }
-
-        const render_terrain_vertex& va = terrain_mesh->vertices[ia];
-        const render_terrain_vertex& vb = terrain_mesh->vertices[ib];
-        const render_terrain_vertex& vc = terrain_mesh->vertices[ic];
-        const glm::vec3 average_color = (va.color + vb.color + vc.color) / 3.0f;
-        const glm::vec3 ink = average_color * 0.72f + glm::vec3(0.10f, 0.08f, 0.04f);
-        draw_filled_map_triangle(batch,
-                                 layout,
-                                 map_point(layout, va.position),
-                                 map_point(layout, vb.position),
-                                 map_point(layout, vc.position),
-                                 ink);
-    }
-}
-
-void draw_paper_course_map(overlay_batch& batch, const render_data& data) {
+// The terrain fill is retained (see renderer/course_map_fill.h): it is drawn
+// from its own buffer between the paper background and the map markers, so
+// submission order — and therefore blending — is unchanged.
+void draw_paper_course_map(overlay_pass& pass, course_map_fill_cache& fill_cache, const render_data& data) {
+    overlay_batch& batch = pass.batch();
     const course_map_layout layout = make_course_map_layout(data);
     const glm::vec3 paper(0.76f, 0.72f, 0.55f);
     const glm::vec3 paper_shadow(0.14f, 0.12f, 0.09f);
@@ -1511,9 +1398,10 @@ void draw_paper_course_map(overlay_batch& batch, const render_data& data) {
                       fold,
                       0.46f);
 
-    draw_filled_map_terrain(batch, layout, data);
+    update_course_map_fill_cache(fill_cache, layout, data.terrain_mesh);
+    pass.draw_retained(fill_cache.fill.vertices, fill_cache.revision);
 
-    for (const render_tree& tree : data.trees) {
+    for (const render_tree& tree : render_trees(data)) {
         const glm::vec2 p = map_point(layout, tree.base);
         const float radius = std::max(0.012f, std::min(0.028f, tree.leaf_radius * layout.scale));
         draw_map_marker(batch, p, glm::vec3(0.08f, 0.24f, 0.11f), radius);
@@ -1848,10 +1736,7 @@ void renderer::shutdown() {
         ball_vao_ = 0;
     }
 
-    if (flight_path_vbo_ != 0) {
-        glDeleteBuffers(1, &flight_path_vbo_);
-        flight_path_vbo_ = 0;
-    }
+    flight_path_buffer_.shutdown();
 
     if (flight_path_vao_ != 0) {
         glDeleteVertexArrays(1, &flight_path_vao_);
@@ -1871,11 +1756,6 @@ void renderer::shutdown() {
     if (cone_vbo_ != 0) {
         glDeleteBuffers(1, &cone_vbo_);
         cone_vbo_ = 0;
-    }
-
-    if (cone_vao_ != 0) {
-        glDeleteVertexArrays(1, &cone_vao_);
-        cone_vao_ = 0;
     }
 
     if (screen_vbo_ != 0) {
@@ -2067,11 +1947,14 @@ bool renderer::init_geometry() {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
     glBindVertexArray(0);
 
+    // Flight paths are capped at game_tuning::flight_path::max_points (96),
+    // so this capacity covers every shot without ever reallocating.
+    constexpr std::size_t flight_path_capacity_vertices = 128;
     glGenVertexArrays(1, &flight_path_vao_);
-    glGenBuffers(1, &flight_path_vbo_);
     glBindVertexArray(flight_path_vao_);
-    glBindBuffer(GL_ARRAY_BUFFER, flight_path_vbo_);
-    glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+    // init() leaves the buffer bound for the attribute pointers below.
+    flight_path_buffer_.init(flight_path_capacity_vertices * sizeof(render_terrain_vertex));
+    flight_path_vertices_.reserve(flight_path_capacity_vertices);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0,
                           3,
@@ -2112,22 +1995,18 @@ bool renderer::init_geometry() {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
     glBindVertexArray(0);
 
+    // Cone vertices are only ever drawn through tree_renderer's instanced VAO,
+    // which describes this buffer itself, so no VAO is created here.
     const std::vector<float> cone_vertices = make_cone_vertices(10);
     cone_vertex_count_ = static_cast<int>(cone_vertices.size() / 6);
 
-    glGenVertexArrays(1, &cone_vao_);
     glGenBuffers(1, &cone_vbo_);
-    glBindVertexArray(cone_vao_);
     glBindBuffer(GL_ARRAY_BUFFER, cone_vbo_);
     glBufferData(GL_ARRAY_BUFFER,
                  static_cast<GLsizeiptr>(cone_vertices.size() * sizeof(float)),
                  cone_vertices.data(),
                  GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(0));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
-    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     const float screen_vertices[] = {
         -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
@@ -2292,7 +2171,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     gpu_timers_.end();
 
     gpu_timers_.begin(gpu_profile_stage::trees);
-    tree_renderer_.draw(data.trees, data.trees_revision, view, proj, profile);
+    tree_renderer_.draw(render_trees(data), data.trees_revision, view, proj, profile);
     gpu_timers_.end();
 
     const primitive_geometry primitives{
@@ -2312,9 +2191,9 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     markers.show_primary_hole_markers = data.show_primary_hole_markers;
     markers.tee_position = data.tee_position;
     markers.pin_position = data.pin_position;
-    markers.start_markers = &data.start_markers;
-    markers.tee_markers = &data.tee_markers;
-    markers.pin_markers = &data.pin_markers;
+    markers.start_markers = data.start_markers;
+    markers.tee_markers = data.tee_markers;
+    markers.pin_markers = data.pin_markers;
     markers.cup_radius = data.cup_radius;
     markers.cup_visual_radius_meters = data.cup_visual_radius_meters;
     markers.pin_visual_height_meters = data.pin_visual_height_meters;
@@ -2328,24 +2207,24 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     build_world_marker_batch(world_marker_batch_, markers);
     world_marker_renderer_.draw(world_marker_batch_, proj * view, profile);
 
-    if (data.show_flight_path && data.flight_path_points.size() > 1 && flight_path_vao_ != 0) {
-        std::vector<render_terrain_vertex> path_vertices;
-        path_vertices.reserve(data.flight_path_points.size());
-        for (const glm::vec3& point : data.flight_path_points) {
+    const std::vector<glm::vec3>& flight_path_points = flight_path_points_or_empty(data);
+    if (data.show_flight_path && flight_path_points.size() > 1 && flight_path_vao_ != 0) {
+        // Rebuilt into a member vector so a shot in flight does not allocate
+        // every frame, and streamed into the grow-only buffer.
+        flight_path_vertices_.clear();
+        flight_path_vertices_.reserve(flight_path_points.size());
+        for (const glm::vec3& point : flight_path_points) {
             render_terrain_vertex vertex;
             vertex.position = point + glm::vec3(0.0f, 0.02f, 0.0f);
             vertex.normal = glm::vec3(0.0f, 1.0f, 0.0f);
             vertex.color = glm::vec3(1.0f);
-            path_vertices.push_back(vertex);
+            flight_path_vertices_.push_back(vertex);
         }
 
         glBindVertexArray(flight_path_vao_);
-        glBindBuffer(GL_ARRAY_BUFFER, flight_path_vbo_);
-        glBufferData(GL_ARRAY_BUFFER,
-                     static_cast<GLsizeiptr>(path_vertices.size() * sizeof(render_terrain_vertex)),
-                     path_vertices.data(),
-                     GL_DYNAMIC_DRAW);
-        record_buffer_upload(profile, path_vertices.size() * sizeof(render_terrain_vertex));
+        flight_path_buffer_.upload(flight_path_vertices_.data(),
+                                   flight_path_vertices_.size() * sizeof(render_terrain_vertex),
+                                   profile);
 
         terrain_shader_.use();
         const glm::mat4 model(1.0f);
@@ -2359,7 +2238,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glLineWidth(std::max(1.0f, data.flight_path_width));
-        draw_arrays(terrain_shader_, GL_LINE_STRIP, 0, static_cast<GLsizei>(path_vertices.size()));
+        draw_arrays(terrain_shader_, GL_LINE_STRIP, 0, static_cast<GLsizei>(flight_path_vertices_.size()));
         glLineWidth(1.0f);
         glDisable(GL_BLEND);
         glBindVertexArray(0);
@@ -2407,7 +2286,7 @@ void renderer::render_overlay(const glm::mat4& view, const glm::mat4& proj, cons
     }
 
     if (data.show_course_map) {
-        draw_paper_course_map(batch, data);
+        draw_paper_course_map(overlay_pass_, course_map_fill_cache_, data);
     }
 
     if (data.show_scorecard) {
