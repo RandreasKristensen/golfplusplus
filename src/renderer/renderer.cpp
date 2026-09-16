@@ -11,6 +11,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,31 @@ void draw_elements(const shader_program& shader,
                    const void* offset) {
     glDrawElements(mode, count, type, offset);
     record_draw_call(shader.profile());
+}
+
+// Frustum-culled chunk ranges are merged into at most this many glDrawElements
+// calls per mesh; culled chunks inside a merged span are drawn again rather
+// than costing another draw call. Four ranges cover a ground-level view of the
+// Marienlyst hub with ~0.1% extra indices over unlimited ranges.
+constexpr std::size_t max_terrain_draw_ranges = 4;
+// The material overlay is two orders of magnitude smaller than the terrain
+// (~200 triangles), so it never deserves more than a couple of draws.
+constexpr std::size_t max_material_overlay_draw_ranges = 2;
+
+const std::vector<render_mesh_chunk>& chunks_of(const render_static_mesh* mesh) {
+    static const std::vector<render_mesh_chunk> none;
+    return mesh == nullptr ? none : mesh->chunks;
+}
+
+void draw_index_ranges(const shader_program& shader, const std::vector<render_index_range>& ranges) {
+    for (const render_index_range& range : ranges) {
+        const std::uintptr_t offset = static_cast<std::uintptr_t>(range.first_index) * sizeof(std::uint32_t);
+        draw_elements(shader,
+                      GL_TRIANGLES,
+                      static_cast<GLsizei>(range.index_count),
+                      GL_UNSIGNED_INT,
+                      reinterpret_cast<void*>(offset));
+    }
 }
 
 constexpr int reference_low_res_width = 640;
@@ -2275,24 +2301,44 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     draw_arrays(terrain_shader_, GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
 
+    // Frustum culling of the chunked static meshes. The chunk lists were built
+    // with the meshes (app::refresh_render_mesh_cache) and describe the index
+    // buffer that was just uploaded for this revision.
+    const view_frustum frustum = make_view_frustum(proj * view);
+    cull_stats_ = renderer_cull_stats{};
+
     if (terrain_mesh_index_count_ > 0) {
-        set_terrain_draw_state(terrain_shader_, glm::mat4(1.0f), view, proj, glm::vec3(0.18f, 0.42f, 0.18f), true);
-        glBindVertexArray(terrain_mesh_vao_);
-        draw_elements(terrain_shader_, GL_TRIANGLES, terrain_mesh_index_count_, GL_UNSIGNED_INT, reinterpret_cast<void*>(0));
-        glBindVertexArray(0);
+        cull_stats_.terrain = collect_visible_index_ranges(chunks_of(data.terrain_mesh),
+                                                           frustum,
+                                                           static_cast<std::size_t>(terrain_mesh_index_count_),
+                                                           max_terrain_draw_ranges,
+                                                           terrain_draw_ranges_);
+        if (!terrain_draw_ranges_.empty()) {
+            set_terrain_draw_state(terrain_shader_, glm::mat4(1.0f), view, proj, glm::vec3(0.18f, 0.42f, 0.18f), true);
+            glBindVertexArray(terrain_mesh_vao_);
+            draw_index_ranges(terrain_shader_, terrain_draw_ranges_);
+            glBindVertexArray(0);
+        }
     }
 
     if (material_overlay_index_count_ > 0) {
-        set_terrain_draw_state(terrain_shader_, glm::mat4(1.0f), view, proj, glm::vec3(1.0f), true);
-        glBindVertexArray(material_overlay_vao_);
-        draw_elements(terrain_shader_, GL_TRIANGLES, material_overlay_index_count_, GL_UNSIGNED_INT, reinterpret_cast<void*>(0));
-        glBindVertexArray(0);
+        cull_stats_.material_overlay = collect_visible_index_ranges(chunks_of(data.material_overlay_mesh),
+                                                                    frustum,
+                                                                    static_cast<std::size_t>(material_overlay_index_count_),
+                                                                    max_material_overlay_draw_ranges,
+                                                                    material_overlay_draw_ranges_);
+        if (!material_overlay_draw_ranges_.empty()) {
+            set_terrain_draw_state(terrain_shader_, glm::mat4(1.0f), view, proj, glm::vec3(1.0f), true);
+            glBindVertexArray(material_overlay_vao_);
+            draw_index_ranges(terrain_shader_, material_overlay_draw_ranges_);
+            glBindVertexArray(0);
+        }
     }
 
     gpu_timers_.end();
 
     gpu_timers_.begin(gpu_profile_stage::trees);
-    tree_renderer_.draw(data.trees, data.trees_revision, view, proj, profile);
+    cull_stats_.trees_visible = tree_renderer_.draw(data.trees, data.trees_revision, view, proj, frustum, profile);
     gpu_timers_.end();
 
     const primitive_geometry primitives{

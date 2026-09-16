@@ -13,9 +13,11 @@
 #include "physics/material_zone.h"
 #include "profiling/profiling.h"
 #include "renderer/framebuffer.h"
+#include "renderer/frustum.h"
 #include "renderer/gl_timer.h"
 #include "renderer/overlay_pass.h"
 #include "renderer/render_mesh.h"
+#include "renderer/render_mesh_chunks.h"
 #include "renderer/render_tree.h"
 #include "renderer/shader.h"
 #include "renderer/tree_renderer.h"
@@ -158,11 +160,23 @@ struct render_data {
     render_startup_menu startup_menu;
 };
 
+// Per-frame frustum culling result for the static scene meshes. Plain data the
+// owner can copy into profiling/debug output; the renderer only records it.
+struct renderer_cull_stats {
+    render_chunk_cull_stats terrain;
+    render_chunk_cull_stats material_overlay;
+    // False when the whole tree batch was outside the frustum (both instanced
+    // draws skipped).
+    bool trees_visible = false;
+};
+
 struct renderer {
     bool init(SDL_Window* window);
     void shutdown();
     // `profile` is optional: null disables all profiling work.
     void render(const render_data& data, frame_profile* profile = nullptr);
+    // Culling counters recorded by the most recent render() call.
+    const renderer_cull_stats& cull_stats() const { return cull_stats_; }
 
 private:
     bool init_shaders();
@@ -187,6 +201,11 @@ private:
     world_marker_renderer world_marker_renderer_;
     // Rebuilt every frame; kept as a member so its vectors keep their capacity.
     world_marker_batch world_marker_batch_;
+    // Visible chunk ranges of the static meshes, rebuilt every frame. Members so
+    // the per-frame culling allocates nothing after the first frames.
+    std::vector<render_index_range> terrain_draw_ranges_;
+    std::vector<render_index_range> material_overlay_draw_ranges_;
+    renderer_cull_stats cull_stats_;
 
     unsigned int ground_vao_ = 0;
     unsigned int ground_vbo_ = 0;

@@ -4,7 +4,10 @@
 #include <cstddef>
 #include <vector>
 
+#include <glm/common.hpp>
 #include <glm/vec3.hpp>
+
+#include "renderer/render_mesh.h"
 
 // GL-free tree render data. Kept separate from renderer.h so the per-instance
 // builder can be unit tested without SDL or an OpenGL context.
@@ -59,4 +62,29 @@ inline render_tree_instance_batch build_tree_instances(const std::vector<render_
     }
 
     return batch;
+}
+
+// World bounds of every trunk and leaf instance in `batch`. The unit meshes
+// span x/z in [-1, 1] and y in [0, 1], so an instance covers
+// offset + [-scale.x, scale.x] x [0, scale.y] x [-scale.z, scale.z].
+// Invalid (all-zero) for an empty batch. Used for a whole-batch frustum cull.
+inline render_mesh_bounds compute_tree_instance_bounds(const render_tree_instance_batch& batch) {
+    render_mesh_bounds bounds;
+    const auto add = [&bounds](const std::vector<render_tree_instance>& instances) {
+        for (const render_tree_instance& instance : instances) {
+            const glm::vec3 low = instance.offset - glm::vec3(instance.scale.x, 0.0f, instance.scale.z);
+            const glm::vec3 high = instance.offset + instance.scale;
+            if (!bounds.valid) {
+                bounds.min = low;
+                bounds.max = high;
+                bounds.valid = true;
+                continue;
+            }
+            bounds.min = glm::min(bounds.min, low);
+            bounds.max = glm::max(bounds.max, high);
+        }
+    };
+    add(batch.trunks);
+    add(batch.leaves);
+    return bounds;
 }
