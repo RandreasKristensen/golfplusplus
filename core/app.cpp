@@ -13,6 +13,7 @@
 #include "game/shop.h"
 #include "physics/terrain.h"
 #include "profiling/profiling.h"
+#include "renderer/render_mesh_chunks.h"
 
 #include <SDL.h>
 
@@ -864,11 +865,17 @@ void app::refresh_render_mesh_cache(frame_profile* profile) {
                                cached_terrain_mesh_.indices,
                                game_.tuning.terrain_apron_mesh_data);
     cached_terrain_mesh_.bounds = compute_render_mesh_bounds(cached_terrain_mesh_.vertices);
+    // Render chunks are part of the cached mesh: built once per terrain
+    // revision, frustum culled per frame by the renderer.
+    cached_terrain_mesh_.chunks = build_render_mesh_chunks(cached_terrain_mesh_.vertices,
+                                                           cached_terrain_mesh_.indices);
     cached_terrain_mesh_.revision = game_.terrain_render_revision;
 
     set_material_overlay_render_mesh(cached_material_overlay_mesh_, game_.tuning);
     append_course_world_overlays(cached_material_overlay_mesh_, game_);
     cached_material_overlay_mesh_.bounds = compute_render_mesh_bounds(cached_material_overlay_mesh_.vertices);
+    cached_material_overlay_mesh_.chunks = build_render_mesh_chunks(cached_material_overlay_mesh_.vertices,
+                                                                    cached_material_overlay_mesh_.indices);
     cached_material_overlay_mesh_.revision = game_.terrain_render_revision;
 
     cached_terrain_revision_ = game_.terrain_render_revision;

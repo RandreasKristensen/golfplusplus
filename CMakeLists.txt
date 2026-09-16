@@ -17,6 +17,8 @@ set(VCR_GOLF_SOURCES
     src/renderer/shader.cpp
     src/renderer/framebuffer.cpp
     src/renderer/dynamic_buffer.cpp
+    src/renderer/frustum.cpp
+    src/renderer/render_mesh_chunks.cpp
     src/renderer/gl_timer.cpp
     src/renderer/overlay_pass.cpp
     src/renderer/renderer.cpp
@@ -174,12 +176,15 @@ if (VCR_GOLF_BUILD_TESTS)
         tests/profiling_tests.cpp
         tests/shader_tests.cpp
         tests/world_marker_tests.cpp
+        tests/render_culling_tests.cpp
         tests/audio_manifest_tests.cpp
         tests/overlay_batch_tests.cpp
         tests/dynamic_buffer_tests.cpp
         tests/course_map_fill_tests.cpp
         src/audio/audio_manifest.cpp
         src/renderer/world_marker_batch.cpp
+        src/renderer/frustum.cpp
+        src/renderer/render_mesh_chunks.cpp
     )
     set_target_properties(golfpp-tests PROPERTIES OUTPUT_NAME "golf++-tests")
     target_link_libraries(golfpp-tests PRIVATE vcr-golf-physics vcr-golf-game vcr-golf-profiling)

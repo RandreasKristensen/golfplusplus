@@ -161,26 +161,34 @@ void tree_renderer::draw_part(const instanced_part& part, frame_profile* profile
     record_draw_call(profile);
 }
 
-void tree_renderer::draw(const std::vector<render_tree>& trees,
+bool tree_renderer::draw(const std::vector<render_tree>& trees,
                          const std::uint64_t revision,
                          const glm::mat4& view,
                          const glm::mat4& proj,
+                         const view_frustum& frustum,
                          frame_profile* profile) {
     if (shader_.id() == 0 || draw_arrays_instanced_ == nullptr) {
-        return;
+        return false;
     }
 
     if (!uploaded_ || uploaded_revision_ != revision || uploaded_tree_count_ != trees.size()) {
         const render_tree_instance_batch batch = build_tree_instances(trees);
         upload_part(trunks_, batch.trunks, profile);
         upload_part(leaves_, batch.leaves, profile);
+        instance_bounds_ = compute_tree_instance_bounds(batch);
         uploaded_revision_ = revision;
         uploaded_tree_count_ = trees.size();
         uploaded_ = true;
     }
 
     if (trunks_.instance_count == 0 && leaves_.instance_count == 0) {
-        return;
+        return false;
+    }
+
+    // Whole-batch cull: skips both instanced draws when no tree is on screen.
+    if (instance_bounds_.valid &&
+        !frustum_intersects_aabb(frustum, instance_bounds_.min, instance_bounds_.max)) {
+        return false;
     }
 
     shader_.set_profile(profile);
@@ -197,4 +205,5 @@ void tree_renderer::draw(const std::vector<render_tree>& trees,
     draw_part(leaves_, profile);
 
     glBindVertexArray(0);
+    return true;
 }
