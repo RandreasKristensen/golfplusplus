@@ -106,8 +106,12 @@ save_data migrate_save_data(save_data save) {
     if (save.version < 4) {
         save.version = 4;
     }
+    if (save.version < 5) {
+        // v5 dropped money, unlocked_items and completed_quest_ids along with
+        // the shop and quests. Older files still carry them; parsing ignores them.
+        save.version = 5;
+    }
     save.version = current_save_version;
-    save.money = std::max(0, save.money);
     save.current_hole_index = std::max(0, save.current_hole_index);
     ensure_default_skills(save.skills);
     for (auto& repeatable : save.repeatable_collectibles) {
@@ -125,9 +129,6 @@ std::optional<save_data> parse_save_data(const std::string& text) {
 
     save_data save;
     save.version = int_at(root, "version").value_or(0);
-    save.money = int_at(root, "money").value_or(0);
-    save.unlocked_items = string_array_at(root, "unlocked_items");
-    save.completed_quest_ids = string_array_at(root, "completed_quest_ids");
     save.completed_course_ids = string_array_at(root, "completed_course_ids");
     save.current_course_id = string_at(root, "current_course_id").value_or("");
     save.current_hole_index = int_at(root, "current_hole_index").value_or(0);
@@ -156,9 +157,6 @@ std::optional<save_data> parse_save_data(const std::string& text) {
 std::string save_data_to_json(const save_data& save) {
     json root = json::object();
     root["version"] = current_save_version;
-    root["money"] = std::max(0, save.money);
-    root["unlocked_items"] = save.unlocked_items;
-    root["completed_quest_ids"] = save.completed_quest_ids;
     root["completed_course_ids"] = save.completed_course_ids;
     root["current_course_id"] = save.current_course_id;
     root["current_hole_index"] = std::max(0, save.current_hole_index);

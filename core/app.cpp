@@ -10,7 +10,6 @@
 #include "game/progression.h"
 #include "game/save_manager.h"
 #include "game/scorecard.h"
-#include "game/shop.h"
 #include "physics/terrain.h"
 #include "profiling/profiling.h"
 #include "renderer/render_mesh_chunks.h"
@@ -106,12 +105,6 @@ void append_render_terrain_mesh(std::vector<render_terrain_vertex>& vertices,
     for (const std::uint32_t index : mesh.indices) {
         indices.push_back(index_offset + index);
     }
-}
-
-void append_course_world_overlays(render_static_mesh& mesh, const game_state& game) {
-    (void)mesh;
-    (void)game;
-    return;
 }
 
 // Pure field copy from the cached, already terrain-anchored collision bodies.
@@ -480,10 +473,6 @@ startup_menu_screen startup_screen_for_flow(const startup_flow flow) {
         return startup_menu_screen::hole_picker;
     case startup_flow::course_picker:
         return startup_menu_screen::course_picker;
-    case startup_flow::shop_picker:
-        return startup_menu_screen::shop_picker;
-    case startup_flow::shop_inventory:
-        return startup_menu_screen::shop_inventory;
     default:
         return startup_menu_screen::none;
     }
@@ -532,11 +521,9 @@ int startup_hit_index(const startup_menu_screen screen,
 
 int startup_item_count(const startup_flow flow,
                        const std::vector<startup_hole_option>& holes,
-                       const std::vector<course_definition>& courses,
-                       const game_content& content,
-                       const int active_shop_index) {
+                       const std::vector<course_definition>& courses) {
     if (flow == startup_flow::main) {
-        return 5;
+        return 4;
     }
     if (flow == startup_flow::help) {
         return 0;
@@ -546,14 +533,6 @@ int startup_item_count(const startup_flow flow,
     }
     if (flow == startup_flow::course_picker) {
         return static_cast<int>(courses.size());
-    }
-    if (flow == startup_flow::shop_picker) {
-        return static_cast<int>(content.shops.size());
-    }
-    if (flow == startup_flow::shop_inventory &&
-        active_shop_index >= 0 &&
-        active_shop_index < static_cast<int>(content.shops.size())) {
-        return static_cast<int>(content.shops[static_cast<std::size_t>(active_shop_index)].items.size());
     }
     return 0;
 }
@@ -595,9 +574,7 @@ course_definition single_hole_course(const startup_hole_option& option) {
 render_startup_menu make_startup_menu_render_data(const startup_flow flow,
                                                   const int selection,
                                                   const std::vector<startup_hole_option>& holes,
-                                                  const game_content& content,
-                                                  const save_data& save,
-                                                  const int active_shop_index) {
+                                                  const game_content& content) {
     render_startup_menu menu;
     menu.screen = startup_screen_for_flow(flow);
     if (menu.screen == startup_menu_screen::none) {
@@ -608,10 +585,9 @@ render_startup_menu make_startup_menu_render_data(const startup_flow flow,
         menu.title = "GOLF++";
         menu.subtitle = "SELECT ROUND TYPE";
         menu.footer = "ARROWS MOVE  ENTER SELECT  ESC QUIT";
-        const std::array<std::pair<const char*, const char*>, 5> items{{
+        const std::array<std::pair<const char*, const char*>, 4> items{{
             {"PLAY HOLE", "PICK ONE HOLE"},
             {"PLAY COURSE", "PLAY ORDERED HOLES"},
-            {"SHOP", "BUY UNLOCKS"},
             {"HELP", "SHOW CONTROLS"},
             {"QUIT", "RETURN TO DESKTOP"}
         }};
@@ -619,43 +595,6 @@ render_startup_menu make_startup_menu_render_data(const startup_flow flow,
             render_startup_tile tile;
             tile.title = items[i].first;
             tile.subtitle = items[i].second;
-            tile.selected = static_cast<int>(i) == selection;
-            menu.tiles.push_back(tile);
-        }
-        return menu;
-    }
-
-    if (flow == startup_flow::shop_picker) {
-        menu.title = "SHOP";
-        menu.subtitle = "CHOOSE A COUNTER";
-        menu.footer = "ARROWS MOVE  ENTER OPEN  BACKSPACE BACK";
-        for (std::size_t i = 0; i < content.shops.size(); ++i) {
-            render_startup_tile tile;
-            tile.title = content.shops[i].title;
-            tile.subtitle = content.shops[i].subtitle;
-            tile.selected = static_cast<int>(i) == selection;
-            menu.tiles.push_back(tile);
-        }
-        return menu;
-    }
-
-    if (flow == startup_flow::shop_inventory) {
-        if (active_shop_index < 0 || active_shop_index >= static_cast<int>(content.shops.size())) {
-            menu.title = "SHOP";
-            menu.subtitle = "NO SHOP";
-            menu.footer = "BACKSPACE BACK";
-            return menu;
-        }
-
-        const shop_definition& shop = content.shops[static_cast<std::size_t>(active_shop_index)];
-        menu.title = shop.title;
-        menu.subtitle = "GOLD " + std::to_string(std::max(0, save.money));
-        menu.footer = "ARROWS MOVE  ENTER BUY  BACKSPACE BACK";
-        for (std::size_t i = 0; i < shop.items.size(); ++i) {
-            const shop_item_definition& item = shop.items[i];
-            render_startup_tile tile;
-            tile.title = item.title;
-            tile.subtitle = shop_item_status_label(save, item);
             tile.selected = static_cast<int>(i) == selection;
             menu.tiles.push_back(tile);
         }
@@ -786,31 +725,6 @@ void drain_audio_events(audio_engine& audio, game_state& game) {
     game.audio_events.clear();
 }
 
-bool skills_changed(const skill_progression& before, const skill_progression& after) {
-    if (before.size() != after.size()) {
-        return true;
-    }
-
-    for (const auto& skill : before) {
-        const auto it = after.find(skill.first);
-        if (it == after.end() || it->second.xp != skill.second.xp) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool save_progress_changed(const save_data& before, const save_data& after) {
-    return before.money != after.money ||
-        before.unlocked_items != after.unlocked_items ||
-        before.completed_quest_ids != after.completed_quest_ids ||
-        before.completed_course_ids != after.completed_course_ids ||
-        before.current_course_id != after.current_course_id ||
-        before.current_hole_index != after.current_hole_index ||
-        before.hole_scores != after.hole_scores ||
-        skills_changed(before.skills, after.skills);
-}
-
 bool save_completion_progress_changed(const save_data& before, const save_data& after) {
     return before.completed_course_ids != after.completed_course_ids ||
         before.current_course_id != after.current_course_id ||
@@ -832,23 +746,7 @@ bool app::persist_current_save() {
     }
 
     save_slot_.save = game_.save;
-    const bool saved = persist_save_slot(save_paths_, save_slot_);
-    if (saved) {
-        sync_current_save();
-    }
-    return saved;
-}
-
-void app::sync_current_save() {
-    if (!save_initialized_) {
-        return;
-    }
-
-    cloud_sync_request request;
-    request.local_save = save_slot_.save;
-    request.profile = save_slot_.profile;
-    request.local_dirty = save_slot_.profile.dirty;
-    cloud_save_.sync(request);
+    return persist_save_slot(save_paths_, save_slot_);
 }
 
 void app::refresh_render_mesh_cache(frame_profile* profile) {
@@ -872,7 +770,6 @@ void app::refresh_render_mesh_cache(frame_profile* profile) {
     cached_terrain_mesh_.revision = game_.terrain_render_revision;
 
     set_material_overlay_render_mesh(cached_material_overlay_mesh_, game_.tuning);
-    append_course_world_overlays(cached_material_overlay_mesh_, game_);
     cached_material_overlay_mesh_.bounds = compute_render_mesh_bounds(cached_material_overlay_mesh_.vertices);
     cached_material_overlay_mesh_.chunks = build_render_mesh_chunks(cached_material_overlay_mesh_.vertices,
                                                                     cached_material_overlay_mesh_.indices);
@@ -949,12 +846,9 @@ bool app::init(const startup_options& options) {
     save_paths_ = default_save_paths(save_root);
     save_slot_ = load_or_create_save_slot(save_paths_, game_.save);
     game_.save = save_slot_.save;
-    refresh_unlocked_clubs(game_);
     save_initialized_ = true;
     if (!save_slot_.loaded_existing_profile || !save_slot_.loaded_existing_save) {
         persist_current_save();
-    } else {
-        sync_current_save();
     }
     if (pref_path != nullptr) {
         SDL_free(pref_path);
@@ -1026,7 +920,7 @@ void app::run() {
                 running_ = false;
             }
 
-            const int count = startup_item_count(startup_flow_, hole_options_, content_.courses, content_, active_shop_index_);
+            const int count = startup_item_count(startup_flow_, hole_options_, content_.courses);
             const startup_menu_screen screen = startup_screen_for_flow(startup_flow_);
             const int previous_selection = startup_selection_;
             const int hit = startup_hit_index(screen, count, input_, window_.sdl_window());
@@ -1044,9 +938,6 @@ void app::run() {
                 audio_.play("ui_back");
                 if (startup_flow_ == startup_flow::main) {
                     running_ = false;
-                } else if (startup_flow_ == startup_flow::shop_inventory) {
-                    startup_flow_ = startup_flow::shop_picker;
-                    startup_selection_ = std::max(0, std::min(active_shop_index_, static_cast<int>(content_.shops.size()) - 1));
                 } else {
                     startup_flow_ = startup_flow::main;
                     startup_selection_ = 0;
@@ -1061,9 +952,6 @@ void app::run() {
                         startup_flow_ = startup_flow::course_picker;
                         startup_selection_ = 0;
                     } else if (startup_selection_ == 2) {
-                        startup_flow_ = startup_flow::shop_picker;
-                        startup_selection_ = 0;
-                    } else if (startup_selection_ == 3) {
                         startup_flow_ = startup_flow::help;
                         startup_selection_ = 0;
                     } else {
@@ -1081,26 +969,6 @@ void app::run() {
                         startup_flow_ = startup_flow::playing;
                         audio_.start_ambience("ambience_course_day");
                     }
-                } else if (startup_flow_ == startup_flow::shop_picker && count > 0) {
-                    audio_.play("ui_select");
-                    active_shop_index_ = startup_selection_;
-                    startup_flow_ = startup_flow::shop_inventory;
-                    startup_selection_ = 0;
-                } else if (startup_flow_ == startup_flow::shop_inventory &&
-                           active_shop_index_ >= 0 &&
-                           active_shop_index_ < static_cast<int>(content_.shops.size()) &&
-                           count > 0) {
-                    const shop_definition& shop = content_.shops[static_cast<std::size_t>(active_shop_index_)];
-                    const save_data save_before_purchase = game_.save;
-                    const shop_purchase_result result = purchase_shop_item(game_.save,
-                                                                           shop.items[static_cast<std::size_t>(startup_selection_)]);
-                    if (result == shop_purchase_result::purchased &&
-                        save_progress_changed(save_before_purchase, game_.save)) {
-                        refresh_unlocked_clubs(game_);
-                        mark_current_save_dirty();
-                        persist_current_save();
-                    }
-                    audio_.play(result == shop_purchase_result::purchased ? "ui_select" : "ui_back");
                 }
             }
 
@@ -1109,9 +977,7 @@ void app::run() {
             data.startup_menu = make_startup_menu_render_data(startup_flow_,
                                                               startup_selection_,
                                                               hole_options_,
-                                                              content_,
-                                                              game_.save,
-                                                              active_shop_index_);
+                                                              content_);
             present_frame(data, profile);
             continue;
         }
@@ -1134,7 +1000,6 @@ void app::run() {
                 game_ = make_initial_game_state(game_.asset_root);
                 continue_terrain_render_revision(game_, previous_render_revision);
                 game_.save = save_slot_.save;
-                refresh_unlocked_clubs(game_);
                 audio_.stop_loop("cart_drive_loop");
                 cart_loop_active = false;
                 audio_.play("ui_select");
@@ -1147,9 +1012,7 @@ void app::run() {
                 data.startup_menu = make_startup_menu_render_data(startup_flow_,
                                                                   startup_selection_,
                                                                   hole_options_,
-                                                                  content_,
-                                                                  game_.save,
-                                                                  active_shop_index_);
+                                                                  content_);
             }
             present_frame(data, profile);
             continue;
@@ -1190,7 +1053,6 @@ void app::run() {
                         game_ = make_initial_game_state(game_.asset_root);
                         continue_terrain_render_revision(game_, previous_render_revision);
                         game_.save = save_slot_.save;
-                        refresh_unlocked_clubs(game_);
                         audio_.stop_loop("cart_drive_loop");
                         cart_loop_active = false;
                         audio_.start_ambience("ambience_menu_vcr");
@@ -1244,7 +1106,6 @@ void app::run() {
         persist_current_save();
     } else if (save_initialized_ && save_slot_.profile.dirty) {
         persist_save_slot(save_paths_, save_slot_);
-        sync_current_save();
     }
 }
 

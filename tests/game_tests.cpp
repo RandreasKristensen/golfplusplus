@@ -3,7 +3,6 @@
 #include "core/input.h"
 #include "game/course_loader.h"
 #include "game/course_world_loader.h"
-#include "game/cloud_save.h"
 #include "game/game_state.h"
 #include "game/game_content.h"
 #include "game/hole_loader.h"
@@ -12,11 +11,8 @@
 #include "game/save_data.h"
 #include "game/save_manager.h"
 #include "game/scorecard.h"
-#include "game/shop.h"
 #include "physics/terrain.h"
 #include "physics/tree_collision.h"
-#include "quest/quest_engine.h"
-#include "quest/quest_loader.h"
 
 #include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
@@ -191,14 +187,6 @@ std::vector<std::string> expected_club_ids() {
 std::vector<std::string> expected_club_labels() {
     return {"P", "SWDG", "PWDG", "9I", "7I", "5I", "7WD", "5WD", "DRVR"};
 }
-
-std::vector<std::string> expected_starter_club_ids() {
-    return {"putter", "pitching_wedge", "seven_iron"};
-}
-
-std::vector<std::string> expected_starter_club_labels() {
-    return {"P", "PWDG", "7I"};
-}
 }
 
 TEST_CASE("walking movement changes player position and yaw") {
@@ -219,7 +207,6 @@ TEST_CASE("walking movement changes player position and yaw") {
 
 TEST_CASE("left shift engages cart and release exits cleanly") {
     game_state state = make_initial_game_state();
-    state.save.unlocked_items.push_back(cart_unlock_id());
     const glm::vec3 start_position = state.player.position;
 
     input_state input;
@@ -243,7 +230,6 @@ TEST_CASE("left shift engages cart and release exits cleanly") {
 
 TEST_CASE("cart steering and drift use walking mode without entering shot setup") {
     game_state state = make_initial_game_state();
-    state.save.unlocked_items.push_back(cart_unlock_id());
     const float start_yaw = state.player.yaw;
 
     input_state input;
@@ -276,20 +262,6 @@ TEST_CASE("cart auto disables outside walking mode") {
     CHECK(!state.cart.active);
     CHECK(state.cart.velocity == 0.0f);
     CHECK(state.cart.drift_timer == 0.0f);
-}
-
-TEST_CASE("cart input is ignored until cart is unlocked") {
-    game_state state = make_initial_game_state();
-    const glm::vec3 start_position = state.player.position;
-
-    input_state input;
-    input.left_shift.is_down = true;
-    input.shift.is_down = true;
-    update_game(state, input, 0.25f);
-
-    CHECK(!state.cart.active);
-    CHECK(state.cart.velocity == 0.0f);
-    CHECK(state.player.position == start_position);
 }
 
 TEST_CASE("skill progression curve is monotonic and front loaded") {
@@ -353,34 +325,8 @@ TEST_CASE("add skill xp reports before after and applied xp") {
     CHECK(maxed.applied_xp == 0);
 }
 
-TEST_CASE("shop purchase applies generic unlock requirements") {
-    const std::vector<shop_definition> shops = fallback_shop_definitions();
-    CHECK(shops.size() >= 2);
-    const shop_definition& starter = shops[0];
-    const shop_definition& range = shops[1];
-
-    save_data save;
-    save.money = 100;
-
-    CHECK(purchase_shop_item(save, starter.items[1]) == shop_purchase_result::requirements_not_met);
-    CHECK(purchase_shop_item(save, starter.items[0]) == shop_purchase_result::purchased);
-    CHECK(purchase_shop_item(save, starter.items[0]) == shop_purchase_result::already_owned);
-    CHECK(purchase_shop_item(save, starter.items[1]) == shop_purchase_result::purchased);
-    CHECK(save.money == 75);
-    CHECK(std::find(save.unlocked_items.begin(), save.unlocked_items.end(), "yardage_book") != save.unlocked_items.end());
-
-    CHECK(purchase_shop_item(save, range.items[0]) == shop_purchase_result::requirements_not_met);
-    add_skill_xp(save.skills, golf_swing_skill_id(), xp_for_level(2));
-    CHECK(purchase_shop_item(save, range.items[0]) == shop_purchase_result::purchased);
-
-    save_data poor_save;
-    poor_save.skills[golf_swing_skill_id()].xp = xp_for_level(2);
-    CHECK(purchase_shop_item(poor_save, range.items[0]) == shop_purchase_result::insufficient_funds);
-}
-
 TEST_CASE("smoke and beer emotes can run together and auto clear") {
     game_state state = make_initial_game_state();
-    state.save.unlocked_items.push_back(cigarette_filterless_unlock_id());
 
     input_state input;
     input.key_1.pressed = true;
@@ -417,31 +363,21 @@ TEST_CASE("smoke and beer emotes can run together and auto clear") {
     CHECK(!state.beer_emote.active);
 }
 
-TEST_CASE("smoke input requires an owned cigarette and starts a transient effect") {
-    game_state locked = make_initial_game_state();
+TEST_CASE("smoke input starts a transient cigarette effect") {
+    game_state state = make_initial_game_state();
 
     input_state input;
     input.key_1.pressed = true;
-    update_game(locked, input, 0.016f);
+    update_game(state, input, 0.016f);
 
-    CHECK(!locked.smoke_emote.active);
-    CHECK(locked.cigarette_effect.unlock_id.empty());
-    CHECK(skill_xp(locked.save.skills, smoking_skill_id()) == 0);
-
-    game_state owned = make_initial_game_state();
-    owned.save.unlocked_items.push_back(cigarette_menthol_unlock_id());
-    update_game(owned, input, 0.016f);
-
-    CHECK(owned.smoke_emote.active);
-    CHECK(owned.cigarette_effect.unlock_id == cigarette_menthol_unlock_id());
-    CHECK(owned.cigarette_effect.remaining_seconds > 0.0f);
-    CHECK(skill_xp(owned.save.skills, smoking_skill_id()) == 10);
+    CHECK(state.smoke_emote.active);
+    CHECK(state.cigarette_effect.remaining_seconds > 0.0f);
+    CHECK(skill_xp(state.save.skills, smoking_skill_id()) == 10);
 }
 
-TEST_CASE("menthol cigarette briefly eases swing timing") {
+TEST_CASE("cigarette briefly eases swing timing") {
     game_state normal = make_initial_game_state();
     game_state menthol = make_initial_game_state();
-    menthol.save.unlocked_items.push_back(cigarette_menthol_unlock_id());
 
     input_state input;
     input.key_1.pressed = true;
@@ -539,7 +475,6 @@ TEST_CASE("walking on foot awards fitness xp but cart driving does not") {
     CHECK(skill_xp(walking.save.skills, fitness_skill_id()) > 0);
 
     game_state cart = make_initial_game_state();
-    cart.save.unlocked_items.push_back(cart_unlock_id());
     input.left_shift.is_down = true;
     input.shift.is_down = true;
     for (int i = 0; i < 40; ++i) {
@@ -666,33 +601,13 @@ TEST_CASE("course initializes tee and pin") {
     CHECK(state.ball.radius == state.tuning.scale.ball_physics_radius_meters);
     CHECK(state.ball.mass == state.tuning.scale.ball_mass_kg);
     CHECK(state.ball.position == terrain_clamped_tee(state.tuning));
-    const std::vector<std::string> club_ids = expected_starter_club_ids();
-    const std::vector<std::string> club_labels = expected_starter_club_labels();
+    const std::vector<std::string> club_ids = expected_club_ids();
+    const std::vector<std::string> club_labels = expected_club_labels();
     CHECK(state.tuning.clubs.size() == club_ids.size());
     for (std::size_t i = 0; i < club_ids.size() && i < state.tuning.clubs.size(); ++i) {
         CHECK(state.tuning.clubs[i].id == club_ids[i]);
         CHECK(state.tuning.clubs[i].label == club_labels[i]);
     }
-}
-
-TEST_CASE("club unlocks expand the playable bag from the full catalog") {
-    game_state state = make_initial_game_state();
-
-    CHECK(state.club_catalog.size() == expected_club_ids().size());
-    CHECK(state.tuning.clubs.size() == expected_starter_club_ids().size());
-
-    state.save.unlocked_items.push_back("driver");
-    refresh_unlocked_clubs(state);
-
-    CHECK(state.tuning.clubs.back().id == "driver");
-    CHECK(state.tuning.clubs.size() == expected_starter_club_ids().size() + 1);
-
-    state.selected_club = state.tuning.clubs.size() - 1;
-    state.save.unlocked_items.clear();
-    refresh_unlocked_clubs(state);
-
-    CHECK(state.tuning.clubs.size() == expected_starter_club_ids().size());
-    CHECK(state.selected_club == 0);
 }
 
 TEST_CASE("fallback clubs match full bag order") {
@@ -863,17 +778,13 @@ TEST_CASE("course extent includes authored trees") {
     CHECK(estimate_course_extent(hole) >= 86.0f);
 }
 
-TEST_CASE("content layer loads courses clubs and quests from asset root") {
+TEST_CASE("content layer loads courses and clubs from asset root") {
     const game_content content = load_game_content(asset_root());
 
     CHECK(!content.clubs.empty());
     CHECK(!content.courses.empty());
-    CHECK(!content.shops.empty());
-    CHECK(!content.quests.empty());
 
     bool found_course = false;
-    bool found_shop = false;
-    bool found_quest = false;
     for (const course_definition& course : content.courses) {
         if (course.id == "course_01") {
             found_course = true;
@@ -882,23 +793,8 @@ TEST_CASE("content layer loads courses clubs and quests from asset root") {
             CHECK(course.holes.size() == 3);
         }
     }
-    for (const quest_definition& quest : content.quests) {
-        if (quest.id == "starter_cash") {
-            found_quest = true;
-            CHECK(quest.reward.money == 25);
-        }
-    }
-    for (const shop_definition& shop : content.shops) {
-        if (shop.id == "range_rat") {
-            found_shop = true;
-            CHECK(shop.items.size() == 5);
-            CHECK(shop.items[0].requirement.skill_id == golf_swing_skill_id());
-        }
-    }
 
     CHECK(found_course);
-    CHECK(found_shop);
-    CHECK(found_quest);
 }
 
 TEST_CASE("course manifest loads authored three-hole course in order") {
@@ -1190,7 +1086,6 @@ TEST_CASE("cart bonus applies near roads and not far from roads") {
     if (!on_road.hub.available || on_road.hub.world.cart_roads.empty()) {
         return;
     }
-    on_road.save.unlocked_items.push_back(cart_unlock_id());
     on_road.player.position = on_road.hub.world.cart_roads.front().polyline.front();
 
     game_state off_road = on_road;
@@ -1208,36 +1103,15 @@ TEST_CASE("cart bonus applies near roads and not far from roads") {
     CHECK(on_road.cart.velocity > off_road.cart.velocity);
 }
 
-TEST_CASE("locked fitness shortcut is detected from save skill level") {
-    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
-    CHECK(course.has_value());
-    if (!course) {
-        return;
-    }
-    const std::optional<course_world_definition> world = load_course_world_from_file(course_world_file_path(asset_root(), *course), *course);
-    CHECK(world.has_value());
-    if (!world || world->walking_shortcuts.empty()) {
-        return;
-    }
-
-    save_data save;
-    CHECK(!shortcut_unlocked(save, world->walking_shortcuts.front()));
-
-    add_skill_xp(save.skills, fitness_skill_id(), xp_for_level(world->walking_shortcuts.front().required_level));
-    CHECK(shortcut_unlocked(save, world->walking_shortcuts.front()));
-}
-
 TEST_CASE("collectibles apply permanent and repeatable rewards") {
     course_world_collectible permanent;
     permanent.id = "lost_ball";
-    permanent.money = 3;
     permanent.world_flag = "found_lost_ball";
     permanent.skill_rewards.push_back(course_world_skill_reward{fitness_skill_id(), 12});
 
     save_data save;
     CHECK(collectible_available(save, permanent, 0));
     CHECK(apply_collectible_reward(save, permanent, 0));
-    CHECK(save.money == 3);
     CHECK(skill_xp(save.skills, fitness_skill_id()) == 12);
     CHECK(save.collected_ids.size() == 1);
     CHECK(save.world_flags.size() == 1);
@@ -1305,7 +1179,6 @@ TEST_CASE("cart driving and drifting xp are awarded only on hub paths") {
     if (!on_road.hub.available || on_road.hub.world.cart_roads.empty()) {
         return;
     }
-    on_road.save.unlocked_items.push_back(cart_unlock_id());
     on_road.player.position = on_road.hub.world.cart_roads.front().polyline.front();
 
     input_state input;
@@ -1322,7 +1195,6 @@ TEST_CASE("cart driving and drifting xp are awarded only on hub paths") {
 
     game_state off_road = make_initial_game_state();
     CHECK(start_game_course(off_road, *course));
-    off_road.save.unlocked_items.push_back(cart_unlock_id());
     off_road.player.position = glm::vec3(400.0f, 0.0f, 400.0f);
     for (int i = 0; i < 80; ++i) {
         input.space.pressed = i % 6 == 0;
@@ -1612,9 +1484,6 @@ TEST_CASE("stopped following shot outside cup returns to walking without complet
 TEST_CASE("save data round trips progress and migrates missing version") {
     save_data save;
     save.version = current_save_version;
-    save.money = 70;
-    save.unlocked_items = {"driver"};
-    save.completed_quest_ids = {"starter_cash"};
     save.completed_course_ids = {"course_01"};
     save.current_course_id = "test_nine";
     save.current_hole_index = 3;
@@ -1633,9 +1502,6 @@ TEST_CASE("save data round trips progress and migrates missing version") {
         return;
     }
     CHECK(parsed->version == current_save_version);
-    CHECK(parsed->money == 70);
-    CHECK(parsed->unlocked_items.size() == 1);
-    CHECK(parsed->completed_quest_ids.size() == 1);
     CHECK(parsed->completed_course_ids.size() == 1);
     CHECK(parsed->completed_course_ids[0] == "course_01");
     CHECK(parsed->current_course_id == "test_nine");
@@ -1653,13 +1519,12 @@ TEST_CASE("save data round trips progress and migrates missing version") {
     CHECK(parsed->repeatable_collectibles.at("range_token").last_claimed_hole_index == 1);
     CHECK(parsed->world_flags.size() == 1);
 
-    const std::optional<save_data> migrated = parse_save_data("{\"money\":5,\"current_hole_index\":-2}");
+    const std::optional<save_data> migrated = parse_save_data("{\"money\":5,\"unlocked_items\":[\"driver\"],\"current_hole_index\":-2}");
     CHECK(migrated.has_value());
     if (!migrated) {
         return;
     }
     CHECK(migrated->version == current_save_version);
-    CHECK(migrated->money == 5);
     CHECK(migrated->current_hole_index == 0);
     CHECK(skill_xp(migrated->skills, golf_swing_skill_id()) == 0);
     CHECK(skill_xp(migrated->skills, smoking_skill_id()) == 0);
@@ -1681,8 +1546,8 @@ TEST_CASE("save manager creates local profile metadata and persists slot") {
     std::filesystem::remove_all(root);
 
     save_data fallback;
-    fallback.money = 15;
-    fallback.completed_quest_ids = {"starter_cash"};
+    fallback.completed_course_ids = {"course_01"};
+    fallback.skills[golf_swing_skill_id()].xp = 15;
 
     const save_paths paths = default_save_paths(root.string());
     save_slot slot = load_or_create_save_slot(paths, fallback);
@@ -1690,7 +1555,7 @@ TEST_CASE("save manager creates local profile metadata and persists slot") {
     CHECK(!slot.loaded_existing_save);
     CHECK(slot.profile.profile_id == "local");
     CHECK(slot.profile.slot_id == "slot_0");
-    CHECK(slot.save.money == 15);
+    CHECK(skill_xp(slot.save.skills, golf_swing_skill_id()) == 15);
 
     mark_save_slot_dirty(slot, slot.save);
     CHECK(slot.profile.dirty);
@@ -1702,72 +1567,12 @@ TEST_CASE("save manager creates local profile metadata and persists slot") {
     const save_slot loaded = load_or_create_save_slot(paths, save_data{});
     CHECK(loaded.loaded_existing_profile);
     CHECK(loaded.loaded_existing_save);
-    CHECK(loaded.save.money == 15);
-    CHECK(loaded.save.completed_quest_ids.size() == 1);
+    CHECK(skill_xp(loaded.save.skills, golf_swing_skill_id()) == 15);
+    CHECK(loaded.save.completed_course_ids.size() == 1);
     CHECK(loaded.profile.client_revision == 1);
     CHECK(!loaded.profile.dirty);
 
     std::filesystem::remove_all(root);
-}
-
-TEST_CASE("offline cloud save client reports unavailable without mutating save") {
-    save_data save;
-    save.money = 20;
-    local_profile_metadata profile;
-    profile.client_revision = 7;
-
-    offline_cloud_save_client client;
-    cloud_sync_request request;
-    request.local_save = save;
-    request.profile = profile;
-    request.local_dirty = true;
-
-    const std::string before_hash = save_payload_hash(save);
-    const cloud_sync_result result = client.sync(request);
-
-    CHECK(result.status == cloud_sync_status::offline);
-    CHECK(result.remote_revision == 7);
-    CHECK(!result.remote_save.has_value());
-    CHECK(save_payload_hash(save) == before_hash);
-}
-
-TEST_CASE("quest parser engine and reward application are deterministic") {
-    const std::optional<quest_definition> quest = load_quest_from_file(asset_root() + "/quests/starter_cash.json");
-    CHECK(quest.has_value());
-    if (!quest) {
-        return;
-    }
-    CHECK(quest->steps.size() == 2);
-    CHECK(quest->reward.money == 25);
-
-    quest_session session = start_quest(*quest);
-    const quest_step* first = current_quest_step(session);
-    CHECK(first != nullptr);
-    if (first == nullptr) {
-        return;
-    }
-    CHECK(first->id == "intro");
-
-    quest_outcome outcome = advance_quest(session, 0);
-    CHECK(!outcome.completed);
-    const quest_step* second = current_quest_step(session);
-    CHECK(second != nullptr);
-    if (second == nullptr) {
-        return;
-    }
-    CHECK(second->id == "accepted");
-
-    outcome = advance_quest(session, 0);
-    CHECK(outcome.completed);
-    CHECK(outcome.money == 25);
-
-    save_data save;
-    CHECK(apply_quest_completion_once(save, session, outcome));
-    CHECK(save.money == 25);
-    CHECK(save.completed_quest_ids.size() == 1);
-    CHECK(!apply_quest_completion_once(save, session, outcome));
-    CHECK(save.money == 25);
-    CHECK(save.completed_quest_ids.size() == 1);
 }
 
 TEST_CASE("fallback hole populates cached terrain mesh") {
@@ -2396,11 +2201,6 @@ TEST_CASE("rangefinder is only active while walking with non-cart shift held") {
     update_game(state, input, 0.016f);
 
     CHECK(state.mode == game_mode::walking);
-    CHECK(!state.rangefinder_active);
-
-    state.save.unlocked_items.push_back(rangefinder_unlock_id());
-    update_game(state, input, 0.016f);
-
     CHECK(state.rangefinder_active);
     CHECK(state.rangefinder_distance_meters > 0.0f);
     CHECK(!state.rangefinder_distance_label.empty());
@@ -2428,8 +2228,6 @@ TEST_CASE("rangefinder is only active while walking with non-cart shift held") {
     CHECK(!rangefinder_should_show(game_mode::following_shot, input));
 
     game_state cart_state = make_initial_game_state();
-    cart_state.save.unlocked_items.push_back(rangefinder_unlock_id());
-    cart_state.save.unlocked_items.push_back(cart_unlock_id());
     input_state cart_input;
     cart_input.shift.is_down = true;
     cart_input.left_shift.is_down = true;
@@ -2440,7 +2238,6 @@ TEST_CASE("rangefinder is only active while walking with non-cart shift held") {
 
 TEST_CASE("rangefinder distance changes as player walks toward pin") {
     game_state state = make_initial_game_state();
-    state.save.unlocked_items.push_back(rangefinder_unlock_id());
 
     input_state input;
     input.shift.is_down = true;

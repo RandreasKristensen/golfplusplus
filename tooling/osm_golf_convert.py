@@ -2369,7 +2369,6 @@ def _collectible_candidates(course_id: str,
             "repeatable": True,
             "repeatable_cooldown_holes": 1,
             "reward": {
-                "money": 1,
                 "skill_xp": {"fitness": 5}
             }
         }
@@ -2384,7 +2383,6 @@ def _collectible_candidates(course_id: str,
             "interaction_radius": 3.0,
             "repeatable": False,
             "reward": {
-                "money": 3,
                 "skill_xp": {"fitness": 12},
                 "world_flag": f"{course_id}_found_lost_ball_01"
             }
@@ -2404,7 +2402,6 @@ def _collectible_candidates(course_id: str,
                 "min_level": 2
             },
             "reward": {
-                "money": 8,
                 "skill_xp": {"fitness": 20},
                 "world_flag": f"{course_id}_found_fitness_cache_01"
             }

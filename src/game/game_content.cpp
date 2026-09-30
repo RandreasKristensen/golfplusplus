@@ -2,8 +2,6 @@
 
 #include "game/club_loader.h"
 #include "game/course_loader.h"
-#include "game/shop.h"
-#include "quest/quest_loader.h"
 
 #include <filesystem>
 
@@ -16,10 +14,5 @@ game_content load_game_content(const std::string& asset_root) {
     if (content.courses.empty()) {
         content.courses.push_back(fallback_course_definition());
     }
-    content.shops = load_shops_from_directory((root / "shops").string());
-    if (content.shops.empty()) {
-        content.shops = fallback_shop_definitions();
-    }
-    content.quests = load_quests_from_directory((root / "quests").string());
     return content;
 }

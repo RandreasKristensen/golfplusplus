@@ -92,7 +92,7 @@ std::optional<std::vector<glm::vec3>> polyline_from_json(const json& value) {
     return points;
 }
 
-std::optional<course_world_path> path_from_json(const json& value, const bool shortcut) {
+std::optional<course_world_path> path_from_json(const json& value) {
     if (!value.is_object()) {
         return std::nullopt;
     }
@@ -114,9 +114,7 @@ std::optional<course_world_path> path_from_json(const json& value, const bool sh
     path.surface = string_at(value, "surface").value_or("");
     path.source = string_at(value, "source").value_or("");
     path.osm_ref = string_at(value, "osm_ref").value_or("");
-    path.width = float_at(value, "width").value_or(shortcut ? 2.0f : 4.0f);
-    path.required_skill_id = string_at(value, "required_skill_id").value_or("");
-    path.required_level = int_at(value, "required_level").value_or(1);
+    path.width = float_at(value, "width").value_or(4.0f);
     path.polyline = *polyline;
     return path;
 }
@@ -152,7 +150,7 @@ std::optional<course_world_hole_start> hole_start_from_json(const json& value, c
     return start;
 }
 
-std::vector<course_world_path> paths_from_json(const json& root, const char* key, const bool shortcut) {
+std::vector<course_world_path> paths_from_json(const json& root, const char* key) {
     std::vector<course_world_path> paths;
     const auto it = root.find(key);
     if (it == root.end() || !it->is_array()) {
@@ -160,57 +158,12 @@ std::vector<course_world_path> paths_from_json(const json& root, const char* key
     }
 
     for (const json& value : *it) {
-        const std::optional<course_world_path> path = path_from_json(value, shortcut);
+        const std::optional<course_world_path> path = path_from_json(value);
         if (path) {
             paths.push_back(*path);
         }
     }
     return paths;
-}
-
-void append_spawn_zones(course_world_definition& world, const json& root) {
-    const auto it = root.find("spawn_zones");
-    if (it == root.end() || !it->is_array()) {
-        return;
-    }
-    for (const json& value : *it) {
-        if (!value.is_object()) {
-            continue;
-        }
-        course_world_spawn_zone zone;
-        zone.id = string_at(value, "id").value_or("");
-        zone.kind = string_at(value, "kind").value_or("");
-        zone.near = string_at(value, "near").value_or("");
-        zone.count = int_at(value, "count").value_or(0);
-        world.spawn_zones.push_back(zone);
-    }
-}
-
-void append_interactables(course_world_definition& world, const json& root) {
-    const auto it = root.find("interactables");
-    if (it == root.end() || !it->is_array()) {
-        return;
-    }
-    for (const json& value : *it) {
-        if (!value.is_object()) {
-            continue;
-        }
-        const auto position_it = value.find("position");
-        if (position_it == value.end()) {
-            continue;
-        }
-        const std::optional<glm::vec3> position = vec3_from_json(*position_it);
-        if (!position) {
-            continue;
-        }
-        course_world_interactable interactable;
-        interactable.id = string_at(value, "id").value_or("");
-        interactable.kind = string_at(value, "kind").value_or("");
-        interactable.content_id = string_at(value, "content_id").value_or("");
-        interactable.position = *position;
-        interactable.interaction_radius = float_at(value, "interaction_radius").value_or(3.0f);
-        world.interactables.push_back(interactable);
-    }
 }
 
 std::vector<course_world_skill_reward> skill_rewards_from_json(const json& value) {
@@ -258,8 +211,6 @@ std::optional<course_world_collectible> collectible_from_json(const json& value)
 
     const auto reward_it = value.find("reward");
     if (reward_it != value.end() && reward_it->is_object()) {
-        collectible.money = std::max(0, int_at(*reward_it, "money").value_or(0));
-        collectible.unlock_id = string_at(*reward_it, "unlock_id").value_or("");
         collectible.world_flag = string_at(*reward_it, "world_flag").value_or("");
         const auto skills_it = reward_it->find("skill_xp");
         if (skills_it != reward_it->end()) {
@@ -348,11 +299,8 @@ std::optional<course_world_definition> world_from_json(const json& root, const c
         return std::nullopt;
     }
 
-    world.cart_roads = paths_from_json(root, "cart_roads", false);
-    world.walking_shortcuts = paths_from_json(root, "walking_shortcuts", true);
+    world.cart_roads = paths_from_json(root, "cart_roads");
     append_collectibles(world, root);
-    append_spawn_zones(world, root);
-    append_interactables(world, root);
     return world;
 }
 }
@@ -376,13 +324,6 @@ std::string course_world_file_path(const std::string& asset_root, const course_d
         return reference.string();
     }
     return (std::filesystem::path(asset_root) / reference).string();
-}
-
-bool shortcut_unlocked(const save_data& save, const course_world_path& shortcut) {
-    if (shortcut.required_skill_id.empty()) {
-        return true;
-    }
-    return skill_level(skill_xp(save.skills, shortcut.required_skill_id)) >= shortcut.required_level;
 }
 
 bool collectible_available(const save_data& save,
@@ -423,12 +364,8 @@ bool apply_collectible_reward(save_data& save,
         return false;
     }
 
-    save.money = std::max(0, save.money + std::max(0, collectible.money));
     for (const course_world_skill_reward& reward : collectible.skill_rewards) {
         add_skill_xp(save.skills, reward.skill_id, reward.xp);
-    }
-    if (!collectible.unlock_id.empty() && !contains_string(save.unlocked_items, collectible.unlock_id)) {
-        save.unlocked_items.push_back(collectible.unlock_id);
     }
     if (!collectible.world_flag.empty() && !contains_string(save.world_flags, collectible.world_flag)) {
         save.world_flags.push_back(collectible.world_flag);

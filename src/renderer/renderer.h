@@ -46,9 +46,7 @@ enum class startup_menu_screen {
     main,
     help,
     hole_picker,
-    course_picker,
-    shop_picker,
-    shop_inventory
+    course_picker
 };
 
 struct render_hole_preview {

@@ -32,26 +32,6 @@ const char* drifting_skill_id() {
     return "drifting";
 }
 
-const char* rangefinder_unlock_id() {
-    return "rangefinder";
-}
-
-const char* cart_unlock_id() {
-    return "cart";
-}
-
-const char* cigarette_filterless_unlock_id() {
-    return "cigarette_filterless";
-}
-
-const char* cigarette_menthol_unlock_id() {
-    return "cigarette_menthol";
-}
-
-const char* cigarette_longcut_unlock_id() {
-    return "cigarette_longcut";
-}
-
 skill_progression default_skill_progression() {
     skill_progression progression;
     progression[golf_swing_skill_id()] = skill_progress{};
@@ -60,10 +40,6 @@ skill_progression default_skill_progression() {
     progression[cart_driving_skill_id()] = skill_progress{};
     progression[drifting_skill_id()] = skill_progress{};
     return progression;
-}
-
-bool has_unlock(const std::vector<std::string>& unlocked_items, const std::string& unlock_id) {
-    return std::find(unlocked_items.begin(), unlocked_items.end(), unlock_id) != unlocked_items.end();
 }
 
 int xp_for_level(const int level) {

@@ -51,7 +51,6 @@ struct course_hub_hole_marker {
 };
 
 struct cigarette_effect_state {
-    std::string unlock_id;
     float remaining_seconds = 0.0f;
 };
 
@@ -129,7 +128,6 @@ struct game_state {
     game_tuning tuning;
     std::uint64_t terrain_render_revision = 0;
     static_anchor_cache static_anchors;
-    std::vector<club_definition> club_catalog;
     game_mode mode = game_mode::walking;
     float aim_angle = 0.0f;
     std::size_t selected_club = 0;
@@ -154,7 +152,6 @@ struct game_state {
 
 game_state make_initial_game_state();
 game_state make_initial_game_state(const std::string& asset_root);
-void refresh_unlocked_clubs(game_state& state);
 static_anchor_cache build_static_anchor_cache(const game_tuning& tuning,
                                               const std::vector<course_hub_hole_marker>& hub_markers,
                                               std::uint64_t revision,

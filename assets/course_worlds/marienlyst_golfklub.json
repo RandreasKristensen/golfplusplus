@@ -454,7 +454,6 @@
       "repeatable": true,
       "repeatable_cooldown_holes": 1,
       "reward": {
-        "money": 1,
         "skill_xp": {
           "fitness": 5
         }
@@ -471,7 +470,6 @@
       "interaction_radius": 3,
       "repeatable": false,
       "reward": {
-        "money": 3,
         "skill_xp": {
           "fitness": 12
         },
@@ -494,7 +492,6 @@
         "min_level": 2
       },
       "reward": {
-        "money": 8,
         "skill_xp": {
           "fitness": 20
         },

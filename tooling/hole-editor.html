@@ -2481,7 +2481,6 @@ function renderRouteEdit(collectionName, container, index, shortcut) {
 function renderCollectibleEdit(container, index) {
   const c = courseWorld.collectibles[index];
   if (!c) return;
-  const reward = c.reward || {};
   container.innerHTML =
     `<div class="subfield"><label>id</label><input type="text" value="${escapeAttr(c.id)}" oninput="setCollectibleValue(${index},'id',this.value)"></div>` +
     `<div class="field-row">` +
@@ -2494,8 +2493,7 @@ function renderCollectibleEdit(container, index) {
     `<div class="field compact"><label>z</label><input type="number" step="0.1" value="${c.position[2]}" oninput="setWorldPointValue('collectible',${index},2,+this.value)"></div>` +
     `</div>` +
     `<div class="field"><label>repeatable</label><input type="checkbox" ${c.repeatable ? 'checked' : ''} onchange="setCollectibleValue(${index},'repeatable',this.checked)"></div>` +
-    `<div class="field"><label>cooldown</label><input type="number" step="1" min="0" value="${c.repeatable_cooldown_holes || 0}" oninput="setCollectibleValue(${index},'repeatable_cooldown_holes',+this.value)"></div>` +
-    `<div class="field"><label>money</label><input type="number" step="1" min="0" value="${reward.money || 0}" oninput="setCollectibleRewardValue(${index},'money',+this.value)"></div>`;
+    `<div class="field"><label>cooldown</label><input type="number" step="1" min="0" value="${c.repeatable_cooldown_holes || 0}" oninput="setCollectibleValue(${index},'repeatable_cooldown_holes',+this.value)"></div>`;
 }
 
 function renderInteractableEdit(container, index) {
@@ -2629,14 +2627,6 @@ function setCollectibleValue(index, key, value) {
   else c[key] = value;
   markWorldDirty();
   render();
-}
-
-function setCollectibleRewardValue(index, key, value) {
-  const c = courseWorld?.collectibles?.[index];
-  if (!c) return;
-  if (!c.reward) c.reward = {};
-  c.reward[key] = key === 'money' ? Math.max(0, Number.isFinite(value) ? Math.round(value) : 0) : value;
-  markWorldDirty();
 }
 
 function setInteractableValue(index, key, value) {

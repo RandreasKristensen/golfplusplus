@@ -98,19 +98,15 @@ set(VCR_GOLF_GAME_SOURCES
     src/game/course_loader.cpp
     src/game/course_world_loader.cpp
     src/game/game_content.cpp
-    src/game/cloud_save.cpp
     src/game/hole_loader.cpp
     src/game/progression.cpp
     src/game/save_data.cpp
     src/game/save_manager.cpp
     src/game/round_state.cpp
     src/game/scorecard.cpp
-    src/game/shop.cpp
     src/game/game_tuning.cpp
     src/game/game_state.cpp
     src/game/swing.cpp
-    quest/quest_loader.cpp
-    quest/quest_engine.cpp
 )
 
 set(GLM_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/vendor/glm)

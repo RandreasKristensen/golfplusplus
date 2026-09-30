@@ -16,8 +16,6 @@ struct course_world_path {
     std::string surface;
     std::string source;
     std::string osm_ref;
-    std::string required_skill_id;
-    int required_level = 1;
     float width = 0.0f;
     std::vector<glm::vec3> polyline;
 };
@@ -29,21 +27,6 @@ struct course_world_hole_start {
     glm::vec3 return_position{0.0f};
     float interaction_radius = 4.0f;
     float rotation_degrees = 0.0f;
-};
-
-struct course_world_spawn_zone {
-    std::string id;
-    std::string kind;
-    std::string near;
-    int count = 0;
-};
-
-struct course_world_interactable {
-    std::string id;
-    std::string kind;
-    std::string content_id;
-    glm::vec3 position{0.0f};
-    float interaction_radius = 3.0f;
 };
 
 struct course_world_skill_reward {
@@ -65,8 +48,6 @@ struct course_world_collectible {
     float interaction_radius = 2.5f;
     bool repeatable = false;
     int repeatable_cooldown_holes = 0;
-    int money = 0;
-    std::string unlock_id;
     std::string world_flag;
     course_world_collectible_requirement requirement;
     std::vector<course_world_skill_reward> skill_rewards;
@@ -80,8 +61,5 @@ struct course_world_definition {
     course_world_spawn spawn;
     std::vector<course_world_hole_start> hole_starts;
     std::vector<course_world_path> cart_roads;
-    std::vector<course_world_path> walking_shortcuts;
     std::vector<course_world_collectible> collectibles;
-    std::vector<course_world_spawn_zone> spawn_zones;
-    std::vector<course_world_interactable> interactables;
 };

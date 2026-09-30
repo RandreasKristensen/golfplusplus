@@ -27,6 +27,9 @@ namespace {
 constexpr float pi = 3.14159265358979323846f;
 constexpr int min_visible_xp_drop = 5;
 constexpr float default_xp_drop_lifetime = 2.4f;
+constexpr float cigarette_effect_seconds = 8.0f;
+constexpr float cigarette_spin_bias_scale = 0.94f;
+constexpr float cigarette_timing_speed_scale = 0.92f;
 
 glm::vec3 aim_direction(const float aim_angle) {
     return glm::normalize(glm::vec3(std::sin(aim_angle), 0.0f, std::cos(aim_angle)));
@@ -332,59 +335,14 @@ bool apply_course_world_to_tuning(game_state& state) {
     return true;
 }
 
-bool starter_club_id(const std::string& club_id) {
-    return club_id == "putter" || club_id == "pitching_wedge" || club_id == "seven_iron";
-}
-
-bool club_available(const save_data& save, const club_definition& club) {
-    return starter_club_id(club.id) || has_unlock(save.unlocked_items, club.id);
-}
-
-bool rangefinder_unlocked(const save_data& save) {
-    return has_unlock(save.unlocked_items, rangefinder_unlock_id());
-}
-
-bool cart_unlocked(const save_data& save) {
-    return has_unlock(save.unlocked_items, cart_unlock_id());
-}
-
-std::string selected_cigarette_unlock_id(const save_data& save) {
-    if (has_unlock(save.unlocked_items, cigarette_longcut_unlock_id())) {
-        return cigarette_longcut_unlock_id();
-    }
-    if (has_unlock(save.unlocked_items, cigarette_menthol_unlock_id())) {
-        return cigarette_menthol_unlock_id();
-    }
-    if (has_unlock(save.unlocked_items, cigarette_filterless_unlock_id())) {
-        return cigarette_filterless_unlock_id();
-    }
-    return "";
-}
-
-float cigarette_effect_duration(const std::string& unlock_id) {
-    if (unlock_id == cigarette_longcut_unlock_id()) {
-        return 8.0f;
-    }
-    if (unlock_id == cigarette_menthol_unlock_id() || unlock_id == cigarette_filterless_unlock_id()) {
-        return 5.0f;
-    }
-    return 0.0f;
-}
-
 club_stats apply_cigarette_effect(const club_stats& base, const cigarette_effect_state& effect) {
     if (effect.remaining_seconds <= 0.0f) {
         return base;
     }
 
     club_stats adjusted = base;
-    if (effect.unlock_id == cigarette_filterless_unlock_id()) {
-        adjusted.spin_bias *= 0.90f;
-    } else if (effect.unlock_id == cigarette_menthol_unlock_id()) {
-        adjusted.timing_speed *= 0.85f;
-    } else if (effect.unlock_id == cigarette_longcut_unlock_id()) {
-        adjusted.spin_bias *= 0.94f;
-        adjusted.timing_speed *= 0.92f;
-    }
+    adjusted.spin_bias *= cigarette_spin_bias_scale;
+    adjusted.timing_speed *= cigarette_timing_speed_scale;
     return adjusted;
 }
 
@@ -419,7 +377,7 @@ bool complete_if_ball_reached_cup(game_state& state, const glm::vec3& previous_b
 }
 
 void update_rangefinder_state(game_state& state, const input_state& input) {
-    state.rangefinder_active = rangefinder_unlocked(state.save) && rangefinder_should_show(state.mode, input);
+    state.rangefinder_active = rangefinder_should_show(state.mode, input);
     state.rangefinder_distance_meters = compute_rangefinder_distance_meters(state.player.position,
                                                                             pin_anchor_position(state),
                                                                             state.tuning.scale.meters_per_world_unit);
@@ -473,14 +431,10 @@ void tick_cigarette_effect(cigarette_effect_state& effect, const float dt) {
 
 void update_emote_state(game_state& state, const input_state& input, const float dt) {
     if (input.key_1.pressed) {
-        const std::string cigarette_id = selected_cigarette_unlock_id(state.save);
-        if (!cigarette_id.empty()) {
-            trigger_emote(state.smoke_emote);
-            state.cigarette_effect.unlock_id = cigarette_id;
-            state.cigarette_effect.remaining_seconds = cigarette_effect_duration(cigarette_id);
-            award_skill_xp(state, smoking_skill_id(), 10);
-            push_audio_event(state, audio_event_type::emote_smoke);
-        }
+        trigger_emote(state.smoke_emote);
+        state.cigarette_effect.remaining_seconds = cigarette_effect_seconds;
+        award_skill_xp(state, smoking_skill_id(), 10);
+        push_audio_event(state, audio_event_type::emote_smoke);
     }
     if (input.key_2.pressed) {
         trigger_emote(state.beer_emote);
@@ -727,7 +681,7 @@ void update_swing(game_state& state, const input_state& input, const float dt) {
 }
 
 void update_walking(game_state& state, const input_state& input, const float dt, frame_profile* profile) {
-    if (cart_unlocked(state.save) && (input.left_shift.is_down || state.cart.active)) {
+    if (input.left_shift.is_down || state.cart.active) {
         update_cart(state, input, dt, profile);
         return;
     }
@@ -1014,44 +968,6 @@ glm::vec3 pin_anchor_position(const game_state& state) {
     return terrain_anchor_position(state.tuning, state.tuning.course.pin_position);
 }
 
-void refresh_unlocked_clubs(game_state& state) {
-    if (state.club_catalog.empty()) {
-        state.club_catalog = state.tuning.clubs;
-    }
-
-    std::string selected_id;
-    if (state.selected_club < state.tuning.clubs.size()) {
-        selected_id = state.tuning.clubs[state.selected_club].id;
-    }
-
-    std::vector<club_definition> available;
-    for (const club_definition& club : state.club_catalog) {
-        if (club_available(state.save, club)) {
-            available.push_back(club);
-        }
-    }
-
-    if (available.empty()) {
-        for (const club_definition& club : state.club_catalog) {
-            if (club.id == "putter") {
-                available.push_back(club);
-                break;
-            }
-        }
-    }
-
-    state.tuning.clubs = available;
-    state.selected_club = 0;
-    if (!selected_id.empty()) {
-        for (std::size_t i = 0; i < state.tuning.clubs.size(); ++i) {
-            if (state.tuning.clubs[i].id == selected_id) {
-                state.selected_club = i;
-                return;
-            }
-        }
-    }
-}
-
 void award_skill_xp(game_state& state, const std::string& skill_id, const int amount, const xp_drop_policy policy) {
     const add_skill_xp_result result = add_skill_xp(state.save.skills, skill_id, amount);
     if (policy == xp_drop_policy::hidden || result.applied_xp <= 0 || skill_id.empty()) {
@@ -1099,8 +1015,6 @@ game_state make_initial_game_state(const std::string& asset_root) {
     state.save.current_hole_index = 0;
     state.tuning = default_game_tuning(asset_root);
     mark_terrain_render_dirty(state);
-    state.club_catalog = state.tuning.clubs;
-    refresh_unlocked_clubs(state);
     reset_transient_hole_state(state);
     return state;
 }

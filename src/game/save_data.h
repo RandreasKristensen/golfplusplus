@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-constexpr int current_save_version = 4;
+constexpr int current_save_version = 5;
 
 struct repeatable_collectible_state {
     int claim_count = 0;
@@ -16,9 +16,6 @@ struct repeatable_collectible_state {
 
 struct save_data {
     int version = current_save_version;
-    int money = 0;
-    std::vector<std::string> unlocked_items;
-    std::vector<std::string> completed_quest_ids;
     std::vector<std::string> completed_course_ids;
     std::string current_course_id;
     int current_hole_index = 0;
