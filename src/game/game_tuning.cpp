@@ -47,15 +47,15 @@ hole_data fallback_hole() {
 
 std::vector<club_definition> fallback_club_definitions() {
     return {
-        club_definition{"putter", "Putter", "P", 0, 0, club_stats{22.0f, 2.0f, 0.97f, 0.02f, 0.25f, 0.35f}},
-        club_definition{"sand_wedge", "Sand Wedge", "SWDG", 0, 1, club_stats{25.0f, 54.0f, 0.86f, 0.18f}},
-        club_definition{"pitching_wedge", "Pitching Wedge", "PWDG", 0, 2, club_stats{30.5f, 46.0f, 0.85f, 0.15f}},
-        club_definition{"nine_iron", "9 Iron", "9I", 0, 3, club_stats{33.5f, 40.0f, 0.78f, 0.12f}},
-        club_definition{"seven_iron", "7 Iron", "7I", 0, 4, club_stats{38.5f, 34.0f, 0.70f, 0.08f}},
-        club_definition{"five_iron", "5 Iron", "5I", 0, 5, club_stats{45.0f, 27.0f, 0.62f, 0.06f}},
-        club_definition{"seven_wood", "7 Wood", "7WD", 0, 6, club_stats{53.0f, 22.0f, 0.55f, 0.045f}},
-        club_definition{"four_wood", "4 Wood", "5WD", 0, 7, club_stats{65.0f, 16.0f, 0.48f, 0.035f}},
-        club_definition{"driver", "Driver", "DRVR", 0, 8, club_stats{80.0f, 11.0f, 0.42f, 0.025f}}
+        club_definition{"putter", "Putter", "P", 0, club_stats{22.0f, 2.0f, 0.97f, 0.02f, 0.25f, 0.35f}},
+        club_definition{"sand_wedge", "Sand Wedge", "SWDG", 1, club_stats{25.0f, 54.0f, 0.86f, 0.18f}},
+        club_definition{"pitching_wedge", "Pitching Wedge", "PWDG", 2, club_stats{30.5f, 46.0f, 0.85f, 0.15f}},
+        club_definition{"nine_iron", "9 Iron", "9I", 3, club_stats{33.5f, 40.0f, 0.78f, 0.12f}},
+        club_definition{"seven_iron", "7 Iron", "7I", 4, club_stats{38.5f, 34.0f, 0.70f, 0.08f}},
+        club_definition{"five_iron", "5 Iron", "5I", 5, club_stats{45.0f, 27.0f, 0.62f, 0.06f}},
+        club_definition{"seven_wood", "7 Wood", "7WD", 6, club_stats{53.0f, 22.0f, 0.55f, 0.045f}},
+        club_definition{"four_wood", "4 Wood", "5WD", 7, club_stats{65.0f, 16.0f, 0.48f, 0.035f}},
+        club_definition{"driver", "Driver", "DRVR", 8, club_stats{80.0f, 11.0f, 0.42f, 0.025f}}
     };
 }
 

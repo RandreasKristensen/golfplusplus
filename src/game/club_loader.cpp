@@ -71,7 +71,6 @@ std::optional<club_definition> parse_club_definition(const json& root) {
     club.id = string_at(root, "id").value_or("");
     club.name = string_at(root, "name").value_or(club.id);
     club.label = string_at(root, "label").value_or(club.name);
-    club.price = int_at(root, "price").value_or(0);
     club.bag_order = int_at(root, "bag_order").value_or(0);
     club.stats.power = *power;
     club.stats.loft_degrees = *loft_degrees;

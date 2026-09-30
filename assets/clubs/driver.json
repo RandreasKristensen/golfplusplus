@@ -2,7 +2,6 @@
   "id": "driver",
   "name": "Driver",
   "label": "DRVR",
-  "price": 0,
   "bag_order": 8,
   "stats": {
     "power": 80.0,

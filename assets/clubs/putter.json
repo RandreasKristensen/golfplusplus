@@ -2,7 +2,6 @@
   "id": "putter",
   "name": "Putter",
   "label": "P",
-  "price": 0,
   "bag_order": 0,
   "stats": {
     "power": 22.0,

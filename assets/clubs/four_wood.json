@@ -2,7 +2,6 @@
   "id": "four_wood",
   "name": "4 Wood",
   "label": "5WD",
-  "price": 0,
   "bag_order": 7,
   "stats": {
     "power": 65.0,

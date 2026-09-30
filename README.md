@@ -1,55 +1,18 @@
 # golf++
 
-A pixelated VCR-aesthetic 3D golf RPG about playing weird courses, meeting NPCs, collecting gear, and leveling strange skills. Built almost entirely with AI assistance (Claude + GPT) when tooling was available.
+A lo-fi 3D golf game in C++ that looks like it was taped on a 1989 camcorder.
+Play real-world courses imported from OpenStreetMap, walk or drive between
+holes, and level up skills like golfing, fitness, drifting and smoking.
 
-## Project Direction
+![golf++](docs/imgs/06_big_progress.png)
 
-golf++ is growing from a stable golf simulation into a lo-fi course-hub RPG: golf first, RPG progression second, multiplayer later. See `AGENTS.md` for engineering rules and `ideas.md` for the roadmap/backlog.
+## Build
 
-**Timeline snapshots (00→06):**
-
-<table>
-  <tr>
-    <td><img src="imgs/00_original_folder_structure.png" width="180" alt="00 original folder structure"></td>
-    <td><img src="imgs/01_first_visual.png" width="180" alt="01 first visual"></td>
-    <td><img src="imgs/02_mvp.png" width="180" alt="02 mvp"></td>
-    <td><img src="imgs/03_mvp.png" width="180" alt="03 mvp"></td>
-  </tr>
-  <tr>
-    <td><img src="imgs/04_holes_integration.png" width="180" alt="04 holes integration"></td>
-    <td><img src="imgs/05_still_bugs.png" width="180" alt="05 still bugs"></td>
-    <td><img src="imgs/06_big_progress.png" width="180" alt="06 big progress"></td>
-    <td></td>
-  </tr>
-</table>
-
----
-
-## Quick start (debug)
+Needs CMake 3.25+, Ninja, SDL2, SDL2_mixer, OpenGL and GLM.
 
 ```bash
-cmake --preset debug
-cmake --build build/debug
-./build/debug/golf++
+cmake --preset release && cmake --build build/release && ./build/release/golf++
+cmake --preset test && cmake --build build/test && ./build/test/golf++-tests
 ```
 
-## Release build (Windows helper)
-
-```pwrshl
-.\gb      # configure + clean rebuild release
-.\gb -r   # build release, then launch golf++
-.\gb -rr  # build release, stop running copy from this build, relaunch
-```
-
-## Performance
-
-`docs/performance.md` has the release-mode performance pass: how to boot the
-6-hole course (`GOLFPP_COURSE`), disable vsync for profiling (`GOLFPP_VSYNC=0`),
-read the in-game profiling overlay (`Ctrl`), the per-scenario budgets, and what
-each counter regressing means.
-
-## Dependencies
-
-CMake 3.25+, SDL2, SDL_mixer, OpenGL, and GLM. GLAD + doctest are vendored.
-
-See `AGENTS.md` for the detailed architecture rules and AI editing context.
+On Windows, `.\tooling\gb -r` does a clean release build and launches it.

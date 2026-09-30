@@ -2,7 +2,6 @@
   "id": "seven_iron",
   "name": "7 Iron",
   "label": "7I",
-  "price": 0,
   "bag_order": 4,
   "stats": {
     "power": 38.5,

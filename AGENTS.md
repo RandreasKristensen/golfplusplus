@@ -1,520 +1,255 @@
-# CLAUDE.md — golf++ project context
+# AGENTS.md — golf++ project context
 
-Read this before touching anything. It covers the architecture, rules, conventions, and the reasoning behind decisions.
+Read this before touching anything. It describes the code as it is, the rules
+that are not negotiable, and where the project is heading.
 
-For ANY directory specific command, always write the full directory for where to run the command. This directory is 'C:\Users\arand\Desktop\AU\sjov\golfplusplus'
-
----
-
-## Project overview
-
-A lo-fi 3D golf game written in C++. The aesthetic is pixelated VCR / retro camcorder — renders to a low-resolution framebuffer and upscales with a CRT post-process shader. Gameplay involves hitting golf balls on spline-deformed course geometry, with club and ball stats affecting shot shape. Progression comes from a text-based RPG quest layer — earn money through branching story quests, spend it on gear in a shop.
+For ANY directory specific command, always write the full directory for where to
+run the command. The repo root is `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
 
 ---
 
-## Product Direction
+## What this is
 
-- The project direction is a lo-fi golf RPG: golf simulation first, RPG progression second, multiplayer later.
-- Preserve the VCR/CRT aesthetic and deterministic physics while expanding RPG systems.
-- Prefer data-driven content for quests, NPCs, items, skills, unlocks, and world interactions.
-- Course selection may remain menu-based, but in-course play should trend toward roamable hubs.
-- Do not implement true seamless open world until course-hub systems are proven.
-- Keep the core game client-first and offline-playable. Add backend systems only for clear jobs like cloud saves, score submissions, ghost data, accounts, or cosmetics.
+A lo-fi 3D golf game in C++17. It renders to a low-resolution framebuffer and
+upscales through a CRT post-process so it looks like a 1989 camcorder tape.
+Courses are real golf courses imported from OpenStreetMap. Each course is a
+roamable hub: you walk or drive a cart between hole starts, pick up
+collectibles, and level RuneScape-style skills (golf swing, fitness, cart
+driving, drifting, smoking).
 
----
-
-## Planning Mode Context
-
-When planning future work, interpret feature requests through the RPG direction above:
-
-- Treat golf simulation as the stable foundation; build RPG systems around it instead of destabilizing core physics.
-- Prefer reusable systems over one-off state. For example, plan `skill_id -> xp/level` progression instead of standalone counters like `smoking_xp`, `drinking_xp`, or `drift_xp`.
-- Put persistent progression behind dedicated systems: skills, inventory, quest state, world flags, unlock history, and discovered locations.
-- Put RPG content in JSON/data files. NPC dialogue, quest text, rewards, item definitions, skill definitions, and unlock rules should not be hardcoded into C++.
-- For unlocks, plan a progression/unlock API instead of direct checks spread through UI, shop, quest, and game update code.
-- For NPCs and course hubs, plan data-driven placement plus an interaction system for nearby NPCs, signs, shops, pickups, and hole starts.
-- For multiplayer, plan the path as hot-seat/local first, ghost/replay second, async score/challenge sharing third, lightweight backend only when needed, and real-time online later.
-- Do not propose an OSRS/Path of Exile-style authoritative backend unless the requested feature truly needs protected leaderboards, a shared economy, ranked competition, or server-owned progression.
-- If a backend is proposed, give it a narrow job such as cloud saves, score submissions, ghost data, accounts, or cosmetics, while keeping the core game offline-playable.
-- Before planning large feature work, account for file-splitting needs in `app.cpp`, `game_state.cpp`, and `renderer.cpp` so new systems do not get bolted onto already-large responsibilities.
+**Current state:** everything is unlocked. All clubs are in the bag, and the
+rangefinder, cart and smoking are always available. There is no money, shop or
+quest system. They were removed on purpose until the RPG layer is redesigned.
 
 ---
 
-## AI provenance
+## Repo layout
 
-This project was built almost entirely with AI assistance (Claude + GPT) when tooling was available. Treat this file as the authoritative context for automated edits.
+| Path | What |
+|---|---|
+| `src/core/` | Entry point, main loop, window, input, startup options |
+| `src/game/` | Mutable game state, content loaders, save data, skills |
+| `src/physics/` | Pure-functional ball flight, collision, terrain, wind |
+| `src/renderer/` | OpenGL renderer, CRT pipeline, batched overlay/markers |
+| `src/audio/` | SDL_mixer wrapper + data-driven sound manifest |
+| `src/profiling/` | Per-frame profiler behind the `Ctrl` overlay |
+| `src/platform/windows/` | Windows icon resource |
+| `assets/` | Game data: holes, courses, course worlds, clubs, shaders, audio, icons |
+| `tests/` | Unit tests; `tests/fixtures/` holds small hand-made holes/courses for tests only |
+| `tooling/hole_editor/` | Browser-based hole + course-world editor |
+| `tooling/osm_import/` | OpenStreetMap → hole/course/world JSON converter (Python) |
+| `tooling/gb.ps1` | Windows release build helper (`.\tooling\gb -r`) |
+| `docs/` | `ideas.md` (the owner's personal scratchpad, do not restructure it), `performance.md` (profiling guide) |
+| `vendor/` | `nlohmann/json.hpp`, `doctest.h` |
 
 ---
 
 ## Tech stack
 
-| Concern | Library | Location |
-|---|---|---|
-| Window + input | SDL2 | system install |
-| Audio | SDL_mixer | system install |
-| OpenGL loader | GLAD (GL 3.3 core) | `src/glad/` |
-| Math | GLM | `vendor/glm/` or system install |
-| JSON parsing | nlohmann/json | `vendor/nlohmann/json.hpp` |
-| Testing | doctest | `vendor/doctest.h` |
-| Build | CMake 3.25+ | `CMakeLists.txt` + `CMakePresets.json` |
-
-**Do not introduce new dependencies without flagging it first.** If you think a library would help, say so and explain the tradeoff — don't just add it.
-
----
-
-## Scaling Rules
-
-- Do not add more bespoke fields like `smoke_emote` / `beer_emote` for every new activity unless it is only temporary visual state.
-- Persistent progression belongs in dedicated save structures: skills, inventory, quest state, world flags.
-- Unlock logic should live behind a progression/unlock API, not scattered across UI, shop, quest, and game update code.
-- New RPG content belongs in JSON/data files, not hardcoded C++.
-- Split `app.cpp`, `game_state.cpp`, and `renderer.cpp` responsibilities before adding large new systems to them.
-- Multiplayer code must not be mixed directly into single-player game state; define a session/network boundary first.
-- Do not build an OSRS/Path of Exile-style authoritative backend before RPG progression, course hubs, and async multiplayer prove they need it.
-
----
-
-## Physics module — strict rules
-
-**`src/physics/` is a pure functional zone. These rules are hard constraints, not style preferences.**
-
-### The rule
-
-Every function in `src/physics/` must:
-- Take all inputs by value or `const` reference
-- Return a new value — never mutate a parameter
-- Read no global state — no `extern`, no `static`, no singleton access
-- Do no I/O — no logging, no file reads, no `std::cout`
-- Use no `static` local variables
-
-### What correct looks like
-
-```cpp
-// CORRECT — pure function, same inputs always give same output
-ball_state step(const ball_state in, const wind_state wind, const float dt);
-float compute_drag(const glm::vec3 velocity, const float radius);
-glm::vec3 magnus_force(const glm::vec3 spin, const glm::vec3 velocity);
-
-// WRONG — mutates parameter
-void step(BallState* state, const float dt);
-void step(BallState& state, const float dt);
-
-// WRONG — reads global state
-ball_state step(const ball_state in, const float dt) {
-    float ws = g_wind_speed; // NO. Pass WindState as a parameter.
-}
-
-// WRONG — I/O inside physics
-ball_state step(const ball_state in, const wind_state wind, const float dt) {
-    std::cout << "stepping"; // NO.
-}
-```
-
-### Why
-
-Pure functions are trivially unit-testable with zero setup or mocking. They produce deterministic output — same inputs always give the same ball trajectory. The rest of the codebase is mutable and stateful — physics is the deliberate exception. When something in the simulation behaves wrong, you can reproduce it exactly by feeding in the same state.
-
-### What lives in physics/
-
-| File | Responsibility |
+| Concern | Library |
 |---|---|
-| `ball_state.h` | Plain struct — position, velocity, spin. No methods beyond construction |
-| `club_stats.h` | Plain struct — power, accuracy, spin_bias. Data only |
-| `ball_physics.cpp` | Top-level `step()` — composes sub-functions |
-| `flight_model.cpp` | Drag, Magnus effect, gravity application |
-| `collision.cpp` | Terrain intersection, bounce, roll-out |
-| `wind.cpp` | Takes a `WindState`, returns a force vector |
-| `tests/physics_tests.cpp` | doctest tests — can run entirely in isolation |
+| Window + input | SDL2 |
+| Audio | SDL2_mixer |
+| OpenGL | GL 3.3 core; function pointers loaded via SDL in `src/core/gl_loader.*` |
+| Math | GLM (`vendor/glm/` or system install) |
+| JSON | nlohmann/json (`vendor/nlohmann/json.hpp`) |
+| Tests | `vendor/doctest.h`, a small doctest-compatible reimplementation (no `REQUIRE`, no `-tc` filtering) |
+| Build | CMake 3.25+ with Ninja presets |
 
-### Wind determinism
-
-Wind is a pure function of a seed and time. The same seed and time must always produce the same wind vector.
-
-```cpp
-wind_state sample_wind(const uint32_t seed, const float time);
-```
-
-- Store the seed in the hole JSON so each hole has a stable wind character
-- The game loop passes elapsed hole time into `sample_wind()` each frame
-- Tests use a fixed seed and time to verify determinism
+**Do not introduce new dependencies without flagging it first.** Explain the
+tradeoff and let the owner decide.
 
 ---
 
-## Renderer
-
-Lives in `src/renderer/`. OpenGL 3.3 core profile, loaded via GLAD. SDL2 owns the window and GL context.
-
-### The CRT pipeline — do not skip this
-
-1. Render the scene to a low-res FBO (target ~320×240, exact value in `renderer.cpp`)
-2. Upscale to native screen resolution with **nearest-neighbor filtering** — this produces the chunky pixel look
-3. Apply `crt.frag` post-process: scanlines, chromatic aberration, vignette, subtle bloom bleed
-
-The CRT pass is not a visual option. It defines the aesthetic identity of the game. Do not make it toggleable or skip it during development — build with it on from day one so you always see the real output.
-
-### Shaders
-
-- All shaders live in `assets/shaders/`
-- GLSL version 330 core — no older or newer
-- `crt.vert` / `crt.frag` — fullscreen quad post-process
-- `terrain.vert` / `terrain.frag` — spline-deformed course geometry
-- `ball.vert` / `ball.frag` — ball rendering
-- Load shaders from disk at startup. If you add hot-reloading, note it clearly in code
-
-### Renderer files
-
-| File | Responsibility |
-|---|---|
-| `renderer.cpp` | Scene render pass, FBO management, draw call orchestration |
-| `framebuffer.cpp` | Low-res FBO creation, CRT upscale pass |
-| `shader.cpp` | Shader loading, compilation, uniform helpers |
-| `mesh.cpp` | Vertex buffer management, geometry upload |
-| `camera.cpp` | View + projection matrices, follow-ball logic |
-| `texture.cpp` | Texture loading and binding |
-| `crt_effect.cpp` | CRT post-process pass setup and parameters |
-
----
-
-## Game state
-
-Lives in `src/game/`. This is the mutable core of the application — it is explicitly not pure functional.
-
-### What game state owns
-
-- Current hole geometry reference
-- Ball position, velocity, spin (live, updated by physics step results)
-- Shot history for the current hole
-- Player money
-- Unlocked club and ball inventory
-- Currently selected club
-- Swing state machine state
-
-### How to handle it
-
-Game state is a plain struct or small class. Pass it by reference to anything that needs to read or write it. **Do not use a global or singleton for game state.** The main loop in `app.cpp` owns it and passes it explicitly to update and render functions.
-
-```cpp
-// CORRECT — explicit ownership and passing
-struct GameState { ... };
-
-void update(GameState& state, const InputState& input, float dt);
-void render(const Renderer& renderer, const GameState& state);
-
-// WRONG — global
-GameState g_game; // NO.
-GameState& get_game() { static GameState s; return s; } // NO.
-```
-
-### Save data and serialization
-
-Use JSON save files with a small, explicitly persisted subset of state. Everything else is transient and rebuilt on load.
-
-```cpp
-// Persisted — goes to disk
-struct SaveData {
-    int version;
-    int money;
-    std::vector<ItemId> unlocked_items;
-    std::vector<std::string> completed_quest_ids;
-    std::map<int, int> hole_scores;  // hole_index -> strokes
-    int current_hole;
-};
-
-// Transient — never saved, rebuilt on load
-struct GameState {
-    SaveData save;     // embed it
-    BallState ball;    // mid-flight state, do not save
-    SwingState swing;
-    ClubBag bag;       // derived from save.unlocked_items
-};
-```
-
-Versioning uses a single integer plus a migration chain:
-
-```cpp
-// save_manager.cpp
-json migrate(json save) {
-    int v = save.value("version", 0);
-    if (v < 1) save = migrate_v0_to_v1(save);
-    if (v < 2) save = migrate_v1_to_v2(save);
-    save["version"] = CURRENT_SAVE_VERSION;
-    return save;
-}
-```
-
-Save triggers (in priority order):
-- On hole completion
-- On quest completion
-- On clean exit (SDL_QUIT)
-
-Save data is expected to grow to include skills, inventory, active quests, completed quests, world flags, discovered locations, and unlock history. Every save expansion must bump the save version and add migration behavior.
-
-Do not save transient ball flight, live emote animation, current input, renderer state, or temporary audio events.
-
-Do not autosave mid-hole.
-
----
-
-## Hole authoring and storage
-
-One JSON file per hole under `assets/holes/`.
-
-```json
-{
-  "id": "hole_01",
-  "name": "The Ditch",
-  "par": 3,
-  "wind_seed": 42,
-  "tee": [0.0, 0.0, 0.0],
-  "pin": [0.0, 0.0, 80.0],
-  "spline": {
-    "control_points": [
-      [0, 0, 0], [2, 1, 20], [-1, 0.5, 40], [3, 2, 60], [0, 1, 80]
-    ],
-    "width": 18.0
-  },
-  "material_zones": [
-    { "type": "green",  "center": [0, 1, 80], "radius": 6.0 },
-    { "type": "bunker", "center": [4, 0, 55], "radius": 3.0 },
-    { "type": "water",  "bounds": [[-8, 0, 30], [8, 0, 45]] }
-  ]
-}
-```
-
-Collision is derived at runtime from the spline. Sample the spline height for any XZ to get terrain height and surface normal; no baked collision data is needed.
-
-Materials drive physics constants:
-
-```cpp
-struct MaterialProps {
-    float friction;
-    float restitution;
-    float spin_decay;
-};
-
-MaterialProps material_at(const glm::vec3 pos, const HoleData& hole);
-```
-
-Tooling: use the external web hole editor at `tooling/hole-editor.html`. We are not building an in-game editor.
-
----
-
-## Quest system
-
-Quests live in `quest/`. They are entirely data-driven. C++ owns the engine, JSON owns the content.
-
-Keep simple dialogue quests supported. Future quests should support NPC ownership, active objective state, completion conditions, skill/item requirements, world flags, and rewards.
-
-Quest text, NPC dialogue, rewards, requirements, and branching content stay data-driven.
-
-### Rule: no quest content in C++
-
-If you are writing story text, dialogue, or reward definitions in a `.cpp` or `.h` file, stop. Add a JSON file under `assets/quests/` instead.
-
-### Quest JSON schema
-
-```json
-{
-  "id": "unique_string_id",
-  "title": "Display title",
-  "steps": [
-    {
-      "id": "step_id",
-      "text": "Dialogue text shown to the player.",
-      "choices": [
-        { "label": "Choice text shown as button", "next": "next_step_id" },
-        { "label": "Another choice", "next": "END" }
-      ]
-    }
-  ],
-  "reward": {
-    "money": 0,
-    "unlock": "item_id_or_null"
-  }
-}
-```
-
-- `next` can be any step `id` in the same quest, or the string `"END"` to complete
-- `unlock` is an item ID that maps to a club or ball stat struct in `shop.cpp`
-- `money` is added to player wallet on completion
-
-### Quest module files
-
-| File | Responsibility |
-|---|---|
-| `quest_parser.cpp` | Deserialise JSON into internal structs via nlohmann/json |
-| `quest_engine.cpp` | State machine — current step, handle choices, fire completion |
-| `dialogue.cpp` | Feeds text to the UI layer step by step |
-| `player_wallet.cpp` | Add/spend money. Never goes below zero |
-| `shop.cpp` | Maps unlock item IDs to club/ball stat structs |
-| `reward.cpp` | Applies quest rewards to game state |
-
----
-
-## Multiplayer Direction
-
-Multiplayer is long-term. Start with hot-seat/local, ghost replay, and async score/challenge sharing before real-time online.
-
-Keep the normal game simulation client-first. A lightweight backend may later store cloud saves, score submissions, ghost data, accounts, or cosmetics, but the core game should remain playable offline.
-
-Real-time online requires explicit session state, player IDs, authority rules, synchronization, and latency handling. Do not build real-time multiplayer by sharing the current mutable `game_state` directly.
-
-If competitive leaderboards or a shared economy become central, revisit server authority deliberately. Until then, tolerate that casual client-side submissions can be cheated and separate any future verified results from unverified/social ones.
-
----
-
-## UI layer
-
-Lives in `ui/`. Reads from game state and renders. Never writes directly to game state — fires callbacks or calls explicit mutator functions only.
-
-### Files
-
-| File | Responsibility |
-|---|---|
-| `hud.cpp` | In-play overlay — current club, shot power indicator, hole info |
-| `power_meter.cpp` | Timing-based swing power display — reads swing state from game |
-| `text_renderer.cpp` | Bitmap font rendering onto the low-res framebuffer |
-| `dialogue_box.cpp` | Renders quest dialogue text, choice buttons |
-| `shop_screen.cpp` | Shop UI — shows available items, handles purchase input |
-| `scorecard_ui.cpp` | Hole scores display |
-| `menu.cpp` | Main menu, pause screen |
-
-Use a bitmap font for all in-game text — it fits the aesthetic. SDL_ttf with a pixel font is acceptable. Do not use a smooth TTF renderer for in-game HUD elements.
-
-### UI -> GameState commands
-
-UI never mutates game state directly. It pushes typed commands into a queue; the game loop drains and applies them.
-
-```cpp
-// commands.h
-struct SwingCommand    { float power; float direction; };
-struct SelectClubCmd   { ClubId club; };
-struct PurchaseItemCmd { ItemId item; };
-struct AdvanceDialogue { int choice_index; };
-
-using Command = std::variant<
-  SwingCommand,
-  SelectClubCmd,
-  PurchaseItemCmd,
-  AdvanceDialogue
->;
-
-// UI pushes — no game state access
-void PowerMeter::on_release(CommandQueue& q, float power) {
-  q.push(SwingCommand{ power, current_direction });
-}
-
-// Game loop drains — app.cpp
-void App::update(const float dt) {
-  while (!commands.empty()) {
-    const auto cmd = commands.pop();
-    std::visit(overloaded {
-      [&](SwingCommand c)    { game.apply_swing(c); },
-      [&](SelectClubCmd c)   { game.select_club(c.club); },
-      [&](PurchaseItemCmd c) { shop.purchase(c.item, game.save); },
-      [&](AdvanceDialogue c) { quest_engine.advance(c.choice_index); }
-    }, cmd);
-  }
-}
-```
-
----
-
-## Core / entry point
-
-Lives in `core/`.
-
-| File | Responsibility |
-|---|---|
-| `main.cpp` | Tiny. Init SDL2 + SDL_mixer + GLAD. Create App. Run. Quit. |
-| `app.cpp` | Owns the main loop: poll events → update → render |
-| `event_loop.cpp` | SDL2 event dispatch, input state accumulation |
-| `window.cpp` | SDL2 window + GL context creation, GLAD init, swap |
-| `input.cpp` | Input state struct — keyboard, mouse, controller this frame |
-
-`main.cpp` should be under 30 lines. All interesting wiring lives in `app.cpp`.
-
----
-
-## Testing
-
-Uses **doctest** — single header at `vendor/doctest.h`.
-
-Tests live in `tests/`. Physics tests should be the most thorough — pure functions require zero mocking and are trivially reproducible.
-
-```cpp
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "doctest.h"
-#include "../src/physics/ball_physics.h"
-#include "../src/physics/ball_state.h"
-
-TEST_CASE("ball decelerates under aerodynamic drag") {
-    BallState b;
-    b.velocity = glm::vec3(50.0f, 0.0f, 0.0f);
-    b.spin     = glm::vec3(0.0f);
-    b.position = glm::vec3(0.0f);
-
-    WindState w;
-    w.velocity = glm::vec3(0.0f);
-
-    BallState b2 = step(b, w, 0.016f);
-    CHECK(glm::length(b2.velocity) < glm::length(b.velocity));
-}
-
-TEST_CASE("step is deterministic — same inputs give same output") {
-    BallState b  = make_test_ball();
-    WindState w  = make_zero_wind();
-    BallState r1 = step(b, w, 0.016f);
-    BallState r2 = step(b, w, 0.016f);
-    CHECK(r1.position == r2.position);
-    CHECK(r1.velocity == r2.velocity);
-}
-```
-
-Run all tests: `cmake --preset test && cmake --build build/test && ./build/test/golf++-tests`
-
----
-
-## Build
+## Build and test
 
 ```bash
-cmake --preset debug    # debug symbols, no optimisation
-cmake --preset release  # full optimisation
-cmake --preset test     # builds test binary instead of game
+cmake --preset debug   && cmake --build build/debug   # ./build/debug/golf++
+cmake --preset release && cmake --build build/release # ./build/release/golf++
+cmake --preset test    && cmake --build build/test && ./build/test/golf++-tests
 ```
 
-Presets defined in `CMakePresets.json`. C++17 standard. Do not modify the build system without understanding what you are changing.
+The test binary also builds the game. The full suite takes about 2 minutes
+(terrain index tests and full-size OSM holes dominate). The Python tooling tests
+run with `python -m unittest test_osm_golf_convert` from `tooling/osm_import/`.
+
+Profiling switches (`GOLFPP_COURSE`, `GOLFPP_VSYNC`) and the overlay are
+documented in `docs/performance.md`.
+
+---
+
+## Modules
+
+### core (`src/core/`)
+
+`main.cpp` is tiny: it reads startup options and runs `app`. `app.cpp` owns the
+main loop (poll events → update → render), the startup menu flow, save
+persistence and render-data assembly. `app.cpp` is large (~1100 lines) and is
+the first candidate for splitting (menu flow out of the main loop) before new
+screens are added.
+
+### game (`src/game/`)
+
+Mutable core. `game_state` is a plain struct owned by `app` and passed by
+reference. **No globals or singletons.**
+
+| File | Responsibility |
+|---|---|
+| `game_state.*` | Update loop: walking, cart, aiming, swing, ball step, hub/hole transitions, emotes, XP drops |
+| `game_tuning.*` | Gameplay feel constants and the loaded course/terrain for the active hole |
+| `swing.*` | Timing-based swing state machine |
+| `round_state.*`, `scorecard.*` | Strokes per hole, round progress, scorecard rows |
+| `progression.*` | Generic `skill_id -> xp` model, level curve (1–99) |
+| `save_data.*` | Persisted save struct, JSON (de)serialization, migration chain |
+| `save_manager.*` | Save slot + local profile metadata on disk |
+| `hole_loader.*`, `course_loader.*`, `course_world_loader.*`, `club_loader.*` | JSON content loaders |
+| `game_content.*` | Loads clubs + courses for the menu |
+| `asset_resolver.*` | Finds the `assets/` folder at runtime |
+
+### physics (`src/physics/`) — strict rules
+
+**`src/physics/` is a pure functional zone. These are hard constraints.**
+
+Every function in `src/physics/` must:
+- take all inputs by value or `const` reference
+- return a new value, never mutate a parameter
+- read no global state (no `extern`, no `static`, no singletons)
+- do no I/O (no logging, no file reads)
+- use no `static` local variables
+
+```cpp
+// CORRECT
+ball_state step(const ball_state in, const wind_state wind, const float dt);
+
+// WRONG — mutates, reads globals, does I/O
+void step(ball_state& state, const float dt);
+```
+
+Pure functions are trivially testable and deterministic: the same inputs always
+give the same trajectory, so any bug reproduces exactly. Wind is a pure function
+of `(seed, time)`; each hole's `wind_seed` gives it a stable wind character.
+
+Files: `ball_physics` (top-level `step`), `flight_model` (drag, Magnus,
+gravity), `collision` (terrain bounce/roll), `tree_collision`, `terrain` (spline
+→ mesh, spatial index, height/normal sampling), `wind`.
+
+### renderer (`src/renderer/`)
+
+OpenGL 3.3 core. SDL2 owns the window and context.
+
+**The CRT pipeline is not optional:**
+1. Render the scene to a low-res FBO (sized from a 640×360 reference in `renderer.cpp`)
+2. Upscale with **nearest-neighbor** filtering
+3. Apply `crt.frag`: scanlines, chromatic aberration, vignette, bloom bleed
+
+Never make the CRT pass toggleable or skip it during development.
+
+Several pieces are deliberately GL-free so they can be unit tested:
+`overlay_batch` + `pixel_font` (2D HUD/menus/text), `world_marker_batch`,
+`cart_batch`, `course_map_fill`, `frustum`, `render_mesh_chunks`,
+`primitive_mesh`. Their GL counterparts are `overlay_pass`,
+`world_marker_renderer`, `tree_renderer` (instanced trees) and
+`dynamic_buffer` (grow-only streaming VBO). `renderer.cpp` (~2200 lines) still
+does scene orchestration, HUD layout and menus. Split it before adding
+large new visuals.
+
+Shaders live in `assets/shaders/`, GLSL `330 core`, loaded from disk at startup.
+All in-game text uses the bitmap `pixel_font`. Never use a smooth TTF font for HUD.
+
+### audio / profiling
+
+`audio_manifest` parses `assets/audio/sounds.json`; `audio_engine` plays it.
+Game code pushes `audio_event`s into `game_state`; `app` drains them.
+`profiling` is opt-in per frame (`frame_profile*` may be null) and never global.
+
+---
+
+## Content data (`assets/`)
+
+All content is JSON. **Do not hardcode content in C++.**
+
+| Folder | Contents |
+|---|---|
+| `holes/` | One file per hole: `id`, `name`, `par`, `wind_seed`, `tee`, `pin`, `spline {control_points, width, rough_width}`, `material_zones` (green/bunker/water), `trees` |
+| `courses/` | Course manifest: `id`, `name`, `hole_count`, `holes` (paths or ids), optional `world` |
+| `course_worlds/` | Hub data in shared course coordinates: `spawn`, `hole_starts`, `cart_roads`, `collectibles` (skill XP + world flag rewards, optional skill/flag requirements) |
+| `clubs/` | Club stats and bag order |
+| `audio/`, `shaders/`, `icons/` | Sound manifest + files, GLSL, window icon |
+
+Terrain collision is derived at runtime from the hole spline; no baked data.
+Holes and course worlds are produced by `tooling/osm_import/` and cleaned up in
+`tooling/hole_editor/`. The tooling also writes `walking_shortcuts`,
+`spawn_zones` and `interactables` into course worlds; **the game does not read
+these yet**. They are placeholders for NPC/interaction work.
+
+`make_initial_game_state()` boots the first course alphabetically (or one with
+id `dev_course` if present) as the backdrop behind the main menu.
+
+---
+
+## Save data
+
+Persisted in `save_data` (`src/game/save_data.h`), currently **version 5**:
+completed courses, current course/hole, hole scores, skills, collected ids,
+repeatable collectible state, world flags.
+
+- Every change to the persisted shape bumps `current_save_version` and adds a
+  step to `migrate_save_data`. Parsing ignores unknown fields, so removed fields
+  in old saves are harmless.
+- Save on hole completion, course completion and clean exit. Never autosave mid-hole.
+- Never save transient state: ball flight, emotes, input, renderer or audio state.
+
+---
+
+## Direction
+
+Golf simulation first, RPG progression second, multiplayer later.
+
+- Treat golf physics as the stable foundation; build RPG systems around it.
+- Prefer reusable systems: `skill_id -> xp`, not one-off counters like `smoking_xp`.
+  Don't add bespoke fields like `smoke_emote`/`beer_emote` for every new activity
+  unless it is purely temporary visual state.
+- When unlocks return, put them behind one progression/unlock API instead of
+  scattering checks across UI, game update and menus. Item effects (e.g. the
+  cigarette stat modifiers in `game_state.cpp`) should move to data at that point.
+- NPCs, signs and pickups: data-driven placement in course worlds plus one
+  interaction system for everything nearby.
+- Course selection stays menu-based; in-course play trends toward roamable hubs.
+  No seamless open world until hubs are proven.
+- Multiplayer order: hot-seat → ghost/replay → async score/challenge sharing →
+  lightweight backend (cloud saves, scores, ghosts, cosmetics) → real-time later.
+  Define a session boundary first; never share mutable `game_state` over a network.
+  No authoritative OSRS-style backend unless a feature truly needs it.
+- Keep the game client-first and fully playable offline.
 
 ---
 
 ## Coding conventions
 
-- **C++17**
-- `snake_case` for everything — files, functions, variables, type names, struct names
-- Structs for plain data, classes only when you need encapsulation with enforced invariants
-- `const` aggressively — especially in physics, but everywhere it applies
-- No raw owning pointers — use `std::unique_ptr` or value types
-- No exceptions — return `std::optional` or a result struct on failure
-- No `using namespace std` in any header file
-- Keep files focused — if a `.cpp` is growing past ~300 lines, it probably contains two concerns
-- Include what you use — no relying on transitive includes
-
----
+- C++17, `snake_case` for everything (files, functions, variables, types)
+- Structs for plain data; classes only for enforced invariants
+- `const` aggressively
+- No raw owning pointers; use `std::unique_ptr` or values
+- No exceptions; return `std::optional` or a result struct
+- No `using namespace std` in headers
+- Include what you use
+- If a `.cpp` grows past ~300 lines it probably has two concerns. `app.cpp`,
+  `game_state.cpp` and `renderer.cpp` already do; split before growing them
 
 ## What not to do
 
-- Do not add singletons or global mutable state anywhere
-- Do not put game logic in the renderer
-- Do not put rendering calls in game state or physics
-- Do not hardcode quest content in C++ — it belongs in JSON
-- Do not make the CRT post-process pass optional or disable it during development
-- Do not mutate parameters inside `src/physics/`
-- Do not read global state inside `src/physics/`
-- Do not introduce new libraries without flagging it first
-- Do not use smooth TTF fonts for in-game HUD elements — use a bitmap font
+- No singletons or global mutable state
+- No game logic in the renderer; no rendering calls in game state or physics
+- No mutation or global reads inside `src/physics/`
+- No content (text, rewards, item stats) hardcoded in C++
+- Never make the CRT pass optional
+- No smooth TTF fonts in the HUD
+- No new libraries without flagging first
 
----
+## Aesthetic
 
-## Aesthetic goals (keep these in mind)
-
-The game should look like it was recorded on a consumer VHS camcorder in 1989 and then played back on a small television. Pixel-perfect upscaling, chunky geometry, slightly wrong colours from the chromatic aberration, scanlines. The lo-fi look should feel intentional and committed — not like a technical shortcut. Every rendering decision should ask: does this make it look more like that, or less?
+It should look like it was recorded on a consumer VHS camcorder in 1989 and
+played back on a small TV: pixel-perfect upscaling, chunky geometry, slightly
+wrong colours from chromatic aberration, scanlines. The lo-fi look is
+intentional and committed. For every rendering decision, ask whether it makes
+the game look more like that or less.

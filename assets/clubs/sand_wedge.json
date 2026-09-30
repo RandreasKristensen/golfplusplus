@@ -2,7 +2,6 @@
   "id": "sand_wedge",
   "name": "Sand Wedge",
   "label": "SWDG",
-  "price": 0,
   "bag_order": 1,
   "stats": {
     "power": 25.0,
