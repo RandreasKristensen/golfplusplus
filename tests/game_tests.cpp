@@ -163,11 +163,29 @@ float visible_cup_radius(const game_tuning& tuning) {
 }
 
 std::string asset_root() {
-#ifdef VCR_GOLF_ASSETS_DIR
-    return VCR_GOLF_ASSETS_DIR;
+#ifdef GOLFPP_ASSETS_DIR
+    return GOLFPP_ASSETS_DIR;
 #else
     return "assets";
 #endif
+}
+
+std::string fixture_root() {
+#ifdef GOLFPP_TEST_FIXTURES_DIR
+    return GOLFPP_TEST_FIXTURES_DIR;
+#else
+    return "tests/fixtures";
+#endif
+}
+
+std::string fixture_hole(const char* name) {
+    return fixture_root() + "/holes/" + name + ".json";
+}
+
+// First hole of the course make_initial_game_state() boots when no course is picked.
+std::optional<hole_data> default_course_first_hole() {
+    const course_definition course = default_course_definition(load_courses_from_directory(asset_root() + "/courses"));
+    return load_hole_from_file(course_hole_path(asset_root(), course, 0));
 }
 
 std::vector<std::string> expected_club_ids() {
@@ -587,7 +605,7 @@ TEST_CASE("first address space press starts swing timing") {
 
 TEST_CASE("course initializes tee and pin") {
     game_state state = make_initial_game_state();
-    const std::optional<hole_data> hole = load_hole_from_file(asset_root() + "/holes/test.json");
+    const std::optional<hole_data> hole = default_course_first_hole();
 
     if (hole) {
         CHECK(state.tuning.course.tee_position == hole->tee_position);
@@ -674,8 +692,8 @@ TEST_CASE("default tuning has arcade-sized cup") {
     CHECK(tuning.course.cup_radius > tuning.scale.ball_visual_radius_meters * 5.0f);
 }
 
-TEST_CASE("hole editor json loads into game tuning course data") {
-    const std::optional<hole_data> hole = load_hole_from_file(asset_root() + "/holes/test.json");
+TEST_CASE("default game tuning loads the default course first hole") {
+    const std::optional<hole_data> hole = default_course_first_hole();
     CHECK(hole.has_value());
     if (!hole) {
         return;
@@ -698,7 +716,7 @@ TEST_CASE("hole editor json loads into game tuning course data") {
 }
 
 TEST_CASE("hole loader reads rough width and trees with defaults") {
-    const std::filesystem::path path = std::filesystem::temp_directory_path() / "vcr_golf_tree_hole.json";
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "golfpp_tree_hole.json";
     std::ofstream file(path);
     file << R"({
       "id": "tree_hole",
@@ -736,7 +754,7 @@ TEST_CASE("hole loader reads rough width and trees with defaults") {
 }
 
 TEST_CASE("hole loader defaults missing rough width to fairway width") {
-    const std::filesystem::path path = std::filesystem::temp_directory_path() / "vcr_golf_no_rough_hole.json";
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "golfpp_no_rough_hole.json";
     std::ofstream file(path);
     file << R"({
       "id": "legacy_hole",
@@ -786,11 +804,10 @@ TEST_CASE("content layer loads courses and clubs from asset root") {
 
     bool found_course = false;
     for (const course_definition& course : content.courses) {
-        if (course.id == "course_01") {
+        if (course.id == "marienlyst_golfklub") {
             found_course = true;
-            CHECK(course.name == "The Big Three");
-            CHECK(course.hole_count == 3);
-            CHECK(course.holes.size() == 3);
+            CHECK(course.hole_count == 6);
+            CHECK(course.holes.size() == 6);
         }
     }
 
@@ -798,7 +815,7 @@ TEST_CASE("content layer loads courses and clubs from asset root") {
 }
 
 TEST_CASE("course manifest loads authored three-hole course in order") {
-    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/course_01.json");
+    const std::optional<course_definition> course = load_course_from_file(fixture_root() + "/courses/course_01.json");
 
     CHECK(course.has_value());
     if (!course) {
@@ -815,7 +832,7 @@ TEST_CASE("course manifest loads authored three-hole course in order") {
 }
 
 TEST_CASE("course manifests can reference holes by id") {
-    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/course_01.json");
+    const std::optional<course_definition> course = load_course_from_file(fixture_root() + "/courses/course_01.json");
 
     CHECK(course.has_value());
     if (!course) {
@@ -825,10 +842,10 @@ TEST_CASE("course manifests can reference holes by id") {
     CHECK(course->id == "course_01");
     CHECK(course->hole_count == 3);
     CHECK(course->holes.front() == "test");
-    CHECK(course_hole_path(asset_root(), *course, 0).find("holes") != std::string::npos);
+    CHECK(course_hole_path(fixture_root(), *course, 0).find("test.json") != std::string::npos);
 
     game_tuning tuning = default_game_tuning();
-    CHECK(load_hole_runtime(tuning, *course, 0, asset_root()));
+    CHECK(load_hole_runtime(tuning, *course, 0, fixture_root()));
     CHECK(!tuning.course.id.empty());
 }
 
@@ -868,7 +885,7 @@ TEST_CASE("invalid course world hole index is rejected") {
     course.id = "bad_world_course";
     course.name = "Bad World Course";
     course.hole_count = 1;
-    course.holes = {"holes/test.json"};
+    course.holes = {fixture_hole("test")};
 
     const std::filesystem::path path = std::filesystem::temp_directory_path() / "golfpp_bad_course_world.json";
     {
@@ -891,7 +908,7 @@ TEST_CASE("missing world file falls back to current course behavior") {
     course.id = "missing_world_course";
     course.name = "Missing World Course";
     course.hole_count = 1;
-    course.holes = {"holes/test.json"};
+    course.holes = {fixture_hole("test")};
     course.world = "course_worlds/missing_world.json";
 
     game_state state = make_initial_game_state();
@@ -903,7 +920,7 @@ TEST_CASE("missing world file falls back to current course behavior") {
 }
 
 TEST_CASE("hole directory loader discovers authored holes") {
-    const std::vector<hole_data> holes = load_holes_from_directory(asset_root() + "/holes");
+    const std::vector<hole_data> holes = load_holes_from_directory(fixture_root() + "/holes");
 
     CHECK(holes.size() >= 2);
     bool found_test = false;
@@ -936,7 +953,7 @@ TEST_CASE("round state records strokes and finishes after course length") {
     course.id = "two_hole";
     course.name = "Two Hole";
     course.hole_count = 2;
-    course.holes = {"holes/test.json", "holes/test.json"};
+    course.holes = {fixture_hole("test"), fixture_hole("test")};
 
     round_state round = start_course(course);
     CHECK(round.current_hole_index == 0);
@@ -1210,7 +1227,7 @@ TEST_CASE("scorecard data shows played scores and pending holes") {
     course.id = "three_hole";
     course.name = "Three Hole";
     course.hole_count = 3;
-    course.holes = {"holes/test.json", "holes/test2.json", "holes/test3.json"};
+    course.holes = {fixture_hole("test"), fixture_hole("test2"), fixture_hole("test3")};
 
     game_state state = make_initial_game_state(asset_root());
     CHECK(start_game_course(state, course));
@@ -1248,7 +1265,7 @@ TEST_CASE("scorecard totals count played holes until the round is finished") {
     course.id = "three_hole";
     course.name = "Three Hole";
     course.hole_count = 3;
-    course.holes = {"holes/test.json", "holes/test2.json", "holes/test3.json"};
+    course.holes = {fixture_hole("test"), fixture_hole("test2"), fixture_hole("test3")};
 
     game_state state = make_initial_game_state(asset_root());
     CHECK(start_game_course(state, course));
@@ -1300,7 +1317,7 @@ TEST_CASE("game course completion preserves score and resets transient hole stat
     course.id = "two_hole";
     course.name = "Two Hole";
     course.hole_count = 2;
-    course.holes = {"holes/test.json", "holes/test.json"};
+    course.holes = {fixture_hole("test"), fixture_hole("test")};
 
     game_state state = make_initial_game_state(asset_root());
     CHECK(start_game_course(state, course));
@@ -1343,7 +1360,7 @@ TEST_CASE("stopped following shot in cup completes and advances hole") {
     course.id = "two_hole";
     course.name = "Two Hole";
     course.hole_count = 2;
-    course.holes = {"holes/test.json", "holes/test.json"};
+    course.holes = {fixture_hole("test"), fixture_hole("test")};
 
     game_state state = make_initial_game_state(asset_root());
     CHECK(start_game_course(state, course));
@@ -1375,7 +1392,7 @@ TEST_CASE("walking ball already resting in cup completes hole") {
     course.id = "two_hole";
     course.name = "Two Hole";
     course.hole_count = 2;
-    course.holes = {"holes/test.json", "holes/test.json"};
+    course.holes = {fixture_hole("test"), fixture_hole("test")};
 
     game_state state = make_initial_game_state(asset_root());
     CHECK(start_game_course(state, course));
@@ -1402,7 +1419,7 @@ TEST_CASE("moving ball crossing visible cup completes hole") {
     course.id = "two_hole";
     course.name = "Two Hole";
     course.hole_count = 2;
-    course.holes = {"holes/test.json", "holes/test.json"};
+    course.holes = {fixture_hole("test"), fixture_hole("test")};
 
     game_state state = make_initial_game_state(asset_root());
     CHECK(start_game_course(state, course));
@@ -1959,7 +1976,7 @@ TEST_CASE("static anchor cache matches fresh anchors across course and hole load
     single.id = "single_hole_02";
     single.name = "Single";
     single.hole_count = 1;
-    single.holes = {"holes/test2.json"};
+    single.holes = {fixture_hole("test2")};
     previous_revision = state.terrain_render_revision;
     const bool started_single = start_game_course(state, single);
     CHECK(started_single);

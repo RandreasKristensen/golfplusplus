@@ -2,7 +2,7 @@
 
 #include <SDL.h>
 
-#if defined(VCR_GOLF_USE_GLAD)
+#if defined(GOLFPP_USE_GLAD)
 #include "glad/glad.h"
 
 bool load_gl_functions();

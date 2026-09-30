@@ -31,7 +31,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "VCR_GOLF_BUILD_TESTS": "ON",
+        "GOLFPP_BUILD_TESTS": "ON",
         "GLM_INCLUDE_DIR": "C:/msys64/mingw64/include"
       }
     }

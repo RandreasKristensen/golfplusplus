@@ -15,8 +15,8 @@ const audio_sound_definition* find_sound(const audio_manifest& manifest, const s
 }
 
 std::string asset_root() {
-#ifdef VCR_GOLF_ASSETS_DIR
-    return VCR_GOLF_ASSETS_DIR;
+#ifdef GOLFPP_ASSETS_DIR
+    return GOLFPP_ASSETS_DIR;
 #else
     return "assets";
 #endif

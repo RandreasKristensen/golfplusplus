@@ -9,7 +9,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repo_root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repo_root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $build_dir = Join-Path $repo_root "build\release"
 $exe_path = Join-Path $build_dir "golf++.exe"
 

@@ -71,8 +71,8 @@ constexpr int reference_low_res_height = 360;
 constexpr int min_low_res_dimension = 120;
 
 std::string asset_path(const char* relative) {
-#ifdef VCR_GOLF_ASSETS_DIR
-    std::string base = VCR_GOLF_ASSETS_DIR;
+#ifdef GOLFPP_ASSETS_DIR
+    std::string base = GOLFPP_ASSETS_DIR;
 #else
     std::string base = "assets";
 #endif

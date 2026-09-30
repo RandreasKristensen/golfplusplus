@@ -1,19 +1,32 @@
 # golf++ — tooling
 
-Design and import courses for golf++. The tooling folder contains two things:
-a browser-based hole editor for building and tweaking holes visually, and a
-command-line script that pulls real course data from OpenStreetMap and converts
-it directly into hole JSON files.
+Design and import courses for golf++, plus the Windows build helper.
+
+| Path | What |
+|---|---|
+| `hole_editor/hole-editor.html` | Browser-based editor for holes and course worlds |
+| `osm_import/` | Converts real courses from OpenStreetMap into hole/course/world JSON |
+| `gb.cmd` / `gb.ps1` | Windows release build helper (see below) |
+
+## gb (build helper)
+
+Run from the repo root:
+
+```pwrshl
+.\tooling\gb      # configure + clean rebuild release
+.\tooling\gb -r   # build release, then launch golf++
+.\tooling\gb -rr  # stop the running golf++ from this build, rebuild, relaunch
+```
 
 ---
 
-## hole-editor.html
+## hole_editor/hole-editor.html
 
 A single-file, no-install web tool for authoring hole JSON by hand. Open it
 directly in any browser — no server required.
 
 ```
-open hole-editor.html
+open hole_editor/hole-editor.html
 ```
 
 In Chromium/Edge, use **open project** and choose the golf++ repo root. The
@@ -103,7 +116,9 @@ pin), Y is elevation. All distances are in metres.
 
 ---
 
-## osm_golf_convert.py
+## osm_import/osm_golf_convert.py
+
+Run the commands below from `tooling/osm_import/`.
 
 Queries OpenStreetMap via the Overpass API and converts a real golf course into
 hole JSON files and a course manifest, ready to load directly into the game or
@@ -132,7 +147,7 @@ py -3 osm_golf_convert.py --id W1019045811
 py -3 osm_golf_convert.py --id R3456789
 
 # Custom output directory
-py -3 osm_golf_convert.py "Aarhus Golf Klub" -o ../assets/holes --course-out ../assets/courses
+py -3 osm_golf_convert.py "Aarhus Golf Klub" -o ../../assets/holes --course-out ../../assets/courses
 
 # Skip writing the course manifest
 py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-course
@@ -187,7 +202,7 @@ writing `y` anywhere else in the hole JSON would be ignored.
 Overpass and Nominatim are donated infrastructure. The converter tries to be a
 good citizen:
 
-- every response is cached under `tooling/.osm_cache/`, so a re-run after a
+- every response is cached under `tooling/osm_import/.osm_cache/`, so a re-run after a
   config tweak costs zero requests (`--refresh` forces a re-download,
   `--no-cache` disables it)
 - it checks the Overpass slot endpoint and waits when the server is busy
@@ -256,6 +271,9 @@ select a course with a `world` manifest entry, then switch to world view to edit
 - collectible positions and simple reward fields
 - interactable/sign positions
 
+Walking shortcuts, spawn zones and interactables are authored here but the game
+does not read them yet; they are placeholders for NPC/interaction work.
+
 Use area select in either hole view or world view to drag a selection rectangle
 around editable points/items. The editor highlights everything inside the box
 and can bulk-delete selected route points, trees, zones, collectibles, and
@@ -267,15 +285,15 @@ per-hole local coordinates, while world JSON uses shared course coordinates.
 
 ### Output
 
-Running the converter from `tooling/` writes directly to the game's asset
+Running the converter from `tooling/osm_import/` writes directly to the game's asset
 folders by default:
 
 ```
-../assets/holes/
+../../assets/holes/
   aarhus_golf_klub_h01.json
   aarhus_golf_klub_h02.json
   ...
-../assets/courses/
+../../assets/courses/
   aarhus_golf_klub.json          ← course manifest
 ```
 
@@ -317,7 +335,7 @@ truth and prints a per-hole table plus a pass/fail summary.
 
 ```bash
 py -3 verify_osm_import.py --id W1019045811 \
-    --holes ../assets/holes --scorecard old_course
+    --holes ../../assets/holes --scorecard old_course
 ```
 
 It runs four checks:
@@ -383,10 +401,10 @@ remaining warning is its 2nd hole, 62 m short for exactly that reason.
 python osm_golf_convert.py "Skandinavisk Golf Center"
 
 # 2. Open the editor and paste in a hole to review and fix up
-open hole-editor.html
+open ../hole_editor/hole-editor.html
 # → import → paste hole JSON → adjust spline / zones → export
 
-# 3. Save the cleaned JSON back to ../assets/holes
+# 3. Save the cleaned JSON back to ../../assets/holes
 ```
 
 ### Two courses on one site

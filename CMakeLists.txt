@@ -4,15 +4,15 @@ project(golfpp LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(VCR_GOLF_BUILD_TESTS "Build tests" OFF)
+option(GOLFPP_BUILD_TESTS "Build tests" OFF)
 
-set(VCR_GOLF_SOURCES
-    core/main.cpp
-    core/app.cpp
-    core/startup_options.cpp
-    core/window.cpp
-    core/event_loop.cpp
-    core/gl_loader.cpp
+set(GOLFPP_SOURCES
+    src/core/main.cpp
+    src/core/app.cpp
+    src/core/startup_options.cpp
+    src/core/window.cpp
+    src/core/event_loop.cpp
+    src/core/gl_loader.cpp
     src/audio/audio_manifest.cpp
     src/audio/audio_engine.cpp
     src/renderer/shader.cpp
@@ -30,11 +30,10 @@ set(VCR_GOLF_SOURCES
     src/renderer/world_marker_renderer.cpp
 )
 
-add_executable(golfpp ${VCR_GOLF_SOURCES})
+add_executable(golfpp ${GOLFPP_SOURCES})
 set_target_properties(golfpp PROPERTIES OUTPUT_NAME "golf++")
 
 target_include_directories(golfpp PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor
 )
@@ -80,10 +79,10 @@ set(GLAD_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/glad/glad.c)
 if (EXISTS ${GLAD_SOURCE})
     target_sources(golfpp PRIVATE ${GLAD_SOURCE})
     target_include_directories(golfpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/glad)
-    target_compile_definitions(golfpp PRIVATE VCR_GOLF_USE_GLAD=1)
+    target_compile_definitions(golfpp PRIVATE GOLFPP_USE_GLAD=1)
 endif()
 
-set(VCR_GOLF_PHYSICS_SOURCES
+set(GOLFPP_PHYSICS_SOURCES
     src/physics/ball_physics.cpp
     src/physics/flight_model.cpp
     src/physics/collision.cpp
@@ -92,7 +91,7 @@ set(VCR_GOLF_PHYSICS_SOURCES
     src/physics/wind.cpp
 )
 
-set(VCR_GOLF_GAME_SOURCES
+set(GOLFPP_GAME_SOURCES
     src/game/asset_resolver.cpp
     src/game/club_loader.cpp
     src/game/course_loader.cpp
@@ -120,55 +119,54 @@ if (NOT GLM_INCLUDE_DIR)
     message(FATAL_ERROR "GLM not found. Install it or add vendor/glm.")
 endif()
 
-file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/assets" VCR_GOLF_ASSETS_DIR)
+file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/assets" GOLFPP_ASSETS_DIR)
 target_include_directories(golfpp PRIVATE ${GLM_INCLUDE_DIR})
-target_compile_definitions(golfpp PRIVATE VCR_GOLF_ASSETS_DIR=\"${VCR_GOLF_ASSETS_DIR}\")
+target_compile_definitions(golfpp PRIVATE GOLFPP_ASSETS_DIR=\"${GOLFPP_ASSETS_DIR}\")
 
-add_library(vcr-golf-profiling src/profiling/profiling.cpp)
-target_include_directories(vcr-golf-profiling PUBLIC
+add_library(golfpp-profiling src/profiling/profiling.cpp)
+target_include_directories(golfpp-profiling PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(golfpp PRIVATE vcr-golf-profiling)
+target_link_libraries(golfpp PRIVATE golfpp-profiling)
 
 # GL-free overlay batch builder + bitmap pixel font (unit tested).
-add_library(vcr-golf-overlay
+add_library(golfpp-overlay
     src/renderer/overlay_batch.cpp
     src/renderer/course_map_fill.cpp
     src/renderer/pixel_font.cpp
 )
-target_include_directories(vcr-golf-overlay PUBLIC
+target_include_directories(golfpp-overlay PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${GLM_INCLUDE_DIR}
 )
 
-target_link_libraries(golfpp PRIVATE vcr-golf-overlay)
+target_link_libraries(golfpp PRIVATE golfpp-overlay)
 
-add_library(vcr-golf-physics ${VCR_GOLF_PHYSICS_SOURCES})
-target_include_directories(vcr-golf-physics PUBLIC
+add_library(golfpp-physics ${GOLFPP_PHYSICS_SOURCES})
+target_include_directories(golfpp-physics PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${GLM_INCLUDE_DIR}
 )
 
-target_link_libraries(golfpp PRIVATE vcr-golf-physics)
+target_link_libraries(golfpp PRIVATE golfpp-physics)
 
-add_library(vcr-golf-game ${VCR_GOLF_GAME_SOURCES})
-target_include_directories(vcr-golf-game PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+add_library(golfpp-game ${GOLFPP_GAME_SOURCES})
+target_include_directories(golfpp-game PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor
     ${GLM_INCLUDE_DIR}
 )
-target_link_libraries(vcr-golf-game PUBLIC vcr-golf-physics vcr-golf-profiling)
-target_compile_definitions(vcr-golf-game PUBLIC VCR_GOLF_ASSETS_DIR=\"${VCR_GOLF_ASSETS_DIR}\")
+target_link_libraries(golfpp-game PUBLIC golfpp-physics golfpp-profiling)
+target_compile_definitions(golfpp-game PUBLIC GOLFPP_ASSETS_DIR=\"${GOLFPP_ASSETS_DIR}\")
 
-target_link_libraries(golfpp PRIVATE vcr-golf-game)
+target_link_libraries(golfpp PRIVATE golfpp-game)
 
 if (WIN32)
-    target_sources(golfpp PRIVATE windows/golfpp.rc)
+    target_sources(golfpp PRIVATE src/platform/windows/golfpp.rc)
 endif()
 
-if (VCR_GOLF_BUILD_TESTS)
+if (GOLFPP_BUILD_TESTS)
     add_executable(golfpp-tests
         tests/physics_tests.cpp
         tests/startup_options_tests.cpp
@@ -182,7 +180,7 @@ if (VCR_GOLF_BUILD_TESTS)
         tests/dynamic_buffer_tests.cpp
         tests/course_map_fill_tests.cpp
         src/audio/audio_manifest.cpp
-        core/startup_options.cpp
+        src/core/startup_options.cpp
         src/renderer/primitive_mesh.cpp
         src/renderer/cart_batch.cpp
         src/renderer/world_marker_batch.cpp
@@ -190,8 +188,9 @@ if (VCR_GOLF_BUILD_TESTS)
         src/renderer/render_mesh_chunks.cpp
     )
     set_target_properties(golfpp-tests PROPERTIES OUTPUT_NAME "golf++-tests")
-    target_link_libraries(golfpp-tests PRIVATE vcr-golf-physics vcr-golf-game vcr-golf-profiling)
-    target_link_libraries(golfpp-tests PRIVATE vcr-golf-overlay)
-    target_include_directories(golfpp-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_include_directories(golfpp-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
+    target_link_libraries(golfpp-tests PRIVATE golfpp-physics golfpp-game golfpp-profiling)
+    target_link_libraries(golfpp-tests PRIVATE golfpp-overlay)
+    target_include_directories(golfpp-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
+    file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures" GOLFPP_TEST_FIXTURES_DIR)
+    target_compile_definitions(golfpp-tests PRIVATE GOLFPP_TEST_FIXTURES_DIR=\"${GOLFPP_TEST_FIXTURES_DIR}\")
 endif()

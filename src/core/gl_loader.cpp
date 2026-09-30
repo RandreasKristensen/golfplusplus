@@ -1,6 +1,6 @@
 #include "core/gl_loader.h"
 
-#if defined(VCR_GOLF_USE_GLAD)
+#if defined(GOLFPP_USE_GLAD)
 bool load_gl_functions() {
     return gladLoadGLLoader(reinterpret_cast<GLADloadproc>(SDL_GL_GetProcAddress)) != 0;
 }

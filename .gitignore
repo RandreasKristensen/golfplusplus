@@ -21,4 +21,4 @@ __pycache__/
 *.pyc
 
 # Cached OSM / elevation responses for the course importer
-tooling/.osm_cache/
+tooling/osm_import/.osm_cache/

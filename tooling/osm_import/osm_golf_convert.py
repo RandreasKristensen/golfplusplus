@@ -10,7 +10,7 @@ Usage:
   python osm_golf_convert.py --name "Skandinavisk Golf Center"
   python osm_golf_convert.py --id R123456          # OSM relation ID
   python osm_golf_convert.py --lat 56.19 --lon 10.19  # nearest course
-  python osm_golf_convert.py --id R123456 -o ../assets/holes --course-out ../assets/courses
+  python osm_golf_convert.py --id R123456 -o ../../assets/holes --course-out ../../assets/courses
 
 Requirements: pip install requests (optional; falls back to Python stdlib)
 """
@@ -2569,7 +2569,7 @@ def slugify(name: str) -> str:
 
 
 def _project_root() -> Path:
-    return Path(__file__).resolve().parent.parent
+    return Path(__file__).resolve().parent.parent.parent
 
 
 def main():

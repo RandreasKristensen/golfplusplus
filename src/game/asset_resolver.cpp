@@ -4,8 +4,8 @@
 #include <string>
 
 std::string compile_time_asset_root() {
-#ifdef VCR_GOLF_ASSETS_DIR
-    return VCR_GOLF_ASSETS_DIR;
+#ifdef GOLFPP_ASSETS_DIR
+    return GOLFPP_ASSETS_DIR;
 #else
     return "assets";
 #endif

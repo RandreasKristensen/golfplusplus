@@ -10,7 +10,7 @@ void set_window_icon(SDL_Window* window) {
         return;
     }
 
-    SDL_Surface* icon = SDL_LoadBMP(VCR_GOLF_ASSETS_DIR "/icons/golfpp-icon.bmp");
+    SDL_Surface* icon = SDL_LoadBMP(GOLFPP_ASSETS_DIR "/icons/golfpp-icon.bmp");
     if (!icon) {
         SDL_Log("SDL_LoadBMP icon failed: %s", SDL_GetError());
         return;
