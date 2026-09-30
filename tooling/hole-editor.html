@@ -724,6 +724,9 @@ function defaultGeneratorConfig() {
   return {
     tree: { trunk_radius: 0.65, trunk_height: 5.0, leaf_radius: 4.7, leaf_height: 6.0, max_per_hole: 60 },
     hole: { fallback_width: 20.0, fallback_rough_width: 32.0, rough_width_multiplier: 1.55 },
+    // Terrain heights the OSM converter samples from a DEM. No UI yet; kept
+    // here so saving config from the editor does not drop the section.
+    elevation: { enabled: true, dataset: 'auto', max_grade: 0.25, smooth_window: 3 },
     world: {
       hole_start_interaction_radius: 4.0,
       fallback_cart_width: 4.0,
@@ -743,6 +746,7 @@ function normalizeGeneratorConfig() {
   if (!generatorConfig) generatorConfig = defaultGeneratorConfig();
   generatorConfig.tree = { ...defaultGeneratorConfig().tree, ...(generatorConfig.tree || {}) };
   generatorConfig.hole = { ...defaultGeneratorConfig().hole, ...(generatorConfig.hole || {}) };
+  generatorConfig.elevation = { ...defaultGeneratorConfig().elevation, ...(generatorConfig.elevation || {}) };
   generatorConfig.world = { ...defaultGeneratorConfig().world, ...(generatorConfig.world || {}) };
   if (!generatorConfig.courses || typeof generatorConfig.courses !== 'object') generatorConfig.courses = {};
 }

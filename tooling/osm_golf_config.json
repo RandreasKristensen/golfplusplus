@@ -11,6 +11,12 @@
     "fallback_rough_width": 32.0,
     "rough_width_multiplier": 1.55
   },
+  "elevation": {
+    "enabled": true,
+    "dataset": "auto",
+    "max_grade": 0.25,
+    "smooth_window": 3
+  },
   "world": {
     "hole_start_interaction_radius": 4.0,
     "fallback_cart_width": 4.0,

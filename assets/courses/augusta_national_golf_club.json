@@ -1,0 +1,26 @@
+{
+  "id": "augusta_national_golf_club",
+  "name": "Augusta National Golf Club",
+  "hole_count": 18,
+  "holes": [
+    "holes/augusta_national_golf_club_h01.json",
+    "holes/augusta_national_golf_club_h02.json",
+    "holes/augusta_national_golf_club_h03.json",
+    "holes/augusta_national_golf_club_h04.json",
+    "holes/augusta_national_golf_club_h05.json",
+    "holes/augusta_national_golf_club_h06.json",
+    "holes/augusta_national_golf_club_h07.json",
+    "holes/augusta_national_golf_club_h08.json",
+    "holes/augusta_national_golf_club_h09.json",
+    "holes/augusta_national_golf_club_h10.json",
+    "holes/augusta_national_golf_club_h11.json",
+    "holes/augusta_national_golf_club_h12.json",
+    "holes/augusta_national_golf_club_h13.json",
+    "holes/augusta_national_golf_club_h14.json",
+    "holes/augusta_national_golf_club_h15.json",
+    "holes/augusta_national_golf_club_h16.json",
+    "holes/augusta_national_golf_club_h17.json",
+    "holes/augusta_national_golf_club_h18.json"
+  ],
+  "world": "course_worlds/augusta_national_golf_club.json"
+}

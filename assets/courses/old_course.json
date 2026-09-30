@@ -1,0 +1,26 @@
+{
+  "id": "old_course",
+  "name": "Old Course",
+  "hole_count": 18,
+  "holes": [
+    "holes/old_course_h01.json",
+    "holes/old_course_h02.json",
+    "holes/old_course_h03.json",
+    "holes/old_course_h04.json",
+    "holes/old_course_h05.json",
+    "holes/old_course_h06.json",
+    "holes/old_course_h07.json",
+    "holes/old_course_h08.json",
+    "holes/old_course_h09.json",
+    "holes/old_course_h10.json",
+    "holes/old_course_h11.json",
+    "holes/old_course_h12.json",
+    "holes/old_course_h13.json",
+    "holes/old_course_h14.json",
+    "holes/old_course_h15.json",
+    "holes/old_course_h16.json",
+    "holes/old_course_h17.json",
+    "holes/old_course_h18.json"
+  ],
+  "world": "course_worlds/old_course.json"
+}

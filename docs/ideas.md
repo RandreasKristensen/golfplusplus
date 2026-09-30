@@ -115,6 +115,7 @@ stuff like hole in ones, course clubhousea with npcs and driving ranges where yo
 - Pick up balls around the course that are not yours if you do not find your ball; you have to drop it, with a timer from when you shoot.
 - Let players name clubs and collect clubs.
 - Buy clubs in a shop with made-up names like Haitormade Wedges, Callitaday driver, putter, iron, and similar gear.
+- player housing
 
 ### Devops
 

@@ -118,13 +118,17 @@ pip install requests  # optional; falls back to Python's standard library
 ### Usage
 
 ```bash
-# Search by course name
-py -3 osm_golf_convert.py "Marienlyst Golf Klub"
+# Search by course name — resolved through Nominatim, so this is fast now
+py -3 osm_golf_convert.py "Marienlyst Golfklub"
+
+# See every course the name matches, with the --id to use for each
+py -3 osm_golf_convert.py "St Andrews" --list
 
 # Nearest course to a lat/lon — useful when you're standing on the course
 py -3 osm_golf_convert.py --lat 56.180454 --lon 10.156731
 
-# By OSM relation ID — most reliable; find it at openstreetmap.org
+# By OSM ID — most reliable when several courses share a name or a site
+py -3 osm_golf_convert.py --id W1019045811
 py -3 osm_golf_convert.py --id R3456789
 
 # Custom output directory
@@ -135,7 +139,66 @@ py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-course
 
 # Use generator tuning, including tree dimensions and hub path filtering
 py -3 osm_golf_convert.py "Marienlyst Golfklub" --config osm_golf_config.json
+
+# Flat holes, no DEM lookups
+py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-elevation
+
+# Re-download instead of reusing the cached OSM responses
+py -3 osm_golf_convert.py --id W1019045811 --refresh
 ```
+
+Use `--id` for anything you intend to keep. Names are ambiguous — "St Andrews"
+alone matches seven courses on the same site — and `--list` exists to turn a
+name into the right id once, so later re-imports are reproducible.
+
+### Elevation
+
+OSM carries no usable height data for golf features, so the converter samples a
+public digital elevation model and bakes the result into each hole's spline
+control points. This is the same idea as the LiDAR import in TGC Designer
+Tools, using the open DEMs that are free to query without an account.
+
+| Dataset | Coverage | Resolution |
+|---|---|---|
+| `ned10m` | USA | 10 m |
+| `eudem25m` | Europe | 25 m |
+| `mapzen` | global | ~30 m |
+| `srtm30m` | ±60° latitude | 30 m |
+
+`dataset: "auto"` (the default) picks the best one covering the course. Heights
+are made relative to the tee, so every hole still starts at `y = 0`; smoothed,
+because neighbouring control points can straddle a DEM cell boundary; and
+slope-limited, because a DEM occasionally reads a clubhouse roof or tree canopy
+next to a fairway as a cliff.
+
+**What this does and does not give you.** A 10–30 m DEM reproduces the landform
+of a hole — the uphill second shot, the valley you have to carry, a plateau
+green, the general fall of a fairway. It cannot see green contours, bunker
+lips, or mounding, because those are smaller than one DEM cell. Expect to keep
+doing green and bunker shaping in the hole editor; expect not to have to
+rebuild the overall shape of the land.
+
+Only the spline carries elevation. The game builds terrain as a ribbon swept
+along the control points and samples zone and tree heights off that mesh, so
+writing `y` anywhere else in the hole JSON would be ignored.
+
+### Caching and rate limits
+
+Overpass and Nominatim are donated infrastructure. The converter tries to be a
+good citizen:
+
+- every response is cached under `tooling/.osm_cache/`, so a re-run after a
+  config tweak costs zero requests (`--refresh` forces a re-download,
+  `--no-cache` disables it)
+- it checks the Overpass slot endpoint and waits when the server is busy
+- at least two seconds between Overpass calls, and 429/504 back off
+  exponentially rather than retrying immediately
+- queries are scoped to the course *area* rather than its bounding box, which
+  is both cheaper for the server and more accurate — a bbox around the Old
+  Course also contains the town of St Andrews and six other courses
+- a hard ceiling on requests per run, so a bug cannot turn into a loop
+
+A full 18-hole import is normally under ten requests.
 
 ### Generator config
 
@@ -247,6 +310,72 @@ The course manifest follows the same format as the hand-authored course files:
    - Converts water hazard polygons to axis-aligned bounding boxes.
    - Estimates par from tee-to-pin distance if OSM doesn't have a `par` tag.
 
+### Verifying an import
+
+`verify_osm_import.py` checks a generated course against independent ground
+truth and prints a per-hole table plus a pass/fail summary.
+
+```bash
+py -3 verify_osm_import.py --id W1019045811 \
+    --holes ../assets/holes --scorecard old_course
+```
+
+It runs four checks:
+
+| Check | Question it answers |
+|---|---|
+| Projection fidelity | Is a metre in the output really a metre on the ground? |
+| Scorecard accuracy | Does the hole play its published length? |
+| Plausibility | Are widths, green radii and pars in the range real courses occupy? |
+| Loader contract | Will `hole_loader.cpp` actually accept this file? |
+
+The projection check recomputes distances from the tee and pin coordinates the
+converter recorded in each hole's `source` block, using Vincenty's formula on
+the WGS84 ellipsoid — code that shares nothing with the converter's flat-earth
+projection. A disagreement there is a converter bug.
+
+The scorecard check compares against `testdata/scorecards.json`, which holds
+published hole-by-hole distances in metres. Add a course by adding an entry;
+each one records the tee set and the source it was taken from. Note that golf
+measures a hole *along the line of play*, so a dogleg's scorecard number is
+longer than the straight tee-to-pin distance — the check compares against the
+spline path length for that reason.
+
+Current results:
+
+```
+Augusta National (way/871993734)
+  projection fidelity : mean 0.201%  worst 0.359%
+  scorecard accuracy  : mean -1.3%   18/18 holes within 12%
+  total par           : 72  (scorecard 72)
+  0 failures, 0 warnings
+
+Old Course, St Andrews (way/1019045811)
+  projection fidelity : mean 0.117%  worst 0.255%
+  scorecard accuracy  : mean -3.8%   17/18 holes within 12%
+  total par           : 72  (scorecard 72)
+  0 failures, 1 warning
+
+Marienlyst Golfklub (way/1408711156)
+  projection fidelity : mean 0.157%  worst 0.226%
+  total par           : 18  (6 holes, all par 3)
+  0 failures, 0 warnings
+```
+
+Marienlyst is a useful check of a different kind: its hole distances reproduce
+the hand-corrected course already in `assets/holes/` to within half a metre on
+all six holes.
+
+Both courses also import with every hole's par matching the scorecard, and the
+Old Course's hole names come through in order — Burn, Dyke, Cartgate (Out) …
+Road, Tom Morris — which is a useful independent check that hole numbering and
+identity are right.
+
+A systematic few percent short is expected and is not a converter fault: OSM
+maps the everyday teeing grounds, while published yardages are from the
+championship tees, which are often separate and unmapped. The Old Course's
+remaining warning is its 2nd hole, 62 m short for exactly that reason.
+
 ### Typical workflow
 
 ```bash
@@ -259,6 +388,22 @@ open hole-editor.html
 
 # 3. Save the cleaned JSON back to ../assets/holes
 ```
+
+### Two courses on one site
+
+A single `leisure=golf_course` polygon often covers more than one layout.
+Augusta National's contains the Par 3 Course, so hole refs 1–9 appear twice —
+once for a 410 m par 4 and once for a 125 m par 3 — and the two used to merge
+into single impossible holes carrying the wrong par.
+
+The converter detects contested refs and keeps the layout that the
+unambiguously-numbered holes belong to, judging each candidate by how close it
+sits to them and how well its length matches theirs. Features that carry a
+contested ref but sit far from the winning centreline — the other layout's
+tees, pins, greens and bunkers — go with it. The run prints what it dropped.
+
+If you actually wanted the other layout, find its own polygon with `--list`
+and import that by `--id`.
 
 ### OSM data quality
 
@@ -280,6 +425,29 @@ out geom;
 
 If you only see the outer boundary and no internal features, the course isn't
 mapped at hole level yet and manual editing will be needed.
+
+The single most valuable thing a course can have mapped is the `golf=hole`
+way — the surveyed centreline from tee to green. It is what a scorecard
+measures along, so it fixes both the hole's length and its shape, and the
+converter prefers it over everything else. A course with hole ways imports
+close to its real yardage; one without falls back to slicing fairway polygons
+and will need the editor.
+
+### What still needs the hole editor
+
+Even a cleanly imported course is a starting point, not a finished one:
+
+- **Green and bunker shapes.** OSM polygons become circles, and a DEM cannot
+  see green contours or bunker lips. Expect to reshape these.
+- **Elevation detail.** A 10–30 m DEM gives the landform, not the mounding.
+- **Trees.** Positions come from `natural=tree` nodes and sampled woodland, so
+  they are plausible rather than exact, and are capped per hole.
+- **Water.** Hazards become axis-aligned boxes, which is rarely the real shape.
+- **Fairway width** falls back to 20 m wherever OSM has no fairway polygon, or
+  where the polygon is a shared double fairway and therefore not one hole's.
+
+What you should *not* have to redo by hand is the overall layout: hole
+positions, lengths, doglegs, par, and the fall of the land.
 
 ### Finding an OSM relation ID
 

@@ -1,0 +1,199 @@
+{
+  "id": "old_course_h03",
+  "name": "Cartgate (Out)",
+  "par": 4,
+  "wind_seed": 668,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    -176.6,
+    0.61,
+    321.77
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        -17.66,
+        0.02,
+        32.18
+      ],
+      [
+        -35.32,
+        0.04,
+        64.35
+      ],
+      [
+        -52.98,
+        0.21,
+        96.53
+      ],
+      [
+        -70.64,
+        0.53,
+        128.71
+      ],
+      [
+        -88.3,
+        0.93,
+        160.89
+      ],
+      [
+        -105.96,
+        1.22,
+        193.06
+      ],
+      [
+        -123.62,
+        1.28,
+        225.24
+      ],
+      [
+        -141.28,
+        1.17,
+        257.42
+      ],
+      [
+        -158.94,
+        0.93,
+        289.6
+      ],
+      [
+        -176.6,
+        0.73,
+        321.77
+      ]
+    ],
+    "width": 20.0,
+    "rough_width": 31.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        -186.98,
+        0,
+        321.72
+      ],
+      "radius": 22.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -179.01,
+        0,
+        294.93
+      ],
+      "radius": 6.86
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -101.63,
+        0,
+        222.73
+      ],
+      "radius": 2.41
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -138.19,
+        0,
+        291.66
+      ],
+      "radius": 1.5
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -166.38,
+        0,
+        253.37
+      ],
+      "radius": 1.85
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -94.54,
+        0,
+        201.88
+      ],
+      "radius": 2.14
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -86.75,
+        0,
+        117.64
+      ],
+      "radius": 2.5
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -47.51,
+        0,
+        33.38
+      ],
+      "radius": 2.19
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        -79.28,
+        0.0,
+        94.2
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -110.69,
+        0.0,
+        261.36
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        20.16,
+        0.0,
+        -24.47
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.3459952,
+      -2.8109029
+    ],
+    "pin_latlon": [
+      56.3488857,
+      -2.813766
+    ],
+    "centerline": "hole_way",
+    "elevation": "eudem25m"
+  }
+}

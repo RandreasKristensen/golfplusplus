@@ -1,0 +1,67 @@
+{
+  "_comment": [
+    "Published scorecards for courses used to verify the OSM importer.",
+    "Distances are METRES along the intended line of play from the tee set named",
+    "in 'tees' -- that is how golf measures a hole, so a dogleg's scorecard number",
+    "is longer than the straight tee-to-pin distance. Compare it against the",
+    "generated spline path length, not the pin vector.",
+    "OSM tee polygons are usually the whole teeing ground rather than one marker,",
+    "so expect generated distances to land a little short of championship numbers."
+  ],
+  "courses": {
+    "old_course": {
+      "name": "Old Course at St Andrews",
+      "osm": "way/1019045811",
+      "tees": "championship",
+      "source": "https://en.wikipedia.org/wiki/Old_Course_at_St_Andrews",
+      "total_par": 72,
+      "holes": {
+        "1":  {"par": 4, "metres": 344, "name": "Burn"},
+        "2":  {"par": 4, "metres": 414, "name": "Dyke"},
+        "3":  {"par": 4, "metres": 363, "name": "Cartgate (Out)"},
+        "4":  {"par": 4, "metres": 439, "name": "Ginger Beer"},
+        "5":  {"par": 5, "metres": 519, "name": "Hole O'Cross (Out)"},
+        "6":  {"par": 4, "metres": 377, "name": "Heathery (Out)"},
+        "7":  {"par": 4, "metres": 339, "name": "High (Out)"},
+        "8":  {"par": 3, "metres": 160, "name": "Short"},
+        "9":  {"par": 4, "metres": 322, "name": "End"},
+        "10": {"par": 4, "metres": 353, "name": "Bobby Jones"},
+        "11": {"par": 3, "metres": 159, "name": "High (In)"},
+        "12": {"par": 4, "metres": 318, "name": "Heathery (In)"},
+        "13": {"par": 4, "metres": 425, "name": "Hole O'Cross (In)"},
+        "14": {"par": 5, "metres": 565, "name": "Long"},
+        "15": {"par": 4, "metres": 416, "name": "Cartgate (In)"},
+        "16": {"par": 4, "metres": 387, "name": "Corner of the Dyke"},
+        "17": {"par": 4, "metres": 453, "name": "Road"},
+        "18": {"par": 4, "metres": 327, "name": "Tom Morris"}
+      }
+    },
+    "augusta_national": {
+      "name": "Augusta National Golf Club",
+      "osm": "way/871993734",
+      "tees": "championship",
+      "source": "https://en.wikipedia.org/wiki/Augusta_National_Golf_Club",
+      "total_par": 72,
+      "holes": {
+        "1":  {"par": 4, "metres": 407, "name": "Tea Olive"},
+        "2":  {"par": 5, "metres": 535, "name": "Pink Dogwood"},
+        "3":  {"par": 4, "metres": 320, "name": "Flowering Peach"},
+        "4":  {"par": 3, "metres": 219, "name": "Flowering Crab Apple"},
+        "5":  {"par": 4, "metres": 453, "name": "Magnolia"},
+        "6":  {"par": 3, "metres": 165, "name": "Juniper"},
+        "7":  {"par": 4, "metres": 411, "name": "Pampas"},
+        "8":  {"par": 5, "metres": 521, "name": "Yellow Jasmine"},
+        "9":  {"par": 4, "metres": 421, "name": "Carolina Cherry"},
+        "10": {"par": 4, "metres": 453, "name": "Camellia"},
+        "11": {"par": 4, "metres": 475, "name": "White Dogwood"},
+        "12": {"par": 3, "metres": 142, "name": "Golden Bell"},
+        "13": {"par": 5, "metres": 498, "name": "Azalea"},
+        "14": {"par": 4, "metres": 402, "name": "Chinese Fir"},
+        "15": {"par": 5, "metres": 503, "name": "Firethorn"},
+        "16": {"par": 3, "metres": 155, "name": "Redbud"},
+        "17": {"par": 4, "metres": 402, "name": "Nandina"},
+        "18": {"par": 4, "metres": 425, "name": "Holly"}
+      }
+    }
+  }
+}

@@ -1,0 +1,267 @@
+{
+  "id": "old_course_h04",
+  "name": "Ginger Beer",
+  "par": 4,
+  "wind_seed": 4221,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    -182.81,
+    -1.09,
+    389.62
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        -15.14,
+        -0.01,
+        32.51
+      ],
+      [
+        -30.29,
+        -0.14,
+        65.02
+      ],
+      [
+        -45.43,
+        -0.5,
+        97.53
+      ],
+      [
+        -60.58,
+        -1.05,
+        130.04
+      ],
+      [
+        -75.72,
+        -1.56,
+        162.56
+      ],
+      [
+        -90.86,
+        -1.84,
+        195.07
+      ],
+      [
+        -106.01,
+        -1.94,
+        227.58
+      ],
+      [
+        -121.15,
+        -1.96,
+        260.09
+      ],
+      [
+        -136.51,
+        -1.94,
+        292.5
+      ],
+      [
+        -151.94,
+        -1.8,
+        324.87
+      ],
+      [
+        -167.38,
+        -1.5,
+        357.25
+      ],
+      [
+        -182.81,
+        -1.22,
+        389.62
+      ]
+    ],
+    "width": 20.0,
+    "rough_width": 31.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        -182.81,
+        0,
+        389.62
+      ],
+      "radius": 22.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -201.21,
+        0,
+        382.35
+      ],
+      "radius": 4.71
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -163.36,
+        0,
+        306.41
+      ],
+      "radius": 1.9
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -34.67,
+        0,
+        34.77
+      ],
+      "radius": 1.63
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -172.45,
+        0,
+        305.5
+      ],
+      "radius": 2.01
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -91.21,
+        0,
+        248.68
+      ],
+      "radius": 2.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -178.04,
+        0,
+        344.21
+      ],
+      "radius": 2.3
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -74.57,
+        0,
+        208.28
+      ],
+      "radius": 2.15
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -187.71,
+        0,
+        346.13
+      ],
+      "radius": 2.01
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -193.67,
+        0,
+        339.96
+      ],
+      "radius": 2.16
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -13.71,
+        0,
+        -7.8
+      ],
+      "radius": 2.46
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -162.56,
+        0,
+        386.64
+      ],
+      "radius": 2.21
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        -114.68,
+        0.0,
+        289.7
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        8.37,
+        0.0,
+        -20.68
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -115.0,
+        0.0,
+        312.29
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -199.36,
+        0.0,
+        340.17
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -105.23,
+        0.0,
+        324.07
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.3482393,
+      -2.8124867
+    ],
+    "pin_latlon": [
+      56.3517393,
+      -2.8154505
+    ],
+    "centerline": "hole_way",
+    "elevation": "eudem25m"
+  }
+}

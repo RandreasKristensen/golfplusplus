@@ -1,0 +1,212 @@
+{
+  "id": "old_course_h06",
+  "name": "Heathery (Out)",
+  "par": 4,
+  "wind_seed": 4547,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    -290.97,
+    -0.72,
+    240.61
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        -29.1,
+        -0.07,
+        24.06
+      ],
+      [
+        -58.19,
+        -0.36,
+        48.12
+      ],
+      [
+        -87.29,
+        -0.83,
+        72.18
+      ],
+      [
+        -116.39,
+        -1.25,
+        96.24
+      ],
+      [
+        -145.49,
+        -1.36,
+        120.3
+      ],
+      [
+        -174.58,
+        -1.17,
+        144.37
+      ],
+      [
+        -203.68,
+        -0.86,
+        168.43
+      ],
+      [
+        -232.78,
+        -0.58,
+        192.49
+      ],
+      [
+        -261.88,
+        -0.53,
+        216.55
+      ],
+      [
+        -290.97,
+        -0.59,
+        240.61
+      ]
+    ],
+    "width": 20.0,
+    "rough_width": 31.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        -290.97,
+        0,
+        240.61
+      ],
+      "radius": 22.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -161.32,
+        0,
+        140.38
+      ],
+      "radius": 3.08
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -181.02,
+        0,
+        164.25
+      ],
+      "radius": 2.01
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -172.28,
+        0,
+        161.1
+      ],
+      "radius": 1.89
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -166.98,
+        0,
+        165.68
+      ],
+      "radius": 1.98
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -185.09,
+        0,
+        154.77
+      ],
+      "radius": 2.27
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -140.34,
+        0,
+        120.98
+      ],
+      "radius": 2.92
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        21.56,
+        0.0,
+        -6.49
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -75.43,
+        0.0,
+        99.02
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -90.59,
+        0.0,
+        118.22
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -59.66,
+        0.0,
+        101.21
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        32.13,
+        0.0,
+        -26.34
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.3552131,
+      -2.818769
+    ],
+    "pin_latlon": [
+      56.3573745,
+      -2.8234864
+    ],
+    "centerline": "hole_way",
+    "elevation": "eudem25m"
+  }
+}

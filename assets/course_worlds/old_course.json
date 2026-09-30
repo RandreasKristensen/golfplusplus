@@ -1,0 +1,550 @@
+{
+  "id": "old_course",
+  "name": "Old Course",
+  "source": {
+    "type": "osm",
+    "osm_ref": "way/1019045811"
+  },
+  "projection": {
+    "type": "equirectangular",
+    "origin_lat": 56.3524632785676,
+    "origin_lon": -2.817038679462847,
+    "units": "meters"
+  },
+  "spawn": {
+    "id": "clubhouse_spawn",
+    "position": [
+      871.23,
+      0.0,
+      -1008.52
+    ],
+    "radius": 5.0
+  },
+  "hole_starts": [
+    {
+      "id": "hole_01_start",
+      "hole_index": 0,
+      "position": [
+        855.02,
+        0.0,
+        -981.37
+      ],
+      "return_position": [
+        548.62,
+        0.0,
+        -966.13
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_02_start",
+      "hole_index": 1,
+      "position": [
+        532.34,
+        0.0,
+        -932.12
+      ],
+      "return_position": [
+        290.53,
+        0.0,
+        -696.08
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_03_start",
+      "hole_index": 2,
+      "position": [
+        354.33,
+        0.0,
+        -699.2
+      ],
+      "return_position": [
+        201.86,
+        0.0,
+        -398.26
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_04_start",
+      "hole_index": 3,
+      "position": [
+        242.87,
+        0.0,
+        -408.2
+      ],
+      "return_position": [
+        97.96,
+        0.0,
+        -80.59
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_05_start",
+      "hole_index": 4,
+      "position": [
+        116.7,
+        0.0,
+        -66.28
+      ],
+      "return_position": [
+        -147.19,
+        0.0,
+        285.42
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_06_start",
+      "hole_index": 5,
+      "position": [
+        -157.7,
+        0.0,
+        338.24
+      ],
+      "return_position": [
+        -397.7,
+        0.0,
+        546.72
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_07_start",
+      "hole_index": 6,
+      "position": [
+        -342.66,
+        0.0,
+        555.43
+      ],
+      "return_position": [
+        -451.05,
+        0.0,
+        863.47
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_08_start",
+      "hole_index": 7,
+      "position": [
+        -452.43,
+        0.0,
+        924.37
+      ],
+      "return_position": [
+        -325.51,
+        0.0,
+        800.01
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_09_start",
+      "hole_index": 8,
+      "position": [
+        -340.41,
+        0.0,
+        886.33
+      ],
+      "return_position": [
+        -154.36,
+        0.0,
+        624.56
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_10_start",
+      "hole_index": 9,
+      "position": [
+        -181.56,
+        0.0,
+        587.06
+      ],
+      "return_position": [
+        -360.75,
+        0.0,
+        783.83
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_11_start",
+      "hole_index": 10,
+      "position": [
+        -378.13,
+        0.0,
+        732.01
+      ],
+      "return_position": [
+        -489.64,
+        0.0,
+        821.76
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_12_start",
+      "hole_index": 11,
+      "position": [
+        -508.96,
+        0.0,
+        798.33
+      ],
+      "return_position": [
+        -446.09,
+        0.0,
+        517.95
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_13_start",
+      "hole_index": 12,
+      "position": [
+        -502.66,
+        0.0,
+        510.6
+      ],
+      "return_position": [
+        -178.13,
+        0.0,
+        309.39
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_14_start",
+      "hole_index": 13,
+      "position": [
+        -237.59,
+        0.0,
+        292.79
+      ],
+      "return_position": [
+        51.26,
+        0.0,
+        -87.42
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_15_start",
+      "hole_index": 14,
+      "position": [
+        -25.33,
+        0.0,
+        -39.77
+      ],
+      "return_position": [
+        176.05,
+        0.0,
+        -401.61
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_16_start",
+      "hole_index": 15,
+      "position": [
+        124.98,
+        0.0,
+        -338.02
+      ],
+      "return_position": [
+        258.89,
+        0.0,
+        -699.68
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_17_start",
+      "hole_index": 16,
+      "position": [
+        267.74,
+        0.0,
+        -745.22
+      ],
+      "return_position": [
+        528.64,
+        0.0,
+        -1039.73
+      ],
+      "interaction_radius": 4.0
+    },
+    {
+      "id": "hole_18_start",
+      "hole_index": 17,
+      "position": [
+        519.5,
+        0.0,
+        -1010.82
+      ],
+      "return_position": [
+        862.12,
+        0.0,
+        -1039.62
+      ],
+      "interaction_radius": 4.0
+    }
+  ],
+  "cart_roads": [
+    {
+      "id": "cart_way_1348405297",
+      "surface": "gravel",
+      "width": 4.0,
+      "source": "osm",
+      "osm_ref": "way/1348405297",
+      "polyline": [
+        [
+          60.8,
+          0.0,
+          81.56
+        ],
+        [
+          68.93,
+          0.0,
+          70.97
+        ],
+        [
+          108.59,
+          0.0,
+          7.19
+        ],
+        [
+          126.65,
+          0.0,
+          -22.85
+        ],
+        [
+          139.62,
+          0.0,
+          -52.61
+        ],
+        [
+          140.17,
+          0.0,
+          -56.86
+        ]
+      ]
+    }
+  ],
+  "walking_shortcuts": [
+    {
+      "id": "shortcut_way_1334924000",
+      "surface": "dirt",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/1334924000",
+      "required_skill_id": "fitness",
+      "required_level": 2,
+      "polyline": [
+        [
+          443.59,
+          0.0,
+          -1016.82
+        ],
+        [
+          447.63,
+          0.0,
+          -1020.65
+        ]
+      ]
+    },
+    {
+      "id": "shortcut_way_1053387966",
+      "surface": "dirt",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/1053387966",
+      "required_skill_id": "fitness",
+      "required_level": 2,
+      "polyline": [
+        [
+          -109.58,
+          0.0,
+          544.25
+        ],
+        [
+          -107.59,
+          0.0,
+          548.35
+        ],
+        [
+          -105.84,
+          0.0,
+          555.04
+        ],
+        [
+          -104.29,
+          0.0,
+          561.13
+        ],
+        [
+          -113.34,
+          0.0,
+          572.2
+        ]
+      ]
+    },
+    {
+      "id": "shortcut_way_1053387963",
+      "surface": "dirt",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/1053387963",
+      "required_skill_id": "fitness",
+      "required_level": 2,
+      "polyline": [
+        [
+          -417.63,
+          0.0,
+          676.91
+        ],
+        [
+          -405.43,
+          0.0,
+          690.65
+        ],
+        [
+          -400.3,
+          0.0,
+          694.14
+        ],
+        [
+          -393.47,
+          0.0,
+          697.07
+        ],
+        [
+          -384.81,
+          0.0,
+          694.36
+        ]
+      ]
+    },
+    {
+      "id": "shortcut_way_220750786",
+      "surface": "dirt",
+      "width": 2.0,
+      "source": "osm",
+      "osm_ref": "way/220750786",
+      "required_skill_id": "fitness",
+      "required_level": 2,
+      "polyline": [
+        [
+          -379.74,
+          0.0,
+          584.84
+        ],
+        [
+          -386.59,
+          0.0,
+          597.94
+        ],
+        [
+          -407.15,
+          0.0,
+          631.44
+        ]
+      ]
+    }
+  ],
+  "collectibles": [
+    {
+      "id": "old_course_clubhouse_token",
+      "kind": "range_token",
+      "position": [
+        873.23,
+        0.0,
+        -1006.52
+      ],
+      "interaction_radius": 3.0,
+      "repeatable": true,
+      "repeatable_cooldown_holes": 1,
+      "reward": {
+        "money": 1,
+        "skill_xp": {
+          "fitness": 5
+        }
+      }
+    },
+    {
+      "id": "old_course_lost_ball_01",
+      "kind": "lost_ball",
+      "position": [
+        863.13,
+        0.0,
+        -994.95
+      ],
+      "interaction_radius": 3.0,
+      "repeatable": false,
+      "reward": {
+        "money": 3,
+        "skill_xp": {
+          "fitness": 12
+        },
+        "world_flag": "old_course_found_lost_ball_01"
+      }
+    },
+    {
+      "id": "old_course_fitness_cache_01",
+      "kind": "cache",
+      "position": [
+        540.48,
+        0.0,
+        -949.13
+      ],
+      "interaction_radius": 3.0,
+      "repeatable": false,
+      "requirement": {
+        "skill_id": "fitness",
+        "min_level": 2
+      },
+      "reward": {
+        "money": 8,
+        "skill_xp": {
+          "fitness": 20
+        },
+        "world_flag": "old_course_found_fitness_cache_01"
+      }
+    }
+  ],
+  "spawn_zones": [
+    {
+      "id": "road_collectibles",
+      "kind": "collectible",
+      "near": "cart_roads",
+      "count": 8
+    },
+    {
+      "id": "tree_signs",
+      "kind": "sign",
+      "near": "trees",
+      "count": 4
+    },
+    {
+      "id": "clubhouse_npcs",
+      "kind": "npc",
+      "near": "spawn",
+      "count": 2
+    }
+  ],
+  "interactables": [
+    {
+      "id": "clubhouse_notice",
+      "kind": "sign",
+      "position": [
+        874.23,
+        0.0,
+        -1007.02
+      ],
+      "interaction_radius": 3.0,
+      "content_id": "clubhouse_notice"
+    }
+  ]
+}
