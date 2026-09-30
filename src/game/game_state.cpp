@@ -14,7 +14,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <filesystem>
 #include <limits>
 #include <optional>
@@ -381,7 +380,6 @@ void update_rangefinder_state(game_state& state, const input_state& input) {
     state.rangefinder_distance_meters = compute_rangefinder_distance_meters(state.player.position,
                                                                             pin_anchor_position(state),
                                                                             state.tuning.scale.meters_per_world_unit);
-    state.rangefinder_distance_label = format_rangefinder_distance(state.rangefinder_distance_meters);
 }
 
 void update_course_map_state(game_state& state, const input_state& input) {
@@ -1356,9 +1354,6 @@ float compute_rangefinder_distance_meters(const glm::vec3& player_position,
     return glm::length(horizontal_delta) * meters_per_world_unit;
 }
 
-std::string format_rangefinder_distance(const float distance_meters) {
-    const int rounded_meters = static_cast<int>(std::floor(std::max(0.0f, distance_meters) + 0.5f));
-    char buffer[16] = {};
-    std::snprintf(buffer, sizeof(buffer), "%dM", rounded_meters);
-    return std::string(buffer);
+int rounded_rangefinder_meters(const float distance_meters) {
+    return static_cast<int>(std::floor(std::max(0.0f, distance_meters) + 0.5f));
 }

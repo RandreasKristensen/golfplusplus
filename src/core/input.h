@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 struct button_state {
     bool is_down = false;
     bool pressed = false;
@@ -15,6 +17,9 @@ struct input_state {
     bool quit_requested = false;
     int mouse_x = 0;
     int mouse_y = 0;
+    // UTF-8 text typed this frame (SDL_TEXTINPUT). Only filled while a text
+    // field has enabled text input, see set_text_input_enabled.
+    std::string text_typed;
     button_state key_1;
     button_state key_2;
     button_state left;
@@ -35,6 +40,7 @@ struct input_state {
 
     void reset_frame() {
         quit_requested = false;
+        text_typed.clear();
         key_1.reset_frame();
         key_2.reset_frame();
         left.reset_frame();

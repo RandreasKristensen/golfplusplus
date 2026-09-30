@@ -10,13 +10,14 @@
 #include <glm/vec3.hpp>
 
 #include "game/scorecard.h"
-#include "physics/material_zone.h"
+#include "game/text_assets.h"
 #include "profiling/profiling.h"
 #include "renderer/course_map_fill.h"
 #include "renderer/dynamic_buffer.h"
 #include "renderer/framebuffer.h"
 #include "renderer/frustum.h"
 #include "renderer/gl_timer.h"
+#include "renderer/menu_overlay.h"
 #include "renderer/overlay_pass.h"
 #include "renderer/render_mesh.h"
 #include "renderer/render_mesh_chunks.h"
@@ -39,38 +40,6 @@ struct controls_overlay_state {
     bool enter_down = false;
     bool backspace_down = false;
     bool retee_down = false;
-};
-
-enum class startup_menu_screen {
-    none,
-    main,
-    help,
-    hole_picker,
-    course_picker
-};
-
-struct render_hole_preview {
-    glm::vec3 tee_position = glm::vec3(0.0f);
-    glm::vec3 pin_position = glm::vec3(0.0f);
-    std::vector<glm::vec3> control_points;
-    float fairway_width = 0.0f;
-    std::vector<material_zone> material_zones;
-};
-
-struct render_startup_tile {
-    std::string title;
-    std::string subtitle;
-    bool selected = false;
-    bool has_preview = false;
-    render_hole_preview preview;
-};
-
-struct render_startup_menu {
-    startup_menu_screen screen = startup_menu_screen::none;
-    std::string title;
-    std::string subtitle;
-    std::string footer;
-    std::vector<render_startup_tile> tiles;
 };
 
 struct render_skill_progress {
@@ -188,8 +157,9 @@ struct renderer_cull_stats {
 struct renderer {
     bool init(SDL_Window* window);
     void shutdown();
-    // `profile` is optional: null disables all profiling work.
-    void render(const render_data& data, frame_profile* profile = nullptr);
+    // `text` is borrowed for the call. `profile` is optional: null disables
+    // all profiling work.
+    void render(const render_data& data, const text_assets& text, frame_profile* profile = nullptr);
     // Culling counters recorded by the most recent render() call.
     const renderer_cull_stats& cull_stats() const { return cull_stats_; }
 
@@ -199,7 +169,11 @@ private:
     bool init_framebuffer();
     bool ensure_framebuffer_size(int screen_width, int screen_height);
     void render_scene(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile);
-    void render_overlay(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile);
+    void render_overlay(const glm::mat4& view,
+                        const glm::mat4& proj,
+                        const render_data& data,
+                        const text_assets& text,
+                        frame_profile* profile);
     void render_crt(int screen_width, int screen_height, frame_profile* profile);
     void upload_terrain_mesh(const render_data& data, frame_profile* profile);
     void upload_material_overlay_mesh(const render_data& data, frame_profile* profile);

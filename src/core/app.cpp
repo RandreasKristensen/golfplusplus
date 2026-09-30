@@ -1,15 +1,14 @@
 #include "core/app.h"
 
 #include "core/event_loop.h"
+#include "core/startup_flow.h"
 #include "game/asset_resolver.h"
-#include "game/course_loader.h"
 #include "game/course_world_loader.h"
 #include "game/game_content.h"
-#include "game/hole_data.h"
-#include "game/hole_loader.h"
 #include "game/progression.h"
 #include "game/save_manager.h"
 #include "game/scorecard.h"
+#include "game/text_ids.h"
 #include "physics/terrain.h"
 #include "profiling/profiling.h"
 #include "renderer/render_mesh_chunks.h"
@@ -19,7 +18,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdio>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -218,23 +216,23 @@ controls_overlay_state make_controls_overlay_state(const input_state& input) {
     return controls;
 }
 
-std::vector<render_skill_progress> make_render_skills(const skill_progression& progression) {
-    const std::array<std::pair<const char*, const char*>, 5> skills{{
-        {golf_swing_skill_id(), "GOLF SWING"},
-        {smoking_skill_id(), "SMOKING"},
-        {fitness_skill_id(), "FITNESS"},
-        {cart_driving_skill_id(), "CART DRIVING"},
-        {drifting_skill_id(), "DRIFTING"}
+std::vector<render_skill_progress> make_render_skills(const skill_progression& progression, const text_assets& text) {
+    const std::array<const char*, 5> skills{{
+        golf_swing_skill_id(),
+        smoking_skill_id(),
+        fitness_skill_id(),
+        cart_driving_skill_id(),
+        drifting_skill_id()
     }};
 
     std::vector<render_skill_progress> rows;
     rows.reserve(skills.size());
-    for (const auto& skill : skills) {
+    for (const char* skill : skills) {
         render_skill_progress row;
-        row.label = skill.second;
-        row.xp = skill_xp(progression, skill.first);
+        row.label = lookup_text(text, skill_text_key(skill).c_str());
+        row.xp = skill_xp(progression, skill);
         row.level = skill_level(row.xp);
-        row.xp_to_next = xp_to_next_level(progression, skill.first);
+        row.xp_to_next = xp_to_next_level(progression, skill);
         rows.push_back(row);
     }
     return rows;
@@ -278,6 +276,7 @@ std::vector<render_xp_drop> make_render_xp_drops(const std::vector<xp_drop>& dro
 // the returned data is handed to.
 render_data make_render_data(const game_state& game,
                              const input_state& input,
+                             const text_assets& text,
                              const static_anchor_cache& anchors,
                              const std::vector<render_tree>& trees,
                              const render_static_mesh& terrain_mesh,
@@ -322,17 +321,20 @@ render_data make_render_data(const game_state& game,
     }
     data.show_rangefinder = game.rangefinder_active;
     data.rangefinder_distance_meters = game.rangefinder_distance_meters;
-    data.rangefinder_distance_label = game.rangefinder_distance_label;
+    if (data.show_rangefinder) {
+        data.rangefinder_distance_label = format_text(
+            text, text_hud_rangefinder, {{"meters", std::to_string(rounded_rangefinder_meters(game.rangefinder_distance_meters))}});
+    }
     data.show_course_map = game.course_map_active;
     data.show_scorecard = game.scorecard_active;
     data.show_skills_panel = game.skills_panel_active;
     data.show_course_results = game.round.finished;
     // Both are string-building; only pay for them on the frames that draw them.
     if (data.show_scorecard || data.show_course_results) {
-        data.scorecard = build_scorecard_data(game);
+        data.scorecard = build_scorecard_data(game, text.strings);
     }
     if (data.show_skills_panel) {
-        data.skills = make_render_skills(game.save.skills);
+        data.skills = make_render_skills(game.save.skills, text);
     }
     data.xp_drops = game.round.finished ? std::vector<render_xp_drop>{} : make_render_xp_drops(game.xp_drops);
     data.cart_active = game.cart.active;
@@ -367,139 +369,16 @@ render_data make_render_data(const game_state& game,
     return data;
 }
 
-std::string format_fps_label(const int fps, const int frame_ms) {
-    char buffer[32] = {};
-    std::snprintf(buffer, sizeof(buffer), "FPS %d  %dMS", std::max(0, fps), std::max(0, frame_ms));
-    return std::string(buffer);
+std::string format_fps_label(const text_assets& text, const int fps, const int frame_ms) {
+    return format_text(text,
+                       text_hud_fps,
+                       {{"fps", std::to_string(std::max(0, fps))}, {"ms", std::to_string(std::max(0, frame_ms))}});
 }
 
-std::string relative_asset_path(const std::filesystem::path& asset_root, const std::filesystem::path& path) {
-    std::error_code error;
-    const std::filesystem::path relative = std::filesystem::relative(path, asset_root, error);
-    if (error) {
-        return path.string();
-    }
-    return relative.generic_string();
-}
-
-std::vector<startup_hole_option> load_startup_holes(const std::string& asset_root) {
-    std::vector<startup_hole_option> options;
-    const std::filesystem::path root(asset_root);
-    const std::filesystem::path holes_dir = root / "holes";
-    if (!std::filesystem::exists(holes_dir) || !std::filesystem::is_directory(holes_dir)) {
-        return options;
-    }
-
-    std::vector<std::filesystem::path> files;
-    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(holes_dir)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".json") {
-            files.push_back(entry.path());
-        }
-    }
-
-    std::sort(files.begin(), files.end());
-    for (const std::filesystem::path& path : files) {
-        std::optional<hole_data> hole = load_hole_from_file(path.string());
-        if (!hole) {
-            continue;
-        }
-        if (hole->id.empty()) {
-            hole->id = path.stem().string();
-        }
-        startup_hole_option option;
-        option.path = relative_asset_path(root, path);
-        option.hole = *hole;
-        options.push_back(option);
-    }
-    return options;
-}
-
-render_hole_preview make_hole_preview(const hole_data& hole) {
-    render_hole_preview preview;
-    preview.tee_position = hole.tee_position;
-    preview.pin_position = hole.pin_position;
-    preview.control_points = hole.spline.control_points;
-    preview.fairway_width = hole.spline.width;
-    preview.material_zones = hole.material_zones;
-    return preview;
-}
-
-std::string par_label(const int par) {
-    char buffer[24] = {};
-    std::snprintf(buffer, sizeof(buffer), "PAR %d", std::max(1, par));
-    return std::string(buffer);
-}
-
-int course_total_par(const course_definition& course, const std::string& asset_root) {
-    int total = 0;
-    for (std::size_t i = 0; i < course.holes.size(); ++i) {
-        const std::optional<hole_data> hole = load_hole_from_file(course_hole_path(asset_root, course, i));
-        if (hole) {
-            total += std::max(1, hole->par);
-        }
-    }
-    return total;
-}
-
-std::optional<render_hole_preview> course_preview(const course_definition& course, const std::string& asset_root) {
-    if (course.holes.empty()) {
+// This frame's left click in overlay clip space (-1..1, y up), if any.
+std::optional<glm::vec2> mouse_click_position(const input_state& input, SDL_Window* window) {
+    if (!input.mouse_left.pressed || window == nullptr) {
         return std::nullopt;
-    }
-    const std::optional<hole_data> hole = load_hole_from_file(course_hole_path(asset_root, course, 0));
-    if (!hole) {
-        return std::nullopt;
-    }
-    return make_hole_preview(*hole);
-}
-
-std::string course_subtitle(const course_definition& course, const std::string& asset_root) {
-    char buffer[48] = {};
-    const int total_par = course_total_par(course, asset_root);
-    std::snprintf(buffer,
-                  sizeof(buffer),
-                  "%d HOLES  PAR %d",
-                  std::max(0, course.hole_count),
-                  std::max(0, total_par));
-    return std::string(buffer);
-}
-
-startup_menu_screen startup_screen_for_flow(const startup_flow flow) {
-    switch (flow) {
-    case startup_flow::main:
-        return startup_menu_screen::main;
-    case startup_flow::help:
-        return startup_menu_screen::help;
-    case startup_flow::hole_picker:
-        return startup_menu_screen::hole_picker;
-    case startup_flow::course_picker:
-        return startup_menu_screen::course_picker;
-    default:
-        return startup_menu_screen::none;
-    }
-}
-
-glm::vec2 startup_tile_center_for_hit(const startup_menu_screen screen, const int index) {
-    if (screen == startup_menu_screen::main) {
-        return glm::vec2(0.0f, 0.26f - static_cast<float>(index) * 0.24f);
-    }
-
-    constexpr int columns = 3;
-    const int row = index / columns;
-    const int column = index % columns;
-    return glm::vec2(-0.58f + static_cast<float>(column) * 0.58f,
-                     0.36f - static_cast<float>(row) * 0.38f);
-}
-
-glm::vec2 startup_tile_half_for_hit(const startup_menu_screen screen) {
-    return screen == startup_menu_screen::main ? glm::vec2(0.42f, 0.095f) : glm::vec2(0.25f, 0.165f);
-}
-
-int startup_hit_index(const startup_menu_screen screen,
-                      const int count,
-                      const input_state& input,
-                      SDL_Window* window) {
-    if (!input.mouse_left.pressed || count <= 0 || window == nullptr) {
-        return -1;
     }
 
     int width = 1;
@@ -507,154 +386,23 @@ int startup_hit_index(const startup_menu_screen screen,
     SDL_GetWindowSize(window, &width, &height);
     const float x = static_cast<float>(input.mouse_x) / static_cast<float>(std::max(1, width)) * 2.0f - 1.0f;
     const float y = 1.0f - static_cast<float>(input.mouse_y) / static_cast<float>(std::max(1, height)) * 2.0f;
-    const glm::vec2 mouse(x, y);
-    const glm::vec2 half = startup_tile_half_for_hit(screen);
+    return glm::vec2(x, y);
+}
 
-    for (int i = 0; i < count; ++i) {
-        const glm::vec2 center = startup_tile_center_for_hit(screen, i);
-        if (std::abs(mouse.x - center.x) <= half.x && std::abs(mouse.y - center.y) <= half.y) {
-            return i;
+void play_ui_sounds(audio_engine& audio, const std::vector<ui_sound>& sounds) {
+    for (const ui_sound sound : sounds) {
+        switch (sound) {
+        case ui_sound::move:
+            audio.play("ui_move");
+            break;
+        case ui_sound::select:
+            audio.play("ui_select");
+            break;
+        case ui_sound::back:
+            audio.play("ui_back");
+            break;
         }
     }
-    return -1;
-}
-
-int startup_item_count(const startup_flow flow,
-                       const std::vector<startup_hole_option>& holes,
-                       const std::vector<course_definition>& courses) {
-    if (flow == startup_flow::main) {
-        return 4;
-    }
-    if (flow == startup_flow::help) {
-        return 0;
-    }
-    if (flow == startup_flow::hole_picker) {
-        return static_cast<int>(holes.size());
-    }
-    if (flow == startup_flow::course_picker) {
-        return static_cast<int>(courses.size());
-    }
-    return 0;
-}
-
-void move_startup_selection(startup_flow flow,
-                            int& selection,
-                            const int count,
-                            const input_state& input) {
-    if (count <= 0) {
-        selection = 0;
-        return;
-    }
-
-    const int columns = flow == startup_flow::main ? 1 : 3;
-    if (input.left.pressed) {
-        selection = (selection + count - 1) % count;
-    }
-    if (input.right.pressed) {
-        selection = (selection + 1) % count;
-    }
-    if (input.up.pressed) {
-        selection = (selection + count - columns) % count;
-    }
-    if (input.down.pressed) {
-        selection = (selection + columns) % count;
-    }
-    selection = std::max(0, std::min(selection, count - 1));
-}
-
-course_definition single_hole_course(const startup_hole_option& option) {
-    course_definition course;
-    course.id = option.hole.id.empty() ? "single_hole" : "single_" + option.hole.id;
-    course.name = option.hole.name.empty() ? option.hole.id : option.hole.name;
-    course.hole_count = 1;
-    course.holes = {option.path};
-    return course;
-}
-
-render_startup_menu make_startup_menu_render_data(const startup_flow flow,
-                                                  const int selection,
-                                                  const std::vector<startup_hole_option>& holes,
-                                                  const game_content& content) {
-    render_startup_menu menu;
-    menu.screen = startup_screen_for_flow(flow);
-    if (menu.screen == startup_menu_screen::none) {
-        return menu;
-    }
-
-    if (flow == startup_flow::main) {
-        menu.title = "GOLF++";
-        menu.subtitle = "SELECT ROUND TYPE";
-        menu.footer = "ARROWS MOVE  ENTER SELECT  ESC QUIT";
-        const std::array<std::pair<const char*, const char*>, 4> items{{
-            {"PLAY HOLE", "PICK ONE HOLE"},
-            {"PLAY COURSE", "PLAY ORDERED HOLES"},
-            {"HELP", "SHOW CONTROLS"},
-            {"QUIT", "RETURN TO DESKTOP"}
-        }};
-        for (std::size_t i = 0; i < items.size(); ++i) {
-            render_startup_tile tile;
-            tile.title = items[i].first;
-            tile.subtitle = items[i].second;
-            tile.selected = static_cast<int>(i) == selection;
-            menu.tiles.push_back(tile);
-        }
-        return menu;
-    }
-
-    if (flow == startup_flow::help) {
-        menu.title = "CONTROLS";
-        menu.subtitle = "CURRENT GAMEPLAY INPUTS";
-        menu.footer = "BACKSPACE BACK  ESC BACK";
-        return menu;
-    }
-
-    if (flow == startup_flow::hole_picker) {
-        menu.title = "PLAY HOLE";
-        menu.subtitle = "CHOOSE A SINGLE HOLE";
-        menu.footer = "ARROWS MOVE  ENTER START  BACKSPACE BACK";
-        for (std::size_t i = 0; i < holes.size(); ++i) {
-            render_startup_tile tile;
-            tile.title = holes[i].hole.name.empty() ? holes[i].hole.id : holes[i].hole.name;
-            tile.subtitle = par_label(holes[i].hole.par);
-            tile.selected = static_cast<int>(i) == selection;
-            tile.has_preview = true;
-            tile.preview = make_hole_preview(holes[i].hole);
-            menu.tiles.push_back(tile);
-        }
-        return menu;
-    }
-
-    menu.title = "PLAY COURSE";
-    menu.subtitle = "CHOOSE A COURSE";
-    menu.footer = "ARROWS MOVE  ENTER START  BACKSPACE BACK";
-    for (std::size_t i = 0; i < content.courses.size(); ++i) {
-        render_startup_tile tile;
-        tile.title = content.courses[i].name.empty() ? content.courses[i].id : content.courses[i].name;
-        tile.subtitle = course_subtitle(content.courses[i], content.asset_root);
-        tile.selected = static_cast<int>(i) == selection;
-        const std::optional<render_hole_preview> preview = course_preview(content.courses[i], content.asset_root);
-        if (preview) {
-            tile.has_preview = true;
-            tile.preview = *preview;
-        }
-        menu.tiles.push_back(tile);
-    }
-    return menu;
-}
-
-render_startup_menu make_confirm_menu_render_data(const int selection) {
-    render_startup_menu menu;
-    menu.screen = startup_menu_screen::main;
-    menu.title = "ARE YOU SURE";
-
-    const std::array<const char*, 2> items{{"YES", "NO"}};
-    for (std::size_t i = 0; i < items.size(); ++i) {
-        render_startup_tile tile;
-        tile.title = items[i];
-        tile.selected = static_cast<int>(i) == selection;
-        menu.tiles.push_back(tile);
-    }
-    return menu;
 }
 
 std::string club_hit_sound_id(const std::string& club_id) {
@@ -733,6 +481,16 @@ bool save_completion_progress_changed(const save_data& before, const save_data& 
 }
 }
 
+void app::return_to_menu() {
+    return_to_main_menu(menu_);
+    const std::uint64_t previous_render_revision = game_.terrain_render_revision;
+    game_ = make_initial_game_state(game_.asset_root);
+    continue_terrain_render_revision(game_, previous_render_revision);
+    game_.save = save_slot_.save;
+    audio_.stop_loop("cart_drive_loop");
+    audio_.start_ambience("ambience_menu_vcr");
+}
+
 void app::mark_current_save_dirty() {
     if (!save_initialized_) {
         return;
@@ -780,9 +538,9 @@ void app::refresh_render_mesh_cache(frame_profile* profile) {
 
 void app::present_frame(render_data& data, frame_profile* profile) {
     data.show_fps = show_fps_;
-    data.fps_label = format_fps_label(displayed_fps_, displayed_frame_ms_);
+    data.fps_label = format_fps_label(text_, displayed_fps_, displayed_frame_ms_);
     data.profile_summary = profiler_.published;
-    renderer_.render(data, profile);
+    renderer_.render(data, text_, profile);
     if (profile != nullptr) {
         // Culling happens inside the renderer; the profile only records it.
         const renderer_cull_stats& cull = renderer_.cull_stats();
@@ -815,7 +573,7 @@ bool app::boot_into_course(const std::string& course_id) {
         return false;
     }
 
-    startup_flow_ = startup_flow::playing;
+    enter_playing(menu_);
     SDL_Log("GOLFPP_COURSE=%s: booted straight into '%s' (%d holes)",
             course_id.c_str(),
             match->name.c_str(),
@@ -835,6 +593,25 @@ bool app::init(const startup_options& options) {
 
     char* base_path = SDL_GetBasePath();
     const std::string asset_root = resolve_asset_root(base_path != nullptr ? base_path : "");
+    if (base_path != nullptr) {
+        SDL_free(base_path);
+    }
+
+    std::optional<text_assets> text = load_text_assets(asset_root);
+    if (!text) {
+        SDL_Log("Failed to load text assets (%s, %s, %s) from %s",
+                text_font_path,
+                text_strings_path,
+                text_styles_path,
+                asset_root.c_str());
+        renderer_.shutdown();
+        window_.shutdown();
+        return false;
+    }
+    text_ = std::move(*text);
+    // Typing only reaches input_state::text_typed while a text field is focused.
+    set_text_input_enabled(false);
+
     game_ = make_initial_game_state(asset_root);
     content_ = load_game_content(asset_root);
     hole_options_ = load_startup_holes(asset_root);
@@ -862,9 +639,6 @@ bool app::init(const startup_options& options) {
     audio_.init();
     audio_.load_manifest(std::filesystem::path(asset_root) / "audio" / "sounds.json");
     audio_.start_ambience(booted_course ? "ambience_course_day" : "ambience_menu_vcr");
-    if (base_path != nullptr) {
-        SDL_free(base_path);
-    }
     running_ = true;
     return true;
 }
@@ -880,6 +654,7 @@ void app::run() {
         refresh_static_anchor_cache(game_, profile);
         return make_render_data(game_,
                                 input_,
+                                text_,
                                 game_.static_anchors,
                                 refresh_render_tree_cache(render_trees_, game_.static_anchors),
                                 cached_terrain_mesh_,
@@ -915,69 +690,27 @@ void app::run() {
             fps_frame_count_ = 0;
         }
 
-        if (startup_flow_ != startup_flow::playing) {
+        if (menu_.flow != startup_flow::playing) {
             if (input_.quit_requested) {
                 running_ = false;
             }
 
-            const int count = startup_item_count(startup_flow_, hole_options_, content_.courses);
-            const startup_menu_screen screen = startup_screen_for_flow(startup_flow_);
-            const int previous_selection = startup_selection_;
-            const int hit = startup_hit_index(screen, count, input_, window_.sdl_window());
-            if (hit >= 0) {
-                startup_selection_ = hit;
-            }
-            move_startup_selection(startup_flow_, startup_selection_, count, input_);
-            if (startup_selection_ != previous_selection) {
-                audio_.play("ui_move");
-            }
-
-            const bool accept = input_.enter.pressed || input_.space.pressed || hit >= 0;
-            const bool back = input_.backspace.pressed || input_.escape.pressed;
-            if (back) {
-                audio_.play("ui_back");
-                if (startup_flow_ == startup_flow::main) {
-                    running_ = false;
-                } else {
-                    startup_flow_ = startup_flow::main;
-                    startup_selection_ = 0;
-                }
-            } else if (accept) {
-                if (startup_flow_ == startup_flow::main) {
-                    audio_.play("ui_select");
-                    if (startup_selection_ == 0) {
-                        startup_flow_ = startup_flow::hole_picker;
-                        startup_selection_ = 0;
-                    } else if (startup_selection_ == 1) {
-                        startup_flow_ = startup_flow::course_picker;
-                        startup_selection_ = 0;
-                    } else if (startup_selection_ == 2) {
-                        startup_flow_ = startup_flow::help;
-                        startup_selection_ = 0;
-                    } else {
-                        running_ = false;
-                    }
-                } else if (startup_flow_ == startup_flow::hole_picker && count > 0) {
-                    audio_.play("ui_select");
-                    if (start_game_course(game_, single_hole_course(hole_options_[static_cast<std::size_t>(startup_selection_)]))) {
-                        startup_flow_ = startup_flow::playing;
-                        audio_.start_ambience("ambience_course_day");
-                    }
-                } else if (startup_flow_ == startup_flow::course_picker && count > 0) {
-                    audio_.play("ui_select");
-                    if (start_game_course(game_, content_.courses[static_cast<std::size_t>(startup_selection_)])) {
-                        startup_flow_ = startup_flow::playing;
-                        audio_.start_ambience("ambience_course_day");
-                    }
-                }
+            const startup_menu_result result = update_startup_menu(menu_,
+                                                                   input_,
+                                                                   mouse_click_position(input_, window_.sdl_window()),
+                                                                   hole_options_,
+                                                                   content_);
+            play_ui_sounds(audio_, result.sounds);
+            if (result.action == startup_action::quit) {
+                running_ = false;
+            } else if (result.action == startup_action::start_course && start_game_course(game_, result.course)) {
+                enter_playing(menu_);
+                audio_.start_ambience("ambience_course_day");
             }
 
             refresh_render_mesh_cache(profile);
             render_data data = make_frame_render_data(profile);
-            data.startup_menu = make_startup_menu_render_data(startup_flow_,
-                                                              startup_selection_,
-                                                              hole_options_,
-                                                              content_);
+            data.startup_menu = make_startup_menu_render_data(menu_, hole_options_, content_, text_);
             present_frame(data, profile);
             continue;
         }
@@ -992,82 +725,43 @@ void app::run() {
                 input_.escape.pressed ||
                 input_.backspace.pressed;
             if (leave_results) {
-                startup_flow_ = startup_flow::main;
-                startup_selection_ = 0;
-                confirm_menu_active_ = false;
-                confirm_selection_ = 1;
-                const std::uint64_t previous_render_revision = game_.terrain_render_revision;
-                game_ = make_initial_game_state(game_.asset_root);
-                continue_terrain_render_revision(game_, previous_render_revision);
-                game_.save = save_slot_.save;
-                audio_.stop_loop("cart_drive_loop");
-                cart_loop_active = false;
                 audio_.play("ui_select");
-                audio_.start_ambience("ambience_menu_vcr");
+                return_to_menu();
+                cart_loop_active = false;
             }
 
             refresh_render_mesh_cache(profile);
             render_data data = make_frame_render_data(profile);
-            if (startup_flow_ != startup_flow::playing) {
-                data.startup_menu = make_startup_menu_render_data(startup_flow_,
-                                                                  startup_selection_,
-                                                                  hole_options_,
-                                                                  content_);
+            if (menu_.flow != startup_flow::playing) {
+                data.startup_menu = make_startup_menu_render_data(menu_, hole_options_, content_, text_);
             }
             present_frame(data, profile);
             continue;
         }
 
         bool confirm_opened_this_frame = false;
-        if (!confirm_menu_active_ && input_.escape.pressed && game_.mode == game_mode::walking) {
-            confirm_menu_active_ = true;
-            confirm_selection_ = 1;
+        if (!menu_.confirm_active && input_.escape.pressed && game_.mode == game_mode::walking) {
+            open_confirm_menu(menu_);
             confirm_opened_this_frame = true;
         }
 
-        if (confirm_menu_active_) {
+        if (menu_.confirm_active) {
             if (input_.quit_requested) {
                 running_ = false;
             } else if (!confirm_opened_this_frame) {
-                const int count = 2;
-                const int previous_selection = confirm_selection_;
-                const int hit = startup_hit_index(startup_menu_screen::main, count, input_, window_.sdl_window());
-                if (hit >= 0) {
-                    confirm_selection_ = hit;
-                }
-                move_startup_selection(startup_flow::main, confirm_selection_, count, input_);
-                if (confirm_selection_ != previous_selection) {
-                    audio_.play("ui_move");
-                }
-
-                const bool accept = input_.enter.pressed || input_.space.pressed || hit >= 0;
-                const bool cancel = input_.escape.pressed || input_.backspace.pressed;
-
-                if (accept) {
-                    audio_.play("ui_select");
-                    if (confirm_selection_ == 0) {
-                        confirm_menu_active_ = false;
-                        startup_flow_ = startup_flow::main;
-                        startup_selection_ = 0;
-                        const std::uint64_t previous_render_revision = game_.terrain_render_revision;
-                        game_ = make_initial_game_state(game_.asset_root);
-                        continue_terrain_render_revision(game_, previous_render_revision);
-                        game_.save = save_slot_.save;
-                        audio_.stop_loop("cart_drive_loop");
-                        cart_loop_active = false;
-                        audio_.start_ambience("ambience_menu_vcr");
-                    } else {
-                        confirm_menu_active_ = false;
-                    }
-                } else if (cancel) {
-                    audio_.play("ui_back");
-                    confirm_menu_active_ = false;
+                const confirm_menu_result result = update_confirm_menu(menu_,
+                                                                       input_,
+                                                                       mouse_click_position(input_, window_.sdl_window()));
+                play_ui_sounds(audio_, result.sounds);
+                if (result.leave_round) {
+                    return_to_menu();
+                    cart_loop_active = false;
                 }
             }
 
             refresh_render_mesh_cache(profile);
             render_data data = make_frame_render_data(profile);
-            data.startup_menu = make_confirm_menu_render_data(confirm_selection_);
+            data.startup_menu = make_confirm_menu_render_data(menu_, text_);
             present_frame(data, profile);
             continue;
         }
@@ -1101,7 +795,7 @@ void app::run() {
         present_frame(data, profile);
     }
 
-    if (save_initialized_ && startup_flow_ == startup_flow::playing) {
+    if (save_initialized_ && menu_.flow == startup_flow::playing) {
         mark_current_save_dirty();
         persist_current_save();
     } else if (save_initialized_ && save_slot_.profile.dirty) {

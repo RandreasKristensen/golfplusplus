@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "game/string_table.h"
+
 struct game_state;
 
 struct scorecard_row {
@@ -27,5 +29,6 @@ struct scorecard_data {
     bool finished = false;
 };
 
-std::string format_relative_score(int relative_score);
-scorecard_data build_scorecard_data(const game_state& state);
+// Labels come from the string table: "EVEN", "+2", "-1" in en.json.
+std::string format_relative_score(const string_table& strings, int relative_score);
+scorecard_data build_scorecard_data(const game_state& state, const string_table& strings);

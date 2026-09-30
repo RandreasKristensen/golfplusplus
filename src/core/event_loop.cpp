@@ -76,6 +76,10 @@ void poll_events(input_state& input) {
             input.quit_requested = true;
         }
 
+        if (event.type == SDL_TEXTINPUT) {
+            input.text_typed += event.text.text;
+        }
+
         if (event.type == SDL_MOUSEMOTION) {
             input.mouse_x = event.motion.x;
             input.mouse_y = event.motion.y;
@@ -115,5 +119,13 @@ void poll_events(input_state& input) {
                 set_button_up(*shift_button);
             }
         }
+    }
+}
+
+void set_text_input_enabled(const bool enabled) {
+    if (enabled && !SDL_IsTextInputActive()) {
+        SDL_StartTextInput();
+    } else if (!enabled && SDL_IsTextInputActive()) {
+        SDL_StopTextInput();
     }
 }

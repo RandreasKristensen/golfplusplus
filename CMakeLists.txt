@@ -9,6 +9,7 @@ option(GOLFPP_BUILD_TESTS "Build tests" OFF)
 set(GOLFPP_SOURCES
     src/core/main.cpp
     src/core/app.cpp
+    src/core/startup_flow.cpp
     src/core/startup_options.cpp
     src/core/window.cpp
     src/core/event_loop.cpp
@@ -130,16 +131,34 @@ target_include_directories(golfpp-profiling PUBLIC
 
 target_link_libraries(golfpp PRIVATE golfpp-profiling)
 
-# GL-free overlay batch builder + bitmap pixel font (unit tested).
+# Text assets as data: pixel font, string table, text styles (unit tested).
+# Shared by game code and the GL-free overlay drawing.
+add_library(golfpp-text
+    src/game/pixel_font_data.cpp
+    src/game/string_table.cpp
+    src/game/text_style.cpp
+    src/game/text_assets.cpp
+)
+target_include_directories(golfpp-text PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor
+    ${GLM_INCLUDE_DIR}
+)
+
+# GL-free overlay batch builder, pixel text, menus and widgets (unit tested).
 add_library(golfpp-overlay
     src/renderer/overlay_batch.cpp
     src/renderer/course_map_fill.cpp
     src/renderer/pixel_font.cpp
+    src/renderer/control_icons.cpp
+    src/renderer/menu_overlay.cpp
+    src/renderer/text_input.cpp
 )
 target_include_directories(golfpp-overlay PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${GLM_INCLUDE_DIR}
 )
+target_link_libraries(golfpp-overlay PUBLIC golfpp-text)
 
 target_link_libraries(golfpp PRIVATE golfpp-overlay)
 
@@ -157,7 +176,7 @@ target_include_directories(golfpp-game PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor
     ${GLM_INCLUDE_DIR}
 )
-target_link_libraries(golfpp-game PUBLIC golfpp-physics golfpp-profiling)
+target_link_libraries(golfpp-game PUBLIC golfpp-physics golfpp-profiling golfpp-text)
 target_compile_definitions(golfpp-game PUBLIC GOLFPP_ASSETS_DIR=\"${GOLFPP_ASSETS_DIR}\")
 
 target_link_libraries(golfpp PRIVATE golfpp-game)
@@ -179,7 +198,11 @@ if (GOLFPP_BUILD_TESTS)
         tests/overlay_batch_tests.cpp
         tests/dynamic_buffer_tests.cpp
         tests/course_map_fill_tests.cpp
+        tests/text_assets_tests.cpp
+        tests/text_input_tests.cpp
+        tests/startup_flow_tests.cpp
         src/audio/audio_manifest.cpp
+        src/core/startup_flow.cpp
         src/core/startup_options.cpp
         src/renderer/primitive_mesh.cpp
         src/renderer/cart_batch.cpp
@@ -193,4 +216,6 @@ if (GOLFPP_BUILD_TESTS)
     target_include_directories(golfpp-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
     file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures" GOLFPP_TEST_FIXTURES_DIR)
     target_compile_definitions(golfpp-tests PRIVATE GOLFPP_TEST_FIXTURES_DIR=\"${GOLFPP_TEST_FIXTURES_DIR}\")
+    file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src" GOLFPP_SOURCE_DIR)
+    target_compile_definitions(golfpp-tests PRIVATE GOLFPP_SOURCE_DIR=\"${GOLFPP_SOURCE_DIR}\")
 endif()

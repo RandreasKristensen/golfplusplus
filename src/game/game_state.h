@@ -136,7 +136,6 @@ struct game_state {
     float hole_time = 0.0f;
     bool rangefinder_active = false;
     float rangefinder_distance_meters = 0.0f;
-    std::string rangefinder_distance_label;
     cigarette_effect_state cigarette_effect;
     bool course_map_active = false;
     bool scorecard_active = false;
@@ -192,4 +191,5 @@ glm::vec3 follow_camera_target(const glm::vec3& ball_position);
 float compute_rangefinder_distance_meters(const glm::vec3& player_position,
                                           const glm::vec3& pin_anchor,
                                           float meters_per_world_unit);
-std::string format_rangefinder_distance(float distance_meters);
+// Whole meters shown on the rangefinder (the label itself is in the string table).
+int rounded_rangefinder_meters(float distance_meters);

@@ -11,6 +11,7 @@
 #include "game/save_data.h"
 #include "game/save_manager.h"
 #include "game/scorecard.h"
+#include "game/text_assets.h"
 #include "physics/terrain.h"
 #include "physics/tree_collision.h"
 
@@ -168,6 +169,11 @@ std::string asset_root() {
 #else
     return "assets";
 #endif
+}
+
+string_table test_strings() {
+    const std::optional<text_assets> text = load_text_assets(asset_root());
+    return text ? text->strings : string_table{};
 }
 
 std::string fixture_root() {
@@ -1239,7 +1245,7 @@ TEST_CASE("scorecard data shows played scores and pending holes") {
     state.save.hole_scores[0] = 4;
     state.round.current_hole_index = 1;
 
-    const scorecard_data scorecard = build_scorecard_data(state);
+    const scorecard_data scorecard = build_scorecard_data(state, test_strings());
     CHECK(scorecard.rows.size() == 3);
     if (scorecard.rows.size() != 3) {
         return;
@@ -1279,7 +1285,7 @@ TEST_CASE("scorecard totals count played holes until the round is finished") {
     state.save.hole_scores[1] = 2;
     state.round.current_hole_index = 2;
 
-    scorecard_data scorecard = build_scorecard_data(state);
+    scorecard_data scorecard = build_scorecard_data(state, test_strings());
     CHECK(scorecard.total_par == 6);
     CHECK(scorecard.total_strokes == 6);
     CHECK(scorecard.total_relative_label == "EVEN");
@@ -1288,7 +1294,7 @@ TEST_CASE("scorecard totals count played holes until the round is finished") {
     state.save.hole_scores[2] = 3;
     state.round.finished = true;
 
-    scorecard = build_scorecard_data(state);
+    scorecard = build_scorecard_data(state, test_strings());
     CHECK(scorecard.finished);
     CHECK(scorecard.total_par == 9);
     CHECK(scorecard.total_strokes == 9);
@@ -1296,9 +1302,10 @@ TEST_CASE("scorecard totals count played holes until the round is finished") {
 }
 
 TEST_CASE("relative score labels format over under and even par") {
-    CHECK(format_relative_score(2) == "+2");
-    CHECK(format_relative_score(-1) == "-1");
-    CHECK(format_relative_score(0) == "EVEN");
+    const string_table strings = test_strings();
+    CHECK(format_relative_score(strings, 2) == "+2");
+    CHECK(format_relative_score(strings, -1) == "-1");
+    CHECK(format_relative_score(strings, 0) == "EVEN");
 }
 
 TEST_CASE("tab scorecard overlay is hold to view while walking") {
@@ -2184,14 +2191,15 @@ TEST_CASE("retee works while ball is moving") {
     CHECK(state.stroke_count == 1);
 }
 
-TEST_CASE("rangefinder formats rounded horizontal meters") {
+TEST_CASE("rangefinder rounds horizontal meters") {
     const glm::vec3 player_position(1.0f, 12.0f, 2.0f);
     const glm::vec3 pin_anchor(4.0f, -3.0f, 6.0f);
 
     CHECK(near_float(compute_rangefinder_distance_meters(player_position, pin_anchor, 1.0f), 5.0f));
     CHECK(near_float(compute_rangefinder_distance_meters(player_position, pin_anchor, 2.0f), 10.0f));
-    CHECK(format_rangefinder_distance(124.49f) == "124M");
-    CHECK(format_rangefinder_distance(124.50f) == "125M");
+    CHECK(rounded_rangefinder_meters(124.49f) == 124);
+    CHECK(rounded_rangefinder_meters(124.50f) == 125);
+    CHECK(rounded_rangefinder_meters(-3.0f) == 0);
 }
 
 TEST_CASE("follow camera target keeps ball-relative height below zero") {
@@ -2220,7 +2228,6 @@ TEST_CASE("rangefinder is only active while walking with non-cart shift held") {
     CHECK(state.mode == game_mode::walking);
     CHECK(state.rangefinder_active);
     CHECK(state.rangefinder_distance_meters > 0.0f);
-    CHECK(!state.rangefinder_distance_label.empty());
 
     input.reset_frame();
     input.shift.is_down = false;

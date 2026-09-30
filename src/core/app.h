@@ -2,31 +2,19 @@
 
 #include "audio/audio_engine.h"
 #include "core/input.h"
+#include "core/startup_flow.h"
 #include "core/startup_options.h"
 #include "core/window.h"
 #include "game/game_content.h"
 #include "game/game_state.h"
-#include "game/hole_data.h"
 #include "game/save_manager.h"
+#include "game/text_assets.h"
 #include "profiling/profiling.h"
 #include "renderer/renderer.h"
 
 #include <cstdint>
 #include <string>
 #include <vector>
-
-enum class startup_flow {
-    main,
-    help,
-    hole_picker,
-    course_picker,
-    playing
-};
-
-struct startup_hole_option {
-    std::string path;
-    hole_data hole;
-};
 
 // Renderable copy of the static anchor cache's trees. Rebuilt only when that
 // cache is (see refresh_render_tree_cache), so the render path borrows it
@@ -46,6 +34,8 @@ struct app {
     void shutdown();
 
 private:
+    // Back to the main menu with a fresh backdrop game state (offline save kept).
+    void return_to_menu();
     void mark_current_save_dirty();
     bool persist_current_save();
     // Startup-only: boots straight into the course with this id when it exists.
@@ -62,11 +52,10 @@ private:
     game_content content_;
     save_paths save_paths_;
     save_slot save_slot_;
+    // Loaded once in init; borrowed by render-data assembly and the renderer.
+    text_assets text_;
     std::vector<startup_hole_option> hole_options_;
-    startup_flow startup_flow_ = startup_flow::main;
-    int startup_selection_ = 0;
-    bool confirm_menu_active_ = false;
-    int confirm_selection_ = 1;
+    startup_flow_state menu_;
     bool show_fps_ = false;
     // Owned here, never global. Handed out as a nullable frame_profile*.
     profiler profiler_;

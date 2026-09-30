@@ -1,17 +1,26 @@
 #include "doctest.h"
 
+#include "game/text_assets.h"
 #include "renderer/overlay_batch.h"
 #include "renderer/pixel_font.h"
 
+#include <glm/common.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 
 #include <cmath>
 #include <cstddef>
+#include <optional>
 #include <string>
 
 namespace {
+pixel_font_data test_font() {
+    const std::optional<text_assets> text = load_text_assets(GOLFPP_ASSETS_DIR);
+    CHECK(text.has_value());
+    return text ? text->font : pixel_font_data{};
+}
+
 // The old path drew the unit screen quad with u_mvp = model. Reproduce that
 // transform on the CPU for comparison.
 glm::vec2 old_matrix_corner(const glm::mat4& model, const std::size_t corner_index) {
@@ -128,40 +137,43 @@ TEST_CASE("overlay batch keeps submission order for painter's-order blending") {
 }
 
 TEST_CASE("pixel glyph appends exactly one quad per lit pixel") {
-    const std::string charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-/:";
+    const pixel_font_data font = test_font();
+    const std::string charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-/:_.,!?()'#@";
     for (const char c : charset) {
         overlay_batch batch;
-        draw_pixel_glyph(batch, c, glm::vec2(-0.5f, 0.5f), 0.01f, glm::vec3(1.0f));
-        const int lit = glyph_lit_pixel_count(c);
+        draw_pixel_glyph(batch, font, c, glm::vec2(-0.5f, 0.5f), 0.01f, glm::vec3(1.0f));
+        const int lit = find_glyph(font, c).lit_pixel_count;
         CHECK(lit > 0);
         CHECK(overlay_batch_quad_count(batch) == static_cast<std::size_t>(lit));
         CHECK(batch.vertices.size() % overlay_vertices_per_quad == 0U);
     }
 
     overlay_batch space_batch;
-    draw_pixel_glyph(space_batch, ' ', glm::vec2(0.0f), 0.01f, glm::vec3(1.0f));
+    draw_pixel_glyph(space_batch, font, ' ', glm::vec2(0.0f), 0.01f, glm::vec3(1.0f));
     CHECK(space_batch.vertices.empty());
 
     overlay_batch lower;
     overlay_batch upper;
-    draw_pixel_glyph(lower, 'x', glm::vec2(0.0f), 0.01f, glm::vec3(1.0f));
-    draw_pixel_glyph(upper, 'X', glm::vec2(0.0f), 0.01f, glm::vec3(1.0f));
+    draw_pixel_glyph(lower, font, 'x', glm::vec2(0.0f), 0.01f, glm::vec3(1.0f));
+    draw_pixel_glyph(upper, font, 'X', glm::vec2(0.0f), 0.01f, glm::vec3(1.0f));
     CHECK(lower.vertices.size() == upper.vertices.size());
 }
 
 TEST_CASE("pixel glyph quads sit on the old pixel grid with the 0.42 half size") {
+    const pixel_font_data font = test_font();
     overlay_batch batch;
     const glm::vec2 top_left(-0.3f, 0.2f);
     const float pixel_size = 0.015f;
     const glm::vec3 color(0.88f, 0.86f, 0.72f);
-    draw_pixel_glyph(batch, 'A', top_left, pixel_size, color);
+    draw_pixel_glyph(batch, font, 'A', top_left, pixel_size, color);
 
     // Walk the glyph rows in the same order the renderer does.
-    const std::array<const char*, 7>& rows = glyph_rows('A');
+    const pixel_glyph& glyph = find_glyph(font, 'A');
+    CHECK(glyph.width == 4);
     std::size_t quad = 0;
-    for (int y = 0; y < 7; ++y) {
-        for (int x = 0; rows[static_cast<std::size_t>(y)][x] != '\0'; ++x) {
-            if (rows[static_cast<std::size_t>(y)][x] != '1') {
+    for (int y = 0; y < font.height; ++y) {
+        for (int x = 0; x < glyph.width; ++x) {
+            if (glyph.pixels[static_cast<std::size_t>(y * glyph.width + x)] == 0U) {
                 continue;
             }
             const glm::vec2 center = top_left + glm::vec2((static_cast<float>(x) + 0.5f) * pixel_size,
@@ -178,19 +190,64 @@ TEST_CASE("pixel glyph quads sit on the old pixel grid with the 0.42 half size")
 }
 
 TEST_CASE("pixel text appends the sum of its glyph quads") {
+    const pixel_font_data font = test_font();
     const std::string label = "+120 XP";
     int lit = 0;
     for (const char c : label) {
-        lit += glyph_lit_pixel_count(c);
+        lit += find_glyph(font, c).lit_pixel_count;
     }
 
+    text_style style;
+    style.pixel_size = 0.01f;
     overlay_batch left;
-    draw_pixel_text_left(left, label, glm::vec2(0.0f), 0.01f, glm::vec3(1.0f));
+    draw_text(left, font, with_align(style, text_align::left), label, glm::vec2(0.0f));
     CHECK(overlay_batch_quad_count(left) == static_cast<std::size_t>(lit));
 
     overlay_batch centered;
-    draw_pixel_text_centered(centered, label, glm::vec2(0.0f), 0.01f, glm::vec3(1.0f));
+    draw_text(centered, font, with_align(style, text_align::center), label, glm::vec2(0.0f));
     CHECK(overlay_batch_quad_count(centered) == static_cast<std::size_t>(lit));
+}
+
+TEST_CASE("left text starts at its anchor and centred text is centred on it") {
+    const pixel_font_data font = test_font();
+    text_style style;
+    style.pixel_size = 0.02f;
+    const std::string label = "I";  // glyph column 1 is lit on every row
+
+    overlay_batch left;
+    draw_text(left, font, with_align(style, text_align::left), label, glm::vec2(0.1f, 0.2f));
+    CHECK(overlay_batch_quad_count(left) > 0U);
+    if (overlay_batch_quad_count(left) == 0U) {
+        return;
+    }
+    // First lit pixel is row 0: its quad is centred half a pixel below the top.
+    const glm::vec2 first_left = (left.vertices[0].position + left.vertices[2].position) * 0.5f;
+    CHECK(std::abs(first_left.y - (0.2f - 0.5f * style.pixel_size)) < 1e-6f);
+
+    overlay_batch centered;
+    draw_text(centered, font, with_align(style, text_align::center), label, glm::vec2(0.0f));
+    glm::vec2 min_corner(1.0f);
+    glm::vec2 max_corner(-1.0f);
+    for (const overlay_vertex& vertex : centered.vertices) {
+        min_corner = glm::min(min_corner, vertex.position);
+        max_corner = glm::max(max_corner, vertex.position);
+    }
+    CHECK(std::abs(min_corner.x + max_corner.x) < 1e-6f);
+    CHECK(std::abs(min_corner.y + max_corner.y) < 1e-6f);
+}
+
+TEST_CASE("fitted text shrinks to its box but not below the style minimum") {
+    const pixel_font_data font = test_font();
+    text_style style;
+    style.pixel_size = 0.02f;
+    style.min_pixel_size = 0.005f;
+
+    CHECK(fitted_pixel_size(font, style, "AB", glm::vec2(1.0f)) == 0.02f);
+    const float squeezed = fitted_pixel_size(font, style, "ABCDEFGHIJ", glm::vec2(0.2f, 1.0f));
+    CHECK(squeezed < 0.02f);
+    CHECK(squeezed >= 0.005f);
+    CHECK(pixel_text_width(font, "ABCDEFGHIJ", squeezed) <= 0.4f * 0.88f + 1e-5f);
+    CHECK(fitted_pixel_size(font, style, "ABCDEFGHIJ", glm::vec2(0.001f)) == 0.005f);
 }
 
 TEST_CASE("clearing the overlay batch keeps its capacity for reuse") {
