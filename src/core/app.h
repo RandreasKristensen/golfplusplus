@@ -10,6 +10,7 @@
 #include "game/save_manager.h"
 #include "game/text_assets.h"
 #include "profiling/profiling.h"
+#include "renderer/camera_transition.h"
 #include "renderer/renderer.h"
 
 #include <cstdint>
@@ -60,6 +61,8 @@ private:
     // Owned here, never global. Handed out as a nullable frame_profile*.
     profiler profiler_;
     render_tree_cache render_trees_;
+    // Eases the camera between modes so it never cuts. Presentation only.
+    camera_transition_state camera_transition_;
     std::uint64_t cached_terrain_revision_ = 0;
     render_static_mesh cached_terrain_mesh_;
     render_static_mesh cached_material_overlay_mesh_;

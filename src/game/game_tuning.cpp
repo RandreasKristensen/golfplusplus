@@ -198,6 +198,51 @@ bool load_hole_runtime(game_tuning& tuning,
     return true;
 }
 
+void apply_course_world_hole_to_tuning(game_tuning& tuning,
+                                       const hole_data& hole,
+                                       const course_world_hole_start& start) {
+    // Build in hole space first so bounds-based zones shape the terrain exactly
+    // as they do in the hub, then move everything into course coordinates.
+    apply_hole_to_tuning(tuning, hole);
+
+    tuning.course.tee_position = course_world_hole_point(hole, start, hole.tee_position);
+    tuning.course.pin_position = course_world_hole_point(hole, start, hole.pin_position);
+    for (glm::vec3& point : tuning.course.spline.control_points) {
+        point = course_world_hole_point(hole, start, point);
+    }
+    tuning.terrain.control_points = tuning.course.spline.control_points;
+    for (std::size_t i = 0; i < hole.material_zones.size(); ++i) {
+        tuning.course.material_zones[i] = transform_course_world_material_zone(hole.material_zones[i], hole, start);
+    }
+    for (std::size_t i = 0; i < hole.trees.size(); ++i) {
+        tuning.course.trees[i] = transform_course_world_tree_instance(hole.trees[i], hole, start);
+    }
+    tuning.terrain_mesh_data = build_terrain_mesh_index(
+        transform_course_world_terrain_mesh(tuning.terrain_mesh_data, hole, start));
+    tuning.terrain_apron_mesh_data = build_terrain_mesh_index(
+        transform_course_world_terrain_mesh(tuning.terrain_apron_mesh_data, hole, start));
+    tuning.ground_y = tuning.course.tee_position.y;
+}
+
+bool load_course_world_hole_runtime(game_tuning& tuning,
+                                    const course_definition& course,
+                                    const std::size_t hole_index,
+                                    const course_world_hole_start& start,
+                                    const std::string& asset_root) {
+    const std::string path = course_hole_path(asset_root, course, hole_index);
+    if (path.empty()) {
+        return false;
+    }
+
+    const std::optional<hole_data> hole = load_hole_from_file(path);
+    if (!hole) {
+        return false;
+    }
+
+    apply_course_world_hole_to_tuning(tuning, *hole, start);
+    return true;
+}
+
 game_tuning default_game_tuning() {
     return default_game_tuning(resolve_asset_root(""));
 }
@@ -232,6 +277,8 @@ game_tuning default_game_tuning(const std::string& asset_root) {
     tuning.camera.cart_eye_offset = tuning.camera.walking_eye_offset;
     tuning.camera.cart_target_distance = tuning.camera.walking_target_distance;
     tuning.camera.cart_fov_degrees = 60.0f;
+    tuning.camera.transition_seconds = 0.55f;
+    tuning.camera.transition_jump_distance = 1.5f;
 
     tuning.zone_tuning.bunker_depth = 0.55f;
     tuning.zone_tuning.water_depth = 0.35f;

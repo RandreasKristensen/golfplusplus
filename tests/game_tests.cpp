@@ -988,7 +988,12 @@ TEST_CASE("selecting six-hole course enters hub mode") {
     CHECK(state.hub.available);
     CHECK(state.hub.in_hub);
     CHECK(state.round.current_hole_index == 0);
-    CHECK(near_float(state.player.position.x, state.hub.world.spawn.position.x));
+    // A course begins at hole 1's start, facing down hole 1.
+    CHECK(near_float(state.player.position.x, state.hub.world.hole_starts.front().position.x));
+    CHECK(near_float(state.player.position.z, state.hub.world.hole_starts.front().position.z));
+    CHECK(can_interact_with_hole_start(state));
+    const glm::vec3 to_pin = state.hub.hole_markers.front().pin_position - state.player.position;
+    CHECK(near_float(state.player.yaw, std::atan2(to_pin.x, to_pin.z)));
     CHECK(!can_interact_with_ball(state));
 }
 
@@ -1074,6 +1079,42 @@ TEST_CASE("interacting with hub hole start loads the correct hole") {
     CHECK(state.tuning.course.id == "marienlyst_golfklub_h02");
 }
 
+TEST_CASE("hub holes are played where the hub shows them") {
+    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
+    CHECK(course.has_value());
+    if (!course) {
+        return;
+    }
+
+    game_state state = make_initial_game_state();
+    CHECK(start_game_course(state, *course));
+    if (!state.hub.available || state.hub.hole_markers.size() < 3U) {
+        return;
+    }
+    const course_hub_hole_marker marker = state.hub.hole_markers[2];
+    state.player.position = marker.start_position;
+
+    CHECK(start_hub_hole(state, 2));
+    CHECK(near_float(state.tuning.course.tee_position.x, marker.tee_position.x));
+    CHECK(near_float(state.tuning.course.tee_position.z, marker.tee_position.z));
+    CHECK(near_float(state.tuning.course.pin_position.x, marker.pin_position.x));
+    CHECK(near_float(state.tuning.course.pin_position.z, marker.pin_position.z));
+
+    const glm::vec3 ball_offset = state.ball.position - marker.tee_position;
+    CHECK(glm::length(glm::vec3(ball_offset.x, 0.0f, ball_offset.z)) < 0.5f);
+    const glm::vec3 player_offset = state.player.position - marker.start_position;
+    CHECK(glm::length(glm::vec3(player_offset.x, 0.0f, player_offset.z)) < 5.0f);
+
+    const terrain_sample tee_ground = sample_terrain_mesh(state.tuning.terrain_mesh_data,
+                                                          marker.tee_position,
+                                                          state.tuning.ground_y);
+    CHECK(tee_ground.inside_surface);
+    const terrain_sample pin_ground = sample_terrain_mesh(state.tuning.terrain_mesh_data,
+                                                          marker.pin_position,
+                                                          state.tuning.ground_y);
+    CHECK(pin_ground.inside_surface);
+}
+
 TEST_CASE("completing hub hole returns to hub and preserves score") {
     const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
     CHECK(course.has_value());
@@ -1109,7 +1150,12 @@ TEST_CASE("cart bonus applies near roads and not far from roads") {
     if (!on_road.hub.available || on_road.hub.world.cart_roads.empty()) {
         return;
     }
-    on_road.player.position = on_road.hub.world.cart_roads.front().polyline.front();
+    const std::vector<glm::vec3>& road = on_road.hub.world.cart_roads.front().polyline;
+    on_road.player.position = road.front();
+    if (road.size() >= 2U) {
+        const glm::vec3 along = road[1] - road[0];
+        on_road.player.yaw = std::atan2(along.x, along.z);
+    }
 
     game_state off_road = on_road;
     off_road.player.position = glm::vec3(400.0f, 0.0f, 400.0f);
@@ -1202,7 +1248,12 @@ TEST_CASE("cart driving and drifting xp are awarded only on hub paths") {
     if (!on_road.hub.available || on_road.hub.world.cart_roads.empty()) {
         return;
     }
-    on_road.player.position = on_road.hub.world.cart_roads.front().polyline.front();
+    const std::vector<glm::vec3>& road = on_road.hub.world.cart_roads.front().polyline;
+    on_road.player.position = road.front();
+    if (road.size() >= 2U) {
+        const glm::vec3 along = road[1] - road[0];
+        on_road.player.yaw = std::atan2(along.x, along.z);
+    }
 
     input_state input;
     input.left_shift.is_down = true;

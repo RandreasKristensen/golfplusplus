@@ -294,7 +294,7 @@ All validation failures return `Err("...")`: the transaction rolls back and the 
 |---|---|
 | `client_connected` / `client_disconnected` (lifecycle) | Auth check (2.3). Upsert `player` (`online`, `last_login`). On disconnect: leave room/group, delete `avatar_motion` and `ball` (abandons the hole), decrement `room.player_count`, delete empty rooms and groups |
 | `claim_name(name)` | Only if the player has no name yet (renames are out of scope). Trim; 3–12 chars; letters, digits and single inner spaces; every character must have a glyph in the embedded font. Unique on the lowercased `name_key`. Must succeed before any other gameplay reducer (they all reject nameless players) |
-| `join_course(course_id)` | Course must exist in embedded content. Leave current room. Join the non-full room for that course with the **most** players, else create one. Spawn at the course world `spawn` in the hub zone |
+| `join_course(course_id)` | Course must exist in embedded content. Leave current room. Join the non-full room for that course with the **most** players, else create one. Spawn at hole 1's start in the hub zone (the course world `spawn` if hole 1 has no start), as offline does |
 | `leave_room()` | As disconnect, minus `online=false` |
 | `update_motion(motion)` | See 2.6 |
 | `create_group()` / `join_group(group_id)` / `leave_group()` | Same room, cap 4. Leadership passes on, or the group is deleted when empty |

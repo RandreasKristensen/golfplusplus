@@ -166,7 +166,9 @@ Several pieces are deliberately GL-free so they can be unit tested:
 menus and help screen, plus the tile layout the menu flow hit-tests against),
 `control_icons` (key icons shared by the HUD and help screen), `text_input`
 (single-line text field), `world_marker_batch`, `cart_batch`,
-`course_map_fill`, `frustum`, `render_mesh_chunks`, `primitive_mesh`. Their GL
+`course_map_fill`, `frustum`, `render_mesh_chunks`, `primitive_mesh`,
+`camera_transition` (eases the camera over ~0.5 s whenever the camera rig
+changes or teleports; `app` owns its state and snaps it in menus). Their GL
 counterparts are `overlay_pass`, `world_marker_renderer`, `tree_renderer`
 (instanced trees) and `dynamic_buffer` (grow-only streaming VBO).
 `renderer.cpp` (~1800 lines) still does scene orchestration and HUD layout.
@@ -206,7 +208,7 @@ All content is JSON. **Do not hardcode content in C++.**
 |---|---|
 | `holes/` | One file per hole: `id`, `name`, `par`, `wind_seed`, `tee`, `pin`, `spline {control_points, width, rough_width}`, `material_zones` (green/bunker/water), `trees` |
 | `courses/` | Course manifest: `id`, `name`, `hole_count`, `holes` (paths or ids), optional `world` |
-| `course_worlds/` | Hub data in shared course coordinates: `spawn`, `hole_starts`, `cart_roads`, `collectibles` (skill XP + world flag rewards, optional skill/flag requirements) |
+| `course_worlds/` | Hub data in shared course coordinates: `spawn`, `hole_starts`, `cart_roads`, `collectibles` (skill XP + world flag rewards, optional skill/flag requirements). A course starts at hole 1's start (`spawn` only if hole 1 has none). Each hole is played where the hub places it (its start's position and `rotation_degrees`), never in the hole file's local coordinates |
 | `clubs/` | Club stats and bag order |
 | `fonts/` | `pixel_font.json`: glyph bitmaps (`"A": ["0110", ...]`, 7 rows), glyph height, fallback glyph |
 | `text/` | `en.json`: every on-screen string, keyed as in `src/game/text_ids.h` |

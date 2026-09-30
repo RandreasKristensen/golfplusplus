@@ -863,6 +863,29 @@ void reset_transient_hole_state(game_state& state) {
     update_walk_overlays(state, input);
 }
 
+// Faces the start of the next hole to play, or straight down that hole when
+// already standing at its start.
+float hub_facing_yaw(const game_state& state) {
+    const std::size_t next_hole = state.round.current_hole_index;
+    const course_world_hole_start* start = find_hole_start(state.hub.world, next_hole);
+    if (start == nullptr) {
+        return 0.0f;
+    }
+    const glm::vec3 delta = start->position - state.player.position;
+    const bool at_start = glm::length(glm::vec3(delta.x, 0.0f, delta.z)) <= start->interaction_radius;
+    if (at_start && next_hole < state.hub.hole_markers.size()) {
+        return aim_angle_towards(state.player.position, state.hub.hole_markers[next_hole].pin_position);
+    }
+    return aim_angle_towards(state.player.position, start->position);
+}
+
+// Where a course begins: at the first hole's start, so the round can begin
+// right away. Falls back to the world spawn when hole 1 has no start.
+glm::vec3 course_start_position(const course_world_definition& world) {
+    const course_world_hole_start* start = find_hole_start(world, 0);
+    return start != nullptr ? start->position : world.spawn.position;
+}
+
 bool reset_transient_hub_state(game_state& state, const glm::vec3& spawn_position) {
     if (!apply_course_world_to_tuning(state)) {
         return false;
@@ -890,9 +913,7 @@ bool reset_transient_hub_state(game_state& state, const glm::vec3& spawn_positio
     state.cart_drift_meter_remainder = 0.0f;
     clear_flight_path(state);
     state.player.position = terrain.point;
-    state.player.yaw = state.hub.world.hole_starts.empty()
-        ? 0.0f
-        : aim_angle_towards(state.player.position, state.hub.world.hole_starts.front().position);
+    state.player.yaw = hub_facing_yaw(state);
     state.cart.yaw = state.player.yaw;
     state.aim_angle = state.player.yaw;
     state.hub.in_hub = true;
@@ -1042,9 +1063,9 @@ bool start_game_course(game_state& state, const course_definition& course) {
             state.hub.available = true;
             state.hub.in_hub = true;
             state.hub.active_hole_index = 0;
-            state.hub.return_position = world->spawn.position;
             state.hub.world = *world;
-            if (reset_transient_hub_state(state, state.hub.world.spawn.position)) {
+            state.hub.return_position = course_start_position(state.hub.world);
+            if (reset_transient_hub_state(state, state.hub.return_position)) {
                 return true;
             }
             state.hub = course_hub_state{};
@@ -1066,7 +1087,11 @@ bool start_hub_hole(game_state& state, const std::size_t hole_index) {
     if (!state.hub.available || hole_index >= state.active_course.holes.size()) {
         return false;
     }
-    if (!load_hole_runtime(state.tuning, state.active_course, hole_index, state.asset_root)) {
+    // The hole is played where the hub shows it, so walking up to a hole start
+    // leads straight onto that hole instead of teleporting to hole space.
+    const course_world_hole_start* start = find_hole_start(state.hub.world, hole_index);
+    if (start == nullptr ||
+        !load_course_world_hole_runtime(state.tuning, state.active_course, hole_index, *start, state.asset_root)) {
         return false;
     }
     mark_terrain_render_dirty(state);

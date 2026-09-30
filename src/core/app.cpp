@@ -170,6 +170,19 @@ void set_follow_camera(render_data& data, const game_state& game) {
     data.camera_target = follow_camera_target(game.ball.position);
 }
 
+camera_rig active_camera_rig(const game_state& game) {
+    switch (game.mode) {
+    case game_mode::walking:
+        return game.cart.active ? camera_rig::cart : camera_rig::walking;
+    case game_mode::aiming:
+        return camera_rig::aiming;
+    case game_mode::addressing:
+        return camera_rig::addressing;
+    default:
+        return camera_rig::following_shot;
+    }
+}
+
 std::vector<glm::vec3> estimate_aim_arc(const game_state& game, frame_profile* profile = nullptr) {
     std::vector<glm::vec3> points;
     if (game.selected_club >= game.tuning.clubs.size()) {
@@ -354,19 +367,50 @@ render_data make_render_data(const game_state& game,
         data.start_markers = &anchors.hub_start_markers;
     }
 
-    if (game.mode == game_mode::walking && game.cart.active) {
+    switch (active_camera_rig(game)) {
+    case camera_rig::cart:
         set_cart_camera(data, game);
-    } else if (game.mode == game_mode::walking) {
+        break;
+    case camera_rig::walking:
         set_walking_camera(data, game);
-    } else if (game.mode == game_mode::aiming) {
+        break;
+    case camera_rig::aiming:
         set_aiming_camera(data, game);
-    } else if (game.mode == game_mode::addressing) {
+        break;
+    case camera_rig::addressing:
         set_address_camera(data, game);
-    } else {
+        break;
+    case camera_rig::following_shot:
         set_follow_camera(data, game);
+        break;
     }
 
     return data;
+}
+
+// Replaces the live rig view in `data` with the eased one. `snap` skips the
+// blend (menus, where the backdrop course can change under the camera).
+void apply_camera_transition(camera_transition_state& transition,
+                             render_data& data,
+                             const game_state& game,
+                             const float dt,
+                             const bool snap) {
+    camera_view desired;
+    desired.position = data.camera_position;
+    desired.target = data.camera_target;
+    desired.fov_degrees = data.camera_fov_degrees;
+
+    const camera_rig rig = active_camera_rig(game);
+    camera_transition_settings settings;
+    settings.duration_seconds = game.tuning.camera.transition_seconds;
+    settings.jump_distance = game.tuning.camera.transition_jump_distance;
+    transition = snap
+        ? snap_camera_transition(rig, desired)
+        : update_camera_transition(transition, rig, desired, dt, settings);
+
+    data.camera_position = transition.shown.position;
+    data.camera_target = transition.shown.target;
+    data.camera_fov_degrees = transition.shown.fov_degrees;
 }
 
 std::string format_fps_label(const text_assets& text, const int fps, const int frame_ms) {
@@ -648,18 +692,21 @@ void app::run() {
     const double performance_frequency = static_cast<double>(SDL_GetPerformanceFrequency());
     bool cart_loop_active = false;
 
-    const auto make_frame_render_data = [this](frame_profile* profile) {
+    // `camera_dt` advances camera blends; `snap_camera` cuts straight to the live view.
+    const auto make_frame_render_data = [this](frame_profile* profile, const float camera_dt, const bool snap_camera) {
         const profile_scope timer(profile, profile_stage::make_render_data);
         // No-op unless terrain_render_revision changed without a rebuild.
         refresh_static_anchor_cache(game_, profile);
-        return make_render_data(game_,
-                                input_,
-                                text_,
-                                game_.static_anchors,
-                                refresh_render_tree_cache(render_trees_, game_.static_anchors),
-                                cached_terrain_mesh_,
-                                cached_material_overlay_mesh_,
-                                profile);
+        render_data data = make_render_data(game_,
+                                            input_,
+                                            text_,
+                                            game_.static_anchors,
+                                            refresh_render_tree_cache(render_trees_, game_.static_anchors),
+                                            cached_terrain_mesh_,
+                                            cached_material_overlay_mesh_,
+                                            profile);
+        apply_camera_transition(camera_transition_, data, game_, camera_dt, snap_camera);
+        return data;
     };
 
     while (running_) {
@@ -709,7 +756,7 @@ void app::run() {
             }
 
             refresh_render_mesh_cache(profile);
-            render_data data = make_frame_render_data(profile);
+            render_data data = make_frame_render_data(profile, simulation_dt, true);
             data.startup_menu = make_startup_menu_render_data(menu_, hole_options_, content_, text_);
             present_frame(data, profile);
             continue;
@@ -731,7 +778,7 @@ void app::run() {
             }
 
             refresh_render_mesh_cache(profile);
-            render_data data = make_frame_render_data(profile);
+            render_data data = make_frame_render_data(profile, simulation_dt, menu_.flow != startup_flow::playing);
             if (menu_.flow != startup_flow::playing) {
                 data.startup_menu = make_startup_menu_render_data(menu_, hole_options_, content_, text_);
             }
@@ -760,7 +807,7 @@ void app::run() {
             }
 
             refresh_render_mesh_cache(profile);
-            render_data data = make_frame_render_data(profile);
+            render_data data = make_frame_render_data(profile, simulation_dt, menu_.flow != startup_flow::playing);
             data.startup_menu = make_confirm_menu_render_data(menu_, text_);
             present_frame(data, profile);
             continue;
@@ -791,7 +838,7 @@ void app::run() {
         }
 
         refresh_render_mesh_cache(profile);
-        render_data data = make_frame_render_data(profile);
+        render_data data = make_frame_render_data(profile, simulation_dt, false);
         present_frame(data, profile);
     }
 

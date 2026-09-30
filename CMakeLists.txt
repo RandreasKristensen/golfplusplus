@@ -20,6 +20,7 @@ set(GOLFPP_SOURCES
     src/renderer/framebuffer.cpp
     src/renderer/dynamic_buffer.cpp
     src/renderer/frustum.cpp
+    src/renderer/camera_transition.cpp
     src/renderer/render_mesh_chunks.cpp
     src/renderer/gl_timer.cpp
     src/renderer/overlay_pass.cpp
@@ -194,6 +195,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/shader_tests.cpp
         tests/world_marker_tests.cpp
         tests/render_culling_tests.cpp
+        tests/camera_transition_tests.cpp
         tests/audio_manifest_tests.cpp
         tests/overlay_batch_tests.cpp
         tests/dynamic_buffer_tests.cpp
@@ -208,6 +210,7 @@ if (GOLFPP_BUILD_TESTS)
         src/renderer/cart_batch.cpp
         src/renderer/world_marker_batch.cpp
         src/renderer/frustum.cpp
+        src/renderer/camera_transition.cpp
         src/renderer/render_mesh_chunks.cpp
     )
     set_target_properties(golfpp-tests PROPERTIES OUTPUT_NAME "golf++-tests")

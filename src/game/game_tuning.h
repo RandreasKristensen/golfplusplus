@@ -61,6 +61,9 @@ struct camera_tuning {
     glm::vec3 cart_eye_offset{0.0f, 1.2f, -4.8f};
     float cart_target_distance = 11.0f;
     float cart_fov_degrees = 67.0f;
+    // Blend between camera views on mode changes and teleports.
+    float transition_seconds = 0.55f;
+    float transition_jump_distance = 1.5f;
 };
 
 struct game_tuning {
@@ -115,7 +118,17 @@ terrain_mesh transform_course_world_terrain_mesh(const terrain_mesh& mesh, const
 material_zone transform_course_world_material_zone(const material_zone& zone, const hole_data& hole, const course_world_hole_start& start);
 tree_instance transform_course_world_tree_instance(const tree_instance& tree, const hole_data& hole, const course_world_hole_start& start);
 void apply_hole_to_tuning(game_tuning& tuning, const hole_data& hole);
+// Like apply_hole_to_tuning, but places the hole where the course world puts
+// it (same transform as the hub), so playing it keeps hub coordinates.
+void apply_course_world_hole_to_tuning(game_tuning& tuning,
+                                       const hole_data& hole,
+                                       const course_world_hole_start& start);
 bool load_hole_runtime(game_tuning& tuning,
                        const course_definition& course,
                        std::size_t hole_index,
                        const std::string& asset_root);
+bool load_course_world_hole_runtime(game_tuning& tuning,
+                                    const course_definition& course,
+                                    std::size_t hole_index,
+                                    const course_world_hole_start& start,
+                                    const std::string& asset_root);
