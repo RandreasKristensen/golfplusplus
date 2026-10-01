@@ -1,10 +1,12 @@
 #include "game/play_area.h"
 
+#include "physics/ground_mesh.h"
 #include "physics/vector_math.h"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 
 #include <glm/common.hpp>
 #include <glm/trigonometric.hpp>
@@ -70,7 +72,7 @@ terrain_mesh append_mesh(terrain_mesh target, const terrain_mesh& source) {
 play_area with_bounds(play_area area) {
     glm::vec3 low(std::numeric_limits<float>::max());
     glm::vec3 high(std::numeric_limits<float>::lowest());
-    for (const terrain_mesh* mesh : {&area.terrain, &area.apron}) {
+    for (const terrain_mesh* mesh : {&area.terrain, &area.ground}) {
         for (const terrain_vertex& vertex : mesh->vertices) {
             low = glm::min(low, vertex.position);
             high = glm::max(high, vertex.position);
@@ -84,13 +86,17 @@ play_area with_bounds(play_area area) {
     return area;
 }
 
-// Full ribbon width (fairway + rough); also how far the apron reaches past it.
+// Full ribbon width (fairway + rough); also how far a lone hole's ground
+// reaches past it.
 float ribbon_width(const hole_data& hole) {
     return std::max(hole.spline.width, hole.spline.rough_width);
 }
 
-terrain_mesh build_apron(const terrain_mesh& terrain, const float margin, const game_tuning& tuning) {
-    return build_outer_rough_apron(terrain, margin, tuning.terrain.apron_cell_size, tuning.terrain.zones);
+// A sample from the ground, marked so it never hints the ribbons.
+terrain_sample off_ribbon(terrain_sample sample) {
+    sample.triangle_index = -1;
+    sample.material = terrain_material::rough;
+    return sample;
 }
 
 // The hole's ribbon and zone overlay, in hole space.
@@ -141,53 +147,48 @@ hole_data place_hole(const hole_data& hole, const course_world_hole_start& start
 play_area build_hole_area(const hole_data& hole, const game_tuning& tuning) {
     const hole_meshes meshes = build_hole_meshes(hole, tuning);
     play_area area;
-    area.wind_seed = hole.wind_seed;
     area.ground_y = hole.tee_position.y;
     area.trees = hole.trees;
     area.terrain = meshes.terrain;
-    area.apron = build_apron(area.terrain, ribbon_width(hole), tuning);
+    area.ground = build_outer_rough_apron(area.terrain, ribbon_width(hole), tuning.terrain.ground_cell_size, tuning.terrain.zones);
     area.material_overlay = meshes.overlay;
     return with_bounds(std::move(area));
 }
 
-play_area build_placed_hole_area(const hole_data& hole, const course_world_hole_start& start, const game_tuning& tuning) {
-    hole_meshes meshes = place_hole_meshes(hole, start, tuning);
-    play_area area;
-    area.wind_seed = hole.wind_seed;
-    area.ground_y = place_hole_point(hole, start, hole.tee_position).y;
-    area.trees = place_hole(hole, start).trees;
-    area.terrain = std::move(meshes.terrain);
-    area.apron = build_apron(area.terrain, ribbon_width(hole), tuning);
-    area.material_overlay = std::move(meshes.overlay);
-    return with_bounds(std::move(area));
-}
-
-play_area build_hub_area(const std::vector<hole_data>& holes,
-                         const course_world_definition& world,
-                         const game_tuning& tuning) {
-    play_area hub;
-    float apron_margin = 0.0f;
+play_area build_course_area(const std::vector<hole_data>& holes,
+                            const course_world_definition& world,
+                            const game_tuning& tuning) {
+    play_area course;
     for (std::size_t i = 0; i < holes.size() && i < world.hole_starts.size(); ++i) {
         const hole_meshes hole = place_hole_meshes(holes[i], world.hole_starts[i], tuning);
         const std::vector<tree_instance> trees = place_hole(holes[i], world.hole_starts[i]).trees;
-        hub.terrain = append_mesh(std::move(hub.terrain), hole.terrain);
-        hub.material_overlay = append_mesh(std::move(hub.material_overlay), hole.overlay);
-        hub.trees.insert(hub.trees.end(), trees.begin(), trees.end());
-        apron_margin = std::max(apron_margin, ribbon_width(holes[i]));
+        course.terrain = append_mesh(std::move(course.terrain), hole.terrain);
+        course.material_overlay = append_mesh(std::move(course.material_overlay), hole.overlay);
+        course.trees.insert(course.trees.end(), trees.begin(), trees.end());
     }
-    hub.terrain = build_terrain_mesh_index(std::move(hub.terrain));
-    hub.material_overlay = build_terrain_mesh_index(std::move(hub.material_overlay));
-    // One apron over every hole: a per-hole apron would follow only its own
-    // hole's heights and float over (or sink under) its neighbours.
-    hub.apron = build_apron(hub.terrain, apron_margin, tuning);
-    return with_bounds(std::move(hub));
+    course.terrain = build_terrain_mesh_index(std::move(course.terrain));
+    course.material_overlay = build_terrain_mesh_index(std::move(course.material_overlay));
+    // One ground for the whole course: it meets every hole's edge, so no hole
+    // floats over (or sinks under) its neighbours.
+    course.ground = build_course_ground(course.terrain, world.ground, tuning.terrain.ground_cell_size,
+                                        tuning.terrain.ground_blend_distance, tuning.terrain.zones);
+    return with_bounds(std::move(course));
 }
 
 terrain_sample sample_area(const play_area& area,
                            const glm::vec3& position,
                            frame_profile* profile,
                            const terrain_sample* previous_sample) {
-    const terrain_sample sample = sample_terrain_mesh(area.terrain, position, area.ground_y, previous_sample);
+    terrain_sample sample;
+    if (const std::optional<terrain_sample> on_ribbon = sample_terrain_inside(area.terrain, position, previous_sample)) {
+        sample = *on_ribbon;
+    } else if (const std::optional<terrain_sample> on_ground = sample_terrain_inside(area.ground, position)) {
+        sample = off_ribbon(*on_ground);
+    } else if (!area.ground.vertices.empty()) {
+        sample = off_ribbon(sample_terrain_mesh(area.ground, position, area.ground_y));
+    } else {
+        sample = sample_terrain_mesh(area.terrain, position, area.ground_y, previous_sample);
+    }
     record_terrain_sample(profile, sample.triangles_tested);
     return sample;
 }
@@ -197,7 +198,6 @@ float terrain_height(const play_area& area, const glm::vec3& position, frame_pro
 }
 
 glm::vec3 anchor_on_terrain(const play_area& area, const glm::vec3& position, frame_profile* profile) {
-    const terrain_sample sample = sample_terrain_anchor(area.terrain, position, area.ground_y);
-    record_terrain_sample(profile, sample.triangles_tested);
-    return sample.point;
+    const terrain_sample sample = sample_area(area, position, profile);
+    return glm::vec3(position.x, sample.point.y, position.z);
 }

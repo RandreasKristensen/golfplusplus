@@ -32,6 +32,12 @@ delete the item.
 - [ ] Check the ODbL share-alike terms for our changed course data and decide
   how to publish it (e.g. a public repo with the course JSON).
 
+### Elevation attribution (Terrain Tiles)
+- [ ] Credit the elevation data behind hole heights and course ground in the
+  credits screen, using the attribution list on
+  https://github.com/tilezen/joerd/blob/master/docs/attribution.md (SRTM, USGS
+  NED and the national DEMs of the countries our courses are in).
+
 ### Audio and asset licences
 - [ ] Record the source and licence of every file in `assets/audio/` and
   `assets/icons/`. Replace anything that doesn't allow commercial use.

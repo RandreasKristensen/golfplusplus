@@ -12,6 +12,7 @@
 #include "test_support.h"
 
 #include <algorithm>
+#include <optional>
 
 #include <glm/geometric.hpp>
 
@@ -111,38 +112,62 @@ TEST_CASE("the hub terrain covers every hole start") {
     }
 }
 
-TEST_CASE("the hub apron never rises over a neighbouring hole at another height") {
-    // Two parallel holes 80 m apart: a flat one, and a climbing one that
-    // starts 10 m higher.
-    const auto straight_hole = [](const float rise) {
-        hole_data hole;
-        hole.tee_position = glm::vec3(0.0f);
-        hole.pin_position = glm::vec3(0.0f, rise, 200.0f);
-        hole.spline.control_points = {glm::vec3(0.0f), glm::vec3(0.0f, rise * 0.5f, 100.0f), hole.pin_position};
-        hole.spline.width = 20.0f;
-        hole.spline.rough_width = 32.0f;
-        return hole;
-    };
+namespace {
+hole_data straight_hole(const float rise) {
+    hole_data hole;
+    hole.tee_position = glm::vec3(0.0f);
+    hole.pin_position = glm::vec3(0.0f, rise, 200.0f);
+    hole.spline.control_points = {glm::vec3(0.0f), glm::vec3(0.0f, rise * 0.5f, 100.0f), hole.pin_position};
+    hole.spline.width = 20.0f;
+    hole.spline.rough_width = 32.0f;
+    return hole;
+}
+
+// Two parallel holes 80 m apart, a flat one and a climbing one that starts
+// 10 m higher, on land that sits `land_height` high everywhere.
+play_area two_hole_course(const float land_height) {
     course_world_definition world;
     world.hole_starts.resize(2);
     world.hole_starts[0].hole_index = 0;
     world.hole_starts[1].hole_index = 1;
     world.hole_starts[1].position = glm::vec3(80.0f, 10.0f, 0.0f);
-    const play_area hub = build_hub_area({straight_hole(0.0f), straight_hole(15.0f)}, world, shipped_content().tuning);
+    world.ground.origin_x = -200.0f;
+    world.ground.origin_z = -200.0f;
+    world.ground.cell_size = 50.0f;
+    world.ground.columns = 11;
+    world.ground.rows = 13;
+    world.ground.heights.assign(11U * 13U, land_height);
+    return build_course_area({straight_hole(0.0f), straight_hole(15.0f)}, world, shipped_content().tuning);
+}
+}
 
+TEST_CASE("the course ground never rises over a hole, whatever the land does") {
+    const play_area course = two_hole_course(30.0f);
     int points_on_holes = 0;
     for (float x = -20.0f; x <= 100.0f; x += 1.7f) {
         for (float z = 0.0f; z <= 200.0f; z += 1.7f) {
             const glm::vec3 point(x, 0.0f, z);
-            const terrain_sample ground = sample_area(hub, point);
-            if (!ground.inside_surface) {
+            const std::optional<terrain_sample> on_hole = sample_terrain_inside(course.terrain, point);
+            if (!on_hole) {
                 continue;
             }
             ++points_on_holes;
-            CHECK(sample_terrain_mesh(hub.apron, point, 0.0f).point.y < ground.point.y);
+            CHECK(sample_terrain_mesh(course.ground, point, 0.0f).point.y < on_hole->point.y);
         }
     }
     CHECK(points_on_holes > 1000);
+}
+
+TEST_CASE("off the holes the ball lands on the ground, which follows the land far away") {
+    const play_area course = two_hole_course(30.0f);
+    const terrain_sample far = sample_area(course, glm::vec3(250.0f, 0.0f, 100.0f));
+    CHECK(near(far.point.y, 30.0f, 0.01f));
+    CHECK(far.material == terrain_material::rough);
+    CHECK(far.triangle_index == -1);
+
+    // Just off the flat hole's rough, the ground meets its edge, not the land.
+    const terrain_sample beside = sample_area(course, glm::vec3(-17.0f, 0.0f, 100.0f));
+    CHECK(beside.point.y < 1.0f);
 }
 
 TEST_CASE("holes are placed by their start, rotated around the tee") {
@@ -155,6 +180,15 @@ TEST_CASE("holes are placed by their start, rotated around the tee") {
 
     CHECK(near(place_hole_point(hole, start, hole.tee_position), start.position, 0.0001f));
     CHECK(near(place_hole_point(hole, start, hole.pin_position), glm::vec3(90.0f, 0.0f, 200.0f), 0.0001f));
+}
+
+TEST_CASE("a hub hole is played on the whole course") {
+    game_state state = started_game(fixture_hub_course());
+    const glm::vec3 course_center = state.area.center;
+    REQUIRE(start_hub_hole(state, 0));
+    CHECK(near(state.area.center, course_center));
+    CHECK(sample_area(state.area, state.hub->world.hole_starts[2].position).inside_surface);
+    CHECK(state.hole->wind_seed == state.course_holes[0].wind_seed);
 }
 
 TEST_CASE("action at a hole start plays that hole where the hub shows it") {

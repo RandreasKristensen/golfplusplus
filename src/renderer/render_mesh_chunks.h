@@ -8,7 +8,7 @@
 #include "renderer/render_mesh.h"
 
 // GL-free render chunking and chunk culling for static indexed meshes
-// (course terrain + apron, material overlays).
+// (course terrain + ground, material overlays).
 //
 // Chunking scheme: order-preserving spatial runs. Triangles are walked in
 // index-buffer order and a new chunk starts whenever adding the next triangle
@@ -16,10 +16,10 @@
 // The index buffer is never reordered, so:
 //   - every chunk is a contiguous index range and the chunks tile the buffer,
 //   - the triangle draw order is exactly the authored order. This matters:
-//     overlapping, coplanar material overlay zones (and overlapping hole/apron
+//     overlapping, coplanar material overlay zones (and overlapping hole/ground
 //     terrain in the hub) resolve with GL_LESS by draw order, so reordering
 //     triangles by a spatial grid could flip which surface wins.
-// Course meshes are emitted as spline section rows, apron grid rows and one
+// Course meshes are emitted as spline section rows, ground grid rows and one
 // zone at a time, so consecutive triangles are spatially coherent and the runs
 // come out as compact pieces of each hole.
 

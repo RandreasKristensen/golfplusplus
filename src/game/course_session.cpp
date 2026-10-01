@@ -44,9 +44,9 @@ void tee_up(game_state& state) {
     state.player.position.y = terrain_height(state.area, state.player.position);
 }
 
-void enter_hole(game_state& state, const std::size_t index, play_area area, const hole_data& placed_hole) {
-    state.area = std::move(area);
-    state.hole = active_hole{index, placed_hole.tee_position, placed_hole.pin_position};
+// `placed_hole` is in the play area's coordinates.
+void enter_hole(game_state& state, const std::size_t index, const hole_data& placed_hole) {
+    state.hole = active_hole{index, placed_hole.tee_position, placed_hole.pin_position, placed_hole.wind_seed};
     mark_terrain_render_dirty(state);
     reset_play_state(state);
     tee_up(state);
@@ -64,7 +64,6 @@ float hub_facing_yaw(const game_state& state) {
 }
 
 void enter_hub(game_state& state, const glm::vec3& position) {
-    state.area = state.hub->area;
     state.hole.reset();
     mark_terrain_render_dirty(state);
     reset_play_state(state);
@@ -85,7 +84,7 @@ std::optional<std::vector<hole_data>> load_course_holes(const std::string& asset
     return holes;
 }
 
-course_hub build_hub(const course_world_definition& world, const std::vector<hole_data>& holes, const game_tuning& tuning) {
+course_hub build_hub(const course_world_definition& world, const std::vector<hole_data>& holes) {
     course_hub hub;
     hub.world = world;
     for (std::size_t i = 0; i < holes.size(); ++i) {
@@ -93,13 +92,13 @@ course_hub build_hub(const course_world_definition& world, const std::vector<hol
         const hole_data placed = place_hole(holes[i], start);
         hub.markers.push_back(hub_hole_marker{placed.tee_position, placed.pin_position, start.position});
     }
-    hub.area = build_hub_area(holes, world, tuning);
     return hub;
 }
 
 void enter_linear_hole(game_state& state, const std::size_t index) {
     const hole_data& hole = state.course_holes[index];
-    enter_hole(state, index, build_hole_area(hole, state.tuning), hole);
+    state.area = build_hole_area(hole, state.tuning);
+    enter_hole(state, index, hole);
 }
 }
 
@@ -110,13 +109,15 @@ bool start_course(game_state& state, const course_definition& course) {
     }
 
     std::optional<course_hub> hub;
+    play_area course_area;
     if (!course.world.empty()) {
         const std::optional<course_world_definition> world =
             load_course_world_from_file(course_world_file_path(state.asset_root, course), course);
         if (!world) {
             return false;
         }
-        hub = build_hub(*world, *holes, state.tuning);
+        hub = build_hub(*world, *holes);
+        course_area = build_course_area(*holes, *world, state.tuning);
     }
 
     state.course = course;
@@ -126,6 +127,7 @@ bool start_course(game_state& state, const course_definition& course) {
     state.xp_drops.clear();
     state.pending_xp_drop_amounts.clear();
     if (state.hub) {
+        state.area = std::move(course_area);
         enter_hub(state, state.hub->world.hole_starts.front().position);
     } else {
         enter_linear_hole(state, 0);
@@ -140,7 +142,7 @@ bool start_hub_hole(game_state& state, const std::size_t hole_index) {
     const hole_data& hole = state.course_holes[hole_index];
     const course_world_hole_start& start = state.hub->world.hole_starts[hole_index];
     state.round.current_hole_index = hole_index;
-    enter_hole(state, hole_index, build_placed_hole_area(hole, start, state.tuning), place_hole(hole, start));
+    enter_hole(state, hole_index, place_hole(hole, start));
     return true;
 }
 

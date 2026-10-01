@@ -34,6 +34,7 @@ except ImportError:
     requests = None
 
 import osm_elevation
+import osm_ground
 
 # overpass-api.de is the reference instance and is tried first. The mirrors are
 # full-planet instances from the OSM wiki's list, used when the primary is
@@ -92,11 +93,15 @@ DEFAULT_CONFIG = {
     },
     "elevation": {
         "enabled": True,
-        # "auto" picks the best DEM covering the course: 10 m in the USA,
-        # 25 m in Europe, ~30 m elsewhere. Name a dataset to force one.
-        "dataset": "auto",
+        # Terrarium tile zoom (see osm_elevation.py); 14 is ~5–8 m per pixel.
+        "zoom": 14,
         "max_grade": 0.25,
         "smooth_window": 3,
+    },
+    # The course world's ground grid (see osm_ground.py).
+    "ground": {
+        "cell_size": 20.0,
+        "margin": 120.0,
     },
     "courses": {},
 }
@@ -2395,54 +2400,55 @@ def _make_elevation_sampler(args, config: dict, origin_lat: float, origin_lon: f
         print("  Elevation sampling disabled; every hole will be flat.", file=sys.stderr)
         return None
 
-    dataset = args.elevation_dataset or elevation_config.get("dataset", "auto")
-    if dataset == "auto":
-        dataset = osm_elevation.auto_dataset(origin_lat, origin_lon)
-
-    cached = _cache_read("elevation", f"{dataset}") or {}
-    sampler = osm_elevation.ElevationSampler(
-        dataset=dataset, cache=osm_elevation.ElevationSampler.cache_from_dict(cached))
-    print(f"  Sampling elevation from '{dataset}' "
-          f"({len(sampler._cache)} points already cached)", file=sys.stderr)
+    sampler = osm_elevation.ElevationSampler(cache_dir=_CACHE_DIR,
+                                             zoom=int(elevation_config.get("zoom", osm_elevation.DEFAULT_ZOOM)),
+                                             refresh=_CACHE_REFRESH)
+    print(f"  Sampling elevation from {sampler.dataset} tiles at zoom {sampler.zoom}", file=sys.stderr)
     return sampler
 
 
-class _CoordinateCollector:
-    """
-    Stand-in sampler that records which coordinates a conversion asks for.
-
-    Holes are converted one at a time, so a real sampler would issue one DEM
-    request per hole. Running the conversion once against this collector
-    gathers every coordinate the course needs, which then resolves in one or
-    two batched requests instead of eighteen.
-    """
-
-    dataset = "collector"
-
-    def __init__(self):
-        self.points: list[tuple[float, float]] = []
-
-    def elevations(self, latlons):
-        self.points.extend(latlons)
-        return [None] * len(latlons)
-
-
-def _prefetch_course_elevation(sampler, holes: dict, origin_lat: float, origin_lon: float,
-                               course_id: str, config: dict) -> None:
-    if sampler is None:
-        return
-    collector = _CoordinateCollector()
-    for num in sorted(holes.keys()):
-        hole_to_json(num, holes[num], origin_lat, origin_lon, course_id, config, collector)
-    before = sampler.requests_made
-    sampler.prefetch(collector.points)
-    print(f"  Prefetched {len(collector.points)} elevation points in "
-          f"{sampler.requests_made - before} request(s)", file=sys.stderr)
-
-
-def _save_elevation_cache(sampler) -> None:
+def _report_elevation(sampler) -> None:
     if sampler is not None:
-        _cache_write("elevation", sampler.dataset, sampler.cache_as_dict())
+        print(f"→ Elevation: {sampler.tiles_downloaded} tile(s) downloaded, "
+              f"{sampler.tiles_from_cache} from the cache", file=sys.stderr)
+
+
+def _course_ground(world: dict, hole_jsons: list[dict], sampler,
+                   origin_lat: float, origin_lon: float, config: dict) -> dict:
+    ground_config = config.get("ground", {})
+    return osm_ground.ground_grid(world, hole_jsons, sampler,
+                                  lambda x, z: _xz_to_latlon(x, z, origin_lat, origin_lon),
+                                  float(ground_config.get("cell_size", 20.0)),
+                                  float(ground_config.get("margin", 120.0)))
+
+
+def _write_ground_only(args) -> None:
+    """Adds or replaces the ground grid of an existing course world."""
+    course_path = Path(args.course_out) / f"{args.ground_only}.json"
+    with open(course_path, "r", encoding="utf-8") as f:
+        course = json.load(f)
+    asset_root = course_path.parent.parent
+    world_path = asset_root / course["world"]
+    with open(world_path, "r", encoding="utf-8") as f:
+        world = json.load(f)
+    hole_jsons = []
+    for hole_ref in course["holes"]:
+        with open(asset_root / hole_ref, "r", encoding="utf-8") as f:
+            hole_jsons.append(json.load(f))
+
+    config = load_generation_config(args.config, args.ground_only)
+    projection = world["projection"]
+    origin_lat, origin_lon = float(projection["origin_lat"]), float(projection["origin_lon"])
+    elevation = _make_elevation_sampler(args, config, origin_lat, origin_lon)
+    world["ground"] = _course_ground(world, hole_jsons, elevation, origin_lat, origin_lon, config)
+    with open(world_path, "w", encoding="utf-8") as f:
+        json.dump(world, f, indent=2)
+        f.write("\n")
+    _report_elevation(elevation)
+    ground = world["ground"]
+    relief = max(ground["heights"]) - min(ground["heights"])
+    print(f"→ Ground: {ground['columns']}x{ground['rows']} cells of {ground['cell_size']} m, "
+          f"relief {relief:.1f} m, in {world_path}", file=sys.stderr)
 
 
 def slugify(name: str) -> str:
@@ -2496,13 +2502,19 @@ Examples:
                     help="List matching courses with their --id values and exit")
     ap.add_argument("--no-elevation", action="store_true",
                     help="Leave every control point at y=0 instead of sampling a DEM")
-    ap.add_argument("--elevation-dataset", metavar="NAME",
-                    help="DEM to sample: auto (default), mapzen, eudem25m, ned10m, srtm30m")
     ap.add_argument("--no-course", action="store_true",
                     help="Skip writing the course manifest JSON")
     ap.add_argument("--no-world", action="store_true",
                     help="Skip writing the course-world JSON")
+    ap.add_argument("--ground-only", metavar="COURSE_ID",
+                    help="Only (re)write the ground grid of an existing course world, "
+                         "e.g. a hand-made one; reads the course and its holes from the asset folders")
     args = ap.parse_args()
+
+    if args.ground_only:
+        set_cache(None if args.no_cache else args.cache_dir, refresh=args.refresh)
+        _write_ground_only(args)
+        return
 
     if not any([args.name, args.id, args.lat is not None, args.lon is not None]):
         ap.print_help()
@@ -2574,10 +2586,10 @@ Examples:
     hole_paths = []
 
     elevation = _make_elevation_sampler(args, config, origin_lat, origin_lon)
-    _prefetch_course_elevation(elevation, holes, origin_lat, origin_lon, course_id, config)
 
     source_counts: dict[str, int] = {}
     tee_elevations: dict[int, float | None] = {}
+    hole_jsons = []
     for num in sorted(holes.keys()):
         print(f"  Processing hole {num}...", file=sys.stderr)
         h_json = hole_to_json(num, holes[num], origin_lat, origin_lon, course_id, config, elevation)
@@ -2587,6 +2599,7 @@ Examples:
             json.dump(h_json, f, indent=2)
         hole_paths.append(f"holes/{fname}")
         tee_elevations[num] = h_json["source"]["tee_elevation"]
+        hole_jsons.append(h_json)
         dist = math.hypot(h_json["pin"][0], h_json["pin"][2])
         path_len = _hole_json_path_length(h_json)
         width = h_json["spline"]["width"]
@@ -2612,6 +2625,7 @@ Examples:
                                           origin_lon,
                                           config,
                                           tee_elevations)
+        world_json["ground"] = _course_ground(world_json, hole_jsons, elevation, origin_lat, origin_lon, config)
         world_file = world_dir / f"{course_id}.json"
         with open(world_file, "w", encoding="utf-8") as f:
             json.dump(world_json, f, indent=2)
@@ -2633,11 +2647,7 @@ Examples:
     if source_counts:
         summary = ", ".join(f"{count}x {name}" for name, count in sorted(source_counts.items()))
         print(f"\n→ Centreline sources: {summary}", file=sys.stderr)
-    if elevation:
-        print(f"→ Elevation: {elevation.points_resolved} points from '{elevation.dataset}' "
-              f"in {elevation.requests_made} request(s), {elevation.points_missing} missing",
-              file=sys.stderr)
-    _save_elevation_cache(elevation)
+    _report_elevation(elevation)
     print(f"→ Done! {len(holes)} hole(s) in {out_dir}/", file=sys.stderr)
 
 

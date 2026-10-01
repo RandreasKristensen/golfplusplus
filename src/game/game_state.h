@@ -60,6 +60,7 @@ struct active_hole {
     std::size_t index = 0;
     glm::vec3 tee_position{0.0f};
     glm::vec3 pin_position{0.0f};
+    std::uint32_t wind_seed = 0;
 };
 
 // Where each hole sits in the hub (course coordinates, authored heights).
@@ -69,12 +70,11 @@ struct hub_hole_marker {
     glm::vec3 start_position{0.0f};
 };
 
-// A course with a course world. The hub area is kept so returning to the hub
-// after a hole does not rebuild it.
+// A course with a course world. Its whole course is the play area, both
+// while walking around and while playing a hole.
 struct course_hub {
     course_world_definition world;
     std::vector<hub_hole_marker> markers;
-    play_area area;
 };
 
 // A "+XP" popup. Age runs to tuning.xp_drops.lifetime_seconds.
@@ -132,6 +132,7 @@ struct game_state {
     round_state round;
     std::optional<course_hub> hub;
     std::optional<active_hole> hole;  // nullopt while walking around a hub
+    // The whole course on a hub course; the current hole on a course without one.
     play_area area;
 
     // The offline save. `save_requested` asks app to write it (hole and course

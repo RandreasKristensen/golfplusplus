@@ -3,198 +3,187 @@
 osm_elevation.py — Sample real terrain elevation for imported OSM courses.
 
 OpenStreetMap does not carry usable height data for golf features, so the
-importer reads a public digital elevation model (DEM) instead and bakes the
-result into each hole's spline control points. This is the same idea as the
-LiDAR import step in TGC Designer Tools, scaled down to the open DEMs that are
-free to query without an account.
+importer reads a digital elevation model (DEM) instead and bakes the result
+into each hole's spline and the course world's ground grid.
 
-Only the standard library is used. `requests` is picked up when it happens to
-be installed, matching osm_golf_convert.py.
-
-Datasets (served by api.opentopodata.org):
-
-  mapzen     global merged DEM, ~30 m  — the safe default anywhere on Earth
-  eudem25m   Europe, 25 m              — better for Danish/European courses
-  ned10m     USA, 10 m                 — better for US courses
-  srtm30m    near-global, 30 m
+The DEM is the Terrarium elevation tiles from the AWS Open Data "Terrain
+Tiles" set (https://registry.opendata.aws/terrain-tiles/): 256x256 PNG map
+tiles whose pixels encode height. They are free, need no account and have no
+rate limit, and each tile is downloaded once and cached on disk, so a
+re-import, a moved hole or a new ground grid costs no network at all. The
+sources behind them are SRTM (~30 m) worldwide, USGS NED (10 m or better) in
+the USA and national lidar in some European countries; see the registry page
+for the full list and its attribution requirements.
 
 Resolution honesty: a 10–30 m DEM reproduces the landform of a hole — uphill
 tee shots, valleys, plateau greens, the slope of a fairway — but it cannot see
 green contours, bunker lips, or mounding. Those stay a hole-editor job.
+
+Only the standard library is used (PNG decoding is zlib plus row filters).
 """
 
-import json
 import math
+import struct
 import sys
 import time
-import urllib.error
-import urllib.parse
 import urllib.request
+import zlib
+from pathlib import Path
 
-try:
-    import requests
-except ImportError:
-    requests = None
-
-OPENTOPODATA_URL = "https://api.opentopodata.org/v1/{dataset}"
+TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
 HEADERS = {"User-Agent": "osm_golf_convert/2.0 (golf course converter)"}
-
-# Public opentopodata allows 100 locations per call and 1 call/second.
-MAX_LOCATIONS_PER_CALL = 100
-MIN_SECONDS_BETWEEN_CALLS = 1.05
-
-DATASET_COVERAGE = {
-    # dataset: (min_lat, min_lon, max_lat, max_lon) or None for global
-    "eudem25m": (34.0, -25.0, 72.0, 45.0),
-    "ned10m": (24.0, -125.0, 50.0, -66.0),
-    "srtm30m": (-60.0, -180.0, 60.0, 180.0),
-    "mapzen": None,
-}
-
-DEFAULT_DATASET_PREFERENCE = ["ned10m", "eudem25m", "mapzen"]
+DATASET = "terrarium"
+TILE_SIZE = 256
+# ~5–8 m per pixel at golf-course latitudes: finer than any source DEM outside
+# the USA, so nothing is lost, and a course needs only a handful of tiles.
+DEFAULT_ZOOM = 14
 
 
-def dataset_covers(dataset: str, lat: float, lon: float) -> bool:
-    box = DATASET_COVERAGE.get(dataset, None)
-    if box is None:
-        return True
-    min_lat, min_lon, max_lat, max_lon = box
-    return min_lat <= lat <= max_lat and min_lon <= lon <= max_lon
+# ── tiles ─────────────────────────────────────────────────────────────────────
+
+def tile_pixel(lat: float, lon: float, zoom: int) -> tuple[float, float]:
+    """Web Mercator position of a coordinate, in pixels of the whole map at `zoom`."""
+    scale = TILE_SIZE * (2 ** zoom)
+    x = (lon + 180.0) / 360.0 * scale
+    lat_rad = math.radians(max(-85.0511, min(85.0511, lat)))
+    y = (1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * scale
+    return x, y
 
 
-def auto_dataset(lat: float, lon: float, preference: list[str] | None = None) -> str:
-    """Pick the highest-resolution dataset that covers this coordinate."""
-    for dataset in (preference or DEFAULT_DATASET_PREFERENCE):
-        if dataset_covers(dataset, lat, lon):
-            return dataset
-    return "mapzen"
+def decode_png_rgb(data: bytes) -> tuple[int, int, list[bytes]]:
+    """
+    Width, height and raw RGB rows of an 8-bit, non-interlaced RGB or RGBA
+    PNG (the only kinds the tile set uses). Alpha is dropped.
+    """
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a PNG")
+    pos = 8
+    width = height = channels = 0
+    compressed = bytearray()
+    while pos < len(data):
+        length, kind = struct.unpack(">I4s", data[pos:pos + 8])
+        body = data[pos + 8:pos + 8 + length]
+        pos += 12 + length
+        if kind == b"IHDR":
+            width, height, depth, color, _comp, _filt, interlace = struct.unpack(">IIBBBBB", body)
+            if depth != 8 or color not in (2, 6) or interlace != 0:
+                raise ValueError("unsupported PNG format")
+            channels = 3 if color == 2 else 4
+        elif kind == b"IDAT":
+            compressed += body
+        elif kind == b"IEND":
+            break
+
+    raw = zlib.decompress(bytes(compressed))
+    stride = width * channels
+    rows: list[bytes] = []
+    previous = bytearray(stride)
+    for row in range(height):
+        start = row * (stride + 1)
+        kind = raw[start]
+        line = bytearray(raw[start + 1:start + 1 + stride])
+        for i in range(stride):
+            left = line[i - channels] if i >= channels else 0
+            up = previous[i]
+            if kind == 1:
+                line[i] = (line[i] + left) & 0xFF
+            elif kind == 2:
+                line[i] = (line[i] + up) & 0xFF
+            elif kind == 3:
+                line[i] = (line[i] + ((left + up) >> 1)) & 0xFF
+            elif kind == 4:
+                up_left = previous[i - channels] if i >= channels else 0
+                p = left + up - up_left
+                pa, pb, pc = abs(p - left), abs(p - up), abs(p - up_left)
+                predictor = left if pa <= pb and pa <= pc else (up if pb <= pc else up_left)
+                line[i] = (line[i] + predictor) & 0xFF
+        previous = line
+        if channels == 4:
+            line = bytearray(b for i, b in enumerate(line) if i % 4 != 3)
+        rows.append(bytes(line))
+    return width, height, rows
+
+
+def terrarium_heights(rows: list[bytes]) -> list[list[float]]:
+    """Metres above sea level per pixel: (R * 256 + G + B / 256) - 32768."""
+    return [[row[i] * 256.0 + row[i + 1] + row[i + 2] / 256.0 - 32768.0
+             for i in range(0, len(row), 3)] for row in rows]
 
 
 class ElevationSampler:
     """
-    Batched DEM sampler with an in-memory cache and optional disk cache.
-
-    Coordinates are rounded to ~1 m before caching so that the many control
-    points, zone centres and tees that land on the same DEM cell only cost one
-    lookup.
+    Bilinear heights from Terrarium tiles. Tiles are fetched on first use and
+    cached under `cache_dir` (when given), so every later lookup in the same
+    area, in any run, is local.
     """
 
-    ROUND_DIGITS = 5  # ~1.1 m of latitude
-
-    def __init__(self, dataset: str = "mapzen", cache: dict | None = None,
-                 verbose: bool = True):
-        self.dataset = dataset
-        self._cache: dict[tuple[float, float], float | None] = dict(cache or {})
-        self._last_call = 0.0
+    def __init__(self, cache_dir: Path | None = None, zoom: int = DEFAULT_ZOOM,
+                 refresh: bool = False, verbose: bool = True):
+        self.dataset = DATASET
+        self.zoom = zoom
+        self.cache_dir = Path(cache_dir) / DATASET / str(zoom) if cache_dir else None
+        self.refresh = refresh
         self.verbose = verbose
-        self.requests_made = 0
-        self.points_resolved = 0
-        self.points_missing = 0
+        self.tiles_downloaded = 0
+        self.tiles_from_cache = 0
+        self._tiles: dict[tuple[int, int], list[list[float]] | None] = {}
 
-    # ── cache plumbing ────────────────────────────────────────────────────────
-
-    def _key(self, lat: float, lon: float) -> tuple[float, float]:
-        return (round(lat, self.ROUND_DIGITS), round(lon, self.ROUND_DIGITS))
-
-    def cache_as_dict(self) -> dict:
-        return {f"{lat},{lon}": value for (lat, lon), value in self._cache.items()}
-
-    @staticmethod
-    def cache_from_dict(raw: dict) -> dict:
-        out = {}
-        for key, value in (raw or {}).items():
+    def _download(self, x: int, y: int) -> bytes | None:
+        url = TILE_URL.format(z=self.zoom, x=x, y=y)
+        for attempt in range(3):
             try:
-                lat_s, lon_s = key.split(",")
-                out[(float(lat_s), float(lon_s))] = value
-            except (ValueError, AttributeError):
-                continue
-        return out
-
-    # ── network ───────────────────────────────────────────────────────────────
-
-    def _http_get(self, url: str) -> dict:
-        if requests is not None:
-            r = requests.get(url, timeout=60, headers=HEADERS)
-            r.raise_for_status()
-            return r.json()
-        req = urllib.request.Request(url, headers=HEADERS, method="GET")
-        with urllib.request.urlopen(req, timeout=60) as response:
-            return json.loads(response.read().decode("utf-8"))
-
-    def _throttle(self):
-        elapsed = time.monotonic() - self._last_call
-        if elapsed < MIN_SECONDS_BETWEEN_CALLS:
-            time.sleep(MIN_SECONDS_BETWEEN_CALLS - elapsed)
-        self._last_call = time.monotonic()
-
-    def _fetch_batch(self, batch: list[tuple[float, float]]) -> None:
-        locations = "|".join(f"{lat},{lon}" for lat, lon in batch)
-        url = OPENTOPODATA_URL.format(dataset=self.dataset) + "?" + urllib.parse.urlencode(
-            {"locations": locations, "interpolation": "bilinear"}
-        )
-
-        payload = None
-        for attempt in range(4):
-            self._throttle()
-            try:
-                payload = self._http_get(url)
-                break
-            except Exception as e:  # network, HTTP, JSON — all retryable
-                wait = 2.0 * (attempt + 1)
+                request = urllib.request.Request(url, headers=HEADERS)
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    return response.read()
+            except Exception as e:  # network or HTTP — retry, then give up
                 if self.verbose:
-                    print(f"  [warn] elevation request failed ({type(e).__name__}); "
-                          f"retrying in {wait:.0f}s", file=sys.stderr)
-                time.sleep(wait)
+                    print(f"  [warn] elevation tile {self.zoom}/{x}/{y} failed ({e}); "
+                          f"{'retrying' if attempt < 2 else 'giving up'}", file=sys.stderr)
+                time.sleep(1.0 + attempt)
+        return None
 
-        self.requests_made += 1
+    def _tile(self, x: int, y: int) -> list[list[float]] | None:
+        key = (x, y)
+        if key in self._tiles:
+            return self._tiles[key]
+        path = self.cache_dir / str(x) / f"{y}.png" if self.cache_dir else None
+        data = None
+        if path is not None and path.exists() and not self.refresh:
+            data = path.read_bytes()
+            self.tiles_from_cache += 1
+        else:
+            data = self._download(x, y)
+            if data is not None:
+                self.tiles_downloaded += 1
+                if path is not None:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(data)
+        heights = terrarium_heights(decode_png_rgb(data)[2]) if data is not None else None
+        self._tiles[key] = heights
+        return heights
 
-        if not payload or payload.get("status") != "OK":
-            for key in batch:
-                self._cache.setdefault(key, None)
-                self.points_missing += 1
-            return
-
-        results = payload.get("results", [])
-        for key, result in zip(batch, results):
-            elevation = result.get("elevation")
-            if elevation is None:
-                self._cache[key] = None
-                self.points_missing += 1
-            else:
-                self._cache[key] = float(elevation)
-                self.points_resolved += 1
-
-        # Short reply: mark whatever did not come back as missing.
-        for key in batch[len(results):]:
-            self._cache.setdefault(key, None)
-            self.points_missing += 1
-
-    # ── public API ────────────────────────────────────────────────────────────
-
-    def prefetch(self, latlons: list[tuple[float, float]]) -> None:
-        """Resolve every coordinate not already cached, in batched calls."""
-        pending = []
-        seen = set()
-        for lat, lon in latlons:
-            key = self._key(lat, lon)
-            if key in self._cache or key in seen:
-                continue
-            seen.add(key)
-            pending.append(key)
-
-        for i in range(0, len(pending), MAX_LOCATIONS_PER_CALL):
-            batch = pending[i:i + MAX_LOCATIONS_PER_CALL]
-            self._fetch_batch(batch)
+    def _pixel_height(self, px: int, py: int) -> float | None:
+        tile = self._tile(px // TILE_SIZE, py // TILE_SIZE)
+        return None if tile is None else tile[py % TILE_SIZE][px % TILE_SIZE]
 
     def elevation(self, lat: float, lon: float) -> float | None:
-        key = self._key(lat, lon)
-        if key not in self._cache:
-            self._fetch_batch([key])
-        return self._cache.get(key)
+        # Pixel centres sit at +0.5, so shift before splitting into cell + fraction.
+        fx, fy = tile_pixel(lat, lon, self.zoom)
+        fx -= 0.5
+        fy -= 0.5
+        x0, y0 = math.floor(fx), math.floor(fy)
+        tx, ty = fx - x0, fy - y0
+        corners = [self._pixel_height(x0, y0), self._pixel_height(x0 + 1, y0),
+                   self._pixel_height(x0, y0 + 1), self._pixel_height(x0 + 1, y0 + 1)]
+        if any(c is None for c in corners):
+            return None
+        a, b, c, d = corners
+        top = a + (b - a) * tx
+        bottom = c + (d - c) * tx
+        return top + (bottom - top) * ty
 
     def elevations(self, latlons: list[tuple[float, float]]) -> list[float | None]:
-        self.prefetch(latlons)
-        return [self._cache.get(self._key(lat, lon)) for lat, lon in latlons]
+        return [self.elevation(lat, lon) for lat, lon in latlons]
 
 
 # ── post-processing ───────────────────────────────────────────────────────────

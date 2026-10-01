@@ -353,7 +353,7 @@ void step_ball(game_state& state, const float dt, frame_profile* profile) {
     const physics_tuning physics = ball_in_water(state.ball, before, state.tuning.terrain.zones.water_depth)
         ? with_water_drag(state.tuning.physics)
         : state.tuning.physics;
-    const wind_state wind = sample_wind(state.area.wind_seed, state.hole_time, state.tuning.wind);
+    const wind_state wind = sample_wind(state.hole->wind_seed, state.hole_time, state.tuning.wind);
     state.ball = step_ball_flight(state.ball, wind, dt, physics);
 
     const terrain_sample after = sample_area(state.area, state.ball.position, profile, &before);

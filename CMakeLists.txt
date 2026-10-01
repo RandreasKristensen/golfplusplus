@@ -56,6 +56,7 @@ golfpp_library(golfpp-physics
     src/physics/collision.cpp
     src/physics/flight_model.cpp
     src/physics/ground_contact.cpp
+    src/physics/ground_mesh.cpp
     src/physics/terrain.cpp
     src/physics/tree_collision.cpp
     src/physics/wind.cpp

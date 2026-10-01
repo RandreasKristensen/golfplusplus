@@ -20,7 +20,10 @@ commands (`status`, `diff`, `log`) are fine.
 A lo-fi 3D golf game in C++17 that looks like a 1989 camcorder tape played on a
 small TV. Courses are real golf courses imported from OpenStreetMap. Each course
 is a hub: walk or drive a cart between hole starts, pick up collectibles, level
-RuneScape-style skills.
+RuneScape-style skills. A course is one continuous area on its real land
+(the course world's `ground` grid): holes are played where they sit, never in
+a separate scene, so other groups stay visible and a stray shot lands on the
+next hole or the ground between.
 
 Golf simulation first, RPG progression second. Online play (SpacetimeDB rooms)
 is planned to become the main draw; offline stays a complete solo mode.
@@ -164,6 +167,8 @@ system.
   in new player-facing text, store material or file names. The existing ones
   are due to be renamed.
 - Course data is OpenStreetMap (ODbL): never remove or hide OSM attribution.
+- Heights are from the AWS Terrain Tiles (Terrarium) and their sources (SRTM,
+  USGS NED, national DEMs): credit them alongside OSM.
 - Record the source and licence of every audio, image or icon asset; only use
   assets that allow commercial use.
 - Flag any AI-generated art, audio, text or trailer content to the owner (Steam

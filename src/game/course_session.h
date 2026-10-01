@@ -13,7 +13,8 @@
 // hole or the world cannot be loaded.
 bool start_course(game_state& state, const course_definition& course);
 
-// Plays hub hole `hole_index` where the hub shows it. False when there is no
+// Plays hub hole `hole_index` where it sits on the course: the area stays the
+// whole course, with every hole, tree and the land. False when there is no
 // hub, the index is out of range or the hole was already played this round.
 bool start_hub_hole(game_state& state, std::size_t hole_index);
 

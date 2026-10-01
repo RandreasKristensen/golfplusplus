@@ -311,7 +311,7 @@ void app::refresh_render_meshes() {
         return;
     }
     const std::uint64_t revision = game_.terrain_render_revision;
-    terrain_render_mesh_ = make_terrain_render_mesh({&game_.area.terrain, &game_.area.apron}, revision);
+    terrain_render_mesh_ = make_terrain_render_mesh({&game_.area.terrain, &game_.area.ground}, revision);
     material_overlay_render_mesh_ = make_terrain_render_mesh({&game_.area.material_overlay}, revision);
     render_meshes_revision_ = revision;
 }

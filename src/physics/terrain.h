@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include <glm/vec3.hpp>
@@ -28,6 +29,9 @@ enum class terrain_material : std::uint8_t {
     water
 };
 inline constexpr std::size_t terrain_material_count = 5;
+
+// A ribbon's rough edge sits up to this much lower than its fairway.
+inline constexpr float ribbon_edge_drop = 0.18f;
 
 struct terrain_zone_tuning {
     float bunker_depth = 0.0f;
@@ -82,7 +86,9 @@ struct terrain_sample {
     glm::vec3 point{0.0f};
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
     float distance_from_center = 0.0f;
-    // -1 when the mesh was empty and `point` is the fallback height.
+    // -1 when the mesh was empty and `point` is the fallback height. A caller
+    // sampling several meshes sets -1 on samples that must not hint this one
+    // (see sample_area in game/play_area.h).
     int triangle_index = -1;
     // Triangles tested to produce this sample (for profiling the index).
     int triangles_tested = 0;
@@ -104,16 +110,13 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& source_mesh,
                                          const std::vector<material_zone>& zones,
                                          float lift);
 
-// A rough grid around `mesh`, `margin` wider on each side, with vertices about
-// `cell_size` apart, following the nearest terrain height. Off the surface it
-// sits just below the nearest edge; under the surface it sinks past the
-// deepest zone carve, so the coarse grid never pokes up through the ribbon.
-// `mesh` may hold several ribbons (the course hub): the apron then covers the
-// gaps between them without rising over any of them.
-terrain_mesh build_outer_rough_apron(const terrain_mesh& mesh,
-                                     float margin,
-                                     float cell_size,
-                                     const terrain_zone_tuning& zones);
+// Two triangles per grid cell over `rows` x `columns` vertices laid out row by
+// row starting at `first_vertex`.
+std::vector<std::uint32_t> grid_triangle_indices(int rows, int columns, std::uint32_t first_vertex);
+
+// `vertices` with area-weighted upward normals from the triangles that use them.
+std::vector<terrain_vertex> with_smooth_normals(std::vector<terrain_vertex> vertices,
+                                                const std::vector<std::uint32_t>& indices);
 
 // Returns the mesh with its spatial index rebuilt. Run any mesh assembled or
 // transformed by hand through this so sampling keeps the fast path.
@@ -126,6 +129,13 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
                                    const glm::vec3& position,
                                    float fallback_y,
                                    const terrain_sample* previous_sample = nullptr);
+
+// The containing triangle's sample, or nothing when `position` is off the
+// surface. Unlike sample_terrain_mesh it never searches for the nearest edge,
+// so it stays cheap far from the mesh. `previous_sample` works as there.
+std::optional<terrain_sample> sample_terrain_inside(const terrain_mesh& mesh,
+                                                    const glm::vec3& position,
+                                                    const terrain_sample* previous_sample = nullptr);
 
 // Like sample_terrain_mesh, but keeps the query's exact XZ (only the height
 // comes from the terrain). Used to place objects that sit on the ground.

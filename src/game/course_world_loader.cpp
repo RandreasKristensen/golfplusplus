@@ -24,6 +24,39 @@ std::optional<course_world_hole_start> hole_start_from_json(const json& value, c
     return start;
 }
 
+// The land under the course. Every cell must have a height.
+std::optional<height_grid> ground_from_json(const json& root) {
+    const json* ground = json_object(root, "ground");
+    if (ground == nullptr) {
+        return std::nullopt;
+    }
+    const json* origin = json_array(*ground, "origin");
+    const std::optional<float> cell_size = json_float(*ground, "cell_size");
+    const std::optional<int> columns = json_int(*ground, "columns");
+    const std::optional<int> rows = json_int(*ground, "rows");
+    const json* heights = json_array(*ground, "heights");
+    if (origin == nullptr || origin->size() != 2 || !(*origin)[0].is_number() || !(*origin)[1].is_number() ||
+        !cell_size || !(*cell_size > 0.0f) || !columns || *columns < 2 || !rows || *rows < 2 || heights == nullptr ||
+        heights->size() != static_cast<std::size_t>(*columns) * static_cast<std::size_t>(*rows)) {
+        return std::nullopt;
+    }
+
+    height_grid grid;
+    grid.origin_x = (*origin)[0].get<float>();
+    grid.origin_z = (*origin)[1].get<float>();
+    grid.cell_size = *cell_size;
+    grid.columns = *columns;
+    grid.rows = *rows;
+    grid.heights.reserve(heights->size());
+    for (const json& height : *heights) {
+        if (!height.is_number()) {
+            return std::nullopt;
+        }
+        grid.heights.push_back(height.get<float>());
+    }
+    return grid;
+}
+
 std::vector<course_world_cart_road> cart_roads_from_json(const json& root) {
     std::vector<course_world_cart_road> roads;
     const json* array = json_array(root, "cart_roads");
@@ -113,6 +146,11 @@ std::optional<course_world_definition> parse_course_world_from_text(const std::s
         }
     }
 
+    std::optional<height_grid> ground = ground_from_json(*root);
+    if (!ground) {
+        return std::nullopt;
+    }
+    world.ground = std::move(*ground);
     world.cart_roads = cart_roads_from_json(*root);
     if (const json* collectibles = json_array(*root, "collectibles")) {
         for (const json& value : *collectibles) {

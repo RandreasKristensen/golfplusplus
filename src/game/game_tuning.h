@@ -21,7 +21,9 @@ struct world_scale_tuning {
 
 struct terrain_build_tuning {
     int min_sections = 0;           // terrain_spline::sample_count
-    float apron_cell_size = 0.0f;   // spacing of the rough apron grid
+    float ground_cell_size = 0.0f;  // spacing of the ground grid around and between holes
+    // How far from a hole's edge the ground takes to ease into the course's land.
+    float ground_blend_distance = 0.0f;
     terrain_zone_tuning zones;      // bunker and water carve depths
     float material_overlay_lift = 0.0f;
 };

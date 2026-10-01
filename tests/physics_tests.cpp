@@ -3,6 +3,7 @@
 
 #include "physics/ball_physics.h"
 #include "physics/collision.h"
+#include "physics/ground_mesh.h"
 #include "physics/terrain.h"
 #include "physics/tree_collision.h"
 #include "physics/wind.h"

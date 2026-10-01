@@ -13,9 +13,13 @@
   },
   "elevation": {
     "enabled": true,
-    "dataset": "auto",
+    "zoom": 14,
     "max_grade": 0.25,
     "smooth_window": 3
+  },
+  "ground": {
+    "cell_size": 20.0,
+    "margin": 120.0
   },
   "world": {
     "hole_start_interaction_radius": 4.0,

@@ -381,7 +381,7 @@ TEST_CASE("tree instance bounds cover every trunk and leaf") {
 
 TEST_CASE("a hub's terrain chunks into bounded pieces that cull from ground level") {
     const game_state state = started_game(fixture_hub_course());
-    const render_static_mesh mesh = make_terrain_render_mesh({&state.area.terrain, &state.area.apron}, 1U);
+    const render_static_mesh mesh = make_terrain_render_mesh({&state.area.terrain, &state.area.ground}, 1U);
     REQUIRE(mesh.indices.size() > 1000U);
 
     const render_chunk_settings settings;

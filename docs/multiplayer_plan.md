@@ -51,7 +51,7 @@ Verified against the SpacetimeDB docs and releases as of 2026-09-30 (latest v2.1
 | Topology | One database. Rooms are rows, not separate databases |
 | Room cap | 40 players per room, one course per room. `join_course` fills the fullest non-full room, creates a new one when all are full |
 | Groups | Up to 4 per group, inside a room, so at most 10 groups per room |
-| Zones | A player is in exactly one zone: `hub` (course-world coordinates) or `hole N` (that hole's local coordinates, same as `load_hole_runtime` today). Players only see avatars and balls in their own zone |
+| Zones | A player is in exactly one zone: `hub` (walking the course) or `hole N` (playing it). Both use course-world coordinates, because holes are played where they sit on the course (`build_course_area`). Everyone in a room sees every avatar and ball, so other groups are visible playing nearby holes |
 | Turn order | None. Everyone plays their own ball at their own pace. The group shares a scorecard and sees each other highlighted |
 | Ball collisions | None between players. Other balls and avatars are visual only |
 | Authority | Server decides: shot results, strokes, hole/round completion, XP, collectibles, world flags, names, room/group membership. Client decides (with server sanity checks): movement. Client only: camera, aim preview, swing meter, audio, animation |
@@ -196,9 +196,10 @@ A CMake step generates `embedded_content.cpp` holding every JSON file from
 `assets/progression`, `assets/tuning` and `assets/fonts` (for the name charset) as string literals
 keyed by relative path (about 450 KB). The module parses on demand.
 
-**Terrain cache:** building a hole's terrain mesh and spatial index is the
-expensive part, and SpacetimeDB bills CPU. The module keeps a memo
-`map<(course_id, hole_index), play_area>` in module memory. It's a pure cache of
+**Terrain cache:** building a course's terrain, ground and spatial indexes is
+the expensive part, and SpacetimeDB bills CPU. The module keeps a memo
+`map<course_id, play_area>` in module memory (the whole course, as offline).
+A shot that strays onto another hole or the ground between holes lands there. It's a pure cache of
 immutable embedded content: rebuilt if the instance restarts, never holding game
 state. This is the one allowed piece of module-global mutable state.
 
@@ -504,13 +505,13 @@ All new text goes through the string table and text styles.
 
 - GL-free `remote_avatar_batch.{h,cpp}` in `src/renderer/` (unit tested like `cart_batch`): a chunky low-poly figure, the existing cart mesh in cart modes, a tint per player (group members share a highlight colour).
 - Name tags are projected to screen and drawn through the text library. Small and a bit fuzzy through the CRT pass, like camcorder captions.
-- Only the current zone is drawn. Extrapolation per remote player uses the same walk/cart rules as local movement (`speed`, `yaw`, `turn_rate` since `server_time`), snaps y to the terrain and blends corrections over 200 ms. Cap extrapolation at 3 s, then freeze.
+- Every player in the room is drawn. Extrapolation per remote player uses the same walk/cart rules as local movement (`speed`, `yaw`, `turn_rate` since `server_time`), snaps y to the terrain and blends corrections over 200 ms. Cap extrapolation at 3 s, then freeze.
 - `render_data` gets a `std::vector<render_remote_avatar>`. Route it through `world_marker_renderer` or a new small renderer file, not `renderer.cpp`.
 
 ### 4.3 Remote balls and shots
 
-- Other players' `ball` rows in the same zone render as tinted balls, plus a fading trail while a remote shot plays back.
-- On a `shot_event` from someone else in my zone: `simulate_shot` locally from the event inputs, play it back, and finish at the event's `rest` position (blend if different).
+- Other players' `ball` rows in the room render as tinted balls, plus a fading trail while a remote shot plays back.
+- On a `shot_event` from someone else in my room: `simulate_shot` locally from the event inputs, play it back, and finish at the event's `rest` position (blend if different).
 
 ### 4.4 Groups
 

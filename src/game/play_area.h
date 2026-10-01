@@ -1,7 +1,8 @@
 #pragma once
 
-// The ground the player is on: one hole, or a course hub with every hole
-// placed where the course world puts it. Built from content, never saved.
+// The ground the player is on: a whole course, with every hole placed where
+// its course world puts it on the course's land, or one hole on its own for a
+// course without a world. Built from content, never saved.
 
 #include "game/course_world_definition.h"
 #include "game/game_tuning.h"
@@ -9,24 +10,20 @@
 #include "physics/terrain.h"
 #include "profiling/profiling.h"
 
-#include <cstdint>
-#include <optional>
-#include <string>
 #include <vector>
 
 #include <glm/vec3.hpp>
 
 struct play_area {
-    std::uint32_t wind_seed = 0;
     float ground_y = 0.0f;  // height used where there is no terrain
-    // XZ centre and half-size of the terrain (with apron), for the camera's
-    // far plane, the backdrop ground and the course map.
+    // XZ centre and half-size of the terrain and ground, for the camera's far
+    // plane, the backdrop ground and the course map.
     glm::vec3 center{0.0f};
     float extent = 0.0f;
     std::vector<tree_instance> trees;
-    terrain_mesh terrain;
-    terrain_mesh apron;             // render-only rough around the terrain
-    terrain_mesh material_overlay;  // render-only zone shapes draped over the terrain
+    terrain_mesh terrain;           // the holes' ribbons
+    terrain_mesh ground;            // around and between the ribbons (physics/ground_mesh.h)
+    terrain_mesh material_overlay;  // render-only zone shapes draped over the ribbons
 };
 
 // Hole-space position -> course position for a hole placed at `start`
@@ -34,18 +31,19 @@ struct play_area {
 glm::vec3 place_hole_point(const hole_data& hole, const course_world_hole_start& start, const glm::vec3& point);
 hole_data place_hole(const hole_data& hole, const course_world_hole_start& start);
 
-// One hole, in the coordinates of `hole` (use place_hole first to play it
-// where a hub shows it). The terrain is built in hole space before placing,
-// so bounds-based zones shape it the same either way.
+// One hole on its own, in the coordinates of `hole`.
 play_area build_hole_area(const hole_data& hole, const game_tuning& tuning);
-play_area build_placed_hole_area(const hole_data& hole, const course_world_hole_start& start, const game_tuning& tuning);
 
-// Every hole of a course placed by its hole start, as one area. `holes[i]`
-// belongs to `world.hole_starts[i]`.
-play_area build_hub_area(const std::vector<hole_data>& holes,
-                         const course_world_definition& world,
-                         const game_tuning& tuning);
+// The whole course: every hole placed by its hole start (`holes[i]` belongs to
+// `world.hole_starts[i]`), on the world's land. Each hole's terrain is built
+// in hole space before placing, so bounds-based zones shape it the same way.
+play_area build_course_area(const std::vector<hole_data>& holes,
+                            const course_world_definition& world,
+                            const game_tuning& tuning);
 
+// The ribbon under `position`, else the ground, else the nearest edge of
+// either. Samples off the ribbons carry triangle_index -1, so passing one back
+// as `previous_sample` never hints the ribbons with a ground triangle.
 terrain_sample sample_area(const play_area& area,
                            const glm::vec3& position,
                            frame_profile* profile = nullptr,

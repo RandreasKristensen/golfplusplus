@@ -7,6 +7,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import osm_golf_convert as conv
+import osm_ground as ground
 import osm_elevation as elev
 import osm_elevation as elev
 import osm_elevation as elev
@@ -397,26 +398,46 @@ class ElevationTests(unittest.TestCase):
 
         self.assertLessEqual(max(limited), 0.25 * 50.0 + 0.01)
 
-    def test_dataset_autoselect_prefers_the_regional_dem(self):
-        self.assertEqual("ned10m", elev.auto_dataset(33.50, -82.02))    # Augusta
-        self.assertEqual("eudem25m", elev.auto_dataset(56.34, -2.80))   # St Andrews
-        self.assertEqual("mapzen", elev.auto_dataset(-33.9, 151.2))     # Sydney
+    def test_png_decoding_undoes_row_filters(self):
+        import struct
+        import zlib
 
-    def test_sampler_batches_and_caches_lookups(self):
-        sampler = elev.ElevationSampler(dataset="mapzen", verbose=False)
-        calls = []
+        rows = [bytes([10, 20, 30, 40, 50, 60]), bytes([11, 21, 31, 41, 51, 61])]
+        sub = bytes([10, 20, 30, 30, 30, 30])  # row 0, filter 1 (Sub)
+        up = bytes([1, 1, 1, 1, 1, 1])         # row 1, filter 2 (Up)
+        payload = zlib.compress(b"\x01" + sub + b"\x02" + up)
 
-        def fake_batch(batch):
-            calls.append(list(batch))
-            for key in batch:
-                sampler._cache[key] = 100.0
+        def chunk(kind, body):
+            return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
 
-        sampler._fetch_batch = fake_batch
-        values = sampler.elevations([(56.0, 10.0), (56.0, 10.0), (56.1, 10.1)])
+        png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 2, 0, 0, 0)) +
+               chunk(b"IDAT", payload) + chunk(b"IEND", b""))
+        width, height, decoded = elev.decode_png_rgb(png)
 
-        self.assertEqual([100.0, 100.0, 100.0], values)
-        self.assertEqual(1, len(calls), "duplicate coordinates should share one lookup")
-        self.assertEqual(2, len(calls[0]))
+        self.assertEqual((2, 2), (width, height))
+        self.assertEqual(rows, decoded)
+
+    def test_terrarium_pixels_decode_to_metres(self):
+        # 32768 + 76.5 m = 128 * 256 + 76 + 128 / 256
+        self.assertEqual([[76.5]], elev.terrarium_heights([bytes([128, 76, 128])]))
+
+    def test_sampler_reads_cached_tiles_without_the_network(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as cache:
+            sampler = elev.ElevationSampler(cache_dir=Path(cache), zoom=14, verbose=False)
+            fx, fy = elev.tile_pixel(56.0, 10.0, 14)
+            tile = Path(cache) / "terrarium" / "14" / str(int(fx) // 256) / f"{int(fy) // 256}.png"
+            tile.parent.mkdir(parents=True)
+            tile.write_bytes(b"placeholder")
+            # Every pixel of the cached tile is 12 m high.
+            with mock.patch.object(elev, "decode_png_rgb", return_value=(256, 256, [bytes([128, 12, 0]) * 256] * 256)), \
+                 mock.patch.object(sampler, "_download", side_effect=AssertionError("no network")):
+                # (56, 10) is well inside its tile, so all four bilinear corners are in it.
+                self.assertAlmostEqual(12.0, sampler.elevation(56.0, 10.0))
+            self.assertEqual(0, sampler.tiles_downloaded)
+            self.assertEqual(1, sampler.tiles_from_cache)
 
     def test_hole_json_carries_elevation_into_control_points(self):
         holes = conv.group_holes([
@@ -707,6 +728,53 @@ class SharedGreenTests(unittest.TestCase):
         self.assertEqual(1, len(holes[1]["greens"]))
         self.assertEqual(1, len(holes[2]["greens"]))
         self.assertNotEqual(holes[1]["greens"][0]["id"], holes[2]["greens"][0]["id"])
+
+
+class GroundTests(unittest.TestCase):
+    WORLD = {"hole_starts": [
+        {"position": [100.0, 2.0, 0.0]},
+        {"position": [0.0, 0.0, 300.0], "rotation_degrees": 90.0},
+    ]}
+    HOLES = [
+        {"tee": [0.0, 0.0, 0.0], "pin": [0.0, 0.0, 200.0],
+         "spline": {"control_points": [[0.0, 0.0, 0.0], [0.0, 0.0, 200.0]]}},
+        {"tee": [0.0, 0.0, 0.0], "pin": [0.0, 0.0, 100.0],
+         "spline": {"control_points": [[0.0, 0.0, 0.0], [0.0, 0.0, 100.0]]}},
+    ]
+
+    class HeightFromZ:
+        """A DEM whose height above sea level is 50 m plus a tenth of z."""
+        dataset = "fake"
+
+        def elevations(self, latlons):
+            return [50.0 + latlon[0] * 0.1 for latlon in latlons]
+
+    def test_holes_are_placed_by_their_start_and_rotation(self):
+        points = ground.placed_hole_points(self.WORLD, self.HOLES)
+
+        self.assertIn((100.0, 200.0), points)
+        x, z = points[-1]  # hole 2's pin, 100 m along -x after a 90 degree turn
+        self.assertAlmostEqual(-100.0, x, places=4)
+        self.assertAlmostEqual(300.0, z, places=4)
+
+    def test_grid_covers_every_hole_plus_the_margin(self):
+        grid = ground.ground_grid(self.WORLD, self.HOLES, None, lambda x, z: (z, x), 20.0, 50.0)
+
+        self.assertEqual([-150.0, -50.0], grid["origin"])
+        self.assertGreaterEqual(grid["origin"][0] + (grid["columns"] - 1) * 20.0, 150.0)
+        self.assertGreaterEqual(grid["origin"][1] + (grid["rows"] - 1) * 20.0, 350.0)
+        self.assertEqual(grid["columns"] * grid["rows"], len(grid["heights"]))
+        self.assertEqual({0.0}, set(grid["heights"]))
+
+    def test_heights_are_relative_to_hole_one_start(self):
+        grid = ground.ground_grid(self.WORLD, self.HOLES, self.HeightFromZ(), lambda x, z: (z, x), 20.0, 50.0)
+
+        # Hole 1's start is at z = 0 and y = 2, so z = 0 maps to y = 2 and
+        # every 10 m north adds 1 m.
+        columns = grid["columns"]
+        first_row_z = grid["origin"][1]
+        self.assertAlmostEqual(2.0 + first_row_z * 0.1, grid["heights"][0], places=2)
+        self.assertAlmostEqual(2.0 + (first_row_z + 20.0) * 0.1, grid["heights"][columns], places=2)
 
 
 if __name__ == "__main__":

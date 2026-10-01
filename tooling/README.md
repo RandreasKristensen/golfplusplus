@@ -155,7 +155,7 @@ py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-course
 # Use generator tuning, including tree dimensions and hub path filtering
 py -3 osm_golf_convert.py "Marienlyst Golfklub" --config osm_golf_config.json
 
-# Flat holes, no DEM lookups
+# Flat holes and flat ground, no elevation tiles
 py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-elevation
 
 # Re-download instead of reusing the cached OSM responses
@@ -169,25 +169,26 @@ name into the right id once, so later re-imports are reproducible.
 ### Elevation
 
 OSM carries no usable height data for golf features, so the converter samples a
-public digital elevation model and bakes the result into each hole's spline
-control points. This is the same idea as the LiDAR import in TGC Designer
-Tools, using the open DEMs that are free to query without an account.
+digital elevation model and bakes the result into each hole's spline control
+points and the course world's ground grid. This is the same idea as the LiDAR
+import in TGC Designer Tools.
 
-| Dataset | Coverage | Resolution |
-|---|---|---|
-| `ned10m` | USA | 10 m |
-| `eudem25m` | Europe | 25 m |
-| `mapzen` | global | ~30 m |
-| `srtm30m` | ±60° latitude | 30 m |
+The DEM is the [Terrarium elevation tiles](https://registry.opendata.aws/terrain-tiles/)
+from AWS Open Data: PNG map tiles whose pixels encode height, built from SRTM
+(~30 m) worldwide, USGS NED (10 m or better) in the USA and national lidar in
+some European countries. They are free, need no account and have no rate limit.
+A course needs a handful of tiles at zoom 14 (`elevation.zoom`), about 65 KB
+each, downloaded once into `.osm_cache/terrarium/`. A hundred courses is in the
+tens of megabytes, and every later import, moved hole or new ground grid in the
+same area reads the cache with no network at all. The sources require
+attribution: see `docs/steam_todo.md`.
 
-`dataset: "auto"` (the default) picks the best one covering the course. Heights
-are made relative to the tee, so every hole still starts at `y = 0` (its
-tee's real height goes in `source.tee_elevation`, and the course world puts
-each hole start at that height relative to hole 1, so holes line up in the
-hub); smoothed,
-because neighbouring control points can straddle a DEM cell boundary; and
-slope-limited, because a DEM occasionally reads a clubhouse roof or tree canopy
-next to a fairway as a cliff.
+Hole heights are made relative to the tee, so every hole still starts at
+`y = 0` (its tee's real height goes in `source.tee_elevation`, and the course
+world puts each hole start at that height relative to hole 1, so holes line up
+on the course); smoothed, because neighbouring control points can straddle a
+DEM cell boundary; and slope-limited, because a DEM occasionally reads a
+clubhouse roof or tree canopy next to a fairway as a cliff.
 
 **What this does and does not give you.** A 10–30 m DEM reproduces the landform
 of a hole — the uphill second shot, the valley you have to carry, a plateau
@@ -195,6 +196,18 @@ green, the general fall of a fairway. It cannot see green contours, bunker
 lips, or mounding, because those are smaller than one DEM cell. Expect to keep
 doing green and bunker shaping in the hole editor; expect not to have to
 rebuild the overall shape of the land.
+
+The course world also gets a `ground` grid: the DEM sampled every
+`ground.cell_size` metres (20 by default) over every hole plus
+`ground.margin`, relative to hole 1's start. It is the land between the holes;
+the game eases it into each hole's edge. To add or refresh it on a course world
+that already exists, including a hand-made one (it needs `projection`):
+
+```bash
+py -3 osm_golf_convert.py --ground-only marienlyst_golfklub
+```
+
+With `--no-elevation` the ground is written flat.
 
 Only the spline carries elevation. The game builds terrain as a ribbon swept
 along the control points and samples zone and tree heights off that mesh, so
