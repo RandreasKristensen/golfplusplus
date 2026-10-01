@@ -1,48 +1,59 @@
 #pragma once
 
-#include "game/club_definition.h"
-#include "game/course_definition.h"
-#include "game/course_world_definition.h"
-#include "game/hole_data.h"
+// Gameplay feel constants, loaded from assets/tuning/game_tuning.json by
+// game/tuning_loader.h. Every field is required in the file; the zero
+// defaults here only exist so the structs are plain values. Distances are in
+// meters, times in seconds, angles in radians unless named otherwise.
+
 #include "physics/physics_tuning.h"
 #include "physics/terrain.h"
-#include "profiling/profiling.h"
-
-#include <cstdint>
-#include <string>
-#include <vector>
 
 #include <glm/vec3.hpp>
 
-struct sandbox_course {
-    std::string id;
-    std::string name;
-    int par = 3;
-    glm::vec3 tee_position{0.0f, 0.0f, 0.0f};
-    glm::vec3 pin_position{0.0f, 0.0f, 0.0f};
-    float cup_radius = 0.0f;
-    float extent = 0.0f;
-    hole_spline spline;
-    std::vector<material_zone> material_zones;
-    std::vector<tree_instance> trees;
-};
-
 struct world_scale_tuning {
-    float meters_per_world_unit = 1.0f;
-    float ball_physics_radius_meters = 0.021335f;
-    float ball_mass_kg = 0.04593f;
-    float cup_physics_radius_meters = 0.053975f;
-    float ball_visual_radius_meters = 0.10f;
-    float cup_visual_radius_meters = 0.10f;
-    float pin_visual_height_meters = 2.10f;
+    float meters_per_world_unit = 0.0f;
+    float ball_physics_radius_meters = 0.0f;
+    float ball_visual_radius_meters = 0.0f;
+    // Drawn and holed at this radius: much larger than a real cup (arcade).
+    float cup_radius_meters = 0.0f;
+    float pin_visual_height_meters = 0.0f;
 };
 
-struct flight_path_tuning {
-    glm::vec3 color{0.92f, 0.18f, 0.16f};
-    float alpha = 0.45f;
-    float min_point_spacing = 0.25f;
-    int max_points = 96;
-    float line_width = 1.0f;
+struct terrain_build_tuning {
+    int min_sections = 0;           // terrain_spline::sample_count
+    int apron_grid_resolution = 0;  // vertices per side of the rough apron grid
+    terrain_zone_tuning zones;      // bunker and water carve depths
+    float material_overlay_lift = 0.0f;
+};
+
+struct ball_tuning {
+    float stop_speed = 0.0f;  // below this (and grounded) the ball is at rest
+    float ground_restitution = 0.0f;
+    float ground_friction = 0.0f;  // per 1/60 s of contact, see physics/collision.h
+    float water_restitution = 0.0f;
+    float water_friction = 0.0f;
+    float tree_restitution = 0.0f;
+    float tree_friction = 0.0f;
+    float roll_deceleration = 0.0f;  // m/s^2 while rolling (times the club's roll_friction_scale)
+    float settle_speed = 0.0f;       // normal speed below which a grounded ball rolls instead of bouncing
+};
+
+struct swing_tuning {
+    float meter_cycle_seconds = 0.0f;  // one full 0 -> 1 -> 0 swing meter cycle
+    float min_power = 0.0f;
+    float side_spin_scale = 0.0f;      // multiplies club_stats::side_spin
+};
+
+struct player_tuning {
+    float walk_speed = 0.0f;
+    float turn_rate = 0.0f;
+    float aim_turn_rate = 0.0f;
+    float ball_interact_radius = 0.0f;
+    // How far the player stands from the ball: behind it when teeing up, to
+    // its side (and address_back_distance behind) when addressing it.
+    float ball_stand_off_distance = 0.0f;
+    float address_back_distance = 0.0f;
+    float emote_seconds = 0.0f;
 };
 
 struct cart_tuning {
@@ -53,82 +64,69 @@ struct cart_tuning {
     float drift_damping = 0.0f;
     float drift_duration = 0.0f;
     float drift_speed_boost = 0.0f;
+    // A road counts as under the cart within half its width plus this margin
+    // (and never less than min_road_reach).
+    float road_reach_margin = 0.0f;
+    float min_road_reach = 0.0f;
+    // Hub only: multipliers on cart speed and control on and off roads.
+    float road_speed_scale = 0.0f;
+    float road_control_scale = 0.0f;
+    float off_road_speed_scale = 0.0f;
+    float off_road_control_scale = 0.0f;
 };
 
+// Camera rigs. "back" is against the aim direction, "side" is to the
+// player's left (the address stance side).
 struct camera_tuning {
-    glm::vec3 walking_eye_offset{0.0f, 1.65f, 0.0f};
-    float walking_target_distance = 10.0f;
-    glm::vec3 cart_eye_offset{0.0f, 1.2f, -4.8f};
-    float cart_target_distance = 11.0f;
-    float cart_fov_degrees = 67.0f;
-    // Blend between camera views on mode changes and teleports.
-    float transition_seconds = 0.55f;
-    float transition_jump_distance = 1.5f;
+    float fov_degrees = 0.0f;
+    float walking_eye_height = 0.0f;
+    float walking_look_distance = 0.0f;
+    float aiming_back_distance = 0.0f;
+    float aiming_eye_height = 0.0f;
+    float aiming_look_distance = 0.0f;
+    float aiming_look_height = 0.0f;
+    float address_side_distance = 0.0f;
+    float address_back_distance = 0.0f;
+    float address_eye_height = 0.0f;
+    float address_look_distance = 0.0f;
+    float address_look_height = 0.0f;
+    float follow_look_height = 0.0f;
+    float transition_seconds = 0.0f;        // blend time on rig changes and teleports
+    float transition_jump_distance = 0.0f;  // eye movement per frame that counts as a teleport
+};
+
+// The dotted arc shown while aiming.
+struct aim_preview_tuning {
+    float step_seconds = 0.0f;
+    int max_points = 0;
+};
+
+// The trail drawn behind a ball in flight.
+struct flight_path_tuning {
+    glm::vec3 color{0.0f};
+    float alpha = 0.0f;
+    float min_point_spacing = 0.0f;
+    int max_points = 0;
+    float line_width = 0.0f;
+};
+
+// The "+25 XP" popups.
+struct xp_drop_tuning {
+    float lifetime_seconds = 0.0f;
+    int min_visible_xp = 0;  // smaller gains are pooled until they reach this
 };
 
 struct game_tuning {
-    sandbox_course course;
     world_scale_tuning scale;
-    flight_path_tuning flight_path;
-    cart_tuning cart;
-    camera_tuning camera;
-    terrain_spline terrain;
-    terrain_mesh terrain_mesh_data;
-    terrain_mesh terrain_apron_mesh_data;
-    terrain_zone_tuning zone_tuning;
-    std::vector<club_definition> clubs;
+    terrain_build_tuning terrain;
     physics_tuning physics;
     wind_tuning wind;
-    std::uint32_t wind_seed = 0U;
-    float aim_turn_rate = 0.0f;
-    float min_swing_power = 0.0f;
-    float launch_side_spin_scale = 0.0f;
-    float stop_speed = 0.0f;
-    float ground_y = 0.0f;
-    float ground_restitution = 0.0f;
-    float ground_friction = 0.0f;
-    float water_restitution = 0.0f;
-    float water_friction = 0.0f;
-    float tree_restitution = 0.0f;
-    float tree_friction = 0.0f;
-    float ground_roll_friction = 0.0f;
-    float ground_settle_speed = 0.0f;
-    float ball_interact_radius = 0.0f;
-    float player_walk_speed = 0.0f;
-    float player_turn_rate = 0.0f;
-    float player_stand_off_distance = 0.0f;
+    ball_tuning ball;
+    swing_tuning swing;
+    player_tuning player;
+    cart_tuning cart;
+    camera_tuning camera;
+    aim_preview_tuning aim_preview;
+    flight_path_tuning flight_path;
+    xp_drop_tuning xp_drops;
 };
-
-// Central gameplay feel tuning. Edit this factory's values in game_tuning.cpp.
-std::vector<club_definition> fallback_club_definitions();
-game_tuning default_game_tuning();
-game_tuning default_game_tuning(const std::string& asset_root);
-glm::vec3 terrain_anchor_position(const game_tuning& tuning,
-                                  const glm::vec3& authored_position,
-                                  frame_profile* profile = nullptr);
-glm::vec3 tree_base_position(const game_tuning& tuning,
-                             const tree_instance& tree,
-                             frame_profile* profile = nullptr);
-glm::vec3 course_world_hole_translation(const hole_data& hole, const course_world_hole_start& start);
-glm::vec3 course_world_hole_point(const hole_data& hole, const course_world_hole_start& start, const glm::vec3& local_point);
-terrain_mesh translate_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& translation);
-material_zone translate_material_zone(const material_zone& zone, const glm::vec3& translation);
-tree_instance translate_tree_instance(const tree_instance& tree, const glm::vec3& translation);
-terrain_mesh transform_course_world_terrain_mesh(const terrain_mesh& mesh, const hole_data& hole, const course_world_hole_start& start);
-material_zone transform_course_world_material_zone(const material_zone& zone, const hole_data& hole, const course_world_hole_start& start);
-tree_instance transform_course_world_tree_instance(const tree_instance& tree, const hole_data& hole, const course_world_hole_start& start);
-void apply_hole_to_tuning(game_tuning& tuning, const hole_data& hole);
-// Like apply_hole_to_tuning, but places the hole where the course world puts
-// it (same transform as the hub), so playing it keeps hub coordinates.
-void apply_course_world_hole_to_tuning(game_tuning& tuning,
-                                       const hole_data& hole,
-                                       const course_world_hole_start& start);
-bool load_hole_runtime(game_tuning& tuning,
-                       const course_definition& course,
-                       std::size_t hole_index,
-                       const std::string& asset_root);
-bool load_course_world_hole_runtime(game_tuning& tuning,
-                                    const course_definition& course,
-                                    std::size_t hole_index,
-                                    const course_world_hole_start& start,
-                                    const std::string& asset_root);

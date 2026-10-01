@@ -1,114 +1,98 @@
 #include "physics/tree_collision.h"
 
-#include <algorithm>
-#include <cmath>
+#include "physics/vector_math.h"
 
-#include <glm/geometric.hpp>
+#include <algorithm>
 
 namespace {
-float clamp01(const float value) {
-    return std::max(0.0f, std::min(1.0f, value));
+// Leaves push the ball slightly upwards so it drops out of the canopy.
+constexpr float leaf_lift = 0.18f;
+
+glm::vec3 horizontal_push_direction(const ball_state& ball, const glm::vec3& base) {
+    const glm::vec3 away = horizontal(ball.position - base);
+    const glm::vec3 backwards = horizontal(-ball.velocity);
+    return safe_normalize(away, safe_normalize(backwards, glm::vec3(1.0f, 0.0f, 0.0f)));
 }
 
-glm::vec3 safe_normalize(const glm::vec3& value, const glm::vec3& fallback) {
-    const float len = glm::length(value);
-    if (len <= 0.00001f) {
-        return fallback;
-    }
-    return value / len;
-}
-
-glm::vec3 horizontal_fallback_normal(const ball_state& ball, const glm::vec3& base) {
-    const glm::vec3 away(ball.position.x - base.x, 0.0f, ball.position.z - base.z);
-    const glm::vec3 from_velocity(-ball.velocity.x, 0.0f, -ball.velocity.z);
-    return safe_normalize(away, safe_normalize(from_velocity, glm::vec3(1.0f, 0.0f, 0.0f)));
-}
-
+// Tree hits are single impacts, so friction is a one-off fraction of the
+// tangential speed (unlike terrain contact, which lasts several steps).
 ball_state resolve_contact(const ball_state& in,
                            const glm::vec3& normal,
                            const float penetration,
                            const float restitution,
                            const float friction) {
-    ball_state out = in;
     if (penetration <= 0.0f) {
-        return out;
+        return in;
     }
 
+    ball_state out = in;
     const glm::vec3 n = safe_normalize(normal, glm::vec3(1.0f, 0.0f, 0.0f));
     out.position += n * penetration;
 
     const float normal_speed = glm::dot(out.velocity, n);
     if (normal_speed < 0.0f) {
-        out.velocity = out.velocity - (1.0f + clamp01(restitution)) * normal_speed * n;
+        out.velocity -= (1.0f + clamp01(restitution)) * normal_speed * n;
     }
 
-    const float updated_normal_speed = glm::dot(out.velocity, n);
-    const glm::vec3 normal_velocity = n * updated_normal_speed;
+    const glm::vec3 normal_velocity = n * glm::dot(out.velocity, n);
     const glm::vec3 tangent_velocity = out.velocity - normal_velocity;
     out.velocity = normal_velocity + tangent_velocity * (1.0f - clamp01(friction));
     return out;
 }
 
 ball_state resolve_trunk_collision(const ball_state& in,
-                                   const tree_collision_body& tree,
+                                   const tree_body& tree,
                                    const float restitution,
                                    const float friction) {
-    const float radius = std::max(0.0f, tree.trunk_radius) + std::max(0.0f, in.radius);
-    const float min_y = tree.base.y - std::max(0.0f, in.radius);
-    const float max_y = tree.base.y + std::max(0.0f, tree.trunk_height) + std::max(0.0f, in.radius);
+    const float ball_radius = std::max(0.0f, in.radius);
+    const float reach = std::max(0.0f, tree.shape.trunk_radius) + ball_radius;
+    const float min_y = tree.base.y - ball_radius;
+    const float max_y = tree.base.y + std::max(0.0f, tree.shape.trunk_height) + ball_radius;
     if (in.position.y < min_y || in.position.y > max_y) {
         return in;
     }
 
-    const glm::vec3 delta(in.position.x - tree.base.x, 0.0f, in.position.z - tree.base.z);
-    const float distance = glm::length(delta);
-    if (distance >= radius) {
+    const float distance = horizontal_distance(in.position, tree.base);
+    if (distance >= reach) {
         return in;
     }
-
-    const glm::vec3 normal = distance > 0.00001f
-        ? delta / distance
-        : horizontal_fallback_normal(in, tree.base);
-    return resolve_contact(in, normal, radius - distance, restitution, friction);
+    return resolve_contact(in, horizontal_push_direction(in, tree.base), reach - distance, restitution, friction);
 }
 
 ball_state resolve_leaf_collision(const ball_state& in,
-                                  const tree_collision_body& tree,
+                                  const tree_body& tree,
                                   const float restitution,
                                   const float friction) {
-    const float leaf_height = std::max(0.0f, tree.leaf_height);
+    const float leaf_height = std::max(0.0f, tree.shape.leaf_height);
     if (leaf_height <= 0.00001f) {
         return in;
     }
 
     const float ball_radius = std::max(0.0f, in.radius);
-    const float leaf_base_y = tree.base.y + std::max(0.0f, tree.trunk_height);
+    const float leaf_base_y = tree.base.y + std::max(0.0f, tree.shape.trunk_height);
     const float leaf_top_y = leaf_base_y + leaf_height;
     if (in.position.y < leaf_base_y - ball_radius || in.position.y > leaf_top_y + ball_radius) {
         return in;
     }
 
-    const float local_y = std::max(0.0f, std::min(leaf_height, in.position.y - leaf_base_y));
-    const float cone_t = local_y / leaf_height;
-    const float cone_radius = std::max(0.0f, tree.leaf_radius) * (1.0f - cone_t);
-    const float expanded_radius = cone_radius + ball_radius;
+    // The canopy is a cone: widest at its base, a point at the top.
+    const float height_in_cone = std::clamp(in.position.y - leaf_base_y, 0.0f, leaf_height);
+    const float cone_radius = std::max(0.0f, tree.shape.leaf_radius) * (1.0f - height_in_cone / leaf_height);
+    const float reach = cone_radius + ball_radius;
 
-    const glm::vec3 delta(in.position.x - tree.base.x, 0.0f, in.position.z - tree.base.z);
-    const float distance = glm::length(delta);
-    if (distance >= expanded_radius) {
+    const float distance = horizontal_distance(in.position, tree.base);
+    if (distance >= reach) {
         return in;
     }
 
-    const glm::vec3 horizontal_normal = distance > 0.00001f
-        ? delta / distance
-        : horizontal_fallback_normal(in, tree.base);
-    const glm::vec3 normal = safe_normalize(horizontal_normal + glm::vec3(0.0f, 0.18f, 0.0f), horizontal_normal);
-    return resolve_contact(in, normal, expanded_radius - distance, restitution, friction);
+    const glm::vec3 push = horizontal_push_direction(in, tree.base);
+    const glm::vec3 normal = safe_normalize(push + glm::vec3(0.0f, leaf_lift, 0.0f), push);
+    return resolve_contact(in, normal, reach - distance, restitution, friction);
 }
 }
 
-ball_state resolve_tree_collision(const ball_state in,
-                                  const tree_collision_body& tree,
+ball_state resolve_tree_collision(const ball_state& in,
+                                  const tree_body& tree,
                                   const float restitution,
                                   const float friction) {
     return resolve_leaf_collision(resolve_trunk_collision(in, tree, restitution, friction),
@@ -117,12 +101,12 @@ ball_state resolve_tree_collision(const ball_state in,
                                   friction);
 }
 
-ball_state resolve_tree_collisions(const ball_state in,
-                                   const std::vector<tree_collision_body>& trees,
+ball_state resolve_tree_collisions(const ball_state& in,
+                                   const std::vector<tree_body>& trees,
                                    const float restitution,
                                    const float friction) {
     ball_state out = in;
-    for (const tree_collision_body& tree : trees) {
+    for (const tree_body& tree : trees) {
         out = resolve_tree_collision(out, tree, restitution, friction);
     }
     return out;

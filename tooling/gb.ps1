@@ -1,3 +1,7 @@
+# Release build helper.
+#   .\tooling\gb        configure and build build/release
+#   .\tooling\gb -r     build, then launch golf++
+#   .\tooling\gb -rr    stop a running golf++ from this build, build, launch
 [CmdletBinding()]
 param(
     [Alias("r")]
@@ -48,7 +52,7 @@ try {
     }
 
     Write-Host "[gb] building release"
-    & cmake --build $build_dir --clean-first
+    & cmake --build $build_dir
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }

@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <type_traits>
 
-#include "core/gl_loader.h"
+#include "renderer/gl_loader.h"
 
 namespace {
 constexpr GLuint position_location = 0;
@@ -22,7 +22,7 @@ static_assert(sizeof(world_marker_vertex) == 7 * sizeof(float), "world_marker_ve
 static_assert(offsetof(world_marker_vertex, color) == 3 * sizeof(float), "world_marker_vertex::color must follow position");
 static_assert(std::is_standard_layout<world_marker_vertex>::value, "world_marker_vertex must be standard layout");
 
-bool world_marker_renderer::init(const char* vertex_path, const char* fragment_path) {
+bool world_marker_renderer::init(const std::string& vertex_path, const std::string& fragment_path) {
     shutdown();
 
     if (!shader_.load_from_files(vertex_path, fragment_path)) {

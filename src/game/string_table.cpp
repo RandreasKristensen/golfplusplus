@@ -24,7 +24,7 @@ std::optional<string_table> parse_string_table(const std::string& text) {
 std::string lookup_text(const string_table& table, const char* key) {
     const auto it = table.entries.find(key);
     if (it == table.entries.end()) {
-        return "[" + std::string(key) + "]";
+        return "#" + std::string(key) + "#";
     }
     return it->second;
 }

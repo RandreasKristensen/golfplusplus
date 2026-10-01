@@ -4,6 +4,7 @@
 // overlay batch. GL-free. The tile layout functions are shared with the menu
 // flow's mouse hit test (core/startup_flow) so the two can't drift apart.
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -19,7 +20,8 @@ enum class startup_menu_screen {
     main,
     help,
     hole_picker,
-    course_picker
+    course_picker,
+    confirm  // laid out like main
 };
 
 struct render_hole_preview {
@@ -34,8 +36,7 @@ struct render_startup_tile {
     std::string title;
     std::string subtitle;
     bool selected = false;
-    bool has_preview = false;
-    render_hole_preview preview;
+    std::optional<render_hole_preview> preview;
 };
 
 struct render_startup_menu {
@@ -46,8 +47,8 @@ struct render_startup_menu {
     std::vector<render_startup_tile> tiles;
 };
 
-// Tile layout in overlay clip space: a single column on the main screen, a
-// three-column grid on the pickers.
+// Tile layout in overlay clip space: a single column on the main and confirm
+// screens, a three-column grid on the pickers.
 glm::vec2 startup_tile_center(startup_menu_screen screen, int index);
 glm::vec2 startup_tile_half_size(startup_menu_screen screen);
 // Index of the tile under `point` (overlay clip space), or -1.

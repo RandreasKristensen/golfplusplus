@@ -2,25 +2,18 @@
 
 #include "game/course_loader.h"
 #include "game/hole_loader.h"
+#include "game/json_util.h"
 #include "game/text_ids.h"
 
-#include <algorithm>
 #include <array>
 #include <filesystem>
+#include <system_error>
 #include <utility>
 
 namespace {
-constexpr int main_menu_item_count = 4;
+constexpr int main_menu_item_count = static_cast<int>(main_menu_item::count);
 constexpr int confirm_item_count = 2;
-
-std::string relative_asset_path(const std::filesystem::path& asset_root, const std::filesystem::path& path) {
-    std::error_code error;
-    const std::filesystem::path relative = std::filesystem::relative(path, asset_root, error);
-    if (error) {
-        return path.string();
-    }
-    return relative.generic_string();
-}
+constexpr int picker_columns = 3;
 
 render_hole_preview make_hole_preview(const hole_data& hole) {
     render_hole_preview preview;
@@ -32,26 +25,20 @@ render_hole_preview make_hole_preview(const hole_data& hole) {
     return preview;
 }
 
-int course_total_par(const course_definition& course, const std::string& asset_root) {
-    int total = 0;
+startup_course_option make_course_option(const std::string& asset_root, const course_definition& course) {
+    startup_course_option option;
+    option.course = course;
     for (std::size_t i = 0; i < course.holes.size(); ++i) {
         const std::optional<hole_data> hole = load_hole_from_file(course_hole_path(asset_root, course, i));
-        if (hole) {
-            total += std::max(1, hole->par);
+        if (!hole) {
+            continue;
+        }
+        option.total_par += hole->par;
+        if (i == 0) {
+            option.preview = make_hole_preview(*hole);
         }
     }
-    return total;
-}
-
-std::optional<render_hole_preview> course_preview(const course_definition& course, const std::string& asset_root) {
-    if (course.holes.empty()) {
-        return std::nullopt;
-    }
-    const std::optional<hole_data> hole = load_hole_from_file(course_hole_path(asset_root, course, 0));
-    if (!hole) {
-        return std::nullopt;
-    }
-    return make_hole_preview(*hole);
+    return option;
 }
 
 startup_menu_screen screen_for_flow(const startup_flow flow) {
@@ -64,55 +51,34 @@ startup_menu_screen screen_for_flow(const startup_flow flow) {
         return startup_menu_screen::hole_picker;
     case startup_flow::course_picker:
         return startup_menu_screen::course_picker;
-    default:
+    case startup_flow::playing:
         return startup_menu_screen::none;
     }
+    return startup_menu_screen::none;
 }
 
-int hit_index(const startup_menu_screen screen, const int count, const std::optional<glm::vec2> click) {
-    if (!click || count <= 0) {
-        return -1;
-    }
-    return startup_tile_at(screen, count, *click);
-}
-
-int item_count(const startup_flow flow,
-               const std::vector<startup_hole_option>& holes,
-               const std::vector<course_definition>& courses) {
+int item_count(const startup_flow flow, const startup_catalog& catalog) {
     switch (flow) {
     case startup_flow::main:
         return main_menu_item_count;
     case startup_flow::hole_picker:
-        return static_cast<int>(holes.size());
+        return static_cast<int>(catalog.holes.size());
     case startup_flow::course_picker:
-        return static_cast<int>(courses.size());
-    default:
+        return static_cast<int>(catalog.courses.size());
+    case startup_flow::help:
+    case startup_flow::playing:
         return 0;
     }
+    return 0;
 }
 
-void move_selection(const int columns, int& selection, const int count, const input_state& input) {
-    if (count <= 0) {
-        selection = 0;
-        return;
-    }
-
-    if (input.left.pressed) {
-        selection = (selection + count - 1) % count;
-    }
-    if (input.right.pressed) {
-        selection = (selection + 1) % count;
-    }
-    if (input.up.pressed) {
-        selection = (selection + count - columns) % count;
-    }
-    if (input.down.pressed) {
-        selection = (selection + columns) % count;
-    }
-    selection = std::max(0, std::min(selection, count - 1));
+int wrap(const int value, const int count) {
+    return ((value % count) + count) % count;
 }
 
-// Clicks select a tile and move the keyboard selection onto it.
+// Moves `selection` by arrow keys (left/right by one, up/down by a row) or
+// onto a clicked tile; queues a move sound when it changed. Returns the
+// clicked tile, or -1.
 int select_with_input(const startup_menu_screen screen,
                       const int columns,
                       int& selection,
@@ -120,24 +86,39 @@ int select_with_input(const startup_menu_screen screen,
                       const input_state& input,
                       const std::optional<glm::vec2> click,
                       std::vector<ui_sound>& sounds) {
-    const int previous_selection = selection;
-    const int hit = hit_index(screen, count, click);
+    if (count <= 0) {
+        selection = 0;
+        return -1;
+    }
+    const int previous = selection;
+    const int hit = click ? startup_tile_at(screen, count, *click) : -1;
     if (hit >= 0) {
         selection = hit;
     }
-    move_selection(columns, selection, count, input);
-    if (selection != previous_selection) {
+    if (input.left.pressed) {
+        selection = wrap(selection - 1, count);
+    }
+    if (input.right.pressed) {
+        selection = wrap(selection + 1, count);
+    }
+    if (input.up.pressed) {
+        selection = wrap(selection - columns, count);
+    }
+    if (input.down.pressed) {
+        selection = wrap(selection + columns, count);
+    }
+    if (selection != previous) {
         sounds.push_back(ui_sound::move);
     }
     return hit;
 }
 
-course_definition single_hole_course(const startup_hole_option& option) {
+course_definition practice_course(const startup_hole_option& option) {
     course_definition course;
-    course.id = option.hole.id.empty() ? "single_hole" : "single_" + option.hole.id;
-    course.name = option.hole.name.empty() ? option.hole.id : option.hole.name;
-    course.hole_count = 1;
+    course.id = "practice_" + option.hole.id;
+    course.name = option.hole.name;
     course.holes = {option.path};
+    course.practice = true;
     return course;
 }
 
@@ -148,25 +129,17 @@ void add_tile(render_startup_menu& menu, std::string title, std::string subtitle
     tile.selected = selected;
     menu.tiles.push_back(std::move(tile));
 }
+
+void open_screen(startup_flow_state& state, const startup_flow flow) {
+    state.flow = flow;
+    state.selection = 0;
+}
 }
 
-std::vector<startup_hole_option> load_startup_holes(const std::string& asset_root) {
-    std::vector<startup_hole_option> options;
-    const std::filesystem::path root(asset_root);
-    const std::filesystem::path holes_dir = root / "holes";
-    if (!std::filesystem::exists(holes_dir) || !std::filesystem::is_directory(holes_dir)) {
-        return options;
-    }
-
-    std::vector<std::filesystem::path> files;
-    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(holes_dir)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".json") {
-            files.push_back(entry.path());
-        }
-    }
-
-    std::sort(files.begin(), files.end());
-    for (const std::filesystem::path& path : files) {
+startup_catalog load_startup_catalog(const game_content& content) {
+    startup_catalog catalog;
+    const std::filesystem::path root(content.asset_root);
+    for (const std::filesystem::path& path : json_files_in_directory(root / "holes")) {
         std::optional<hole_data> hole = load_hole_from_file(path.string());
         if (!hole) {
             continue;
@@ -174,27 +147,29 @@ std::vector<startup_hole_option> load_startup_holes(const std::string& asset_roo
         if (hole->id.empty()) {
             hole->id = path.stem().string();
         }
-        startup_hole_option option;
-        option.path = relative_asset_path(root, path);
-        option.hole = *hole;
-        options.push_back(option);
+        if (hole->name.empty()) {
+            hole->name = hole->id;
+        }
+        std::error_code error;
+        const std::filesystem::path relative = std::filesystem::relative(path, root, error);
+        catalog.holes.push_back(startup_hole_option{error ? path.string() : relative.generic_string(), std::move(*hole)});
     }
-    return options;
+    for (const course_definition& course : content.courses) {
+        catalog.courses.push_back(make_course_option(content.asset_root, course));
+    }
+    return catalog;
 }
 
 startup_menu_result update_startup_menu(startup_flow_state& state,
                                         const input_state& input,
                                         const std::optional<glm::vec2> click,
-                                        const std::vector<startup_hole_option>& holes,
-                                        const game_content& content) {
+                                        const startup_catalog& catalog) {
     startup_menu_result result;
-    const int count = item_count(state.flow, holes, content.courses);
-    const int columns = state.flow == startup_flow::main ? 1 : 3;
+    const int count = item_count(state.flow, catalog);
+    const int columns = state.flow == startup_flow::main ? 1 : picker_columns;
     const int hit = select_with_input(screen_for_flow(state.flow), columns, state.selection, count, input, click, result.sounds);
 
-    const bool accept = input.enter.pressed || input.space.pressed || hit >= 0;
-    const bool back = input.backspace.pressed || input.escape.pressed;
-    if (back) {
+    if (input.backspace.pressed || input.escape.pressed) {
         result.sounds.push_back(ui_sound::back);
         if (state.flow == startup_flow::main) {
             result.action = startup_action::quit;
@@ -203,32 +178,41 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
         }
         return result;
     }
-    if (!accept) {
+    if (!(input.enter.pressed || input.space.pressed || hit >= 0) || count <= 0) {
         return result;
     }
 
-    if (state.flow == startup_flow::main) {
-        result.sounds.push_back(ui_sound::select);
-        if (state.selection == 0) {
-            state.flow = startup_flow::hole_picker;
-            state.selection = 0;
-        } else if (state.selection == 1) {
-            state.flow = startup_flow::course_picker;
-            state.selection = 0;
-        } else if (state.selection == 2) {
-            state.flow = startup_flow::help;
-            state.selection = 0;
-        } else {
+    result.sounds.push_back(ui_sound::select);
+    const std::size_t selected = static_cast<std::size_t>(state.selection);
+    switch (state.flow) {
+    case startup_flow::main:
+        switch (static_cast<main_menu_item>(state.selection)) {
+        case main_menu_item::play_hole:
+            open_screen(state, startup_flow::hole_picker);
+            break;
+        case main_menu_item::play_course:
+            open_screen(state, startup_flow::course_picker);
+            break;
+        case main_menu_item::help:
+            open_screen(state, startup_flow::help);
+            break;
+        case main_menu_item::quit:
+        case main_menu_item::count:
             result.action = startup_action::quit;
+            break;
         }
-    } else if (state.flow == startup_flow::hole_picker && count > 0) {
-        result.sounds.push_back(ui_sound::select);
+        break;
+    case startup_flow::hole_picker:
         result.action = startup_action::start_course;
-        result.course = single_hole_course(holes[static_cast<std::size_t>(state.selection)]);
-    } else if (state.flow == startup_flow::course_picker && count > 0) {
-        result.sounds.push_back(ui_sound::select);
+        result.course = practice_course(catalog.holes[selected]);
+        break;
+    case startup_flow::course_picker:
         result.action = startup_action::start_course;
-        result.course = content.courses[static_cast<std::size_t>(state.selection)];
+        result.course = catalog.courses[selected].course;
+        break;
+    case startup_flow::help:
+    case startup_flow::playing:
+        break;
     }
     return result;
 }
@@ -238,10 +222,7 @@ void enter_playing(startup_flow_state& state) {
 }
 
 void return_to_main_menu(startup_flow_state& state) {
-    state.flow = startup_flow::main;
-    state.selection = 0;
-    state.confirm_active = false;
-    state.confirm_selection = 1;
+    state = startup_flow_state{};
 }
 
 void open_confirm_menu(startup_flow_state& state) {
@@ -253,21 +234,14 @@ confirm_menu_result update_confirm_menu(startup_flow_state& state,
                                         const input_state& input,
                                         const std::optional<glm::vec2> click) {
     confirm_menu_result result;
-    const int hit = select_with_input(startup_menu_screen::main,
-                                      1,
-                                      state.confirm_selection,
-                                      confirm_item_count,
-                                      input,
-                                      click,
-                                      result.sounds);
+    const int hit = select_with_input(startup_menu_screen::confirm, 1, state.confirm_selection, confirm_item_count,
+                                      input, click, result.sounds);
 
-    const bool accept = input.enter.pressed || input.space.pressed || hit >= 0;
-    const bool cancel = input.escape.pressed || input.backspace.pressed;
-    if (accept) {
+    if (input.enter.pressed || input.space.pressed || hit >= 0) {
         result.sounds.push_back(ui_sound::select);
         state.confirm_active = false;
         result.leave_round = state.confirm_selection == 0;
-    } else if (cancel) {
+    } else if (input.escape.pressed || input.backspace.pressed) {
         result.sounds.push_back(ui_sound::back);
         state.confirm_active = false;
     }
@@ -275,16 +249,14 @@ confirm_menu_result update_confirm_menu(startup_flow_state& state,
 }
 
 render_startup_menu make_startup_menu_render_data(const startup_flow_state& state,
-                                                  const std::vector<startup_hole_option>& holes,
-                                                  const game_content& content,
+                                                  const startup_catalog& catalog,
                                                   const text_assets& text) {
     render_startup_menu menu;
     menu.screen = screen_for_flow(state.flow);
-    if (menu.screen == startup_menu_screen::none) {
-        return menu;
-    }
+    const auto selected = [&state](const std::size_t i) { return static_cast<int>(i) == state.selection; };
 
-    if (state.flow == startup_flow::main) {
+    switch (state.flow) {
+    case startup_flow::main: {
         menu.title = lookup_text(text, text_menu_main_title);
         menu.subtitle = lookup_text(text, text_menu_main_subtitle);
         menu.footer = lookup_text(text, text_menu_main_footer);
@@ -292,64 +264,53 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
             {text_menu_main_play_hole, text_menu_main_play_hole_hint},
             {text_menu_main_play_course, text_menu_main_play_course_hint},
             {text_menu_main_help, text_menu_main_help_hint},
-            {text_menu_main_quit, text_menu_main_quit_hint}
+            {text_menu_main_quit, text_menu_main_quit_hint},
         }};
         for (std::size_t i = 0; i < items.size(); ++i) {
-            add_tile(menu,
-                     lookup_text(text, items[i].first),
-                     lookup_text(text, items[i].second),
-                     static_cast<int>(i) == state.selection);
+            add_tile(menu, lookup_text(text, items[i].first), lookup_text(text, items[i].second), selected(i));
         }
-        return menu;
+        break;
     }
-
-    if (state.flow == startup_flow::help) {
+    case startup_flow::help:
         menu.title = lookup_text(text, text_menu_help_title);
         menu.subtitle = lookup_text(text, text_menu_help_subtitle);
         menu.footer = lookup_text(text, text_menu_help_footer);
-        return menu;
-    }
-
-    if (state.flow == startup_flow::hole_picker) {
+        break;
+    case startup_flow::hole_picker:
         menu.title = lookup_text(text, text_menu_hole_picker_title);
         menu.subtitle = lookup_text(text, text_menu_hole_picker_subtitle);
         menu.footer = lookup_text(text, text_menu_hole_picker_footer);
-        for (std::size_t i = 0; i < holes.size(); ++i) {
-            const hole_data& hole = holes[i].hole;
-            add_tile(menu,
-                     hole.name.empty() ? hole.id : hole.name,
-                     format_text(text, text_menu_hole_picker_tile, {{"par", std::to_string(std::max(1, hole.par))}}),
-                     static_cast<int>(i) == state.selection);
-            menu.tiles.back().has_preview = true;
+        for (std::size_t i = 0; i < catalog.holes.size(); ++i) {
+            const hole_data& hole = catalog.holes[i].hole;
+            add_tile(menu, hole.name, format_text(text, text_menu_hole_picker_tile, {{"par", std::to_string(hole.par)}}), selected(i));
             menu.tiles.back().preview = make_hole_preview(hole);
         }
-        return menu;
-    }
-
-    menu.title = lookup_text(text, text_menu_course_picker_title);
-    menu.subtitle = lookup_text(text, text_menu_course_picker_subtitle);
-    menu.footer = lookup_text(text, text_menu_course_picker_footer);
-    for (std::size_t i = 0; i < content.courses.size(); ++i) {
-        const course_definition& course = content.courses[i];
-        add_tile(menu,
-                 course.name.empty() ? course.id : course.name,
-                 format_text(text,
-                             text_menu_course_picker_tile,
-                             {{"holes", std::to_string(std::max(0, course.hole_count))},
-                              {"par", std::to_string(std::max(0, course_total_par(course, content.asset_root)))}}),
-                 static_cast<int>(i) == state.selection);
-        const std::optional<render_hole_preview> preview = course_preview(course, content.asset_root);
-        if (preview) {
-            menu.tiles.back().has_preview = true;
-            menu.tiles.back().preview = *preview;
+        break;
+    case startup_flow::course_picker:
+        menu.title = lookup_text(text, text_menu_course_picker_title);
+        menu.subtitle = lookup_text(text, text_menu_course_picker_subtitle);
+        menu.footer = lookup_text(text, text_menu_course_picker_footer);
+        for (std::size_t i = 0; i < catalog.courses.size(); ++i) {
+            const startup_course_option& option = catalog.courses[i];
+            add_tile(menu,
+                     option.course.name,
+                     format_text(text,
+                                 text_menu_course_picker_tile,
+                                 {{"holes", std::to_string(option.course.holes.size())},
+                                  {"par", std::to_string(option.total_par)}}),
+                     selected(i));
+            menu.tiles.back().preview = option.preview;
         }
+        break;
+    case startup_flow::playing:
+        break;
     }
     return menu;
 }
 
 render_startup_menu make_confirm_menu_render_data(const startup_flow_state& state, const text_assets& text) {
     render_startup_menu menu;
-    menu.screen = startup_menu_screen::main;
+    menu.screen = startup_menu_screen::confirm;
     menu.title = lookup_text(text, text_menu_confirm_title);
     add_tile(menu, lookup_text(text, text_menu_confirm_yes), "", state.confirm_selection == 0);
     add_tile(menu, lookup_text(text, text_menu_confirm_no), "", state.confirm_selection == 1);

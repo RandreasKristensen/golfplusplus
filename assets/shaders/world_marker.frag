@@ -1,6 +1,6 @@
 #version 330 core
 
-// Unlit, exactly like terrain.frag's u_use_vertex_color == 0 path.
+// Flat, unlit colour: world markers and trees.
 
 flat in vec4 v_color;
 

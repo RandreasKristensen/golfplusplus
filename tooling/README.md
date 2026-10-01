@@ -303,7 +303,6 @@ The course manifest follows the same format as the hand-authored course files:
 {
   "id": "aarhus_golf_klub",
   "name": "Aarhus Golf Klub",
-  "hole_count": 18,
   "holes": [
     "holes/aarhus_golf_klub_h01.json",
     ...

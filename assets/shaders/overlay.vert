@@ -4,8 +4,7 @@
 layout(location = 0) in vec2 a_pos;
 layout(location = 1) in vec4 a_color;
 
-// Every vertex of a quad carries the same colour; flat avoids any
-// interpolation drift so the output matches the old uniform colour exactly.
+// Every vertex of a quad carries the same colour; flat avoids interpolation.
 flat out vec4 v_color;
 
 void main() {

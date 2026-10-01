@@ -2,11 +2,9 @@
 
 // CPU-side builder for the batched 2D overlay (HUD, menus, pixel text).
 //
-// Every overlay primitive appends six vertices (two triangles, same corner
-// order as the old unit screen quad) already transformed into overlay clip
-// space, each carrying its own RGBA. Because colour and alpha are per vertex,
-// quads never need to be sorted: submission order is kept, so painter's-order
-// alpha blending is identical to the old one-draw-per-quad path while the
+// Every overlay primitive appends six vertices (two triangles) already in
+// overlay clip space, each carrying its own RGBA. Because colour and alpha are
+// per vertex, submission order is drawing order (painter's algorithm) and the
 // whole stream goes out in a single draw call.
 //
 // "draw_overlay_*" here means "append to the batch" — nothing touches GL. The
@@ -34,8 +32,7 @@ struct overlay_batch {
     std::vector<overlay_vertex> vertices;
 };
 
-// Unit-quad corners (x, y) in the same triangle order as the renderer's
-// screen quad VBO.
+// Unit-quad corners (x, y), two triangles.
 constexpr std::array<std::array<float, 2>, overlay_vertices_per_quad> overlay_unit_quad_corners{{
     {{-1.0f, -1.0f}},
     {{ 1.0f, -1.0f}},
@@ -48,8 +45,7 @@ constexpr std::array<std::array<float, 2>, overlay_vertices_per_quad> overlay_un
 void clear_overlay_batch(overlay_batch& batch);
 std::size_t overlay_batch_quad_count(const overlay_batch& batch);
 
-// Axis-aligned quad: corners are center +/- half_size. Equivalent to the old
-// u_mvp = translate(center) * scale(half_size) applied to the unit quad.
+// Axis-aligned quad: corners are center +/- half_size.
 void draw_overlay_quad(overlay_batch& batch,
                        glm::vec2 center,
                        glm::vec2 half_size,

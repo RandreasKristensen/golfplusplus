@@ -44,8 +44,8 @@ Verified against the SpacetimeDB docs and releases as of 2026-09-30 (latest v2.1
 | Login method | **Steam is the intended primary login** (silent sign-in with a Steam session ticket, no browser or password), but it is **Phase 6, waiting on the Steam app id**. Until then browser sign-in (magic link, Google, Discord and others) is the only login, and it stays as the secondary path afterwards |
 | Steam and offline | Steam is **never required** to play offline, and the game doesn't use Steam DRM. If Steam isn't running, offline works and online falls back to browser sign-in |
 | Play modes | **Online** (main mode: sign-in, rooms, groups) and **Offline** (solo, no sign-in, no network). Both are picked from the main menu |
-| Progression | Two **completely separate** progress stores. Offline: the existing local save (`save_data` + `save_manager`), unchanged format. Online: server tables only, never written to disk. No import, export, merge or copying either way |
-| Shared rules | Both modes run the **same** rule code (`src/game/progress_rules.*`, see 1.5) for XP, collectibles, hole scores and course completion. Offline applies it locally, the server applies it online |
+| Progression | Two **completely separate** progress stores. Offline: the existing local save (`save_data` + `save_manager`), with its own format and migrations. Online: server tables only, never written to disk. No import, export, merge or copying either way |
+| Shared rules | Both modes run the **same** rule code (`src/game/progress_rules.*`) for XP, collectibles, hole completion and course completion. Offline applies it locally, the server applies it online |
 | Longevity | Supports the "Stop Killing Games" idea. Offline never needs a server, an account or Steam. Online can outlive the official server: the module source and README let anyone self-host, the client's server address is a setting, and a self-hosted server can use its own login issuer or `allow_anonymous` (see Phase 5) |
 | Names | A name entry screen on first login. Names are unique (case-insensitive) |
 | Topology | One database. Rooms are rows, not separate databases |
@@ -81,8 +81,8 @@ Anything beyond this list: stop and ask the owner.
 
 **Ball flight is not deterministic today.** `step_ball` in
 `src/game/game_state.cpp` steps with the frame `dt` (clamped to 0.05 in
-`app.cpp`), and wind is sampled at `state.hole_time`, which is also frame-time
-driven. The same shot gives different results at 60 fps and 144 fps. The server
+`update_game`), and wind is sampled at `state.hole_time`, which is also frame-time
+driven. Contact friction is already frame-rate independent. The same shot gives different results at 60 fps and 144 fps. The server
 cannot reproduce a client's shot until this is fixed. Phase 1 fixes it.
 
 ---
@@ -99,7 +99,7 @@ struct shot_input {
     glm::vec3 ball_start{0.0f};
     float aim_angle = 0.0f;
     std::string club_id;
-    float power = 0.0f;           // clamped to [min_swing_power, 1]
+    float power = 0.0f;           // clamped to [swing.min_power, 1]
     bool cigarette_active = false;
     float wind_time = 0.0f;       // seconds since hole start at launch
 };
@@ -114,15 +114,17 @@ struct shot_result {
     std::vector<shot_event_sample> events;    // for audio during playback
 };
 
-shot_result simulate_shot(const shot_input& input, const game_tuning& tuning);
+shot_result simulate_shot(const shot_input& input, const game_tuning& tuning, const play_area& area,
+                          const std::vector<club_definition>& clubs, const reward_rules& rewards);
 ```
 
 - Fixed step `1/120 s`, hard cap of 60 s simulated time.
 - Wind is sampled at `input.wind_time + step_index * fixed_dt`.
-- It moves the logic that is now split across `launch_ball`, `step_ball`,
-  `apply_ground_roll_friction`, tree collision and `complete_if_ball_reached_cup`
-  (the `path_intersects_cup` check) into one loop. Cup detection happens every step.
-- The cigarette club modifier (`apply_cigarette_effect`) is applied from `input.cigarette_active`.
+- It moves the logic that is now split across `launch_ball`, `step_ball` and
+  `update_ball` in `game_state.cpp` (rolling friction, tree collision and the
+  `path_crosses_cup` check from `physics/ground_contact.h`) into one loop. Cup
+  detection happens every step.
+- The cigarette club modifier (`effective_club_stats`, values from `rewards.json`) is applied from `input.cigarette_active`.
 - Trajectory sampling must match what the flight-path trail currently draws
   (`flight_path_tuning.min_point_spacing`, `max_points`).
 
@@ -138,23 +140,7 @@ Tests (`tests/shot_simulation_tests.cpp`):
 - A handful of **golden shots** on `tests/fixtures` holes: store expected rest
   positions in a JSON fixture and compare within 1 mm. Phase 2 reuses them for the native-vs-WASM check.
 
-### 1.2 Content from text, not only files
-
-The server module can't read files. Every loader
-(`hole_loader`, `course_loader`, `course_world_loader`, `club_loader`) gets a
-`parse_*_from_text(const std::string&)` entry point next to the file one; the
-file versions call the text versions. Also a way to build the per-hole
-`game_tuning` from an in-memory `hole_data` (the pieces already exist in
-`apply_hole_to_tuning` / `default_game_tuning`; split out anything touching the filesystem).
-
-### 1.3 XP and reward amounts to data
-
-The XP amounts hardcoded in `game_state.cpp` (25 per swing, 10 for smoking, the
-per-meter fitness/cart/drift rates) and the cigarette effect constants move to
-`assets/progression/rewards.json`, loaded by a small loader. Both the game and the
-server module read it, so the numbers have one source.
-
-### 1.4 Network seam in `game_state`
+### 1.2 Network seam in `game_state`
 
 Mirror the existing `audio_events` pattern. Game code never talks to the network.
 
@@ -172,7 +158,7 @@ Mirror the existing `audio_events` pattern. Game code never talks to the network
   and collectible checks read progress **only** through it.
 - `award_skill_xp`, collectible claims and hole completion no longer mutate
   progress directly. They go through one dispatch point:
-  - offline: apply `progress_rules` to `state.save` right away (today's behaviour), and save on hole completion, course completion and clean exit as today;
+  - offline: apply `progress_rules` to `state.save` right away (today's behaviour) and set `save_requested` on hole completion as today;
   - online: push a command, and the change arrives from the server (XP drops come from diffing old and new skill rows).
 - Put net types in `src/game/net_types.h` so game code and `src/net/` share them
   without depending on each other.
@@ -180,16 +166,6 @@ Mirror the existing `audio_events` pattern. Game code never talks to the network
 Tests: a test per rule path that runs one online-mode and one offline-mode update
 and asserts that online never changes `state.save`, and offline never pushes net
 commands or touches `online.progress`.
-
-### 1.5 Shared progress rules: `src/game/progress_rules.{h,cpp}`
-
-Pure functions over `save_data`, compiled into both the game and the server module:
-`apply_hole_completed`, `apply_course_completed`, `claim_collectible` (requirements,
-repeatable state, rewards), `award_xp`, `award_movement_xp` (meter remainders,
-rates from `rewards.json`). Each returns a result struct (new progress + awarded XP
-+ reason on refusal). They're moved out of `game_state.cpp`, not rewritten, so offline
-behaviour stays identical. The server converts its tables to and from this shape
-for the player it's updating.
 
 ---
 
@@ -202,8 +178,8 @@ template (`spacetime init --lang cpp`) and keep its CMake.
 
 The module compiles, from the main repo:
 `src/physics/*.cpp`, `src/game/shot_simulation.cpp`, the loaders' text parsers,
-`src/game/progression.cpp`, `src/game/progress_rules.cpp`, the rewards loader, and whatever `game_tuning.cpp`
-pieces `simulate_shot` needs. Plus `vendor/nlohmann/json.hpp` (define
+`src/game/progression.cpp`, `src/game/progress_rules.cpp`, `src/game/reward_rules.cpp`,
+`src/game/tuning_loader.cpp` and `src/game/play_area.cpp`. Plus `vendor/nlohmann/json.hpp` (define
 `JSON_NOEXCEPTION`; the loaders already use the non-throwing `parse(..., nullptr, false)`)
 and GLM (header-only).
 
@@ -217,12 +193,12 @@ the default) so FMA fusing doesn't change float results.
 
 A CMake step generates `embedded_content.cpp` holding every JSON file from
 `assets/holes`, `assets/courses`, `assets/course_worlds`, `assets/clubs`,
-`assets/progression` and `assets/fonts` (for the name charset) as string literals
+`assets/progression`, `assets/tuning` and `assets/fonts` (for the name charset) as string literals
 keyed by relative path (about 450 KB). The module parses on demand.
 
 **Terrain cache:** building a hole's terrain mesh and spatial index is the
 expensive part, and SpacetimeDB bills CPU. The module keeps a memo
-`map<(course_id, hole_index), game_tuning>` in module memory. It's a pure cache of
+`map<(course_id, hole_index), play_area>` in module memory. It's a pure cache of
 immutable embedded content: rebuilt if the instance restarts, never holding game
 state. This is the one allowed piece of module-global mutable state.
 
@@ -283,8 +259,9 @@ Event table syntax in C++: `SPACETIMEDB_TABLE(ShotEvent, shot_event, Public, tru
 Rows only reach subscribers' `on_insert` and are never stored in the client cache.
 
 The per-player tables mirror today's `save_data` (skills, collected ids,
-repeatable collectible state, world flags, completed courses, hole scores), so the
-existing collectible and requirement logic can run on the server unchanged.
+repeatable collectible state, world flags, completed courses, holes completed), so
+`progress_rules` can run on the server unchanged. Hole scores for the current round
+live in the room tables, like `round_state` does offline.
 
 ### 2.5 Reducers
 
@@ -294,7 +271,7 @@ All validation failures return `Err("...")`: the transaction rolls back and the 
 |---|---|
 | `client_connected` / `client_disconnected` (lifecycle) | Auth check (2.3). Upsert `player` (`online`, `last_login`). On disconnect: leave room/group, delete `avatar_motion` and `ball` (abandons the hole), decrement `room.player_count`, delete empty rooms and groups |
 | `claim_name(name)` | Only if the player has no name yet (renames are out of scope). Trim; 3–12 chars; letters, digits and single inner spaces; every character must have a glyph in the embedded font. Unique on the lowercased `name_key`. Must succeed before any other gameplay reducer (they all reject nameless players) |
-| `join_course(course_id)` | Course must exist in embedded content. Leave current room. Join the non-full room for that course with the **most** players, else create one. Spawn at hole 1's start in the hub zone (the course world `spawn` if hole 1 has no start), as offline does |
+| `join_course(course_id)` | Course must exist in embedded content. Leave current room. Join the non-full room for that course with the **most** players, else create one. Spawn at hole 1's start in the hub zone, as offline does |
 | `leave_room()` | As disconnect, minus `online=false` |
 | `update_motion(motion)` | See 2.6 |
 | `create_group()` / `join_group(group_id)` / `leave_group()` | Same room, cap 4. Leadership passes on, or the group is deleted when empty |
@@ -552,13 +529,13 @@ All new text goes through the string table and text styles.
 
 - Skills panel, XP drops, collectibles and the scorecard read `active_progress()`.
 - Online XP drops come from skill row updates. Offline XP drops work as today.
-- Online mode never calls `persist_current_save`. Offline mode never sends commands.
+- Online mode never writes the local save. Offline mode never sends commands.
 
 ---
 
 ## Phase 5: Self-hosting, tooling, docs
 
-- The local save format and `save_manager` stay as they are (offline only). No save version bump is needed, since nothing online goes into it.
+- The local save and `save_manager` stay offline only. Nothing online goes into the save, so online work never bumps its version.
 - `server/README.md`, written so a player could follow it:
   - install emsdk + `spacetime`, `spacetime start`, publish (`spacetime publish golfpp --project-path server/golfpp_module`), set `server_config`;
   - regenerate client bindings, deploy to Maincloud (`-s maincloud`);
@@ -670,11 +647,11 @@ Start only when the owner confirms the app id exists. Then:
 - **Adds** (in Phase 6): Steam is the primary online login but is never required. The game must start,
   and offline must work, without Steam running. No Steam DRM and no `RestartAppIfNecessary`.
   Steam headers are only included by `src/platform/steam/`, `app` and `src/net/`.
-- `server/golfpp_module/` may hold **one** module-global memo cache of hole tuning built from embedded content. No other global state in the module.
+- `server/golfpp_module/` may hold **one** module-global memo cache of hole play areas built from embedded content. No other global state in the module.
 - A mid-hole disconnect abandons the hole. Scores only exist for completed holes.
 - Game code never includes `src/net/`. It communicates through `net_commands` and `online` in `game_state`, like audio.
 - Only room-scoped or self-scoped subscriptions. Motion ≤ 4 calls/s per player.
-- New layout entries: `server/`, `net/client_bridge/`, `src/net/`, `assets/progression/`, `assets/online.json` (and `src/platform/steam/` in Phase 6).
+- New layout entries: `server/`, `net/client_bridge/`, `src/net/`, `assets/online.json` (and `src/platform/steam/` in Phase 6).
 
 ---
 
@@ -703,7 +680,7 @@ Start only when the owner confirms the app id exists. Then:
 
 ## Suggested split (one agent run each)
 
-1. **Phase 1**: deterministic shots, content-from-text, rewards to data, network seam. The owner plays to check shot feel.
+1. **Phase 1**: deterministic shots and the network seam. The owner plays to check shot feel.
 2. **Phase 2**: server module and determinism check. Needs emsdk and `spacetime` installed.
 3. **Phase 3**: SpacetimeAuth verification (3.0), bridge, browser login. The owner first sets up the SpacetimeAuth project.
 4. **Phase 4**: login, name and menu screens, remote players, shots, groups.

@@ -21,7 +21,7 @@ struct text_arg {
 // Every value must be a string; returns nullopt otherwise.
 std::optional<string_table> parse_string_table(const std::string& text);
 
-// The string for `key`, or "[key]" when it is missing so gaps show in game.
+// The string for `key`, or "#key#" when it is missing so gaps show in game.
 std::string lookup_text(const string_table& table, const char* key);
 // lookup_text with each "{name}" replaced by its argument's value. Unknown
 // placeholders are left as written.

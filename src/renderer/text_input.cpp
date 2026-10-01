@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 
+#include "renderer/control_icons.h"
 #include "renderer/pixel_font.h"
 
 namespace {
@@ -56,17 +57,9 @@ void draw_text_input(overlay_batch& batch,
                      const float time_seconds) {
     const glm::vec3 panel_color(0.030f, 0.032f, 0.034f);
     const glm::vec3 outline_color = state.active ? glm::vec3(0.94f, 0.72f, 0.22f) : glm::vec3(0.50f, 0.52f, 0.48f);
-    constexpr float outline_thickness = 0.008f;
 
     draw_overlay_quad(batch, center, half_size, panel_color, 0.92f);
-    const glm::vec2 top_left(center.x - half_size.x, center.y + half_size.y);
-    const glm::vec2 top_right(center.x + half_size.x, center.y + half_size.y);
-    const glm::vec2 bottom_left(center.x - half_size.x, center.y - half_size.y);
-    const glm::vec2 bottom_right(center.x + half_size.x, center.y - half_size.y);
-    draw_overlay_segment(batch, top_left, top_right, outline_thickness, outline_color, 0.94f);
-    draw_overlay_segment(batch, top_right, bottom_right, outline_thickness, outline_color, 0.94f);
-    draw_overlay_segment(batch, bottom_right, bottom_left, outline_thickness, outline_color, 0.94f);
-    draw_overlay_segment(batch, bottom_left, top_left, outline_thickness, outline_color, 0.94f);
+    draw_button_outline(batch, center, half_size, outline_color, 0.94f);
 
     // Size the text for a full field so it doesn't shrink as it fills up.
     const float glyph_width = static_cast<float>(find_glyph(font, 'W').width + 1);

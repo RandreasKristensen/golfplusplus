@@ -2,17 +2,13 @@
 
 #include <SDL.h>
 
-#include "core/gl_loader.h"
+#include "renderer/gl_loader.h"
 
 namespace {
-void set_window_icon(SDL_Window* window) {
-    if (window == nullptr) {
-        return;
-    }
-
-    SDL_Surface* icon = SDL_LoadBMP(GOLFPP_ASSETS_DIR "/icons/golfpp-icon.bmp");
-    if (!icon) {
-        SDL_Log("SDL_LoadBMP icon failed: %s", SDL_GetError());
+void set_window_icon(SDL_Window* window, const std::string& icon_path) {
+    SDL_Surface* icon = SDL_LoadBMP(icon_path.c_str());
+    if (icon == nullptr) {
+        SDL_Log("Window icon %s not loaded: %s", icon_path.c_str(), SDL_GetError());
         return;
     }
 
@@ -21,7 +17,7 @@ void set_window_icon(SDL_Window* window) {
 }
 }
 
-bool window::init(const char* title, int width, int height, const bool vsync) {
+bool window::init(const char* title, const int width, const int height, const bool vsync, const std::string& icon_path) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return false;
@@ -48,7 +44,7 @@ bool window::init(const char* title, int width, int height, const bool vsync) {
         return false;
     }
 
-    set_window_icon(window_);
+    set_window_icon(window_, icon_path);
 
     gl_context_ = SDL_GL_CreateContext(window_);
     if (!gl_context_) {
@@ -57,9 +53,8 @@ bool window::init(const char* title, int width, int height, const bool vsync) {
         return false;
     }
 
-    // Swap interval 0 is the profiling escape hatch: it lets the renderer run
-    // past the display refresh so frame times are the renderer's, not the
-    // monitor's. Nothing else in the build depends on which one is chosen.
+    // Swap interval 0 (profiling only) lets frames run past the display
+    // refresh so frame times are the renderer's, not the monitor's.
     const int requested_swap_interval = vsync ? 1 : 0;
     if (SDL_GL_SetSwapInterval(requested_swap_interval) != 0) {
         SDL_Log("SDL_GL_SetSwapInterval(%d) failed: %s", requested_swap_interval, SDL_GetError());

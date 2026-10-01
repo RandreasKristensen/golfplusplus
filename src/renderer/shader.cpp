@@ -2,31 +2,13 @@
 
 #include <SDL.h>
 
-#include <fstream>
-#include <sstream>
+#include <optional>
 #include <string>
 
-#include "core/gl_loader.h"
+#include "game/json_util.h"
+#include "renderer/gl_loader.h"
 
 namespace {
-std::string read_text_file(const char* path, bool* ok) {
-    std::ifstream file(path, std::ios::in);
-    if (!file.is_open()) {
-        if (ok) {
-            *ok = false;
-        }
-        return {};
-    }
-
-    std::ostringstream buffer;
-    buffer << file.rdbuf();
-
-    if (ok) {
-        *ok = true;
-    }
-    return buffer.str();
-}
-
 unsigned int compile_stage(unsigned int type, const char* source, const char* label) {
     unsigned int shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, nullptr);
@@ -61,28 +43,22 @@ bool link_program(unsigned int program) {
 }
 }
 
-bool shader_program::load_from_files(const char* vertex_path, const char* fragment_path) {
+bool shader_program::load_from_files(const std::string& vertex_path, const std::string& fragment_path) {
     shutdown();
 
-    bool ok = false;
-    const std::string vertex_source = read_text_file(vertex_path, &ok);
-    if (!ok) {
-        SDL_Log("Failed to read vertex shader: %s", vertex_path);
+    const std::optional<std::string> vertex_source = read_text_file(vertex_path);
+    const std::optional<std::string> fragment_source = read_text_file(fragment_path);
+    if (!vertex_source || !fragment_source) {
+        SDL_Log("Failed to read shader: %s", (!vertex_source ? vertex_path : fragment_path).c_str());
         return false;
     }
 
-    const std::string fragment_source = read_text_file(fragment_path, &ok);
-    if (!ok) {
-        SDL_Log("Failed to read fragment shader: %s", fragment_path);
-        return false;
-    }
-
-    unsigned int vertex_shader = compile_stage(GL_VERTEX_SHADER, vertex_source.c_str(), vertex_path);
+    const unsigned int vertex_shader = compile_stage(GL_VERTEX_SHADER, vertex_source->c_str(), vertex_path.c_str());
     if (!vertex_shader) {
         return false;
     }
 
-    unsigned int fragment_shader = compile_stage(GL_FRAGMENT_SHADER, fragment_source.c_str(), fragment_path);
+    const unsigned int fragment_shader = compile_stage(GL_FRAGMENT_SHADER, fragment_source->c_str(), fragment_path.c_str());
     if (!fragment_shader) {
         glDeleteShader(vertex_shader);
         return false;

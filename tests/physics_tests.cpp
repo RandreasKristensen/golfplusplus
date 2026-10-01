@@ -1,7 +1,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include "game/game_tuning.h"
 #include "physics/ball_physics.h"
 #include "physics/collision.h"
 #include "physics/terrain.h"
@@ -17,13 +16,27 @@
 
 #include <glm/geometric.hpp>
 
+#include "test_support.h"
+
 namespace {
-bool near_vec3(const glm::vec3& a, const glm::vec3& b, const float eps = 1e-5f) {
-    return glm::length(a - b) <= eps;
+physics_tuning test_physics() {
+    physics_tuning physics;
+    physics.drag_coeff = 0.004f;
+    physics.magnus_coeff = 0.0004f;
+    physics.spin_decay = 0.6f;
+    return physics;
 }
 
-bool near_float(const float a, const float b, const float eps = 1e-5f) {
-    return std::fabs(a - b) <= eps;
+wind_tuning test_wind() {
+    wind_tuning wind;
+    wind.seed_phase_scale = 0.01f;
+    wind.base_speed = 2.0f;
+    wind.speed_variation = 1.5f;
+    wind.speed_time_scale = 0.2f;
+    wind.angle_variation = 0.7f;
+    wind.angle_time_scale = 0.11f;
+    wind.phase_angle_scale = 1.3f;
+    return wind;
 }
 
 terrain_mesh crossing_branch_mesh() {
@@ -93,8 +106,7 @@ TEST_CASE("ball decelerates under aerodynamic drag") {
     wind_state w;
     w.velocity = glm::vec3(0.0f, 0.0f, 0.0f);
 
-    const game_tuning tuning = default_game_tuning();
-    const ball_state b2 = step(b, w, 0.016f, tuning.physics);
+    const ball_state b2 = step_ball_flight(b, w, 0.016f, test_physics());
     CHECK(glm::length(b2.velocity) < glm::length(b.velocity));
 }
 
@@ -107,49 +119,27 @@ TEST_CASE("step is deterministic") {
     wind_state w;
     w.velocity = glm::vec3(0.0f, 0.0f, 0.0f);
 
-    const game_tuning tuning = default_game_tuning();
-    const ball_state r1 = step(b, w, 0.016f, tuning.physics);
-    const ball_state r2 = step(b, w, 0.016f, tuning.physics);
+    const ball_state r1 = step_ball_flight(b, w, 0.016f, test_physics());
+    const ball_state r2 = step_ball_flight(b, w, 0.016f, test_physics());
 
-    CHECK(near_vec3(r1.position, r2.position));
-    CHECK(near_vec3(r1.velocity, r2.velocity));
+    CHECK(near(r1.position, r2.position));
+    CHECK(near(r1.velocity, r2.velocity));
 }
 
 TEST_CASE("wind is deterministic") {
-    const game_tuning tuning = default_game_tuning();
-    const wind_state w1 = sample_wind(42U, 10.0f, tuning.wind);
-    const wind_state w2 = sample_wind(42U, 10.0f, tuning.wind);
-    CHECK(near_vec3(w1.velocity, w2.velocity));
+    const wind_state w1 = sample_wind(42U, 10.0f, test_wind());
+    const wind_state w2 = sample_wind(42U, 10.0f, test_wind());
+    CHECK(near(w1.velocity, w2.velocity));
 }
 
 TEST_CASE("wind varies with time and seed") {
-    const game_tuning tuning = default_game_tuning();
-    const wind_state w_time_a = sample_wind(42U, 0.0f, tuning.wind);
-    const wind_state w_time_b = sample_wind(42U, 3.0f, tuning.wind);
-    CHECK(!near_vec3(w_time_a.velocity, w_time_b.velocity));
+    const wind_state w_time_a = sample_wind(42U, 0.0f, test_wind());
+    const wind_state w_time_b = sample_wind(42U, 3.0f, test_wind());
+    CHECK(!near(w_time_a.velocity, w_time_b.velocity));
 
-    const wind_state w_seed_a = sample_wind(1U, 0.0f, tuning.wind);
-    const wind_state w_seed_b = sample_wind(2U, 0.0f, tuning.wind);
-    CHECK(!near_vec3(w_seed_a.velocity, w_seed_b.velocity));
-}
-
-TEST_CASE("ground collision bounces and applies friction") {
-    ball_state b;
-    b.position = glm::vec3(0.0f, -1.0f, 0.0f);
-    b.velocity = glm::vec3(2.0f, -5.0f, 3.0f);
-
-    const ball_state r = resolve_ground_collision(b, 0.0f, 0.8f, 0.3f);
-    CHECK(near_float(r.position.y, b.radius));
-    CHECK(r.velocity.y > 0.0f);
-    CHECK(r.velocity.x < 2.0f);
-    CHECK(r.velocity.z < 3.0f);
-}
-
-TEST_CASE("ball state carries the real golf ball contract") {
-    const ball_state ball;
-
-    CHECK(near_float(ball.radius, 0.021335f));
-    CHECK(near_float(ball.mass, 0.04593f));
+    const wind_state w_seed_a = sample_wind(1U, 0.0f, test_wind());
+    const wind_state w_seed_b = sample_wind(2U, 0.0f, test_wind());
+    CHECK(!near(w_seed_a.velocity, w_seed_b.velocity));
 }
 
 TEST_CASE("terrain mesh is a continuous shared ribbon") {
@@ -162,7 +152,7 @@ TEST_CASE("terrain mesh is a continuous shared ribbon") {
     terrain.width = 8.0f;
     terrain.sample_count = 12;
 
-    const terrain_mesh mesh = build_terrain_mesh(terrain);
+    const terrain_mesh mesh = plain_terrain_mesh(terrain);
 
     CHECK(mesh.section_count >= 21);
     CHECK(mesh.cross_section_count == 9);
@@ -194,7 +184,7 @@ TEST_CASE("terrain mesh centerline follows spline height") {
     terrain.width = 8.0f;
     terrain.sample_count = 16;
 
-    const terrain_mesh mesh = build_terrain_mesh(terrain);
+    const terrain_mesh mesh = plain_terrain_mesh(terrain);
     CHECK(mesh.cross_section_count == 9);
     if (mesh.cross_section_count != 9) {
         return;
@@ -206,8 +196,8 @@ TEST_CASE("terrain mesh centerline follows spline height") {
         if (center.position.z < -0.001f || center.position.z > 20.001f) {
             continue;
         }
-        CHECK(near_float(center.position.x, 0.0f, 0.001f));
-        CHECK(near_float(center.position.y, center.position.z * 0.5f, 0.001f));
+        CHECK(near(center.position.x, 0.0f, 0.001f));
+        CHECK(near(center.position.y, center.position.z * 0.5f, 0.001f));
         ++checked_sections;
     }
     CHECK(checked_sections >= terrain.sample_count);
@@ -254,7 +244,7 @@ TEST_CASE("terrain mesh separates fairway from authored rough ribbon") {
     terrain.fairway_width = 10.0f;
     terrain.sample_count = 12;
 
-    const terrain_mesh mesh = build_terrain_mesh(terrain);
+    const terrain_mesh mesh = plain_terrain_mesh(terrain);
     CHECK(mesh.cross_section_count == 9);
     if (mesh.cross_section_count != 9) {
         return;
@@ -313,7 +303,7 @@ TEST_CASE("radius material overlay samples downhill terrain height") {
     bunker_zone.has_radius = true;
 
     constexpr float lift = 0.045f;
-    const terrain_mesh terrain_mesh_data = build_terrain_mesh(terrain);
+    const terrain_mesh terrain_mesh_data = plain_terrain_mesh(terrain);
     const terrain_mesh overlay = build_material_overlay_mesh(terrain_mesh_data, {bunker_zone}, lift);
 
     CHECK(overlay.vertices.size() == 33U);
@@ -321,8 +311,8 @@ TEST_CASE("radius material overlay samples downhill terrain height") {
     if (overlay.vertices.empty()) {
         return;
     }
-    CHECK(near_float(overlay.vertices.front().position.x, bunker_zone.center.x));
-    CHECK(near_float(overlay.vertices.front().position.z, bunker_zone.center.z));
+    CHECK(near(overlay.vertices.front().position.x, bunker_zone.center.x));
+    CHECK(near(overlay.vertices.front().position.z, bunker_zone.center.z));
 
     bool found_sample_below_authored_height = false;
     for (const terrain_vertex& vertex : overlay.vertices) {
@@ -349,7 +339,7 @@ TEST_CASE("bounds material overlay samples downhill terrain height") {
     water_zone.has_bounds = true;
 
     constexpr float lift = 0.045f;
-    const terrain_mesh terrain_mesh_data = build_terrain_mesh(terrain);
+    const terrain_mesh terrain_mesh_data = plain_terrain_mesh(terrain);
     const terrain_mesh overlay = build_material_overlay_mesh(terrain_mesh_data, {water_zone}, lift);
 
     CHECK(overlay.vertices.size() == 36U);
@@ -357,10 +347,10 @@ TEST_CASE("bounds material overlay samples downhill terrain height") {
     if (overlay.vertices.empty()) {
         return;
     }
-    CHECK(near_float(overlay.vertices.front().position.x, water_zone.bounds_min.x));
-    CHECK(near_float(overlay.vertices.front().position.z, water_zone.bounds_min.z));
-    CHECK(near_float(overlay.vertices.back().position.x, water_zone.bounds_max.x));
-    CHECK(near_float(overlay.vertices.back().position.z, water_zone.bounds_max.z));
+    CHECK(near(overlay.vertices.front().position.x, water_zone.bounds_min.x));
+    CHECK(near(overlay.vertices.front().position.z, water_zone.bounds_min.z));
+    CHECK(near(overlay.vertices.back().position.x, water_zone.bounds_max.x));
+    CHECK(near(overlay.vertices.back().position.z, water_zone.bounds_max.z));
 
     bool found_sample_below_authored_height = false;
     for (const terrain_vertex& vertex : overlay.vertices) {
@@ -381,9 +371,9 @@ TEST_CASE("spline terrain samples loaded elevation") {
     terrain.width = 8.0f;
     terrain.sample_count = 64;
 
-    const terrain_sample sample = sample_terrain(terrain, glm::vec3(1.0f, 0.0f, 10.0f), -2.0f);
+    const terrain_sample sample = sample_spline(terrain, glm::vec3(1.0f, 0.0f, 10.0f), -2.0f);
 
-    CHECK(sample.has_spline);
+    CHECK(sample.triangle_index >= 0);
     CHECK(sample.inside_surface);
     CHECK(sample.material == terrain_material::fairway);
     CHECK(sample.point.y > 4.9f);
@@ -402,9 +392,9 @@ TEST_CASE("terrain sampling refines between coarse samples") {
     terrain.width = 8.0f;
     terrain.sample_count = 2;
 
-    const terrain_sample sample = sample_terrain(terrain, glm::vec3(0.0f, 0.0f, 10.0f), -2.0f);
+    const terrain_sample sample = sample_spline(terrain, glm::vec3(0.0f, 0.0f, 10.0f), -2.0f);
 
-    CHECK(sample.has_spline);
+    CHECK(sample.triangle_index >= 0);
     CHECK(sample.point.y > 0.5f);
     CHECK(sample.point.y < 2.5f);
     CHECK(sample.distance_from_center < 0.1f);
@@ -421,7 +411,7 @@ TEST_CASE("terrain sampling is continuous across section boundaries") {
     terrain.width = 10.0f;
     terrain.sample_count = 30;
 
-    const terrain_mesh mesh = build_terrain_mesh(terrain);
+    const terrain_mesh mesh = plain_terrain_mesh(terrain);
     CHECK(mesh.section_count > 8);
     if (mesh.section_count <= 8) {
         return;
@@ -432,8 +422,8 @@ TEST_CASE("terrain sampling is continuous across section boundaries") {
     const terrain_sample before = sample_terrain_mesh(mesh, boundary + glm::vec3(0.2f, 0.0f, -0.02f), -10.0f);
     const terrain_sample after = sample_terrain_mesh(mesh, boundary + glm::vec3(0.2f, 0.0f, 0.02f), -10.0f);
 
-    CHECK(before.has_spline);
-    CHECK(after.has_spline);
+    CHECK(before.triangle_index >= 0);
+    CHECK(after.triangle_index >= 0);
     CHECK(before.inside_surface);
     CHECK(after.inside_surface);
     CHECK(std::abs(before.point.y - after.point.y) < 0.1f);
@@ -449,9 +439,9 @@ TEST_CASE("terrain sampling clamps outside ribbon as rough") {
     terrain.width = 8.0f;
     terrain.sample_count = 20;
 
-    const terrain_sample sample = sample_terrain(terrain, glm::vec3(9.0f, 0.0f, 10.0f), -5.0f);
+    const terrain_sample sample = sample_spline(terrain, glm::vec3(9.0f, 0.0f, 10.0f), -5.0f);
 
-    CHECK(sample.has_spline);
+    CHECK(sample.triangle_index >= 0);
     CHECK(!sample.inside_surface);
     CHECK(sample.material == terrain_material::rough);
     CHECK(sample.point.x < -3.9f || sample.point.x > 3.9f);
@@ -467,14 +457,14 @@ TEST_CASE("terrain anchor sampling preserves authored horizontal position outsid
     terrain.width = 8.0f;
     terrain.sample_count = 20;
 
-    const terrain_mesh mesh = build_terrain_mesh(terrain);
+    const terrain_mesh mesh = plain_terrain_mesh(terrain);
     const glm::vec3 authored(12.0f, 0.0f, 10.0f);
     const terrain_sample sample = sample_terrain_anchor(mesh, authored, -5.0f);
 
-    CHECK(sample.has_spline);
+    CHECK(sample.triangle_index >= 0);
     CHECK(!sample.inside_surface);
-    CHECK(near_float(sample.point.x, authored.x));
-    CHECK(near_float(sample.point.z, authored.z));
+    CHECK(near(sample.point.x, authored.x));
+    CHECK(near(sample.point.z, authored.z));
     CHECK(sample.material == terrain_material::rough);
 }
 
@@ -490,10 +480,10 @@ TEST_CASE("terrain anchor height follows nearby downhill and uphill terrain outs
     terrain_spline uphill = downhill;
     uphill.control_points[1].y = 6.0f;
 
-    const terrain_sample downhill_sample = sample_terrain_anchor(build_terrain_mesh(downhill),
+    const terrain_sample downhill_sample = sample_terrain_anchor(plain_terrain_mesh(downhill),
                                                                  glm::vec3(12.0f, 0.0f, 10.0f),
                                                                  0.0f);
-    const terrain_sample uphill_sample = sample_terrain_anchor(build_terrain_mesh(uphill),
+    const terrain_sample uphill_sample = sample_terrain_anchor(plain_terrain_mesh(uphill),
                                                                glm::vec3(12.0f, 0.0f, 10.0f),
                                                                0.0f);
 
@@ -511,7 +501,7 @@ TEST_CASE("terrain mesh end caps extend beyond first and last control points") {
     terrain.fairway_width = 10.0f;
     terrain.sample_count = 12;
 
-    const terrain_mesh mesh = build_terrain_mesh(terrain);
+    const terrain_mesh mesh = plain_terrain_mesh(terrain);
     CHECK(mesh.cross_section_count == 9);
     if (mesh.cross_section_count != 9 || mesh.vertices.empty()) {
         return;
@@ -536,7 +526,7 @@ TEST_CASE("outer rough apron samples terrain elevation instead of flat ground") 
     terrain.width = 10.0f;
     terrain.sample_count = 20;
 
-    const terrain_mesh mesh = build_terrain_mesh(terrain);
+    const terrain_mesh mesh = plain_terrain_mesh(terrain);
     const terrain_mesh apron = build_outer_rough_apron(mesh, terrain.width, 8);
 
     bool found_below_zero = false;
@@ -553,11 +543,9 @@ TEST_CASE("terrain sampling stays on the hinted branch through a crossing overla
 
     terrain_sample lower_hint;
     lower_hint.triangle_index = 0;
-    lower_hint.has_spline = true;
     lower_hint.inside_surface = true;
     terrain_sample upper_hint;
     upper_hint.triangle_index = 6;
-    upper_hint.has_spline = true;
     upper_hint.inside_surface = true;
 
     const terrain_sample lower_cross = sample_terrain_mesh(mesh, crossing, 0.0f, &lower_hint);
@@ -586,24 +574,25 @@ TEST_CASE("terrain collision uses spline elevation and is deterministic") {
     terrain.sample_count = 64;
 
     ball_state ball;
+    ball.radius = 0.021335f;
     ball.position = glm::vec3(0.0f, 4.0f, 10.0f);
     ball.velocity = glm::vec3(0.0f, -3.0f, 2.0f);
 
-    const terrain_sample sample = sample_terrain(terrain, ball.position, 0.0f);
-    const ball_state r1 = resolve_terrain_collision(ball, sample, 0.5f, 0.1f);
-    const ball_state r2 = resolve_terrain_collision(ball, sample, 0.5f, 0.1f);
+    const terrain_sample sample = sample_spline(terrain, ball.position, 0.0f);
+    const ball_state r1 = resolve_terrain_collision(ball, sample, 0.5f, 0.1f, 1.0f / 60.0f);
+    const ball_state r2 = resolve_terrain_collision(ball, sample, 0.5f, 0.1f, 1.0f / 60.0f);
 
-    CHECK(near_float(glm::dot(r1.position - sample.point, sample.normal), ball.radius));
+    CHECK(near(glm::dot(r1.position - sample.point, sample.normal), ball.radius));
     CHECK(r1.velocity.y > ball.velocity.y);
-    CHECK(near_vec3(r1.position, r2.position));
-    CHECK(near_vec3(r1.velocity, r2.velocity));
+    CHECK(near(r1.position, r2.position));
+    CHECK(near(r1.velocity, r2.velocity));
 }
 
 TEST_CASE("tree trunk collision pushes ball outside and reflects deterministically") {
-    tree_collision_body tree;
+    tree_body tree;
     tree.base = glm::vec3(0.0f);
-    tree.trunk_radius = 0.35f;
-    tree.trunk_height = 2.4f;
+    tree.shape.trunk_radius = 0.35f;
+    tree.shape.trunk_height = 2.4f;
 
     ball_state ball;
     ball.radius = 0.1f;
@@ -613,19 +602,19 @@ TEST_CASE("tree trunk collision pushes ball outside and reflects deterministical
     const ball_state r1 = resolve_tree_collision(ball, tree, 0.25f, 0.35f);
     const ball_state r2 = resolve_tree_collision(ball, tree, 0.25f, 0.35f);
 
-    CHECK(r1.position.x >= tree.trunk_radius + ball.radius - 0.0001f);
+    CHECK(r1.position.x >= tree.shape.trunk_radius + ball.radius - 0.0001f);
     CHECK(r1.velocity.x > 0.0f);
-    CHECK(near_vec3(r1.position, r2.position));
-    CHECK(near_vec3(r1.velocity, r2.velocity));
+    CHECK(near(r1.position, r2.position));
+    CHECK(near(r1.velocity, r2.velocity));
 }
 
 TEST_CASE("tree leaf cone collision damps and deflects deterministically") {
-    tree_collision_body tree;
+    tree_body tree;
     tree.base = glm::vec3(0.0f);
-    tree.trunk_radius = 0.25f;
-    tree.trunk_height = 2.0f;
-    tree.leaf_radius = 1.5f;
-    tree.leaf_height = 3.0f;
+    tree.shape.trunk_radius = 0.25f;
+    tree.shape.trunk_height = 2.0f;
+    tree.shape.leaf_radius = 1.5f;
+    tree.shape.leaf_height = 3.0f;
 
     ball_state ball;
     ball.radius = 0.1f;
@@ -637,29 +626,30 @@ TEST_CASE("tree leaf cone collision damps and deflects deterministically") {
 
     CHECK(glm::length(r1.velocity) < glm::length(ball.velocity));
     CHECK(r1.position.x > ball.position.x);
-    CHECK(near_vec3(r1.position, r2.position));
-    CHECK(near_vec3(r1.velocity, r2.velocity));
+    CHECK(near(r1.position, r2.position));
+    CHECK(near(r1.velocity, r2.velocity));
 }
 
 TEST_CASE("tree collision leaves distant ball unchanged") {
-    tree_collision_body tree;
+    tree_body tree;
     tree.base = glm::vec3(0.0f);
+    tree.shape = tree_shape{0.35f, 2.4f, 1.6f, 3.2f};
 
     ball_state ball;
     ball.position = glm::vec3(5.0f, 1.0f, 0.0f);
     ball.velocity = glm::vec3(1.0f, 0.0f, 0.0f);
 
     const ball_state result = resolve_tree_collision(ball, tree, 0.25f, 0.35f);
-    CHECK(near_vec3(result.position, ball.position));
-    CHECK(near_vec3(result.velocity, ball.velocity));
+    CHECK(near(result.position, ball.position));
+    CHECK(near(result.velocity, ball.velocity));
 }
 
 // ---------------------------------------------------------------------------
 // Terrain spatial index
 //
-// The reference behaviour is the original full scan, which is still the code
-// path taken whenever a mesh has no usable index. Clearing spatial_index gives
-// us that exact reference implementation to compare the indexed result against.
+// The full scan (taken whenever a mesh has no usable index) is the
+// reference: clearing spatial_index gives it, and the indexed result must
+// match it exactly.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -671,11 +661,9 @@ terrain_mesh without_spatial_index(terrain_mesh mesh) {
 bool same_terrain_sample(const terrain_sample& a, const terrain_sample& b) {
     return a.point == b.point
         && a.normal == b.normal
-        && a.barycentric == b.barycentric
         && a.distance_from_center == b.distance_from_center
         && a.triangle_index == b.triangle_index
         && a.material == b.material
-        && a.has_spline == b.has_spline
         && a.inside_surface == b.inside_surface;
 }
 
@@ -1039,7 +1027,6 @@ TEST_CASE("terrain sampling tolerates empty and malformed meshes") {
     const terrain_mesh empty_mesh;
     const terrain_sample empty_sample = sample_terrain_mesh(empty_mesh, glm::vec3(1.0f, 0.0f, 2.0f), 3.0f);
     CHECK(empty_sample.point == glm::vec3(1.0f, 3.0f, 2.0f));
-    CHECK(empty_sample.has_spline == false);
     CHECK(empty_sample.triangle_index == -1);
 
     terrain_mesh degenerate;

@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstring>
+#include <string>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -20,7 +21,8 @@
 // Negative locations (uniform optimised out) are cached like any other.
 //
 // Kept free of GL so it can be unit tested; the actual query is passed in.
-struct uniform_location_cache {
+class uniform_location_cache {
+public:
     static constexpr std::size_t capacity = 16;
     static constexpr std::size_t max_name_length = 31;
 
@@ -74,8 +76,9 @@ private:
     std::size_t next_ = 0;
 };
 
-struct shader_program {
-    bool load_from_files(const char* vertex_path, const char* fragment_path);
+class shader_program {
+public:
+    bool load_from_files(const std::string& vertex_path, const std::string& fragment_path);
     void shutdown();
     void use() const;
 

@@ -2,11 +2,12 @@
   "id": "driver",
   "name": "Driver",
   "label": "DRVR",
+  "hit_sound": "club_hit_driver",
   "bag_order": 8,
   "stats": {
     "power": 80.0,
     "loft_degrees": 11.0,
-    "accuracy": 0.42,
-    "spin_bias": 0.025
+    "backspin": 0.025,
+    "side_spin": 0.42
   }
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -22,19 +24,20 @@
 // was considered and rejected: GL 3.3 glDrawArraysInstanced has no base-instance
 // parameter, so contiguous visible instance ranges would need either one
 // instance buffer (and draw call) per chunk, or a per-frame re-upload of the
-// visible instances. With ~100 trees on the 6-hole course both cost more than
-// the ~15k vertices the two instanced draws submit.
+// visible instances, both costing more than drawing every tree for the tree
+// counts courses have.
 //
 // Owned by the renderer, which also owns the cylinder/cone vertex buffers this
 // shares (they must outlive this object's VAOs being used).
-struct tree_renderer {
+class tree_renderer {
+public:
     struct mesh_source {
-        unsigned int vbo = 0;       // interleaved vec3 position, vec3 normal
+        unsigned int vbo = 0;  // interleaved vec3 position, vec3 normal (normal unused)
         int vertex_count = 0;
     };
 
-    bool init(const char* vertex_path,
-              const char* fragment_path,
+    bool init(const std::string& vertex_path,
+              const std::string& fragment_path,
               mesh_source trunk_mesh,
               mesh_source leaf_mesh);
     void shutdown();
@@ -42,7 +45,7 @@ struct tree_renderer {
     // Uploads instance data if `revision`/tree count changed, then draws.
     // No draw calls are issued when there are no trees, or when the whole batch
     // is outside `frustum`. Returns true when the batch was drawn.
-    bool draw(const std::vector<render_tree>& trees,
+    bool draw(const std::vector<tree_body>& trees,
               std::uint64_t revision,
               const glm::mat4& view,
               const glm::mat4& proj,
@@ -70,8 +73,4 @@ private:
     std::uint64_t uploaded_revision_ = 0;
     std::size_t uploaded_tree_count_ = 0;
     bool uploaded_ = false;
-
-    // Loaded through SDL_GL_GetProcAddress into members, never into globals.
-    void* vertex_attrib_divisor_ = nullptr;
-    void* draw_arrays_instanced_ = nullptr;
 };

@@ -1,8 +1,16 @@
 #include "doctest.h"
 
 #include "audio/audio_manifest.h"
+#include "game/club_definition.h"
 
+#include "test_support.h"
+
+#include <filesystem>
+#include <fstream>
+#include <regex>
+#include <sstream>
 #include <string>
+#include <vector>
 
 namespace {
 const audio_sound_definition* find_sound(const audio_manifest& manifest, const std::string& id) {
@@ -12,14 +20,6 @@ const audio_sound_definition* find_sound(const audio_manifest& manifest, const s
         }
     }
     return nullptr;
-}
-
-std::string asset_root() {
-#ifdef GOLFPP_ASSETS_DIR
-    return GOLFPP_ASSETS_DIR;
-#else
-    return "assets";
-#endif
 }
 }
 
@@ -87,8 +87,6 @@ TEST_CASE("audio manifest parser defaults optional fields") {
     const audio_sound_definition& sound = result.manifest->sounds[0];
     CHECK(result.manifest->master_volume == 1.0f);
     CHECK(sound.category == "gameplay");
-    CHECK(sound.description.empty());
-    CHECK(sound.target_length_seconds == 0.0f);
     CHECK(sound.volume_multiplier == 1.0f);
     CHECK(sound.type == audio_sound_type::sfx);
 }
@@ -150,30 +148,37 @@ TEST_CASE("audio manifest parser keeps SDL_mixer asset classes explicit") {
     CHECK(ambience->file == "ambience/course_day.ogg");
 }
 
-TEST_CASE("project audio manifest lists initial sound set") {
+TEST_CASE("every sound the game plays is in the manifest with an existing file") {
     const audio_manifest_parse_result result = load_audio_manifest_from_file(asset_root() + "/audio/sounds.json");
+    REQUIRE(result.manifest.has_value());
 
-    CHECK(result.manifest.has_value());
-    if (!result.manifest) {
-        return;
+    std::vector<std::string> played;
+    std::ifstream header(std::string(GOLFPP_SOURCE_DIR) + "/audio/sound_ids.h");
+    std::stringstream contents;
+    contents << header.rdbuf();
+    const std::string text = contents.str();
+    const std::regex pattern(R"re(constexpr const char\* sound_\w+ = "([^"]*)";)re");
+    for (auto it = std::sregex_iterator(text.begin(), text.end(), pattern); it != std::sregex_iterator(); ++it) {
+        played.push_back((*it)[1].str());
+    }
+    CHECK(played.size() > 10U);
+    for (const club_definition& club : shipped_content().clubs) {
+        played.push_back(club.hit_sound);
     }
 
-    CHECK(find_sound(*result.manifest, "ui_move") != nullptr);
-    CHECK(find_sound(*result.manifest, "club_hit_driver") != nullptr);
-    CHECK(find_sound(*result.manifest, "ball_cup") != nullptr);
-    CHECK(find_sound(*result.manifest, "cart_drive_loop") != nullptr);
-    CHECK(find_sound(*result.manifest, "ambience_course_day") != nullptr);
-    CHECK(find_sound(*result.manifest, "ambience_menu_vcr") != nullptr);
-
-    const audio_sound_definition* cart_loop = find_sound(*result.manifest, "cart_drive_loop");
-    const audio_sound_definition* course_day = find_sound(*result.manifest, "ambience_course_day");
-    CHECK(cart_loop != nullptr);
-    CHECK(course_day != nullptr);
-    if (cart_loop == nullptr || course_day == nullptr) {
-        return;
+    for (const std::string& id : played) {
+        const audio_sound_definition* sound = find_sound(*result.manifest, id);
+        CHECK(sound != nullptr);
+        if (sound != nullptr) {
+            CHECK(std::filesystem::exists(std::filesystem::path(asset_root()) / "audio" / sound->file));
+        }
     }
-    CHECK(cart_loop->type == audio_sound_type::loop);
-    CHECK(course_day->type == audio_sound_type::ambience);
-    CHECK(cart_loop->volume_multiplier == 1.0f);
-    CHECK(course_day->volume_multiplier == 1.0f);
+}
+
+TEST_CASE("every file in the manifest exists") {
+    const audio_manifest_parse_result result = load_audio_manifest_from_file(asset_root() + "/audio/sounds.json");
+    REQUIRE(result.manifest.has_value());
+    for (const audio_sound_definition& sound : result.manifest->sounds) {
+        CHECK(std::filesystem::exists(std::filesystem::path(asset_root()) / "audio" / sound.file));
+    }
 }

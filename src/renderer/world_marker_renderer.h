@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include <glm/mat4x4.hpp>
 
 #include "profiling/profiling.h"
@@ -13,8 +15,9 @@
 // The GPU buffer only ever grows (see renderer/dynamic_buffer.h): a frame that
 // fits the current capacity is streamed with glBufferSubData; a larger frame
 // reallocates (orphans) the storage once before streaming.
-struct world_marker_renderer {
-    bool init(const char* vertex_path, const char* fragment_path);
+class world_marker_renderer {
+public:
+    bool init(const std::string& vertex_path, const std::string& fragment_path);
     void shutdown();
 
     // Draws (and uploads) nothing for an empty batch. Leaves depth writes

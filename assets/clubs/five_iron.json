@@ -2,11 +2,12 @@
   "id": "five_iron",
   "name": "5 Iron",
   "label": "5I",
+  "hit_sound": "club_hit_iron",
   "bag_order": 5,
   "stats": {
     "power": 45.0,
     "loft_degrees": 27.0,
-    "accuracy": 0.62,
-    "spin_bias": 0.06
+    "backspin": 0.06,
+    "side_spin": 0.62
   }
 }

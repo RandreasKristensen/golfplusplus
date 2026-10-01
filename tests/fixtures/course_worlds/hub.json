@@ -1,0 +1,35 @@
+{
+  "id": "fixture_hub",
+  "name": "Fixture Hub",
+  "hole_starts": [
+    { "hole_index": 0, "position": [0, 0, 0], "return_position": [0, 0, -15], "interaction_radius": 4 },
+    { "hole_index": 1, "position": [200, 0, 0], "return_position": [200, 0, -15], "interaction_radius": 4 },
+    { "hole_index": 2, "position": [400, 0, 0], "return_position": [400, 0, -15], "interaction_radius": 4, "rotation_degrees": 90 }
+  ],
+  "cart_roads": [
+    { "width": 4, "polyline": [[-30, 0, -30], [430, 0, -30]] }
+  ],
+  "collectibles": [
+    {
+      "id": "range_token",
+      "position": [20, 0, -20],
+      "interaction_radius": 3,
+      "repeatable": true,
+      "repeatable_cooldown_holes": 1,
+      "reward": { "skill_xp": { "fitness": 5 } }
+    },
+    {
+      "id": "lost_ball",
+      "position": [40, 0, -20],
+      "interaction_radius": 3,
+      "reward": { "skill_xp": { "fitness": 12 }, "world_flag": "found_lost_ball" }
+    },
+    {
+      "id": "fitness_cache",
+      "position": [60, 0, -20],
+      "interaction_radius": 3,
+      "requirement": { "skill_id": "fitness", "min_level": 2 },
+      "reward": { "skill_xp": { "fitness": 20 } }
+    }
+  ]
+}

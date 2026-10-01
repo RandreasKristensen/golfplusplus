@@ -2,52 +2,22 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 namespace {
+// Each level needs this much more XP than the last, so early levels come fast.
 constexpr double xp_curve_base = 1.0885;
 
 int clamp_xp(const int xp) {
-    return std::max(0, std::min(skill_max_xp, xp));
+    return std::clamp(xp, 0, skill_max_xp);
 }
-}
-
-const char* golf_swing_skill_id() {
-    return "golf_swing";
-}
-
-const char* smoking_skill_id() {
-    return "smoking";
-}
-
-const char* fitness_skill_id() {
-    return "fitness";
-}
-
-const char* cart_driving_skill_id() {
-    return "cart_driving";
-}
-
-const char* drifting_skill_id() {
-    return "drifting";
-}
-
-skill_progression default_skill_progression() {
-    skill_progression progression;
-    progression[golf_swing_skill_id()] = skill_progress{};
-    progression[smoking_skill_id()] = skill_progress{};
-    progression[fitness_skill_id()] = skill_progress{};
-    progression[cart_driving_skill_id()] = skill_progress{};
-    progression[drifting_skill_id()] = skill_progress{};
-    return progression;
 }
 
 int xp_for_level(const int level) {
-    const int clamped_level = std::max(1, std::min(skill_max_level, level));
-    if (clamped_level <= 1) {
+    const int clamped_level = std::clamp(level, 1, skill_max_level);
+    if (clamped_level == 1) {
         return 0;
     }
-    if (clamped_level >= skill_max_level) {
+    if (clamped_level == skill_max_level) {
         return skill_max_xp;
     }
 
@@ -59,64 +29,34 @@ int xp_for_level(const int level) {
 int skill_level(const int xp) {
     const int clamped_xp = clamp_xp(xp);
     int level = 1;
-    for (int candidate = 2; candidate <= skill_max_level; ++candidate) {
-        if (clamped_xp < xp_for_level(candidate)) {
-            break;
-        }
-        level = candidate;
+    while (level < skill_max_level && clamped_xp >= xp_for_level(level + 1)) {
+        ++level;
     }
     return level;
 }
 
 int skill_xp(const skill_progression& progression, const std::string& skill_id) {
     const auto it = progression.find(skill_id);
-    if (it == progression.end()) {
-        return 0;
-    }
-    return clamp_xp(it->second.xp);
+    return it == progression.end() ? 0 : clamp_xp(it->second.xp);
 }
 
 int xp_to_next_level(const skill_progression& progression, const std::string& skill_id) {
     const int xp = skill_xp(progression, skill_id);
     const int level = skill_level(xp);
-    if (level >= skill_max_level) {
-        return 0;
-    }
-    return std::max(0, xp_for_level(level + 1) - xp);
-}
-
-void ensure_default_skills(skill_progression& progression) {
-    for (const auto& default_skill : default_skill_progression()) {
-        if (progression.find(default_skill.first) == progression.end()) {
-            progression[default_skill.first] = default_skill.second;
-        }
-    }
-
-    for (auto& skill : progression) {
-        skill.second.xp = clamp_xp(skill.second.xp);
-    }
+    return level >= skill_max_level ? 0 : xp_for_level(level + 1) - xp;
 }
 
 add_skill_xp_result add_skill_xp(skill_progression& progression, const std::string& skill_id, const int amount) {
     add_skill_xp_result result;
-    if (skill_id.empty()) {
-        return result;
-    }
-    if (amount <= 0) {
-        result.before_xp = skill_xp(progression, skill_id);
-        result.after_xp = result.before_xp;
+    result.before_xp = skill_xp(progression, skill_id);
+    result.after_xp = result.before_xp;
+    if (skill_id.empty() || amount <= 0) {
         return result;
     }
 
-    skill_progress& progress = progression[skill_id];
-    progress.xp = clamp_xp(progress.xp);
-    result.before_xp = progress.xp;
-    if (progress.xp > skill_max_xp - amount) {
-        progress.xp = skill_max_xp;
-    } else {
-        progress.xp = clamp_xp(progress.xp + amount);
-    }
-    result.after_xp = progress.xp;
-    result.applied_xp = std::max(0, result.after_xp - result.before_xp);
+    // before_xp <= skill_max_xp, so the subtraction never overflows.
+    result.after_xp = amount > skill_max_xp - result.before_xp ? skill_max_xp : result.before_xp + amount;
+    progression[skill_id].xp = result.after_xp;
+    result.applied_xp = result.after_xp - result.before_xp;
     return result;
 }

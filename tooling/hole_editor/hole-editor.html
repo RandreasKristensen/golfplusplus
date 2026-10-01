@@ -266,9 +266,6 @@ body {
   <button class="btn"        id="btn-bunker"  onclick="setMode('add_zone','bunker')">+ bunker</button>
   <button class="btn"        id="btn-water"   onclick="setMode('add_zone','water')">+ water</button>
   <button class="btn"        id="btn-tree"    onclick="setMode('add_tree')">+ tree</button>
-  <button class="btn"        id="btn-cart"    onclick="setMode('add_cart_point')">+ cart pt</button>
-  <button class="btn"        id="btn-shortcut" onclick="setMode('add_shortcut_point')">+ shortcut pt</button>
-  <button class="btn"        id="btn-collectible" onclick="setMode('add_collectible')">+ collectible</button>
   <div class="sep"></div>
   <button class="btn"        onclick="fitView();render()">fit</button>
   <button class="btn"        onclick="newHole()">new</button>
@@ -686,17 +683,25 @@ function normalizeCourseWorld() {
     rotation_degrees: normalizeDegrees(start.rotation_degrees)
   }));
 
-  const normalizePath = (route, i, prefix, shortcut) => ({
-    ...route,
-    id: route.id || `${prefix}_${i + 1}`,
-    surface: route.surface || (shortcut ? 'dirt' : 'gravel'),
-    width: Number.isFinite(+route.width) ? Math.max(0.5, +route.width) : (shortcut ? 2 : 4),
-    source: route.source || 'manual',
-    osm_ref: route.osm_ref || '',
-    required_skill_id: route.required_skill_id || (shortcut ? 'fitness' : ''),
-    required_level: Number.isInteger(+route.required_level) ? Math.max(1, +route.required_level) : 1,
-    polyline: routePoints(route).map(p => vec3(p)).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[2]))
-  });
+  // Skill requirements are placeholder data for walking shortcuts only; cart
+  // roads are open to everyone.
+  const normalizePath = (route, i, prefix, shortcut) => {
+    const { required_skill_id, required_level, ...base } = route;
+    const path = {
+      ...base,
+      id: route.id || `${prefix}_${i + 1}`,
+      surface: route.surface || (shortcut ? 'dirt' : 'gravel'),
+      width: Number.isFinite(+route.width) ? Math.max(0.5, +route.width) : (shortcut ? 2 : 4),
+      source: route.source || 'manual',
+      osm_ref: route.osm_ref || '',
+      polyline: routePoints(route).map(p => vec3(p)).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[2]))
+    };
+    if (shortcut) {
+      path.required_skill_id = required_skill_id || 'fitness';
+      path.required_level = Number.isInteger(+required_level) ? Math.max(1, +required_level) : 1;
+    }
+    return path;
+  };
   courseWorld.cart_roads = courseWorld.cart_roads.map((r, i) => normalizePath(r, i, 'cart_road', false));
   courseWorld.walking_shortcuts = courseWorld.walking_shortcuts.map((r, i) => normalizePath(r, i, 'shortcut', true));
 
@@ -2144,7 +2149,6 @@ function setMode(m, zt) {
   mode=m; ztype=zt||null;
   const map = { select:'btn-select', area_select:'btn-area-select', add_cp:'btn-addcp',
     measure:'btn-measure', add_tree:'btn-tree',
-    add_cart_point:'btn-cart', add_shortcut_point:'btn-shortcut', add_collectible:'btn-collectible',
     'add_zone:green':'btn-green','add_zone:bunker':'btn-bunker','add_zone:water':'btn-water' };
   document.querySelectorAll('#toolbar .btn').forEach(b=>b.classList.remove('active'));
   document.getElementById(viewScope === 'world' ? 'btn-world-view' : 'btn-hole-view')?.classList.add('active');
@@ -2155,11 +2159,6 @@ function setMode(m, zt) {
 }
 
 function updateToolbarForScope() {
-  const legacyWorldTools = ['btn-cart', 'btn-shortcut', 'btn-collectible'];
-  legacyWorldTools.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
   const hideInWorld = ['btn-area-select', 'btn-addcp', 'btn-green', 'btn-bunker', 'btn-water', 'btn-tree'];
   hideInWorld.forEach(id => {
     const el = document.getElementById(id);
@@ -2175,11 +2174,7 @@ function setViewScope(scope) {
   if (changed) selectedAreaItems = [];
   drag = null;
   pan = null;
-  if (scope === 'world') {
-    if (!['select', 'measure'].includes(mode)) mode = 'select';
-  } else if (mode === 'add_cart_point' || mode === 'add_shortcut_point' || mode === 'add_collectible') {
-    mode = 'select';
-  }
+  if (scope === 'world' && !['select', 'measure'].includes(mode)) mode = 'select';
   fitView();
   updatePanel();
   setMode(mode, ztype);

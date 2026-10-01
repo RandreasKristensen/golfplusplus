@@ -2,10 +2,14 @@
 
 #include <SDL.h>
 
-struct window {
-    // `vsync` maps to the GL swap interval. False is a profiling-only mode
-    // selected at startup (see core/startup_options.h); the default is on.
-    bool init(const char* title, int width, int height, bool vsync = true);
+#include <string>
+
+// The SDL window and its OpenGL 3.3 core context.
+class window {
+public:
+    // `vsync` maps to the GL swap interval (off only for profiling, see
+    // core/startup_options.h). A missing icon is logged and ignored.
+    bool init(const char* title, int width, int height, bool vsync, const std::string& icon_path);
     void shutdown();
     void swap();
 

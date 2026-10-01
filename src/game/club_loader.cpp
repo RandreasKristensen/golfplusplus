@@ -1,119 +1,52 @@
 #include "game/club_loader.h"
 
+#include "game/json_util.h"
+
 #include <algorithm>
 #include <filesystem>
-#include <fstream>
-#include <optional>
-#include <string>
-#include <vector>
 
-#include <nlohmann/json.hpp>
-
-namespace {
-using json = nlohmann::json;
-
-std::optional<json> load_json_file(const std::filesystem::path& path) {
-    std::ifstream file(path);
-    if (!file) {
+std::optional<club_definition> parse_club_from_text(const std::string& text) {
+    const std::optional<json> root = parse_json(text);
+    const json* stats = root ? json_object(*root, "stats") : nullptr;
+    if (stats == nullptr) {
         return std::nullopt;
     }
 
-    json parsed = json::parse(file, nullptr, false);
-    if (parsed.is_discarded()) {
-        return std::nullopt;
-    }
-    return parsed;
-}
-
-std::optional<std::string> string_at(const json& object, const char* key) {
-    const auto it = object.find(key);
-    if (it == object.end() || !it->is_string()) {
-        return std::nullopt;
-    }
-    return it->get<std::string>();
-}
-
-std::optional<int> int_at(const json& object, const char* key) {
-    const auto it = object.find(key);
-    if (it == object.end() || !it->is_number_integer()) {
-        return std::nullopt;
-    }
-    return it->get<int>();
-}
-
-std::optional<float> float_at(const json& object, const char* key) {
-    const auto it = object.find(key);
-    if (it == object.end() || !it->is_number()) {
-        return std::nullopt;
-    }
-    return it->get<float>();
-}
-
-std::optional<club_definition> parse_club_definition(const json& root) {
-    if (!root.is_object()) {
-        return std::nullopt;
-    }
-
-    const auto stats_it = root.find("stats");
-    if (stats_it == root.end() || !stats_it->is_object()) {
-        return std::nullopt;
-    }
-
-    const std::optional<float> power = float_at(*stats_it, "power");
-    const std::optional<float> loft_degrees = float_at(*stats_it, "loft_degrees");
-    const std::optional<float> accuracy = float_at(*stats_it, "accuracy");
-    const std::optional<float> spin_bias = float_at(*stats_it, "spin_bias");
-    if (!power || !loft_degrees || !accuracy || !spin_bias) {
+    const std::optional<std::string> id = json_string(*root, "id");
+    const std::optional<std::string> hit_sound = json_string(*root, "hit_sound");
+    const std::optional<float> power = json_float(*stats, "power");
+    const std::optional<float> loft_degrees = json_float(*stats, "loft_degrees");
+    const std::optional<float> backspin = json_float(*stats, "backspin");
+    const std::optional<float> side_spin = json_float(*stats, "side_spin");
+    if (!id || !hit_sound || !power || !loft_degrees || !backspin || !side_spin) {
         return std::nullopt;
     }
 
     club_definition club;
-    club.id = string_at(root, "id").value_or("");
-    club.name = string_at(root, "name").value_or(club.id);
-    club.label = string_at(root, "label").value_or(club.name);
-    club.bag_order = int_at(root, "bag_order").value_or(0);
+    club.id = *id;
+    club.name = json_string(*root, "name").value_or(club.id);
+    club.label = json_string(*root, "label").value_or(club.name);
+    club.hit_sound = *hit_sound;
+    club.bag_order = json_int(*root, "bag_order").value_or(0);
     club.stats.power = *power;
     club.stats.loft_degrees = *loft_degrees;
-    club.stats.accuracy = *accuracy;
-    club.stats.spin_bias = *spin_bias;
-    club.stats.timing_speed = float_at(*stats_it, "timing_speed").value_or(1.0f);
-    club.stats.roll_friction_scale = float_at(*stats_it, "roll_friction_scale").value_or(1.0f);
+    club.stats.backspin = *backspin;
+    club.stats.side_spin = *side_spin;
+    club.stats.timing_speed = json_float(*stats, "timing_speed").value_or(1.0f);
+    club.stats.roll_friction_scale = json_float(*stats, "roll_friction_scale").value_or(1.0f);
     return club;
-}
 }
 
 std::vector<club_definition> load_clubs_from_directory(const std::string& directory) {
     std::vector<club_definition> clubs;
-    const std::filesystem::path dir(directory);
-    if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
-        return clubs;
-    }
-
-    std::vector<std::filesystem::path> files;
-    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(dir)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".json") {
-            files.push_back(entry.path());
+    for (const std::filesystem::path& path : json_files_in_directory(directory)) {
+        const std::optional<std::string> text = read_text_file(path);
+        if (std::optional<club_definition> club = text ? parse_club_from_text(*text) : std::nullopt) {
+            clubs.push_back(std::move(*club));
         }
     }
-
-    std::sort(files.begin(), files.end());
-    for (const std::filesystem::path& path : files) {
-        const std::optional<json> root = load_json_file(path);
-        if (!root) {
-            continue;
-        }
-        const std::optional<club_definition> club = parse_club_definition(*root);
-        if (club) {
-            clubs.push_back(*club);
-        }
-    }
-
     std::sort(clubs.begin(), clubs.end(), [](const club_definition& a, const club_definition& b) {
-        if (a.bag_order == b.bag_order) {
-            return a.id < b.id;
-        }
-        return a.bag_order < b.bag_order;
+        return a.bag_order != b.bag_order ? a.bag_order < b.bag_order : a.id < b.id;
     });
-
     return clubs;
 }

@@ -1,5 +1,8 @@
 #pragma once
 
+// A small doctest-compatible test runner (TEST_CASE, CHECK, REQUIRE).
+// `golf++-tests <text>` runs only the test cases whose name contains <text>.
+
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -28,10 +31,15 @@ struct registrar {
     }
 };
 
-inline int run_tests() {
+inline int run_tests(const std::string& name_filter) {
     int failures = 0;
     int failed_tests = 0;
+    int run_count = 0;
     for (const auto& entry : registry()) {
+        if (!name_filter.empty() && std::string(entry.name).find(name_filter) == std::string::npos) {
+            continue;
+        }
+        ++run_count;
         const int before = failure_count();
         try {
             entry.func();
@@ -48,9 +56,8 @@ inline int run_tests() {
     }
 
     failures = failure_count();
-    const int total_tests = static_cast<int>(registry().size());
-    const int passed_tests = total_tests - failed_tests;
-    std::cout << "Test summary: Total " << total_tests
+    const int passed_tests = run_count - failed_tests;
+    std::cout << "Test summary: Total " << run_count
               << ", Passed " << passed_tests
               << ", Failed " << failed_tests
               << ", Checks failed " << failures << "\n";
@@ -74,8 +81,18 @@ inline int run_tests() {
         } \
     } while (0)
 
+// Like CHECK, but ends the test case on failure.
+#define REQUIRE(expr) \
+    do { \
+        if (!(expr)) { \
+            doctest_lite::failure_count()++; \
+            std::cerr << "REQUIRE failed: " << #expr << " (" << __FILE__ << ":" << __LINE__ << ")\n"; \
+            return; \
+        } \
+    } while (0)
+
 #ifdef DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-int main() {
-    return doctest_lite::run_tests();
+int main(int argc, char** argv) {
+    return doctest_lite::run_tests(argc > 1 ? argv[1] : "");
 }
 #endif

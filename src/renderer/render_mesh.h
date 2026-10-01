@@ -12,7 +12,7 @@
 struct render_terrain_vertex {
     glm::vec3 position = glm::vec3(0.0f);
     glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::vec3 color = glm::vec3(0.18f, 0.42f, 0.18f);
+    glm::vec3 color = glm::vec3(1.0f);
 };
 
 // Axis-aligned bounds over every vertex position. `valid` is false for an
@@ -61,12 +61,4 @@ inline render_mesh_bounds compute_render_mesh_bounds(const std::vector<render_te
     }
     bounds.valid = true;
     return bounds;
-}
-
-// Lowest mesh height clamped to at most zero; 0 for a missing or empty mesh.
-inline float render_mesh_min_y_or_zero(const render_static_mesh* mesh) {
-    if (mesh == nullptr || !mesh->bounds.valid) {
-        return 0.0f;
-    }
-    return std::min(0.0f, mesh->bounds.min.y);
 }

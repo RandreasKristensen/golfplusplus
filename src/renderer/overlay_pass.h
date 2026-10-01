@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 // GL side of the batched overlay. Owns one dynamic VBO/VAO plus the tiny
 // overlay shader, and turns an overlay_batch into a single glDrawArrays.
 //
@@ -20,8 +22,9 @@
 #include "renderer/overlay_batch.h"
 #include "renderer/shader.h"
 
-struct overlay_pass {
-    bool init(const char* vertex_path, const char* fragment_path);
+class overlay_pass {
+public:
+    bool init(const std::string& vertex_path, const std::string& fragment_path);
     void shutdown();
 
     // Clears the batch and points profiling at `profile` (null = off).

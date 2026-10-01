@@ -90,7 +90,7 @@ frame_profile averaged(const frame_profile& total, const int frames) {
     result.chunk_indices_drawn = average_u64(total.chunk_indices_drawn, frames);
     result.chunk_indices_total = average_u64(total.chunk_indices_total, frames);
     result.trees_visible = total.trees_visible;
-    result.frame_ms =static_cast<float>(static_cast<double>(total.frame_ms) / divisor);
+    result.frame_ms = static_cast<float>(static_cast<double>(total.frame_ms) / divisor);
     return result;
 }
 

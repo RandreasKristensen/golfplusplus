@@ -74,7 +74,6 @@
   "scorecard.header.relative": "+/-",
   "scorecard.total": "TOTAL",
   "scorecard.results_hint": "ENTER / SPACE / ESC / BACKSPACE",
-  "scorecard.hole_fallback": "HOLE {hole}",
   "scorecard.hole_row": "{hole} {name}",
   "scorecard.even": "EVEN",
   "scorecard.over": "+{strokes}",

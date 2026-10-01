@@ -2,7 +2,7 @@
 
 #include <SDL.h>
 
-#include "core/gl_loader.h"
+#include "renderer/gl_loader.h"
 
 bool framebuffer::init(int width, int height) {
     shutdown();

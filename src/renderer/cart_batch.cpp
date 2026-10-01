@@ -1,17 +1,13 @@
 #include "renderer/cart_batch.h"
 
-#include <glm/geometric.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include <glm/trigonometric.hpp>
-#include <glm/vec4.hpp>
 
 #include <array>
 
+#include "renderer/camera_local.h"
 #include "renderer/primitive_mesh.h"
 
 namespace {
-// Every cart piece went through the terrain shader's flat path with
-// u_alpha = 1 and blending disabled, and wrote depth.
 constexpr float opaque = 1.0f;
 constexpr bool writes_depth = true;
 
@@ -26,70 +22,6 @@ constexpr std::size_t quad_vertex_count = 6;
 constexpr std::size_t cart_quad_count = 6;
 constexpr std::size_t cart_cylinder_count = 8;
 constexpr std::size_t cart_sphere_count = 2;
-
-glm::vec3 camera_forward(const glm::vec3& camera_position, const glm::vec3& camera_target) {
-    glm::vec3 forward = camera_target - camera_position;
-    forward.y = 0.0f;
-    return glm::normalize(glm::length(forward) > 0.0001f ? forward : glm::vec3(0.0f, 0.0f, 1.0f));
-}
-}
-
-glm::vec3 camera_local_point(const glm::vec3& camera_position,
-                             const glm::vec3& camera_target,
-                             const glm::vec3& local) {
-    const glm::vec3 forward = camera_forward(camera_position, camera_target);
-    const glm::vec3 up(0.0f, 1.0f, 0.0f);
-    const glm::vec3 right = glm::normalize(glm::cross(up, forward));
-    return camera_position + right * local.x + up * local.y + forward * local.z;
-}
-
-glm::mat4 camera_local_model(const glm::vec3& camera_position,
-                             const glm::vec3& camera_target,
-                             const glm::vec3& local,
-                             const glm::vec3& rotation,
-                             const glm::vec3& scale) {
-    const glm::vec3 forward = camera_forward(camera_position, camera_target);
-    const glm::vec3 up(0.0f, 1.0f, 0.0f);
-    const glm::vec3 right = glm::normalize(glm::cross(up, forward));
-    const glm::vec3 position = camera_position + right * local.x + up * local.y + forward * local.z;
-
-    glm::mat4 model(1.0f);
-    model[0] = glm::vec4(right, 0.0f);
-    model[1] = glm::vec4(up, 0.0f);
-    model[2] = glm::vec4(forward, 0.0f);
-    model[3] = glm::vec4(position, 1.0f);
-    model = glm::rotate(model, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
-    model = glm::rotate(model, rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
-    model = glm::rotate(model, rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
-    return glm::scale(model, scale);
-}
-
-glm::mat4 local_panel_model(const glm::vec3& camera_position,
-                            const glm::vec3& camera_target,
-                            const glm::vec3& local,
-                            const glm::vec3& rotation,
-                            const glm::vec2& half_size) {
-    return camera_local_model(camera_position, camera_target, local, rotation, glm::vec3(half_size, 1.0f));
-}
-
-glm::mat4 local_cylinder_model(const glm::vec3& camera_position,
-                               const glm::vec3& camera_target,
-                               const glm::vec3& local,
-                               const glm::vec3& rotation,
-                               const glm::vec3& scale) {
-    // The unit cylinder spans y in [0, 1]; the old draw scaled first and then
-    // translated half a unit down in the *scaled* frame, so the piece ends up
-    // centred on the local point. Scale then translate, in that order.
-    glm::mat4 model = camera_local_model(camera_position, camera_target, local, rotation, glm::vec3(1.0f));
-    model = glm::scale(model, scale);
-    return glm::translate(model, glm::vec3(0.0f, -0.5f, 0.0f));
-}
-
-glm::mat4 local_sphere_model(const glm::vec3& camera_position,
-                             const glm::vec3& camera_target,
-                             const glm::vec3& local,
-                             const float radius) {
-    return camera_local_model(camera_position, camera_target, local, glm::vec3(0.0f), glm::vec3(radius));
 }
 
 std::size_t cart_model_vertex_count() {

@@ -2,13 +2,11 @@
 
 // GL-free builder for the paper course map's terrain fill.
 //
-// The fill scan-converts every terrain triangle into map-space strip quads:
-// 5k-11k quads for a full course, which used to be rebuilt and re-uploaded on
-// every frame the map was open. It depends on nothing but the terrain mesh and
-// the map layout, so the vertices are cached and only rebuilt when one of
-// those actually changes (the layout normally does not change at all while the
-// map is open: the ball and player positions that feed it sit inside the
-// terrain bounds, which dominate them).
+// The fill scan-converts every terrain triangle into map-space strip quads
+// (thousands of quads for a course). It depends only on the terrain mesh and
+// the map layout, so the vertices are cached and rebuilt only when one of
+// those changes; while the map is open the layout normally stays fixed
+// because the terrain bounds dominate it.
 //
 // Kept free of GL and render_data so the vertices can be unit tested against
 // the uncached builder.

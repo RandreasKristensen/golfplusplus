@@ -1,5 +1,8 @@
 #pragma once
 
+// assets/audio/sounds.json. Entries may carry authoring notes
+// ("description", "target_length_seconds") that the game ignores.
+
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -8,15 +11,13 @@
 enum class audio_sound_type {
     sfx,
     loop,
-    ambience
+    ambience  // streamed music, one at a time
 };
 
 struct audio_sound_definition {
     std::string id;
-    std::string file;
+    std::string file;  // relative to the manifest's folder
     std::string category;
-    std::string description;
-    float target_length_seconds = 0.0f;
     float volume_multiplier = 1.0f;
     audio_sound_type type = audio_sound_type::sfx;
 };

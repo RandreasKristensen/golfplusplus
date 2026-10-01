@@ -1,5 +1,8 @@
 #pragma once
 
+// Owns everything (window, renderer, audio, content, game state) and runs the
+// main loop: poll input -> update menus or the game -> render.
+
 #include "audio/audio_engine.h"
 #include "core/input.h"
 #include "core/startup_flow.h"
@@ -7,69 +10,61 @@
 #include "core/window.h"
 #include "game/game_content.h"
 #include "game/game_state.h"
-#include "game/save_manager.h"
 #include "game/text_assets.h"
 #include "profiling/profiling.h"
 #include "renderer/camera_transition.h"
+#include "renderer/render_data.h"
+#include "renderer/render_mesh.h"
 #include "renderer/renderer.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <string>
-#include <vector>
 
-// Renderable copy of the static anchor cache's trees. Rebuilt only when that
-// cache is (see refresh_render_tree_cache), so the render path borrows it
-// instead of rebuilding a tree vector every frame.
-struct render_tree_cache {
-    std::vector<render_tree> trees;
-    std::uint64_t revision = 0;
-    std::size_t source_count = 0;
-    bool valid = false;
-};
-
-struct app {
-    // `options` carries profiling-only startup switches (vsync, boot course).
-    // They are consumed here and never reach game state or the renderer.
-    bool init(const startup_options& options = startup_options{});
+class app {
+public:
+    // False (after logging why) when the window, renderer or content fail.
+    bool init(const startup_options& options);
     void run();
     void shutdown();
 
 private:
-    // Back to the main menu with a fresh backdrop game state (offline save kept).
+    // A fresh state on the first course as the menu backdrop, keeping the save.
+    bool reset_to_menu_backdrop();
     void return_to_menu();
-    void mark_current_save_dirty();
-    bool persist_current_save();
-    // Startup-only: boots straight into the course with this id when it exists.
-    // Returns false when no course matched, so the menu is shown instead.
-    bool boot_into_course(const std::string& course_id);
-    void refresh_render_mesh_cache(frame_profile* profile);
+    void save_progress();
+    void update_menu(frame_profile* profile);
+    void update_confirm_menu(frame_profile* profile);
+    void update_round(float dt, frame_profile* profile);
+    void play_game_audio();
+    void refresh_render_meshes();
+    // `snap_camera` cuts to the live view instead of blending (menus).
+    render_data make_frame(float dt, bool snap_camera, frame_profile* profile);
     void present_frame(render_data& data, frame_profile* profile);
 
     window window_;
     renderer renderer_;
     audio_engine audio_;
     input_state input_;
-    game_state game_;
     game_content content_;
-    save_paths save_paths_;
-    save_slot save_slot_;
-    // Loaded once in init; borrowed by render-data assembly and the renderer.
     text_assets text_;
-    std::vector<startup_hole_option> hole_options_;
+    startup_catalog catalog_;
     startup_flow_state menu_;
-    bool show_fps_ = false;
-    // Owned here, never global. Handed out as a nullable frame_profile*.
-    profiler profiler_;
-    render_tree_cache render_trees_;
-    // Eases the camera between modes so it never cuts. Presentation only.
+    game_state game_;
+    // When the existing save could not be read and could not be backed up,
+    // saving is disabled so the unreadable file is never overwritten.
+    bool saving_enabled_ = true;
+    std::filesystem::path save_path_;
+
+    // Presentation state, never read by game logic.
     camera_transition_state camera_transition_;
-    std::uint64_t cached_terrain_revision_ = 0;
-    render_static_mesh cached_terrain_mesh_;
-    render_static_mesh cached_material_overlay_mesh_;
-    float fps_elapsed_seconds_ = 0.0f;
-    int fps_frame_count_ = 0;
-    int displayed_fps_ = 0;
-    int displayed_frame_ms_ = 0;
+    std::uint64_t render_meshes_revision_ = 0;
+    render_static_mesh terrain_render_mesh_;
+    render_static_mesh material_overlay_render_mesh_;
+    bool cart_loop_playing_ = false;
+
+    // Ctrl toggles the FPS and profiling overlay; the profiler only records
+    // while it is shown.
+    profiler profiler_;
     bool running_ = false;
-    bool save_initialized_ = false;
 };

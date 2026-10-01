@@ -1,32 +1,20 @@
 #pragma once
 
-#include <algorithm>
-#include <cstddef>
-#include <vector>
+// GL-free per-instance data for the instanced tree draw (unit tested).
 
-#include <glm/common.hpp>
-#include <glm/vec3.hpp>
-
+#include "physics/tree_collision.h"
 #include "renderer/render_mesh.h"
 
-// GL-free tree render data. Kept separate from renderer.h so the per-instance
-// builder can be unit tested without SDL or an OpenGL context.
+#include <vector>
 
-struct render_tree {
-    glm::vec3 base = glm::vec3(0.0f);
-    float trunk_radius = 0.35f;
-    float trunk_height = 2.4f;
-    float leaf_radius = 1.6f;
-    float leaf_height = 3.2f;
-};
+#include <glm/vec3.hpp>
 
 // Per-instance data for a unit mesh (cylinder or cone spanning y in [0, 1],
-// radius 1). The instance model matrix is translate(offset) * scale(scale),
-// i.e. world = offset + local * scale. Laid out as six tightly packed floats
-// because it is uploaded straight into a GL instance buffer.
+// radius 1): world = offset + local * scale. Six packed floats, uploaded
+// straight into a GL instance buffer.
 struct render_tree_instance {
-    glm::vec3 offset = glm::vec3(0.0f);
-    glm::vec3 scale = glm::vec3(1.0f);
+    glm::vec3 offset{0.0f};
+    glm::vec3 scale{1.0f};
 };
 
 struct render_tree_instance_batch {
@@ -34,57 +22,10 @@ struct render_tree_instance_batch {
     std::vector<render_tree_instance> leaves;
 };
 
-// Every dimension is clamped so degenerate authoring data never produces a
-// zero scale (which would also break the inverse-transpose normal transform).
-inline constexpr float min_tree_dimension = 0.01f;
+// One trunk and one leaf instance per tree, in input order. Tree sizes are
+// already validated by the hole loader (never zero).
+render_tree_instance_batch build_tree_instances(const std::vector<tree_body>& trees);
 
-// One trunk and one leaf instance per tree, in input order.
-inline render_tree_instance_batch build_tree_instances(const std::vector<render_tree>& trees) {
-    render_tree_instance_batch batch;
-    batch.trunks.reserve(trees.size());
-    batch.leaves.reserve(trees.size());
-
-    for (const render_tree& tree : trees) {
-        const float trunk_radius = std::max(min_tree_dimension, tree.trunk_radius);
-        const float trunk_height = std::max(min_tree_dimension, tree.trunk_height);
-        const float leaf_radius = std::max(min_tree_dimension, tree.leaf_radius);
-        const float leaf_height = std::max(min_tree_dimension, tree.leaf_height);
-
-        render_tree_instance trunk;
-        trunk.offset = tree.base;
-        trunk.scale = glm::vec3(trunk_radius, trunk_height, trunk_radius);
-        batch.trunks.push_back(trunk);
-
-        render_tree_instance leaf;
-        leaf.offset = tree.base + glm::vec3(0.0f, trunk_height, 0.0f);
-        leaf.scale = glm::vec3(leaf_radius, leaf_height, leaf_radius);
-        batch.leaves.push_back(leaf);
-    }
-
-    return batch;
-}
-
-// World bounds of every trunk and leaf instance in `batch`. The unit meshes
-// span x/z in [-1, 1] and y in [0, 1], so an instance covers
-// offset + [-scale.x, scale.x] x [0, scale.y] x [-scale.z, scale.z].
-// Invalid (all-zero) for an empty batch. Used for a whole-batch frustum cull.
-inline render_mesh_bounds compute_tree_instance_bounds(const render_tree_instance_batch& batch) {
-    render_mesh_bounds bounds;
-    const auto add = [&bounds](const std::vector<render_tree_instance>& instances) {
-        for (const render_tree_instance& instance : instances) {
-            const glm::vec3 low = instance.offset - glm::vec3(instance.scale.x, 0.0f, instance.scale.z);
-            const glm::vec3 high = instance.offset + instance.scale;
-            if (!bounds.valid) {
-                bounds.min = low;
-                bounds.max = high;
-                bounds.valid = true;
-                continue;
-            }
-            bounds.min = glm::min(bounds.min, low);
-            bounds.max = glm::max(bounds.max, high);
-        }
-    };
-    add(batch.trunks);
-    add(batch.leaves);
-    return bounds;
-}
+// World bounds of every instance (unit meshes span x/z in [-1, 1], y in
+// [0, 1]). Invalid for an empty batch. Used for a whole-batch frustum cull.
+render_mesh_bounds compute_tree_instance_bounds(const render_tree_instance_batch& batch);

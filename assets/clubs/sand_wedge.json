@@ -2,11 +2,12 @@
   "id": "sand_wedge",
   "name": "Sand Wedge",
   "label": "SWDG",
+  "hit_sound": "club_hit_wedge",
   "bag_order": 1,
   "stats": {
     "power": 25.0,
     "loft_degrees": 54.0,
-    "accuracy": 0.86,
-    "spin_bias": 0.18
+    "backspin": 0.18,
+    "side_spin": 0.86
   }
 }

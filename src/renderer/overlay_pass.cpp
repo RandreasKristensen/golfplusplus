@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include "core/gl_loader.h"
+#include "renderer/gl_loader.h"
 
 namespace {
 // Enough for a busy HUD with text; the course map grows it once on first open.
@@ -51,7 +51,7 @@ void overlay_pass::shutdown_stream(vertex_stream& stream) {
     }
 }
 
-bool overlay_pass::init(const char* vertex_path, const char* fragment_path) {
+bool overlay_pass::init(const std::string& vertex_path, const std::string& fragment_path) {
     shutdown();
 
     if (!shader_.load_from_files(vertex_path, fragment_path)) {

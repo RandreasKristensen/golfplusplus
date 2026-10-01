@@ -7,6 +7,9 @@
 #include "renderer/render_mesh.h"
 #include "renderer/render_mesh_chunks.h"
 #include "renderer/render_tree.h"
+#include "renderer/terrain_render_mesh.h"
+
+#include "test_support.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
@@ -21,14 +24,6 @@
 #include <vector>
 
 namespace {
-
-std::string asset_root() {
-#ifdef GOLFPP_ASSETS_DIR
-    return GOLFPP_ASSETS_DIR;
-#else
-    return "assets";
-#endif
-}
 
 // A camera at the origin looking down -Z, matching the renderer's projection
 // convention (GLM perspective, OpenGL clip space).
@@ -100,30 +95,6 @@ std::map<std::vector<std::uint32_t>, int> triangle_multiset(const std::vector<st
         ++counts[triangle_key(indices, i)];
     }
     return counts;
-}
-
-std::vector<render_terrain_vertex> render_vertices_of(const terrain_mesh& mesh) {
-    std::vector<render_terrain_vertex> vertices;
-    vertices.reserve(mesh.vertices.size());
-    for (const terrain_vertex& vertex : mesh.vertices) {
-        vertices.push_back(make_vertex(vertex.position.x, vertex.position.y, vertex.position.z));
-    }
-    return vertices;
-}
-
-// Mirrors app::refresh_render_mesh_cache: course terrain then apron appended.
-test_grid_mesh make_course_render_mesh(const game_tuning& tuning) {
-    test_grid_mesh mesh;
-    mesh.vertices = render_vertices_of(tuning.terrain_mesh_data);
-    mesh.indices = tuning.terrain_mesh_data.indices;
-
-    const std::uint32_t offset = static_cast<std::uint32_t>(mesh.vertices.size());
-    const std::vector<render_terrain_vertex> apron = render_vertices_of(tuning.terrain_apron_mesh_data);
-    mesh.vertices.insert(mesh.vertices.end(), apron.begin(), apron.end());
-    for (const std::uint32_t index : tuning.terrain_apron_mesh_data.indices) {
-        mesh.indices.push_back(offset + index);
-    }
-    return mesh;
 }
 
 } // namespace
@@ -390,13 +361,10 @@ TEST_CASE("frustum culling of chunks keeps the chunks the camera looks at") {
 }
 
 TEST_CASE("tree instance bounds cover every trunk and leaf") {
-    std::vector<render_tree> trees(2);
-    trees[0].base = glm::vec3(10.0f, 0.0f, -5.0f);
-    trees[0].trunk_radius = 0.4f;
-    trees[0].trunk_height = 3.0f;
-    trees[0].leaf_radius = 2.0f;
-    trees[0].leaf_height = 4.0f;
-    trees[1].base = glm::vec3(-20.0f, 1.0f, 30.0f);
+    const std::vector<tree_body> trees{
+        tree_body{glm::vec3(10.0f, 0.0f, -5.0f), tree_shape{0.4f, 3.0f, 2.0f, 4.0f}},
+        tree_body{glm::vec3(-20.0f, 1.0f, 30.0f), tree_shape{0.35f, 2.4f, 1.6f, 3.2f}},
+    };
 
     const render_tree_instance_batch batch = build_tree_instances(trees);
     const render_mesh_bounds bounds = compute_tree_instance_bounds(batch);
@@ -411,31 +379,18 @@ TEST_CASE("tree instance bounds cover every trunk and leaf") {
     CHECK(!compute_tree_instance_bounds(build_tree_instances({})).valid);
 }
 
-TEST_CASE("marienlyst course terrain chunks into bounded pieces") {
-    const std::optional<course_definition> course = load_course_from_file(asset_root() + "/courses/marienlyst_golfklub.json");
-    CHECK(course.has_value());
-    if (!course) {
-        return;
-    }
-
-    game_state state = make_initial_game_state();
-    CHECK(start_game_course(state, *course));
-    if (!state.hub.available) {
-        return;
-    }
-
-    const test_grid_mesh mesh = make_course_render_mesh(state.tuning);
-    CHECK(mesh.indices.size() > 1000U);
+TEST_CASE("a hub's terrain chunks into bounded pieces that cull from ground level") {
+    const game_state state = started_game(fixture_hub_course());
+    const render_static_mesh mesh = make_terrain_render_mesh({&state.area.terrain, &state.area.apron}, 1U);
+    REQUIRE(mesh.indices.size() > 1000U);
 
     const render_chunk_settings settings;
-    const std::vector<render_mesh_chunk> chunks = build_render_mesh_chunks(mesh.vertices, mesh.indices, settings);
-    // ~17.3k triangles over a 442 x 330 m hub: ~360 chunks of ~48 triangles.
-    CHECK(chunks.size() > 50U);
-    CHECK(chunks.size() <= settings.max_chunks);
+    CHECK(mesh.chunks.size() > 10U);
+    CHECK(mesh.chunks.size() <= settings.max_chunks);
 
     std::uint64_t total = 0U;
     std::uint32_t expected_first = 0U;
-    for (const render_mesh_chunk& chunk : chunks) {
+    for (const render_mesh_chunk& chunk : mesh.chunks) {
         CHECK(chunk.first_index == expected_first);
         CHECK(chunk.bounds.valid);
         expected_first += chunk.index_count;
@@ -443,14 +398,12 @@ TEST_CASE("marienlyst course terrain chunks into bounded pieces") {
     }
     CHECK(total == mesh.indices.size());
 
-    // A ground-level camera on the hub never needs the whole course.
-    const glm::vec3 eye = state.hub.world.spawn.position + glm::vec3(0.0f, 1.7f, 0.0f);
+    // Standing at hole 1 looking down it, most of the hub is off screen.
+    const glm::vec3 eye = state.player.position + glm::vec3(0.0f, 1.7f, 0.0f);
     const view_frustum frustum = make_test_frustum(eye, eye + glm::vec3(0.0f, 0.0f, 40.0f), 400.0f);
     std::vector<render_index_range> ranges;
-    const render_chunk_cull_stats stats = collect_visible_index_ranges(chunks, frustum, mesh.indices.size(), 4U, ranges);
-    CHECK(stats.chunks_visible < chunks.size());
+    const render_chunk_cull_stats stats = collect_visible_index_ranges(mesh.chunks, frustum, mesh.indices.size(), 4U, ranges);
+    CHECK(stats.chunks_visible < mesh.chunks.size());
     CHECK(stats.draw_ranges <= 4U);
-    // Standing in the hub, most of the course is off screen: measured 22.5% of
-    // the indices drawn for this view.
     CHECK(stats.indices_drawn * 2U < stats.indices_total);
 }

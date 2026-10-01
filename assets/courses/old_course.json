@@ -1,7 +1,6 @@
 {
   "id": "old_course",
   "name": "Old Course",
-  "hole_count": 18,
   "holes": [
     "holes/old_course_h01.json",
     "holes/old_course_h02.json",

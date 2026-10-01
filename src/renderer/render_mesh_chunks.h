@@ -25,9 +25,8 @@
 
 struct render_chunk_settings {
     // Largest XZ size of one chunk, in world units (meters). A single triangle
-    // larger than this still forms one chunk. 48 m is about two spline cross
-    // sections wide: on the Marienlyst 6-hole hub it yields ~360 chunks of ~48
-    // triangles, small enough that walking the hub culls 75-99% of the indices.
+    // larger than this still forms one chunk. About two ribbon widths: small
+    // enough that walking around a hub culls most of the terrain.
     float target_extent = 48.0f;
     // Upper bound on chunk count. If a mesh would produce more (e.g. input that
     // is not spatially coherent), `target_extent` is doubled until it fits, so

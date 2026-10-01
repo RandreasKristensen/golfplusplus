@@ -24,6 +24,11 @@ std::vector<float> make_sphere_vertices(int latitude_segments, int longitude_seg
 // Unit cone: radius 1 base in XZ at y = 0, tip at y = 1, plus a base disc.
 std::vector<float> make_cone_vertices(int segments);
 
+// Two triangles covering [-1, 1] in XY at z = 0, facing +Z.
+std::vector<float> make_xy_quad_vertices();
+// Two triangles covering [-1, 1] in XZ at y = 0, facing +Y.
+std::vector<float> make_xz_quad_vertices();
+
 // Position-only views of the generators above, in the same vertex order.
 std::vector<glm::vec3> make_cylinder_positions(int segments);
 std::vector<glm::vec3> make_sphere_positions(int latitude_segments, int longitude_segments);
@@ -31,8 +36,8 @@ std::vector<glm::vec3> make_sphere_positions(int latitude_segments, int longitud
 // Strips the normals out of an interleaved position+normal vertex list.
 std::vector<glm::vec3> mesh_positions_of(const std::vector<float>& interleaved);
 
-// The tessellation the renderer has always used. Named so the GPU buffers and
-// the CPU batch cannot be built at different detail levels.
+// Tessellation shared by the GPU buffers and the CPU world marker batch so the
+// two never differ.
 inline constexpr int primitive_cylinder_segments = 8;
 inline constexpr int primitive_sphere_latitude_segments = 8;
 inline constexpr int primitive_sphere_longitude_segments = 12;

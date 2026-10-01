@@ -10,6 +10,7 @@
 #include "game/text_ids.h"
 #include "renderer/control_icons.h"
 #include "renderer/pixel_font.h"
+#include "renderer/terrain_palette.h"
 
 namespace {
 enum class help_control_icon {
@@ -138,14 +139,15 @@ void draw_startup_help_screen(overlay_batch& batch, const text_assets& text) {
 glm::vec3 thumbnail_zone_color(const material_zone_type type) {
     switch (type) {
     case material_zone_type::green:
-        return glm::vec3(0.20f, 0.62f, 0.24f);
+        return terrain_material_color(terrain_material::green);
     case material_zone_type::bunker:
-        return glm::vec3(0.68f, 0.56f, 0.24f);
+        return terrain_material_color(terrain_material::bunker);
     case material_zone_type::water:
-        return glm::vec3(0.12f, 0.24f, 0.66f);
-    default:
-        return glm::vec3(0.28f, 0.30f, 0.28f);
+        return terrain_material_color(terrain_material::water);
+    case material_zone_type::unknown:
+        break;
     }
+    return terrain_material_color(terrain_material::rough);
 }
 
 glm::vec2 thumbnail_world_point(const glm::vec3& point, const bool rotate_long_axis) {
@@ -225,7 +227,7 @@ void draw_hole_thumbnail(overlay_batch& batch,
         for (std::size_t i = 1; i < preview.control_points.size(); ++i) {
             const glm::vec2 a = preview_point(preview.control_points[i - 1], center, inset_half, padded_min, scale, rotate_long_axis);
             const glm::vec2 b = preview_point(preview.control_points[i], center, inset_half, padded_min, scale, rotate_long_axis);
-            draw_overlay_segment(batch, a, b, fairway_width, glm::vec3(0.18f, 0.46f, 0.18f), 0.82f);
+            draw_overlay_segment(batch, a, b, fairway_width, terrain_material_color(terrain_material::fairway), 0.82f);
             draw_overlay_segment(batch, a, b, 0.006f, glm::vec3(0.62f, 0.78f, 0.38f), 0.55f);
         }
     }
@@ -248,10 +250,14 @@ void draw_hole_thumbnail(overlay_batch& batch,
     draw_overlay_quad(batch, tee, glm::vec2(0.014f), glm::vec3(0.88f, 0.80f, 0.48f), 0.94f);
     draw_overlay_quad(batch, pin, glm::vec2(0.012f, 0.028f), glm::vec3(0.88f, 0.18f, 0.12f), 0.94f);
 }
+
+bool single_column(const startup_menu_screen screen) {
+    return screen == startup_menu_screen::main || screen == startup_menu_screen::confirm;
+}
 }
 
 glm::vec2 startup_tile_center(const startup_menu_screen screen, const int index) {
-    if (screen == startup_menu_screen::main) {
+    if (single_column(screen)) {
         return glm::vec2(0.0f, 0.26f - static_cast<float>(index) * 0.24f);
     }
 
@@ -263,7 +269,7 @@ glm::vec2 startup_tile_center(const startup_menu_screen screen, const int index)
 }
 
 glm::vec2 startup_tile_half_size(const startup_menu_screen screen) {
-    return screen == startup_menu_screen::main ? glm::vec2(0.42f, 0.095f) : glm::vec2(0.25f, 0.165f);
+    return single_column(screen) ? glm::vec2(0.42f, 0.095f) : glm::vec2(0.25f, 0.165f);
 }
 
 int startup_tile_at(const startup_menu_screen screen, const int count, const glm::vec2 point) {
@@ -302,8 +308,8 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
         draw_overlay_quad(batch, center, tile_half, panel_color, tile.selected ? 0.94f : 0.76f);
         draw_button_outline(batch, center, tile_half, outline, tile.selected ? 0.94f : 0.44f);
 
-        if (tile.has_preview) {
-            draw_hole_thumbnail(batch, tile.preview, center + glm::vec2(0.0f, 0.030f), glm::vec2(tile_half.x * 0.86f, tile_half.y * 0.48f));
+        if (tile.preview) {
+            draw_hole_thumbnail(batch, *tile.preview, center + glm::vec2(0.0f, 0.030f), glm::vec2(tile_half.x * 0.86f, tile_half.y * 0.48f));
 
             draw_text_fitted(batch,
                              text.font,

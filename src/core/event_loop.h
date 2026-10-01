@@ -1,8 +1,9 @@
 #pragma once
 
-struct input_state;
+#include "core/input.h"
 
-void poll_events(input_state& input);
+// Reads every pending SDL event into the next frame's input.
+input_state poll_events(const input_state& previous);
 
 // Starts/stops SDL text input. Enable it only while a text field is focused,
 // so typing never doubles as game keys.

@@ -23,12 +23,12 @@ Remove-Item Env:GOLFPP_VSYNC, Env:GOLFPP_COURSE
 
 Press `Ctrl` in game to toggle FPS + the profiling overlay. The profiler records
 nothing while the overlay is off. Values are averaged over 0.25 s; timings are
-whole microseconds (the pixel font has no `.`).
+whole microseconds to keep the lines short.
 
 | Counter | Meaning |
 |---|---|
 | `UPD` | CPU time in `update_game` (physics, movement, terrain sampling) |
-| `MESH` | Rebuilding cached render meshes. Should be ~0 except on the frame a hole loads |
+| `MESH` | Refreshing static anchors and render meshes. Should be ~0 except on the frame an area loads |
 | `MRD` | Building the frame's render data. Should stay well under 1 ms |
 | `SWP` | `SDL_GL_SwapWindow`. With vsync on this is the vblank wait, so large = headroom |
 | `REN` / `SCN` / `OVL` / `CRT` | Whole render call / 3D scene / 2D overlay / CRT pass |
@@ -38,7 +38,7 @@ whole microseconds (the pixel font has no `.`).
 | `TSAMP` / `TTRI` | Terrain sample calls / triangles tested across them |
 | `CHUNK v/c R IDX` | Terrain chunks visible / culled, merged draw ranges, indices drawn |
 | `TREE` | `ON` when the instanced tree batch passed frustum culling |
-| `GPU ...` | GPU pass timings, only when timer queries exist; reported 2 frames late |
+| `GPU ...` | GPU pass timings from timer queries, reported 2 frames late |
 
 The overlay text comes from `format_profile_overlay_lines` in
 `src/profiling/profiling.cpp`.

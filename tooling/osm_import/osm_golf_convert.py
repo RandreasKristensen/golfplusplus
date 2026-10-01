@@ -1962,135 +1962,6 @@ def _path_kind(el: dict) -> str:
     return "walking_shortcut"
 
 
-def _path_surface(el: dict) -> str:
-    tags = el.get("tags", {})
-    if tags.get("surface"):
-        return tags["surface"]
-    if tags.get("highway") in ("service", "track"):
-        return "gravel"
-    return "dirt"
-
-
-def _route_from_path(el: dict, origin_lat: float, origin_lon: float, index: int) -> dict | None:
-    pts = _to_xz_list([el], origin_lat, origin_lon)
-    if len(pts) < 2:
-        return None
-    kind = _path_kind(el)
-    route = {
-        "id": f"{kind}_{index:02d}",
-        "source": f"osm:{el.get('type', '?')}/{el.get('id', '?')}",
-        "surface": _path_surface(el),
-        "width": 3.2 if kind == "cart_road" else 1.6,
-        "points": [_xyz(pt) for pt in pts],
-    }
-    if kind == "walking_shortcut":
-        route["required_skill_id"] = "fitness"
-        route["required_level"] = 2
-    return route
-
-
-def _fallback_cart_roads(course_id: str, hole_starts: list[dict]) -> list[dict]:
-    if not hole_starts:
-        return []
-
-    points = [hole_starts[0]["position"]]
-    for start in hole_starts:
-        if points[-1] != start["position"]:
-            points.append(start["position"])
-        points.append(start["return_position"])
-
-    return [{
-        "id": f"{course_id}_fallback_cart_loop",
-        "source": "generated:fallback",
-        "surface": "gravel",
-        "width": 3.4,
-        "points": points,
-    }]
-
-
-def _unused_course_world_to_json_v2_schema(course_id: str,
-                                           course_name: str,
-                                           course_el: dict,
-                                           holes: dict,
-                                           path_elements: list,
-                                           origin_lat: float,
-                                           origin_lon: float) -> dict:
-    hole_starts = []
-    for num in sorted(holes.keys()):
-        tee = _hole_tee_xz(holes[num], origin_lat, origin_lon)
-        ret = _hole_return_xz(holes[num], origin_lat, origin_lon)
-        hole_starts.append({
-            "id": f"hole_{num:02d}_start",
-            "hole_index": len(hole_starts),
-            "label": f"Hole {num}",
-            "position": _xyz(tee),
-            "return_position": _xyz(ret),
-            "interaction_radius": 5.0,
-        })
-
-    if hole_starts:
-        first = hole_starts[0]["position"]
-        clubhouse_spawn = [_r(first[0] - 16.0), 0.0, _r(first[2] - 12.0)]
-    else:
-        clubhouse_spawn = [0.0, 0.0, 0.0]
-
-    cart_roads = []
-    walking_shortcuts = []
-    for index, el in enumerate(path_elements, start=1):
-        route = _route_from_path(el, origin_lat, origin_lon, index)
-        if not route:
-            continue
-        if _path_kind(el) == "cart_road":
-            cart_roads.append(route)
-        else:
-            walking_shortcuts.append(route)
-
-    if not cart_roads:
-        cart_roads = _fallback_cart_roads(course_id, [{"position": clubhouse_spawn, "return_position": clubhouse_spawn}] + hole_starts)
-
-    if not walking_shortcuts and len(hole_starts) >= 2:
-        walking_shortcuts.append({
-            "id": f"{course_id}_fitness_cut_01",
-            "source": "generated:fallback",
-            "surface": "rough",
-            "width": 1.4,
-            "required_skill_id": "fitness",
-            "required_level": 2,
-            "points": [hole_starts[0]["return_position"], hole_starts[1]["position"]],
-        })
-
-    return {
-        "id": course_id,
-        "name": course_name,
-        "origin": {
-            "lat": origin_lat,
-            "lon": origin_lon,
-            "projection": "equirectangular_meters_xz",
-            "osm_ref": _format_osm_ref(course_el),
-        },
-        "clubhouse_spawn": clubhouse_spawn,
-        "hole_starts": hole_starts,
-        "cart_roads": cart_roads,
-        "walking_shortcuts": walking_shortcuts,
-        "spawn_zones": [
-            {
-                "id": f"{course_id}_roadside_collectibles",
-                "type": "collectible",
-                "placement_hint": "near_roads",
-                "center": clubhouse_spawn,
-                "radius": 120.0,
-            },
-            {
-                "id": f"{course_id}_clubhouse_interactables",
-                "type": "npc_sign_shop",
-                "placement_hint": "near_clubhouse",
-                "center": clubhouse_spawn,
-                "radius": 24.0,
-            },
-        ],
-    }
-
-
 def _hole_world_anchors(hole_num: int, h: dict, origin_lat: float, origin_lon: float) -> tuple[tuple[float, float], tuple[float, float]]:
     line_pts = _oriented_hole_line_xz(h, origin_lat, origin_lon)
 
@@ -2244,15 +2115,6 @@ def _path_polyline(el: dict, origin_lat: float, origin_lon: float) -> list[tuple
 def _is_cart_road(el: dict) -> bool:
     tags = el.get("tags", {})
     return tags.get("golf") == "cartpath" or tags.get("highway") in ("service", "track")
-
-
-def _smooth_connection(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    if len(points) < 2:
-        return points
-    smoothed = [points[0]]
-    for a, b in zip(points, points[1:]):
-        smoothed.append(((a[0] * 0.35) + (b[0] * 0.65), (a[1] * 0.35) + (b[1] * 0.65)))
-    return smoothed
 
 
 def _fallback_cart_roads(spawn: tuple[float, float],
@@ -2737,7 +2599,6 @@ Examples:
         course_json = {
             "id": course_id,
             "name": course_name,
-            "hole_count": len(holes),
             "holes": hole_paths
         }
         if not args.no_world:

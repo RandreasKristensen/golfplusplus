@@ -1,5 +1,8 @@
 #pragma once
 
+// Timing swing: the first press starts the power meter, which rises and falls
+// continuously; the second press hits at the current power.
+
 enum class swing_phase {
     idle,
     timing
@@ -7,8 +10,9 @@ enum class swing_phase {
 
 struct swing_state {
     swing_phase phase = swing_phase::idle;
-    float elapsed = 0.0f;
-    float power = 0.0f;
+    float elapsed = 0.0f;  // seconds since the meter started
+    float power = 0.0f;    // 0..1
 };
 
-float sample_swing_power(float elapsed);
+// Meter power after `elapsed` seconds at speed 1: 0 -> 1 -> 0 every `cycle_seconds`.
+float sample_swing_power(float elapsed, float cycle_seconds);

@@ -1,12 +1,13 @@
 {
   "id": "four_wood",
   "name": "4 Wood",
-  "label": "5WD",
+  "label": "4WD",
+  "hit_sound": "club_hit_driver",
   "bag_order": 7,
   "stats": {
     "power": 65.0,
     "loft_degrees": 16.0,
-    "accuracy": 0.48,
-    "spin_bias": 0.035
+    "backspin": 0.035,
+    "side_spin": 0.48
   }
 }

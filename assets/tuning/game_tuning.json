@@ -1,0 +1,104 @@
+{
+  "scale": {
+    "meters_per_world_unit": 1.0,
+    "ball_physics_radius_meters": 0.021335,
+    "ball_visual_radius_meters": 0.10,
+    "cup_radius_meters": 0.75,
+    "pin_visual_height_meters": 2.10
+  },
+  "terrain": {
+    "min_sections": 128,
+    "apron_grid_resolution": 14,
+    "bunker_depth": 0.55,
+    "water_depth": 0.35,
+    "material_overlay_lift": 0.045
+  },
+  "physics": {
+    "drag_coeff": 0.004,
+    "magnus_coeff": 0.0004,
+    "spin_decay": 0.6,
+    "water_drag_coeff": 0.22,
+    "water_spin_decay": 2.8
+  },
+  "wind": {
+    "seed_phase_scale": 0.01,
+    "base_speed": 2.0,
+    "speed_variation": 1.5,
+    "speed_time_scale": 0.2,
+    "angle_variation": 0.7,
+    "angle_time_scale": 0.11,
+    "phase_angle_scale": 1.3
+  },
+  "ball": {
+    "stop_speed": 0.08,
+    "ground_restitution": 0.35,
+    "ground_friction": 0.08,
+    "water_restitution": 0.05,
+    "water_friction": 0.28,
+    "tree_restitution": 0.25,
+    "tree_friction": 0.35,
+    "roll_deceleration": 1.0,
+    "settle_speed": 0.6
+  },
+  "swing": {
+    "meter_cycle_seconds": 1.4,
+    "min_power": 0.15,
+    "side_spin_scale": 4.0
+  },
+  "player": {
+    "walk_speed": 7.0,
+    "turn_rate": 1.8,
+    "aim_turn_rate": 0.75,
+    "ball_interact_radius": 3.0,
+    "ball_stand_off_distance": 2.0,
+    "address_back_distance": 0.4,
+    "emote_seconds": 2.0
+  },
+  "cart": {
+    "speed": 14.0,
+    "turn_rate": 2.3,
+    "drift_turn_rate": 3.9,
+    "normal_damping": 13.0,
+    "drift_damping": 5.0,
+    "drift_duration": 0.42,
+    "drift_speed_boost": 1.18,
+    "road_reach_margin": 2.5,
+    "min_road_reach": 4.0,
+    "road_speed_scale": 1.32,
+    "road_control_scale": 1.12,
+    "off_road_speed_scale": 0.72,
+    "off_road_control_scale": 0.78
+  },
+  "camera": {
+    "fov_degrees": 60.0,
+    "walking_eye_height": 1.65,
+    "walking_look_distance": 10.0,
+    "aiming_back_distance": 2.0,
+    "aiming_eye_height": 1.55,
+    "aiming_look_distance": 12.0,
+    "aiming_look_height": 1.05,
+    "address_side_distance": 2.4,
+    "address_back_distance": 0.7,
+    "address_eye_height": 2.0,
+    "address_look_distance": 0.7,
+    "address_look_height": 0.25,
+    "follow_look_height": 0.25,
+    "transition_seconds": 0.55,
+    "transition_jump_distance": 1.5
+  },
+  "aim_preview": {
+    "step_seconds": 0.18,
+    "max_points": 28
+  },
+  "flight_path": {
+    "color": [0.92, 0.18, 0.16],
+    "alpha": 0.45,
+    "min_point_spacing": 0.25,
+    "max_points": 96,
+    "line_width": 1.0
+  },
+  "xp_drops": {
+    "lifetime_seconds": 2.4,
+    "min_visible_xp": 5
+  }
+}

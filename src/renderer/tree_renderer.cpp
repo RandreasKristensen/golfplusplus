@@ -7,21 +7,13 @@
 #include <cstddef>
 #include <type_traits>
 
-#include "core/gl_loader.h"
-#include "renderer/gl_proc.h"
+#include "renderer/gl_loader.h"
 
 namespace {
-// Instancing entry points are core since GL 3.1/3.3 but are not part of the
-// base loader, so they are fetched here like gl_timer_pool does for queries.
-using vertex_attrib_divisor_fn = void (APIENTRY*)(GLuint, GLuint);
-using draw_arrays_instanced_fn = void (APIENTRY*)(GLenum, GLint, GLsizei, GLsizei);
-
 constexpr GLuint position_location = 0;
-constexpr GLuint normal_location = 1;
 constexpr GLuint instance_offset_location = 3;
 constexpr GLuint instance_scale_location = 4;
 
-// Same flat colors the per-tree draws used.
 const glm::vec3 trunk_color(0.31f, 0.20f, 0.11f);
 const glm::vec3 leaf_color(0.06f, 0.24f, 0.11f);
 }
@@ -31,19 +23,11 @@ static_assert(sizeof(render_tree_instance) == 6 * sizeof(float), "render_tree_in
 static_assert(offsetof(render_tree_instance, scale) == 3 * sizeof(float), "render_tree_instance::scale must follow offset");
 static_assert(std::is_standard_layout<render_tree_instance>::value, "render_tree_instance must be standard layout");
 
-bool tree_renderer::init(const char* vertex_path,
-                         const char* fragment_path,
+bool tree_renderer::init(const std::string& vertex_path,
+                         const std::string& fragment_path,
                          const mesh_source trunk_mesh,
                          const mesh_source leaf_mesh) {
     shutdown();
-
-    vertex_attrib_divisor_ = load_gl_proc("glVertexAttribDivisor");
-    draw_arrays_instanced_ = load_gl_proc("glDrawArraysInstanced");
-    if (vertex_attrib_divisor_ == nullptr || draw_arrays_instanced_ == nullptr) {
-        SDL_Log("Instanced rendering entry points unavailable; tree rendering requires OpenGL 3.3.");
-        shutdown();
-        return false;
-    }
 
     if (!shader_.load_from_files(vertex_path, fragment_path)) {
         shutdown();
@@ -65,8 +49,6 @@ void tree_renderer::shutdown() {
     uploaded_revision_ = 0;
     uploaded_tree_count_ = 0;
     uploaded_ = false;
-    vertex_attrib_divisor_ = nullptr;
-    draw_arrays_instanced_ = nullptr;
 }
 
 bool tree_renderer::init_part(instanced_part& part, const mesh_source mesh) {
@@ -74,8 +56,6 @@ bool tree_renderer::init_part(instanced_part& part, const mesh_source mesh) {
         SDL_Log("Tree renderer needs a valid shared mesh buffer.");
         return false;
     }
-
-    const auto divisor = reinterpret_cast<vertex_attrib_divisor_fn>(vertex_attrib_divisor_);
 
     part.vertex_count = mesh.vertex_count;
     glGenVertexArrays(1, &part.vao);
@@ -87,13 +67,10 @@ bool tree_renderer::init_part(instanced_part& part, const mesh_source mesh) {
 
     glBindVertexArray(part.vao);
 
-    // Shared unit mesh: interleaved position + normal, same layout as the
-    // renderer's own cylinder/cone VAOs.
+    // Shared unit mesh: interleaved position + normal; only the position is read.
     glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
     glEnableVertexAttribArray(position_location);
-    glVertexAttribPointer(position_location, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(0));
-    glEnableVertexAttribArray(normal_location);
-    glVertexAttribPointer(normal_location, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
+    glVertexAttribPointer(position_location, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), nullptr);
 
     glBindBuffer(GL_ARRAY_BUFFER, part.instance_vbo);
     glEnableVertexAttribArray(instance_offset_location);
@@ -103,7 +80,7 @@ bool tree_renderer::init_part(instanced_part& part, const mesh_source mesh) {
                           GL_FALSE,
                           sizeof(render_tree_instance),
                           reinterpret_cast<void*>(offsetof(render_tree_instance, offset)));
-    divisor(instance_offset_location, 1);
+    glVertexAttribDivisor(instance_offset_location, 1);
     glEnableVertexAttribArray(instance_scale_location);
     glVertexAttribPointer(instance_scale_location,
                           3,
@@ -111,7 +88,7 @@ bool tree_renderer::init_part(instanced_part& part, const mesh_source mesh) {
                           GL_FALSE,
                           sizeof(render_tree_instance),
                           reinterpret_cast<void*>(offsetof(render_tree_instance, scale)));
-    divisor(instance_scale_location, 1);
+    glVertexAttribDivisor(instance_scale_location, 1);
 
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -154,20 +131,17 @@ void tree_renderer::draw_part(const instanced_part& part, frame_profile* profile
     }
 
     glBindVertexArray(part.vao);
-    reinterpret_cast<draw_arrays_instanced_fn>(draw_arrays_instanced_)(GL_TRIANGLES,
-                                                                       0,
-                                                                       static_cast<GLsizei>(part.vertex_count),
-                                                                       static_cast<GLsizei>(part.instance_count));
+    glDrawArraysInstanced(GL_TRIANGLES, 0, static_cast<GLsizei>(part.vertex_count), static_cast<GLsizei>(part.instance_count));
     record_draw_call(profile);
 }
 
-bool tree_renderer::draw(const std::vector<render_tree>& trees,
+bool tree_renderer::draw(const std::vector<tree_body>& trees,
                          const std::uint64_t revision,
                          const glm::mat4& view,
                          const glm::mat4& proj,
                          const view_frustum& frustum,
                          frame_profile* profile) {
-    if (shader_.id() == 0 || draw_arrays_instanced_ == nullptr) {
+    if (shader_.id() == 0) {
         return false;
     }
 
@@ -194,9 +168,6 @@ bool tree_renderer::draw(const std::vector<render_tree>& trees,
     shader_.set_profile(profile);
     shader_.use();
     shader_.set_mat4("u_view_proj", proj * view);
-    // Flat-color path of terrain.frag, exactly like the old per-tree draws.
-    shader_.set_int("u_use_vertex_color", 0);
-    shader_.set_float("u_alpha", 1.0f);
 
     shader_.set_vec3("u_color", trunk_color);
     draw_part(trunks_, profile);

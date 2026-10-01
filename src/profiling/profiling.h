@@ -237,7 +237,8 @@ inline void reclaim_debug_overlay_cost(frame_profile* profile, const debug_overl
 
 // RAII CPU timer. Accumulates into `stage`, so calling it twice in one frame
 // reports the total. No-op (and no clock read) when `profile` is null.
-struct profile_scope {
+class profile_scope {
+public:
     profile_scope(frame_profile* profile, const profile_stage stage)
         : profile_(profile), stage_(stage) {
         if (profile_ != nullptr) {
@@ -271,6 +272,6 @@ const char* gpu_profile_stage_label(gpu_profile_stage stage);
 // Rounded, glyph-safe byte count for the overlay: "512B", "12KB", "34MB".
 std::string format_byte_count(std::uint64_t bytes);
 
-// Compact uppercase lines for the bitmap-font debug overlay. The glyph table in
-// the renderer has no '.' so timings are printed as whole microseconds.
+// Compact uppercase lines for the bitmap-font debug overlay; timings are
+// whole microseconds to keep the lines short.
 std::vector<std::string> format_profile_overlay_lines(const frame_profile& profile);

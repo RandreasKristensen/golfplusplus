@@ -2,5 +2,6 @@
 
 #include <string>
 
-std::string compile_time_asset_root();
-std::string resolve_asset_root(const std::string& executable_path_or_directory);
+// The assets/ folder: next to the executable when it exists (shipped builds),
+// otherwise the source tree's assets/ baked in at build time (development).
+std::string resolve_asset_root(const std::string& executable_directory);

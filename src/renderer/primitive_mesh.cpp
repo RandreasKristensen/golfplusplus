@@ -1,12 +1,12 @@
 #include "renderer/primitive_mesh.h"
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 
 #include <cmath>
 #include <cstddef>
 
 namespace {
-constexpr float pi = 3.14159265358979323846f;
 
 void append_mesh_vertex(std::vector<float>& vertices, const glm::vec3 position, const glm::vec3 normal) {
     vertices.insert(vertices.end(), {
@@ -27,12 +27,12 @@ std::vector<float> make_sphere_vertices(const int latitude_segments, const int l
                      static_cast<std::size_t>(longitude_segments) * 36);
 
     for (int lat = 0; lat < latitude_segments; ++lat) {
-        const float theta0 = pi * static_cast<float>(lat) / static_cast<float>(latitude_segments);
-        const float theta1 = pi * static_cast<float>(lat + 1) / static_cast<float>(latitude_segments);
+        const float theta0 = glm::pi<float>() * static_cast<float>(lat) / static_cast<float>(latitude_segments);
+        const float theta1 = glm::pi<float>() * static_cast<float>(lat + 1) / static_cast<float>(latitude_segments);
 
         for (int lon = 0; lon < longitude_segments; ++lon) {
-            const float phi0 = 2.0f * pi * static_cast<float>(lon) / static_cast<float>(longitude_segments);
-            const float phi1 = 2.0f * pi * static_cast<float>(lon + 1) / static_cast<float>(longitude_segments);
+            const float phi0 = 2.0f * glm::pi<float>() * static_cast<float>(lon) / static_cast<float>(longitude_segments);
+            const float phi1 = 2.0f * glm::pi<float>() * static_cast<float>(lon + 1) / static_cast<float>(longitude_segments);
 
             const glm::vec3 p00(std::sin(theta0) * std::cos(phi0), std::cos(theta0), std::sin(theta0) * std::sin(phi0));
             const glm::vec3 p01(std::sin(theta0) * std::cos(phi1), std::cos(theta0), std::sin(theta0) * std::sin(phi1));
@@ -57,8 +57,8 @@ std::vector<float> make_cylinder_vertices(const int segments) {
     vertices.reserve(static_cast<std::size_t>(segments) * 72);
 
     for (int i = 0; i < segments; ++i) {
-        const float a0 = 2.0f * pi * static_cast<float>(i) / static_cast<float>(segments);
-        const float a1 = 2.0f * pi * static_cast<float>(i + 1) / static_cast<float>(segments);
+        const float a0 = 2.0f * glm::pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
+        const float a1 = 2.0f * glm::pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
         const glm::vec3 n0(std::cos(a0), 0.0f, std::sin(a0));
         const glm::vec3 n1(std::cos(a1), 0.0f, std::sin(a1));
         const glm::vec3 p00(n0.x, 0.0f, n0.z);
@@ -91,8 +91,8 @@ std::vector<float> make_cone_vertices(const int segments) {
 
     const glm::vec3 tip(0.0f, 1.0f, 0.0f);
     for (int i = 0; i < segments; ++i) {
-        const float a0 = 2.0f * pi * static_cast<float>(i) / static_cast<float>(segments);
-        const float a1 = 2.0f * pi * static_cast<float>(i + 1) / static_cast<float>(segments);
+        const float a0 = 2.0f * glm::pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
+        const float a1 = 2.0f * glm::pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
         const glm::vec3 p0(std::cos(a0), 0.0f, std::sin(a0));
         const glm::vec3 p1(std::cos(a1), 0.0f, std::sin(a1));
         const glm::vec3 face_normal = glm::normalize(glm::cross(p1 - p0, tip - p0));
@@ -106,6 +106,26 @@ std::vector<float> make_cone_vertices(const int segments) {
         append_mesh_vertex(vertices, p1, glm::vec3(0.0f, -1.0f, 0.0f));
     }
 
+    return vertices;
+}
+
+std::vector<float> make_xy_quad_vertices() {
+    std::vector<float> vertices;
+    const glm::vec3 normal(0.0f, 0.0f, 1.0f);
+    for (const glm::vec3& corner : {glm::vec3(-1.0f, -1.0f, 0.0f), glm::vec3(1.0f, -1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 0.0f),
+                                    glm::vec3(-1.0f, -1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 0.0f), glm::vec3(-1.0f, 1.0f, 0.0f)}) {
+        append_mesh_vertex(vertices, corner, normal);
+    }
+    return vertices;
+}
+
+std::vector<float> make_xz_quad_vertices() {
+    std::vector<float> vertices;
+    const glm::vec3 normal(0.0f, 1.0f, 0.0f);
+    for (const glm::vec3& corner : {glm::vec3(-1.0f, 0.0f, -1.0f), glm::vec3(-1.0f, 0.0f, 1.0f), glm::vec3(1.0f, 0.0f, 1.0f),
+                                    glm::vec3(-1.0f, 0.0f, -1.0f), glm::vec3(1.0f, 0.0f, 1.0f), glm::vec3(1.0f, 0.0f, -1.0f)}) {
+        append_mesh_vertex(vertices, corner, normal);
+    }
     return vertices;
 }
 

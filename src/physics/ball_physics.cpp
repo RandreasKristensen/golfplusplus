@@ -4,17 +4,16 @@
 
 #include <algorithm>
 
-ball_state step(const ball_state in, const wind_state wind, const float dt, const physics_tuning& tuning) {
+ball_state step_ball_flight(const ball_state& in, const wind_state& wind, const float dt, const physics_tuning& tuning) {
     const glm::vec3 relative_velocity = in.velocity - wind.velocity;
-    const glm::vec3 accel = gravity_accel()
-        + drag_accel(relative_velocity, tuning.drag_coeff, dt)
-        + magnus_accel(in.spin, relative_velocity, tuning.magnus_coeff);
+    const glm::vec3 acceleration = gravity_acceleration()
+        + drag_acceleration(relative_velocity, tuning.drag_coeff, dt)
+        + magnus_acceleration(in.spin, relative_velocity, tuning.magnus_coeff);
 
     ball_state out = in;
-    out.velocity = in.velocity + accel * dt;
-    // Semi-implicit Euler: update velocity before position for stability.
+    // Semi-implicit Euler: velocity first, then position with the new velocity.
+    out.velocity = in.velocity + acceleration * dt;
     out.position = in.position + out.velocity * dt;
-    const float spin_factor = std::max(0.0f, 1.0f - tuning.spin_decay * dt);
-    out.spin = in.spin * spin_factor;
+    out.spin = in.spin * std::max(0.0f, 1.0f - tuning.spin_decay * dt);
     return out;
 }

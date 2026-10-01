@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
 namespace {
@@ -9,14 +10,6 @@ namespace {
 float smoothstep01(const float t) {
     const float x = std::clamp(t, 0.0f, 1.0f);
     return x * x * (3.0f - 2.0f * x);
-}
-
-float mix(const float a, const float b, const float t) {
-    return a + (b - a) * t;
-}
-
-glm::vec3 mix(const glm::vec3& a, const glm::vec3& b, const float t) {
-    return a + (b - a) * t;
 }
 
 } // namespace
@@ -31,7 +24,7 @@ camera_view blend_camera_views(const camera_view& from, const camera_view& to, c
         return w < 1.0f ? from : to;
     }
 
-    glm::vec3 direction = mix(from_look / from_distance, to_look / to_distance, w);
+    glm::vec3 direction = glm::mix(from_look / from_distance, to_look / to_distance, w);
     const float direction_length = glm::length(direction);
     // Opposite directions have no defined halfway turn; swap view at the midpoint.
     direction = direction_length > 0.0001f
@@ -39,9 +32,9 @@ camera_view blend_camera_views(const camera_view& from, const camera_view& to, c
         : (w < 0.5f ? from_look / from_distance : to_look / to_distance);
 
     camera_view view;
-    view.position = mix(from.position, to.position, w);
-    view.target = view.position + direction * mix(from_distance, to_distance, w);
-    view.fov_degrees = mix(from.fov_degrees, to.fov_degrees, w);
+    view.position = glm::mix(from.position, to.position, w);
+    view.target = view.position + direction * glm::mix(from_distance, to_distance, w);
+    view.fov_degrees = glm::mix(from.fov_degrees, to.fov_degrees, w);
     return view;
 }
 

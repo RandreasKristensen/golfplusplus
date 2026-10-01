@@ -1,6 +1,10 @@
 #pragma once
 
-struct framebuffer {
+// The low-resolution colour + depth target the scene is drawn into before the
+// CRT pass upscales it.
+
+class framebuffer {
+public:
     bool init(int width, int height);
     void shutdown();
     void bind() const;

@@ -4,10 +4,33 @@
 #include <SDL_mixer.h>
 
 #include <algorithm>
-#include <cstdio>
-#include <filesystem>
-#include <string>
-#include <utility>
+#include <system_error>
+
+namespace {
+constexpr int mixer_frequency = 44100;
+constexpr int mixer_channels = 2;
+constexpr int mixer_chunk_size = 1024;
+constexpr int mixer_voices = 32;
+
+int mixer_volume(const audio_manifest& manifest, const audio_sound_definition& sound) {
+    const auto it = manifest.category_volumes.find(sound.category);
+    const float category = it != manifest.category_volumes.end() ? it->second : 1.0f;
+    const float volume = std::clamp(manifest.master_volume * category * sound.volume_multiplier, 0.0f, 1.0f);
+    return static_cast<int>(volume * static_cast<float>(MIX_MAX_VOLUME) + 0.5f);
+}
+}
+
+void audio_engine::chunk_deleter::operator()(Mix_Chunk* chunk) const {
+    Mix_FreeChunk(chunk);
+}
+
+void audio_engine::music_deleter::operator()(Mix_Music* music) const {
+    Mix_FreeMusic(music);
+}
+
+audio_engine::~audio_engine() {
+    shutdown();
+}
 
 bool audio_engine::init() {
     if (initialized_) {
@@ -20,19 +43,17 @@ bool audio_engine::init() {
         return false;
     }
 
-    const int flags = MIX_INIT_OGG;
-    const int initialized_flags = Mix_Init(flags);
-    if ((initialized_flags & flags) != flags) {
+    if ((Mix_Init(MIX_INIT_OGG) & MIX_INIT_OGG) != MIX_INIT_OGG) {
         warn_once("mix_init_ogg", std::string("SDL_mixer OGG support unavailable: ") + Mix_GetError());
     }
 
-    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024) != 0) {
+    if (Mix_OpenAudio(mixer_frequency, MIX_DEFAULT_FORMAT, mixer_channels, mixer_chunk_size) != 0) {
         warn_once("mix_open_audio", std::string("SDL_mixer open audio failed: ") + Mix_GetError());
         Mix_Quit();
         return false;
     }
 
-    Mix_AllocateChannels(32);
+    Mix_AllocateChannels(mixer_voices);
     mixer_open_ = true;
     return true;
 }
@@ -46,39 +67,36 @@ bool audio_engine::load_manifest(const std::filesystem::path& manifest_path) {
         return false;
     }
 
-    master_volume_ = result.manifest->master_volume;
-    category_volumes_ = result.manifest->category_volumes;
     const std::filesystem::path audio_root = manifest_path.parent_path();
-
     for (const audio_sound_definition& sound : result.manifest->sounds) {
-        const std::filesystem::path path = audio_root / std::filesystem::path(sound.file);
-        if (!std::filesystem::exists(path)) {
+        const std::filesystem::path path = audio_root / sound.file;
+        std::error_code error;
+        if (!std::filesystem::exists(path, error)) {
             warn_once("missing:" + path.string(), "audio asset missing: " + path.string());
             continue;
         }
-
         if (!mixer_open_) {
             continue;
         }
 
+        const int volume = mixer_volume(*result.manifest, sound);
         if (sound.type == audio_sound_type::ambience) {
-            Mix_Music* loaded = Mix_LoadMUS(path.string().c_str());
-            if (loaded == nullptr) {
-                warn_once("load_music:" + path.string(), std::string("audio music load failed: ") + path.string() + " - " + Mix_GetError());
+            std::unique_ptr<Mix_Music, music_deleter> music(Mix_LoadMUS(path.string().c_str()));
+            if (!music) {
+                warn_once("load:" + path.string(), "audio load failed: " + path.string() + " - " + Mix_GetError());
                 continue;
             }
-            music_[sound.id] = loaded_music{loaded, sound.category, sound.volume_multiplier};
+            music_[sound.id] = loaded_music{std::move(music), volume};
         } else {
-            Mix_Chunk* loaded = Mix_LoadWAV(path.string().c_str());
-            if (loaded == nullptr) {
-                warn_once("load_chunk:" + path.string(), std::string("audio chunk load failed: ") + path.string() + " - " + Mix_GetError());
+            std::unique_ptr<Mix_Chunk, chunk_deleter> chunk(Mix_LoadWAV(path.string().c_str()));
+            if (!chunk) {
+                warn_once("load:" + path.string(), "audio load failed: " + path.string() + " - " + Mix_GetError());
                 continue;
             }
-            chunks_[sound.id] = loaded_chunk{loaded, sound.category, sound.volume_multiplier};
+            Mix_VolumeChunk(chunk.get(), volume);
+            chunks_[sound.id] = std::move(chunk);
         }
     }
-
-    refresh_chunk_volumes();
     return true;
 }
 
@@ -86,33 +104,28 @@ void audio_engine::play(const std::string& id) {
     if (!mixer_open_) {
         return;
     }
-
     const auto it = chunks_.find(id);
-    if (it == chunks_.end() || it->second.chunk == nullptr) {
-        warn_once("play_missing:" + id, "audio sound unavailable: " + id);
+    if (it == chunks_.end()) {
+        warn_once("play:" + id, "audio sound unavailable: " + id);
         return;
     }
-
-    Mix_PlayChannel(-1, it->second.chunk, 0);
+    Mix_PlayChannel(-1, it->second.get(), 0);
 }
 
 void audio_engine::play_loop(const std::string& id) {
     if (!mixer_open_) {
         return;
     }
-
-    const auto active_it = loop_channels_.find(id);
-    if (active_it != loop_channels_.end() && Mix_Playing(active_it->second) != 0) {
+    const auto active = loop_channels_.find(id);
+    if (active != loop_channels_.end() && Mix_Playing(active->second) != 0) {
         return;
     }
-
     const auto it = chunks_.find(id);
-    if (it == chunks_.end() || it->second.chunk == nullptr) {
-        warn_once("loop_missing:" + id, "audio loop unavailable: " + id);
+    if (it == chunks_.end()) {
+        warn_once("loop:" + id, "audio loop unavailable: " + id);
         return;
     }
-
-    const int channel = Mix_PlayChannel(-1, it->second.chunk, -1);
+    const int channel = Mix_PlayChannel(-1, it->second.get(), -1);
     if (channel >= 0) {
         loop_channels_[id] = channel;
     }
@@ -123,7 +136,6 @@ void audio_engine::stop_loop(const std::string& id) {
     if (it == loop_channels_.end()) {
         return;
     }
-
     if (mixer_open_) {
         Mix_HaltChannel(it->second);
     }
@@ -134,44 +146,22 @@ void audio_engine::start_ambience(const std::string& id) {
     if (!mixer_open_ || active_ambience_ == id) {
         return;
     }
-
     Mix_HaltMusic();
     active_ambience_.clear();
 
     const auto it = music_.find(id);
-    if (it == music_.end() || it->second.music == nullptr) {
-        warn_once("ambience_missing:" + id, "audio ambience unavailable: " + id);
+    if (it == music_.end()) {
+        warn_once("ambience:" + id, "audio ambience unavailable: " + id);
         return;
     }
-
-    Mix_VolumeMusic(volume_for_sound(it->second.category, it->second.volume_multiplier));
-    if (Mix_PlayMusic(it->second.music, -1) == 0) {
+    Mix_VolumeMusic(it->second.volume);
+    if (Mix_PlayMusic(it->second.music.get(), -1) == 0) {
         active_ambience_ = id;
-    }
-}
-
-void audio_engine::stop_ambience() {
-    if (mixer_open_) {
-        Mix_HaltMusic();
-    }
-    active_ambience_.clear();
-}
-
-void audio_engine::set_category_volume(const std::string& category, const float volume) {
-    category_volumes_[category] = std::max(0.0f, std::min(1.0f, volume));
-    refresh_chunk_volumes();
-
-    if (!active_ambience_.empty()) {
-        const auto it = music_.find(active_ambience_);
-        if (it != music_.end()) {
-            Mix_VolumeMusic(volume_for_sound(it->second.category, it->second.volume_multiplier));
-        }
     }
 }
 
 void audio_engine::shutdown() {
     unload_manifest();
-
     if (mixer_open_) {
         Mix_CloseAudio();
         mixer_open_ = false;
@@ -188,51 +178,14 @@ void audio_engine::unload_manifest() {
         Mix_HaltChannel(-1);
         Mix_HaltMusic();
     }
-
     loop_channels_.clear();
     active_ambience_.clear();
-
-    for (auto& item : chunks_) {
-        if (item.second.chunk != nullptr) {
-            Mix_FreeChunk(item.second.chunk);
-        }
-    }
     chunks_.clear();
-
-    for (auto& item : music_) {
-        if (item.second.music != nullptr) {
-            Mix_FreeMusic(item.second.music);
-        }
-    }
     music_.clear();
 }
 
 void audio_engine::warn_once(const std::string& key, const std::string& message) {
-    if (!warned_.insert(key).second) {
-        return;
-    }
-    std::fprintf(stderr, "%s\n", message.c_str());
-}
-
-int audio_engine::volume_for_sound(const std::string& category, const float volume_multiplier) const {
-    float category_volume = 1.0f;
-    const auto it = category_volumes_.find(category);
-    if (it != category_volumes_.end()) {
-        category_volume = it->second;
-    }
-
-    const float volume = std::max(0.0f, std::min(1.0f, master_volume_ * category_volume * volume_multiplier));
-    return static_cast<int>(volume * static_cast<float>(MIX_MAX_VOLUME) + 0.5f);
-}
-
-void audio_engine::refresh_chunk_volumes() {
-    if (!mixer_open_) {
-        return;
-    }
-
-    for (auto& item : chunks_) {
-        if (item.second.chunk != nullptr) {
-            Mix_VolumeChunk(item.second.chunk, volume_for_sound(item.second.category, item.second.volume_multiplier));
-        }
+    if (warned_.insert(key).second) {
+        SDL_Log("%s", message.c_str());
     }
 }

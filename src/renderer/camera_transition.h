@@ -14,23 +14,22 @@
 struct camera_view {
     glm::vec3 position{0.0f};
     glm::vec3 target{0.0f, 0.0f, 1.0f};
-    float fov_degrees = 60.0f;
+    float fov_degrees = 0.0f;
 };
 
 enum class camera_rig {
-    walking,
-    cart,
+    walking,  // on foot and in the cart
     aiming,
     addressing,
     following_shot
 };
 
+// From game_tuning::camera.
 struct camera_transition_settings {
-    // Length of one blend. Kept under a second so input never feels laggy.
-    float duration_seconds = 0.55f;
+    float duration_seconds = 0.0f;  // length of one blend
     // A rig whose eye moves further than this in one frame has teleported,
     // and is blended to like a rig change.
-    float jump_distance = 1.5f;
+    float jump_distance = 0.0f;
 };
 
 struct camera_transition_state {

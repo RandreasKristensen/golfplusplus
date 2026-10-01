@@ -2,41 +2,33 @@
 
 #include <algorithm>
 
-round_state start_course(const course_definition& course) {
+round_state start_round(const std::size_t hole_count) {
     round_state round;
-    round.course_id = course.id;
-    round.current_hole_index = 0;
-    round.strokes_per_hole.assign(static_cast<std::size_t>(std::max(0, course.hole_count)), 0);
-    round.finished = round.strokes_per_hole.empty();
+    round.strokes.assign(hole_count, std::nullopt);
     return round;
 }
 
-bool complete_hole(round_state& round, const int strokes) {
-    if (round.finished || round.current_hole_index >= round.strokes_per_hole.size()) {
-        return false;
+round_state complete_hole(const round_state& round, const std::size_t hole_index, const int strokes) {
+    round_state next = round;
+    if (hole_index >= next.strokes.size()) {
+        return next;
     }
-
-    round.strokes_per_hole[round.current_hole_index] = std::max(0, strokes);
-    return advance_to_next_hole(round);
+    next.strokes[hole_index] = std::max(0, strokes);
+    for (std::size_t step = 1; step <= next.strokes.size(); ++step) {
+        const std::size_t candidate = (hole_index + step) % next.strokes.size();
+        if (!next.strokes[candidate]) {
+            next.current_hole_index = candidate;
+            break;
+        }
+    }
+    return next;
 }
 
-bool advance_to_next_hole(round_state& round) {
-    if (round.finished) {
-        return false;
-    }
-
-    if (round.current_hole_index + 1 >= round.strokes_per_hole.size()) {
-        round.finished = true;
-        return false;
-    }
-
-    ++round.current_hole_index;
-    return true;
+bool hole_played(const round_state& round, const std::size_t hole_index) {
+    return hole_index < round.strokes.size() && round.strokes[hole_index].has_value();
 }
 
-int current_hole_score(const round_state& round) {
-    if (round.current_hole_index >= round.strokes_per_hole.size()) {
-        return 0;
-    }
-    return round.strokes_per_hole[round.current_hole_index];
+bool round_finished(const round_state& round) {
+    return !round.strokes.empty() &&
+        std::all_of(round.strokes.begin(), round.strokes.end(), [](const std::optional<int>& s) { return s.has_value(); });
 }

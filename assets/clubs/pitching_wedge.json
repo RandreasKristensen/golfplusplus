@@ -2,11 +2,12 @@
   "id": "pitching_wedge",
   "name": "Pitching Wedge",
   "label": "PWDG",
+  "hit_sound": "club_hit_wedge",
   "bag_order": 2,
   "stats": {
     "power": 30.5,
     "loft_degrees": 46.0,
-    "accuracy": 0.85,
-    "spin_bias": 0.15
+    "backspin": 0.15,
+    "side_spin": 0.85
   }
 }

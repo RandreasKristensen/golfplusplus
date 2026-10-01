@@ -1,6 +1,6 @@
 #include "doctest.h"
 
-#include "game/progression.h"
+#include "game/game_content.h"
 #include "game/text_assets.h"
 #include "game/text_ids.h"
 
@@ -85,8 +85,8 @@ TEST_CASE("every skill has a name in the string table") {
         CHECK(false);
         return;
     }
-    for (const auto& skill : default_skill_progression()) {
-        CHECK(text->strings.entries.count(skill_text_key(skill.first)) == 1U);
+    for (const skill_definition& skill : load_game_content(GOLFPP_ASSETS_DIR).content->skills) {
+        CHECK(text->strings.entries.count(skill_text_key(skill.id)) == 1U);
     }
 }
 
@@ -167,11 +167,11 @@ TEST_CASE("string table looks up, formats and marks missing keys") {
         return;
     }
     CHECK(lookup_text(*table, "hud.power") == "POWER");
-    CHECK(lookup_text(*table, "hud.nope") == "[hud.nope]");
+    CHECK(lookup_text(*table, "hud.nope") == "#hud.nope#");
     CHECK(format_text(*table, "hud.hole_of", {{"hole", "3"}, {"count", "18"}}) == "HOLE 3 OF 18");
     CHECK(format_text(*table, "hud.hole_of", {{"hole", "3"}}) == "HOLE 3 OF {count}");
     CHECK(format_text(*table, "hud.odd", {{"a", "X"}}) == "XX {unknown} {");
-    CHECK(format_text(*table, "hud.nope", {{"a", "X"}}) == "[hud.nope]");
+    CHECK(format_text(*table, "hud.nope", {{"a", "X"}}) == "#hud.nope#");
 
     CHECK(!parse_string_table(R"({"a": 1})").has_value());
     CHECK(!parse_string_table(R"(["a"])").has_value());
@@ -204,7 +204,7 @@ TEST_CASE("text styles parse with defaults and reject bad values") {
     CHECK(!parse_text_styles(R"({"styles": {"a": {"pixel_size": 0.01, "min_pixel_size": 0.02, "color": [1, 1, 1]}}})").has_value());
 }
 
-TEST_CASE("shipped styles keep the pre-data HUD sizes") {
+TEST_CASE("shipped styles have the sizes the HUD layout is built around") {
     const std::optional<text_assets> text = shipped_text();
     if (!text) {
         CHECK(false);

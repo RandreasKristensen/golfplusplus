@@ -115,30 +115,12 @@
       "volume_multiplier": 1.0
     },
     {
-      "id": "ball_roll",
-      "file": "sfx/ball_roll.wav",
-      "type": "loop",
-      "category": "gameplay",
-      "description": "Quiet rolling loop or short texture, loopable if possible.",
-      "target_length_seconds": 1.0,
-      "volume_multiplier": 1.0
-    },
-    {
       "id": "ball_cup",
       "file": "sfx/ball_cup.wav",
       "type": "sfx",
       "category": "gameplay",
       "description": "Ball dropping into cup.",
       "target_length_seconds": 0.7,
-      "volume_multiplier": 1.0
-    },
-    {
-      "id": "hole_complete",
-      "file": "sfx/hole_complete.wav",
-      "type": "sfx",
-      "category": "gameplay",
-      "description": "Short success sting, VCR or arcade flavored.",
-      "target_length_seconds": 2.0,
       "volume_multiplier": 1.0
     },
     {
@@ -206,7 +188,7 @@
     },
     {
       "id": "ambience_menu_vcr",
-      "file": "ambience/menu_vcr.ogg",
+      "file": "ambience/menu_vcr.wav",
       "type": "ambience",
       "category": "ambience",
       "description": "Very quiet CRT/VCR hum for menus, seamless.",

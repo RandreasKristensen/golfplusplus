@@ -1,0 +1,6 @@
+{
+  "id": "fixture_hub",
+  "name": "Fixture Hub",
+  "holes": ["test", "test2", "test3"],
+  "world": "course_worlds/hub.json"
+}

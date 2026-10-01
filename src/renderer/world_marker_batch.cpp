@@ -1,35 +1,31 @@
 #include "renderer/world_marker_batch.h"
 
 #include "renderer/cart_batch.h"
+#include "physics/vector_math.h"
 #include "renderer/primitive_mesh.h"
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
 
 #include <algorithm>
 #include <cmath>
 
 namespace {
-const glm::vec3 primary_tee_color(0.45f, 0.30f, 0.16f);
+const glm::vec3 tee_color(0.45f, 0.30f, 0.16f);
 const glm::vec3 start_marker_color(0.82f, 0.68f, 0.28f);
-const glm::vec3 hub_tee_color(0.45f, 0.30f, 0.16f);
+const glm::vec3 collectible_color(0.36f, 0.78f, 0.86f);
 const glm::vec3 cup_color(0.03f, 0.03f, 0.035f);
 const glm::vec3 pin_pole_color(0.95f, 0.90f, 0.68f);
 const glm::vec3 flag_color(0.96f, 0.78f, 0.20f);
 const glm::vec3 aim_dot_color(0.95f, 0.78f, 0.22f);
 
-constexpr float primary_tee_scale = 1.8f;
+constexpr float hole_tee_scale = 1.8f;
 constexpr float start_marker_scale = 2.2f;
 constexpr float hub_tee_scale = 1.45f;
-
-// Every piece that used to go through the terrain shader's flat path did so
-// with u_alpha = 1 and blending disabled.
+constexpr float collectible_scale = 1.2f;
 constexpr float opaque = 1.0f;
-
-glm::vec3 aim_direction(const float aim_angle) {
-    return glm::normalize(glm::vec3(std::sin(aim_angle), 0.0f, std::cos(aim_angle)));
-}
 
 float axis_x_yaw_radians(const glm::vec3& axis) {
     glm::vec3 flat(axis.x, 0.0f, axis.z);
@@ -58,10 +54,9 @@ std::vector<glm::vec3> make_unit_disc_positions(const int segments) {
     positions.reserve(static_cast<std::size_t>(segments) * 3U);
 
     constexpr float radius = 0.5f;
-    constexpr float pi = 3.14159265358979323846f;
     for (int i = 0; i < segments; ++i) {
-        const float a0 = 2.0f * pi * static_cast<float>(i) / static_cast<float>(segments);
-        const float a1 = 2.0f * pi * static_cast<float>(i + 1) / static_cast<float>(segments);
+        const float a0 = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
+        const float a1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
         positions.emplace_back(0.0f, 0.0f, 0.0f);
         positions.emplace_back(std::cos(a0) * radius, 0.0f, std::sin(a0) * radius);
         positions.emplace_back(std::cos(a1) * radius, 0.0f, std::sin(a1) * radius);
@@ -90,11 +85,6 @@ world_marker_batch::world_marker_batch()
 void world_marker_batch::clear() {
     vertices_.clear();
     runs_.clear();
-}
-
-void world_marker_batch::reserve(const std::size_t vertex_count, const std::size_t run_count) {
-    vertices_.reserve(vertex_count);
-    runs_.reserve(run_count);
 }
 
 void world_marker_batch::append_disc(const glm::mat4& model,
@@ -188,14 +178,9 @@ void append_ground_marker(world_marker_batch& batch,
     batch.append_disc(ground_marker_model(position, scale), color, opaque, true);
 }
 
-void append_pin_cup(world_marker_batch& batch,
-                    const glm::vec3& position,
-                    const float cup_radius,
-                    const float cup_visual_radius_meters) {
-    const float cup_scale = std::max(cup_visual_radius_meters * 2.0f, cup_radius * 2.0f);
-    // The cup never writes depth so the ball and flagstick drawn later stay
-    // visible through it.
-    batch.append_disc(pin_cup_model(position, cup_scale), cup_color, opaque, false);
+void append_pin_cup(world_marker_batch& batch, const glm::vec3& position, const float cup_radius_meters) {
+    // The cup never writes depth so the ball and flagstick stay visible through it.
+    batch.append_disc(pin_cup_model(position, cup_radius_meters * 2.0f), cup_color, opaque, false);
 }
 
 void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, const float pin_visual_height_meters) {
@@ -223,7 +208,7 @@ void append_swing_club(world_marker_batch& batch,
                        const float aim_angle,
                        const float swing_power) {
     const float power = std::clamp(swing_power, 0.0f, 1.0f);
-    const glm::vec3 forward = aim_direction(aim_angle);
+    const glm::vec3 forward = yaw_direction(aim_angle);
     const glm::vec3 up(0.0f, 1.0f, 0.0f);
     glm::vec3 player_side = glm::normalize(glm::cross(up, forward));
     if (glm::length(player_side) <= 0.0001f) {
@@ -268,61 +253,39 @@ void append_swing_club(world_marker_batch& batch,
 
 void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene) {
     batch.clear();
-
-    // First, exactly as render_scene drew the cart before the marker pass. It
-    // writes depth, so it opens the leading depth-writing run and everything
-    // that used to follow it still follows it.
     append_cart_model(batch, scene.cart_active, scene.camera_position, scene.camera_target);
 
-    if (scene.show_primary_hole_markers) {
-        append_ground_marker(batch, scene.tee_position, primary_tee_scale, primary_tee_color);
-        append_pin_cup(batch, scene.pin_position, scene.cup_radius, scene.cup_visual_radius_meters);
+    if (scene.show_hole) {
+        append_ground_marker(batch, scene.tee_position, hole_tee_scale, tee_color);
+        append_pin_cup(batch, scene.pin_position, scene.cup_radius_meters);
         append_pin_flagstick(batch, scene.pin_position, scene.pin_visual_height_meters);
     }
 
-    if (scene.start_markers != nullptr) {
-        for (const glm::vec3& position : *scene.start_markers) {
-            append_ground_marker(batch, position, start_marker_scale, start_marker_color);
-        }
+    const std::vector<glm::vec3> none;
+    const auto markers = [&none](const std::vector<glm::vec3>* positions) -> const std::vector<glm::vec3>& {
+        return positions != nullptr ? *positions : none;
+    };
+    for (const glm::vec3& position : markers(scene.start_markers)) {
+        append_ground_marker(batch, position, start_marker_scale, start_marker_color);
     }
-
-    if (scene.tee_markers != nullptr) {
-        for (const glm::vec3& position : *scene.tee_markers) {
-            append_ground_marker(batch, position, hub_tee_scale, hub_tee_color);
-        }
+    for (const glm::vec3& position : markers(scene.tee_markers)) {
+        append_ground_marker(batch, position, hub_tee_scale, tee_color);
     }
-
-    if (scene.pin_markers != nullptr) {
-        // The old loop drew cup_0, flagstick_0, cup_1, flagstick_1, ... Cups
-        // are opaque and never write depth, so the only thing their order
-        // relative to *another* hole's flagstick can change is a pixel where
-        // cup_j is in front of flagstick_i (i < j). The cup disc sits 0.09 m
-        // above the terrain it is anchored to, and terrain is drawn (with
-        // depth) before this pass, so any flagstick behind the disc is also
-        // behind that terrain and fails the depth test unless it stands in
-        // the few centimetres between the disc and the ground, i.e. two
-        // holes' pins overlapping. (A camera below the disc plane can only
-        // see the disc's underside through that same gap: grazing rim pixels
-        // at most.) Hoisting every cup ahead of every flagstick is therefore
-        // visually identical for real layouts, keeps each cup before its own
-        // flagstick, and turns 2N runs into 2.
-        for (const glm::vec3& position : *scene.pin_markers) {
-            append_pin_cup(batch, position, scene.cup_radius, scene.cup_visual_radius_meters);
-        }
-        for (const glm::vec3& position : *scene.pin_markers) {
-            append_pin_flagstick(batch, position, scene.pin_visual_height_meters);
-        }
+    for (const glm::vec3& position : markers(scene.collectible_markers)) {
+        append_ground_marker(batch, position, collectible_scale, collectible_color);
+    }
+    const std::vector<glm::vec3>& pins = markers(scene.pin_markers);
+    for (const glm::vec3& position : pins) {
+        append_pin_cup(batch, position, scene.cup_radius_meters);
+    }
+    for (const glm::vec3& position : pins) {
+        append_pin_flagstick(batch, position, scene.pin_visual_height_meters);
     }
 
     if (scene.show_aim_indicator && scene.aim_arc_points != nullptr) {
         append_aim_dots(batch, *scene.aim_arc_points);
     }
-
     if (scene.show_swing_club) {
-        append_swing_club(batch,
-                          scene.ball_position,
-                          scene.ball_visual_radius_meters,
-                          scene.aim_angle,
-                          scene.swing_power);
+        append_swing_club(batch, scene.ball_position, scene.ball_visual_radius_meters, scene.aim_angle, scene.swing_power);
     }
 }

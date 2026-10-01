@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -7,37 +8,44 @@
 
 #include "physics/material_zone.h"
 
+// Terrain is a ribbon mesh built along a Catmull-Rom spline. Each "section" is
+// one row of `cross_section_count` vertices across the ribbon.
 struct terrain_spline {
     std::vector<glm::vec3> control_points;
-    // Width is the full rendered/playable ribbon. fairway_width marks the inner fairway strip.
+    // Full ribbon width (fairway + rough). `fairway_width` is the inner strip.
     float width = 0.0f;
     float fairway_width = 0.0f;
-    int sample_count = 96;
+    // Minimum number of sections along the spline (more are added for long holes).
+    int sample_count = 0;
 };
 
-enum class terrain_material {
+// Underlying values index per-material arrays; keep `terrain_material_count` in sync.
+enum class terrain_material : std::uint8_t {
     fairway,
     rough,
     green,
     bunker,
     water
 };
+inline constexpr std::size_t terrain_material_count = 5;
 
 struct terrain_zone_tuning {
-    float bunker_depth = 0.55f;
-    float water_depth = 0.35f;
+    float bunker_depth = 0.0f;
+    float water_depth = 0.0f;
 };
 
 struct terrain_vertex {
     glm::vec3 position{0.0f};
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
+    // Signed lateral offset from the spline centreline (0 for non-ribbon meshes
+    // except where noted by the builder).
     float distance_from_center = 0.0f;
     terrain_material material = terrain_material::fairway;
 };
 
 // Deterministic uniform XZ grid over the mesh triangles, stored CSR style.
-// It is purely an acceleration structure: sampling must produce the same result
-// with or without it, and an empty/stale index simply falls back to a full scan.
+// Purely an acceleration structure: sampling gives the same result with or
+// without it, and an empty or stale index falls back to a full scan.
 struct terrain_mesh_index {
     float min_x = 0.0f;
     float min_z = 0.0f;
@@ -47,21 +55,23 @@ struct terrain_mesh_index {
     float cell_size_z = 0.0f;
     int cells_x = 0;
     int cells_z = 0;
-    // Cheap staleness fingerprint. If a caller copies a mesh and moves its
-    // vertices without rebuilding the index, these stop matching and sampling
-    // falls back to the exact full scan instead of returning wrong results.
-    uint32_t vertex_count = 0;
-    uint32_t triangle_count = 0;
+    // Staleness fingerprint: if a mesh is copied and its vertices moved without
+    // rebuilding the index, these stop matching and sampling does a full scan.
+    std::uint32_t vertex_count = 0;
+    std::uint32_t triangle_count = 0;
     glm::vec3 fingerprint_first{0.0f};
     glm::vec3 fingerprint_middle{0.0f};
     glm::vec3 fingerprint_last{0.0f};
-    std::vector<uint32_t> cell_starts;    // size cells_x * cells_z + 1
-    std::vector<uint32_t> cell_triangles; // ascending triangle indices per cell
+    std::vector<std::uint32_t> cell_starts;     // size cells_x * cells_z + 1
+    std::vector<std::uint32_t> cell_triangles;  // ascending triangle indices per cell
 };
 
 struct terrain_mesh {
     std::vector<terrain_vertex> vertices;
-    std::vector<uint32_t> indices;
+    std::vector<std::uint32_t> indices;
+    // Ribbon layout: vertex rows of `cross_section_count` vertices. Several
+    // ribbons with the same cross_section_count can be appended into one mesh
+    // (the course hub). Zero for meshes that are not ribbons.
     int section_count = 0;
     int cross_section_count = 0;
     float width = 0.0f;
@@ -71,35 +81,45 @@ struct terrain_mesh {
 struct terrain_sample {
     glm::vec3 point{0.0f};
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
-    glm::vec3 barycentric{0.0f};
     float distance_from_center = 0.0f;
+    // -1 when the mesh was empty and `point` is the fallback height.
     int triangle_index = -1;
-    // Number of mesh triangles actually tested to produce this sample.
-    // Pure output value, useful for profiling the spatial index.
+    // Triangles tested to produce this sample (for profiling the index).
     int triangles_tested = 0;
     terrain_material material = terrain_material::rough;
-    bool has_spline = false;
+    // False when no triangle contains the query and the nearest edge was used.
     bool inside_surface = false;
 };
 
 glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, float t);
-terrain_mesh build_terrain_mesh(const terrain_spline& terrain);
+
+// Builds the ribbon mesh with material zones applied (bunkers and water are
+// carved by `tuning`). Includes the spatial index.
 terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
                                 const std::vector<material_zone>& zones,
                                 const terrain_zone_tuning& tuning);
+
+// Zone shapes draped over `source_mesh` and lifted by `lift`, for drawing.
 terrain_mesh build_material_overlay_mesh(const terrain_mesh& source_mesh,
                                          const std::vector<material_zone>& zones,
                                          float lift);
+
+// A rough grid around `mesh`, `margin` wider on each side, following the
+// nearest terrain height and sunk slightly below it.
 terrain_mesh build_outer_rough_apron(const terrain_mesh& mesh, float margin, int grid_resolution);
-// Returns a copy of the mesh with its spatial index rebuilt from its current
-// vertices/indices. All build_*_mesh functions already do this; callers that
-// assemble or transform a terrain_mesh by hand should run the result through
-// this so sampling keeps the fast path.
+
+// Returns the mesh with its spatial index rebuilt. Run any mesh assembled or
+// transformed by hand through this so sampling keeps the fast path.
 terrain_mesh build_terrain_mesh_index(terrain_mesh mesh);
-terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& position, float fallback_y);
+
+// Height, normal and material at `position` (XZ). Off the mesh, the nearest
+// edge is used and the material is rough. `previous_sample` (optional) keeps
+// the result on the same ribbon where ribbons overlap.
 terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
                                    const glm::vec3& position,
                                    float fallback_y,
-                                   const terrain_sample* previous_sample);
+                                   const terrain_sample* previous_sample = nullptr);
+
+// Like sample_terrain_mesh, but keeps the query's exact XZ (only the height
+// comes from the terrain). Used to place objects that sit on the ground.
 terrain_sample sample_terrain_anchor(const terrain_mesh& mesh, const glm::vec3& position, float fallback_y);
-terrain_sample sample_terrain(const terrain_spline& terrain, const glm::vec3& position, float fallback_y);

@@ -1,0 +1,14 @@
+{
+  "shot_xp": { "skill": "golf_swing", "xp": 25 },
+  "smoke_xp": { "skill": "smoking", "xp": 10 },
+  "movement_xp": {
+    "walking": { "skill": "fitness", "meters_per_xp": 10.0 },
+    "cart_on_road": { "skill": "cart_driving", "meters_per_xp": 20.0 },
+    "drift_on_road": { "skill": "drifting", "meters_per_xp": 8.0 }
+  },
+  "cigarette": {
+    "duration_seconds": 8.0,
+    "backspin_scale": 0.94,
+    "timing_speed_scale": 0.92
+  }
+}

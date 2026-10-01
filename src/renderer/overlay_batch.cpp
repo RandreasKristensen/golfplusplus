@@ -10,9 +10,8 @@ void append_transformed_quad(overlay_batch& batch,
                              const glm::vec2 column_x,
                              const glm::vec2 column_y,
                              const glm::vec4 color) {
-    // Mirrors mat4 * vec4(ux, uy, 0, 1) for a 2D affine model whose columns
-    // are column_x, column_y and the translation `center`, grouped the way
-    // glm evaluates it so results match the old matrix path.
+    // A 2D affine transform with columns column_x, column_y and translation
+    // `center`, applied to each unit-quad corner.
     for (const std::array<float, 2>& corner : overlay_unit_quad_corners) {
         overlay_vertex vertex;
         vertex.position = (column_x * corner[0] + column_y * corner[1]) + center;

@@ -78,9 +78,9 @@ void append_map_fill_triangle(overlay_batch& batch,
             continue;
         }
 
-        std::sort(intersections.begin(), intersections.begin() + intersection_count);
-        const float x0 = std::max(intersections[0], clip_min.x);
-        const float x1 = std::min(intersections[static_cast<std::size_t>(intersection_count - 1)], clip_max.x);
+        const auto crossings = intersections.begin() + intersection_count;
+        const float x0 = std::max(*std::min_element(intersections.begin(), crossings), clip_min.x);
+        const float x1 = std::min(*std::max_element(intersections.begin(), crossings), clip_max.x);
         if (x1 <= x0) {
             continue;
         }

@@ -2,11 +2,12 @@
   "id": "seven_iron",
   "name": "7 Iron",
   "label": "7I",
+  "hit_sound": "club_hit_iron",
   "bag_order": 4,
   "stats": {
     "power": 38.5,
     "loft_degrees": 34.0,
-    "accuracy": 0.70,
-    "spin_bias": 0.08
+    "backspin": 0.08,
+    "side_spin": 0.7
   }
 }

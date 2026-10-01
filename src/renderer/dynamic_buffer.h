@@ -53,7 +53,8 @@ inline buffer_upload_plan plan_buffer_upload(const std::size_t capacity_bytes, c
 }
 
 // GL side. Owns one GL_ARRAY_BUFFER object. Not copyable: it owns GL names.
-struct dynamic_vertex_buffer {
+class dynamic_vertex_buffer {
+public:
     dynamic_vertex_buffer() = default;
     dynamic_vertex_buffer(const dynamic_vertex_buffer&) = delete;
     dynamic_vertex_buffer& operator=(const dynamic_vertex_buffer&) = delete;
@@ -75,7 +76,4 @@ struct dynamic_vertex_buffer {
 private:
     unsigned int vbo_ = 0;
     std::size_t capacity_bytes_ = 0;
-    // glBufferSubData is not in core/gl_loader's table; resolved through
-    // renderer/gl_proc.h into this member, never a global.
-    void* buffer_sub_data_ = nullptr;
 };

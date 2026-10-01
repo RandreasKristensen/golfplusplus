@@ -1,8 +1,13 @@
 #pragma once
 
+// Plays the sounds in assets/audio/sounds.json through SDL_mixer. Missing
+// files and failed loads are logged once and then ignored, so the game runs
+// without audio.
+
 #include "audio/audio_manifest.h"
 
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -12,39 +17,39 @@ struct Mix_Music;
 
 class audio_engine {
 public:
+    audio_engine() = default;
+    audio_engine(const audio_engine&) = delete;
+    audio_engine& operator=(const audio_engine&) = delete;
+    ~audio_engine();
+
     bool init();
     bool load_manifest(const std::filesystem::path& manifest_path);
     void play(const std::string& id);
+    // Starts a looping sound unless it is already playing.
     void play_loop(const std::string& id);
     void stop_loop(const std::string& id);
+    // Switches the background ambience (no-op if it is already playing).
     void start_ambience(const std::string& id);
-    void stop_ambience();
-    void set_category_volume(const std::string& category, float volume);
     void shutdown();
 
 private:
-    struct loaded_chunk {
-        Mix_Chunk* chunk = nullptr;
-        std::string category;
-        float volume_multiplier = 1.0f;
+    struct chunk_deleter {
+        void operator()(Mix_Chunk* chunk) const;
     };
-
+    struct music_deleter {
+        void operator()(Mix_Music* music) const;
+    };
     struct loaded_music {
-        Mix_Music* music = nullptr;
-        std::string category;
-        float volume_multiplier = 1.0f;
+        std::unique_ptr<Mix_Music, music_deleter> music;
+        int volume = 0;
     };
 
     void unload_manifest();
     void warn_once(const std::string& key, const std::string& message);
-    int volume_for_sound(const std::string& category, float volume_multiplier) const;
-    void refresh_chunk_volumes();
 
     bool initialized_ = false;
     bool mixer_open_ = false;
-    float master_volume_ = 1.0f;
-    std::unordered_map<std::string, float> category_volumes_;
-    std::unordered_map<std::string, loaded_chunk> chunks_;
+    std::unordered_map<std::string, std::unique_ptr<Mix_Chunk, chunk_deleter>> chunks_;
     std::unordered_map<std::string, loaded_music> music_;
     std::unordered_map<std::string, int> loop_channels_;
     std::unordered_set<std::string> warned_;

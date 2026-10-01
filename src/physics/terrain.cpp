@@ -1,19 +1,29 @@
 #include "physics/terrain.h"
 
+#include "physics/vector_math.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstddef>
 #include <limits>
-#include <vector>
+#include <optional>
 
 #include <glm/common.hpp>
-#include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 
 namespace {
-float clamp01(const float value) {
-    return std::max(0.0f, std::min(1.0f, value));
-}
+// Ribbon meshes have this many vertices across.
+constexpr int ribbon_cross_section_count = 9;
+// The ribbon's outer 45% drops away by up to this much, so the rough sits
+// slightly lower than the fairway.
+constexpr float ribbon_edge_drop = 0.18f;
+constexpr float ribbon_flat_fraction = 0.55f;
+// The apron sits this far below the terrain it follows, so the ribbon always
+// wins where they overlap.
+constexpr float apron_overlap_lowering = 0.12f;
+constexpr int overlay_circle_segments = 32;
+constexpr int overlay_bounds_resolution = 6;
+constexpr float water_edge_softness = 0.25f;
 
 float smoothstep(const float edge0, const float edge1, const float value) {
     const float t = clamp01((value - edge0) / std::max(0.00001f, edge1 - edge0));
@@ -21,36 +31,24 @@ float smoothstep(const float edge0, const float edge1, const float value) {
 }
 
 float distance_xz_squared(const glm::vec3& a, const glm::vec3& b) {
-    const float dx = a.x - b.x;
-    const float dz = a.z - b.z;
-    return dx * dx + dz * dz;
+    const glm::vec3 delta = horizontal(a - b);
+    return glm::dot(delta, delta);
 }
 
 float distance_squared(const glm::vec3& a, const glm::vec3& b) {
-    const float dx = a.x - b.x;
-    const float dy = a.y - b.y;
-    const float dz = a.z - b.z;
-    return dx * dx + dy * dy + dz * dz;
+    const glm::vec3 delta = a - b;
+    return glm::dot(delta, delta);
 }
 
 float control_polygon_xz_length(const std::vector<glm::vec3>& points) {
     float length = 0.0f;
     for (std::size_t i = 1; i < points.size(); ++i) {
-        const float dx = points[i].x - points[i - 1].x;
-        const float dz = points[i].z - points[i - 1].z;
-        length += std::sqrt(dx * dx + dz * dz);
+        length += horizontal_distance(points[i], points[i - 1]);
     }
     return length;
 }
 
-glm::vec3 safe_normalize(const glm::vec3& value, const glm::vec3& fallback) {
-    const float len = glm::length(value);
-    if (len <= 0.00001f) {
-        return fallback;
-    }
-    return value / len;
-}
-
+// Higher wins when materials compete for the same spot.
 int material_priority(const terrain_material material) {
     switch (material) {
     case terrain_material::water:
@@ -62,29 +60,12 @@ int material_priority(const terrain_material material) {
     case terrain_material::fairway:
         return 0;
     case terrain_material::rough:
-    default:
         return -1;
     }
+    return -1;
 }
 
-int material_index(const terrain_material material) {
-    switch (material) {
-    case terrain_material::fairway:
-        return 0;
-    case terrain_material::rough:
-        return 1;
-    case terrain_material::green:
-        return 2;
-    case terrain_material::bunker:
-        return 3;
-    case terrain_material::water:
-        return 4;
-    default:
-        return 0;
-    }
-}
-
-terrain_material material_from_zone(const material_zone_type type) {
+std::optional<terrain_material> material_from_zone(const material_zone_type type) {
     switch (type) {
     case material_zone_type::green:
         return terrain_material::green;
@@ -92,88 +73,63 @@ terrain_material material_from_zone(const material_zone_type type) {
         return terrain_material::bunker;
     case material_zone_type::water:
         return terrain_material::water;
-    default:
-        return terrain_material::fairway;
+    case material_zone_type::unknown:
+        return std::nullopt;
     }
+    return std::nullopt;
 }
 
-int zone_priority(const material_zone_type type) {
-    switch (type) {
-    case material_zone_type::water:
-        return 3;
-    case material_zone_type::bunker:
-        return 2;
-    case material_zone_type::green:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-bool zone_contains(const material_zone& zone, const glm::vec3& position, float& out_normalized_distance) {
+// Normalized distance from the zone centre (0 at the centre, 1 at the edge),
+// or nullopt when `position` is outside the zone.
+std::optional<float> zone_normalized_distance(const material_zone& zone, const glm::vec3& position) {
     if (zone.has_radius && zone.radius > 0.00001f) {
-        const float dist = std::sqrt(distance_xz_squared(position, zone.center));
-        if (dist > zone.radius) {
-            return false;
+        const float distance = horizontal_distance(position, zone.center);
+        if (distance > zone.radius) {
+            return std::nullopt;
         }
-        out_normalized_distance = clamp01(dist / zone.radius);
-        return true;
+        return clamp01(distance / zone.radius);
     }
 
     if (zone.has_bounds) {
-        const float min_x = std::min(zone.bounds_min.x, zone.bounds_max.x);
-        const float max_x = std::max(zone.bounds_min.x, zone.bounds_max.x);
-        const float min_z = std::min(zone.bounds_min.z, zone.bounds_max.z);
-        const float max_z = std::max(zone.bounds_min.z, zone.bounds_max.z);
-        if (position.x < min_x || position.x > max_x || position.z < min_z || position.z > max_z) {
-            return false;
+        const glm::vec3 low = glm::min(zone.bounds_min, zone.bounds_max);
+        const glm::vec3 high = glm::max(zone.bounds_min, zone.bounds_max);
+        if (position.x < low.x || position.x > high.x || position.z < low.z || position.z > high.z) {
+            return std::nullopt;
         }
-
-        const glm::vec3 center = (zone.bounds_min + zone.bounds_max) * 0.5f;
-        const glm::vec3 half = glm::max(glm::abs(zone.bounds_max - zone.bounds_min) * 0.5f, glm::vec3(0.0001f));
-        const float norm_x = std::abs(position.x - center.x) / half.x;
-        const float norm_z = std::abs(position.z - center.z) / half.z;
-        out_normalized_distance = clamp01(std::max(norm_x, norm_z));
-        return true;
+        const glm::vec3 center = (low + high) * 0.5f;
+        const glm::vec3 half = glm::max((high - low) * 0.5f, glm::vec3(0.0001f));
+        return clamp01(std::max(std::abs(position.x - center.x) / half.x,
+                                std::abs(position.z - center.z) / half.z));
     }
 
-    return false;
+    return std::nullopt;
 }
 
 struct zone_hit {
-    bool has_hit = false;
     terrain_material material = terrain_material::fairway;
     float normalized_distance = 1.0f;
 };
 
-zone_hit query_zone_hit(const glm::vec3& position, const std::vector<material_zone>& zones) {
-    zone_hit hit;
-    int best_priority = -1;
-    float best_distance = 1.0f;
-
+// The highest-priority zone at `position`; among equals, the one whose centre
+// is nearest. Zones of unknown type are ignored.
+std::optional<zone_hit> query_zone_hit(const glm::vec3& position, const std::vector<material_zone>& zones) {
+    std::optional<zone_hit> best;
     for (const material_zone& zone : zones) {
-        float normalized_distance = 0.0f;
-        if (!zone_contains(zone, position, normalized_distance)) {
+        const std::optional<terrain_material> material = material_from_zone(zone.type);
+        const std::optional<float> distance = zone_normalized_distance(zone, position);
+        if (!material || !distance) {
             continue;
         }
-
-        const int priority = zone_priority(zone.type);
-        if (priority < best_priority) {
-            continue;
+        if (best) {
+            const int priority = material_priority(*material);
+            const int best_priority = material_priority(best->material);
+            if (priority < best_priority || (priority == best_priority && *distance >= best->normalized_distance)) {
+                continue;
+            }
         }
-
-        if (priority == best_priority && normalized_distance >= best_distance) {
-            continue;
-        }
-
-        best_priority = priority;
-        best_distance = normalized_distance;
-        hit.has_hit = true;
-        hit.material = material_from_zone(zone.type);
-        hit.normalized_distance = normalized_distance;
+        best = zone_hit{*material, *distance};
     }
-
-    return hit;
+    return best;
 }
 
 glm::vec3 catmull_rom(const glm::vec3& p0,
@@ -189,55 +145,30 @@ glm::vec3 catmull_rom(const glm::vec3& p0,
         + (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3);
 }
 
-glm::vec3 terrain_tangent_at(const terrain_spline& terrain, const float t) {
-    const float step = 1.0f / static_cast<float>(std::max(terrain.sample_count, 2) * 4);
-    const glm::vec3 before = sample_terrain_spline_point(terrain, clamp01(t - step));
-    const glm::vec3 after = sample_terrain_spline_point(terrain, clamp01(t + step));
-    return safe_normalize(after - before, glm::vec3(0.0f, 0.0f, 1.0f));
-}
-
-glm::vec3 terrain_lateral_at(const terrain_spline& terrain, const float t) {
-    const glm::vec3 tangent = terrain_tangent_at(terrain, t);
-    return safe_normalize(glm::vec3(-tangent.z, 0.0f, tangent.x), glm::vec3(1.0f, 0.0f, 0.0f));
-}
-
-int terrain_base_section_count(const terrain_spline& terrain) {
-    const float length = control_polygon_xz_length(terrain.control_points);
-    const int length_sections = static_cast<int>(std::ceil(length)) + 1;
-    return std::max(2, std::max(terrain.sample_count, length_sections));
-}
-
-int terrain_cap_section_count(const terrain_spline& terrain) {
-    const float extension = terrain.width * 0.5f;
-    if (extension <= 0.00001f) {
-        return 0;
-    }
-    return std::max(1, static_cast<int>(std::ceil(extension)));
-}
-
-glm::vec3 endpoint_extension_tangent(const terrain_spline& terrain, const bool end) {
-    if (terrain.control_points.size() < 2) {
-        return glm::vec3(0.0f, 0.0f, 1.0f);
-    }
-
-    const glm::vec3 a = end
-        ? terrain.control_points[terrain.control_points.size() - 2U]
-        : terrain.control_points[0];
-    const glm::vec3 b = end
-        ? terrain.control_points.back()
-        : terrain.control_points[1];
-    const glm::vec3 delta = b - a;
-    const float xz_length = std::sqrt(delta.x * delta.x + delta.z * delta.z);
-    if (xz_length <= 0.00001f) {
-        return glm::vec3(0.0f, 0.0f, 1.0f);
-    }
-    return delta / xz_length;
-}
-
 glm::vec3 lateral_from_tangent(const glm::vec3& tangent) {
     return safe_normalize(glm::vec3(-tangent.z, 0.0f, tangent.x), glm::vec3(1.0f, 0.0f, 0.0f));
 }
 
+glm::vec3 terrain_lateral_at(const terrain_spline& terrain, const float t) {
+    const float step = 1.0f / static_cast<float>(std::max(terrain.sample_count, 2) * 4);
+    const glm::vec3 before = sample_terrain_spline_point(terrain, clamp01(t - step));
+    const glm::vec3 after = sample_terrain_spline_point(terrain, clamp01(t + step));
+    return lateral_from_tangent(safe_normalize(after - before, glm::vec3(0.0f, 0.0f, 1.0f)));
+}
+
+// Straight extension direction past the first (or last) control point.
+glm::vec3 endpoint_extension_tangent(const terrain_spline& terrain, const bool end) {
+    const std::size_t count = terrain.control_points.size();
+    const glm::vec3 a = end ? terrain.control_points[count - 2U] : terrain.control_points[0];
+    const glm::vec3 b = end ? terrain.control_points[count - 1U] : terrain.control_points[1];
+    const glm::vec3 delta = b - a;
+    const float xz_length = glm::length(horizontal(delta));
+    return xz_length <= 0.00001f ? glm::vec3(0.0f, 0.0f, 1.0f) : delta / xz_length;
+}
+
+// Sections: `cap_sections` straight ones before the spline start, the spline
+// itself, then `cap_sections` after its end, so the ribbon reaches past the
+// tee and pin by half its width.
 struct terrain_section_layout {
     int base_sections = 0;
     int cap_sections = 0;
@@ -246,9 +177,12 @@ struct terrain_section_layout {
 
 terrain_section_layout make_section_layout(const terrain_spline& terrain) {
     terrain_section_layout layout;
-    layout.base_sections = terrain_base_section_count(terrain);
-    layout.cap_sections = terrain_cap_section_count(terrain);
+    const int length_sections = static_cast<int>(std::ceil(control_polygon_xz_length(terrain.control_points))) + 1;
+    layout.base_sections = std::max(2, std::max(terrain.sample_count, length_sections));
     layout.cap_extension = terrain.width * 0.5f;
+    layout.cap_sections = layout.cap_extension <= 0.00001f
+        ? 0
+        : std::max(1, static_cast<int>(std::ceil(layout.cap_extension)));
     return layout;
 }
 
@@ -261,14 +195,11 @@ terrain_section_frame terrain_frame_at_section(const terrain_spline& terrain,
                                                const terrain_section_layout& layout,
                                                const int section) {
     terrain_section_frame frame;
-    const glm::vec3 start_tangent = endpoint_extension_tangent(terrain, false);
-    const glm::vec3 end_tangent = endpoint_extension_tangent(terrain, true);
-
     if (section < layout.cap_sections) {
+        const glm::vec3 tangent = endpoint_extension_tangent(terrain, false);
         const float u = static_cast<float>(section) / static_cast<float>(std::max(1, layout.cap_sections));
-        const float distance = -layout.cap_extension * (1.0f - u);
-        frame.center = terrain.control_points.front() + start_tangent * distance;
-        frame.lateral = lateral_from_tangent(start_tangent);
+        frame.center = terrain.control_points.front() - tangent * (layout.cap_extension * (1.0f - u));
+        frame.lateral = lateral_from_tangent(tangent);
         return frame;
     }
 
@@ -280,10 +211,11 @@ terrain_section_frame terrain_frame_at_section(const terrain_spline& terrain,
         return frame;
     }
 
+    const glm::vec3 tangent = endpoint_extension_tangent(terrain, true);
     const int after_section = base_section - layout.base_sections;
     const float u = static_cast<float>(after_section + 1) / static_cast<float>(std::max(1, layout.cap_sections));
-    frame.center = terrain.control_points.back() + end_tangent * (layout.cap_extension * u);
-    frame.lateral = lateral_from_tangent(end_tangent);
+    frame.center = terrain.control_points.back() + tangent * (layout.cap_extension * u);
+    frame.lateral = lateral_from_tangent(tangent);
     return frame;
 }
 
@@ -300,95 +232,147 @@ float cross_section_height_offset(const float offset, const float width) {
         return 0.0f;
     }
     const float normalized = std::abs(offset) / (width * 0.5f);
-    const float edge = std::max(0.0f, normalized - 0.55f) / 0.45f;
-    return -0.18f * edge * edge;
+    const float edge = std::max(0.0f, normalized - ribbon_flat_fraction) / (1.0f - ribbon_flat_fraction);
+    return -ribbon_edge_drop * edge * edge;
+}
+
+float zone_height_offset(const zone_hit& hit, const terrain_zone_tuning& tuning) {
+    const float t = clamp01(hit.normalized_distance);
+    if (hit.material == terrain_material::bunker && tuning.bunker_depth > 0.0f) {
+        return -(1.0f - t * t) * tuning.bunker_depth;
+    }
+    if (hit.material == terrain_material::water && tuning.water_depth > 0.0f) {
+        return -tuning.water_depth * (1.0f - smoothstep(1.0f - water_edge_softness, 1.0f, t));
+    }
+    return 0.0f;
 }
 
 glm::vec3 triangle_normal(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
-    return safe_normalize(glm::cross(b - a, c - a), glm::vec3(0.0f, 1.0f, 0.0f));
+    return safe_normalize(glm::cross(b - a, c - a), world_up);
 }
 
-void add_vertex_normal(std::vector<terrain_vertex>& vertices, const uint32_t index, const glm::vec3& normal) {
-    if (index < vertices.size()) {
-        vertices[index].normal += normal;
+// Two triangles per grid cell over `rows` x `columns` vertices laid out row by
+// row starting at `first_vertex`.
+std::vector<std::uint32_t> grid_triangle_indices(const int rows, const int columns, const std::uint32_t first_vertex) {
+    std::vector<std::uint32_t> indices;
+    if (rows < 2 || columns < 2) {
+        return indices;
     }
+    indices.reserve(static_cast<std::size_t>((rows - 1) * (columns - 1) * 6));
+    for (int row = 0; row < rows - 1; ++row) {
+        for (int column = 0; column < columns - 1; ++column) {
+            const std::uint32_t a = first_vertex + static_cast<std::uint32_t>(row * columns + column);
+            const std::uint32_t b = first_vertex + static_cast<std::uint32_t>((row + 1) * columns + column);
+            const std::uint32_t c = a + 1U;
+            const std::uint32_t d = b + 1U;
+            indices.insert(indices.end(), {a, b, c, c, b, d});
+        }
+    }
+    return indices;
+}
+
+// Area-weighted upward vertex normals from the triangles that use each vertex.
+std::vector<terrain_vertex> with_smooth_normals(std::vector<terrain_vertex> vertices,
+                                                const std::vector<std::uint32_t>& indices) {
+    for (terrain_vertex& vertex : vertices) {
+        vertex.normal = glm::vec3(0.0f);
+    }
+    for (std::size_t i = 0; i + 2U < indices.size(); i += 3U) {
+        const std::uint32_t ia = indices[i];
+        const std::uint32_t ib = indices[i + 1U];
+        const std::uint32_t ic = indices[i + 2U];
+        if (ia >= vertices.size() || ib >= vertices.size() || ic >= vertices.size()) {
+            continue;
+        }
+        glm::vec3 normal = triangle_normal(vertices[ia].position, vertices[ib].position, vertices[ic].position);
+        if (normal.y < 0.0f) {
+            normal = -normal;
+        }
+        vertices[ia].normal += normal;
+        vertices[ib].normal += normal;
+        vertices[ic].normal += normal;
+    }
+    for (terrain_vertex& vertex : vertices) {
+        vertex.normal = ground_normal(vertex.normal);
+        if (vertex.normal.y < 0.0f) {
+            vertex.normal = -vertex.normal;
+        }
+    }
+    return vertices;
 }
 
 float signed_area_xz(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
     return (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
 }
 
-bool barycentric_xz(const glm::vec3& p,
-                    const glm::vec3& a,
-                    const glm::vec3& b,
-                    const glm::vec3& c,
-                    glm::vec3& out) {
+// Barycentric weights of `p` in triangle abc (XZ only), or nullopt when p is
+// outside it (with a small tolerance) or the triangle is degenerate.
+std::optional<glm::vec3> barycentric_xz(const glm::vec3& p, const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
+    constexpr float tolerance = 0.0001f;
     const float area = signed_area_xz(a, b, c);
     if (std::abs(area) <= 0.000001f) {
-        return false;
+        return std::nullopt;
     }
-
     const float w0 = signed_area_xz(p, b, c) / area;
     const float w1 = signed_area_xz(p, c, a) / area;
     const float w2 = 1.0f - w0 - w1;
-    out = glm::vec3(w0, w1, w2);
-    return w0 >= -0.0001f && w1 >= -0.0001f && w2 >= -0.0001f;
+    if (w0 < -tolerance || w1 < -tolerance || w2 < -tolerance) {
+        return std::nullopt;
+    }
+    return glm::vec3(w0, w1, w2);
+}
+
+const terrain_vertex& triangle_vertex(const terrain_mesh& mesh, const int triangle_index, const std::size_t corner) {
+    return mesh.vertices[mesh.indices[static_cast<std::size_t>(triangle_index) * 3U + corner]];
+}
+
+// The material with the largest barycentric weight; ties go to the higher
+// priority material.
+terrain_material blended_material(const terrain_vertex& a,
+                                  const terrain_vertex& b,
+                                  const terrain_vertex& c,
+                                  const glm::vec3& barycentric) {
+    std::array<float, terrain_material_count> weights{};
+    weights[static_cast<std::size_t>(a.material)] += barycentric.x;
+    weights[static_cast<std::size_t>(b.material)] += barycentric.y;
+    weights[static_cast<std::size_t>(c.material)] += barycentric.z;
+
+    terrain_material best = terrain_material::fairway;
+    float best_weight = -1.0f;
+    int best_priority = -1;
+    for (std::size_t i = 0; i < terrain_material_count; ++i) {
+        if (weights[i] <= 0.00001f) {
+            continue;
+        }
+        const terrain_material material = static_cast<terrain_material>(i);
+        const int priority = material_priority(material);
+        if (weights[i] > best_weight + 0.00001f ||
+            (std::abs(weights[i] - best_weight) <= 0.00001f && priority > best_priority)) {
+            best = material;
+            best_weight = weights[i];
+            best_priority = priority;
+        }
+    }
+    return best;
 }
 
 terrain_sample sample_from_barycentric(const terrain_mesh& mesh,
                                        const int triangle_index,
                                        const glm::vec3& barycentric,
                                        const bool inside_surface) {
-    const std::size_t index = static_cast<std::size_t>(triangle_index) * 3U;
-    const terrain_vertex& a = mesh.vertices[mesh.indices[index]];
-    const terrain_vertex& b = mesh.vertices[mesh.indices[index + 1U]];
-    const terrain_vertex& c = mesh.vertices[mesh.indices[index + 2U]];
+    const terrain_vertex& a = triangle_vertex(mesh, triangle_index, 0U);
+    const terrain_vertex& b = triangle_vertex(mesh, triangle_index, 1U);
+    const terrain_vertex& c = triangle_vertex(mesh, triangle_index, 2U);
 
     terrain_sample sample;
     sample.point = a.position * barycentric.x + b.position * barycentric.y + c.position * barycentric.z;
     sample.normal = safe_normalize(a.normal * barycentric.x + b.normal * barycentric.y + c.normal * barycentric.z,
                                    triangle_normal(a.position, b.position, c.position));
-    sample.barycentric = barycentric;
     sample.distance_from_center = std::abs(a.distance_from_center * barycentric.x
         + b.distance_from_center * barycentric.y
         + c.distance_from_center * barycentric.z);
     sample.triangle_index = triangle_index;
-    if (inside_surface) {
-        constexpr int material_count = 5;
-        std::array<float, material_count> weights{};
-        const auto add_weight = [&](const terrain_material material, const float weight) {
-            const int index = material_index(material);
-            if (index < 0 || index >= material_count) {
-                return;
-            }
-            weights[static_cast<std::size_t>(index)] += weight;
-        };
-        add_weight(a.material, barycentric.x);
-        add_weight(b.material, barycentric.y);
-        add_weight(c.material, barycentric.z);
-
-        terrain_material best = terrain_material::fairway;
-        float best_weight = -1.0f;
-        int best_priority = -1;
-        for (int i = 0; i < material_count; ++i) {
-            if (weights[i] <= 0.00001f) {
-                continue;
-            }
-            const terrain_material material = static_cast<terrain_material>(i);
-            const int priority = material_priority(material);
-            if (weights[i] > best_weight + 0.00001f ||
-                (std::abs(weights[i] - best_weight) <= 0.00001f && priority > best_priority)) {
-                best = material;
-                best_weight = weights[i];
-                best_priority = priority;
-            }
-        }
-
-        sample.material = best;
-    } else {
-        sample.material = terrain_material::rough;
-    }
-    sample.has_spline = true;
+    sample.material = inside_surface ? blended_material(a, b, c, barycentric) : terrain_material::rough;
     sample.inside_surface = inside_surface;
     return sample;
 }
@@ -398,13 +382,11 @@ glm::vec3 closest_barycentric_on_edge(const glm::vec3& position,
                                       const glm::vec3& b,
                                       const glm::vec3& c,
                                       const int edge) {
-    const glm::vec3 points[3] = {a, b, c};
+    const std::array<glm::vec3, 3> points{{a, b, c}};
     const int i0 = edge;
     const int i1 = (edge + 1) % 3;
-    const glm::vec3 edge_start = points[i0];
-    const glm::vec3 edge_end = points[i1];
-    const glm::vec3 edge_xz(edge_end.x - edge_start.x, 0.0f, edge_end.z - edge_start.z);
-    const glm::vec3 delta_xz(position.x - edge_start.x, 0.0f, position.z - edge_start.z);
+    const glm::vec3 edge_xz = horizontal(points[static_cast<std::size_t>(i1)] - points[static_cast<std::size_t>(i0)]);
+    const glm::vec3 delta_xz = horizontal(position - points[static_cast<std::size_t>(i0)]);
     const float denom = glm::dot(edge_xz, edge_xz);
     const float t = denom > 0.000001f ? clamp01(glm::dot(delta_xz, edge_xz) / denom) : 0.0f;
 
@@ -414,100 +396,79 @@ glm::vec3 closest_barycentric_on_edge(const glm::vec3& position,
     return barycentric;
 }
 
-int triangle_section_index(const terrain_mesh& mesh, const int triangle_index) {
-    if (mesh.section_count <= 0 || mesh.cross_section_count < 2) {
+// Triangle row of a ribbon mesh. Used to keep consecutive samples on the same
+// ribbon (`previous_sample`) and to scan one row as a contiguous range.
+int triangle_row(const terrain_mesh& mesh, const int triangle_index) {
+    const int triangles_per_row = (mesh.cross_section_count - 1) * 2;
+    if (mesh.section_count <= 0 || triangles_per_row <= 0) {
         return 0;
     }
-
-    const int triangles_per_section = (mesh.cross_section_count - 1) * 2;
-    if (triangles_per_section <= 0) {
-        return 0;
-    }
-
-    return std::clamp(triangle_index / triangles_per_section, 0, mesh.section_count - 1);
+    return std::clamp(triangle_index / triangles_per_row, 0, mesh.section_count - 1);
 }
 
-glm::vec3 section_center_point(const terrain_mesh& mesh, const int section_index) {
-    if (mesh.vertices.empty() || mesh.cross_section_count <= 0 || mesh.section_count <= 0) {
+// Centreline point of the vertex row the triangle starts on. Derived from the
+// triangle's own vertices so it stays right in meshes that append several
+// ribbons (each ribbon has one more vertex row than triangle rows).
+glm::vec3 triangle_section_center(const terrain_mesh& mesh, const int triangle_index) {
+    const int columns = mesh.cross_section_count;
+    if (columns <= 0) {
         return glm::vec3(0.0f);
     }
-
-    const int clamped_section = std::clamp(section_index, 0, mesh.section_count - 1);
-    const int center_column = mesh.cross_section_count / 2;
-    const std::size_t index = static_cast<std::size_t>(clamped_section * mesh.cross_section_count + center_column);
-    if (index >= mesh.vertices.size()) {
-        return glm::vec3(0.0f);
-    }
-
-    return mesh.vertices[index].position;
+    const std::size_t first_vertex = mesh.indices[static_cast<std::size_t>(triangle_index) * 3U];
+    const std::size_t row = first_vertex / static_cast<std::size_t>(columns);
+    const std::size_t center = row * static_cast<std::size_t>(columns) + static_cast<std::size_t>(columns / 2);
+    return center < mesh.vertices.size() ? mesh.vertices[center].position : glm::vec3(0.0f);
 }
 
 struct terrain_candidate {
     terrain_sample sample;
-    int section_index = 0;
+    int row = 0;
     float section_distance = std::numeric_limits<float>::max();
     float height_distance = std::numeric_limits<float>::max();
     float edge_distance = std::numeric_limits<float>::max();
 };
 
-bool is_better_inside_candidate(const terrain_candidate& candidate,
-                                const terrain_candidate& best,
-                                const int preferred_section) {
+// -1, 0 or 1; values within epsilon count as equal.
+int compare_near(const float a, const float b) {
     constexpr float epsilon = 0.00001f;
-    const bool candidate_preferred = preferred_section >= 0 && candidate.section_index == preferred_section;
-    const bool best_preferred = preferred_section >= 0 && best.section_index == preferred_section;
+    if (a < b - epsilon) {
+        return -1;
+    }
+    return a > b + epsilon ? 1 : 0;
+}
+
+// Candidates on the preferred row win; then the keys are compared in order;
+// the lower triangle index breaks exact ties so the result never depends on
+// scan order.
+bool ranks_before(const terrain_candidate& candidate,
+                  const terrain_candidate& best,
+                  const int preferred_row,
+                  const std::array<float, 3>& candidate_keys,
+                  const std::array<float, 3>& best_keys) {
+    const bool candidate_preferred = preferred_row >= 0 && candidate.row == preferred_row;
+    const bool best_preferred = preferred_row >= 0 && best.row == preferred_row;
     if (candidate_preferred != best_preferred) {
         return candidate_preferred;
     }
-    if (candidate.section_distance < best.section_distance - epsilon) {
-        return true;
-    }
-    if (candidate.section_distance > best.section_distance + epsilon) {
-        return false;
-    }
-    if (candidate.height_distance < best.height_distance - epsilon) {
-        return true;
-    }
-    if (candidate.height_distance > best.height_distance + epsilon) {
-        return false;
-    }
-    if (candidate.sample.distance_from_center < best.sample.distance_from_center - epsilon) {
-        return true;
-    }
-    if (candidate.sample.distance_from_center > best.sample.distance_from_center + epsilon) {
-        return false;
+    for (std::size_t i = 0; i < candidate_keys.size(); ++i) {
+        const int order = compare_near(candidate_keys[i], best_keys[i]);
+        if (order != 0) {
+            return order < 0;
+        }
     }
     return candidate.sample.triangle_index < best.sample.triangle_index;
 }
 
-bool is_better_edge_candidate(const terrain_candidate& candidate,
-                              const terrain_candidate& best,
-                              const int preferred_section) {
-    constexpr float epsilon = 0.00001f;
-    const bool candidate_preferred = preferred_section >= 0 && candidate.section_index == preferred_section;
-    const bool best_preferred = preferred_section >= 0 && best.section_index == preferred_section;
-    if (candidate_preferred != best_preferred) {
-        return candidate_preferred;
-    }
-    if (candidate.edge_distance < best.edge_distance - epsilon) {
-        return true;
-    }
-    if (candidate.edge_distance > best.edge_distance + epsilon) {
-        return false;
-    }
-    if (candidate.section_distance < best.section_distance - epsilon) {
-        return true;
-    }
-    if (candidate.section_distance > best.section_distance + epsilon) {
-        return false;
-    }
-    if (candidate.sample.distance_from_center < best.sample.distance_from_center - epsilon) {
-        return true;
-    }
-    if (candidate.sample.distance_from_center > best.sample.distance_from_center + epsilon) {
-        return false;
-    }
-    return candidate.sample.triangle_index < best.sample.triangle_index;
+bool is_better_inside_candidate(const terrain_candidate& candidate, const terrain_candidate& best, const int preferred_row) {
+    return ranks_before(candidate, best, preferred_row,
+                        {candidate.section_distance, candidate.height_distance, candidate.sample.distance_from_center},
+                        {best.section_distance, best.height_distance, best.sample.distance_from_center});
+}
+
+bool is_better_edge_candidate(const terrain_candidate& candidate, const terrain_candidate& best, const int preferred_row) {
+    return ranks_before(candidate, best, preferred_row,
+                        {candidate.edge_distance, candidate.section_distance, candidate.sample.distance_from_center},
+                        {best.edge_distance, best.section_distance, best.sample.distance_from_center});
 }
 
 // ---------------------------------------------------------------------------
@@ -516,8 +477,8 @@ bool is_better_edge_candidate(const terrain_candidate& candidate,
 
 constexpr int max_index_cells_per_axis = 256;
 constexpr std::size_t max_index_entries = 8000000U;
-// Slack used when pruning the ring search. Must be >= the epsilon the candidate
-// comparators use so ties are never pruned away.
+// Slack used when pruning the ring search. Must be >= the epsilon of
+// compare_near so ties are never pruned away.
 constexpr float index_prune_slack = 0.0001f;
 
 struct triangle_xz_bounds {
@@ -554,16 +515,15 @@ int index_cell_coord(const float value, const float min_value, const float cell_
 }
 
 triangle_xz_bounds padded_triangle_bounds(const terrain_mesh& mesh, const int triangle_index) {
-    const std::size_t base = static_cast<std::size_t>(triangle_index) * 3U;
-    const glm::vec3& a = mesh.vertices[mesh.indices[base]].position;
-    const glm::vec3& b = mesh.vertices[mesh.indices[base + 1U]].position;
-    const glm::vec3& c = mesh.vertices[mesh.indices[base + 2U]].position;
+    const glm::vec3& a = triangle_vertex(mesh, triangle_index, 0U).position;
+    const glm::vec3& b = triangle_vertex(mesh, triangle_index, 1U).position;
+    const glm::vec3& c = triangle_vertex(mesh, triangle_index, 2U).position;
 
     triangle_xz_bounds bounds;
-    bounds.min_x = std::min(a.x, std::min(b.x, c.x));
-    bounds.max_x = std::max(a.x, std::max(b.x, c.x));
-    bounds.min_z = std::min(a.z, std::min(b.z, c.z));
-    bounds.max_z = std::max(a.z, std::max(b.z, c.z));
+    bounds.min_x = std::min({a.x, b.x, c.x});
+    bounds.max_x = std::max({a.x, b.x, c.x});
+    bounds.min_z = std::min({a.z, b.z, c.z});
+    bounds.max_z = std::max({a.z, b.z, c.z});
 
     // barycentric_xz accepts a small negative tolerance, so a point marginally
     // outside the raw bounding box can still count as inside the triangle.
@@ -577,22 +537,38 @@ triangle_xz_bounds padded_triangle_bounds(const terrain_mesh& mesh, const int tr
     return bounds;
 }
 
+struct cell_range {
+    int x0 = 0;
+    int x1 = 0;
+    int z0 = 0;
+    int z1 = 0;
+};
+
+cell_range triangle_cells(const terrain_mesh& mesh, const terrain_mesh_index& index, const int triangle_index) {
+    const triangle_xz_bounds bounds = padded_triangle_bounds(mesh, triangle_index);
+    cell_range cells;
+    cells.x0 = index_cell_coord(bounds.min_x, index.min_x, index.cell_size_x, index.cells_x);
+    cells.x1 = index_cell_coord(bounds.max_x, index.min_x, index.cell_size_x, index.cells_x);
+    cells.z0 = index_cell_coord(bounds.min_z, index.min_z, index.cell_size_z, index.cells_z);
+    cells.z1 = index_cell_coord(bounds.max_z, index.min_z, index.cell_size_z, index.cells_z);
+    return cells;
+}
+
+std::size_t cell_slot(const terrain_mesh_index& index, const int cx, const int cz) {
+    return static_cast<std::size_t>(cz) * static_cast<std::size_t>(index.cells_x) + static_cast<std::size_t>(cx);
+}
+
 terrain_mesh_index make_terrain_mesh_index(const terrain_mesh& mesh) {
     terrain_mesh_index built;
     const std::size_t triangle_count = mesh.indices.size() / 3U;
     const std::size_t vertex_count = mesh.vertices.size();
-    if (vertex_count == 0U || triangle_count == 0U) {
+    if (vertex_count == 0U || triangle_count == 0U || triangle_count * 3U != mesh.indices.size() ||
+        triangle_count > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
         return built;
     }
-    if (triangle_count * 3U != mesh.indices.size()) {
-        return built;
-    }
-    if (triangle_count > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-        return built;
-    }
-    for (const uint32_t index : mesh.indices) {
+    for (const std::uint32_t index : mesh.indices) {
         if (static_cast<std::size_t>(index) >= vertex_count) {
-            return terrain_mesh_index{};
+            return built;
         }
     }
 
@@ -607,7 +583,7 @@ terrain_mesh_index make_terrain_mesh_index(const terrain_mesh& mesh) {
         max_z = std::max(max_z, vertex.position.z);
     }
     if (!(min_x <= max_x) || !(min_z <= max_z)) {
-        return terrain_mesh_index{};
+        return built;
     }
 
     const float extent_x = std::max(0.0f, max_x - min_x);
@@ -650,17 +626,13 @@ terrain_mesh_index make_terrain_mesh_index(const terrain_mesh& mesh) {
     built.cell_size_z = extent_z / static_cast<float>(cells_z);
 
     const std::size_t cell_count = static_cast<std::size_t>(cells_x) * static_cast<std::size_t>(cells_z);
-    std::vector<uint32_t> counts(cell_count, 0U);
+    std::vector<std::uint32_t> counts(cell_count, 0U);
     std::size_t total_entries = 0U;
     for (std::size_t triangle = 0U; triangle < triangle_count; ++triangle) {
-        const triangle_xz_bounds bounds = padded_triangle_bounds(mesh, static_cast<int>(triangle));
-        const int x0 = index_cell_coord(bounds.min_x, min_x, built.cell_size_x, cells_x);
-        const int x1 = index_cell_coord(bounds.max_x, min_x, built.cell_size_x, cells_x);
-        const int z0 = index_cell_coord(bounds.min_z, min_z, built.cell_size_z, cells_z);
-        const int z1 = index_cell_coord(bounds.max_z, min_z, built.cell_size_z, cells_z);
-        for (int cz = z0; cz <= z1; ++cz) {
-            for (int cx = x0; cx <= x1; ++cx) {
-                ++counts[static_cast<std::size_t>(cz) * static_cast<std::size_t>(cells_x) + static_cast<std::size_t>(cx)];
+        const cell_range cells = triangle_cells(mesh, built, static_cast<int>(triangle));
+        for (int cz = cells.z0; cz <= cells.z1; ++cz) {
+            for (int cx = cells.x0; cx <= cells.x1; ++cx) {
+                ++counts[cell_slot(built, cx, cz)];
                 ++total_entries;
             }
         }
@@ -670,77 +642,57 @@ terrain_mesh_index make_terrain_mesh_index(const terrain_mesh& mesh) {
     }
 
     built.cell_starts.assign(cell_count + 1U, 0U);
-    uint32_t running = 0U;
+    std::uint32_t running = 0U;
     for (std::size_t cell = 0U; cell < cell_count; ++cell) {
         built.cell_starts[cell] = running;
         running += counts[cell];
     }
     built.cell_starts[cell_count] = running;
 
-    std::vector<uint32_t> cursors(built.cell_starts.begin(), built.cell_starts.end() - 1);
+    std::vector<std::uint32_t> cursors(built.cell_starts.begin(), built.cell_starts.end() - 1);
     built.cell_triangles.assign(static_cast<std::size_t>(running), 0U);
     for (std::size_t triangle = 0U; triangle < triangle_count; ++triangle) {
-        const triangle_xz_bounds bounds = padded_triangle_bounds(mesh, static_cast<int>(triangle));
-        const int x0 = index_cell_coord(bounds.min_x, min_x, built.cell_size_x, cells_x);
-        const int x1 = index_cell_coord(bounds.max_x, min_x, built.cell_size_x, cells_x);
-        const int z0 = index_cell_coord(bounds.min_z, min_z, built.cell_size_z, cells_z);
-        const int z1 = index_cell_coord(bounds.max_z, min_z, built.cell_size_z, cells_z);
-        for (int cz = z0; cz <= z1; ++cz) {
-            for (int cx = x0; cx <= x1; ++cx) {
-                const std::size_t cell = static_cast<std::size_t>(cz) * static_cast<std::size_t>(cells_x) + static_cast<std::size_t>(cx);
-                built.cell_triangles[cursors[cell]] = static_cast<uint32_t>(triangle);
+        const cell_range cells = triangle_cells(mesh, built, static_cast<int>(triangle));
+        for (int cz = cells.z0; cz <= cells.z1; ++cz) {
+            for (int cx = cells.x0; cx <= cells.x1; ++cx) {
+                const std::size_t cell = cell_slot(built, cx, cz);
+                built.cell_triangles[cursors[cell]] = static_cast<std::uint32_t>(triangle);
                 ++cursors[cell];
             }
         }
     }
 
-    built.vertex_count = static_cast<uint32_t>(vertex_count);
-    built.triangle_count = static_cast<uint32_t>(triangle_count);
+    built.vertex_count = static_cast<std::uint32_t>(vertex_count);
+    built.triangle_count = static_cast<std::uint32_t>(triangle_count);
     built.fingerprint_first = mesh.vertices.front().position;
     built.fingerprint_middle = mesh.vertices[vertex_count / 2U].position;
     built.fingerprint_last = mesh.vertices.back().position;
     return built;
 }
 
-bool same_position(const glm::vec3& a, const glm::vec3& b) {
-    return a.x == b.x && a.y == b.y && a.z == b.z;
-}
-
 bool terrain_index_matches(const terrain_mesh& mesh, const terrain_mesh_index& index) {
-    if (index.cells_x <= 0 || index.cells_z <= 0) {
+    if (index.cells_x <= 0 || index.cells_z <= 0 || mesh.vertices.empty()) {
         return false;
     }
     const std::size_t cell_count = static_cast<std::size_t>(index.cells_x) * static_cast<std::size_t>(index.cells_z);
-    if (index.cell_starts.size() != cell_count + 1U) {
-        return false;
-    }
-    if (mesh.vertices.empty()) {
-        return false;
-    }
-    if (static_cast<std::size_t>(index.vertex_count) != mesh.vertices.size()) {
-        return false;
-    }
-    if (static_cast<std::size_t>(index.triangle_count) * 3U != mesh.indices.size()) {
-        return false;
-    }
-    if (static_cast<std::size_t>(index.cell_starts.back()) != index.cell_triangles.size()) {
-        return false;
-    }
-    return same_position(index.fingerprint_first, mesh.vertices.front().position)
-        && same_position(index.fingerprint_middle, mesh.vertices[mesh.vertices.size() / 2U].position)
-        && same_position(index.fingerprint_last, mesh.vertices.back().position);
+    return index.cell_starts.size() == cell_count + 1U
+        && static_cast<std::size_t>(index.vertex_count) == mesh.vertices.size()
+        && static_cast<std::size_t>(index.triangle_count) * 3U == mesh.indices.size()
+        && static_cast<std::size_t>(index.cell_starts.back()) == index.cell_triangles.size()
+        && index.fingerprint_first == mesh.vertices.front().position
+        && index.fingerprint_middle == mesh.vertices[mesh.vertices.size() / 2U].position
+        && index.fingerprint_last == mesh.vertices.back().position;
 }
 
-// Cheap version of the edge candidate distance, used only to prune the ring
-// search. Produces exactly the distance the full candidate evaluation would.
+// Squared distance to the nearest edge point; exactly what the edge
+// candidates of scan_triangle compute, used to prune the ring search.
 float triangle_edge_distance_squared(const terrain_mesh& mesh,
                                      const int triangle_index,
                                      const glm::vec3& position,
                                      const glm::vec3& query_point) {
-    const std::size_t base = static_cast<std::size_t>(triangle_index) * 3U;
-    const glm::vec3& a = mesh.vertices[mesh.indices[base]].position;
-    const glm::vec3& b = mesh.vertices[mesh.indices[base + 1U]].position;
-    const glm::vec3& c = mesh.vertices[mesh.indices[base + 2U]].position;
+    const glm::vec3& a = triangle_vertex(mesh, triangle_index, 0U).position;
+    const glm::vec3& b = triangle_vertex(mesh, triangle_index, 1U).position;
+    const glm::vec3& c = triangle_vertex(mesh, triangle_index, 2U).position;
 
     float best = std::numeric_limits<float>::max();
     for (int edge = 0; edge < 3; ++edge) {
@@ -751,11 +703,9 @@ float triangle_edge_distance_squared(const terrain_mesh& mesh,
     return best;
 }
 
-// ---------------------------------------------------------------------------
-// Scan state — accumulates the same "best candidate" decision the original full
-// scan made, but as a pure value so the traversal order can be narrowed down.
-// ---------------------------------------------------------------------------
-
+// The best candidates found so far. Every traversal (full scan, indexed cell,
+// ring search) feeds triangles through scan_triangle in ascending order, so
+// they all pick the same winner.
 struct terrain_scan_state {
     terrain_candidate best_inside;
     terrain_candidate best_edge;
@@ -764,61 +714,61 @@ struct terrain_scan_state {
     int triangles_tested = 0;
 };
 
+enum class scan_pass {
+    inside_only,
+    edge_only,
+    both
+};
+
 terrain_scan_state scan_triangle(const terrain_mesh& mesh,
                                  const glm::vec3& position,
                                  const glm::vec3& query_point,
                                  const float fallback_y,
-                                 const int preferred_section,
+                                 const int preferred_row,
                                  const int triangle_index,
-                                 const bool collect_inside,
-                                 const bool collect_edge,
-                                 const terrain_scan_state state) {
+                                 const scan_pass pass,
+                                 const terrain_scan_state& state) {
     terrain_scan_state next = state;
     ++next.triangles_tested;
 
-    const std::size_t base = static_cast<std::size_t>(triangle_index) * 3U;
-    const terrain_vertex& a = mesh.vertices[mesh.indices[base]];
-    const terrain_vertex& b = mesh.vertices[mesh.indices[base + 1U]];
-    const terrain_vertex& c = mesh.vertices[mesh.indices[base + 2U]];
+    const terrain_vertex& a = triangle_vertex(mesh, triangle_index, 0U);
+    const terrain_vertex& b = triangle_vertex(mesh, triangle_index, 1U);
+    const terrain_vertex& c = triangle_vertex(mesh, triangle_index, 2U);
+    const int row = triangle_row(mesh, triangle_index);
+    const float section_distance = distance_xz_squared(query_point, triangle_section_center(mesh, triangle_index));
 
-    glm::vec3 barycentric(0.0f);
-    if (barycentric_xz(position, a.position, b.position, c.position, barycentric)) {
-        if (!collect_inside) {
+    const std::optional<glm::vec3> barycentric = barycentric_xz(position, a.position, b.position, c.position);
+    if (barycentric) {
+        if (pass == scan_pass::edge_only) {
             return next;
         }
-        const int section_index = triangle_section_index(mesh, triangle_index);
-        terrain_sample sample = sample_from_barycentric(mesh, triangle_index, barycentric, true);
-        sample.point.x = position.x;
-        sample.point.z = position.z;
         terrain_candidate candidate;
-        candidate.sample = sample;
-        candidate.section_index = section_index;
-        candidate.section_distance = distance_xz_squared(query_point, section_center_point(mesh, section_index));
-        candidate.height_distance = std::abs(sample.point.y - fallback_y);
-        if (!next.has_inside || is_better_inside_candidate(candidate, next.best_inside, preferred_section)) {
+        candidate.sample = sample_from_barycentric(mesh, triangle_index, *barycentric, true);
+        candidate.sample.point.x = position.x;
+        candidate.sample.point.z = position.z;
+        candidate.row = row;
+        candidate.section_distance = section_distance;
+        candidate.height_distance = std::abs(candidate.sample.point.y - fallback_y);
+        if (!next.has_inside || is_better_inside_candidate(candidate, next.best_inside, preferred_row)) {
             next.best_inside = candidate;
             next.has_inside = true;
         }
         return next;
     }
 
-    if (!collect_edge) {
+    if (pass == scan_pass::inside_only) {
         return next;
     }
 
-    const int section_index = triangle_section_index(mesh, triangle_index);
-    const float section_distance = distance_xz_squared(query_point, section_center_point(mesh, section_index));
     for (int edge = 0; edge < 3; ++edge) {
         const glm::vec3 edge_barycentric = closest_barycentric_on_edge(position, a.position, b.position, c.position, edge);
-        terrain_sample edge_sample = sample_from_barycentric(mesh, triangle_index, edge_barycentric, false);
-        const float distance = distance_squared(query_point, edge_sample.point);
-        edge_sample.distance_from_center += std::sqrt(distance);
         terrain_candidate candidate;
-        candidate.sample = edge_sample;
-        candidate.section_index = section_index;
+        candidate.sample = sample_from_barycentric(mesh, triangle_index, edge_barycentric, false);
+        candidate.edge_distance = distance_squared(query_point, candidate.sample.point);
+        candidate.sample.distance_from_center += std::sqrt(candidate.edge_distance);
+        candidate.row = row;
         candidate.section_distance = section_distance;
-        candidate.edge_distance = distance;
-        if (!next.has_edge || is_better_edge_candidate(candidate, next.best_edge, preferred_section)) {
+        if (!next.has_edge || is_better_edge_candidate(candidate, next.best_edge, preferred_row)) {
             next.best_edge = candidate;
             next.has_edge = true;
         }
@@ -827,21 +777,14 @@ terrain_scan_state scan_triangle(const terrain_mesh& mesh,
 }
 
 terrain_sample finish_terrain_scan(const terrain_scan_state& state, const glm::vec3& query_point) {
-    if (state.has_inside) {
-        terrain_sample sample = state.best_inside.sample;
-        sample.triangles_tested = state.triangles_tested;
-        return sample;
-    }
-    if (state.has_edge) {
-        terrain_sample sample = state.best_edge.sample;
-        sample.has_spline = true;
-        sample.inside_surface = false;
-        sample.material = terrain_material::rough;
-        sample.triangles_tested = state.triangles_tested;
-        return sample;
-    }
     terrain_sample sample;
-    sample.point = query_point;
+    if (state.has_inside) {
+        sample = state.best_inside.sample;
+    } else if (state.has_edge) {
+        sample = state.best_edge.sample;
+    } else {
+        sample.point = query_point;
+    }
     sample.triangles_tested = state.triangles_tested;
     return sample;
 }
@@ -850,29 +793,23 @@ terrain_sample finish_terrain_scan(const terrain_scan_state& state, const glm::v
 // search has not visited yet. Every triangle outside the visited cell block has
 // its padded bounding box outside that block, so its closest edge point cannot
 // be nearer than the closest unvisited part of the grid.
-float unvisited_lower_bound(const terrain_mesh_index& index,
-                            const int x0,
-                            const int x1,
-                            const int z0,
-                            const int z1,
-                            const float x,
-                            const float z) {
-    const float block_min_x = x0 <= 0 ? index.min_x : index.min_x + index.cell_size_x * static_cast<float>(x0);
-    const float block_max_x = x1 >= index.cells_x - 1 ? index.max_x : index.min_x + index.cell_size_x * static_cast<float>(x1 + 1);
-    const float block_min_z = z0 <= 0 ? index.min_z : index.min_z + index.cell_size_z * static_cast<float>(z0);
-    const float block_max_z = z1 >= index.cells_z - 1 ? index.max_z : index.min_z + index.cell_size_z * static_cast<float>(z1 + 1);
+float unvisited_lower_bound(const terrain_mesh_index& index, const cell_range& visited, const float x, const float z) {
+    const float block_min_x = visited.x0 <= 0 ? index.min_x : index.min_x + index.cell_size_x * static_cast<float>(visited.x0);
+    const float block_max_x = visited.x1 >= index.cells_x - 1 ? index.max_x : index.min_x + index.cell_size_x * static_cast<float>(visited.x1 + 1);
+    const float block_min_z = visited.z0 <= 0 ? index.min_z : index.min_z + index.cell_size_z * static_cast<float>(visited.z0);
+    const float block_max_z = visited.z1 >= index.cells_z - 1 ? index.max_z : index.min_z + index.cell_size_z * static_cast<float>(visited.z1 + 1);
 
     float best = std::numeric_limits<float>::max();
-    if (x0 > 0) {
+    if (visited.x0 > 0) {
         best = std::min(best, rect_distance_xz_squared(x, z, index.min_x, index.min_z, block_min_x, index.max_z));
     }
-    if (x1 < index.cells_x - 1) {
+    if (visited.x1 < index.cells_x - 1) {
         best = std::min(best, rect_distance_xz_squared(x, z, block_max_x, index.min_z, index.max_x, index.max_z));
     }
-    if (z0 > 0) {
+    if (visited.z0 > 0) {
         best = std::min(best, rect_distance_xz_squared(x, z, block_min_x, index.min_z, block_max_x, block_min_z));
     }
-    if (z1 < index.cells_z - 1) {
+    if (visited.z1 < index.cells_z - 1) {
         best = std::min(best, rect_distance_xz_squared(x, z, block_min_x, block_max_z, block_max_x, index.max_z));
     }
     return best;
@@ -880,34 +817,24 @@ float unvisited_lower_bound(const terrain_mesh_index& index,
 }
 
 glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, const float t) {
-    if (terrain.control_points.empty()) {
+    const std::vector<glm::vec3>& points = terrain.control_points;
+    if (points.empty()) {
         return glm::vec3(0.0f);
     }
-
-    if (terrain.control_points.size() == 1) {
-        return terrain.control_points.front();
+    if (points.size() == 1) {
+        return points.front();
     }
 
-    const float clamped_t = clamp01(t);
-    const float scaled = clamped_t * static_cast<float>(terrain.control_points.size() - 1);
-    const int segment = std::min(static_cast<int>(std::floor(scaled)),
-                                 static_cast<int>(terrain.control_points.size() - 2));
+    const int last = static_cast<int>(points.size()) - 1;
+    const float scaled = clamp01(t) * static_cast<float>(last);
+    const int segment = std::min(static_cast<int>(std::floor(scaled)), last - 1);
     const float local_t = scaled - static_cast<float>(segment);
-
-    const int p0 = std::max(segment - 1, 0);
-    const int p1 = segment;
-    const int p2 = segment + 1;
-    const int p3 = std::min(segment + 2, static_cast<int>(terrain.control_points.size() - 1));
-
-    return catmull_rom(terrain.control_points[p0],
-                       terrain.control_points[p1],
-                       terrain.control_points[p2],
-                       terrain.control_points[p3],
+    const auto point = [&points](const int i) { return points[static_cast<std::size_t>(i)]; };
+    return catmull_rom(point(std::max(segment - 1, 0)),
+                       point(segment),
+                       point(segment + 1),
+                       point(std::min(segment + 2, last)),
                        local_t);
-}
-
-terrain_mesh build_terrain_mesh(const terrain_spline& terrain) {
-    return build_terrain_mesh(terrain, {}, terrain_zone_tuning{});
 }
 
 terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
@@ -925,79 +852,32 @@ terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
 
     const terrain_section_layout layout = make_section_layout(terrain);
     mesh.section_count = layout.base_sections + layout.cap_sections * 2;
-    mesh.cross_section_count = 9;
+    mesh.cross_section_count = ribbon_cross_section_count;
     mesh.width = terrain.width;
-    mesh.vertices.reserve(static_cast<std::size_t>(mesh.section_count * mesh.cross_section_count));
-    mesh.indices.reserve(static_cast<std::size_t>((mesh.section_count - 1) * (mesh.cross_section_count - 1) * 6));
 
+    std::vector<terrain_vertex> vertices;
+    vertices.reserve(static_cast<std::size_t>(mesh.section_count * mesh.cross_section_count));
     for (int section = 0; section < mesh.section_count; ++section) {
         const terrain_section_frame frame = terrain_frame_at_section(terrain, layout, section);
-
         for (int column = 0; column < mesh.cross_section_count; ++column) {
             const float offset = cross_section_offset(column, mesh.cross_section_count, terrain.width);
             terrain_vertex vertex;
             vertex.position = frame.center + frame.lateral * offset;
             vertex.position.y += cross_section_height_offset(offset, terrain.width);
-            vertex.normal = glm::vec3(0.0f);
             vertex.distance_from_center = offset;
-            vertex.material = std::abs(offset) <= fairway_half_width
-                ? terrain_material::fairway
-                : terrain_material::rough;
+            vertex.material = std::abs(offset) <= fairway_half_width ? terrain_material::fairway : terrain_material::rough;
 
-            const zone_hit hit = query_zone_hit(vertex.position, zones);
-            if (hit.has_hit) {
-                vertex.material = hit.material;
-                if (hit.material == terrain_material::bunker && tuning.bunker_depth > 0.0f) {
-                    const float t = clamp01(hit.normalized_distance);
-                    const float bowl = -(1.0f - t * t) * tuning.bunker_depth;
-                    vertex.position.y += bowl;
-                } else if (hit.material == terrain_material::water && tuning.water_depth > 0.0f) {
-                    constexpr float edge_softness = 0.25f;
-                    const float t = clamp01(hit.normalized_distance);
-                    const float edge = smoothstep(1.0f - edge_softness, 1.0f, t);
-                    const float depth = -tuning.water_depth * (1.0f - edge);
-                    vertex.position.y += depth;
-                }
+            const std::optional<zone_hit> hit = query_zone_hit(vertex.position, zones);
+            if (hit) {
+                vertex.material = hit->material;
+                vertex.position.y += zone_height_offset(*hit, tuning);
             }
-            mesh.vertices.push_back(vertex);
+            vertices.push_back(vertex);
         }
     }
 
-    for (int section = 0; section < mesh.section_count - 1; ++section) {
-        for (int column = 0; column < mesh.cross_section_count - 1; ++column) {
-            const uint32_t a = static_cast<uint32_t>(section * mesh.cross_section_count + column);
-            const uint32_t b = static_cast<uint32_t>((section + 1) * mesh.cross_section_count + column);
-            const uint32_t c = static_cast<uint32_t>(section * mesh.cross_section_count + column + 1);
-            const uint32_t d = static_cast<uint32_t>((section + 1) * mesh.cross_section_count + column + 1);
-            mesh.indices.push_back(a);
-            mesh.indices.push_back(b);
-            mesh.indices.push_back(c);
-            mesh.indices.push_back(c);
-            mesh.indices.push_back(b);
-            mesh.indices.push_back(d);
-        }
-    }
-
-    for (std::size_t i = 0; i + 2U < mesh.indices.size(); i += 3U) {
-        const uint32_t ia = mesh.indices[i];
-        const uint32_t ib = mesh.indices[i + 1U];
-        const uint32_t ic = mesh.indices[i + 2U];
-        glm::vec3 normal = triangle_normal(mesh.vertices[ia].position, mesh.vertices[ib].position, mesh.vertices[ic].position);
-        if (normal.y < 0.0f) {
-            normal = -normal;
-        }
-        add_vertex_normal(mesh.vertices, ia, normal);
-        add_vertex_normal(mesh.vertices, ib, normal);
-        add_vertex_normal(mesh.vertices, ic, normal);
-    }
-
-    for (terrain_vertex& vertex : mesh.vertices) {
-        vertex.normal = safe_normalize(vertex.normal, glm::vec3(0.0f, 1.0f, 0.0f));
-        if (vertex.normal.y < 0.0f) {
-            vertex.normal = -vertex.normal;
-        }
-    }
-
+    mesh.indices = grid_triangle_indices(mesh.section_count, mesh.cross_section_count, 0U);
+    mesh.vertices = with_smooth_normals(std::move(vertices), mesh.indices);
     mesh.spatial_index = make_terrain_mesh_index(mesh);
     return mesh;
 }
@@ -1009,181 +889,105 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& source_mesh,
     if (source_mesh.vertices.empty() || source_mesh.indices.size() < 3U || zones.empty()) {
         return mesh;
     }
-
     mesh.width = source_mesh.width;
 
-    const auto append_sampled_vertex = [&](const glm::vec3& authored_position,
-                                           const terrain_material material) {
+    const auto draped_vertex = [&source_mesh, lift](const glm::vec3& authored_position, const terrain_material material) {
         const terrain_sample sample = sample_terrain_anchor(source_mesh, authored_position, authored_position.y);
         terrain_vertex vertex;
         vertex.position = sample.point + glm::vec3(0.0f, lift, 0.0f);
         vertex.normal = sample.normal;
         vertex.distance_from_center = sample.distance_from_center;
         vertex.material = material;
-        mesh.vertices.push_back(vertex);
-        return static_cast<uint32_t>(mesh.vertices.size() - 1U);
+        return vertex;
     };
 
-    constexpr int radius_segments = 32;
-    constexpr int bounds_resolution = 6;
-
     for (const material_zone& zone : zones) {
-        if (zone.type == material_zone_type::unknown) {
+        const std::optional<terrain_material> material = material_from_zone(zone.type);
+        if (!material) {
             continue;
         }
 
-        const terrain_material material = material_from_zone(zone.type);
+        const std::uint32_t first = static_cast<std::uint32_t>(mesh.vertices.size());
         if (zone.has_radius && zone.radius > 0.00001f) {
-            const uint32_t center_index = append_sampled_vertex(zone.center, material);
-            uint32_t previous_edge = 0U;
-            uint32_t first_edge = 0U;
-
-            for (int i = 0; i < radius_segments; ++i) {
-                const float angle = 2.0f * 3.14159265358979323846f *
-                    static_cast<float>(i) / static_cast<float>(radius_segments);
-                const glm::vec3 edge(zone.center.x + std::cos(angle) * zone.radius,
-                                     zone.center.y,
-                                     zone.center.z + std::sin(angle) * zone.radius);
-                const uint32_t edge_index = append_sampled_vertex(edge, material);
-                if (i == 0) {
-                    first_edge = edge_index;
-                } else {
-                    mesh.indices.push_back(center_index);
-                    mesh.indices.push_back(previous_edge);
-                    mesh.indices.push_back(edge_index);
-                }
-                previous_edge = edge_index;
+            // A fan: centre vertex, then the rim.
+            mesh.vertices.push_back(draped_vertex(zone.center, *material));
+            for (int i = 0; i < overlay_circle_segments; ++i) {
+                const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(overlay_circle_segments);
+                const glm::vec3 rim(zone.center.x + std::cos(angle) * zone.radius,
+                                    zone.center.y,
+                                    zone.center.z + std::sin(angle) * zone.radius);
+                mesh.vertices.push_back(draped_vertex(rim, *material));
             }
-
-            mesh.indices.push_back(center_index);
-            mesh.indices.push_back(previous_edge);
-            mesh.indices.push_back(first_edge);
+            for (int i = 0; i < overlay_circle_segments; ++i) {
+                const std::uint32_t rim_a = first + 1U + static_cast<std::uint32_t>(i);
+                const std::uint32_t rim_b = first + 1U + static_cast<std::uint32_t>((i + 1) % overlay_circle_segments);
+                mesh.indices.insert(mesh.indices.end(), {first, rim_a, rim_b});
+            }
             continue;
         }
 
         if (zone.has_bounds) {
-            const glm::vec3 min_point(glm::min(zone.bounds_min, zone.bounds_max));
-            const glm::vec3 max_point(glm::max(zone.bounds_min, zone.bounds_max));
-            const std::uint32_t offset = static_cast<std::uint32_t>(mesh.vertices.size());
-
-            for (int row = 0; row < bounds_resolution; ++row) {
-                const float v = static_cast<float>(row) / static_cast<float>(bounds_resolution - 1);
-                const float z = min_point.z + (max_point.z - min_point.z) * v;
-                for (int column = 0; column < bounds_resolution; ++column) {
-                    const float u = static_cast<float>(column) / static_cast<float>(bounds_resolution - 1);
-                    const float x = min_point.x + (max_point.x - min_point.x) * u;
-                    const float y = min_point.y + (max_point.y - min_point.y) * ((u + v) * 0.5f);
-                    append_sampled_vertex(glm::vec3(x, y, z), material);
+            const glm::vec3 low = glm::min(zone.bounds_min, zone.bounds_max);
+            const glm::vec3 high = glm::max(zone.bounds_min, zone.bounds_max);
+            constexpr int n = overlay_bounds_resolution;
+            for (int row = 0; row < n; ++row) {
+                const float v = static_cast<float>(row) / static_cast<float>(n - 1);
+                for (int column = 0; column < n; ++column) {
+                    const float u = static_cast<float>(column) / static_cast<float>(n - 1);
+                    const glm::vec3 point(low.x + (high.x - low.x) * u,
+                                          low.y + (high.y - low.y) * ((u + v) * 0.5f),
+                                          low.z + (high.z - low.z) * v);
+                    mesh.vertices.push_back(draped_vertex(point, *material));
                 }
             }
-
-            for (int row = 0; row < bounds_resolution - 1; ++row) {
-                for (int column = 0; column < bounds_resolution - 1; ++column) {
-                    const uint32_t a = offset + static_cast<uint32_t>(row * bounds_resolution + column);
-                    const uint32_t b = offset + static_cast<uint32_t>((row + 1) * bounds_resolution + column);
-                    const uint32_t c = offset + static_cast<uint32_t>(row * bounds_resolution + column + 1);
-                    const uint32_t d = offset + static_cast<uint32_t>((row + 1) * bounds_resolution + column + 1);
-                    mesh.indices.push_back(a);
-                    mesh.indices.push_back(b);
-                    mesh.indices.push_back(c);
-                    mesh.indices.push_back(c);
-                    mesh.indices.push_back(b);
-                    mesh.indices.push_back(d);
-                }
-            }
+            const std::vector<std::uint32_t> grid = grid_triangle_indices(n, n, first);
+            mesh.indices.insert(mesh.indices.end(), grid.begin(), grid.end());
         }
     }
 
-    mesh.section_count = 1;
-    mesh.cross_section_count = 0;
     mesh.spatial_index = make_terrain_mesh_index(mesh);
     return mesh;
 }
 
-terrain_mesh build_outer_rough_apron(const terrain_mesh& source_mesh,
-                                     const float margin,
-                                     const int grid_resolution) {
+terrain_mesh build_outer_rough_apron(const terrain_mesh& source_mesh, const float margin, const int grid_resolution) {
     terrain_mesh apron;
     if (source_mesh.vertices.empty() || source_mesh.indices.size() < 3U) {
         return apron;
     }
 
-    glm::vec3 min_point(std::numeric_limits<float>::max());
-    glm::vec3 max_point(std::numeric_limits<float>::lowest());
+    glm::vec3 low(std::numeric_limits<float>::max());
+    glm::vec3 high(std::numeric_limits<float>::lowest());
     for (const terrain_vertex& vertex : source_mesh.vertices) {
-        min_point.x = std::min(min_point.x, vertex.position.x);
-        min_point.z = std::min(min_point.z, vertex.position.z);
-        max_point.x = std::max(max_point.x, vertex.position.x);
-        max_point.z = std::max(max_point.z, vertex.position.z);
+        low = glm::min(low, vertex.position);
+        high = glm::max(high, vertex.position);
     }
 
     const int resolution = std::max(2, grid_resolution);
     const float apron_margin = std::max(1.0f, margin);
-    min_point.x -= apron_margin;
-    min_point.z -= apron_margin;
-    max_point.x += apron_margin;
-    max_point.z += apron_margin;
+    low -= glm::vec3(apron_margin, 0.0f, apron_margin);
+    high += glm::vec3(apron_margin, 0.0f, apron_margin);
 
     apron.section_count = resolution;
     apron.cross_section_count = resolution;
-    apron.width = std::max(max_point.x - min_point.x, max_point.z - min_point.z);
-    apron.vertices.reserve(static_cast<std::size_t>(resolution * resolution));
-    apron.indices.reserve(static_cast<std::size_t>((resolution - 1) * (resolution - 1) * 6));
+    apron.width = std::max(high.x - low.x, high.z - low.z);
 
-    constexpr float overlap_lowering = 0.12f;
+    std::vector<terrain_vertex> vertices;
+    vertices.reserve(static_cast<std::size_t>(resolution * resolution));
     for (int row = 0; row < resolution; ++row) {
-        const float v = static_cast<float>(row) / static_cast<float>(resolution - 1);
-        const float z = min_point.z + (max_point.z - min_point.z) * v;
+        const float z = low.z + (high.z - low.z) * static_cast<float>(row) / static_cast<float>(resolution - 1);
         for (int column = 0; column < resolution; ++column) {
-            const float u = static_cast<float>(column) / static_cast<float>(resolution - 1);
-            const float x = min_point.x + (max_point.x - min_point.x) * u;
-            const glm::vec3 query(x, 0.0f, z);
-            terrain_sample sample = sample_terrain_anchor(source_mesh, query, 0.0f);
-
+            const float x = low.x + (high.x - low.x) * static_cast<float>(column) / static_cast<float>(resolution - 1);
+            const terrain_sample sample = sample_terrain_anchor(source_mesh, glm::vec3(x, 0.0f, z), 0.0f);
             terrain_vertex vertex;
-            vertex.position = glm::vec3(x, sample.point.y - overlap_lowering, z);
-            vertex.normal = glm::vec3(0.0f);
+            vertex.position = glm::vec3(x, sample.point.y - apron_overlap_lowering, z);
             vertex.distance_from_center = source_mesh.width * 0.5f;
             vertex.material = terrain_material::rough;
-            apron.vertices.push_back(vertex);
+            vertices.push_back(vertex);
         }
     }
 
-    for (int row = 0; row < resolution - 1; ++row) {
-        for (int column = 0; column < resolution - 1; ++column) {
-            const uint32_t a = static_cast<uint32_t>(row * resolution + column);
-            const uint32_t b = static_cast<uint32_t>((row + 1) * resolution + column);
-            const uint32_t c = static_cast<uint32_t>(row * resolution + column + 1);
-            const uint32_t d = static_cast<uint32_t>((row + 1) * resolution + column + 1);
-            apron.indices.push_back(a);
-            apron.indices.push_back(b);
-            apron.indices.push_back(c);
-            apron.indices.push_back(c);
-            apron.indices.push_back(b);
-            apron.indices.push_back(d);
-        }
-    }
-
-    for (std::size_t i = 0; i + 2U < apron.indices.size(); i += 3U) {
-        const uint32_t ia = apron.indices[i];
-        const uint32_t ib = apron.indices[i + 1U];
-        const uint32_t ic = apron.indices[i + 2U];
-        glm::vec3 normal = triangle_normal(apron.vertices[ia].position, apron.vertices[ib].position, apron.vertices[ic].position);
-        if (normal.y < 0.0f) {
-            normal = -normal;
-        }
-        add_vertex_normal(apron.vertices, ia, normal);
-        add_vertex_normal(apron.vertices, ib, normal);
-        add_vertex_normal(apron.vertices, ic, normal);
-    }
-
-    for (terrain_vertex& vertex : apron.vertices) {
-        vertex.normal = safe_normalize(vertex.normal, glm::vec3(0.0f, 1.0f, 0.0f));
-        if (vertex.normal.y < 0.0f) {
-            vertex.normal = -vertex.normal;
-        }
-    }
-
+    apron.indices = grid_triangle_indices(resolution, resolution, 0U);
+    apron.vertices = with_smooth_normals(std::move(vertices), apron.indices);
     apron.spatial_index = make_terrain_mesh_index(apron);
     return apron;
 }
@@ -1193,14 +997,10 @@ terrain_mesh build_terrain_mesh_index(terrain_mesh mesh) {
     return mesh;
 }
 
-terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& position, const float fallback_y) {
-    return sample_terrain_mesh(mesh, position, fallback_y, nullptr);
-}
-
 terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
-                                  const glm::vec3& position,
-                                  const float fallback_y,
-                                  const terrain_sample* previous_sample) {
+                                   const glm::vec3& position,
+                                   const float fallback_y,
+                                   const terrain_sample* previous_sample) {
     if (mesh.vertices.empty() || mesh.indices.size() < 3U) {
         terrain_sample sample;
         sample.point = glm::vec3(position.x, fallback_y, position.z);
@@ -1209,121 +1009,94 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
 
     const int triangle_count = static_cast<int>(mesh.indices.size() / 3U);
     const glm::vec3 query_point(position.x, fallback_y, position.z);
-    const int preferred_section = previous_sample && previous_sample->triangle_index >= 0
-        ? triangle_section_index(mesh, previous_sample->triangle_index)
+    const int preferred_row = previous_sample != nullptr && previous_sample->triangle_index >= 0
+        ? triangle_row(mesh, previous_sample->triangle_index)
         : -1;
+    const auto scan = [&](const int triangle, const scan_pass pass, const terrain_scan_state& state) {
+        return scan_triangle(mesh, position, query_point, fallback_y, preferred_row, triangle, pass, state);
+    };
 
     const terrain_mesh_index& index = mesh.spatial_index;
-
-    // Fallback: no index, or an index that no longer describes this mesh.
-    // Exactly the original full scan.
     if (!terrain_index_matches(mesh, index)) {
         terrain_scan_state state;
-        state.best_edge.sample.point = query_point;
         for (int triangle = 0; triangle < triangle_count; ++triangle) {
-            state = scan_triangle(mesh, position, query_point, fallback_y, preferred_section,
-                                  triangle, true, true, state);
+            state = scan(triangle, scan_pass::both, state);
         }
         return finish_terrain_scan(state, query_point);
     }
 
-    // Pass 1 — containing triangles.
-    // A triangle can only contain the query in XZ if its padded bounding box
-    // contains it, so every candidate the full scan would find lives in the
-    // single cell the query falls into. Cell lists are stored in ascending
-    // triangle order, so the winner is bit-identical to the full scan's.
+    // Pass 1: containing triangles. A triangle can only contain the query if
+    // its padded box does, so every candidate lives in the query's cell. Cell
+    // lists are in ascending triangle order, so the winner matches the full scan.
     terrain_scan_state state;
-    state.best_edge.sample.point = query_point;
     const int cell_x = index_cell_coord(position.x, index.min_x, index.cell_size_x, index.cells_x);
     const int cell_z = index_cell_coord(position.z, index.min_z, index.cell_size_z, index.cells_z);
-    const std::size_t cell = static_cast<std::size_t>(cell_z) * static_cast<std::size_t>(index.cells_x)
-        + static_cast<std::size_t>(cell_x);
-    for (uint32_t slot = index.cell_starts[cell]; slot < index.cell_starts[cell + 1U]; ++slot) {
-        state = scan_triangle(mesh, position, query_point, fallback_y, preferred_section,
-                              static_cast<int>(index.cell_triangles[slot]), true, false, state);
+    const std::size_t cell = cell_slot(index, cell_x, cell_z);
+    for (std::uint32_t slot = index.cell_starts[cell]; slot < index.cell_starts[cell + 1U]; ++slot) {
+        state = scan(static_cast<int>(index.cell_triangles[slot]), scan_pass::inside_only, state);
     }
     if (state.has_inside) {
         return finish_terrain_scan(state, query_point);
     }
 
-    // Pass 2 — no triangle contains the query, so fall back to the nearest
-    // triangle edge. This is the only place the original scan looked at
-    // faraway geometry.
-    const bool has_real_sections = mesh.section_count > 0 && mesh.cross_section_count >= 2;
-    if (preferred_section >= 0 && has_real_sections) {
-        // is_better_edge_candidate ranks any candidate from the previous
-        // sample's section above every other candidate, and with no containing
-        // triangle every triangle in that section produces edge candidates.
-        // So the full scan's winner is decided entirely inside that section's
-        // contiguous triangle range.
-        const int per_section = (mesh.cross_section_count - 1) * 2;
-        const int first = per_section > 0 ? preferred_section * per_section : triangle_count;
-        if (first < triangle_count) {
-            const int last = preferred_section >= mesh.section_count - 1
-                ? triangle_count
-                : std::min(first + per_section, triangle_count);
-            for (int triangle = first; triangle < last; ++triangle) {
-                state = scan_triangle(mesh, position, query_point, fallback_y, preferred_section,
-                                      triangle, false, true, state);
-            }
-            if (state.has_edge) {
-                return finish_terrain_scan(state, query_point);
-            }
+    // Pass 2: off the surface, so the nearest edge wins. Candidates on the
+    // previous sample's row outrank all others, so when that row has
+    // triangles the winner is among them.
+    const int triangles_per_row = (mesh.cross_section_count - 1) * 2;
+    if (preferred_row >= 0 && mesh.section_count > 0 && triangles_per_row > 0) {
+        const int first = preferred_row * triangles_per_row;
+        const int last = std::min(first + triangles_per_row, triangle_count);
+        for (int triangle = first; triangle < last; ++triangle) {
+            state = scan(triangle, scan_pass::edge_only, state);
+        }
+        if (state.has_edge) {
+            return finish_terrain_scan(state, query_point);
         }
     }
 
     // Expanding-ring search over the grid. Stops once nothing unvisited can be
-    // closer than the best edge distance found so far, so the gathered set is a
+    // closer than the best edge distance so far; the gathered set is a
     // superset of every triangle that could win.
-    std::vector<uint32_t> candidates;
+    std::vector<std::uint32_t> candidates;
     float best_distance = std::numeric_limits<float>::max();
     const int max_radius = std::max(index.cells_x, index.cells_z);
     for (int radius = 0; radius <= max_radius; ++radius) {
-        const int x0 = std::max(0, cell_x - radius);
-        const int x1 = std::min(index.cells_x - 1, cell_x + radius);
-        const int z0 = std::max(0, cell_z - radius);
-        const int z1 = std::min(index.cells_z - 1, cell_z + radius);
-        for (int cz = z0; cz <= z1; ++cz) {
+        cell_range ring;
+        ring.x0 = std::max(0, cell_x - radius);
+        ring.x1 = std::min(index.cells_x - 1, cell_x + radius);
+        ring.z0 = std::max(0, cell_z - radius);
+        ring.z1 = std::min(index.cells_z - 1, cell_z + radius);
+        for (int cz = ring.z0; cz <= ring.z1; ++cz) {
             const bool interior_row = cz > cell_z - radius && cz < cell_z + radius;
-            for (int cx = x0; cx <= x1; ++cx) {
+            for (int cx = ring.x0; cx <= ring.x1; ++cx) {
                 if (radius > 0 && interior_row && cx > cell_x - radius && cx < cell_x + radius) {
                     continue;
                 }
-                const std::size_t ring_cell = static_cast<std::size_t>(cz) * static_cast<std::size_t>(index.cells_x)
-                    + static_cast<std::size_t>(cx);
-                for (uint32_t slot = index.cell_starts[ring_cell]; slot < index.cell_starts[ring_cell + 1U]; ++slot) {
-                    const uint32_t triangle = index.cell_triangles[slot];
+                const std::size_t ring_cell = cell_slot(index, cx, cz);
+                for (std::uint32_t slot = index.cell_starts[ring_cell]; slot < index.cell_starts[ring_cell + 1U]; ++slot) {
+                    const std::uint32_t triangle = index.cell_triangles[slot];
                     candidates.push_back(triangle);
                     best_distance = std::min(best_distance,
-                                             triangle_edge_distance_squared(mesh, static_cast<int>(triangle),
-                                                                            position, query_point));
+                                             triangle_edge_distance_squared(mesh, static_cast<int>(triangle), position, query_point));
                 }
             }
         }
 
-        if (x0 == 0 && z0 == 0 && x1 == index.cells_x - 1 && z1 == index.cells_z - 1) {
+        if (ring.x0 == 0 && ring.z0 == 0 && ring.x1 == index.cells_x - 1 && ring.z1 == index.cells_z - 1) {
             break;
         }
-        const float lower_bound = unvisited_lower_bound(index, x0, x1, z0, z1, position.x, position.z);
-        if (lower_bound > best_distance + index_prune_slack) {
+        if (unvisited_lower_bound(index, ring, position.x, position.z) > best_distance + index_prune_slack) {
             break;
         }
     }
 
-    // Replay the gathered triangles in ascending order, exactly the relative
-    // order the full scan visited them in.
+    // Replay in ascending order, the order the full scan visits them in.
     std::sort(candidates.begin(), candidates.end());
     candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
-    for (const uint32_t triangle : candidates) {
-        state = scan_triangle(mesh, position, query_point, fallback_y, preferred_section,
-                              static_cast<int>(triangle), false, true, state);
+    for (const std::uint32_t triangle : candidates) {
+        state = scan(static_cast<int>(triangle), scan_pass::edge_only, state);
     }
     return finish_terrain_scan(state, query_point);
-}
-
-terrain_sample sample_terrain(const terrain_spline& terrain, const glm::vec3& position, const float fallback_y) {
-    const terrain_mesh mesh = build_terrain_mesh(terrain);
-    return sample_terrain_mesh(mesh, position, fallback_y);
 }
 
 terrain_sample sample_terrain_anchor(const terrain_mesh& mesh, const glm::vec3& position, const float fallback_y) {
