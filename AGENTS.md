@@ -8,6 +8,11 @@ anything you touch before changing it.
 For ANY directory-specific command, write the full directory. The repo root is
 `C:\Users\arand\Desktop\AU\sjov\golfplusplus`.
 
+**Source control: work directly on `main`, in the working tree.** Never create,
+switch or merge branches, and never `git add`, commit, push or stash. The owner
+works alone, tests before pushing, and does all source control. Read-only git
+commands (`status`, `diff`, `log`) are fine.
+
 ---
 
 ## What this is
