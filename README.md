@@ -4,7 +4,7 @@ A lo-fi 3D golf game in C++ that looks like it was taped on a 1989 camcorder.
 Play real-world courses imported from OpenStreetMap, walk or drive between
 holes, and level up skills like golfing, fitness, drifting and smoking.
 
-![golf++](docs/imgs/06_big_progress.png)
+![golf++](docs/imgs/07_vibes.png)
 
 ## Build
 
