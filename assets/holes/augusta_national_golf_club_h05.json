@@ -804,6 +804,7 @@
       -82.0274319
     ],
     "centerline": "hole_way",
-    "elevation": "ned10m"
+    "elevation": "ned10m",
+    "tee_elevation": 72.98
   }
 }

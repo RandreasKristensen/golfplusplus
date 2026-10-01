@@ -223,6 +223,24 @@ class OsmGolfConvertTests(unittest.TestCase):
 
         self.assertEqual(["cart_way_6"], [route["id"] for route in world["cart_roads"]])
 
+    def test_course_world_places_hole_starts_at_tee_heights_relative_to_hole_one(self):
+        holes = conv.group_holes([
+            way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.001, 10.0)]),
+            way(2, {"golf": "hole", "ref": "2"}, [(56.001, 10.001), (56.002, 10.001)]),
+            way(3, {"golf": "hole", "ref": "3"}, [(56.002, 10.002), (56.003, 10.002)]),
+        ])
+
+        world = conv.course_world_to_json("test_course",
+                                          "Test Course",
+                                          way(9, {"leisure": "golf_course"}, [(56.0, 10.0), (56.003, 10.003)]),
+                                          holes,
+                                          [],
+                                          56.0,
+                                          10.0,
+                                          tee_elevations={1: 40.0, 2: 52.5, 3: None})
+
+        self.assertEqual([0.0, 12.5, 0.0], [start["position"][1] for start in world["hole_starts"]])
+
     def test_course_world_filters_long_outlying_osm_paths(self):
         origin_lat = 56.0
         origin_lon = 10.0
@@ -359,8 +377,10 @@ class CenterlineTests(unittest.TestCase):
 
 class ElevationTests(unittest.TestCase):
     def test_relative_profile_puts_the_tee_at_zero(self):
-        profile = elev.relative_profile([42.0, 45.0, 48.0], [0.0, 100.0, 200.0])
+        absolute = elev.cleaned_profile([42.0, 45.0, 48.0], [0.0, 100.0, 200.0])
+        profile = elev.relative_profile(absolute)
 
+        self.assertGreater(absolute[0], 40.0)
         self.assertEqual(0.0, profile[0])
         self.assertGreater(profile[-1], 0.0)
 

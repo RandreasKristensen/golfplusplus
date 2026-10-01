@@ -527,7 +527,7 @@ TEST_CASE("outer rough apron samples terrain elevation instead of flat ground") 
     terrain.sample_count = 20;
 
     const terrain_mesh mesh = plain_terrain_mesh(terrain);
-    const terrain_mesh apron = build_outer_rough_apron(mesh, terrain.width, 8);
+    const terrain_mesh apron = build_outer_rough_apron(mesh, terrain.width, 4.0f, terrain_zone_tuning{});
 
     bool found_below_zero = false;
     for (const terrain_vertex& vertex : apron.vertices) {
@@ -726,7 +726,7 @@ TEST_CASE("terrain spatial index is built by the mesh builders") {
           == static_cast<std::size_t>(mesh.spatial_index.cells_x) * static_cast<std::size_t>(mesh.spatial_index.cells_z) + 1U);
     CHECK(mesh.spatial_index.cell_triangles.size() >= mesh.indices.size() / 3U);
 
-    const terrain_mesh apron = build_outer_rough_apron(mesh, 12.0f, 10);
+    const terrain_mesh apron = build_outer_rough_apron(mesh, 12.0f, 8.0f, terrain_zone_tuning{});
     CHECK(apron.spatial_index.cells_x > 0);
     CHECK(apron.spatial_index.triangle_count == static_cast<uint32_t>(apron.indices.size() / 3U));
 
@@ -868,7 +868,7 @@ TEST_CASE("indexed terrain sampling matches the full scan on mesh edges and beyo
 
 TEST_CASE("indexed terrain sampling matches the full scan on the apron mesh") {
     const terrain_mesh mesh = index_test_mesh();
-    const terrain_mesh apron = build_outer_rough_apron(mesh, 12.0f, 10);
+    const terrain_mesh apron = build_outer_rough_apron(mesh, 12.0f, 8.0f, terrain_zone_tuning{});
     const terrain_mesh reference_apron = without_spatial_index(apron);
     CHECK(apron.indices.size() >= 3U);
     if (apron.indices.size() < 3U) {

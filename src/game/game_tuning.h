@@ -21,7 +21,7 @@ struct world_scale_tuning {
 
 struct terrain_build_tuning {
     int min_sections = 0;           // terrain_spline::sample_count
-    int apron_grid_resolution = 0;  // vertices per side of the rough apron grid
+    float apron_cell_size = 0.0f;   // spacing of the rough apron grid
     terrain_zone_tuning zones;      // bunker and water carve depths
     float material_overlay_lift = 0.0f;
 };

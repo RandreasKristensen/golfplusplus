@@ -263,19 +263,24 @@ def limit_slope(values: list[float], distances: list[float], max_grade: float) -
     return out
 
 
-def relative_profile(values: list[float | None],
-                     distances: list[float],
-                     max_grade: float = 0.25,
-                     smooth_window: int = 3) -> list[float]:
+def cleaned_profile(values: list[float | None],
+                    distances: list[float],
+                    max_grade: float = 0.25,
+                    smooth_window: int = 3) -> list[float]:
     """
-    Turn raw DEM samples into game-space heights: gap-filled, smoothed,
-    slope-limited, and shifted so the first point (the tee) sits at y = 0.
+    Raw DEM samples gap-filled, smoothed and slope-limited, still in absolute
+    DEM metres. The first entry is the tee's height above sea level, which the
+    course world uses to place holes relative to each other.
     """
     filled = fill_gaps(values)
     smoothed = smooth(filled, smooth_window)
-    limited = limit_slope(smoothed, distances, max_grade)
-    base = limited[0] if limited else 0.0
-    return [round(v - base, 2) for v in limited]
+    return limit_slope(smoothed, distances, max_grade)
+
+
+def relative_profile(profile: list[float]) -> list[float]:
+    """A cleaned profile shifted so the first point (the tee) sits at y = 0."""
+    base = profile[0] if profile else 0.0
+    return [round(v - base, 2) for v in profile]
 
 
 def polyline_distances(points: list[tuple[float, float]]) -> list[float]:

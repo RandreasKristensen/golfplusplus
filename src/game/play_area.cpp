@@ -84,24 +84,37 @@ play_area with_bounds(play_area area) {
     return area;
 }
 
+// Full ribbon width (fairway + rough); also how far the apron reaches past it.
+float ribbon_width(const hole_data& hole) {
+    return std::max(hole.spline.width, hole.spline.rough_width);
+}
+
+terrain_mesh build_apron(const terrain_mesh& terrain, const float margin, const game_tuning& tuning) {
+    return build_outer_rough_apron(terrain, margin, tuning.terrain.apron_cell_size, tuning.terrain.zones);
+}
+
+// The hole's ribbon and zone overlay, in hole space.
 struct hole_meshes {
     terrain_mesh terrain;
-    terrain_mesh apron;
     terrain_mesh overlay;
 };
 
 hole_meshes build_hole_meshes(const hole_data& hole, const game_tuning& tuning) {
     terrain_spline spline;
     spline.control_points = hole.spline.control_points;
-    spline.width = std::max(hole.spline.width, hole.spline.rough_width);
+    spline.width = ribbon_width(hole);
     spline.fairway_width = hole.spline.width;
     spline.sample_count = tuning.terrain.min_sections;
 
     hole_meshes meshes;
     meshes.terrain = build_terrain_mesh(spline, hole.material_zones, tuning.terrain.zones);
-    meshes.apron = build_outer_rough_apron(meshes.terrain, spline.width, tuning.terrain.apron_grid_resolution);
     meshes.overlay = build_material_overlay_mesh(meshes.terrain, hole.material_zones, tuning.terrain.material_overlay_lift);
     return meshes;
+}
+
+hole_meshes place_hole_meshes(const hole_data& hole, const course_world_hole_start& start, const game_tuning& tuning) {
+    const hole_meshes meshes = build_hole_meshes(hole, tuning);
+    return hole_meshes{place_mesh(meshes.terrain, hole, start), place_mesh(meshes.overlay, hole, start)};
 }
 }
 
@@ -132,20 +145,20 @@ play_area build_hole_area(const hole_data& hole, const game_tuning& tuning) {
     area.ground_y = hole.tee_position.y;
     area.trees = hole.trees;
     area.terrain = meshes.terrain;
-    area.apron = meshes.apron;
+    area.apron = build_apron(area.terrain, ribbon_width(hole), tuning);
     area.material_overlay = meshes.overlay;
     return with_bounds(std::move(area));
 }
 
 play_area build_placed_hole_area(const hole_data& hole, const course_world_hole_start& start, const game_tuning& tuning) {
-    const hole_meshes meshes = build_hole_meshes(hole, tuning);
+    hole_meshes meshes = place_hole_meshes(hole, start, tuning);
     play_area area;
     area.wind_seed = hole.wind_seed;
     area.ground_y = place_hole_point(hole, start, hole.tee_position).y;
     area.trees = place_hole(hole, start).trees;
-    area.terrain = place_mesh(meshes.terrain, hole, start);
-    area.apron = place_mesh(meshes.apron, hole, start);
-    area.material_overlay = place_mesh(meshes.overlay, hole, start);
+    area.terrain = std::move(meshes.terrain);
+    area.apron = build_apron(area.terrain, ribbon_width(hole), tuning);
+    area.material_overlay = std::move(meshes.overlay);
     return with_bounds(std::move(area));
 }
 
@@ -153,16 +166,20 @@ play_area build_hub_area(const std::vector<hole_data>& holes,
                          const course_world_definition& world,
                          const game_tuning& tuning) {
     play_area hub;
+    float apron_margin = 0.0f;
     for (std::size_t i = 0; i < holes.size() && i < world.hole_starts.size(); ++i) {
-        const play_area hole = build_placed_hole_area(holes[i], world.hole_starts[i], tuning);
+        const hole_meshes hole = place_hole_meshes(holes[i], world.hole_starts[i], tuning);
+        const std::vector<tree_instance> trees = place_hole(holes[i], world.hole_starts[i]).trees;
         hub.terrain = append_mesh(std::move(hub.terrain), hole.terrain);
-        hub.apron = append_mesh(std::move(hub.apron), hole.apron);
-        hub.material_overlay = append_mesh(std::move(hub.material_overlay), hole.material_overlay);
-        hub.trees.insert(hub.trees.end(), hole.trees.begin(), hole.trees.end());
+        hub.material_overlay = append_mesh(std::move(hub.material_overlay), hole.overlay);
+        hub.trees.insert(hub.trees.end(), trees.begin(), trees.end());
+        apron_margin = std::max(apron_margin, ribbon_width(holes[i]));
     }
     hub.terrain = build_terrain_mesh_index(std::move(hub.terrain));
-    hub.apron = build_terrain_mesh_index(std::move(hub.apron));
     hub.material_overlay = build_terrain_mesh_index(std::move(hub.material_overlay));
+    // One apron over every hole: a per-hole apron would follow only its own
+    // hole's heights and float over (or sink under) its neighbours.
+    hub.apron = build_apron(hub.terrain, apron_margin, tuning);
     return with_bounds(std::move(hub));
 }
 

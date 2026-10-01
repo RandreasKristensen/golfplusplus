@@ -11,7 +11,8 @@
 #include <glm/vec3.hpp>
 
 // Where a hole begins. The hole is placed so its tee lands on `position`,
-// rotated by `rotation_degrees` around the tee.
+// rotated by `rotation_degrees` around the tee. Holes are tee-relative, so
+// `position.y` is what lines their heights up with each other in the hub.
 struct course_world_hole_start {
     int hole_index = -1;
     glm::vec3 position{0.0f};

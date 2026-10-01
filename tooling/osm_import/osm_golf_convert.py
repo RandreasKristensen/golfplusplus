@@ -1790,6 +1790,7 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
     # heights off that mesh, so baking y anywhere else would be ignored.
     ctrl_y = [0.0] * len(ctrl_xz)
     pin_y = 0.0
+    tee_elevation = None
     if elevation is not None:
         elevation_config = (config or DEFAULT_CONFIG).get("elevation", {})
         samples = elevation.elevations(
@@ -1797,10 +1798,12 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
             [_xz_to_latlon(pin_x, pin_z, origin_lat, origin_lon)])
         distances = osm_elevation.polyline_distances(ctrl_xz)
         pin_distance = distances[-1] + math.hypot(pin_x - ctrl_xz[-1][0], pin_z - ctrl_xz[-1][1])
-        profile = osm_elevation.relative_profile(
+        absolute = osm_elevation.cleaned_profile(
             samples, distances + [pin_distance],
             max_grade=float(elevation_config.get("max_grade", 0.25)),
             smooth_window=int(elevation_config.get("smooth_window", 3)))
+        tee_elevation = round(absolute[0], 2)
+        profile = osm_elevation.relative_profile(absolute)
         ctrl_y, pin_y = profile[:-1], profile[-1]
 
     # Control points relative to this hole's tee (which is [0,0,0])
@@ -1899,7 +1902,11 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
             "tee_latlon": [round(c, 7) for c in _xz_to_latlon(tee_x, tee_z, origin_lat, origin_lon)],
             "pin_latlon": [round(c, 7) for c in _xz_to_latlon(pin_x, pin_z, origin_lat, origin_lon)],
             "centerline": ctrl_source,
-            "elevation": elevation.dataset if elevation is not None else None
+            "elevation": elevation.dataset if elevation is not None else None,
+            # The tee's DEM height above sea level. The hole itself is
+            # tee-relative; the course world places hole starts at these
+            # heights so the holes line up with each other in the hub.
+            "tee_elevation": tee_elevation
         }
     }
 
@@ -2279,7 +2286,14 @@ def course_world_to_json(course_id: str,
                          path_elements: list,
                          origin_lat: float,
                          origin_lon: float,
-                         config: dict | None = None) -> dict:
+                         config: dict | None = None,
+                         tee_elevations: dict | None = None) -> dict:
+    """
+    `tee_elevations` maps hole number to the tee's absolute height (the hole
+    JSON's source.tee_elevation). Hole starts are placed at those heights
+    relative to the first hole's tee, which sits at y = 0; holes without one
+    stay at y = 0.
+    """
     config = config or DEFAULT_CONFIG
     world_config = config.get("world", {})
     hole_anchors = []
@@ -2320,12 +2334,17 @@ def course_world_to_json(course_id: str,
                                           fairway_corridors,
                                           float(world_config.get("fallback_road_extra_offset", 8.0)))
 
+    tee_elevations = {num: height for num, height in (tee_elevations or {}).items() if height is not None}
+    base_elevation = tee_elevations.get(hole_anchors[0]["hole_num"], 0.0) if hole_anchors else 0.0
     hole_starts = []
     for anchor in hole_anchors:
+        start_position = _xyz_from_xz(anchor["start_xz"])
+        if anchor["hole_num"] in tee_elevations:
+            start_position[1] = _r(tee_elevations[anchor["hole_num"]] - base_elevation)
         hole_starts.append({
             "id": f"hole_{anchor['hole_num']:02d}_start",
             "hole_index": anchor["hole_index"],
-            "position": _xyz_from_xz(anchor["start_xz"]),
+            "position": start_position,
             "return_position": _xyz_from_xz(anchor["return_xz"]),
             "interaction_radius": float(world_config.get("hole_start_interaction_radius", 4.0))
         })
@@ -2558,6 +2577,7 @@ Examples:
     _prefetch_course_elevation(elevation, holes, origin_lat, origin_lon, course_id, config)
 
     source_counts: dict[str, int] = {}
+    tee_elevations: dict[int, float | None] = {}
     for num in sorted(holes.keys()):
         print(f"  Processing hole {num}...", file=sys.stderr)
         h_json = hole_to_json(num, holes[num], origin_lat, origin_lon, course_id, config, elevation)
@@ -2566,6 +2586,7 @@ Examples:
         with open(fpath, "w", encoding="utf-8") as f:
             json.dump(h_json, f, indent=2)
         hole_paths.append(f"holes/{fname}")
+        tee_elevations[num] = h_json["source"]["tee_elevation"]
         dist = math.hypot(h_json["pin"][0], h_json["pin"][2])
         path_len = _hole_json_path_length(h_json)
         width = h_json["spline"]["width"]
@@ -2589,7 +2610,8 @@ Examples:
                                           path_elements,
                                           origin_lat,
                                           origin_lon,
-                                          config)
+                                          config,
+                                          tee_elevations)
         world_file = world_dir / f"{course_id}.json"
         with open(world_file, "w", encoding="utf-8") as f:
             json.dump(world_json, f, indent=2)

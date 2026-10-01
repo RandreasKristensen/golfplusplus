@@ -61,7 +61,7 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
 
     const section_reader terrain = section("terrain");
     tuning.terrain.min_sections = terrain.integer("min_sections");
-    tuning.terrain.apron_grid_resolution = terrain.integer("apron_grid_resolution");
+    tuning.terrain.apron_cell_size = terrain.number("apron_cell_size");
     tuning.terrain.zones.bunker_depth = terrain.number("bunker_depth");
     tuning.terrain.zones.water_depth = terrain.number("water_depth");
     tuning.terrain.material_overlay_lift = terrain.number("material_overlay_lift");

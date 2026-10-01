@@ -41,7 +41,7 @@
       "hole_index": 1,
       "position": [
         532.34,
-        0.0,
+        4.25,
         -932.12
       ],
       "return_position": [
@@ -56,7 +56,7 @@
       "hole_index": 2,
       "position": [
         354.33,
-        0.0,
+        4.27,
         -699.2
       ],
       "return_position": [
@@ -71,7 +71,7 @@
       "hole_index": 3,
       "position": [
         242.87,
-        0.0,
+        5.43,
         -408.2
       ],
       "return_position": [
@@ -86,7 +86,7 @@
       "hole_index": 4,
       "position": [
         116.7,
-        0.0,
+        3.72,
         -66.28
       ],
       "return_position": [
@@ -101,7 +101,7 @@
       "hole_index": 5,
       "position": [
         -157.7,
-        0.0,
+        5.46,
         338.24
       ],
       "return_position": [
@@ -116,7 +116,7 @@
       "hole_index": 6,
       "position": [
         -342.66,
-        0.0,
+        5.39,
         555.43
       ],
       "return_position": [
@@ -131,7 +131,7 @@
       "hole_index": 7,
       "position": [
         -452.43,
-        0.0,
+        4.06,
         924.37
       ],
       "return_position": [
@@ -146,7 +146,7 @@
       "hole_index": 8,
       "position": [
         -340.41,
-        0.0,
+        4.89,
         886.33
       ],
       "return_position": [
@@ -161,7 +161,7 @@
       "hole_index": 9,
       "position": [
         -181.56,
-        0.0,
+        4.53,
         587.06
       ],
       "return_position": [
@@ -176,7 +176,7 @@
       "hole_index": 10,
       "position": [
         -378.13,
-        0.0,
+        5.83,
         732.01
       ],
       "return_position": [
@@ -191,7 +191,7 @@
       "hole_index": 11,
       "position": [
         -508.96,
-        0.0,
+        2.15,
         798.33
       ],
       "return_position": [
@@ -206,7 +206,7 @@
       "hole_index": 12,
       "position": [
         -502.66,
-        0.0,
+        3.43,
         510.6
       ],
       "return_position": [
@@ -221,7 +221,7 @@
       "hole_index": 13,
       "position": [
         -237.59,
-        0.0,
+        5.22,
         292.79
       ],
       "return_position": [
@@ -236,7 +236,7 @@
       "hole_index": 14,
       "position": [
         -25.33,
-        0.0,
+        5.74,
         -39.77
       ],
       "return_position": [
@@ -251,7 +251,7 @@
       "hole_index": 15,
       "position": [
         124.98,
-        0.0,
+        4.43,
         -338.02
       ],
       "return_position": [
@@ -266,7 +266,7 @@
       "hole_index": 16,
       "position": [
         267.74,
-        0.0,
+        4.61,
         -745.22
       ],
       "return_position": [
@@ -281,7 +281,7 @@
       "hole_index": 17,
       "position": [
         519.5,
-        0.0,
+        3.75,
         -1010.82
       ],
       "return_position": [

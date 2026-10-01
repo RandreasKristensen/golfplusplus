@@ -104,9 +104,16 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& source_mesh,
                                          const std::vector<material_zone>& zones,
                                          float lift);
 
-// A rough grid around `mesh`, `margin` wider on each side, following the
-// nearest terrain height and sunk slightly below it.
-terrain_mesh build_outer_rough_apron(const terrain_mesh& mesh, float margin, int grid_resolution);
+// A rough grid around `mesh`, `margin` wider on each side, with vertices about
+// `cell_size` apart, following the nearest terrain height. Off the surface it
+// sits just below the nearest edge; under the surface it sinks past the
+// deepest zone carve, so the coarse grid never pokes up through the ribbon.
+// `mesh` may hold several ribbons (the course hub): the apron then covers the
+// gaps between them without rising over any of them.
+terrain_mesh build_outer_rough_apron(const terrain_mesh& mesh,
+                                     float margin,
+                                     float cell_size,
+                                     const terrain_zone_tuning& zones);
 
 // Returns the mesh with its spatial index rebuilt. Run any mesh assembled or
 // transformed by hand through this so sampling keeps the fast path.

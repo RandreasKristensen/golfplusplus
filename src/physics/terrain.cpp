@@ -21,6 +21,8 @@ constexpr float ribbon_flat_fraction = 0.55f;
 // The apron sits this far below the terrain it follows, so the ribbon always
 // wins where they overlap.
 constexpr float apron_overlap_lowering = 0.12f;
+// Caps the apron grid so a huge or malformed course cannot allocate without bound.
+constexpr int max_apron_grid_side = 512;
 constexpr int overlay_circle_segments = 32;
 constexpr int overlay_bounds_resolution = 6;
 constexpr float water_edge_softness = 0.25f;
@@ -814,6 +816,68 @@ float unvisited_lower_bound(const terrain_mesh_index& index, const cell_range& v
     }
     return best;
 }
+
+// The containing triangle's sample, or nothing when `position` is off the
+// surface. Unlike sample_terrain_mesh it never searches for the nearest edge,
+// so it stays cheap far from the mesh.
+std::optional<terrain_sample> sample_inside_terrain(const terrain_mesh& mesh, const glm::vec3& position) {
+    if (mesh.vertices.empty() || mesh.indices.size() < 3U) {
+        return std::nullopt;
+    }
+    const glm::vec3 query_point(position.x, 0.0f, position.z);
+    terrain_scan_state state;
+    const auto scan = [&](const int triangle) {
+        state = scan_triangle(mesh, position, query_point, 0.0f, -1, triangle, scan_pass::inside_only, state);
+    };
+    const terrain_mesh_index& index = mesh.spatial_index;
+    if (terrain_index_matches(mesh, index)) {
+        const std::size_t cell = cell_slot(index,
+                                           index_cell_coord(position.x, index.min_x, index.cell_size_x, index.cells_x),
+                                           index_cell_coord(position.z, index.min_z, index.cell_size_z, index.cells_z));
+        for (std::uint32_t slot = index.cell_starts[cell]; slot < index.cell_starts[cell + 1U]; ++slot) {
+            scan(static_cast<int>(index.cell_triangles[slot]));
+        }
+    } else {
+        for (int triangle = 0; triangle < static_cast<int>(mesh.indices.size() / 3U); ++triangle) {
+            scan(triangle);
+        }
+    }
+    if (!state.has_inside) {
+        return std::nullopt;
+    }
+    return finish_terrain_scan(state, query_point);
+}
+
+// Gives every vertex of a rows x columns grid without a height the height of
+// the nearest vertex that has one (breadth-first, 4-connected). Vertices stay
+// unset only when none has a height.
+std::vector<std::optional<float>> spread_grid_heights(std::vector<std::optional<float>> heights,
+                                                      const int rows,
+                                                      const int columns) {
+    std::vector<int> frontier;
+    for (int i = 0; i < static_cast<int>(heights.size()); ++i) {
+        if (heights[static_cast<std::size_t>(i)]) {
+            frontier.push_back(i);
+        }
+    }
+    for (std::size_t next = 0; next < frontier.size(); ++next) {
+        const int vertex = frontier[next];
+        const int row = vertex / columns;
+        const int column = vertex % columns;
+        const std::array<std::array<int, 2>, 4> neighbours{{{row - 1, column}, {row + 1, column}, {row, column - 1}, {row, column + 1}}};
+        for (const std::array<int, 2>& neighbour : neighbours) {
+            if (neighbour[0] < 0 || neighbour[0] >= rows || neighbour[1] < 0 || neighbour[1] >= columns) {
+                continue;
+            }
+            const int index = neighbour[0] * columns + neighbour[1];
+            if (!heights[static_cast<std::size_t>(index)]) {
+                heights[static_cast<std::size_t>(index)] = heights[static_cast<std::size_t>(vertex)];
+                frontier.push_back(index);
+            }
+        }
+    }
+    return heights;
+}
 }
 
 glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, const float t) {
@@ -949,7 +1013,10 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& source_mesh,
     return mesh;
 }
 
-terrain_mesh build_outer_rough_apron(const terrain_mesh& source_mesh, const float margin, const int grid_resolution) {
+terrain_mesh build_outer_rough_apron(const terrain_mesh& source_mesh,
+                                     const float margin,
+                                     const float cell_size,
+                                     const terrain_zone_tuning& zones) {
     terrain_mesh apron;
     if (source_mesh.vertices.empty() || source_mesh.indices.size() < 3U) {
         return apron;
@@ -962,31 +1029,91 @@ terrain_mesh build_outer_rough_apron(const terrain_mesh& source_mesh, const floa
         high = glm::max(high, vertex.position);
     }
 
-    const int resolution = std::max(2, grid_resolution);
     const float apron_margin = std::max(1.0f, margin);
     low -= glm::vec3(apron_margin, 0.0f, apron_margin);
     high += glm::vec3(apron_margin, 0.0f, apron_margin);
 
-    apron.section_count = resolution;
-    apron.cross_section_count = resolution;
+    const float cell = std::max(1.0f, cell_size);
+    const auto grid_side = [cell](const float span) {
+        return std::clamp(static_cast<int>(std::ceil(span / cell)) + 1, 2, max_apron_grid_side);
+    };
+    const int rows = grid_side(high.z - low.z);
+    const int columns = grid_side(high.x - low.x);
+    apron.section_count = rows;
+    apron.cross_section_count = columns;
     apron.width = std::max(high.x - low.x, high.z - low.z);
 
+    // Under the surface, the grid's straight edges can cut above the ribbon
+    // where it is carved or drops at its rough edge between two grid vertices.
+    const float hidden_lowering =
+        apron_overlap_lowering + ribbon_edge_drop + std::max(zones.bunker_depth, zones.water_depth);
+
+    const std::size_t vertex_count = static_cast<std::size_t>(rows) * static_cast<std::size_t>(columns);
+    const auto grid_point = [&](const int row, const int column) {
+        return glm::vec3(low.x + (high.x - low.x) * static_cast<float>(column) / static_cast<float>(columns - 1),
+                         0.0f,
+                         low.z + (high.z - low.z) * static_cast<float>(row) / static_cast<float>(rows - 1));
+    };
+
+    // Exact heights under the surface and on the ring of vertices around it.
+    // A ring vertex's edge search is hinted with its neighbour under the
+    // surface, so it only scans that ribbon row. Further out a free
+    // nearest-edge search gets slow over a whole course, and the apron only
+    // needs a plausible height there, so the ring's heights spread outward.
+    std::vector<std::optional<terrain_sample>> under_surface(vertex_count);
+    std::vector<std::optional<float>> heights(vertex_count);
+    for (int row = 0; row < rows; ++row) {
+        for (int column = 0; column < columns; ++column) {
+            const std::size_t index = static_cast<std::size_t>(row * columns + column);
+            under_surface[index] = sample_inside_terrain(source_mesh, grid_point(row, column));
+            if (under_surface[index]) {
+                heights[index] = under_surface[index]->point.y - hidden_lowering;
+            }
+        }
+    }
+    const auto neighbour_under_surface = [&](const int row, const int column) -> const terrain_sample* {
+        for (int r = std::max(0, row - 1); r <= std::min(rows - 1, row + 1); ++r) {
+            for (int c = std::max(0, column - 1); c <= std::min(columns - 1, column + 1); ++c) {
+                const std::optional<terrain_sample>& sample = under_surface[static_cast<std::size_t>(r * columns + c)];
+                if (sample) {
+                    return &*sample;
+                }
+            }
+        }
+        return nullptr;
+    };
+    // A ribbon narrower than a cell may have no vertex under it: sample every vertex.
+    const bool any_under_surface =
+        std::any_of(under_surface.begin(), under_surface.end(), [](const std::optional<terrain_sample>& sample) { return sample.has_value(); });
+    for (int row = 0; row < rows; ++row) {
+        for (int column = 0; column < columns; ++column) {
+            const std::size_t index = static_cast<std::size_t>(row * columns + column);
+            if (under_surface[index]) {
+                continue;
+            }
+            const terrain_sample* hint = neighbour_under_surface(row, column);
+            if (hint != nullptr || !any_under_surface) {
+                const terrain_sample edge = sample_terrain_mesh(source_mesh, grid_point(row, column), 0.0f, hint);
+                heights[index] = edge.point.y - apron_overlap_lowering;
+            }
+        }
+    }
+    heights = spread_grid_heights(std::move(heights), rows, columns);
+
     std::vector<terrain_vertex> vertices;
-    vertices.reserve(static_cast<std::size_t>(resolution * resolution));
-    for (int row = 0; row < resolution; ++row) {
-        const float z = low.z + (high.z - low.z) * static_cast<float>(row) / static_cast<float>(resolution - 1);
-        for (int column = 0; column < resolution; ++column) {
-            const float x = low.x + (high.x - low.x) * static_cast<float>(column) / static_cast<float>(resolution - 1);
-            const terrain_sample sample = sample_terrain_anchor(source_mesh, glm::vec3(x, 0.0f, z), 0.0f);
+    vertices.reserve(vertex_count);
+    for (int row = 0; row < rows; ++row) {
+        for (int column = 0; column < columns; ++column) {
             terrain_vertex vertex;
-            vertex.position = glm::vec3(x, sample.point.y - apron_overlap_lowering, z);
+            vertex.position = grid_point(row, column);
+            vertex.position.y = heights[static_cast<std::size_t>(row * columns + column)].value_or(0.0f);
             vertex.distance_from_center = source_mesh.width * 0.5f;
             vertex.material = terrain_material::rough;
             vertices.push_back(vertex);
         }
     }
 
-    apron.indices = grid_triangle_indices(resolution, resolution, 0U);
+    apron.indices = grid_triangle_indices(rows, columns, 0U);
     apron.vertices = with_smooth_normals(std::move(vertices), apron.indices);
     apron.spatial_index = make_terrain_mesh_index(apron);
     return apron;

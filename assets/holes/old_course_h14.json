@@ -242,6 +242,7 @@
       -2.8162077
     ],
     "centerline": "fairway_shape",
-    "elevation": "eudem25m"
+    "elevation": "eudem25m",
+    "tee_elevation": 5.69
   }
 }

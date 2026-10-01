@@ -156,6 +156,7 @@
       -2.8141844
     ],
     "centerline": "hole_way",
-    "elevation": "eudem25m"
+    "elevation": "eudem25m",
+    "tee_elevation": 6.21
   }
 }

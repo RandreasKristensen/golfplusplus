@@ -111,6 +111,40 @@ TEST_CASE("the hub terrain covers every hole start") {
     }
 }
 
+TEST_CASE("the hub apron never rises over a neighbouring hole at another height") {
+    // Two parallel holes 80 m apart: a flat one, and a climbing one that
+    // starts 10 m higher.
+    const auto straight_hole = [](const float rise) {
+        hole_data hole;
+        hole.tee_position = glm::vec3(0.0f);
+        hole.pin_position = glm::vec3(0.0f, rise, 200.0f);
+        hole.spline.control_points = {glm::vec3(0.0f), glm::vec3(0.0f, rise * 0.5f, 100.0f), hole.pin_position};
+        hole.spline.width = 20.0f;
+        hole.spline.rough_width = 32.0f;
+        return hole;
+    };
+    course_world_definition world;
+    world.hole_starts.resize(2);
+    world.hole_starts[0].hole_index = 0;
+    world.hole_starts[1].hole_index = 1;
+    world.hole_starts[1].position = glm::vec3(80.0f, 10.0f, 0.0f);
+    const play_area hub = build_hub_area({straight_hole(0.0f), straight_hole(15.0f)}, world, shipped_content().tuning);
+
+    int points_on_holes = 0;
+    for (float x = -20.0f; x <= 100.0f; x += 1.7f) {
+        for (float z = 0.0f; z <= 200.0f; z += 1.7f) {
+            const glm::vec3 point(x, 0.0f, z);
+            const terrain_sample ground = sample_area(hub, point);
+            if (!ground.inside_surface) {
+                continue;
+            }
+            ++points_on_holes;
+            CHECK(sample_terrain_mesh(hub.apron, point, 0.0f).point.y < ground.point.y);
+        }
+    }
+    CHECK(points_on_holes > 1000);
+}
+
 TEST_CASE("holes are placed by their start, rotated around the tee") {
     hole_data hole;
     hole.tee_position = glm::vec3(10.0f, 0.0f, 20.0f);

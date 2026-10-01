@@ -181,7 +181,10 @@ Tools, using the open DEMs that are free to query without an account.
 | `srtm30m` | ±60° latitude | 30 m |
 
 `dataset: "auto"` (the default) picks the best one covering the course. Heights
-are made relative to the tee, so every hole still starts at `y = 0`; smoothed,
+are made relative to the tee, so every hole still starts at `y = 0` (its
+tee's real height goes in `source.tee_elevation`, and the course world puts
+each hole start at that height relative to hole 1, so holes line up in the
+hub); smoothed,
 because neighbouring control points can straddle a DEM cell boundary; and
 slope-limited, because a DEM occasionally reads a clubhouse roof or tree canopy
 next to a fairway as a cliff.
