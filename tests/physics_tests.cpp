@@ -518,7 +518,7 @@ TEST_CASE("terrain mesh end caps extend beyond first and last control points") {
     CHECK(first_edge.material == terrain_material::rough);
 }
 
-TEST_CASE("outer rough apron samples terrain elevation instead of flat ground") {
+TEST_CASE("the ground around a lone hole follows the hole, on it and past its edge") {
     terrain_spline terrain;
     terrain.control_points = {
         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -527,15 +527,32 @@ TEST_CASE("outer rough apron samples terrain elevation instead of flat ground") 
     terrain.width = 10.0f;
     terrain.sample_count = 20;
 
-    const terrain_mesh mesh = plain_terrain_mesh(terrain);
-    const terrain_mesh apron = build_outer_rough_apron(mesh, terrain.width, 4.0f, terrain_zone_tuning{});
+    const std::vector<terrain_mesh> holes{plain_terrain_mesh(terrain)};
+    const terrain_mesh ground = build_ground(holes, nullptr, ground_settings{1.0f, 10.0f, 0.0f});
 
-    bool found_below_zero = false;
-    for (const terrain_vertex& vertex : apron.vertices) {
-        found_below_zero = found_below_zero || vertex.position.y < 0.0f;
-        CHECK(vertex.material == terrain_material::rough);
-    }
-    CHECK(found_below_zero);
+    // On the hole the ground matches the ribbon; beside it, the edge height.
+    const glm::vec3 on_hole(0.0f, 0.0f, 10.0f);
+    CHECK(near(sample_terrain_mesh(ground, on_hole, 0.0f).point.y, sample_terrain_mesh(holes[0], on_hole, 0.0f).point.y, 0.05f));
+    const glm::vec3 beside(8.0f, 0.0f, 10.0f);
+    const float edge = sample_terrain_mesh(holes[0], glm::vec3(4.99f, 0.0f, 10.0f), 0.0f).point.y;
+    CHECK(near(sample_terrain_mesh(ground, beside, 0.0f).point.y, edge, 0.05f));
+    CHECK(sample_holes(holes, on_hole)->material == terrain_material::fairway);
+    CHECK(!sample_holes(holes, beside));
+}
+
+TEST_CASE("a banked ribbon tilts across, rising towards its lateral side") {
+    terrain_spline terrain;
+    terrain.control_points = {glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 40.0f)};
+    terrain.bank = {0.1f, 0.1f};
+    terrain.width = 20.0f;
+    terrain.fairway_width = 20.0f;
+    terrain.sample_count = 20;
+    const terrain_mesh mesh = plain_terrain_mesh(terrain);
+
+    // Heading +z, the lateral side is -x.
+    const float lateral = sample_terrain_mesh(mesh, glm::vec3(-4.0f, 0.0f, 20.0f), 0.0f).point.y;
+    const float other = sample_terrain_mesh(mesh, glm::vec3(4.0f, 0.0f, 20.0f), 0.0f).point.y;
+    CHECK(near(lateral - other, 0.8f, 0.01f));
 }
 
 TEST_CASE("terrain sampling stays on the hinted branch through a crossing overlap") {
@@ -727,9 +744,9 @@ TEST_CASE("terrain spatial index is built by the mesh builders") {
           == static_cast<std::size_t>(mesh.spatial_index.cells_x) * static_cast<std::size_t>(mesh.spatial_index.cells_z) + 1U);
     CHECK(mesh.spatial_index.cell_triangles.size() >= mesh.indices.size() / 3U);
 
-    const terrain_mesh apron = build_outer_rough_apron(mesh, 12.0f, 8.0f, terrain_zone_tuning{});
-    CHECK(apron.spatial_index.cells_x > 0);
-    CHECK(apron.spatial_index.triangle_count == static_cast<uint32_t>(apron.indices.size() / 3U));
+    const terrain_mesh ground = build_ground({mesh}, nullptr, ground_settings{8.0f, 12.0f, 0.0f});
+    CHECK(ground.spatial_index.cells_x > 0);
+    CHECK(ground.spatial_index.triangle_count == static_cast<uint32_t>(ground.indices.size() / 3U));
 
     const terrain_mesh overlay = build_material_overlay_mesh(mesh, index_test_zones(), 0.02f);
     CHECK(overlay.spatial_index.cells_x > 0);
@@ -867,12 +884,12 @@ TEST_CASE("indexed terrain sampling matches the full scan on mesh edges and beyo
     CHECK(anchor_mismatches == 0);
 }
 
-TEST_CASE("indexed terrain sampling matches the full scan on the apron mesh") {
+TEST_CASE("indexed terrain sampling matches the full scan on the ground mesh") {
     const terrain_mesh mesh = index_test_mesh();
-    const terrain_mesh apron = build_outer_rough_apron(mesh, 12.0f, 8.0f, terrain_zone_tuning{});
-    const terrain_mesh reference_apron = without_spatial_index(apron);
-    CHECK(apron.indices.size() >= 3U);
-    if (apron.indices.size() < 3U) {
+    const terrain_mesh ground = build_ground({mesh}, nullptr, ground_settings{8.0f, 12.0f, 0.0f});
+    const terrain_mesh reference_ground = without_spatial_index(ground);
+    CHECK(ground.indices.size() >= 3U);
+    if (ground.indices.size() < 3U) {
         return;
     }
 
@@ -880,8 +897,8 @@ TEST_CASE("indexed terrain sampling matches the full scan on the apron mesh") {
     for (int xi = -16; xi <= 16; ++xi) {
         for (int zi = -6; zi <= 36; ++zi) {
             const glm::vec3 position(static_cast<float>(xi) * 2.25f, 0.0f, static_cast<float>(zi) * 2.25f);
-            const terrain_sample indexed = sample_terrain_mesh(apron, position, 0.0f);
-            const terrain_sample reference = sample_terrain_mesh(reference_apron, position, 0.0f);
+            const terrain_sample indexed = sample_terrain_mesh(ground, position, 0.0f);
+            const terrain_sample reference = sample_terrain_mesh(reference_ground, position, 0.0f);
             if (!same_terrain_sample(indexed, reference)) {
                 ++mismatches;
             }

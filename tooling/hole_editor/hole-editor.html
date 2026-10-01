@@ -642,6 +642,10 @@ function fmtMeters(value) {
 function normalizeHole() {
   if (!hole.spline) hole.spline = { control_points: [[0,0,0],[0,0,80]], width: 18 };
   if (!hole.spline.control_points) hole.spline.control_points = [[0,0,0],[0,0,80]];
+  // Side slope per control point (rise per metre towards the right looking
+  // down the hole), kept the same length as control_points.
+  const bank = Array.isArray(hole.spline.bank) ? hole.spline.bank : [];
+  hole.spline.bank = hole.spline.control_points.map((_, i) => Number.isFinite(+bank[i]) ? +bank[i] : 0);
   if (!Number.isFinite(+hole.spline.width) || +hole.spline.width <= 0) hole.spline.width = 18;
   if (!Number.isFinite(+hole.spline.rough_width) || +hole.spline.rough_width < +hole.spline.width) {
     hole.spline.rough_width = +hole.spline.width;
@@ -1563,8 +1567,7 @@ canvas.addEventListener('mousedown', e => {
     }
     const h2 = hit(cx,cy);
     let deleted = false;
-    if (h2?.type==='cp' && hole.spline.control_points.length>2) {
-      hole.spline.control_points.splice(h2.index,1);
+    if (h2?.type==='cp' && removeControlPoint(h2.index)) {
       if (sel?.type==='cp') sel=null;
       deleted = true;
     } else if (h2?.type==='zone') {
@@ -1608,6 +1611,7 @@ canvas.addEventListener('mousedown', e => {
   // add control point
   if (mode==='add_cp') {
     hole.spline.control_points.push([r2(w.x),0,r2(w.z)]);
+    hole.spline.bank.push(0);
     sel = { type:'cp', index: hole.spline.control_points.length-1 };
     markDirty();
     updatePanel(); render(); return;
@@ -2077,9 +2081,7 @@ function deleteSelectedHoleItems() {
     .sort((a, b) => b - a);
   for (const i of byType('tree')) hole.trees.splice(i, 1);
   for (const i of byType('zone')) hole.material_zones.splice(i, 1);
-  for (const i of byType('cp')) {
-    if (hole.spline.control_points.length > 2) hole.spline.control_points.splice(i, 1);
-  }
+  for (const i of byType('cp')) removeControlPoint(i);
   markDirty();
 }
 
@@ -2226,9 +2228,7 @@ function updatePanel() {
   });
   cpList.querySelectorAll('.item-del').forEach(el =>
     el.addEventListener('click', () => {
-      const i=+el.dataset.i;
-      if(hole.spline.control_points.length<=2) return;
-      hole.spline.control_points.splice(i,1);
+      if(!removeControlPoint(+el.dataset.i)) return;
       if(sel?.type==='cp') sel=null;
       markDirty();
       updatePanel(); render();
@@ -2244,7 +2244,8 @@ function updatePanel() {
       `<div class="field compact"><label>x</label><input type="number" step="0.1" value="${pt[0]}" oninput="setCpValue(${sel.index},0,+this.value)"></div>` +
       `<div class="field compact"><label>y</label><input type="number" step="0.1" value="${pt[1]}" oninput="setCpValue(${sel.index},1,+this.value)"></div>` +
       `<div class="field compact"><label>z</label><input type="number" step="0.1" value="${pt[2]}" oninput="setCpValue(${sel.index},2,+this.value)"></div>` +
-      `</div>`;
+      `</div>` +
+      `<div class="field compact"><label>bank (rise per m to the right)</label><input type="number" step="0.01" value="${hole.spline.bank[sel.index]}" oninput="setCpBank(${sel.index},+this.value)"></div>`;
   } else if (sel?.type==='tee') {
     cpEdit.innerHTML =
       `<div class="field-row three">` +
@@ -2539,6 +2540,14 @@ function escapeAttr(value) {
 }
 
 function setCpY(i,v) { setCpValue(i, 1, v); }
+function setCpBank(i,v) { hole.spline.bank[i]=Math.round(v*10000)/10000; markDirty(); render(); }
+// Removes a control point and its bank together (never below two points).
+function removeControlPoint(i) {
+  if (hole.spline.control_points.length <= 2) return false;
+  hole.spline.control_points.splice(i, 1);
+  hole.spline.bank.splice(i, 1);
+  return true;
+}
 function setCpValue(i,k,v) { hole.spline.control_points[i][k]=r2(v); markDirty(); render(); }
 function setVec3Value(vec,k,v) { vec[k]=r2(v); markDirty(); render(); }
 function setZoneR(i,v) { hole.material_zones[i].radius=Math.max(0.5,v); markDirty(); render(); }
@@ -2717,6 +2726,8 @@ function buildJSON() {
   h.spline.width = r2(h.spline.width);
   h.spline.rough_width = r2(Math.max(h.spline.width, h.spline.rough_width || h.spline.width));
   h.spline.control_points = h.spline.control_points.map(p=>p.map(r2));
+  // A level hole leaves bank out, as hand-made holes always have.
+  if (h.spline.bank.every(b => b === 0)) delete h.spline.bank;
   h.material_zones = h.material_zones.map(z=>{
     if(z.center) z.center=z.center.map(r2);
     if(z.bounds) {

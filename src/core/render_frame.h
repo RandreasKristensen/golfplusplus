@@ -21,7 +21,7 @@ camera_view live_camera_view(const game_state& game);
 // The scene meshes the frame borrows (see render_data); app rebuilds them
 // whenever game_state::terrain_render_revision changes.
 struct render_meshes {
-    const render_static_mesh* terrain = nullptr;  // terrain plus ground
+    const render_static_mesh* terrain = nullptr;  // the ground
     const render_static_mesh* material_overlay = nullptr;
 };
 

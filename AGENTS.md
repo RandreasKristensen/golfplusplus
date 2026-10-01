@@ -23,7 +23,11 @@ is a hub: walk or drive a cart between hole starts, pick up collectibles, level
 RuneScape-style skills. A course is one continuous area on its real land
 (the course world's `ground` grid): holes are played where they sit, never in
 a separate scene, so other groups stay visible and a stray shot lands on the
-next hole or the ground between.
+next hole or the ground between. There is exactly one surface
+(`build_ground` in `src/physics/ground_mesh.h`): hole geometry decides the
+height on a hole's fairway, its rough eases into the land, and every height
+and normal comes from that one grid. Courses should be right out of the
+importer; the hole editor is for touch-ups.
 
 Golf simulation first, RPG progression second. Online play (SpacetimeDB rooms)
 is planned to become the main draw; offline stays a complete solo mode.

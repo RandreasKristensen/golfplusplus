@@ -13,6 +13,11 @@
 // one row of `cross_section_count` vertices across the ribbon.
 struct terrain_spline {
     std::vector<glm::vec3> control_points;
+    // Side slope per control point (empty = level): metres of rise per metre
+    // towards the lateral side (-tangent.z, 0, tangent.x), the player's right
+    // looking down the hole. Interpolated along the hole, so a ribbon on a
+    // hillside tilts with the hill.
+    std::vector<float> bank;
     // Full ribbon width (fairway + rough). `fairway_width` is the inner strip.
     float width = 0.0f;
     float fairway_width = 0.0f;
@@ -86,9 +91,7 @@ struct terrain_sample {
     glm::vec3 point{0.0f};
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
     float distance_from_center = 0.0f;
-    // -1 when the mesh was empty and `point` is the fallback height. A caller
-    // sampling several meshes sets -1 on samples that must not hint this one
-    // (see sample_area in game/play_area.h).
+    // -1 when the mesh was empty and `point` is the fallback height.
     int triangle_index = -1;
     // Triangles tested to produce this sample (for profiling the index).
     int triangles_tested = 0;
@@ -132,10 +135,8 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
 
 // The containing triangle's sample, or nothing when `position` is off the
 // surface. Unlike sample_terrain_mesh it never searches for the nearest edge,
-// so it stays cheap far from the mesh. `previous_sample` works as there.
-std::optional<terrain_sample> sample_terrain_inside(const terrain_mesh& mesh,
-                                                    const glm::vec3& position,
-                                                    const terrain_sample* previous_sample = nullptr);
+// so it stays cheap far from the mesh.
+std::optional<terrain_sample> sample_terrain_inside(const terrain_mesh& mesh, const glm::vec3& position);
 
 // Like sample_terrain_mesh, but keeps the query's exact XZ (only the height
 // comes from the terrain). Used to place objects that sit on the ground.

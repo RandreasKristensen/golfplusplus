@@ -15,6 +15,7 @@
     "enabled": true,
     "zoom": 14,
     "max_grade": 0.25,
+    "max_bank": 0.2,
     "smooth_window": 3
   },
   "ground": {

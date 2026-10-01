@@ -381,7 +381,7 @@ TEST_CASE("tree instance bounds cover every trunk and leaf") {
 
 TEST_CASE("a hub's terrain chunks into bounded pieces that cull from ground level") {
     const game_state state = started_game(fixture_hub_course());
-    const render_static_mesh mesh = make_terrain_render_mesh({&state.area.terrain, &state.area.ground}, 1U);
+    const render_static_mesh mesh = make_terrain_render_mesh({&state.area.ground}, 1U);
     REQUIRE(mesh.indices.size() > 1000U);
 
     const render_chunk_settings settings;
@@ -398,9 +398,9 @@ TEST_CASE("a hub's terrain chunks into bounded pieces that cull from ground leve
     }
     CHECK(total == mesh.indices.size());
 
-    // Standing at hole 1 looking down it, most of the hub is off screen.
+    // Standing at hole 1 looking down it, most of the course's ground is off screen.
     const glm::vec3 eye = state.player.position + glm::vec3(0.0f, 1.7f, 0.0f);
-    const view_frustum frustum = make_test_frustum(eye, eye + glm::vec3(0.0f, 0.0f, 40.0f), 400.0f);
+    const view_frustum frustum = make_test_frustum(eye, eye + glm::vec3(0.0f, 0.0f, 40.0f), 150.0f);
     std::vector<render_index_range> ranges;
     const render_chunk_cull_stats stats = collect_visible_index_ranges(mesh.chunks, frustum, mesh.indices.size(), 4U, ranges);
     CHECK(stats.chunks_visible < mesh.chunks.size());

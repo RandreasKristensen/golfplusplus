@@ -5,6 +5,8 @@
 #include <glm/common.hpp>
 
 #include <algorithm>
+#include <utility>
+#include <vector>
 
 namespace {
 // Trees and zones smaller than this are treated as authoring mistakes.
@@ -108,6 +110,19 @@ std::optional<hole_data> parse_hole_from_text(const std::string& text) {
     if (!width || *width <= 0.0f || !control_points || control_points->size() < 2) {
         return std::nullopt;
     }
+    // Optional; when given, one number per control point.
+    std::vector<float> bank;
+    if (const json* bank_json = json_array(*spline, "bank")) {
+        if (bank_json->size() != control_points->size()) {
+            return std::nullopt;
+        }
+        for (const json& value : *bank_json) {
+            if (!value.is_number()) {
+                return std::nullopt;
+            }
+            bank.push_back(value.get<float>());
+        }
+    }
 
     hole_data hole;
     hole.id = json_string(*root, "id").value_or("");
@@ -119,6 +134,7 @@ std::optional<hole_data> parse_hole_from_text(const std::string& text) {
     hole.spline.width = *width;
     hole.spline.rough_width = std::max(*width, json_float(*spline, "rough_width").value_or(*width));
     hole.spline.control_points = *control_points;
+    hole.spline.bank = std::move(bank);
     hole.material_zones = material_zones_from_json(*root);
     hole.trees = trees_from_json(*root);
     return hole;

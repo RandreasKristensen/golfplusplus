@@ -123,39 +123,36 @@ hole_data straight_hole(const float rise) {
     return hole;
 }
 
-// Two parallel holes 80 m apart, a flat one and a climbing one that starts
-// 10 m higher, on land that sits `land_height` high everywhere.
-play_area two_hole_course(const float land_height) {
+// Two parallel holes `spacing` m apart, a flat one and one that starts
+// `second_height` higher and climbs `second_rise`, on land that sits
+// `land_height` everywhere.
+play_area two_hole_course(const float land_height,
+                          const float spacing = 80.0f,
+                          const float second_height = 10.0f,
+                          const float second_rise = 15.0f) {
     course_world_definition world;
     world.hole_starts.resize(2);
     world.hole_starts[0].hole_index = 0;
     world.hole_starts[1].hole_index = 1;
-    world.hole_starts[1].position = glm::vec3(80.0f, 10.0f, 0.0f);
+    world.hole_starts[1].position = glm::vec3(spacing, second_height, 0.0f);
     world.ground.origin_x = -200.0f;
     world.ground.origin_z = -200.0f;
     world.ground.cell_size = 50.0f;
     world.ground.columns = 11;
     world.ground.rows = 13;
     world.ground.heights.assign(11U * 13U, land_height);
-    return build_course_area({straight_hole(0.0f), straight_hole(15.0f)}, world, shipped_content().tuning);
+    return build_course_area({straight_hole(0.0f), straight_hole(second_rise)}, world, shipped_content().tuning);
 }
 }
 
-TEST_CASE("the course ground never rises over a hole, whatever the land does") {
+TEST_CASE("on a hole's fairway the ground is the hole, whatever the land does") {
     const play_area course = two_hole_course(30.0f);
-    int points_on_holes = 0;
-    for (float x = -20.0f; x <= 100.0f; x += 1.7f) {
-        for (float z = 0.0f; z <= 200.0f; z += 1.7f) {
+    for (float z = 20.0f; z <= 180.0f; z += 7.3f) {
+        for (float x = -8.0f; x <= 8.0f; x += 2.9f) {
             const glm::vec3 point(x, 0.0f, z);
-            const std::optional<terrain_sample> on_hole = sample_terrain_inside(course.terrain, point);
-            if (!on_hole) {
-                continue;
-            }
-            ++points_on_holes;
-            CHECK(sample_terrain_mesh(course.ground, point, 0.0f).point.y < on_hole->point.y);
+            CHECK(near(sample_area(course, point).point.y, sample_terrain_mesh(course.holes[0], point, 0.0f).point.y, 0.1f));
         }
     }
-    CHECK(points_on_holes > 1000);
 }
 
 TEST_CASE("off the holes the ball lands on the ground, which follows the land far away") {
@@ -163,11 +160,31 @@ TEST_CASE("off the holes the ball lands on the ground, which follows the land fa
     const terrain_sample far = sample_area(course, glm::vec3(250.0f, 0.0f, 100.0f));
     CHECK(near(far.point.y, 30.0f, 0.01f));
     CHECK(far.material == terrain_material::rough);
-    CHECK(far.triangle_index == -1);
 
-    // Just off the flat hole's rough, the ground meets its edge, not the land.
-    const terrain_sample beside = sample_area(course, glm::vec3(-17.0f, 0.0f, 100.0f));
-    CHECK(beside.point.y < 1.0f);
+}
+
+TEST_CASE("a hole's rough eases from its fairway into the land") {
+    // The flat hole's fairway is 20 m wide and its ribbon 32 m.
+    const play_area course = two_hole_course(3.0f);
+    CHECK(near(sample_area(course, glm::vec3(-9.0f, 0.0f, 100.0f)).point.y, 0.0f, 0.2f));
+    CHECK(near(sample_area(course, glm::vec3(-16.5f, 0.0f, 100.0f)).point.y, 3.0f, 0.2f));
+    const float halfway = sample_area(course, glm::vec3(-13.0f, 0.0f, 100.0f)).point.y;
+    CHECK(halfway > 0.5f);
+    CHECK(halfway < 2.5f);
+}
+
+TEST_CASE("overlapping holes at different heights make one continuous surface") {
+    // 20 m apart with 32 m wide ribbons: they overlap by 12 m, 3 m apart in height.
+    const play_area course = two_hole_course(0.0f, 20.0f, 3.0f, 0.0f);
+    float previous = sample_area(course, glm::vec3(-20.0f, 0.0f, 60.0f)).point.y;
+    for (float x = -19.5f; x <= 40.0f; x += 0.5f) {
+        const float y = sample_area(course, glm::vec3(x, 0.0f, 60.0f)).point.y;
+        CHECK(std::abs(y - previous) < 0.5f);
+        previous = y;
+    }
+    // Deep inside each hole, that hole's own height.
+    CHECK(near(sample_area(course, glm::vec3(-2.0f, 0.0f, 60.0f)).point.y, 0.0f, 0.3f));
+    CHECK(near(sample_area(course, glm::vec3(22.0f, 0.0f, 60.0f)).point.y, 3.0f, 0.3f));
 }
 
 TEST_CASE("holes are placed by their start, rotated around the tee") {

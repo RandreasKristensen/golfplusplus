@@ -2,8 +2,10 @@
 
 ## bugs
 
-- course rendering is fucked with the new better height map of holes. The rough between holes renders above the course. Figure out how we want it. Is the course walking around height mapped or flat "map" to walk from hole to hole with paths? so like overworld vs subworld for courses vs holes? or should the hole play be in the same thing as the course world so you can see other groups playing etc.
 - water can't be resized in the hole editor (?)
+- power physics are wonky.
+- performance is down again with the new courses. maybe just for the quick builds and perfomance is better with a "real" build? i dont know the difference.
+- add æøå / ÆØÅ, and make the text scale, and always be scaled with screen size percentage so we always make sure with math that text is scaled correctly.
 
 ## ideas
 

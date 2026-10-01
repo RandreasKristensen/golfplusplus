@@ -143,6 +143,18 @@ TEST_CASE("course worlds need exactly one start per hole") {
         {"hole_index": 0, "position": [9, 0, 0], "return_position": [1, 0, 1]}]})", two_holes));
 }
 
+TEST_CASE("a hole's bank is optional, one number per control point") {
+    const std::string start = R"({"tee": [0, 0, 0], "pin": [0, 0, 100], "spline": {"width": 20, "control_points": [[0, 0, 0], [0, 0, 100]])";
+    const std::optional<hole_data> level = parse_hole_from_text(start + "}}");
+    REQUIRE(level.has_value());
+    CHECK(level->spline.bank.empty());
+    const std::optional<hole_data> banked = parse_hole_from_text(start + R"(, "bank": [0.05, -0.02]}})");
+    REQUIRE(banked.has_value());
+    REQUIRE(banked->spline.bank.size() == 2U);
+    CHECK(near(banked->spline.bank[1], -0.02f));
+    CHECK(!parse_hole_from_text(start + R"(, "bank": [0.05]}})"));
+}
+
 TEST_CASE("course worlds need a complete ground grid") {
     const course_definition course = fixture_hub_course();
     const std::optional<course_world_definition> world =

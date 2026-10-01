@@ -184,7 +184,27 @@ terrain_section_layout make_section_layout(const terrain_spline& terrain) {
 struct terrain_section_frame {
     glm::vec3 center{0.0f};
     glm::vec3 lateral{1.0f, 0.0f, 0.0f};
+    float bank = 0.0f;
 };
+
+// The bank at spline parameter t, linear between control points (t maps to
+// control points as in sample_terrain_spline_point).
+float terrain_bank_at(const terrain_spline& terrain, const float t) {
+    const std::vector<float>& bank = terrain.bank;
+    if (bank.size() != terrain.control_points.size() || bank.empty()) {
+        return 0.0f;
+    }
+    if (bank.size() == 1) {
+        return bank.front();
+    }
+    const int last = static_cast<int>(bank.size()) - 1;
+    const float scaled = clamp01(t) * static_cast<float>(last);
+    const int segment = std::min(static_cast<int>(std::floor(scaled)), last - 1);
+    const float local_t = scaled - static_cast<float>(segment);
+    const float a = bank[static_cast<std::size_t>(segment)];
+    const float b = bank[static_cast<std::size_t>(segment + 1)];
+    return a + (b - a) * local_t;
+}
 
 terrain_section_frame terrain_frame_at_section(const terrain_spline& terrain,
                                                const terrain_section_layout& layout,
@@ -195,6 +215,7 @@ terrain_section_frame terrain_frame_at_section(const terrain_spline& terrain,
         const float u = static_cast<float>(section) / static_cast<float>(std::max(1, layout.cap_sections));
         frame.center = terrain.control_points.front() - tangent * (layout.cap_extension * (1.0f - u));
         frame.lateral = lateral_from_tangent(tangent);
+        frame.bank = terrain_bank_at(terrain, 0.0f);
         return frame;
     }
 
@@ -203,6 +224,7 @@ terrain_section_frame terrain_frame_at_section(const terrain_spline& terrain,
         const float t = static_cast<float>(base_section) / static_cast<float>(std::max(1, layout.base_sections - 1));
         frame.center = sample_terrain_spline_point(terrain, t);
         frame.lateral = terrain_lateral_at(terrain, t);
+        frame.bank = terrain_bank_at(terrain, t);
         return frame;
     }
 
@@ -211,6 +233,7 @@ terrain_section_frame terrain_frame_at_section(const terrain_spline& terrain,
     const float u = static_cast<float>(after_section + 1) / static_cast<float>(std::max(1, layout.cap_sections));
     frame.center = terrain.control_points.back() + tangent * (layout.cap_extension * u);
     frame.lateral = lateral_from_tangent(tangent);
+    frame.bank = terrain_bank_at(terrain, 1.0f);
     return frame;
 }
 
@@ -859,7 +882,7 @@ terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
             const float offset = cross_section_offset(column, mesh.cross_section_count, terrain.width);
             terrain_vertex vertex;
             vertex.position = frame.center + frame.lateral * offset;
-            vertex.position.y += cross_section_height_offset(offset, terrain.width);
+            vertex.position.y += frame.bank * offset + cross_section_height_offset(offset, terrain.width);
             vertex.distance_from_center = offset;
             vertex.material = std::abs(offset) <= fairway_half_width ? terrain_material::fairway : terrain_material::rough;
 
@@ -1052,19 +1075,14 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
     return finish_terrain_scan(state, query_point);
 }
 
-std::optional<terrain_sample> sample_terrain_inside(const terrain_mesh& mesh,
-                                                    const glm::vec3& position,
-                                                    const terrain_sample* previous_sample) {
+std::optional<terrain_sample> sample_terrain_inside(const terrain_mesh& mesh, const glm::vec3& position) {
     if (mesh.vertices.empty() || mesh.indices.size() < 3U) {
         return std::nullopt;
     }
     const glm::vec3 query_point(position.x, 0.0f, position.z);
-    const int preferred_row = previous_sample != nullptr && previous_sample->triangle_index >= 0
-        ? triangle_row(mesh, previous_sample->triangle_index)
-        : -1;
     terrain_scan_state state;
     const auto scan = [&](const int triangle) {
-        state = scan_triangle(mesh, position, query_point, 0.0f, preferred_row, triangle, scan_pass::inside_only, state);
+        state = scan_triangle(mesh, position, query_point, 0.0f, -1, triangle, scan_pass::inside_only, state);
     };
     const terrain_mesh_index& index = mesh.spatial_index;
     if (terrain_index_matches(mesh, index)) {

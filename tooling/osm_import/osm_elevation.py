@@ -272,6 +272,42 @@ def relative_profile(profile: list[float]) -> list[float]:
     return [round(v - base, 2) for v in profile]
 
 
+def lateral_offsets(points: list[tuple[float, float]], half_width: float) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """
+    For each point of an (x, z) polyline, the points `half_width` to either
+    side: first towards the lateral side (-dz, dx) of the direction of travel
+    (the right looking down the hole), the side the game's ribbon `bank`
+    rises towards, then the other side.
+    """
+    out = []
+    for i, (x, z) in enumerate(points):
+        ax, az = points[max(i - 1, 0)]
+        bx, bz = points[min(i + 1, len(points) - 1)]
+        dx, dz = bx - ax, bz - az
+        length = math.hypot(dx, dz) or 1.0
+        nx, nz = -dz / length, dx / length
+        out.append(((x + nx * half_width, z + nz * half_width), (x - nx * half_width, z - nz * half_width)))
+    return out
+
+
+def bank_profile(lateral: list[float | None],
+                 other: list[float | None],
+                 width: float,
+                 max_bank: float = 0.2,
+                 smooth_window: int = 3) -> list[float]:
+    """
+    Side slope per control point from DEM heights `width` apart across the
+    hole: rise per metre towards the lateral side, clamped to `max_bank`
+    (steeper reads a bank, wall or building next to the hole) and smoothed
+    like the height profile. A point missing either side is level.
+    """
+    raw = []
+    for a, b in zip(lateral, other):
+        slope = 0.0 if a is None or b is None or width <= 0.0 else (a - b) / width
+        raw.append(max(-max_bank, min(max_bank, slope)))
+    return [round(v, 4) for v in smooth(raw, smooth_window)]
+
+
 def polyline_distances(points: list[tuple[float, float]]) -> list[float]:
     """Cumulative along-path distance for a list of (x, z) metres."""
     out = [0.0]

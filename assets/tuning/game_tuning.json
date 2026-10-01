@@ -8,7 +8,7 @@
   },
   "terrain": {
     "min_sections": 128,
-    "ground_cell_size": 10.0,
+    "ground_cell_size": 4.0,
     "ground_blend_distance": 40.0,
     "bunker_depth": 0.55,
     "water_depth": 0.35,

@@ -21,9 +21,11 @@ struct play_area {
     glm::vec3 center{0.0f};
     float extent = 0.0f;
     std::vector<tree_instance> trees;
-    terrain_mesh terrain;           // the holes' ribbons
-    terrain_mesh ground;            // around and between the ribbons (physics/ground_mesh.h)
-    terrain_mesh material_overlay;  // render-only zone shapes draped over the ribbons
+    // Each hole's ribbon: where the ground takes hole heights from, and the
+    // material at any point. Never drawn or sampled for height directly.
+    std::vector<terrain_mesh> holes;
+    terrain_mesh ground;            // the one surface (physics/ground_mesh.h)
+    terrain_mesh material_overlay;  // render-only zone shapes draped over the ground
 };
 
 // Hole-space position -> course position for a hole placed at `start`
@@ -41,13 +43,9 @@ play_area build_course_area(const std::vector<hole_data>& holes,
                             const course_world_definition& world,
                             const game_tuning& tuning);
 
-// The ribbon under `position`, else the ground, else the nearest edge of
-// either. Samples off the ribbons carry triangle_index -1, so passing one back
-// as `previous_sample` never hints the ribbons with a ground triangle.
-terrain_sample sample_area(const play_area& area,
-                           const glm::vec3& position,
-                           frame_profile* profile = nullptr,
-                           const terrain_sample* previous_sample = nullptr);
+// The ground's height and normal at `position`, with the holes' material
+// there (rough off every hole).
+terrain_sample sample_area(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);
 float terrain_height(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);
 // `position` moved onto the terrain surface, keeping its XZ.
 glm::vec3 anchor_on_terrain(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);

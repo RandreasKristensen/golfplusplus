@@ -356,7 +356,7 @@ void step_ball(game_state& state, const float dt, frame_profile* profile) {
     const wind_state wind = sample_wind(state.hole->wind_seed, state.hole_time, state.tuning.wind);
     state.ball = step_ball_flight(state.ball, wind, dt, physics);
 
-    const terrain_sample after = sample_area(state.area, state.ball.position, profile, &before);
+    const terrain_sample after = sample_area(state.area, state.ball.position, profile);
     const bool in_water = after.material == terrain_material::water;
     state.ball = resolve_terrain_collision(state.ball,
                                            after,

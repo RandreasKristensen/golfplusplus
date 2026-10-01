@@ -1,0 +1,266 @@
+{
+  "id": "kalo_golf_club_h01",
+  "name": "Hole 1",
+  "par": 4,
+  "wind_seed": 163,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    -161.69,
+    5.06,
+    -353.2
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        -14.12,
+        -0.62,
+        -32.82
+      ],
+      [
+        -26.21,
+        -1.84,
+        -66.4
+      ],
+      [
+        -36.99,
+        -2.83,
+        -100.47
+      ],
+      [
+        -47.77,
+        -3.21,
+        -134.53
+      ],
+      [
+        -58.55,
+        -2.31,
+        -168.6
+      ],
+      [
+        -69.33,
+        0.04,
+        -202.67
+      ],
+      [
+        -80.11,
+        2.7,
+        -236.74
+      ],
+      [
+        -97.26,
+        4.59,
+        -267.52
+      ],
+      [
+        -118.73,
+        5.3,
+        -296.08
+      ],
+      [
+        -140.21,
+        5.32,
+        -324.64
+      ],
+      [
+        -161.69,
+        5.18,
+        -353.2
+      ]
+    ],
+    "bank": [
+      0.0306,
+      0.0357,
+      0.048,
+      0.0615,
+      0.0688,
+      0.0642,
+      0.0508,
+      0.0298,
+      0.006,
+      -0.0138,
+      -0.0205,
+      -0.0199
+    ],
+    "width": 44.5,
+    "rough_width": 69.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        -161.69,
+        0,
+        -353.2
+      ],
+      "radius": 10.59
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -159.52,
+        0,
+        -330.29
+      ],
+      "radius": 5.01
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -57.33,
+        0,
+        -207.06
+      ],
+      "radius": 6.6
+    },
+    {
+      "type": "water",
+      "bounds": [
+        [
+          -166.71,
+          0,
+          -322.47
+        ],
+        [
+          -113.77,
+          0,
+          -263.58
+        ]
+      ]
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        -23.76,
+        0.0,
+        -5.71
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -34.17,
+        0.0,
+        -171.08
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -43.34,
+        0.0,
+        -8.18
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -202.27,
+        0.0,
+        -344.73
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -76.7,
+        0.0,
+        -58.02
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -212.45,
+        0.0,
+        -327.32
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -120.22,
+        0.0,
+        -155.44
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -87.94,
+        0.0,
+        -48.48
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -194.48,
+        0.0,
+        -411.47
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -150.36,
+        0.0,
+        -183.75
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.307478,
+      10.4034663
+    ],
+    "pin_latlon": [
+      56.3106508,
+      10.4008479
+    ],
+    "centerline": "hole_way",
+    "elevation": "terrarium",
+    "tee_elevation": 79.76
+  }
+}

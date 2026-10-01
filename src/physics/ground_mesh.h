@@ -1,13 +1,19 @@
 #pragma once
 
-// The ground around and between terrain ribbons: a regular grid that meets
-// each ribbon's edge, sinks out of sight under it, and away from the ribbons
-// follows the land (a course world's height grid) when there is one. It is a
-// surface like the ribbons: the play area samples it wherever no ribbon is.
+// The ground of a play area: one surface that every height and normal comes
+// from, for physics and drawing alike. It is a regular grid. Inside a hole the
+// hole's ribbon decides the height; where holes overlap they blend, weighted
+// towards the hole a point is deeper inside; away from the holes the ground
+// eases from the nearest hole edge into the land (a course world's height
+// grid), or keeps the edge height when there is no land. Materials come from
+// the holes themselves (sample_holes), so their edges stay exact.
 
 #include "physics/terrain.h"
 
+#include <optional>
 #include <vector>
+
+#include <glm/vec3.hpp>
 
 // Heights on a regular XZ grid, row by row along z, `columns` along x.
 // heights[row * columns + column] is at (origin_x + column * cell_size,
@@ -25,19 +31,19 @@ struct height_grid {
 // empty grid.
 float sample_height_grid(const height_grid& grid, float x, float z);
 
-// A ground grid around `ribbons`, `margin` wider on each side, with vertices
-// about `cell_size` apart and no land of its own: away from the ribbons it
-// keeps the height of the nearest ribbon edge. Used for a single hole.
-terrain_mesh build_outer_rough_apron(const terrain_mesh& ribbons,
-                                     float margin,
-                                     float cell_size,
-                                     const terrain_zone_tuning& zones);
+struct ground_settings {
+    float cell_size = 0.0f;       // grid spacing
+    float margin = 0.0f;          // how far the grid reaches past the holes
+    float blend_distance = 0.0f;  // from a hole's edge into the land
+};
 
-// The ground of a whole course: covers `land` and every ribbon, with vertices
-// about `cell_size` apart. Next to a ribbon it meets the ribbon's edge, and
-// over `blend_distance` it eases into the land's own height.
-terrain_mesh build_course_ground(const terrain_mesh& ribbons,
-                                 const height_grid& land,
-                                 float cell_size,
-                                 float blend_distance,
-                                 const terrain_zone_tuning& zones);
+// `holes` are ribbon meshes (each with its spatial index); `land` may be null.
+// The grid covers every hole plus the margin, and all of `land`.
+terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
+                          const height_grid* land,
+                          const ground_settings& settings);
+
+// The holes' sample at `position`, nothing when it is off every hole. Where
+// holes overlap, green, bunker and water win over fairway, fairway over rough,
+// and the hole the point is deeper inside wins a tie.
+std::optional<terrain_sample> sample_holes(const std::vector<terrain_mesh>& holes, const glm::vec3& position);

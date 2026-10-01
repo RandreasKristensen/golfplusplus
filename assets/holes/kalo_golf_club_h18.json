@@ -1,0 +1,157 @@
+{
+  "id": "kalo_golf_club_h18",
+  "name": "Hole 18",
+  "par": 3,
+  "wind_seed": 1130,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    139.23,
+    3.24,
+    -87.29
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        23.87,
+        -0.33,
+        -13.43
+      ],
+      [
+        47.18,
+        -0.54,
+        -27.82
+      ],
+      [
+        70.19,
+        0.01,
+        -42.69
+      ],
+      [
+        93.21,
+        1.11,
+        -57.55
+      ],
+      [
+        116.22,
+        2.34,
+        -72.42
+      ],
+      [
+        139.23,
+        3.12,
+        -87.29
+      ]
+    ],
+    "bank": [
+      -0.0325,
+      -0.0217,
+      0.0002,
+      0.0204,
+      0.0318,
+      0.0353,
+      0.037
+    ],
+    "width": 19.0,
+    "rough_width": 29.4
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        139.23,
+        0,
+        -87.29
+      ],
+      "radius": 11.33
+    },
+    {
+      "type": "bunker",
+      "center": [
+        124.42,
+        0,
+        -87.98
+      ],
+      "radius": 7.37
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        89.57,
+        0.0,
+        -104.57
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        98.02,
+        0.0,
+        -111.05
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        78.4,
+        0.0,
+        -99.1
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        68.67,
+        0.0,
+        -93.78
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -74.96,
+        0.0,
+        -16.64
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.306466,
+      10.4009993
+    ],
+    "pin_latlon": [
+      56.3072501,
+      10.4032541
+    ],
+    "centerline": "hole_way",
+    "elevation": "terrarium",
+    "tee_elevation": 76.69
+  }
+}

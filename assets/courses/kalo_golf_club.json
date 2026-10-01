@@ -1,0 +1,25 @@
+{
+  "id": "kalo_golf_club",
+  "name": "Kal\u00f8 Golf Club",
+  "holes": [
+    "holes/kalo_golf_club_h01.json",
+    "holes/kalo_golf_club_h02.json",
+    "holes/kalo_golf_club_h03.json",
+    "holes/kalo_golf_club_h04.json",
+    "holes/kalo_golf_club_h05.json",
+    "holes/kalo_golf_club_h06.json",
+    "holes/kalo_golf_club_h07.json",
+    "holes/kalo_golf_club_h08.json",
+    "holes/kalo_golf_club_h09.json",
+    "holes/kalo_golf_club_h10.json",
+    "holes/kalo_golf_club_h11.json",
+    "holes/kalo_golf_club_h12.json",
+    "holes/kalo_golf_club_h13.json",
+    "holes/kalo_golf_club_h14.json",
+    "holes/kalo_golf_club_h15.json",
+    "holes/kalo_golf_club_h16.json",
+    "holes/kalo_golf_club_h17.json",
+    "holes/kalo_golf_club_h18.json"
+  ],
+  "world": "course_worlds/kalo_golf_club.json"
+}

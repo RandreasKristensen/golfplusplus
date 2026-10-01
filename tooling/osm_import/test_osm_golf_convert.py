@@ -417,6 +417,14 @@ class ElevationTests(unittest.TestCase):
         self.assertEqual((2, 2), (width, height))
         self.assertEqual(rows, decoded)
 
+    def test_bank_rises_towards_the_lateral_side_and_is_clamped(self):
+        # Heading +z, the lateral side (-dz, dx) is -x.
+        sides = elev.lateral_offsets([(0.0, 0.0), (0.0, 100.0)], 10.0)
+        self.assertEqual(((-10.0, 0.0), (10.0, 0.0)), sides[0])
+
+        bank = elev.bank_profile([12.0, 30.0, None], [10.0, 0.0, 5.0], 20.0, max_bank=0.2, smooth_window=1)
+        self.assertEqual([0.1, 0.2, 0.0], bank)
+
     def test_terrarium_pixels_decode_to_metres(self):
         # 32768 + 76.5 m = 128 * 256 + 76 + 128 / 256
         self.assertEqual([[76.5]], elev.terrarium_heights([bytes([128, 76, 128])]))
@@ -728,6 +736,59 @@ class SharedGreenTests(unittest.TestCase):
         self.assertEqual(1, len(holes[1]["greens"]))
         self.assertEqual(1, len(holes[2]["greens"]))
         self.assertNotEqual(holes[1]["greens"][0]["id"], holes[2]["greens"][0]["id"])
+
+
+class CourseSelectionTests(unittest.TestCase):
+    # A main course hole along latitude 56.000 and a par-3 hole along 56.010,
+    # each with an unnumbered green at its far end.
+    ELEMENTS = [
+        way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.0, 10.004)]),
+        way(2, {"golf": "hole", "ref": "P1"}, [(56.01, 10.0), (56.01, 10.002)]),
+        way(3, {"golf": "green"}, [(56.0, 10.004), (56.0001, 10.0041), (56.0, 10.0042)]),
+        way(4, {"golf": "green"}, [(56.01, 10.002), (56.0101, 10.0021), (56.01, 10.0022)]),
+    ]
+
+    def test_the_par_3_course_keeps_its_holes_and_nearest_features(self):
+        selected = conv.select_course_by_ref_prefix(self.ELEMENTS, "p", 56.005, 10.002)
+
+        self.assertEqual([2, 4], [el["id"] for el in selected])
+        self.assertEqual("1", selected[0]["tags"]["ref"])
+
+    def test_the_main_course_no_longer_takes_the_par_3_course_green(self):
+        selected = conv.select_course_by_ref_prefix(self.ELEMENTS, "", 56.005, 10.002)
+
+        self.assertEqual([1, 3], [el["id"] for el in selected])
+
+    def test_a_missing_prefix_is_an_error_naming_what_exists(self):
+        with self.assertRaisesRegex(ValueError, "'P'"):
+            conv.select_course_by_ref_prefix(self.ELEMENTS, "X", 56.005, 10.002)
+
+
+class ProjectionTests(unittest.TestCase):
+    def test_east_is_plus_x_and_north_is_minus_z_so_courses_are_not_mirrored(self):
+        # The game puts +X on the left when facing +Z, so +Z must be south for
+        # east to sit on the right of a player facing north.
+        x, z = conv._latlon_to_xz(56.001, 10.001, 56.0, 10.0)
+        self.assertGreater(x, 0.0)
+        self.assertLess(z, 0.0)
+        lat, lon = conv._xz_to_latlon(x, z, 56.0, 10.0)
+        self.assertAlmostEqual(56.001, lat, places=9)
+        self.assertAlmostEqual(10.001, lon, places=9)
+
+
+class PolylineTests(unittest.TestCase):
+    def test_a_single_resampled_point_is_the_middle_of_the_line(self):
+        # A tree row shorter than the tree spacing asks for one tree.
+        self.assertEqual([(5.0, 0.0)], conv._resample_polyline([(0.0, 0.0), (10.0, 0.0)], 1))
+        self.assertEqual(1, len(conv._sample_polyline_points([(0.0, 0.0), (8.0, 0.0)])))
+
+
+class SlugTests(unittest.TestCase):
+    def test_slugs_transliterate_instead_of_dropping_letters(self):
+        self.assertEqual("kalo_golf_club", conv.slugify("Kalø Golf Club"))
+        self.assertEqual("aero_golfklub", conv.slugify("Ærø Golfklub"))
+        self.assertEqual("haderslev_golf_club", conv.slugify("Haderslev  Golf-Club"))
+        self.assertEqual("st_andrews_eden", conv.slugify("St Andrews: Éden"))
 
 
 class GroundTests(unittest.TestCase):

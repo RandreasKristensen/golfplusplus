@@ -23,6 +23,7 @@ import random
 import re
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -96,6 +97,8 @@ DEFAULT_CONFIG = {
         # Terrarium tile zoom (see osm_elevation.py); 14 is ~5–8 m per pixel.
         "zoom": 14,
         "max_grade": 0.25,
+        # Steepest side slope a hole may tilt with, rise per metre across it.
+        "max_bank": 0.2,
         "smooth_window": 3,
     },
     # The course world's ground grid (see osm_ground.py).
@@ -752,17 +755,23 @@ out geom;""")
 # ── Geometry helpers ──────────────────────────────────────────────────────────
 
 def _latlon_to_xz(lat, lon, origin_lat, origin_lon) -> tuple[float, float]:
-    """Project WGS84 → local metres: X=East, Z=North, origin at tee."""
+    """
+    Project WGS84 -> local metres: X = east, Z = south. The game's left is +X
+    when facing +Z (see yaw_left in src/physics/vector_math.h), so with Z
+    south, east is on the right when facing north, as on the real course; a
+    Z-north frame mirrors every course. North is also up in the hole editor,
+    which draws +Z downwards.
+    """
     cos_lat = math.cos(math.radians(origin_lat))
     x = (lon - origin_lon) * cos_lat * EARTH_METERS_PER_DEGREE_LAT
-    z = (lat - origin_lat) * EARTH_METERS_PER_DEGREE_LAT
+    z = (origin_lat - lat) * EARTH_METERS_PER_DEGREE_LAT
     return x, z
 
 
 def _xz_to_latlon(x, z, origin_lat, origin_lon) -> tuple[float, float]:
     """Inverse of _latlon_to_xz — needed to ask a DEM about a local point."""
     cos_lat = math.cos(math.radians(origin_lat)) or 1.0
-    return (origin_lat + z / EARTH_METERS_PER_DEGREE_LAT,
+    return (origin_lat - z / EARTH_METERS_PER_DEGREE_LAT,
             origin_lon + x / (cos_lat * EARTH_METERS_PER_DEGREE_LAT))
 
 
@@ -1057,8 +1066,11 @@ def _polyline_length(pts) -> float:
 
 
 def _resample_polyline(pts, n=5) -> list[tuple[float, float]]:
-    """Return N evenly-spaced points along a line; duplicates if it is degenerate."""
-    if not pts:
+    """
+    Return N evenly-spaced points along a line, ends included; one point is
+    the line's middle. Duplicates if the line is degenerate.
+    """
+    if not pts or n < 1:
         return []
     if len(pts) == 1:
         return [pts[0]] * n
@@ -1068,7 +1080,7 @@ def _resample_polyline(pts, n=5) -> list[tuple[float, float]]:
         return [pts[0]] * n
 
     result = []
-    targets = [total * i / (n - 1) for i in range(n)]
+    targets = [total * i / (n - 1) for i in range(n)] if n > 1 else [total * 0.5]
     seg_start_dist = 0.0
     seg_index = 0
 
@@ -1465,6 +1477,67 @@ def _resolve_duplicate_hole_lines(elements: list) -> list:
     return [el for el in elements if _element_key(el) not in dropped]
 
 
+_PREFIXED_REF = re.compile(r"\s*([A-Za-z]*)\s*0*(\d{1,2})\s*")
+
+
+def _split_ref(tags: dict) -> tuple[str, int] | None:
+    """("P", 3) for ref "P3", ("", 12) for "12"; None without a single-hole ref."""
+    m = _PREFIXED_REF.fullmatch(str(tags.get("ref", "")))
+    return (m.group(1).upper(), int(m.group(2))) if m else None
+
+
+def select_course_by_ref_prefix(elements: list, prefix: str, origin_lat: float, origin_lon: float) -> list:
+    """
+    Keep the course whose hole refs carry `prefix` ("" for plain numbers) when
+    one boundary holds several courses told apart by ref, like Kalø's main
+    course (1–18) and its par-3 course (P1–P9).
+
+    Hole lines of the chosen course are renumbered to plain numbers and the
+    other courses' lines are dropped. A feature with a ref follows its prefix;
+    one without goes to whichever course has the nearest hole line, so neither
+    course steals the other's greens and bunkers. With a single course in the
+    boundary the elements come back unchanged.
+    """
+    prefix = prefix.upper()
+    lines = [el for el in elements if el.get("tags", {}).get("golf") == "hole" and _split_ref(el.get("tags", {}))]
+    prefixes = {_split_ref(el["tags"])[0] for el in lines}
+    if prefix not in prefixes:
+        found = ", ".join(repr(p) for p in sorted(prefixes)) or "none"
+        raise ValueError(f"no holes with ref prefix {prefix!r} in this boundary (found: {found})")
+    if prefixes == {prefix} and not prefix:
+        return elements
+
+    line_xz = [(_split_ref(el["tags"])[0] == prefix, _to_xz_list([el], origin_lat, origin_lon)) for el in lines]
+
+    def nearest_line_is_ours(el) -> bool:
+        pts = _to_xz_list([el], origin_lat, origin_lon)
+        if not pts:
+            return False
+        point = _centroid(pts)
+        ours = min((_point_polyline_distance(point, xz) for mine, xz in line_xz if mine and len(xz) > 1), default=math.inf)
+        theirs = min((_point_polyline_distance(point, xz) for mine, xz in line_xz if not mine and len(xz) > 1), default=math.inf)
+        return ours <= theirs
+
+    selected = []
+    foreign = 0
+    for el in elements:
+        tags = el.get("tags", {})
+        ref = _split_ref(tags)
+        if ref is not None:
+            if ref[0] != prefix:
+                foreign += tags.get("golf") != "hole"
+                continue
+            el = {**el, "tags": {**tags, "ref": str(ref[1])}}
+        elif tags.get("golf") not in (None, "hole") and not nearest_line_is_ours(el):
+            foreign += 1
+            continue
+        selected.append(el)
+    kept = sum(1 for el in lines if _split_ref(el["tags"])[0] == prefix)
+    print(f"  Course with ref prefix {prefix!r}: {kept} hole line(s); "
+          f"dropped {len(lines) - kept} line(s) and {foreign} feature(s) of the other course(s)", file=sys.stderr)
+    return selected
+
+
 def group_holes(elements: list) -> dict:
     """
     Returns {hole_number: hole_dict}.
@@ -1790,12 +1863,14 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
 
     # ── elevation ─────────────────────────────────────────────────────────────
     # OSM has no usable height data for golf features, so heights come from a
-    # DEM instead. Only the spline carries elevation: the game builds terrain as
-    # a ribbon swept along these control points and samples zone and tree
-    # heights off that mesh, so baking y anywhere else would be ignored.
+    # DEM instead. Only the spline carries elevation (heights and side slope):
+    # the game builds terrain as a ribbon swept along these control points and
+    # samples zone and tree heights off that mesh, so baking y anywhere else
+    # would be ignored.
     ctrl_y = [0.0] * len(ctrl_xz)
     pin_y = 0.0
     tee_elevation = None
+    bank = None
     if elevation is not None:
         elevation_config = (config or DEFAULT_CONFIG).get("elevation", {})
         samples = elevation.elevations(
@@ -1810,6 +1885,16 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
         tee_elevation = round(absolute[0], 2)
         profile = osm_elevation.relative_profile(absolute)
         ctrl_y, pin_y = profile[:-1], profile[-1]
+
+        # The land's side slope across the hole, so the ribbon tilts with a
+        # hillside instead of burying one edge and floating the other.
+        ribbon_width = max(width, rough_width)
+        sides = osm_elevation.lateral_offsets(ctrl_xz, ribbon_width * 0.5)
+        side_heights = elevation.elevations(
+            [_xz_to_latlon(x, z, origin_lat, origin_lon) for pair in sides for x, z in pair])
+        bank = osm_elevation.bank_profile(side_heights[0::2], side_heights[1::2], ribbon_width,
+                                          max_bank=float(elevation_config.get("max_bank", 0.2)),
+                                          smooth_window=int(elevation_config.get("smooth_window", 3)))
 
     # Control points relative to this hole's tee (which is [0,0,0])
     def rel_xyz(xz, y=0.0): return [_r(xz[0]-tee_x), _r(y), _r(xz[1]-tee_z)]
@@ -1893,6 +1978,7 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
         "pin": [_r(pin_x-tee_x), _r(pin_y), _r(pin_z-tee_z)],
         "spline": {
             "control_points": [rel_xyz(p, y) for p, y in zip(ctrl_xz, ctrl_y)],
+            **({"bank": bank} if bank is not None else {}),
             "width": width,
             "rough_width": rough_width
         },
@@ -2451,8 +2537,15 @@ def _write_ground_only(args) -> None:
           f"relief {relief:.1f} m, in {world_path}", file=sys.stderr)
 
 
+# Letters that do not decompose to ASCII; everything else loses its accents.
+_SLUG_LETTERS = {"ø": "o", "æ": "ae", "å": "aa", "ß": "ss", "þ": "th", "ð": "d", "ł": "l", "œ": "oe"}
+
+
 def slugify(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    """File-safe id: "Kalø Golf Club" -> "kalo_golf_club"."""
+    lowered = "".join(_SLUG_LETTERS.get(c, c) for c in name.lower())
+    ascii_only = unicodedata.normalize("NFKD", lowered).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "_", ascii_only).strip("_")
 
 
 def _project_root() -> Path:
@@ -2506,6 +2599,12 @@ Examples:
                     help="Skip writing the course manifest JSON")
     ap.add_argument("--no-world", action="store_true",
                     help="Skip writing the course-world JSON")
+    ap.add_argument("--ref-prefix", default="", metavar="PREFIX",
+                    help="Import the course whose hole refs start with PREFIX when one boundary holds "
+                         "several, e.g. P for par-3 holes P1-P9 (default: plain numbers)")
+    ap.add_argument("--course-name", metavar="NAME",
+                    help="Name (and id) for the imported course instead of the OSM name, "
+                         "e.g. \"Kalø Par 3\" with --ref-prefix P")
     ap.add_argument("--ground-only", metavar="COURSE_ID",
                     help="Only (re)write the ground grid of an existing course world, "
                          "e.g. a hand-made one; reads the course and its holes from the asset folders")
@@ -2531,6 +2630,7 @@ Examples:
     # ── 1. Locate the course ─────────────────────────────────────────────────
     print("→ Locating course on OSM...", file=sys.stderr)
     course_el, course_name = _find_course(args)
+    course_name = args.course_name or course_name
     course_id = slugify(course_name)
     config = load_generation_config(args.config, course_id)
     print(f"  Found: {course_name}  (id: {course_id})", file=sys.stderr)
@@ -2559,6 +2659,11 @@ Examples:
 
     # ── 4. Group by hole ──────────────────────────────────────────────────────
     print("→ Grouping elements by hole...", file=sys.stderr)
+    try:
+        elements = select_course_by_ref_prefix(elements, args.ref_prefix, origin_lat, origin_lon)
+    except ValueError as e:
+        print(f"\n{e}", file=sys.stderr)
+        sys.exit(1)
     holes = group_holes(elements)
 
     if not holes:

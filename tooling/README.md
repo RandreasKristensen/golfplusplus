@@ -158,6 +158,9 @@ py -3 osm_golf_convert.py "Marienlyst Golfklub" --config osm_golf_config.json
 # Flat holes and flat ground, no elevation tiles
 py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-elevation
 
+# One boundary holding two courses told apart by ref (Kalø: 1-18 and P1-P9)
+py -3 osm_golf_convert.py --id W96706717 --ref-prefix P --course-name "Kalø Par 3"
+
 # Re-download instead of reusing the cached OSM responses
 py -3 osm_golf_convert.py --id W1019045811 --refresh
 ```
@@ -182,6 +185,13 @@ each, downloaded once into `.osm_cache/terrarium/`. A hundred courses is in the
 tens of megabytes, and every later import, moved hole or new ground grid in the
 same area reads the cache with no network at all. The sources require
 attribution: see `docs/steam_todo.md`.
+
+Each control point also gets a `bank`: the land's side slope across the hole
+(rise per metre towards the right looking down the hole),
+clamped to `elevation.max_bank`, so a hole on a hillside tilts with the hill.
+The game keeps the hole's own height across the fairway and eases its rough
+into the course's land, so neighbouring holes meet on the land. Hand-made holes
+leave `bank` out and stay level; the hole editor shows and edits it per point.
 
 Hole heights are made relative to the tee, so every hole still starts at
 `y = 0` (its tee's real height goes in `source.tee_elevation`, and the course
