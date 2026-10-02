@@ -6,7 +6,8 @@
 // towards the hole a point is deeper inside; away from the holes the ground
 // eases from the nearest hole edge into the land (a course world's height
 // grid), or keeps the edge height when there is no land. Materials come from
-// the holes themselves (sample_holes), so their edges stay exact.
+// the exact zone shapes and the holes' fairway and rough (surface_material),
+// never from the grid, so their edges stay exact.
 
 #include "physics/terrain.h"
 
@@ -37,13 +38,23 @@ struct ground_settings {
     float blend_distance = 0.0f;  // from a hole's edge into the land
 };
 
-// `holes` are ribbon meshes (each with its spatial index); `land` may be null.
-// The grid covers every hole plus the margin, and all of `land`.
+// `holes` are ribbon meshes (each with its spatial index), `zones` every
+// hole's zones in the same coordinates; `land` may be null. The grid covers
+// every hole plus the margin, and all of `land`. Its vertices carry
+// surface_material, for drawing.
 terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
+                          const std::vector<material_zone>& zones,
                           const height_grid* land,
                           const ground_settings& settings);
 
 // The holes' sample at `position`, nothing when it is off every hole. Where
-// holes overlap, green, bunker and water win over fairway, fairway over rough,
-// and the hole the point is deeper inside wins a tie.
+// holes overlap, fairway wins over rough and the hole the point is deeper
+// inside wins a tie.
 std::optional<terrain_sample> sample_holes(const std::vector<terrain_mesh>& holes, const glm::vec3& position);
+
+// The material at `position`: the winning zone's (zone_material_at, which
+// reaches past the ribbons), else the holes' fairway or rough, else rough.
+// `on_hole` is the holes' winning sample there, null when off every hole.
+terrain_material surface_material(const std::vector<material_zone>& zones,
+                                  const terrain_sample* on_hole,
+                                  const glm::vec3& position);

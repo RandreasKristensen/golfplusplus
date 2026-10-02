@@ -1,6 +1,7 @@
 {
   "id": "augusta_national_golf_club",
   "name": "Augusta National Golf Club",
+  "backdrop": "backdrops/augusta_national_golf_club.bmp",
   "holes": [
     "holes/augusta_national_golf_club_h01.json",
     "holes/augusta_national_golf_club_h02.json",

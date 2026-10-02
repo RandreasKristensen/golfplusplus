@@ -20,6 +20,7 @@ render_static_mesh make_terrain_render_mesh(const std::vector<const terrain_mesh
             out.position = vertex.position;
             out.normal = vertex.normal;
             out.color = terrain_material_color(vertex.material, std::min(1.0f, std::abs(vertex.distance_from_center) / half_width));
+            out.rough = vertex.material == terrain_material::rough ? 1.0f : 0.0f;
             render.vertices.push_back(out);
         }
         for (const std::uint32_t index : mesh->indices) {

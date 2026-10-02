@@ -15,6 +15,7 @@
 
 using json = nlohmann::json;
 
+// The whole file, byte for byte (binary files too).
 std::optional<std::string> read_text_file(const std::filesystem::path& path);
 
 // Parses JSON text; nullopt when it is not valid JSON.

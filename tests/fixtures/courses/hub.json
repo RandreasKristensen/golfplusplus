@@ -1,6 +1,7 @@
 {
   "id": "fixture_hub",
   "name": "Fixture Hub",
+  "backdrop": "backdrops/fixture.bmp",
   "holes": ["test", "test2", "test3"],
   "world": "course_worlds/hub.json"
 }

@@ -26,6 +26,9 @@ struct terrain_build_tuning {
     float ground_blend_distance = 0.0f;
     terrain_zone_tuning zones;      // bunker and water carve depths
     float material_overlay_lift = 0.0f;
+    // Greatest gap between the drawn zone shapes' vertices, so they bend with
+    // the ground grid instead of sinking under it.
+    float material_overlay_spacing = 0.0f;
 };
 
 struct ball_tuning {

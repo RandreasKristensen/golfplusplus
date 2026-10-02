@@ -6,7 +6,20 @@ Design and import courses for golf++, plus the Windows build helper.
 |---|---|
 | `hole_editor/hole-editor.html` | Browser-based editor for holes and course worlds |
 | `osm_import/` | Converts real courses from OpenStreetMap into hole/course/world JSON |
+| `art/make_art.py` | Draws the rough's grass texture and every course's backdrop panorama |
 | `gb.cmd` / `gb.ps1` | Windows release build helper (see below) |
+
+## art/make_art.py
+
+Draws `assets/textures/rough_grass.bmp` and the backdrop each course file in
+`assets/courses/` names (`"backdrop"`), from code and fixed seeds. Courses
+without a hand-tuned theme in the script (fresh imports) get a default
+parkland one. Run it after importing a course; `--check` fails if `assets/` is
+out of date.
+
+```
+python tooling/art/make_art.py
+```
 
 ## gb (build helper)
 

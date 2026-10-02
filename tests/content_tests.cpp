@@ -12,6 +12,7 @@
 #include "game/text_ids.h"
 #include "game/tuning_loader.h"
 #include "physics/ground_mesh.h"
+#include "renderer/bmp_image.h"
 #include "renderer/hud_overlay.h"
 #include "renderer/menu_overlay.h"
 #include "renderer/overlay_batch.h"
@@ -21,6 +22,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -123,11 +125,36 @@ TEST_CASE("courses list holes by id or path") {
     CHECK(course->id == "course_01");
     CHECK(course->name == "The Big Three");
     CHECK((course->holes == std::vector<std::string>{"test", "test2", "test3"}));
+    CHECK(course->backdrop == "backdrops/fixture.bmp");
     CHECK(course_hole_path("root", *course, 0) == (std::filesystem::path("root") / "holes" / "test.json").string());
     CHECK(course_hole_path("root", *course, 3).empty());
 
-    CHECK(!parse_course_from_text(R"({"id": "empty", "holes": []})"));
-    CHECK(!parse_course_from_text(R"({"id": "bad", "holes": ["ok", 3]})"));
+    CHECK(!parse_course_from_text(R"({"id": "empty", "backdrop": "b.bmp", "holes": []})"));
+    CHECK(!parse_course_from_text(R"({"id": "bad", "backdrop": "b.bmp", "holes": ["ok", 3]})"));
+    CHECK(!parse_course_from_text(R"({"id": "no_backdrop", "holes": ["ok"]})"));
+}
+
+TEST_CASE("bmp images decode bottom row first") {
+    // 4 x 2: red, green, blue, white along the bottom; black, grey, yellow,
+    // cyan along the top.
+    const std::optional<rgb_image> image = load_bmp_file(fixture_root() + "/backdrops/fixture.bmp");
+    REQUIRE(image.has_value());
+    CHECK(image->width == 4);
+    CHECK(image->height == 2);
+    REQUIRE(image->pixels.size() == 24U);
+    const auto pixel = [&image](const int row, const int column) {
+        const std::size_t at = static_cast<std::size_t>((row * image->width + column) * 3);
+        return std::vector<int>{image->pixels[at], image->pixels[at + 1], image->pixels[at + 2]};
+    };
+    CHECK((pixel(0, 0) == std::vector<int>{255, 0, 0}));
+    CHECK((pixel(0, 2) == std::vector<int>{0, 0, 255}));
+    CHECK((pixel(1, 2) == std::vector<int>{255, 255, 0}));
+    CHECK((pixel(1, 3) == std::vector<int>{0, 255, 255}));
+
+    const std::string bytes = *read_text_file(fixture_root() + "/backdrops/fixture.bmp");
+    CHECK(!parse_bmp(bytes.substr(0, bytes.size() - 4)));
+    CHECK(!parse_bmp("BM not an image at all, just some text long enough to pass the header size"));
+    CHECK(!load_bmp_file(fixture_root() + "/backdrops/missing.bmp"));
 }
 
 TEST_CASE("course worlds need exactly one start per hole") {
@@ -184,9 +211,15 @@ TEST_CASE("course worlds need a complete ground grid") {
         with_ground(R"(, "ground": {"origin": [0, 0], "cell_size": 10, "columns": 2, "rows": 2, "heights": [0, 1, 2]})"), one_hole));
 }
 
-TEST_CASE("every shipped course, hole and world loads") {
+TEST_CASE("every shipped course, hole, world and image loads") {
     const game_content& content = shipped_content();
+    // A course file the loader refuses would drop out of the menus silently.
+    CHECK(content.courses.size() == json_files_in_directory(std::filesystem::path(content.asset_root) / "courses").size());
+    const std::optional<rgb_image> grass = load_bmp_file(std::filesystem::path(content.asset_root) / "textures" / "rough_grass.bmp");
+    CHECK(grass.has_value());
     for (const course_definition& course : content.courses) {
+        const std::optional<rgb_image> backdrop = load_bmp_file(std::filesystem::path(content.asset_root) / course.backdrop);
+        CHECK(backdrop.has_value());
         for (std::size_t i = 0; i < course.holes.size(); ++i) {
             CHECK(load_hole_from_file(course_hole_path(content.asset_root, course, i)).has_value());
         }

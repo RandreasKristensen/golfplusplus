@@ -11,14 +11,17 @@ enum class material_zone_type {
     unknown  // unrecognised type in the data; ignored by terrain building
 };
 
-// A circle (`has_radius`) or an axis-aligned box (`has_bounds`) on the ground.
-// If both are set, the circle is used.
+// A circle (`has_radius`) or a box (`has_bounds`) on the ground. If both are
+// set, the circle is used. The box is `bounds_min`..`bounds_max` turned by
+// `rotation` radians (rotate_about_y, physics/vector_math.h) around its own
+// centre, the way a placed hole turns; authored boxes have rotation 0.
 struct material_zone {
     material_zone_type type = material_zone_type::unknown;
     glm::vec3 center{0.0f};
     float radius = 0.0f;
     glm::vec3 bounds_min{0.0f};
     glm::vec3 bounds_max{0.0f};
+    float rotation = 0.0f;
     bool has_radius = false;
     bool has_bounds = false;
 };

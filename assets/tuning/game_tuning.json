@@ -12,7 +12,8 @@
     "ground_blend_distance": 40.0,
     "bunker_depth": 0.55,
     "water_depth": 0.35,
-    "material_overlay_lift": 0.045
+    "material_overlay_lift": 0.045,
+    "material_overlay_spacing": 2.0
   },
   "physics": {
     "drag_coeff": 0.004,

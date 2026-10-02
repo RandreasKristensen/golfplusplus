@@ -62,6 +62,8 @@ struct render_data {
     // the render call; null means "none this frame".
     const render_static_mesh* terrain_mesh = nullptr;
     const render_static_mesh* material_overlay_mesh = nullptr;
+    // The course's backdrop panorama, relative to the asset root.
+    const std::string* backdrop_image = nullptr;
     const std::vector<tree_body>* trees = nullptr;
     // Instance data for `trees` is re-uploaded only when this changes.
     std::uint64_t trees_revision = 0;

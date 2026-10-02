@@ -1,6 +1,7 @@
 {
   "id": "course_01",
   "name": "The Big Three",
+  "backdrop": "backdrops/fixture.bmp",
   "holes": [
     "test",
     "test2",

@@ -102,16 +102,25 @@ struct terrain_sample {
 
 glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, float t);
 
-// Builds the ribbon mesh with material zones applied (bunkers and water are
-// carved by `tuning`). Includes the spatial index.
+// Builds the ribbon mesh, fairway down the middle and rough at the sides, with
+// bunkers and water carved into it by `tuning`. Zone materials are not on the
+// ribbon: zone_material_at gives them from the exact shapes. Includes the
+// spatial index.
 terrain_mesh build_terrain_mesh(const terrain_spline& terrain,
                                 const std::vector<material_zone>& zones,
                                 const terrain_zone_tuning& tuning);
 
-// Zone shapes draped over `source_mesh` and lifted by `lift`, for drawing.
-terrain_mesh build_material_overlay_mesh(const terrain_mesh& source_mesh,
+// The material of the winning zone at `position` (XZ), nothing outside every
+// zone. Where zones overlap, bunker beats green beats water.
+std::optional<terrain_material> zone_material_at(const std::vector<material_zone>& zones, const glm::vec3& position);
+
+// Zone shapes draped over `ground` and lifted by `lift`, for drawing. Vertices
+// are at most `spacing` apart so the shapes follow the ground between them,
+// and each shows the zone that wins at its spot.
+terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground,
                                          const std::vector<material_zone>& zones,
-                                         float lift);
+                                         float lift,
+                                         float spacing);
 
 // Two triangles per grid cell over `rows` x `columns` vertices laid out row by
 // row starting at `first_vertex`.

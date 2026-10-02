@@ -7,7 +7,8 @@
 #include <string>
 #include <vector>
 
-// nullopt when "holes" is missing, empty or holds anything but non-empty strings.
+// nullopt when "holes" is missing, empty or holds anything but non-empty
+// strings, or "backdrop" is missing or empty.
 std::optional<course_definition> parse_course_from_text(const std::string& text);
 std::optional<course_definition> load_course_from_file(const std::string& path);
 // Every valid course in `directory`, sorted by file name.

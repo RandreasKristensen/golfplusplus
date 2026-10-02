@@ -66,6 +66,7 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.terrain.zones.bunker_depth = terrain.number("bunker_depth");
     tuning.terrain.zones.water_depth = terrain.number("water_depth");
     tuning.terrain.material_overlay_lift = terrain.number("material_overlay_lift");
+    tuning.terrain.material_overlay_spacing = terrain.number("material_overlay_spacing");
 
     const section_reader physics = section("physics");
     tuning.physics.drag_coeff = physics.number("drag_coeff");

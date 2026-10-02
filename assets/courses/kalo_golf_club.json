@@ -1,6 +1,7 @@
 {
   "id": "kalo_golf_club",
   "name": "Kal\u00f8 Golf Club",
+  "backdrop": "backdrops/kalo_golf_club.bmp",
   "holes": [
     "holes/kalo_golf_club_h01.json",
     "holes/kalo_golf_club_h02.json",

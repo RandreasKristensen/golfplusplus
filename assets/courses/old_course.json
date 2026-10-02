@@ -1,6 +1,7 @@
 {
   "id": "old_course",
   "name": "Old Course",
+  "backdrop": "backdrops/old_course.bmp",
   "holes": [
     "holes/old_course_h01.json",
     "holes/old_course_h02.json",

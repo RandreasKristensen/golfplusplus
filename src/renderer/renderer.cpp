@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -41,6 +42,12 @@ const glm::vec3 ball_color(0.9f, 0.9f, 0.9f);
 // The backdrop ground sits this far under the lowest terrain.
 constexpr float backdrop_ground_drop = 2.0f;
 constexpr float flight_path_lift = 0.02f;
+// The drawn zone shapes sit a few centimetres over the ground; this pulls them
+// further forward in depth so far-off ones never flicker under it.
+constexpr float material_overlay_offset_factor = -1.0f;
+constexpr float material_overlay_offset_units = -2.0f;
+constexpr int grass_texture_unit = 1;
+constexpr const char* grass_texture_path = "textures/rough_grass.bmp";
 constexpr float min_far_plane = 160.0f;
 constexpr float far_plane_extent_scale = 2.5f;
 
@@ -72,6 +79,9 @@ void describe_render_terrain_vertex() {
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(render_terrain_vertex),
                           reinterpret_cast<void*>(offsetof(render_terrain_vertex, color)));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(render_terrain_vertex),
+                          reinterpret_cast<void*>(offsetof(render_terrain_vertex, rough)));
 }
 
 void delete_buffer(unsigned int& buffer) {
@@ -196,10 +206,19 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root) {
                             tree_renderer::mesh_source{cylinder_.vbo, cylinder_.vertex_count},
                             tree_renderer::mesh_source{cone_.vbo, cone_.vertex_count}) &&
         world_marker_renderer_.init(path("world_marker.vert"), path("world_marker.frag")) &&
-        overlay_pass_.init(path("overlay.vert"), path("overlay.frag"));
+        overlay_pass_.init(path("overlay.vert"), path("overlay.frag")) &&
+        backdrop_pass_.init(asset_root, path("backdrop.vert"), path("backdrop.frag"), screen_vao_);
     if (!ok) {
         return false;
     }
+
+    const std::optional<rgb_image> grass = load_bmp_file(std::filesystem::path(asset_root) / grass_texture_path);
+    if (!grass || !grass_texture_.upload(*grass, texture_sampling::tiled_detail)) {
+        SDL_Log("%s is missing or not an uncompressed 24/32-bit BMP", grass_texture_path);
+        return false;
+    }
+    terrain_shader_.use();
+    terrain_shader_.set_int("u_grass", grass_texture_unit);
 
     gpu_timers_.init();
     return true;
@@ -210,6 +229,8 @@ void renderer::shutdown() {
     tree_renderer_.shutdown();
     world_marker_renderer_.shutdown();
     overlay_pass_.shutdown();
+    backdrop_pass_.shutdown();
+    grass_texture_.shutdown();
     terrain_shader_.shutdown();
     ball_shader_.shutdown();
     crt_shader_.shutdown();
@@ -243,6 +264,7 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
     terrain_shader_.set_profile(profile);
     ball_shader_.set_profile(profile);
     crt_shader_.set_profile(profile);
+    backdrop_pass_.set_profile(profile);
     gpu_timers_.begin_frame(profile != nullptr);
 
     int screen_width = 0;
@@ -404,8 +426,10 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     const glm::mat4 view_proj = proj * view;
 
     gpu_timers_.begin(gpu_profile_stage::terrain);
+    backdrop_pass_.draw(data.backdrop_image != nullptr ? *data.backdrop_image : std::string(), view, proj);
     terrain_shader_.use();
     terrain_shader_.set_vec3("u_light_dir", light_direction);
+    grass_texture_.bind(grass_texture_unit);
 
     // Backdrop ground under the whole area so the horizon is never empty.
     const float lowest_terrain = data.terrain_mesh != nullptr && data.terrain_mesh->bounds.valid
@@ -429,9 +453,11 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
         std::size_t max_ranges;
         std::vector<render_index_range>& ranges;
         render_chunk_cull_stats& stats;
+        bool pulled_forward;  // drawn over the ground it lies on
     } meshes[] = {
-        {terrain_, data.terrain_mesh, max_terrain_draw_ranges, terrain_draw_ranges_, cull_stats_.terrain},
-        {material_overlay_, data.material_overlay_mesh, max_material_overlay_draw_ranges, material_overlay_draw_ranges_, cull_stats_.material_overlay},
+        {terrain_, data.terrain_mesh, max_terrain_draw_ranges, terrain_draw_ranges_, cull_stats_.terrain, false},
+        {material_overlay_, data.material_overlay_mesh, max_material_overlay_draw_ranges, material_overlay_draw_ranges_,
+         cull_stats_.material_overlay, true},
     };
     for (const auto& mesh : meshes) {
         if (mesh.buffers.index_count <= 0 || mesh.mesh == nullptr) {
@@ -442,7 +468,12 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
         if (!mesh.ranges.empty()) {
             set_terrain_draw_state(terrain_shader_, glm::mat4(1.0f), view_proj, glm::vec3(1.0f), 1.0f, true);
             glBindVertexArray(mesh.buffers.vao);
+            if (mesh.pulled_forward) {
+                glEnable(GL_POLYGON_OFFSET_FILL);
+                glPolygonOffset(material_overlay_offset_factor, material_overlay_offset_units);
+            }
             draw_index_ranges(terrain_shader_, mesh.ranges);
+            glDisable(GL_POLYGON_OFFSET_FILL);
         }
     }
     glBindVertexArray(0);

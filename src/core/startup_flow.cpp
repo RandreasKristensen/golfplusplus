@@ -118,6 +118,7 @@ course_definition practice_course(const startup_hole_option& option) {
     course.id = "practice_" + option.hole.id;
     course.name = option.hole.name;
     course.holes = {option.path};
+    course.backdrop = option.backdrop;
     course.practice = true;
     return course;
 }
@@ -133,6 +134,19 @@ void add_tile(render_startup_menu& menu, std::string title, std::string subtitle
 void open_screen(startup_flow_state& state, const startup_flow flow) {
     state.flow = flow;
     state.selection = 0;
+}
+
+// The backdrop of the first course that plays the hole at `path`, empty when none does.
+std::string backdrop_for_hole(const game_content& content, const std::filesystem::path& path) {
+    for (const course_definition& course : content.courses) {
+        for (std::size_t i = 0; i < course.holes.size(); ++i) {
+            std::error_code error;
+            if (std::filesystem::equivalent(course_hole_path(content.asset_root, course, i), path, error)) {
+                return course.backdrop;
+            }
+        }
+    }
+    return {};
 }
 }
 
@@ -152,7 +166,8 @@ startup_catalog load_startup_catalog(const game_content& content) {
         }
         std::error_code error;
         const std::filesystem::path relative = std::filesystem::relative(path, root, error);
-        catalog.holes.push_back(startup_hole_option{error ? path.string() : relative.generic_string(), std::move(*hole)});
+        catalog.holes.push_back(startup_hole_option{error ? path.string() : relative.generic_string(), std::move(*hole),
+                                                    backdrop_for_hole(content, path)});
     }
     for (const course_definition& course : content.courses) {
         catalog.courses.push_back(make_course_option(content.asset_root, course));

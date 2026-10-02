@@ -11,7 +11,8 @@ std::optional<course_definition> parse_course_from_text(const std::string& text)
     }
 
     const json* holes = json_array(*root, "holes");
-    if (holes == nullptr || holes->empty()) {
+    const std::optional<std::string> backdrop = json_string(*root, "backdrop");
+    if (holes == nullptr || holes->empty() || !backdrop || backdrop->empty()) {
         return std::nullopt;
     }
 
@@ -19,6 +20,7 @@ std::optional<course_definition> parse_course_from_text(const std::string& text)
     course.id = json_string(*root, "id").value_or("");
     course.name = json_string(*root, "name").value_or(course.id);
     course.world = json_string(*root, "world").value_or("");
+    course.backdrop = *backdrop;
     for (const json& hole : *holes) {
         if (!hole.is_string() || hole.get<std::string>().empty()) {
             return std::nullopt;

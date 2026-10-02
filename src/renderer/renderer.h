@@ -13,6 +13,7 @@
 
 #include "game/text_assets.h"
 #include "profiling/profiling.h"
+#include "renderer/backdrop_pass.h"
 #include "renderer/course_map_fill.h"
 #include "renderer/dynamic_buffer.h"
 #include "renderer/framebuffer.h"
@@ -21,6 +22,7 @@
 #include "renderer/render_data.h"
 #include "renderer/render_mesh_chunks.h"
 #include "renderer/shader.h"
+#include "renderer/texture.h"
 #include "renderer/tree_renderer.h"
 #include "renderer/world_marker_batch.h"
 #include "renderer/world_marker_renderer.h"
@@ -34,7 +36,7 @@ struct renderer_cull_stats {
 
 class renderer {
 public:
-    // `asset_root` is where shaders/ is read from.
+    // `asset_root` is where shaders/, textures/ and course backdrops are read from.
     bool init(SDL_Window* window, const std::string& asset_root);
     void shutdown();
     // `profile` may be null (profiling off).
@@ -72,6 +74,8 @@ private:
 
     SDL_Window* window_ = nullptr;
     overlay_pass overlay_pass_;
+    backdrop_pass backdrop_pass_;
+    texture grass_texture_;  // on the rough (terrain.frag)
     framebuffer scene_fbo_;
     gl_timer_pool gpu_timers_;
     shader_program terrain_shader_;

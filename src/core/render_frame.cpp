@@ -176,6 +176,7 @@ render_data make_render_data(const game_state& game,
 
     data.terrain_mesh = meshes.terrain;
     data.material_overlay_mesh = meshes.material_overlay;
+    data.backdrop_image = &game.course.backdrop;
     data.trees = &game.static_anchors.trees;
     data.trees_revision = game.static_anchors.revision;
     data.area_center = game.area.center;

@@ -4,14 +4,13 @@
 
 - water can't be resized in the hole editor (?)
 - power physics are wonky.
-- performance is down again with the new courses. maybe just for the quick builds and perfomance is better with a "real" build? i dont know the difference.
-- add æøå / ÆØÅ, and make the text scale, and always be scaled with screen size percentage so we always make sure with math that text is scaled correctly.
+- performance is down again with the new courses.
 
 ## ideas
 
 - editor for visual assets. Collect sound assets from real life. Audio engine for automatic music control. Music panel like osrs.
-- parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
-- improvement of course rendering. Teepads, course width etc is still very bad, and rough vs course is almost unidentifiable. ground textures so movement has more context, it's trippy right now. Also background
+- (recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
+
 - fullscreen that scales to any resolution natively
 - wind direction and rain, displayable in a greater tier rangefinder
 - player owned housing (small instances where friends can join and be invited, where you can displayed collectibles, tournament wins and gear like clubsets etc.)

@@ -38,31 +38,17 @@ bool contains_xz(const grid_bounds& bounds, const glm::vec3& position) {
         position.z >= bounds.low.z && position.z <= bounds.high.z;
 }
 
-int material_rank(const terrain_material material) {
-    switch (material) {
-    case terrain_material::green:
-    case terrain_material::bunker:
-    case terrain_material::water:
-        return 2;
-    case terrain_material::fairway:
-        return 1;
-    case terrain_material::rough:
-        return 0;
-    }
-    return 0;
-}
-
 // How far inside its ribbon a sample is, from the nearer side edge.
 float depth_inside(const terrain_mesh& hole, const terrain_sample& sample) {
     return std::max(0.0f, hole.width * 0.5f - std::abs(sample.distance_from_center));
 }
 
 // Whether sample `a` (on `a_hole`) wins over `b` (on `b_hole`) where holes
-// overlap: a higher-ranked material, else the hole the point is deeper inside.
+// overlap: fairway over rough, else the hole the point is deeper inside.
 bool outranks(const terrain_mesh& a_hole, const terrain_sample& a, const terrain_mesh& b_hole, const terrain_sample& b) {
-    const int rank = material_rank(a.material);
-    const int other_rank = material_rank(b.material);
-    return rank > other_rank || (rank == other_rank && depth_inside(a_hole, a) > depth_inside(b_hole, b));
+    const bool fairway = a.material == terrain_material::fairway;
+    const bool other_fairway = b.material == terrain_material::fairway;
+    return (fairway && !other_fairway) || (fairway == other_fairway && depth_inside(a_hole, a) > depth_inside(b_hole, b));
 }
 
 // Every hole containing a point, with its sample.
@@ -203,7 +189,14 @@ std::optional<terrain_sample> sample_holes(const std::vector<terrain_mesh>& hole
     return best;
 }
 
+terrain_material surface_material(const std::vector<material_zone>& zones,
+                                  const terrain_sample* on_hole,
+                                  const glm::vec3& position) {
+    return zone_material_at(zones, position).value_or(on_hole != nullptr ? on_hole->material : terrain_material::rough);
+}
+
 terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
+                          const std::vector<material_zone>& zones,
                           const height_grid* land,
                           const ground_settings& settings) {
     terrain_mesh ground;
@@ -244,7 +237,7 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
         return glm::vec3(low.x + step_x * static_cast<float>(column), 0.0f, low.z + step_z * static_cast<float>(row));
     };
 
-    // On the holes: the blended hole height and the winning material.
+    // On the holes: the blended hole height. Materials as surface_material.
     std::vector<bool> on_hole(vertex_count, false);
     std::vector<float> base(vertex_count, 0.0f);
     std::vector<std::optional<float>> offsets(vertex_count);
@@ -255,11 +248,12 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
             const glm::vec3 point = grid_point(row, column);
             base[index] = land != nullptr ? sample_height_grid(*land, point.x, point.z) : 0.0f;
             const std::vector<hole_hit> hits = hits_at(holes, hole_bounds, point);
-            if (const hole_hit* best = winning_hit(holes, hits)) {
+            const hole_hit* best = winning_hit(holes, hits);
+            if (best != nullptr) {
                 on_hole[index] = true;
                 offsets[index] = blended_height(holes, hits) - base[index];
-                materials[index] = best->sample.material;
             }
+            materials[index] = surface_material(zones, best != nullptr ? &best->sample : nullptr, point);
         }
     }
 

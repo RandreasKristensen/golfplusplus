@@ -2740,6 +2740,8 @@ Examples:
         course_json = {
             "id": course_id,
             "name": course_name,
+            # Drawn by tooling/art/make_art.py.
+            "backdrop": f"backdrops/{course_id}.bmp",
             "holes": hole_paths
         }
         if not args.no_world:
@@ -2748,6 +2750,7 @@ Examples:
         with open(course_file, "w", encoding="utf-8") as f:
             json.dump(course_json, f, indent=2)
         print(f"\n→ Course manifest: {course_file}", file=sys.stderr)
+        print("→ Run tooling/art/make_art.py to draw its backdrop.", file=sys.stderr)
 
     if source_counts:
         summary = ", ".join(f"{count}x {name}" for name, count in sorted(source_counts.items()))

@@ -33,6 +33,14 @@ inline float horizontal_distance(const glm::vec3& a, const glm::vec3& b) {
     return glm::length(horizontal(a - b));
 }
 
+// `point` turned `radians` around the Y axis through the origin, +X towards +Z.
+// Placing a hole on its course turns it this way.
+inline glm::vec3 rotate_about_y(const glm::vec3& point, const float radians) {
+    const float c = std::cos(radians);
+    const float s = std::sin(radians);
+    return glm::vec3(point.x * c - point.z * s, point.y, point.x * s + point.z * c);
+}
+
 // Yaw convention for players, carts and aiming: 0 faces +Z, positive turns
 // towards +X.
 inline glm::vec3 yaw_direction(const float yaw) {

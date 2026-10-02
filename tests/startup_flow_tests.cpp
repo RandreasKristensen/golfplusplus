@@ -168,7 +168,7 @@ TEST_CASE("a picked hole starts as a one-hole practice course") {
     hole_data hole;
     hole.id = "hole_01";
     hole.name = "New Hole";
-    catalog.holes = {startup_hole_option{"holes/test.json", hole}};
+    catalog.holes = {startup_hole_option{"holes/test.json", hole, "backdrops/fixture.bmp"}};
     startup_flow_state state;
     state.flow = startup_flow::hole_picker;
 
@@ -180,6 +180,15 @@ TEST_CASE("a picked hole starts as a one-hole practice course") {
     CHECK(result.course.practice);
     CHECK(result.course.holes == std::vector<std::string>{"holes/test.json"});
     CHECK(result.course.name == "New Hole");
+    CHECK(result.course.backdrop == "backdrops/fixture.bmp");
+}
+
+TEST_CASE("every shipped hole is practised in front of its course's backdrop") {
+    const startup_catalog catalog = load_startup_catalog(*load_game_content(GOLFPP_ASSETS_DIR).content);
+    REQUIRE(!catalog.holes.empty());
+    for (const startup_hole_option& option : catalog.holes) {
+        CHECK(!option.backdrop.empty());
+    }
 }
 
 TEST_CASE("the catalog totals each course's par and previews hole 1") {

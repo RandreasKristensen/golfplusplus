@@ -38,6 +38,7 @@
     X(PFNGLFRAMEBUFFERRENDERBUFFERPROC, glFramebufferRenderbuffer)  \
     X(PFNGLFRAMEBUFFERTEXTURE2DPROC, glFramebufferTexture2D)        \
     X(PFNGLGENBUFFERSPROC, glGenBuffers)                            \
+    X(PFNGLGENERATEMIPMAPPROC, glGenerateMipmap)                    \
     X(PFNGLGENFRAMEBUFFERSPROC, glGenFramebuffers)                  \
     X(PFNGLGENQUERIESPROC, glGenQueries)                            \
     X(PFNGLGENRENDERBUFFERSPROC, glGenRenderbuffers)                \
@@ -94,6 +95,7 @@ bool load_gl_functions();
 #define glFramebufferRenderbuffer golfpp_glFramebufferRenderbuffer
 #define glFramebufferTexture2D golfpp_glFramebufferTexture2D
 #define glGenBuffers golfpp_glGenBuffers
+#define glGenerateMipmap golfpp_glGenerateMipmap
 #define glGenFramebuffers golfpp_glGenFramebuffers
 #define glGenQueries golfpp_glGenQueries
 #define glGenRenderbuffers golfpp_glGenRenderbuffers

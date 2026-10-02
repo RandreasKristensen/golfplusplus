@@ -98,6 +98,7 @@ target_compile_definitions(golfpp-game PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSET
 # GL-free render data: overlay/menu drawing, world marker and cart batches,
 # culling, camera blending. The GL side lives in the executable.
 golfpp_library(golfpp-render-data
+    src/renderer/bmp_image.cpp
     src/renderer/camera_local.cpp
     src/renderer/camera_transition.cpp
     src/renderer/cart_batch.cpp
@@ -137,6 +138,7 @@ add_executable(golfpp
     src/core/event_loop.cpp
     src/core/main.cpp
     src/core/window.cpp
+    src/renderer/backdrop_pass.cpp
     src/renderer/dynamic_buffer.cpp
     src/renderer/framebuffer.cpp
     src/renderer/gl_loader.cpp
@@ -144,6 +146,7 @@ add_executable(golfpp
     src/renderer/overlay_pass.cpp
     src/renderer/renderer.cpp
     src/renderer/shader.cpp
+    src/renderer/texture.cpp
     src/renderer/tree_renderer.cpp
     src/renderer/world_marker_renderer.cpp
 )

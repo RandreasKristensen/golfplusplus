@@ -12,6 +12,9 @@ struct course_definition {
     std::vector<std::string> holes;
     // Optional course world (hub) path relative to the asset root.
     std::string world;
+    // The panorama of sky and far-off land behind the course, relative to the
+    // asset root (renderer/backdrop_pass.h). Every course file names one.
+    std::string backdrop;
     // A single hole from the hole picker: completing it does not complete a course.
     bool practice = false;
 };

@@ -38,6 +38,8 @@ enum class main_menu_item {
 struct startup_hole_option {
     std::string path;  // relative to the asset root
     hole_data hole;
+    // The backdrop of the first course playing this hole; empty when none does.
+    std::string backdrop;
 };
 
 struct startup_course_option {

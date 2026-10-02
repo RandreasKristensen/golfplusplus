@@ -13,9 +13,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <optional>
 #include <vector>
 
 #include <glm/geometric.hpp>
+#include <glm/trigonometric.hpp>
 
 #include "test_support.h"
 
@@ -204,35 +206,42 @@ TEST_CASE("terrain mesh centerline follows spline height") {
     CHECK(checked_sections >= terrain.sample_count);
 }
 
-TEST_CASE("terrain zones prioritize water over green") {
-    terrain_spline terrain;
-    terrain.control_points = {
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        glm::vec3(0.0f, 0.0f, 20.0f)
-    };
-    terrain.width = 10.0f;
-    terrain.sample_count = 12;
-
+TEST_CASE("bunkers and greens win over the water box around them") {
     material_zone green_zone;
     green_zone.type = material_zone_type::green;
     green_zone.center = glm::vec3(0.0f, 0.0f, 10.0f);
     green_zone.radius = 6.0f;
     green_zone.has_radius = true;
 
+    material_zone bunker_zone;
+    bunker_zone.type = material_zone_type::bunker;
+    bunker_zone.center = glm::vec3(5.0f, 0.0f, 10.0f);
+    bunker_zone.radius = 2.0f;
+    bunker_zone.has_radius = true;
+
     material_zone water_zone;
     water_zone.type = material_zone_type::water;
-    water_zone.center = glm::vec3(0.0f, 0.0f, 10.0f);
-    water_zone.radius = 3.0f;
-    water_zone.has_radius = true;
+    water_zone.bounds_min = glm::vec3(-20.0f, 0.0f, -20.0f);
+    water_zone.bounds_max = glm::vec3(20.0f, 0.0f, 40.0f);
+    water_zone.has_bounds = true;
 
-    std::vector<material_zone> zones = {green_zone, water_zone};
-    terrain_zone_tuning zone_tuning;
-    zone_tuning.water_depth = 0.4f;
+    const std::vector<material_zone> zones = {water_zone, green_zone, bunker_zone};
+    CHECK(zone_material_at(zones, glm::vec3(0.0f, 0.0f, 10.0f)) == terrain_material::green);
+    CHECK(zone_material_at(zones, glm::vec3(5.5f, 0.0f, 10.0f)) == terrain_material::bunker);
+    CHECK(zone_material_at(zones, glm::vec3(-10.0f, 0.0f, 10.0f)) == terrain_material::water);
+    CHECK(!zone_material_at(zones, glm::vec3(-30.0f, 0.0f, 10.0f)));
+}
 
-    const terrain_mesh mesh = build_terrain_mesh(terrain, zones, zone_tuning);
-    const terrain_sample sample = sample_terrain_mesh(mesh, glm::vec3(0.0f, 0.0f, 10.0f), -2.0f);
+TEST_CASE("a turned box zone covers its turned footprint") {
+    material_zone water_zone;
+    water_zone.type = material_zone_type::water;
+    water_zone.bounds_min = glm::vec3(-4.0f, 0.0f, -1.0f);
+    water_zone.bounds_max = glm::vec3(4.0f, 0.0f, 1.0f);
+    water_zone.rotation = glm::radians(90.0f);
+    water_zone.has_bounds = true;
 
-    CHECK(sample.material == terrain_material::water);
+    CHECK(zone_material_at({water_zone}, glm::vec3(0.0f, 0.0f, 3.5f)) == terrain_material::water);
+    CHECK(!zone_material_at({water_zone}, glm::vec3(3.5f, 0.0f, 0.0f)));
 }
 
 TEST_CASE("terrain mesh separates fairway from authored rough ribbon") {
@@ -257,35 +266,40 @@ TEST_CASE("terrain mesh separates fairway from authored rough ribbon") {
     CHECK(edge.material == terrain_material::rough);
 }
 
-TEST_CASE("terrain zones override rough and fairway materials") {
+TEST_CASE("zones decide the material by their exact shape, on the ribbon and past it") {
     terrain_spline terrain;
     terrain.control_points = {
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(0.0f, 0.0f, 20.0f)
     };
-    terrain.width = 20.0f;
-    terrain.fairway_width = 8.0f;
+    terrain.width = 10.0f;
+    terrain.fairway_width = 6.0f;
     terrain.sample_count = 12;
 
-    material_zone water_zone;
-    water_zone.type = material_zone_type::water;
-    water_zone.center = glm::vec3(10.0f, 0.0f, 0.0f);
-    water_zone.radius = 1.0f;
-    water_zone.has_radius = true;
+    // A green on the last control point, wider than the ribbon.
+    material_zone green_zone;
+    green_zone.type = material_zone_type::green;
+    green_zone.center = glm::vec3(0.0f, 0.0f, 20.0f);
+    green_zone.radius = 8.0f;
+    green_zone.has_radius = true;
+    const std::vector<material_zone> zones = {green_zone};
 
-    const terrain_mesh mesh = build_terrain_mesh(terrain, {water_zone}, terrain_zone_tuning{});
-    CHECK(mesh.cross_section_count == 9);
-    if (mesh.cross_section_count != 9) {
-        return;
+    const std::vector<terrain_mesh> holes{build_terrain_mesh(terrain, zones, terrain_zone_tuning{})};
+    for (const terrain_vertex& vertex : holes[0].vertices) {
+        CHECK((vertex.material == terrain_material::fairway || vertex.material == terrain_material::rough));
     }
 
-    bool found_water_edge = false;
-    for (const terrain_vertex& vertex : mesh.vertices) {
-        if (std::abs(vertex.position.x - 10.0f) < 0.001f && std::abs(vertex.position.z) < 0.001f) {
-            found_water_edge = found_water_edge || vertex.material == terrain_material::water;
-        }
-    }
-    CHECK(found_water_edge);
+    const auto material_at = [&](const glm::vec3& position) {
+        const std::optional<terrain_sample> on_hole = sample_holes(holes, position);
+        return surface_material(zones, on_hole ? &*on_hole : nullptr, position);
+    };
+    CHECK(material_at(glm::vec3(0.0f, 0.0f, 20.0f)) == terrain_material::green);
+    CHECK(material_at(glm::vec3(4.5f, 0.0f, 20.0f)) == terrain_material::green);   // in the ribbon's rough
+    CHECK(material_at(glm::vec3(7.5f, 0.0f, 20.0f)) == terrain_material::green);   // past the ribbon
+    CHECK(material_at(glm::vec3(0.0f, 0.0f, 27.5f)) == terrain_material::green);   // past the ribbon's end
+    CHECK(material_at(glm::vec3(0.0f, 0.0f, 5.0f)) == terrain_material::fairway);
+    CHECK(material_at(glm::vec3(4.5f, 0.0f, 5.0f)) == terrain_material::rough);
+    CHECK(material_at(glm::vec3(30.0f, 0.0f, 5.0f)) == terrain_material::rough);
 }
 
 TEST_CASE("radius material overlay samples downhill terrain height") {
@@ -305,10 +319,11 @@ TEST_CASE("radius material overlay samples downhill terrain height") {
 
     constexpr float lift = 0.045f;
     const terrain_mesh terrain_mesh_data = plain_terrain_mesh(terrain);
-    const terrain_mesh overlay = build_material_overlay_mesh(terrain_mesh_data, {bunker_zone}, lift);
+    const terrain_mesh overlay = build_material_overlay_mesh(terrain_mesh_data, {bunker_zone}, lift, 1.0f);
 
-    CHECK(overlay.vertices.size() == 33U);
-    CHECK(overlay.indices.size() == 96U);
+    // A centre and two rings of 32, one metre apart.
+    CHECK(overlay.vertices.size() == 65U);
+    CHECK(overlay.indices.size() == 288U);
     if (overlay.vertices.empty()) {
         return;
     }
@@ -341,10 +356,11 @@ TEST_CASE("bounds material overlay samples downhill terrain height") {
 
     constexpr float lift = 0.045f;
     const terrain_mesh terrain_mesh_data = plain_terrain_mesh(terrain);
-    const terrain_mesh overlay = build_material_overlay_mesh(terrain_mesh_data, {water_zone}, lift);
+    const terrain_mesh overlay = build_material_overlay_mesh(terrain_mesh_data, {water_zone}, lift, 1.0f);
 
-    CHECK(overlay.vertices.size() == 36U);
-    CHECK(overlay.indices.size() == 150U);
+    // 4 x 4 m at one-metre spacing.
+    CHECK(overlay.vertices.size() == 25U);
+    CHECK(overlay.indices.size() == 96U);
     if (overlay.vertices.empty()) {
         return;
     }
@@ -528,7 +544,7 @@ TEST_CASE("the ground around a lone hole follows the hole, on it and past its ed
     terrain.sample_count = 20;
 
     const std::vector<terrain_mesh> holes{plain_terrain_mesh(terrain)};
-    const terrain_mesh ground = build_ground(holes, nullptr, ground_settings{1.0f, 10.0f, 0.0f});
+    const terrain_mesh ground = build_ground(holes, {}, nullptr, ground_settings{1.0f, 10.0f, 0.0f});
 
     // On the hole the ground matches the ribbon; beside it, the edge height.
     const glm::vec3 on_hole(0.0f, 0.0f, 10.0f);
@@ -744,11 +760,11 @@ TEST_CASE("terrain spatial index is built by the mesh builders") {
           == static_cast<std::size_t>(mesh.spatial_index.cells_x) * static_cast<std::size_t>(mesh.spatial_index.cells_z) + 1U);
     CHECK(mesh.spatial_index.cell_triangles.size() >= mesh.indices.size() / 3U);
 
-    const terrain_mesh ground = build_ground({mesh}, nullptr, ground_settings{8.0f, 12.0f, 0.0f});
+    const terrain_mesh ground = build_ground({mesh}, index_test_zones(), nullptr, ground_settings{8.0f, 12.0f, 0.0f});
     CHECK(ground.spatial_index.cells_x > 0);
     CHECK(ground.spatial_index.triangle_count == static_cast<uint32_t>(ground.indices.size() / 3U));
 
-    const terrain_mesh overlay = build_material_overlay_mesh(mesh, index_test_zones(), 0.02f);
+    const terrain_mesh overlay = build_material_overlay_mesh(ground, index_test_zones(), 0.02f, 1.0f);
     CHECK(overlay.spatial_index.cells_x > 0);
     CHECK(overlay.spatial_index.triangle_count == static_cast<uint32_t>(overlay.indices.size() / 3U));
 }
@@ -765,9 +781,6 @@ TEST_CASE("indexed terrain sampling matches the full scan across the whole surfa
     int outside_samples = 0;
     int fairway_samples = 0;
     int rough_samples = 0;
-    int green_samples = 0;
-    int bunker_samples = 0;
-    int water_samples = 0;
     int mismatches = 0;
     long long indexed_triangles = 0;
     long long reference_triangles = 0;
@@ -793,27 +806,20 @@ TEST_CASE("indexed terrain sampling matches the full scan across the whole surfa
             } else {
                 ++outside_samples;
             }
-            switch (reference.material) {
-            case terrain_material::fairway: ++fairway_samples; break;
-            case terrain_material::rough: ++rough_samples; break;
-            case terrain_material::green: ++green_samples; break;
-            case terrain_material::bunker: ++bunker_samples; break;
-            case terrain_material::water: ++water_samples; break;
-            }
+            fairway_samples += reference.material == terrain_material::fairway ? 1 : 0;
+            rough_samples += reference.material == terrain_material::rough ? 1 : 0;
         }
     }
 
     CHECK(mismatches == 0);
 
-    // The comparison is only meaningful if the sweep really covered every
-    // material, the surface interior, and positions off the surface entirely.
+    // The comparison is only meaningful if the sweep really covered both
+    // ribbon materials, the surface interior, and positions off the surface
+    // entirely (zone materials are not on the ribbon).
     CHECK(inside_samples > 0);
     CHECK(outside_samples > 0);
     CHECK(fairway_samples > 0);
     CHECK(rough_samples > 0);
-    CHECK(green_samples > 0);
-    CHECK(bunker_samples > 0);
-    CHECK(water_samples > 0);
 
     CHECK(indexed_triangles < reference_triangles);
     std::cout << "  [terrain index] samples: " << sample_count
@@ -886,7 +892,7 @@ TEST_CASE("indexed terrain sampling matches the full scan on mesh edges and beyo
 
 TEST_CASE("indexed terrain sampling matches the full scan on the ground mesh") {
     const terrain_mesh mesh = index_test_mesh();
-    const terrain_mesh ground = build_ground({mesh}, nullptr, ground_settings{8.0f, 12.0f, 0.0f});
+    const terrain_mesh ground = build_ground({mesh}, index_test_zones(), nullptr, ground_settings{8.0f, 12.0f, 0.0f});
     const terrain_mesh reference_ground = without_spatial_index(ground);
     CHECK(ground.indices.size() >= 3U);
     if (ground.indices.size() < 3U) {

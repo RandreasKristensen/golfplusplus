@@ -50,7 +50,8 @@ Everything is unlocked today: no money, shop, quests or unlock gating.
 | HUD | `src/renderer/hud_overlay.cpp` (scorecards in `scorecard_overlay.cpp`); the GL side is `src/renderer/renderer.cpp` |
 | Text size and layout | `src/renderer/pixel_font.h`, styles in `assets/ui/text_styles.json` |
 | Content format | the loader next to it (`src/game/*_loader.cpp`), each with `parse_*_from_text` |
-| Tooling | `tooling/README.md` (OSM importer, hole editor) |
+| Tooling | `tooling/README.md` (OSM importer, hole editor, art generator) |
+| Course backdrops, ground textures | `tooling/art/make_art.py`, drawn by `src/renderer/backdrop_pass.h` and `assets/shaders/terrain.frag` |
 
 Reuse these instead of writing your own: `src/physics/vector_math.h` (yaw,
 horizontal distance, safe normalize, `clamp01`; use `glm::radians` and

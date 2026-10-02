@@ -22,8 +22,11 @@ struct play_area {
     float extent = 0.0f;
     std::vector<tree_instance> trees;
     // Each hole's ribbon: where the ground takes hole heights from, and the
-    // material at any point. Never drawn or sampled for height directly.
+    // fairway or rough at any point. Never drawn or sampled for height directly.
     std::vector<terrain_mesh> holes;
+    // Every hole's greens, bunkers and water, placed like the holes. Their
+    // exact shapes decide the material, on a ribbon or off it.
+    std::vector<material_zone> zones;
     terrain_mesh ground;            // the one surface (physics/ground_mesh.h)
     terrain_mesh material_overlay;  // render-only zone shapes draped over the ground
 };
@@ -43,8 +46,8 @@ play_area build_course_area(const std::vector<hole_data>& holes,
                             const course_world_definition& world,
                             const game_tuning& tuning);
 
-// The ground's height and normal at `position`, with the holes' material
-// there (rough off every hole).
+// The ground's height and normal at `position`, with the material there
+// (surface_material: zones, else the holes' fairway or rough, else rough).
 terrain_sample sample_area(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);
 float terrain_height(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);
 // `position` moved onto the terrain surface, keeping its XZ.

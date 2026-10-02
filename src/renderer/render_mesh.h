@@ -13,6 +13,7 @@ struct render_terrain_vertex {
     glm::vec3 position = glm::vec3(0.0f);
     glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
     glm::vec3 color = glm::vec3(1.0f);
+    float rough = 0.0f;  // 1 where the rough's grass texture shows, 0 where not
 };
 
 // Axis-aligned bounds over every vertex position. `valid` is false for an
