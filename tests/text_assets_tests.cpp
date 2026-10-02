@@ -3,6 +3,7 @@
 #include "game/game_content.h"
 #include "game/text_assets.h"
 #include "game/text_ids.h"
+#include "game/utf8.h"
 
 #include <fstream>
 #include <optional>
@@ -44,6 +45,8 @@ std::string without_placeholders(const std::string& value) {
 
 const char* small_font = R"({
   "height": 2,
+  "line_gap": 1,
+  "ellipsis": "A",
   "fallback": ["11", "11"],
   "glyphs": { "A": ["10", "01"], " ": ["0", "0"] }
 })";
@@ -85,7 +88,9 @@ TEST_CASE("every skill has a name in the string table") {
         CHECK(false);
         return;
     }
-    for (const skill_definition& skill : load_game_content(GOLFPP_ASSETS_DIR).content->skills) {
+    const game_content_load_result content = load_game_content(GOLFPP_ASSETS_DIR);
+    REQUIRE(content.content.has_value());
+    for (const skill_definition& skill : content.content->skills) {
         CHECK(text->strings.entries.count(skill_text_key(skill.id)) == 1U);
     }
 }
@@ -97,8 +102,8 @@ TEST_CASE("every character in every string has a glyph in the font") {
         return;
     }
     for (const auto& entry : text->strings.entries) {
-        for (const char c : without_placeholders(entry.second)) {
-            if (c == '\n') {
+        for (const char32_t c : decode_utf8(without_placeholders(entry.second))) {
+            if (c == U'\n') {
                 continue;
             }
             CHECK(font_has_glyph(text->font, c));
@@ -121,6 +126,24 @@ TEST_CASE("font covers the name and menu charset") {
     CHECK(font_charset(text->font).find('q') == std::string::npos);
 }
 
+TEST_CASE("font draws Danish letters, lowercase with the uppercase glyph") {
+    const std::optional<text_assets> text = shipped_text();
+    if (!text) {
+        CHECK(false);
+        return;
+    }
+    const std::u32string upper = U"ÆØÅ";
+    const std::u32string lower = U"æøå";
+    for (std::size_t i = 0; i < upper.size(); ++i) {
+        CHECK(font_has_glyph(text->font, upper[i]));
+        CHECK(&find_glyph(text->font, upper[i]) != &text->font.fallback);
+        CHECK(&find_glyph(text->font, lower[i]) == &find_glyph(text->font, upper[i]));
+    }
+    const std::string charset = font_charset(text->font);
+    CHECK(charset.find(u8"Æ") != std::string::npos);
+    CHECK(charset.find(u8"æ") == std::string::npos);
+}
+
 TEST_CASE("missing glyphs draw the fallback box, not a letter") {
     const std::optional<text_assets> text = shipped_text();
     if (!text) {
@@ -129,7 +152,7 @@ TEST_CASE("missing glyphs draw the fallback box, not a letter") {
     }
     CHECK(!font_has_glyph(text->font, '~'));
     CHECK(&find_glyph(text->font, '~') == &text->font.fallback);
-    CHECK(&find_glyph(text->font, '\xe9') == &text->font.fallback);
+    CHECK(&find_glyph(text->font, U'é') == &text->font.fallback);
     CHECK(text->font.fallback.pixels != find_glyph(text->font, 'I').pixels);
     CHECK(text->font.fallback.pixels != find_glyph(text->font, '?').pixels);
 }
@@ -141,6 +164,8 @@ TEST_CASE("pixel font parses rows and rejects malformed glyphs") {
         return;
     }
     CHECK(font->height == 2);
+    CHECK(font->line_gap == 1);
+    CHECK(font->ellipsis == U"A");
     CHECK(find_glyph(*font, 'A').width == 2);
     CHECK(find_glyph(*font, 'A').lit_pixel_count == 2);
     CHECK(find_glyph(*font, 'a').pixels == find_glyph(*font, 'A').pixels);
@@ -154,6 +179,12 @@ TEST_CASE("pixel font parses rows and rejects malformed glyphs") {
     CHECK(!parse_pixel_font(R"({"height": 2, "fallback": ["1", "1"], "glyphs": {"A": ["10", "1"]}})").has_value());
     CHECK(!parse_pixel_font(R"({"height": 1, "fallback": ["1"], "glyphs": {"a": ["1"]}})").has_value());
     CHECK(!parse_pixel_font(R"({"height": 1, "fallback": ["1"], "glyphs": {"AB": ["1"]}})").has_value());
+    CHECK(!parse_pixel_font(R"({"height": 1, "line_gap": 1, "ellipsis": ".", "fallback": ["1"], "glyphs": {".": ["1"], "æ": ["1"]}})").has_value());
+    CHECK(parse_pixel_font(R"({"height": 1, "line_gap": 1, "ellipsis": ".", "fallback": ["1"], "glyphs": {".": ["1"], "Æ": ["1"]}})").has_value());
+    // The line gap and an ellipsis made of glyphs the font has are required.
+    CHECK(!parse_pixel_font(R"({"height": 1, "ellipsis": ".", "fallback": ["1"], "glyphs": {".": ["1"]}})").has_value());
+    CHECK(!parse_pixel_font(R"({"height": 1, "line_gap": 1, "fallback": ["1"], "glyphs": {".": ["1"]}})").has_value());
+    CHECK(!parse_pixel_font(R"({"height": 1, "line_gap": 1, "ellipsis": "~", "fallback": ["1"], "glyphs": {".": ["1"]}})").has_value());
 }
 
 TEST_CASE("string table looks up, formats and marks missing keys") {
@@ -179,41 +210,42 @@ TEST_CASE("string table looks up, formats and marks missing keys") {
 
 TEST_CASE("text styles parse with defaults and reject bad values") {
     const std::optional<text_style_set> set = parse_text_styles(R"({ "styles": {
-      "title": { "pixel_size": 0.028, "min_pixel_size": 0.014, "color": [0.95, 0.78, 0.28], "align": "center" },
-      "body": { "pixel_size": 0.0092, "color": [0.84, 0.84, 0.74] }
+      "title": { "fill": 0.8, "width_fill": 0.7, "min_scale": 2, "max_scale": 4, "wrap": true,
+                 "color": [0.95, 0.78, 0.28], "align": "right", "valign": "top" },
+      "body": { "fill": 0.5, "color": [0.84, 0.84, 0.74] }
     }})");
     CHECK(set.has_value());
     if (!set) {
         return;
     }
     const text_style& title = find_text_style(*set, "title");
-    CHECK(title.pixel_size == 0.028f);
-    CHECK(title.min_pixel_size == 0.014f);
+    CHECK(title.fill == 0.8f);
+    CHECK(title.width_fill == 0.7f);
+    CHECK(title.min_scale == 2);
+    CHECK(title.max_scale == std::optional<int>(4));
+    CHECK(title.wrap);
     CHECK(title.color == glm::vec3(0.95f, 0.78f, 0.28f));
-    CHECK(title.align == text_align::center);
+    CHECK(title.align == text_align::right);
+    CHECK(title.valign == text_valign::top);
 
     const text_style& body = find_text_style(*set, "body");
-    CHECK(body.min_pixel_size == body.pixel_size);
+    CHECK(body.width_fill > 0.0f);
+    CHECK(body.width_fill <= 1.0f);
+    CHECK(body.min_scale == 1);
+    CHECK(!body.max_scale.has_value());
+    CHECK(!body.wrap);
     CHECK(body.align == text_align::left);
+    CHECK(body.valign == text_valign::center);
 
     CHECK(&find_text_style(*set, "nope") == &set->missing);
 
     CHECK(!parse_text_styles(R"({"styles": {"a": {"color": [1, 1, 1]}}})").has_value());
-    CHECK(!parse_text_styles(R"({"styles": {"a": {"pixel_size": 0.01, "color": [1, 1]}}})").has_value());
-    CHECK(!parse_text_styles(R"({"styles": {"a": {"pixel_size": 0.01, "color": [1, 1, 1], "align": "right"}}})").has_value());
-    CHECK(!parse_text_styles(R"({"styles": {"a": {"pixel_size": 0.01, "min_pixel_size": 0.02, "color": [1, 1, 1]}}})").has_value());
-}
-
-TEST_CASE("shipped styles have the sizes the HUD layout is built around") {
-    const std::optional<text_assets> text = shipped_text();
-    if (!text) {
-        CHECK(false);
-        return;
-    }
-    CHECK(find_text_style(*text, style_title).pixel_size == 0.028f);
-    CHECK(find_text_style(*text, style_title).min_pixel_size == 0.014f);
-    CHECK(find_text_style(*text, style_body).pixel_size == 0.0092f);
-    CHECK(find_text_style(*text, style_hud_label).pixel_size == 0.015f);
-    CHECK(find_text_style(*text, style_scorecard_row_compact).pixel_size == 0.0090f);
-    CHECK(find_text_style(*text, style_debug_profile).pixel_size == 0.006f);
+    CHECK(!parse_text_styles(R"({"styles": {"a": {"fill": 0.5, "color": [1, 1]}}})").has_value());
+    CHECK(!parse_text_styles(R"({"styles": {"a": {"fill": 1.5, "color": [1, 1, 1]}}})").has_value());
+    CHECK(!parse_text_styles(R"({"styles": {"a": {"fill": 0.5, "width_fill": 0, "color": [1, 1, 1]}}})").has_value());
+    CHECK(!parse_text_styles(R"({"styles": {"a": {"fill": 0.5, "min_scale": 0, "color": [1, 1, 1]}}})").has_value());
+    CHECK(!parse_text_styles(R"({"styles": {"a": {"fill": 0.5, "min_scale": 3, "max_scale": 2, "color": [1, 1, 1]}}})").has_value());
+    CHECK(!parse_text_styles(R"({"styles": {"a": {"fill": 0.5, "wrap": 1, "color": [1, 1, 1]}}})").has_value());
+    CHECK(!parse_text_styles(R"({"styles": {"a": {"fill": 0.5, "color": [1, 1, 1], "align": "justify"}}})").has_value());
+    CHECK(!parse_text_styles(R"({"styles": {"a": {"fill": 0.5, "color": [1, 1, 1], "valign": "middle"}}})").has_value());
 }

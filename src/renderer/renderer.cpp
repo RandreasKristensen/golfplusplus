@@ -5,6 +5,7 @@
 #include "renderer/hud_overlay.h"
 #include "renderer/menu_overlay.h"
 #include "renderer/primitive_mesh.h"
+#include "renderer/scorecard_overlay.h"
 
 #include <algorithm>
 #include <cmath>
@@ -596,7 +597,7 @@ void renderer::render_overlay(const glm::mat4& view_proj, const render_data& dat
 
     // Every primitive appends to one vertex stream in submission order, so
     // painter's-order blending holds and the overlay is normally one draw.
-    overlay_batch& batch = overlay_pass_.begin(profile);
+    overlay_batch& batch = overlay_pass_.begin(profile, overlay_grid{target_width_, target_height_});
     if (data.show_course_results) {
         draw_course_results(batch, text, data.scorecard);
     } else {

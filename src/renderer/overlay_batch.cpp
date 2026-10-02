@@ -23,6 +23,7 @@ void append_transformed_quad(overlay_batch& batch,
 
 void clear_overlay_batch(overlay_batch& batch) {
     batch.vertices.clear();
+    batch.truncated_text_count = 0;
 }
 
 std::size_t overlay_batch_quad_count(const overlay_batch& batch) {

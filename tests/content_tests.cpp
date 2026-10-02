@@ -1,17 +1,27 @@
 #include "doctest.h"
 
+#include "core/startup_flow.h"
 #include "game/club_loader.h"
 #include "game/course_loader.h"
 #include "game/course_world_loader.h"
 #include "game/hole_loader.h"
 #include "game/json_util.h"
 #include "game/reward_rules.h"
+#include "game/scorecard.h"
+#include "game/text_assets.h"
+#include "game/text_ids.h"
 #include "game/tuning_loader.h"
 #include "physics/ground_mesh.h"
+#include "renderer/hud_overlay.h"
+#include "renderer/menu_overlay.h"
+#include "renderer/overlay_batch.h"
+#include "renderer/scorecard_overlay.h"
 
 #include "test_support.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -195,4 +205,103 @@ TEST_CASE("json helpers never throw on wrong types") {
     CHECK(json_string_array(*value, "v") == std::vector<std::string>{"a"});
     CHECK(!json_string(json(5), "n"));
     CHECK(json_files_in_directory(fixture_root() + "/missing").empty());
+}
+
+namespace {
+// The low-res target sizes (see renderer::ensure_framebuffer_size) for 4:3,
+// 16:9 and 21:9 windows. The target keeps about the same pixel count at any
+// window size, so these cover every resolution.
+const std::vector<overlay_grid> shipped_grids{{554, 416}, {640, 360}, {733, 314}};
+
+const text_assets& shipped_text_assets() {
+    static const text_assets text = *load_text_assets(asset_root());
+    return text;
+}
+
+// A scorecard for `course` with every hole played over par, so every column
+// has its widest text.
+scorecard_data played_scorecard(const course_definition& course, const text_assets& text) {
+    scorecard_data scorecard;
+    scorecard.course_name = course.name;
+    for (std::size_t i = 0; i < course.holes.size(); ++i) {
+        const std::optional<hole_data> hole = load_hole_from_file(asset_root() + "/" + course.holes[i]);
+        CHECK(hole.has_value());
+        if (!hole) {
+            continue;
+        }
+        scorecard_row row;
+        row.hole_number = static_cast<int>(i) + 1;
+        row.hole_name = hole->name;
+        row.par = hole->par;
+        row.played = true;
+        row.strokes = hole->par + 10;
+        row.relative_label = format_relative_score(text.strings, 10);
+        scorecard.rows.push_back(row);
+        scorecard.total_par += row.par;
+        scorecard.total_strokes += row.strokes;
+    }
+    scorecard.total_relative_label = format_relative_score(text.strings, 10 * static_cast<int>(course.holes.size()));
+    scorecard.finished = true;
+    return scorecard;
+}
+
+// Every in-round HUD element at once, with the widest values the game shows.
+render_data busy_hud(const text_assets& text, const std::string& club_label) {
+    render_data data;
+    data.show_power_meter = true;
+    data.swing_power = 1.0f;
+    data.cart_active = true;
+    data.cart_drifting = true;
+    data.selected_club_label = club_label;
+    data.show_skills_panel = true;
+    for (const skill_definition& skill : shipped_content().skills) {
+        data.skills.push_back(render_skill_progress{lookup_text(text, skill_text_key(skill.id).c_str()), 99, 9999999, 9999999});
+    }
+    data.xp_drops.push_back(render_xp_drop{skill_icon_id::generic, 99999, 0.5f});
+    data.show_rangefinder = true;
+    data.rangefinder_label = format_text(text, text_hud_rangefinder, {{"meters", "999"}});
+    return data;
+}
+}
+
+TEST_CASE("every shipped screen fits its text without cutting any off") {
+    const text_assets& text = shipped_text_assets();
+    const startup_catalog catalog = load_startup_catalog(shipped_content());
+    for (const overlay_grid& grid : shipped_grids) {
+        for (const startup_flow flow : {startup_flow::main, startup_flow::help, startup_flow::hole_picker, startup_flow::course_picker}) {
+            startup_flow_state state;
+            state.flow = flow;
+            overlay_batch batch;
+            batch.grid = grid;
+            draw_startup_menu(batch, text, make_startup_menu_render_data(state, catalog, text));
+            CHECK(batch.truncated_text_count == 0U);
+        }
+
+        startup_flow_state confirm;
+        open_confirm_menu(confirm);
+        overlay_batch confirm_batch;
+        confirm_batch.grid = grid;
+        draw_startup_menu(confirm_batch, text, make_confirm_menu_render_data(confirm, text));
+        CHECK(confirm_batch.truncated_text_count == 0U);
+
+        for (const club_definition& club : shipped_content().clubs) {
+            overlay_batch batch;
+            batch.grid = grid;
+            draw_hud(batch, text, busy_hud(text, club.label), glm::mat4(1.0f));
+            CHECK(batch.truncated_text_count == 0U);
+        }
+
+        for (const course_definition& course : shipped_content().courses) {
+            const scorecard_data scorecard = played_scorecard(course, text);
+            overlay_batch compact;
+            compact.grid = grid;
+            draw_compact_scorecard(compact, text, scorecard);
+            CHECK(compact.truncated_text_count == 0U);
+
+            overlay_batch results;
+            results.grid = grid;
+            draw_course_results(results, text, scorecard);
+            CHECK(results.truncated_text_count == 0U);
+        }
+    }
 }

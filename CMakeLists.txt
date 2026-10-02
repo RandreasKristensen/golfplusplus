@@ -90,6 +90,7 @@ golfpp_library(golfpp-game
     src/game/text_assets.cpp
     src/game/text_style.cpp
     src/game/tuning_loader.cpp
+    src/game/utf8.cpp
 )
 target_link_libraries(golfpp-game PUBLIC golfpp-physics golfpp-profiling)
 target_compile_definitions(golfpp-game PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
@@ -110,9 +111,11 @@ golfpp_library(golfpp-render-data
     src/renderer/primitive_mesh.cpp
     src/renderer/render_mesh_chunks.cpp
     src/renderer/render_tree.cpp
+    src/renderer/scorecard_overlay.cpp
     src/renderer/terrain_palette.cpp
     src/renderer/terrain_render_mesh.cpp
     src/renderer/text_input.cpp
+    src/renderer/ui_rect.cpp
     src/renderer/world_marker_batch.cpp
 )
 target_link_libraries(golfpp-render-data PUBLIC golfpp-game)
@@ -177,6 +180,8 @@ if (GOLFPP_BUILD_TESTS)
         tests/startup_options_tests.cpp
         tests/text_assets_tests.cpp
         tests/text_input_tests.cpp
+        tests/text_layout_tests.cpp
+        tests/utf8_tests.cpp
         tests/world_marker_tests.cpp
     )
     set_target_properties(golfpp-tests PROPERTIES OUTPUT_NAME "golf++-tests")

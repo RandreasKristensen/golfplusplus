@@ -28,6 +28,17 @@ TEST_CASE("text input stores lowercase as its allowed uppercase") {
     CHECK(state.value == "ABC");
 }
 
+TEST_CASE("text input takes Danish letters and counts characters, not bytes") {
+    text_input_state field = name_field();
+    field.allowed_chars = u8"ABÆØÅ";
+    text_input_state state = apply_text_input(field, u8"æøåAB!", false);
+    CHECK(state.value == std::string(u8"ÆØÅAB"));
+    state = apply_text_input(state, "", true);
+    CHECK(state.value == std::string(u8"ÆØÅA"));
+    state = apply_text_input(apply_text_input(state, "", true), "", true);
+    CHECK(state.value == std::string(u8"ÆØ"));
+}
+
 TEST_CASE("text input stops at max length") {
     const text_input_state state = apply_text_input(name_field(), "ABCABCABC", false);
     CHECK(state.value == "ABCAB");
@@ -72,9 +83,11 @@ TEST_CASE("text input draws a box, the value and a blinking cursor") {
     const text_style& style = find_text_style(*text, style_input);
 
     overlay_batch cursor_on;
-    draw_text_input(cursor_on, text->font, style, state, glm::vec2(0.0f), glm::vec2(0.4f, 0.08f), 0.1f);
+    cursor_on.grid = overlay_grid{640, 360};
+    draw_text_input(cursor_on, text->font, style, state, ui_rect{glm::vec2(0.0f), glm::vec2(0.4f, 0.08f)}, 0.1f);
     overlay_batch cursor_off;
-    draw_text_input(cursor_off, text->font, style, state, glm::vec2(0.0f), glm::vec2(0.4f, 0.08f), 0.6f);
+    cursor_off.grid = overlay_grid{640, 360};
+    draw_text_input(cursor_off, text->font, style, state, ui_rect{glm::vec2(0.0f), glm::vec2(0.4f, 0.08f)}, 0.6f);
 
     // Background + 4 outline segments + one quad per lit pixel (+ cursor).
     const std::size_t lit = static_cast<std::size_t>(find_glyph(text->font, 'A').lit_pixel_count +
@@ -84,6 +97,7 @@ TEST_CASE("text input draws a box, the value and a blinking cursor") {
 
     state.active = false;
     overlay_batch inactive;
-    draw_text_input(inactive, text->font, style, state, glm::vec2(0.0f), glm::vec2(0.4f, 0.08f), 0.1f);
+    inactive.grid = overlay_grid{640, 360};
+    draw_text_input(inactive, text->font, style, state, ui_rect{glm::vec2(0.0f), glm::vec2(0.4f, 0.08f)}, 0.1f);
     CHECK(overlay_batch_quad_count(inactive) == 5U + lit);
 }

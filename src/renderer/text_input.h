@@ -7,17 +7,19 @@
 #include <cstddef>
 #include <string>
 
-#include <glm/vec2.hpp>
-
 #include "game/pixel_font_data.h"
 #include "game/text_style.h"
 #include "renderer/overlay_batch.h"
+#include "renderer/ui_rect.h"
 
 struct text_input_state {
+    // UTF-8, like every on-screen string.
     std::string value;
+    // In characters (code points), not bytes.
     std::size_t max_length = 12;
-    // Characters accepted as typed. Lowercase letters are accepted when their
-    // uppercase form is listed, and stored uppercase (the font has no lowercase).
+    // UTF-8 characters accepted as typed. Lowercase letters are accepted when
+    // their uppercase form is listed, and stored uppercase (the font has no
+    // lowercase).
     std::string allowed_chars;
     bool active = false;
 };
@@ -28,11 +30,11 @@ struct text_input_state {
 text_input_state apply_text_input(const text_input_state& state, const std::string& typed, bool backspace);
 
 // Box with the value and, while active, a block cursor that blinks with
-// `time_seconds`. `style` sets the text; the box is sized by `half_size`.
+// `time_seconds`. `style` sets how the text fills `box`; its size is fixed
+// for a full field so typing doesn't resize it.
 void draw_text_input(overlay_batch& batch,
                      const pixel_font_data& font,
                      const text_style& style,
                      const text_input_state& state,
-                     glm::vec2 center,
-                     glm::vec2 half_size,
+                     const ui_rect& box,
                      float time_seconds);

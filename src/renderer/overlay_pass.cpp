@@ -79,10 +79,11 @@ void overlay_pass::shutdown() {
     clear_overlay_batch(batch_);
 }
 
-overlay_batch& overlay_pass::begin(frame_profile* profile) {
+overlay_batch& overlay_pass::begin(frame_profile* profile, const overlay_grid grid) {
     profile_ = profile;
     shader_.set_profile(profile);
     clear_overlay_batch(batch_);
+    batch_.grid = grid;
     return batch_;
 }
 

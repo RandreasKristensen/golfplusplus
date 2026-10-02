@@ -26,10 +26,21 @@ struct overlay_vertex {
 
 constexpr std::size_t overlay_vertices_per_quad = 6;
 
+// Size in pixels of the low-res target the overlay is drawn into. Text is
+// laid out on this grid so every font pixel is a whole block of target pixels.
+struct overlay_grid {
+    int width = 0;
+    int height = 0;
+};
+
 struct overlay_batch {
     // Reused across frames: clear() keeps capacity so steady-state frames do
     // not allocate.
     std::vector<overlay_vertex> vertices;
+    overlay_grid grid;
+    // Labels drawn this batch that did not fit their box and were cut off
+    // with an ellipsis. Layout tests require zero for shipped text.
+    std::size_t truncated_text_count = 0;
 };
 
 // Unit-quad corners (x, y), two triangles.
@@ -42,6 +53,7 @@ constexpr std::array<std::array<float, 2>, overlay_vertices_per_quad> overlay_un
     {{-1.0f,  1.0f}}
 }};
 
+// Empties the vertices and the truncation count; keeps the grid and capacity.
 void clear_overlay_batch(overlay_batch& batch);
 std::size_t overlay_batch_quad_count(const overlay_batch& batch);
 

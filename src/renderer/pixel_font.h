@@ -1,11 +1,17 @@
 #pragma once
 
-// Draws the bitmap pixel font (game/pixel_font_data.h) into the overlay. Each
-// lit glyph pixel becomes one small quad appended to an overlay_batch (see
-// renderer/overlay_batch.h): the chunky look comes from these quads, not from
-// a texture or TTF renderer. GL-free.
+// Overlay text in the bitmap pixel font (game/pixel_font_data.h). Text is
+// always drawn into a box: its style says how much of the box it fills, and
+// the layout picks the largest whole-number scale that fits, so every font
+// pixel is a square block of target pixels (overlay_batch::grid) at any
+// window size or aspect ratio. Text too long for its box wraps between words
+// (if the style allows), shrinks down to the style's min_scale, and is then
+// cut off with the font's ellipsis: it never draws outside its box. Each lit
+// font pixel becomes one quad in the overlay batch; the chunky look comes
+// from these quads, not a texture or TTF renderer. Text is UTF-8. GL-free.
 
 #include <string>
+#include <vector>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -13,47 +19,51 @@
 #include "game/pixel_font_data.h"
 #include "game/text_style.h"
 #include "renderer/overlay_batch.h"
+#include "renderer/ui_rect.h"
 
-// A lit pixel's quad is slightly smaller than its cell, leaving a visible gap.
-constexpr float pixel_glyph_half_size_ratio = 0.42f;
+struct text_line {
+    std::u32string glyphs;
+    glm::vec2 top_left = glm::vec2(0.0f);  // overlay clip space, on the pixel grid
+};
 
-// Width of `text` with one blank font pixel between glyphs.
-float pixel_text_width(const pixel_font_data& font, const std::string& text, float pixel_size);
-// Largest pixel size in [min_pixel_size, max_pixel_size] at which `text`
-// fits inside max_half_size (scaled by padding).
-float fit_pixel_size(const pixel_font_data& font,
-                     const std::string& text,
-                     const glm::vec2& max_half_size,
-                     float max_pixel_size,
-                     float min_pixel_size,
-                     float padding = 0.88f);
+struct text_layout {
+    int scale = 0;                      // target pixels per font pixel
+    glm::vec2 cell = glm::vec2(0.0f);  // one font pixel in clip units
+    std::vector<text_line> lines;
+    ui_rect bounds;                     // what the lines cover
+    bool truncated = false;             // cut off with the ellipsis
+};
 
-// Appends one quad per lit pixel of `value`.
-void draw_pixel_glyph(overlay_batch& batch,
-                      const pixel_font_data& font,
-                      char value,
-                      glm::vec2 top_left,
-                      float pixel_size,
-                      glm::vec3 color);
-
-// Draws `text` in `style`. The anchor is the text's top-left corner for
-// left-aligned styles and its centre for centred ones.
-void draw_text(overlay_batch& batch,
-               const pixel_font_data& font,
-               const text_style& style,
-               const std::string& text,
-               glm::vec2 anchor);
-
-// The style's pixel size, shrunk (down to its min_pixel_size) so `text` fits
-// in max_half_size.
-float fitted_pixel_size(const pixel_font_data& font,
+// Largest scale at which all of `text` fits `box`: at most the style's fill
+// (rounded) and max_scale, at least its min_scale. 0 when it doesn't fit
+// even at min_scale. Use it to give several labels one shared size.
+int fit_text_scale(const pixel_font_data& font,
+                   const text_style& style,
+                   const std::string& text,
+                   const ui_rect& box,
+                   const overlay_grid& grid);
+// `text` at `scale`, with lines that don't fit dropped and the last one cut
+// off with the ellipsis.
+text_layout layout_text_at_scale(const pixel_font_data& font,
+                                 const text_style& style,
+                                 const std::string& text,
+                                 const ui_rect& box,
+                                 const overlay_grid& grid,
+                                 int scale);
+// At fit_text_scale, or cut off at min_scale when nothing fits.
+text_layout layout_text(const pixel_font_data& font,
                         const text_style& style,
                         const std::string& text,
-                        glm::vec2 max_half_size);
-// draw_text at fitted_pixel_size.
-void draw_text_fitted(overlay_batch& batch,
-                      const pixel_font_data& font,
-                      const text_style& style,
-                      const std::string& text,
-                      glm::vec2 anchor,
-                      glm::vec2 max_half_size);
+                        const ui_rect& box,
+                        const overlay_grid& grid);
+
+// Appends one quad per lit font pixel; a truncated layout also counts in
+// batch.truncated_text_count.
+void draw_text_layout(overlay_batch& batch, const pixel_font_data& font, const text_layout& layout, glm::vec3 color);
+// layout_text on the batch's grid, in the style's colour. The usual way to
+// draw any overlay text.
+void draw_label(overlay_batch& batch,
+                const pixel_font_data& font,
+                const text_style& style,
+                const std::string& text,
+                const ui_rect& box);

@@ -6,7 +6,7 @@
 // overlay shader, and turns an overlay_batch into a single glDrawArrays.
 //
 // Usage per frame (inside render_overlay, blend state already set):
-//     overlay_batch& batch = overlay_pass_.begin(profile);
+//     overlay_batch& batch = overlay_pass_.begin(profile, grid);
 //     draw_overlay_quad(batch, ...);         // any number of primitives
 //     overlay_pass_.flush();                 // one upload + one draw
 //
@@ -27,8 +27,9 @@ public:
     bool init(const std::string& vertex_path, const std::string& fragment_path);
     void shutdown();
 
-    // Clears the batch and points profiling at `profile` (null = off).
-    overlay_batch& begin(frame_profile* profile);
+    // Clears the batch, sets the pixel grid text is laid out on, and points
+    // profiling at `profile` (null = off).
+    overlay_batch& begin(frame_profile* profile, overlay_grid grid);
     overlay_batch& batch() { return batch_; }
 
     // Uploads and draws everything queued since the last flush, then clears

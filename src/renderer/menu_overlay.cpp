@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <sstream>
+#include <vector>
 
 #include <glm/common.hpp>
 
@@ -24,25 +24,9 @@ enum class help_control_icon {
     key_2
 };
 
-// One text line per '\n' in the string, stepping down by nine font pixels.
-void draw_help_text_lines(overlay_batch& batch,
-                          const text_assets& text,
-                          const glm::vec2 top_left,
-                          const char* key) {
-    constexpr float line_gap = 9.0f;
-    const text_style& style = find_text_style(text, style_body);
-    std::istringstream lines(lookup_text(text, key));
-    std::string line;
-    for (int i = 0; std::getline(lines, line); ++i) {
-        if (line.empty()) {
-            continue;
-        }
-        draw_text(batch,
-                  text.font,
-                  style,
-                  line,
-                  top_left - glm::vec2(0.0f, static_cast<float>(i) * style.pixel_size * line_gap));
-    }
+void draw_key_cap(overlay_batch& batch, const text_assets& text, const char* key, const glm::vec2 center, const glm::vec2 half_size) {
+    draw_control_button_base(batch, center, half_size, false);
+    draw_label(batch, text.font, find_text_style(text, style_control_key), lookup_text(text, key), ui_rect{center, half_size});
 }
 
 void draw_help_control_icon(overlay_batch& batch,
@@ -89,51 +73,75 @@ void draw_help_control_icon(overlay_batch& batch,
         draw_retee_icon(batch, center, small_half, is_down);
         break;
     case help_control_icon::key_1:
-        draw_control_button_base(batch, center, key_half, is_down);
-        draw_text(batch, text.font, find_text_style(text, style_control_key), lookup_text(text, text_controls_key_1), center);
+        draw_key_cap(batch, text, text_controls_key_1, center, key_half);
         break;
     case help_control_icon::key_2:
-        draw_control_button_base(batch, center, key_half, is_down);
-        draw_text(batch, text.font, find_text_style(text, style_control_key), lookup_text(text, text_controls_key_2), center);
+        draw_key_cap(batch, text, text_controls_key_2, center, key_half);
         break;
     }
 }
 
-void draw_help_control_row(overlay_batch& batch,
-                           const text_assets& text,
-                           const help_control_icon icon,
-                           const glm::vec2 icon_center,
-                           const glm::vec2 label_top_left,
-                           const char* key) {
-    draw_help_control_icon(batch, text, icon, icon_center);
-    draw_help_text_lines(batch, text, label_top_left, key);
+struct help_row {
+    help_control_icon icon;
+    glm::vec2 icon_center;
+    // The label's box runs from here down to the next row's label.
+    float label_top;
+    const char* key;
+};
+
+// A column's labels sit between label_left and label_right.
+struct help_column {
+    float label_left;
+    float label_right;
+    std::vector<help_row> rows;
+};
+
+constexpr float help_column_bottom = -0.70f;
+constexpr float help_row_gap = 0.02f;
+
+ui_rect help_label_box(const help_column& column, const std::size_t row) {
+    const float bottom = row + 1 < column.rows.size() ? column.rows[row + 1].label_top + help_row_gap : help_column_bottom;
+    return rect_from_edges(column.label_left, bottom, column.label_right, column.rows[row].label_top);
 }
 
 void draw_startup_help_screen(overlay_batch& batch, const text_assets& text) {
-    const glm::vec2 left_icon(-0.66f, 0.0f);
-    const glm::vec2 left_label(-0.46f, 0.0f);
-    const glm::vec2 right_icon(0.30f, 0.0f);
-    const glm::vec2 right_label(0.45f, 0.0f);
+    const std::vector<help_column> columns{
+        {-0.46f, 0.14f, {
+            {help_control_icon::arrows, glm::vec2(-0.66f, 0.42f), 0.51f, text_help_arrows},
+            {help_control_icon::space, glm::vec2(-0.66f, 0.15f), 0.22f, text_help_space},
+            {help_control_icon::shift, glm::vec2(-0.66f, -0.22f), -0.18f, text_help_left_shift},
+            {help_control_icon::shift, glm::vec2(-0.66f, -0.43f), -0.39f, text_help_shift},
+        }},
+        {0.45f, 0.84f, {
+            {help_control_icon::enter, glm::vec2(0.30f, 0.43f), 0.50f, text_help_enter},
+            {help_control_icon::backspace, glm::vec2(0.30f, 0.22f), 0.25f, text_help_backspace},
+            {help_control_icon::retee, glm::vec2(0.30f, -0.12f), -0.12f, text_help_retee},
+            {help_control_icon::key_1, glm::vec2(0.30f, -0.32f), -0.30f, text_help_key_1},
+            {help_control_icon::key_2, glm::vec2(0.30f, -0.52f), -0.50f, text_help_key_2},
+        }},
+    };
 
-    draw_help_control_row(batch, text, help_control_icon::arrows,
-                          left_icon + glm::vec2(0.0f, 0.42f), left_label + glm::vec2(0.0f, 0.51f), text_help_arrows);
-    draw_help_control_row(batch, text, help_control_icon::space,
-                          left_icon + glm::vec2(0.0f, 0.15f), left_label + glm::vec2(0.0f, 0.22f), text_help_space);
-    draw_help_control_row(batch, text, help_control_icon::shift,
-                          left_icon + glm::vec2(0.0f, -0.22f), left_label + glm::vec2(0.0f, -0.18f), text_help_left_shift);
-    draw_help_control_row(batch, text, help_control_icon::shift,
-                          left_icon + glm::vec2(0.0f, -0.43f), left_label + glm::vec2(0.0f, -0.39f), text_help_shift);
+    // One shared size, set by the label with the least room.
+    const text_style& style = find_text_style(text, style_body);
+    int scale = 0;
+    for (const help_column& column : columns) {
+        for (std::size_t i = 0; i < column.rows.size(); ++i) {
+            const int fits = fit_text_scale(text.font, style, lookup_text(text, column.rows[i].key), help_label_box(column, i), batch.grid);
+            scale = scale == 0 ? fits : std::min(scale, fits);
+        }
+    }
+    scale = std::max(scale, style.min_scale);
 
-    draw_help_control_row(batch, text, help_control_icon::enter,
-                          right_icon + glm::vec2(0.0f, 0.43f), right_label + glm::vec2(0.0f, 0.50f), text_help_enter);
-    draw_help_control_row(batch, text, help_control_icon::backspace,
-                          right_icon + glm::vec2(0.0f, 0.22f), right_label + glm::vec2(0.0f, 0.25f), text_help_backspace);
-    draw_help_control_row(batch, text, help_control_icon::retee,
-                          right_icon + glm::vec2(0.0f, -0.12f), right_label + glm::vec2(0.0f, -0.12f), text_help_retee);
-    draw_help_control_row(batch, text, help_control_icon::key_1,
-                          right_icon + glm::vec2(0.0f, -0.32f), right_label + glm::vec2(0.0f, -0.30f), text_help_key_1);
-    draw_help_control_row(batch, text, help_control_icon::key_2,
-                          right_icon + glm::vec2(0.0f, -0.52f), right_label + glm::vec2(0.0f, -0.50f), text_help_key_2);
+    for (const help_column& column : columns) {
+        for (std::size_t i = 0; i < column.rows.size(); ++i) {
+            const help_row& row = column.rows[i];
+            draw_help_control_icon(batch, text, row.icon, row.icon_center);
+            draw_text_layout(batch,
+                             text.font,
+                             layout_text_at_scale(text.font, style, lookup_text(text, row.key), help_label_box(column, i), batch.grid, scale),
+                             style.color);
+        }
+    }
 }
 
 glm::vec3 thumbnail_zone_color(const material_zone_type type) {
@@ -290,10 +298,8 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
 
     draw_overlay_quad(batch, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.0f, 0.0f, 0.0f), 0.72f);
     draw_overlay_quad(batch, glm::vec2(0.0f, 0.0f), glm::vec2(0.86f, 0.88f), glm::vec3(0.012f, 0.014f, 0.014f), 0.30f);
-    draw_text_fitted(batch, text.font, find_text_style(text, style_title), menu.title, glm::vec2(0.0f, 0.80f), glm::vec2(0.78f, 0.10f));
-    if (!menu.subtitle.empty()) {
-        draw_text_fitted(batch, text.font, find_text_style(text, style_subtitle), menu.subtitle, glm::vec2(0.0f, 0.68f), glm::vec2(0.70f, 0.065f));
-    }
+    draw_label(batch, text.font, find_text_style(text, style_title), menu.title, ui_rect{glm::vec2(0.0f, 0.80f), glm::vec2(0.78f, 0.10f)});
+    draw_label(batch, text.font, find_text_style(text, style_subtitle), menu.subtitle, ui_rect{glm::vec2(0.0f, 0.66f), glm::vec2(0.70f, 0.045f)});
 
     if (menu.screen == startup_menu_screen::help) {
         draw_startup_help_screen(batch, text);
@@ -302,44 +308,23 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
     const glm::vec2 tile_half = startup_tile_half_size(menu.screen);
     for (std::size_t i = 0; i < menu.tiles.size(); ++i) {
         const render_startup_tile& tile = menu.tiles[i];
-        const glm::vec2 center = startup_tile_center(menu.screen, static_cast<int>(i));
+        const ui_rect tile_box{startup_tile_center(menu.screen, static_cast<int>(i)), tile_half};
         const glm::vec3 panel_color = tile.selected ? glm::vec3(0.20f, 0.16f, 0.065f) : glm::vec3(0.070f, 0.075f, 0.075f);
         const glm::vec3 outline = tile.selected ? glm::vec3(0.94f, 0.72f, 0.22f) : glm::vec3(0.50f, 0.52f, 0.48f);
-        draw_overlay_quad(batch, center, tile_half, panel_color, tile.selected ? 0.94f : 0.76f);
-        draw_button_outline(batch, center, tile_half, outline, tile.selected ? 0.94f : 0.44f);
+        draw_overlay_quad(batch, tile_box.center, tile_box.half_size, panel_color, tile.selected ? 0.94f : 0.76f);
+        draw_button_outline(batch, tile_box.center, tile_box.half_size, outline, tile.selected ? 0.94f : 0.44f);
 
+        const ui_rect inner = inset_rect(tile_box, tile_half * glm::vec2(0.08f, 0.10f));
         if (tile.preview) {
-            draw_hole_thumbnail(batch, *tile.preview, center + glm::vec2(0.0f, 0.030f), glm::vec2(tile_half.x * 0.86f, tile_half.y * 0.48f));
-
-            draw_text_fitted(batch,
-                             text.font,
-                             find_text_style(text, style_tile_label_small),
-                             tile.title,
-                             center + glm::vec2(-tile_half.x * 0.86f, -tile_half.y * 0.28f),
-                             glm::vec2(tile_half.x * 0.86f, tile_half.y * 0.22f));
-            draw_text_fitted(batch,
-                             text.font,
-                             find_text_style(text, style_tile_hint_small),
-                             tile.subtitle,
-                             center + glm::vec2(-tile_half.x * 0.86f, -tile_half.y * 0.58f),
-                             glm::vec2(tile_half.x * 0.86f, tile_half.y * 0.18f));
+            const ui_rect thumbnail = slice_y(inner, 0.0f, 0.52f);
+            draw_hole_thumbnail(batch, *tile.preview, thumbnail.center, thumbnail.half_size);
+            draw_label(batch, text.font, find_text_style(text, style_tile_label_small), tile.title, slice_y(inner, 0.54f, 0.82f));
+            draw_label(batch, text.font, find_text_style(text, style_tile_hint_small), tile.subtitle, slice_y(inner, 0.82f, 1.0f));
         } else {
-            draw_text_fitted(batch,
-                             text.font,
-                             find_text_style(text, style_tile_label),
-                             tile.title,
-                             center + glm::vec2(0.0f, 0.018f),
-                             glm::vec2(tile_half.x * 0.82f, tile_half.y * 0.32f));
-            draw_text_fitted(batch,
-                             text.font,
-                             find_text_style(text, style_tile_hint),
-                             tile.subtitle,
-                             center + glm::vec2(0.0f, -0.050f),
-                             glm::vec2(tile_half.x * 0.82f, tile_half.y * 0.26f));
+            draw_label(batch, text.font, find_text_style(text, style_tile_label), tile.title, slice_y(inner, 0.0f, 0.64f));
+            draw_label(batch, text.font, find_text_style(text, style_tile_hint), tile.subtitle, slice_y(inner, 0.64f, 1.0f));
         }
     }
 
-    if (!menu.footer.empty()) {
-        draw_text_fitted(batch, text.font, find_text_style(text, style_footer), menu.footer, glm::vec2(0.0f, -0.86f), glm::vec2(0.78f, 0.05f));
-    }
+    draw_label(batch, text.font, find_text_style(text, style_footer), menu.footer, ui_rect{glm::vec2(0.0f, -0.86f), glm::vec2(0.78f, 0.05f)});
 }

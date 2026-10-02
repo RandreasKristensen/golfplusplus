@@ -47,7 +47,8 @@ Everything is unlocked today: no money, shop, quests or unlock gating.
 | Feel numbers | `assets/tuning/game_tuning.json` (struct: `src/game/game_tuning.h`) |
 | Rewards and skills | `assets/progression/*.json` (`src/game/reward_rules.h`) |
 | Ball flight, contact, terrain | `src/physics/` |
-| HUD | `src/renderer/hud_overlay.cpp`; the GL side is `src/renderer/renderer.cpp` |
+| HUD | `src/renderer/hud_overlay.cpp` (scorecards in `scorecard_overlay.cpp`); the GL side is `src/renderer/renderer.cpp` |
+| Text size and layout | `src/renderer/pixel_font.h`, styles in `assets/ui/text_styles.json` |
 | Content format | the loader next to it (`src/game/*_loader.cpp`), each with `parse_*_from_text` |
 | Tooling | `tooling/README.md` (OSM importer, hole editor) |
 
@@ -104,7 +105,18 @@ fallback content: missing content fails loudly at startup.
 sounds code plays are in `src/audio/sound_ids.h`. Tests check every id exists.
 A missing string draws as `#key#`, a missing glyph as a box, a missing style in
 magenta. HUD text is the bitmap font only, never a TTF. The only text outside
-the table is the `Ctrl` profiler overlay (developer diagnostics).
+the table is the `Ctrl` profiler overlay (developer diagnostics). Strings are
+UTF-8 and the font is keyed by code point (`src/game/utf8.h`).
+
+**Text always goes in a box.** Overlay text is drawn with `draw_label` (or
+`layout_text`) from `src/renderer/pixel_font.h` into a `ui_rect` cut from its
+panel (`src/renderer/ui_rect.h`), never at a free-floating point or a
+hand-picked size. The style says how much of the box it fills; the layout
+picks a whole-number scale on the low-res target so font pixels stay square
+and sharp, wraps or shrinks, and only then cuts off with an ellipsis. A test
+in `tests/content_tests.cpp` draws every shipped screen at 4:3, 16:9 and
+21:9 and fails if any label is cut off: when it fails, make the box bigger or
+the string shorter, don't lower the check.
 
 **The CRT pass is never optional.** Scene → low-res FBO → nearest-neighbour
 upscale → `assets/shaders/crt.frag` (scanlines and vignette). Never make it
