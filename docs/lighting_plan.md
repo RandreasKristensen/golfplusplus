@@ -149,9 +149,9 @@ rules:
   with `game_day_at` on the `room_sky` row inside the reducer, and the offline path
   runs the same function through `progress_rules`. That's why `game_day_at` is
   plain arithmetic and lives in `src/game/` with no GL. It's added to the module's
-  shared sources (multiplayer plan 2.1) only once a rule needs it.
-- **Weather later.** Wind is still sampled from `shot_input.wind_time` (multiplayer
-  plan Phase 1). If weather ever becomes world state (the `ideas.md` wind and rain),
+  shared sources (`server/golfpp_module/CMakeLists.txt`) only once a rule needs it.
+- **Weather later.** Wind is still sampled from `shot_input.wind_time`
+  (`src/game/shot_simulation.h`). If weather ever becomes world state (the `ideas.md` wind and rain),
   it belongs in this same per-room row, and `shot_input` would carry the weather
   it was simulated with, so the server can replay the shot. Not in this plan, but
   don't design `room_sky` in a way that blocks it.
@@ -162,16 +162,16 @@ These are listed here rather than written into the approved multiplayer plan:
 
 | Where | Change |
 |---|---|
-| 2.4 Tables | `room_sky`, public, PK `room_id`: `anchor_unix_ms`, `anchor_game_day`, `game_days_per_real_day`. `server_config` gets the same three columns as `default_sky_*` |
-| 2.5 Reducers | `join_course` creates `room_sky` with a new room (copying the default, re-anchored to now). The room cleanup that deletes empty rooms also deletes their `room_sky`. New owner-only `admin_set_room_sky` and `admin_set_default_sky` |
-| 2.7 Subscriptions | `room_sky where room_id = <mine>` |
-| 1.2 Network seam | `online_view` gets `sky_timeline sky`. An accessor, `active_sky(const game_state&)`, returns the offline or online timeline, like `active_progress` |
-| 3.4 / 4.1 | When the room changes, the sky blends to the new room's state over about 2 s rather than snapping. With no connection, keep extrapolating the last timeline |
+| Server tables (`server/golfpp_module/src/lib.cpp`) | `room_sky`, public, PK `room_id`: `anchor_unix_ms`, `anchor_game_day`, `game_days_per_real_day`. `server_config` gets the same three columns as `default_sky_*` |
+| Server reducers (`lib.cpp`) | `join_course` creates `room_sky` with a new room (copying the default, re-anchored to now). The room cleanup that deletes empty rooms also deletes their `room_sky`. New owner-only `admin_set_room_sky` and `admin_set_default_sky` |
+| Room subscription (`src/net/net_client.cpp` subscribe_room) | `room_sky where room_id = <mine>` |
+| Network seam (`src/game/net_types.h`) | `online_view` gets `sky_timeline sky`. An accessor, `active_sky(const game_state&)`, returns the offline or online timeline, like `active_progress` |
+| `net_client` | When the room changes, the sky blends to the new room's state over about 2 s rather than snapping. With no connection, keep extrapolating the last timeline |
 | Traffic | No added calls. One row per room, written only on events |
 
-If the lighting work lands before multiplayer Phase 2, only the offline path exists
-and `active_sky` simply returns it. Nothing in the lighting phases waits on the
-server.
+Online play exists, so `active_sky` has both paths from the start. Nothing in the
+lighting phases waits on the server: without the room's sky (a local server
+without it yet, or no connection), the online path keeps the last timeline.
 
 ### Palette keyed on sun elevation (data)
 
@@ -330,7 +330,7 @@ Each phase leaves the build warning-free and all tests passing.
   game day continuous across a rate change. Large `unix_ms` values keep millisecond
   precision.
 - Offline never reads the online timeline, and online never builds one from
-  tuning (in the same shape as the multiplayer plan's mode tests).
+  tuning (in the same shape as `tests/mode_dispatch_tests.cpp`).
 - Palette: keys sorted, covering −90° to 90° after clamping, every field present,
   interpolation continuous.
 - Readability contrast at every key (shipped content, `tests/content_tests.cpp`).

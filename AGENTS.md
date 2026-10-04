@@ -29,8 +29,10 @@ height on a hole's fairway, its rough eases into the land, and every height
 and normal comes from that one grid. Courses should be right out of the
 importer; the hole editor is for touch-ups.
 
-Golf simulation first, RPG progression second. Online play (SpacetimeDB rooms)
-is planned to become the main draw; offline stays a complete solo mode.
+Golf simulation first, RPG progression second. Online play is the main mode:
+rooms of up to 40 players per course on SpacetimeDB, everyone visible on the
+course, groups of up to 4 sharing a scorecard, each player with their own ball
+at their own pace. Offline stays a complete solo mode.
 Everything is unlocked today: no money, shop, quests or unlock gating.
 
 ## Where to start reading
@@ -39,9 +41,16 @@ Everything is unlocked today: no money, shop, quests or unlock gating.
 |---|---|
 | The frame loop, saving, audio dispatch | `src/core/app.cpp` |
 | Keys → game actions | `src/core/key_bindings.cpp` |
-| Menus (new screens go here) | `src/core/startup_flow.h`, drawing in `src/renderer/menu_overlay.h` |
+| Menus (new screens go here) | `src/core/startup_flow.h` (the online screens in `src/core/online_menus.h`), drawing in `src/renderer/menu_overlay.h` |
 | What the renderer is told each frame, camera rigs | `src/core/render_frame.h`, `src/renderer/render_data.h` |
 | Per-frame gameplay | `src/game/game_state.h` |
+| A shot's flight (deterministic, replayable), its playback | `src/game/shot_simulation.h`, `play_shot` in `src/game/game_state.h` |
+| Offline vs online: progress changes, net commands, motion updates | `src/game/mode_dispatch.h`, `src/game/net_types.h`, `src/game/motion_sync.h` |
+| The online connection: sign-in, subscriptions, sending and receiving | `src/net/net_client.h` (C++), over `src/net/stdb_bridge.h`, the C API of the Rust bridge in `net/client_bridge/`; where to connect is `assets/online.json` |
+| Between the menus and the connection; rejoining a room after a reconnect | `src/core/online_session.h` |
+| My room's rows (players, balls, groups, shots), the server clock | `src/net/room_rows.h` |
+| An online round: the server's answers to my shots and actions | `src/game/online_play.h` |
+| Other players and their shots, as shown | `src/game/remote_players.h`; drawn by `src/renderer/remote_avatar_batch.h`, `src/renderer/online_overlay.h`, `src/core/render_online.h` |
 | Starting courses and holes, the hub | `src/game/course_session.h`, `src/game/play_area.h` |
 | XP, collectibles, completion rules | `src/game/progress_rules.h` (pure functions over `save_data`) |
 | Feel numbers | `assets/tuning/game_tuning.json` (struct: `src/game/game_tuning.h`) |
@@ -50,14 +59,18 @@ Everything is unlocked today: no money, shop, quests or unlock gating.
 | HUD | `src/renderer/hud_overlay.cpp` (scorecards in `scorecard_overlay.cpp`); the GL side is `src/renderer/renderer.cpp` |
 | Text size and layout | `src/renderer/pixel_font.h`, styles in `assets/ui/text_styles.json` |
 | Content format | the loader next to it (`src/game/*_loader.cpp`), each with `parse_*_from_text` |
+| The online server (SpacetimeDB module): tables, views, reducers | `server/golfpp_module/src/lib.cpp`; its rules next to it in `account_rules.h`, `play_rules.h`, `server_content.h` |
+| Shots natively vs in the server's WASM | `tooling/net/check_determinism.ps1` |
 | Tooling | `tooling/README.md` (OSM importer, hole editor, art generator) |
 | Course backdrops, ground textures | `tooling/art/make_art.py`, drawn by `src/renderer/backdrop_pass.h` and `assets/shaders/terrain.frag` |
 
 Reuse these instead of writing your own: `src/physics/vector_math.h` (yaw,
 horizontal distance, safe normalize, `clamp01`; use `glm::radians` and
-`glm::pi`, never a local `pi`), `src/game/json_util.h` (every JSON read and
-directory scan), `tests/test_support.h` (fixtures, `started_hole()`,
-`started_game()`, `near()`).
+`glm::pi`, never a local `pi`), `src/game/json_util.h` (every JSON read),
+`src/game/content_files.h` (every file read and directory scan: loaders parse
+text, so the server can parse the same content without a filesystem),
+`tests/test_support.h` (fixtures, `started_hole()`, `started_game()`,
+`near()`).
 
 ## Build and test
 
@@ -68,18 +81,56 @@ cmake --preset release && cmake --build build/release   # ./build/release/golf++
 python -m unittest test_osm_golf_convert                # in tooling/osm_import/
 ```
 
+The server module builds with the Emscripten SDK and the `spacetime` CLI (from
+PowerShell, after `. <emsdk>\emsdk_env.ps1`):
+
+```powershell
+spacetime build --module-path server/golfpp_module
+spacetime start                                           # a local server, in another terminal
+spacetime publish golfpp --server local --bin-path server/golfpp_module/build/lib.wasm
+tooling\net\check_determinism.ps1 -Emsdk <emsdk>         # golden shots, native vs WASM
+```
+
+Running a server, configuring who may sign in and pointing the game at it is
+`server/README.md` (written for players who self-host). For local multiplayer,
+`.\tooling\gb -m` does all of that (starting the server
+only for the session, publishing only a changed module, anonymous logins on)
+and launches two anonymous clients; `.\tooling\gb -x` stops them and the
+server (`tooling/README.md`).
+
+Its plain C++ (everything in `server/golfpp_module/src` but `lib.cpp` and
+`module_cache`) is also in the native test build, so the server's rules are
+tested with the game's. The module compiles content in, so republish it after
+content changes.
+
+Online play needs Rust: the default build runs cargo on `net/client_bridge`
+(with MinGW, the `x86_64-pc-windows-gnu` target: `rustup target add
+x86_64-pc-windows-gnu`) and links it into `golf++`. `-DGOLFPP_NET=OFF` (the
+test preset) builds without it: offline only. Tests link `src/net/` against
+a fake bridge (`tests/fake_stdb_bridge.h`); `cargo test` in
+`net/client_bridge` tests the Rust side. `--server <uri> --db <name>
+--anonymous` (or `GOLFPP_SERVER`, `GOLFPP_DB`) point the game at a local or
+self-hosted server. After changing the server's tables or reducers,
+regenerate the bindings: `spacetime generate --lang rust --bin-path
+server/golfpp_module/build/lib.wasm --out-dir net/client_bridge/src/module_bindings`.
+
 The build uses `-Wall -Wextra -Wpedantic -Wshadow` and must stay warning-free.
 Tests use `vendor/doctest.h`, a small runner with `TEST_CASE`, `CHECK` and
 `REQUIRE` only. Gameplay tests run on `tests/fixtures/` (not `assets/`), so
 content edits don't break them; tests of shipped content live in
-`tests/content_tests.cpp`. `GOLFPP_COURSE` and `GOLFPP_VSYNC` are in
-`docs/performance.md`.
+`tests/content_tests.cpp`. Golden shots (`tests/fixtures/golden_shots/`) run
+on frozen copies of the tuning, clubs and rewards, so feel edits don't move
+them; a new tuning field must be added to that copy too. `GOLFPP_COURSE` and
+`GOLFPP_VSYNC` are in `docs/performance.md`.
 
-**Do not introduce new dependencies without flagging it first.** Approved but
-not added yet (add each only in the plan phase that needs it): SpacetimeDB CLI,
-Emscripten SDK, a Rust client bridge (`spacetimedb-sdk`, OIDC/PKCE, `open`,
-`keyring`), SpacetimeAuth. The Steamworks SDK is approved but **blocked** until
-the owner has a Steam app id.
+**Do not introduce new dependencies without flagging it first.** The server
+uses the SpacetimeDB CLI, the Emscripten SDK and the SpacetimeDB C++ bindings
+(fetched by `server/golfpp_module/CMakeLists.txt`, pinned to the CLI's
+version). The client bridge uses Rust with the crates in
+`net/client_bridge/Cargo.toml` (`spacetimedb-sdk` pinned to the server's
+version). SpacetimeAuth is approved, configured in its dashboard. The
+Steamworks SDK is approved but **blocked** until the owner has a Steam app
+id.
 
 ---
 
@@ -88,13 +139,29 @@ the owner has a Steam app id.
 **Physics (`src/physics/`) is pure.** Every function takes inputs by value or
 const reference and returns a new value: no mutated parameters, no globals, no
 `static` locals, no I/O, no profiling. Same inputs, same result, so the server
-can replay shots. Gameplay simulation that affects results must not add new
-frame-`dt` dependence (ball flight still steps with frame `dt`; plan Phase 1
-replaces it).
+can replay shots. `simulate_shot` (`src/game/shot_simulation.h`) keeps the
+same rules: it runs a whole shot in fixed steps, and `game_state` only plays the
+result back. Gameplay simulation that affects results must not depend on frame
+`dt`. Every library and the server module build with `-ffp-contract=off`, so
+floating point is never fused differently natively and in WASM.
 
 **No globals or singletons.** `app` owns everything and passes it by
-reference. The one exception is the GL function table in
-`src/renderer/gl_loader.h` (OpenGL is global state).
+reference. The exceptions are the GL function table in
+`src/renderer/gl_loader.h` (OpenGL is global state) and, in the server
+module, `server/golfpp_module/src/module_cache.h`: one memo of the parsed
+embedded content and built courses, never game state.
+
+**The server plays by the game's rules.** Online, the server decides shots,
+strokes, completions and progress with the game's own code (`simulate_shot`,
+`progress_rules`, `round_state`, the `play_area` helpers), so a gameplay rule
+changed in `src/game` changes online play too. What only the server checks
+(names, logins, link codes, speed, reach, shot validity) lives in the plain
+`*_rules` files next to `lib.cpp`, which only reads and writes rows. Its
+limits are the `server` section of the tuning. Reducers fail with the ids in
+`server_errors.h`, which the client shows from its string table. The caller's
+token is read with `connection_jwt_payload` in `lib.cpp`, never
+`AuthCtx::get_jwt`, which never returns one in these bindings. A mid-hole
+disconnect abandons the hole: scores exist only for completed holes.
 
 **Content is data.** No gameplay numbers, rewards, item stats, sound choices or
 text in C++. Feel numbers go in `game_tuning.json`, rewards in `rewards.json`,
@@ -138,11 +205,37 @@ progress never mix: the local save is offline only, and nothing imports,
 exports or merges between the two. Accounts are not logins: progress is keyed
 by an account id, and one account can have several logins.
 
+**Offline and online part in one place.** Every progress change goes through
+`src/game/mode_dispatch.h`: offline applies `progress_rules` to the local save,
+online pushes a `net_command` and the result comes back from the server into
+`game_state::online`. Both modes run the same `progress_rules`, so rule changes
+go there. Read progress through `active_progress`, never `state.save` directly.
+Game code never talks to the network or includes `src/net/`: it pushes
+`net_commands` and reads `online` (`src/game/net_types.h`), the way it pushes
+`audio_events`; `app` owns the `net_client` (in its `online_session`) that
+sends and fills them. The menus don't include `src/net/` either: they read an
+`online_menu_status` and return `online_request`s, which `online_session`
+carries out. Online
+motion is sparse and rate-limited by `src/game/motion_sync.h` (the `net`
+section of the tuning). Online the client plays ahead (a shot plays as soon as
+it is hit) and the server's answer wins (`src/game/online_play.h`): a refusal
+puts the player and ball back, the server's rest position is blended to, and a
+hole is over when the server says so, never by local cup detection. Others in
+the room are presentation only (`src/game/remote_players.h`). Subscriptions are only ever the player's own rows or
+their room's (`net_client`), never a whole table: a full room fans every
+update out to everyone in it, and SpacetimeDB bills that traffic.
+`src/net/stdb_bridge.h` and `net/client_bridge/src/ffi.rs` declare the same
+C structs; change both together (`net_client` refuses a bridge whose layout
+differs). The bridge's sign-in failures are ids the game turns into text,
+and the text it shows in the browser comes from the string table.
+
 **Saves.** `src/game/save_data.h` is the offline save. Any change to its shape
 bumps `current_save_version` and adds a migration step; parsing ignores
 unknown fields and refuses newer versions. Save on hole completion, course
 completion, leaving a round and clean exit; never mid-hole, never transient
-state. An unreadable save is backed up, never overwritten silently.
+state. An unreadable save is backed up, never overwritten silently. Online
+progress is never written to disk: only the browser login's refresh token is
+kept, in Windows Credential Manager (`net/client_bridge/src/login.rs`).
 
 ## Writing code that documents itself
 
@@ -153,9 +246,7 @@ Bad patterns replicate: assume whatever you write will be copied.
 - One home per job. Before writing a helper, search for it (see the shared
   helpers above). Never copy a function into a second file.
 - Delete dead code, unused fields and unused JSON keys instead of leaving them
-  for later. Planned work lives in `docs/`, not in unreachable code. (The
-  exception is `src/renderer/text_input.*`, the tested name-entry field for plan
-  Phase 4.)
+  for later. Planned work lives in `docs/`, not in unreachable code.
 - Name things for what they are now. No `_ptr`, `legacy_`, `old_` or `new_`
   names; rename instead.
 - A struct default is never a second copy of a tuning value: data defaults
@@ -195,23 +286,18 @@ system.
 
 `docs/multiplayer_plan.md` is the owner-approved plan. Implement one phase per
 run, in order, leaving the build warning-free and all tests passing.
-**Phase 6 (Steam login) is blocked until the owner confirms a Steam app id:
-don't start it or add any Steam code.** `docs/steam_todo.md` is the store and
-release checklist.
+`docs/steam_todo.md` is the store and release checklist. **Steam login (its
+section 5) is blocked until the owner confirms a Steam app id: don't start it or
+add any Steam code.**
 
 | Phase | What |
 |---|---|
-| 1 | Deterministic fixed-step `simulate_shot` with playback; network seam in `game_state` |
-| 2 | SpacetimeDB server module (C++ to WASM): accounts and login linking, rooms, groups, shots, progress |
-| 3 | Rust client bridge and browser login (SpacetimeAuth) |
-| 4 | Online and offline menus, login and name entry, remote players and shots, groups |
-| 5 | Self-hosting guide, dev tooling, docs |
-| 6 | Steam login and linking Steam to existing accounts (blocked) |
+| 1 | Alpha 0.1, the first release, to friends: installer, Maincloud, client and server versions in step. **Only when the owner says so**: the owner playtests and bug-tests first, and may add features before it |
 
 When anything from the plan or the Steam todo is implemented, update this file
 in the same change, delete it from the plan or todo (renumbering the remaining
 phases and sub-sections, and every cross-reference to them), and add any rules
-from the plan's "Rule changes to write into AGENTS.md".
+it brings.
 
 ## End of every session
 

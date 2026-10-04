@@ -1,0 +1,15 @@
+{
+  "id": "putter",
+  "name": "Putter",
+  "label": "P",
+  "hit_sound": "club_hit_putter",
+  "bag_order": 0,
+  "stats": {
+    "power": 22.0,
+    "loft_degrees": 2.0,
+    "backspin": 0.02,
+    "side_spin": 0.97,
+    "timing_speed": 0.25,
+    "roll_friction_scale": 0.35
+  }
+}

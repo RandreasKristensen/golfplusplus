@@ -1,0 +1,9 @@
+{
+  "server_uri": "https://maincloud.spacetimedb.com",
+  "database": "golfpp",
+  "auth_issuer": "https://auth.spacetimedb.com/oidc",
+  "auth_client_id": "client_034a3i23SFVFzv66ywBHPC",
+  "auth_scopes": "openid profile offline_access",
+  "auth_authorization_endpoint": "https://auth.spacetimedb.com/oidc/auth",
+  "auth_token_endpoint": "https://auth.spacetimedb.com/oidc/token"
+}

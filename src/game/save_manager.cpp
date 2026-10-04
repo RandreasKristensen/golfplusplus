@@ -1,5 +1,6 @@
 #include "game/save_manager.h"
 
+#include "game/content_files.h"
 #include "game/json_util.h"
 
 #include <chrono>

@@ -6,6 +6,7 @@
     "body": { "fill": 1.0, "max_scale": 2, "color": [0.84, 0.84, 0.74], "align": "left", "valign": "top" },
     "error": { "fill": 0.70, "wrap": true, "color": [0.94, 0.38, 0.26], "align": "center" },
     "input": { "fill": 0.70, "color": [0.95, 0.92, 0.80], "align": "left" },
+    "link_code": { "fill": 0.80, "color": [0.95, 0.92, 0.80], "align": "center" },
 
     "tile_label": { "fill": 0.75, "max_scale": 3, "wrap": true, "color": [0.90, 0.88, 0.76], "align": "center" },
     "tile_hint": { "fill": 0.70, "color": [0.66, 0.67, 0.61], "align": "center" },
@@ -16,6 +17,8 @@
     "control_key_down": { "fill": 0.85, "color": [0.08, 0.085, 0.08], "align": "center" },
 
     "hud_label": { "fill": 0.87, "color": [0.88, 0.86, 0.72], "align": "left" },
+    "hud_mode": { "fill": 0.80, "color": [0.70, 0.72, 0.64], "align": "center" },
+    "name_tag": { "fill": 0.85, "max_scale": 1, "color": [0.92, 0.90, 0.80], "align": "center" },
     "hud_scale": { "fill": 0.75, "color": [0.88, 0.86, 0.72], "align": "center" },
     "hud_club": { "fill": 0.60, "max_scale": 3, "wrap": true, "color": [0.90, 0.88, 0.76], "align": "center" },
     "cart_label": { "fill": 0.90, "color": [0.94, 0.86, 0.52], "align": "left" },

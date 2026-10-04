@@ -9,7 +9,8 @@
 #include <glm/vec4.hpp>
 
 // GL-free CPU batch for small, repeated, flat-coloured world geometry: ground
-// markers, pin cups, flagsticks, aim dots, the swing club and the golf cart.
+// markers, pin cups, flagsticks, aim dots, the swing club, the golf cart, and
+// other players and their balls (remote_avatar_batch.h).
 // Each piece is transformed on the CPU into world-space triangles carrying
 // its colour, appended in submission order, and grouped into runs that share
 // render state; the GL side uploads one buffer and draws once per run.
@@ -36,6 +37,9 @@ std::vector<glm::vec3> make_unit_disc_positions(int segments);
 std::vector<glm::vec3> make_unit_quad_positions();
 
 inline constexpr int world_marker_disc_segments = 18;
+
+struct render_remote_avatar;
+struct render_remote_ball;
 
 class world_marker_batch {
 public:
@@ -107,6 +111,11 @@ struct world_marker_scene {
     bool cart_active = false;
     glm::vec3 camera_position{0.0f};
     glm::vec3 camera_target{0.0f, 0.0f, 1.0f};
+
+    // Other players and their balls.
+    const std::vector<render_remote_avatar>* remote_avatars = nullptr;
+    const std::vector<render_remote_ball>* remote_balls = nullptr;
+    float avatar_eye_height = 0.0f;
 };
 
 void append_ground_marker(world_marker_batch& batch, const glm::vec3& position, float scale, const glm::vec3& color);
@@ -120,7 +129,7 @@ void append_swing_club(world_marker_batch& batch,
                        float swing_power);
 
 // Clears `batch` and fills it for one frame: cart first, then hole and hub
-// markers, aim dots and the swing club. All hub cups come before all hub
+// markers, aim dots, the swing club, and other players and their balls. All hub cups come before all hub
 // flagsticks: cups never write depth and sit above their own terrain, so the
 // order between different holes' cups and flags is never visible, and the
 // hub collapses into a few runs instead of two per hole.

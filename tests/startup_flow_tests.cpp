@@ -4,6 +4,8 @@
 #include "game/text_assets.h"
 #include "renderer/menu_overlay.h"
 
+#include "test_support.h"
+
 #include <algorithm>
 #include <optional>
 #include <string>
@@ -12,6 +14,17 @@
 namespace {
 bool has_sound(const std::vector<ui_sound>& sounds, const ui_sound sound) {
     return std::find(sounds.begin(), sounds.end(), sound) != sounds.end();
+}
+
+// From the main menu: PLAY OFFLINE, then PLAY HOLE.
+void open_offline_hole_picker(startup_flow_state& state, const startup_catalog& catalog) {
+    return_to_main_menu(state);
+    input_state accept;
+    accept.enter.pressed = true;
+    state.selection = 1;
+    update_startup_menu(state, accept, std::nullopt, catalog);
+    state.selection = 1;
+    update_startup_menu(state, accept, std::nullopt, catalog);
 }
 
 startup_catalog two_courses() {
@@ -27,19 +40,24 @@ startup_catalog two_courses() {
 }
 }
 
-TEST_CASE("main menu opens the pickers and help, and quits from the last item") {
+TEST_CASE("main menu opens online, offline and help, and quits from the last item") {
     const startup_catalog catalog = two_courses();
 
     startup_flow_state state;
     input_state input;
     input.enter.pressed = true;
     update_startup_menu(state, input, std::nullopt, catalog);
-    CHECK(state.flow == startup_flow::hole_picker);
+    CHECK(state.flow == startup_flow::online_login);
 
     return_to_main_menu(state);
     state.selection = 1;
     update_startup_menu(state, input, std::nullopt, catalog);
+    CHECK(state.flow == startup_flow::offline);
+    update_startup_menu(state, input, std::nullopt, catalog);
     CHECK(state.flow == startup_flow::course_picker);
+
+    open_offline_hole_picker(state, catalog);
+    CHECK(state.flow == startup_flow::hole_picker);
 
     return_to_main_menu(state);
     state.selection = 2;
@@ -53,7 +71,30 @@ TEST_CASE("main menu opens the pickers and help, and quits from the last item") 
     CHECK(has_sound(result.sounds, ui_sound::select));
 }
 
-TEST_CASE("back leaves a sub-menu and quits from the main menu") {
+TEST_CASE("signed in, the main menu adds linking and signing out") {
+    online_menu_status online;
+    online.available = true;
+    online.status = net_status::connected;
+    online.account_id = 7;
+    online.name = "ANNA";
+
+    startup_flow_state state;
+    state.selection = 3;
+    input_state input;
+    input.enter.pressed = true;
+    startup_menu_result result = update_startup_menu(state, input, std::nullopt, two_courses(), online);
+    REQUIRE(result.requests.size() == 1U);
+    CHECK(result.requests[0].type == online_request_type::sign_out);
+
+    // Signed out, the same place is HELP; a selection past the end moves back.
+    online = online_menu_status{};
+    state.selection = 5;
+    result = update_startup_menu(state, input_state{}, std::nullopt, two_courses(), online);
+    CHECK(state.selection == 3);
+    CHECK(result.requests.empty());
+}
+
+TEST_CASE("back leaves a sub-menu for its parent and quits from the main menu") {
     const startup_catalog catalog = two_courses();
     startup_flow_state state;
     state.flow = startup_flow::course_picker;
@@ -62,10 +103,13 @@ TEST_CASE("back leaves a sub-menu and quits from the main menu") {
     input_state input;
     input.escape.pressed = true;
     startup_menu_result result = update_startup_menu(state, input, std::nullopt, catalog);
-    CHECK(state.flow == startup_flow::main);
+    CHECK(state.flow == startup_flow::offline);
     CHECK(state.selection == 0);
     CHECK(result.action == startup_action::none);
     CHECK(has_sound(result.sounds, ui_sound::back));
+
+    update_startup_menu(state, input, std::nullopt, catalog);
+    CHECK(state.flow == startup_flow::main);
 
     result = update_startup_menu(state, input, std::nullopt, catalog);
     CHECK(result.action == startup_action::quit);
@@ -88,6 +132,7 @@ TEST_CASE("course picker asks app to start the selected course without leaving t
     result = update_startup_menu(state, input, std::nullopt, catalog);
     CHECK(result.action == startup_action::start_course);
     CHECK(result.course.id == "second");
+    CHECK(result.play == play_mode::offline);
     CHECK(state.flow == startup_flow::course_picker);
 
     enter_playing(state);
@@ -97,12 +142,28 @@ TEST_CASE("course picker asks app to start the selected course without leaving t
 TEST_CASE("clicking a tile selects and accepts it") {
     const startup_catalog catalog = two_courses();
     startup_flow_state state;
-    const glm::vec2 help_tile = startup_tile_center(startup_menu_screen::main, 2);
+    const glm::vec2 help_tile = startup_tile_center(startup_menu_screen::main, 2, 4);
     const startup_menu_result result = update_startup_menu(state, input_state{}, help_tile, catalog);
     CHECK(state.flow == startup_flow::help);
     CHECK(has_sound(result.sounds, ui_sound::move));
 
     CHECK(startup_tile_at(startup_menu_screen::main, 4, glm::vec2(0.99f, -0.99f)) == -1);
+}
+
+TEST_CASE("a long single column closes up so every tile stays above the footer") {
+    for (const int count : {2, 4, 6, 8}) {
+        const glm::vec2 half = startup_tile_half_size(startup_menu_screen::main, count);
+        const glm::vec2 last = startup_tile_center(startup_menu_screen::main, count - 1, count);
+        CHECK(last.y - half.y >= -0.78f);
+        CHECK(startup_tile_center(startup_menu_screen::main, 0, count).y + half.y <= 0.36f);
+        for (int i = 1; i < count; ++i) {
+            const float gap = startup_tile_center(startup_menu_screen::main, i - 1, count).y -
+                startup_tile_center(startup_menu_screen::main, i, count).y;
+            CHECK(gap >= 2.0f * half.y);
+        }
+    }
+    // Up to four tiles keep the usual spacing.
+    CHECK(near(startup_tile_center(startup_menu_screen::main, 1, 4).y, startup_tile_center(startup_menu_screen::main, 1, 2).y));
 }
 
 TEST_CASE("confirm menu opens on NO and only YES leaves the round") {
@@ -144,9 +205,20 @@ TEST_CASE("menu render data takes its text from the string table") {
     CHECK(main.screen == startup_menu_screen::main);
     CHECK(main.title == "GOLF++");
     CHECK(main.tiles.size() == 4U);
-    CHECK(main.tiles[0].title == "PLAY HOLE");
+    CHECK(main.tiles[0].title == "PLAY ONLINE");
     CHECK(main.tiles[0].selected);
+    CHECK(main.tiles[1].title == "PLAY OFFLINE");
     CHECK(main.tiles[3].subtitle == "RETURN TO DESKTOP");
+
+    online_menu_status online;
+    online.status = net_status::connected;
+    online.account_id = 7;
+    online.name = "ANNA";
+    const render_startup_menu signed_in = make_startup_menu_render_data(state, two_courses(), *text, online);
+    CHECK(signed_in.subtitle == "SIGNED IN AS ANNA");
+    CHECK(signed_in.tiles.size() == 6U);
+    CHECK(signed_in.tiles[2].title == "LINK ANOTHER LOGIN");
+    CHECK(signed_in.tiles[3].title == "SIGN OUT");
 
     state.flow = startup_flow::course_picker;
     const render_startup_menu courses = make_startup_menu_render_data(state, two_courses(), *text);
@@ -184,7 +256,7 @@ TEST_CASE("a picked hole starts as a one-hole practice course") {
 }
 
 TEST_CASE("every shipped hole is practised in front of its course's backdrop") {
-    const startup_catalog catalog = load_startup_catalog(*load_game_content(GOLFPP_ASSETS_DIR).content);
+    const startup_catalog catalog = load_startup_catalog(*load_game_content(GOLFPP_ASSETS_DIR).content, shipped_text_assets());
     REQUIRE(!catalog.holes.empty());
     for (const startup_hole_option& option : catalog.holes) {
         CHECK(!option.backdrop.empty());
@@ -192,8 +264,10 @@ TEST_CASE("every shipped hole is practised in front of its course's backdrop") {
 }
 
 TEST_CASE("the catalog totals each course's par and previews hole 1") {
-    const startup_catalog catalog = load_startup_catalog(*load_game_content(GOLFPP_ASSETS_DIR).content);
+    const startup_catalog catalog = load_startup_catalog(*load_game_content(GOLFPP_ASSETS_DIR).content, shipped_text_assets());
     REQUIRE(!catalog.courses.empty());
+    CHECK(catalog.name_max_length > 0U);
+    CHECK(catalog.name_chars.find('A') != std::string::npos);
     CHECK(!catalog.holes.empty());
     for (const startup_course_option& option : catalog.courses) {
         CHECK(option.total_par >= static_cast<int>(option.course.holes.size()) * 3);

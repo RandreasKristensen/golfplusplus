@@ -34,6 +34,7 @@ struct input_state {
     button_state key_r;
     button_state key_1;
     button_state key_2;
+    button_state key_g;
     button_state mouse_left;
 };
 

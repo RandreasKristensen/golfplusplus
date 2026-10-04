@@ -504,6 +504,9 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     markers.cart_active = data.cart_active;
     markers.camera_position = data.camera_position;
     markers.camera_target = data.camera_target;
+    markers.remote_avatars = &data.remote_avatars;
+    markers.remote_balls = &data.remote_balls;
+    markers.avatar_eye_height = data.avatar_eye_height;
     build_world_marker_batch(world_marker_batch_, markers);
     world_marker_renderer_.draw(world_marker_batch_, view_proj, profile);
 
@@ -575,27 +578,38 @@ void renderer::render_emotes(const glm::mat4& view, const glm::mat4& proj, const
     glBindVertexArray(0);
 }
 
+// My shot's flight path and other players' shot trails, as line strips.
 void renderer::render_flight_path(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile) {
-    if (!data.show_flight_path || data.flight_path_points == nullptr || data.flight_path_points->size() < 2) {
+    const auto draw_path = [&](const std::vector<glm::vec3>& points, const float alpha) {
+        if (points.size() < 2) {
+            return;
+        }
+        flight_path_vertices_.clear();
+        for (const glm::vec3& point : points) {
+            render_terrain_vertex vertex;
+            vertex.position = point + glm::vec3(0.0f, flight_path_lift, 0.0f);
+            flight_path_vertices_.push_back(vertex);
+        }
+        flight_path_buffer_.upload(flight_path_vertices_.data(), flight_path_vertices_.size() * sizeof(render_terrain_vertex), profile);
+        set_terrain_draw_state(terrain_shader_, glm::mat4(1.0f), proj * view, data.flight_path_color, alpha, false);
+        draw_arrays(terrain_shader_, GL_LINE_STRIP, 0, static_cast<GLsizei>(flight_path_vertices_.size()));
+    };
+    const bool own_path = data.show_flight_path && data.flight_path_points != nullptr;
+    if (!own_path && data.remote_trails.empty()) {
         return;
     }
 
-    flight_path_vertices_.clear();
-    for (const glm::vec3& point : *data.flight_path_points) {
-        render_terrain_vertex vertex;
-        vertex.position = point + glm::vec3(0.0f, flight_path_lift, 0.0f);
-        flight_path_vertices_.push_back(vertex);
-    }
-
     glBindVertexArray(flight_path_vao_);
-    flight_path_buffer_.upload(flight_path_vertices_.data(), flight_path_vertices_.size() * sizeof(render_terrain_vertex), profile);
     terrain_shader_.use();
-    set_terrain_draw_state(terrain_shader_, glm::mat4(1.0f), proj * view, data.flight_path_color, data.flight_path_alpha, false);
-
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glLineWidth(std::max(1.0f, data.flight_path_width));
-    draw_arrays(terrain_shader_, GL_LINE_STRIP, 0, static_cast<GLsizei>(flight_path_vertices_.size()));
+    if (own_path) {
+        draw_path(*data.flight_path_points, data.flight_path_alpha);
+    }
+    for (const render_trail& trail : data.remote_trails) {
+        draw_path(trail.points, trail.alpha);
+    }
     glLineWidth(1.0f);
     glDisable(GL_BLEND);
     glBindVertexArray(0);

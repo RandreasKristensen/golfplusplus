@@ -121,6 +121,54 @@ struct xp_drop_tuning {
     int min_visible_xp = 0;  // smaller gains are pooled until they reach this
 };
 
+// Limits on online motion updates (game/motion_sync.h).
+struct net_tuning {
+    float motion_heartbeat_seconds = 0.0f;     // resend at least this often while moving
+    float motion_min_interval_seconds = 0.0f;  // never send motion more often than this
+    float motion_correction_distance = 0.0f;   // resend when others' extrapolation is this far off (world units)
+    // Others are carried on along their last motion for at most this long,
+    // then stand still; a new motion blends in over remote_correction_seconds.
+    float remote_extrapolation_seconds = 0.0f;
+    float remote_correction_seconds = 0.0f;
+    // A shot the server says rests further than this from where this client
+    // played it (world units) blends there: by the end of playback, or over
+    // shot_correction_seconds once it has ended.
+    float shot_correction_distance = 0.0f;
+    float shot_correction_seconds = 0.0f;
+    float remote_trail_fade_seconds = 0.0f;  // another player's shot trail, after the ball stops
+    float group_join_distance = 0.0f;        // G joins the group of a player this close (world units)
+    float notice_seconds = 0.0f;             // how long a refusal from the server shows
+};
+
+// What the online server allows (server/golfpp_module). Slack covers a
+// client's honest rounding and lag, not cheating.
+struct server_tuning {
+    int room_capacity = 0;
+    int group_capacity = 0;
+    int name_min_length = 0;  // code points
+    int name_max_length = 0;
+    float link_code_minutes = 0.0f;  // how long a link code works
+    int link_codes_per_hour = 0;     // per account
+    int link_failures_per_hour = 0;  // wrong codes per login
+    // Between motion updates a player may move at their mode's speed (walking
+    // or the fastest cart) times motion_speed_scale, over at most
+    // max_motion_gap_seconds, plus a slack of motion_distance_slack that
+    // refills at that many world units per second (play_rules.h check_motion).
+    float motion_speed_scale = 0.0f;
+    float motion_distance_slack = 0.0f;  // world units
+    float max_motion_gap_seconds = 0.0f;
+    float interact_slack = 0.0f;      // world units past an interaction radius
+    float wind_time_slack_seconds = 0.0f;
+    // How much earlier than the server's clock the client may restart an
+    // emote, or later still use its cigarette (it times them by frames).
+    float timing_slack_seconds = 0.0f;
+};
+
+// The fastest a cart goes: drifting on a road.
+inline float fastest_cart_speed(const cart_tuning& cart) {
+    return cart.speed * cart.drift_speed_boost * (cart.road_speed_scale > 1.0f ? cart.road_speed_scale : 1.0f);
+}
+
 struct game_tuning {
     world_scale_tuning scale;
     terrain_build_tuning terrain;
@@ -134,4 +182,6 @@ struct game_tuning {
     aim_preview_tuning aim_preview;
     flight_path_tuning flight_path;
     xp_drop_tuning xp_drops;
+    net_tuning net;
+    server_tuning server;
 };

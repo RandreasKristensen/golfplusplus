@@ -1,17 +1,6 @@
 #include "game/json_util.h"
 
 #include <algorithm>
-#include <fstream>
-#include <iterator>
-#include <system_error>
-
-std::optional<std::string> read_text_file(const std::filesystem::path& path) {
-    std::ifstream file(path, std::ios::binary);
-    if (!file) {
-        return std::nullopt;
-    }
-    return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
-}
 
 std::optional<json> parse_json(const std::string& text) {
     json parsed = json::parse(text, nullptr, false);
@@ -126,19 +115,3 @@ std::vector<std::string> json_string_array(const json& object, const char* key) 
     return values;
 }
 
-std::vector<std::filesystem::path> json_files_in_directory(const std::filesystem::path& directory) {
-    std::vector<std::filesystem::path> files;
-    std::error_code error;
-    std::filesystem::directory_iterator it(directory, error);
-    if (error) {
-        return files;
-    }
-    for (; !error && it != std::filesystem::directory_iterator(); it.increment(error)) {
-        std::error_code type_error;
-        if (it->is_regular_file(type_error) && it->path().extension() == ".json") {
-            files.push_back(it->path());
-        }
-    }
-    std::sort(files.begin(), files.end());
-    return files;
-}

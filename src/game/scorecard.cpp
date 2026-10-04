@@ -1,6 +1,7 @@
 #include "game/scorecard.h"
 
 #include "game/game_state.h"
+#include "game/mode_dispatch.h"
 #include "game/text_ids.h"
 
 #include <cstdlib>
@@ -18,6 +19,7 @@ scorecard_data build_scorecard_data(const game_state& state, const string_table&
     data.course_name = state.course.name;
     data.current_hole_index = state.round.current_hole_index;
     data.finished = round_finished(state.round);
+    data.next_round = is_online(state);
 
     for (std::size_t i = 0; i < state.course_holes.size(); ++i) {
         const hole_data& hole = state.course_holes[i];
@@ -37,4 +39,31 @@ scorecard_data build_scorecard_data(const game_state& state, const string_table&
 
     data.total_relative_label = format_relative_score(strings, data.total_strokes - data.total_par);
     return data;
+}
+
+std::vector<group_scorecard_row> build_group_scorecard(const game_state& state, const string_table& strings) {
+    std::vector<group_scorecard_row> rows;
+    const room_player* me = my_room_player(state);
+    if (!is_online(state) || me == nullptr || me->group_id == 0) {
+        return rows;
+    }
+    for (const auto& [account, player] : state.online.players) {
+        if (player.group_id != me->group_id) {
+            continue;
+        }
+        group_scorecard_row row;
+        row.name = player.name;
+        row.me = account == state.online.account_id;
+        int par = 0;
+        for (std::size_t i = 0; i < player.round_strokes.size() && i < state.course_holes.size(); ++i) {
+            if (player.round_strokes[i] > 0) {
+                ++row.holes_played;
+                row.strokes += player.round_strokes[i];
+                par += state.course_holes[i].par;
+            }
+        }
+        row.relative_label = format_relative_score(strings, row.strokes - par);
+        rows.push_back(row);
+    }
+    return rows;
 }

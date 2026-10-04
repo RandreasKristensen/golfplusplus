@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <string>
+#include <vector>
 
 namespace {
 bool is_space(const char value) {
@@ -42,5 +43,25 @@ startup_options parse_startup_options(const char* vsync_value, const char* cours
     }
 
     options.boot_course_id = trimmed(course_value);
+    return options;
+}
+
+startup_options with_online_options(startup_options options,
+                                    const char* server_value,
+                                    const char* database_value,
+                                    const std::vector<std::string>& arguments) {
+    options.online_server = trimmed(server_value);
+    options.online_database = trimmed(database_value);
+    for (std::size_t i = 0; i < arguments.size(); ++i) {
+        const std::string& argument = arguments[i];
+        const bool has_value = i + 1 < arguments.size();
+        if (argument == "--server" && has_value) {
+            options.online_server = trimmed(arguments[++i].c_str());
+        } else if (argument == "--db" && has_value) {
+            options.online_database = trimmed(arguments[++i].c_str());
+        } else if (argument == "--anonymous") {
+            options.online_anonymous = true;
+        }
+    }
     return options;
 }

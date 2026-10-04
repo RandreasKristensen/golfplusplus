@@ -140,7 +140,3 @@ std::optional<hole_data> parse_hole_from_text(const std::string& text) {
     return hole;
 }
 
-std::optional<hole_data> load_hole_from_file(const std::string& path) {
-    const std::optional<std::string> text = read_text_file(path);
-    return text ? parse_hole_from_text(*text) : std::nullopt;
-}

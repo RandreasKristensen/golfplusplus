@@ -1,5 +1,6 @@
 #include "audio/audio_manifest.h"
 
+#include "game/content_files.h"
 #include "game/json_util.h"
 
 #include <algorithm>

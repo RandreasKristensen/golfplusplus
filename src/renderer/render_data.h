@@ -7,6 +7,7 @@
 #include "physics/tree_collision.h"
 #include "profiling/profiling.h"
 #include "renderer/menu_overlay.h"
+#include "renderer/remote_avatar_batch.h"
 #include "renderer/render_mesh.h"
 
 #include <cstdint>
@@ -28,6 +29,8 @@ struct controls_overlay_state {
     bool enter_down = false;
     bool backspace_down = false;
     bool retee_down = false;
+    bool show_group_key = false;  // online only
+    bool group_down = false;
 };
 
 struct render_skill_progress {
@@ -51,6 +54,18 @@ struct render_xp_drop {
     skill_icon_id icon = skill_icon_id::generic;
     int xp = 0;
     float progress = 0.0f;  // 0 when it appears, 1 when it disappears
+};
+
+// A name over another player's head (world position of the tag).
+struct render_name_tag {
+    glm::vec3 position{0.0f};
+    std::string name;
+};
+
+// Another player's shot trail, fading once their ball stops.
+struct render_trail {
+    std::vector<glm::vec3> points;
+    float alpha = 0.0f;
 };
 
 struct render_data {
@@ -107,7 +122,16 @@ struct render_data {
     bool beer_emote_active = false;
     float beer_emote_elapsed = 0.0f;
 
+    // Other players in my room (online).
+    std::vector<render_remote_avatar> remote_avatars;
+    std::vector<render_remote_ball> remote_balls;
+    std::vector<render_trail> remote_trails;
+    std::vector<render_name_tag> name_tags;
+    float avatar_eye_height = 0.0f;
+
     // HUD.
+    // Which progress this round plays for: offline, or the online room.
+    std::string mode_label;
     bool show_interact_prompt = false;
     bool show_power_meter = false;
     int stroke_count = 0;
@@ -119,6 +143,8 @@ struct render_data {
     bool show_scorecard = false;
     bool show_course_results = false;
     scorecard_data scorecard;
+    std::vector<group_scorecard_row> group_scorecard;  // beside the scorecard, when grouped online
+    std::string notice_label;  // a refusal from the server, for a moment
     bool show_skills_panel = false;
     std::vector<render_skill_progress> skills;
     std::vector<render_xp_drop> xp_drops;

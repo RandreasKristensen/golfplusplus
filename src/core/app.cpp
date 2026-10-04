@@ -5,7 +5,10 @@
 #include "core/key_bindings.h"
 #include "core/render_frame.h"
 #include "game/asset_resolver.h"
+#include "game/content_files.h"
 #include "game/course_session.h"
+#include "game/mode_dispatch.h"
+#include "game/net_types.h"
 #include "game/save_manager.h"
 #include "game/text_ids.h"
 #include "renderer/terrain_render_mesh.h"
@@ -13,9 +16,11 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -121,7 +126,27 @@ bool app::init(const startup_options& options) {
         return false;
     }
     content_ = std::move(*content.content);
-    catalog_ = load_startup_catalog(content_);
+    catalog_ = load_startup_catalog(content_, text_);
+
+#if GOLFPP_NET
+    const std::optional<std::string> online_text = read_text_file(std::filesystem::path(asset_root) / online_config_path);
+    const std::optional<online_config> online = online_text ? parse_online_config_from_text(*online_text) : std::nullopt;
+    // Offline always works: without online play's config or a matching
+    // bridge the game starts offline only.
+    std::optional<net_client> net;
+    if (online) {
+        net = net_client::create(
+            with_overrides(*online, options.online_server, options.online_database, options.online_anonymous),
+            lookup_text(text_, text_online_browser_signed_in), lookup_text(text_, text_online_browser_failed));
+    }
+    if (net) {
+        online_.emplace(std::move(*net));
+    } else if (!online) {
+        SDL_Log("Online play is off: cannot load %s from %s", online_config_path, asset_root.c_str());
+    } else {
+        SDL_Log("Online play is off: the client bridge does not match src/net/stdb_bridge.h; rebuild it");
+    }
+#endif
 
     const std::string pref_path = sdl_path(SDL_GetPrefPath("golfplusplus", "golf++"));
     save_path_ = save_file_path(pref_path.empty() ? std::filesystem::path(asset_root) / "saves" : std::filesystem::path(pref_path));
@@ -183,7 +208,13 @@ void app::run() {
         if (menu_.flow != startup_flow::playing) {
             update_menu(profile);
         } else if (round_finished(game_.round)) {
-            if (input_.enter.pressed || input_.space.pressed || input_.escape.pressed || input_.backspace.pressed) {
+            // Online the server has started the next round already; offline
+            // the round ends at the menu.
+            const bool next = input_.enter.pressed || input_.space.pressed;
+            if (next && is_online(game_)) {
+                audio_.play(sound_ui_select);
+                start_next_round(game_);
+            } else if (next || input_.escape.pressed || input_.backspace.pressed) {
                 audio_.play(sound_ui_select);
                 return_to_menu();
             }
@@ -194,6 +225,12 @@ void app::run() {
         } else {
             update_round(dt, profile);
         }
+#if GOLFPP_NET
+        if (online_) {
+            online_->update(game_);
+            watch_online_round();
+        }
+#endif
     }
 
     save_progress();
@@ -207,7 +244,10 @@ void app::shutdown() {
 
 bool app::reset_to_menu_backdrop() {
     const std::uint64_t previous_revision = game_.terrain_render_revision;
+    // What the server sent stays: the menus show who is signed in.
+    online_view online = std::move(game_.online);
     game_ = make_game_state(content_, game_.save);
+    game_.online = std::move(online);
     if (!start_course(game_, content_.courses.front())) {
         return false;
     }
@@ -216,8 +256,14 @@ bool app::reset_to_menu_backdrop() {
 }
 
 // Leaving a round saves like a clean exit, so nothing earned is lost.
+// Online, it leaves the room but stays signed in.
 void app::return_to_menu() {
     save_progress();
+#if GOLFPP_NET
+    if (online_ && is_online(game_)) {
+        online_->leave_round();
+    }
+#endif
     return_to_main_menu(menu_);
     reset_to_menu_backdrop();
     audio_.stop_loop(sound_cart_drive_loop);
@@ -225,31 +271,84 @@ void app::return_to_menu() {
     audio_.start_ambience(sound_ambience_menu_vcr);
 }
 
+// Only the offline save is ever written: online progress lives on the server.
 void app::save_progress() {
     game_.save_requested = false;
-    if (saving_enabled_ && !write_save(save_path_, game_.save)) {
+    if (game_.play == play_mode::offline && saving_enabled_ && !write_save(save_path_, game_.save)) {
         SDL_Log("Failed to write save %s", save_path_.string().c_str());
     }
 }
 
 void app::update_menu(frame_profile* profile) {
+    const online_menu_status online = online_status();
     const startup_menu_result result =
-        update_startup_menu(menu_, input_, mouse_click_position(input_, window_.sdl_window()), catalog_);
+        update_startup_menu(menu_, input_, mouse_click_position(input_, window_.sdl_window()), catalog_, online);
     play_ui_sounds(audio_, result.sounds);
+    carry_out(result.requests);
     if (result.action == startup_action::quit) {
         running_ = false;
     } else if (result.action == startup_action::start_course) {
+        game_.play = result.play;
         if (start_course(game_, result.course)) {
             enter_playing(menu_);
             audio_.start_ambience(sound_ambience_course_day);
         } else {
             SDL_Log("Course %s failed to load", result.course.id.c_str());
+            if (result.play == play_mode::online) {
+                carry_out({online_request{online_request_type::leave_room, {}}});
+                return_to_main_menu(menu_);
+            }
         }
     }
+    // Typing only reaches input_state::text_typed while a text field shows.
+    set_text_input_enabled(wants_text_input(menu_));
 
     render_data data = make_frame(0.0f, true, profile);
-    data.startup_menu = make_startup_menu_render_data(menu_, catalog_, text_);
+    data.startup_menu = make_startup_menu_render_data(menu_, catalog_, text_, online);
     present_frame(data, profile);
+}
+
+online_menu_status app::online_status() const {
+    online_menu_status status;
+#if GOLFPP_NET
+    if (online_) {
+        status = online_->menu_status(game_, std::chrono::system_clock::now());
+    }
+#endif
+    status.clock_seconds = static_cast<double>(SDL_GetTicks64()) / 1000.0;
+    return status;
+}
+
+void app::carry_out(const std::vector<online_request>& requests) {
+#if GOLFPP_NET
+    if (online_) {
+        online_->carry_out(requests, game_);
+    }
+#else
+    (void)requests;
+#endif
+}
+
+void app::watch_online_round() {
+#if GOLFPP_NET
+    if (menu_.flow != startup_flow::playing || !is_online(game_)) {
+        return;
+    }
+    for (const reducer_failure& failure : online_->refusals()) {
+        SDL_Log("The server refused %s: %s", failure.reducer.c_str(), failure.error.c_str());
+    }
+    const online_round_status round = online_->watch_round(game_);
+    if (round.event == online_round_event::restart) {
+        start_course(game_, game_.course);
+    } else if (round.event == online_round_event::lost) {
+        return_to_menu();
+        if (round.message_key.empty()) {
+            open_online_login(menu_);
+        } else {
+            menu_.message_key = round.message_key;
+        }
+    }
+#endif
 }
 
 void app::update_confirm_menu(frame_profile* profile) {

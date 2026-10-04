@@ -79,3 +79,23 @@ TEST_CASE("the two options are independent") {
     CHECK(!(vsync_only.vsync));
     CHECK(vsync_only.boot_course_id.empty());
 }
+
+TEST_CASE("online options come from the environment, and the command line wins") {
+    const startup_options none = with_online_options(startup_options{}, nullptr, nullptr, {});
+    CHECK(none.online_server.empty());
+    CHECK(none.online_database.empty());
+    CHECK(!none.online_anonymous);
+
+    const startup_options environment = with_online_options(startup_options{}, " http://localhost:3000 ", "dev", {});
+    CHECK(environment.online_server == "http://localhost:3000");
+    CHECK(environment.online_database == "dev");
+
+    const startup_options command_line = with_online_options(
+        startup_options{}, "http://env", "env_db", {"--server", "http://cli", "--anonymous", "--db", "cli_db", "--stray"});
+    CHECK(command_line.online_server == "http://cli");
+    CHECK(command_line.online_database == "cli_db");
+    CHECK(command_line.online_anonymous);
+
+    // A flag missing its value is ignored.
+    CHECK(with_online_options(startup_options{}, "http://env", nullptr, {"--server"}).online_server == "http://env");
+}

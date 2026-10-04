@@ -15,7 +15,4 @@ inline constexpr float default_cart_road_width = 4.0f;
 // `course`. hole_starts come back sorted by hole_index.
 std::optional<course_world_definition> parse_course_world_from_text(const std::string& text,
                                                                     const course_definition& course);
-std::optional<course_world_definition> load_course_world_from_file(const std::string& path,
-                                                                   const course_definition& course);
-// Empty when the course has no world.
-std::string course_world_file_path(const std::string& asset_root, const course_definition& course);
+

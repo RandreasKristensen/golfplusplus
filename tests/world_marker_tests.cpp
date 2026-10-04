@@ -3,6 +3,7 @@
 #include "renderer/camera_local.h"
 #include "renderer/cart_batch.h"
 #include "renderer/primitive_mesh.h"
+#include "renderer/remote_avatar_batch.h"
 #include "renderer/world_marker_batch.h"
 
 #include <glm/geometric.hpp>
@@ -768,4 +769,49 @@ TEST_CASE("inactive golf cart appends nothing") {
     scene.cart_active = true;
     build_world_marker_batch(batch, scene);
     CHECK(batch.vertices().size() == markers_only + cart_model_vertex_count());
+}
+
+TEST_CASE("another player is a figure on foot, the cart when driving, with a ring for their group") {
+    world_marker_batch batch;
+    render_remote_avatar avatar;
+    avatar.position = glm::vec3(10.0f, 2.0f, -4.0f);
+    avatar.player_id = 3;
+    append_remote_avatar(batch, avatar, 1.65f);
+    CHECK(batch.vertices().size() == remote_figure_vertex_count());
+    // Standing on the ground, no taller than a person.
+    float lowest = 1000.0f;
+    float highest = -1000.0f;
+    for (const world_marker_vertex& vertex : batch.vertices()) {
+        lowest = std::min(lowest, vertex.position.y);
+        highest = std::max(highest, vertex.position.y);
+    }
+    CHECK(lowest >= avatar.position.y - 0.05f);
+    CHECK(highest <= avatar.position.y + 1.65f * 1.2f);
+
+    batch.clear();
+    avatar.in_cart = true;
+    append_remote_avatar(batch, avatar, 1.65f);
+    CHECK(batch.vertices().size() == cart_model_vertex_count());
+
+    batch.clear();
+    avatar.in_cart = false;
+    avatar.group_id = 2;
+    append_remote_avatar(batch, avatar, 1.65f);
+    CHECK(batch.vertices().size() == remote_figure_vertex_count() + disc_vertex_count);
+    CHECK(group_highlight(2) != group_highlight(3));
+    CHECK(remote_tint(1) != remote_tint(2));
+}
+
+TEST_CASE("the marker batch draws the remote players and balls it is given") {
+    world_marker_batch batch;
+    const std::vector<render_remote_avatar> avatars(2);
+    const std::vector<render_remote_ball> balls(3);
+    world_marker_scene scene;
+    scene.remote_avatars = &avatars;
+    scene.remote_balls = &balls;
+    scene.avatar_eye_height = 1.65f;
+    scene.ball_visual_radius_meters = 0.05f;
+    build_world_marker_batch(batch, scene);
+    const std::size_t sphere = make_sphere_positions(primitive_sphere_latitude_segments, primitive_sphere_longitude_segments).size();
+    CHECK(batch.vertices().size() == 2U * remote_figure_vertex_count() + 3U * sphere);
 }

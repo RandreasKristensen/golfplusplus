@@ -22,4 +22,6 @@ struct game_input {
     bool course_map_held = false;
     bool scorecard_held = false;
     bool skills_panel_held = false;
+    bool group = false;        // join the nearest player's group, or start one
+    bool leave_group = false;
 };

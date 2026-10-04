@@ -1,5 +1,7 @@
 #include "renderer/hud_overlay.h"
 
+#include "renderer/online_overlay.h"
+
 #include "game/text_ids.h"
 #include "renderer/control_icons.h"
 #include "renderer/pixel_font.h"
@@ -65,6 +67,9 @@ void draw_controls_overlay(overlay_batch& batch, const text_assets& text, const 
     const glm::vec2 key_half(0.052f, 0.046f);
     draw_control_key(batch, text, text_controls_key_1, glm::vec2(0.70f, -0.74f), key_half, controls.key_1_down);
     draw_control_key(batch, text, text_controls_key_2, glm::vec2(0.88f, -0.74f), key_half, controls.key_2_down);
+    if (controls.show_group_key) {
+        draw_control_key(batch, text, text_controls_key_g, glm::vec2(0.79f, -0.87f), key_half, controls.group_down);
+    }
 }
 
 void draw_fps_counter(overlay_batch& batch, const text_assets& text, const std::string& label) {
@@ -86,6 +91,11 @@ void draw_club_label(overlay_batch& batch, const text_assets& text, const std::s
     draw_overlay_quad(batch, panel.center, panel.half_size, panel_color);
 
     draw_label(batch, text.font, find_text_style(text, style_hud_club), label, inset_rect(panel, glm::vec2(0.02f)));
+}
+
+// Top centre, clear of the stroke ticks, cart panel, club and XP drops.
+void draw_mode_label(overlay_batch& batch, const text_assets& text, const std::string& label) {
+    draw_label(batch, text.font, find_text_style(text, style_hud_mode), label, rect_from_edges(-0.27f, 0.85f, 0.27f, 0.97f));
 }
 
 void draw_interact_prompt(overlay_batch& batch) {
@@ -353,20 +363,6 @@ void draw_xp_drops(overlay_batch& batch, const text_assets& text, const std::vec
     }
 }
 
-// Overlay clip-space position of a world point, or nullopt when it is
-// behind the camera or outside the depth range.
-std::optional<glm::vec2> project_to_screen(const glm::mat4& view_proj, const glm::vec3& world_position) {
-    const glm::vec4 clip = view_proj * glm::vec4(world_position, 1.0f);
-    if (clip.w <= 0.0f) {
-        return std::nullopt;
-    }
-    const glm::vec3 ndc = glm::vec3(clip) / clip.w;
-    if (ndc.z < -1.0f || ndc.z > 1.0f) {
-        return std::nullopt;
-    }
-    return glm::vec2(ndc.x, ndc.y);
-}
-
 void draw_rangefinder_view(overlay_batch& batch,
                            const text_assets& text,
                            const glm::mat4& view_proj,
@@ -419,6 +415,18 @@ void draw_stroke_ticks(overlay_batch& batch, const int stroke_count) {
 }
 }
 
+std::optional<glm::vec2> project_to_screen(const glm::mat4& view_proj, const glm::vec3& world_position) {
+    const glm::vec4 clip = view_proj * glm::vec4(world_position, 1.0f);
+    if (clip.w <= 0.0f) {
+        return std::nullopt;
+    }
+    const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+    if (ndc.z < -1.0f || ndc.z > 1.0f) {
+        return std::nullopt;
+    }
+    return glm::vec2(ndc.x, ndc.y);
+}
+
 skill_icon_id skill_icon_from_name(const std::string& name) {
     if (name == "golf_swing") {
         return skill_icon_id::golf_swing;
@@ -433,8 +441,10 @@ skill_icon_id skill_icon_from_name(const std::string& name) {
 }
 
 void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& data, const glm::mat4& view_proj) {
+    draw_name_tags(batch, text, data.name_tags, view_proj);
     if (data.show_scorecard) {
         draw_compact_scorecard(batch, text, data.scorecard);
+        draw_group_scorecard(batch, text, data.group_scorecard);
     }
     if (data.show_skills_panel) {
         draw_skills_panel(batch, text, data.skills);
@@ -442,6 +452,7 @@ void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& 
     if (data.show_rangefinder) {
         draw_rangefinder_view(batch, text, view_proj, data);
     }
+    draw_mode_label(batch, text, data.mode_label);
     draw_cart_hud(batch, text, data);
     draw_club_label(batch, text, data.selected_club_label);
     if (data.show_interact_prompt) {
@@ -453,6 +464,7 @@ void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& 
         draw_power_meter(batch, text, data.swing_power);
     }
     draw_stroke_ticks(batch, data.stroke_count);
+    draw_notice(batch, text, data.notice_label);
 }
 
 void draw_debug_text(overlay_batch& batch, const text_assets& text, const render_data& data) {

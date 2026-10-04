@@ -1,0 +1,19 @@
+[package]
+name = "golfpp_client_bridge"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "golf++'s connection to its SpacetimeDB server, behind a small C API (src/net/stdb_bridge.h)."
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+spacetimedb-sdk = "=2.10.2"
+oauth2 = { version = "5", default-features = false, features = ["reqwest-blocking", "rustls-tls"] }
+keyring = { version = "3", features = ["windows-native"] }
+open = "5"
+serde = { version = "1", features = ["derive"] }
+
+[profile.release]
+panic = "abort"

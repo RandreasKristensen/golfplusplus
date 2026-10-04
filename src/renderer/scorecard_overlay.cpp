@@ -184,13 +184,53 @@ void draw_scorecard_card(overlay_batch& batch,
     draw_totals(batch, text, scorecard, grid, layout.total);
 
     if (!compact) {
-        draw_label(batch, text.font, find_text_style(text, style_scorecard_hint), lookup_text(text, text_scorecard_results_hint), layout.hint);
+        draw_label(batch, text.font, find_text_style(text, style_scorecard_hint),
+                   lookup_text(text, scorecard.next_round ? text_scorecard_results_hint_online : text_scorecard_results_hint), layout.hint);
     }
 }
 }
 
 void draw_compact_scorecard(overlay_batch& batch, const text_assets& text, const scorecard_data& scorecard) {
     draw_scorecard_card(batch, text, scorecard, ui_rect{glm::vec2(-0.48f, 0.32f), glm::vec2(0.44f, 0.44f)}, true);
+}
+
+void draw_group_scorecard(overlay_batch& batch, const text_assets& text, const std::vector<group_scorecard_row>& rows) {
+    if (rows.empty()) {
+        return;
+    }
+    // Right of the compact card, clear of the key icons.
+    const ui_rect card{glm::vec2(0.30f, 0.24f), glm::vec2(0.34f, 0.26f)};
+    draw_paper_card_base(batch, card);
+    const ui_rect content = inset_rect(card, glm::vec2(0.03f, 0.0f));
+    draw_label(batch, text.font, find_text_style(text, style_scorecard_title), lookup_text(text, text_scorecard_group_title),
+               slice_y(content, 0.04f, 0.20f));
+
+    const ui_rect area = slice_y(content, 0.24f, 0.96f);
+    const float x0 = rect_left(area);
+    const float x4 = rect_right(area);
+    const float width = x4 - x0;
+    scorecard_grid grid;
+    grid.x_edges = {{x0, x0 + width * 0.52f, x0 + width * 0.66f, x0 + width * 0.82f, x4}};
+    grid.top = rect_top(area);
+    grid.row_count = static_cast<int>(rows.size()) + 1;
+    grid.row_height = std::min(0.07f, area.half_size.y * 2.0f / static_cast<float>(grid.row_count));
+    draw_grid_lines(batch, card, grid);
+
+    const text_style& header = find_text_style(text, style_scorecard_header);
+    const std::array<const char*, 4> keys{{text_scorecard_header_player, text_scorecard_header_thru, text_scorecard_header_score,
+                                           text_scorecard_header_relative}};
+    for (std::size_t column = 0; column < keys.size(); ++column) {
+        draw_label(batch, text.font, header, lookup_text(text, keys[column]), grid_cell(grid, 0, column));
+    }
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        const group_scorecard_row& row = rows[i];
+        const int grid_row = static_cast<int>(i) + 1;
+        const text_style& ink = find_text_style(text, row.me ? style_scorecard_row_current : style_scorecard_row);
+        draw_label(batch, text.font, with_align(ink, text_align::left), row.name, hole_cell(grid_cell(grid, grid_row, 0)));
+        draw_label(batch, text.font, ink, std::to_string(row.holes_played), grid_cell(grid, grid_row, 1));
+        draw_label(batch, text.font, ink, row.holes_played > 0 ? std::to_string(row.strokes) : "", grid_cell(grid, grid_row, 2));
+        draw_label(batch, text.font, ink, row.holes_played > 0 ? row.relative_label : "", grid_cell(grid, grid_row, 3));
+    }
 }
 
 void draw_course_results(overlay_batch& batch, const text_assets& text, const scorecard_data& scorecard) {

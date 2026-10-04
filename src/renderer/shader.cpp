@@ -5,7 +5,7 @@
 #include <optional>
 #include <string>
 
-#include "game/json_util.h"
+#include "game/content_files.h"
 #include "renderer/gl_loader.h"
 
 namespace {

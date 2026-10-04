@@ -1,11 +1,10 @@
 #pragma once
 
-// Shared JSON and file helpers for every loader. None of them throw: a
-// missing key, a wrong type or an unreadable file gives nullopt (or an empty
-// result), and the caller decides whether that is an error.
+// Shared JSON helpers for every loader. None of them throw: a missing key or
+// a wrong type gives nullopt (or an empty result), and the caller decides
+// whether that is an error. Reading files is game/content_files.h.
 
 #include <cstdint>
-#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -14,9 +13,6 @@
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
-
-// The whole file, byte for byte (binary files too).
-std::optional<std::string> read_text_file(const std::filesystem::path& path);
 
 // Parses JSON text; nullopt when it is not valid JSON.
 std::optional<json> parse_json(const std::string& text);
@@ -36,7 +32,3 @@ std::optional<std::vector<glm::vec3>> json_vec3_array(const json& value);
 std::optional<glm::vec3> json_vec3(const json& object, const char* key);
 // The string elements of an array member; other elements are skipped.
 std::vector<std::string> json_string_array(const json& object, const char* key);
-
-// Every *.json file directly in `directory`, sorted by path. Empty when the
-// directory is missing or unreadable.
-std::vector<std::filesystem::path> json_files_in_directory(const std::filesystem::path& directory);

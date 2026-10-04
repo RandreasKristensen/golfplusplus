@@ -18,5 +18,8 @@ game_input game_input_from_keys(const input_state& keys) {
     input.course_map_held = keys.enter.is_down;
     input.scorecard_held = keys.tab.is_down;
     input.skills_panel_held = keys.caps_lock.is_down;
+    const bool shift = keys.left_shift.is_down || keys.right_shift.is_down;
+    input.group = keys.key_g.pressed && !shift;
+    input.leave_group = keys.key_g.pressed && shift;
     return input;
 }

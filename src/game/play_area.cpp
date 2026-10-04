@@ -9,6 +9,7 @@
 #include <optional>
 
 #include <glm/common.hpp>
+#include <glm/geometric.hpp>
 #include <glm/trigonometric.hpp>
 
 namespace {
@@ -177,4 +178,41 @@ float terrain_height(const play_area& area, const glm::vec3& position, frame_pro
 glm::vec3 anchor_on_terrain(const play_area& area, const glm::vec3& position, frame_profile* profile) {
     const terrain_sample sample = sample_area(area, position, profile);
     return glm::vec3(position.x, sample.point.y, position.z);
+}
+
+glm::vec3 resting_ball_position(const play_area& area, const glm::vec3& position, const float radius) {
+    const terrain_sample ground = sample_area(area, position);
+    return ground.point + ground_normal(ground.normal) * radius;
+}
+
+glm::vec3 tee_stance_position(const play_area& area, const glm::vec3& ball, const glm::vec3& pin, const float stand_off) {
+    glm::vec3 stance = ball - yaw_direction(yaw_towards(ball, pin)) * stand_off;
+    stance.y = terrain_height(area, stance);
+    return stance;
+}
+
+bool on_cart_road(const std::vector<course_world_cart_road>& roads, const glm::vec3& position, const cart_tuning& cart) {
+    const glm::vec3 point = horizontal(position);
+    for (const course_world_cart_road& road : roads) {
+        const float reach = std::max(cart.min_road_reach, road.width * 0.5f + cart.road_reach_margin);
+        for (std::size_t i = 0; i + 1 < road.polyline.size(); ++i) {
+            const glm::vec3 a = horizontal(road.polyline[i]);
+            const glm::vec3 ab = horizontal(road.polyline[i + 1]) - a;
+            const float length_squared = glm::dot(ab, ab);
+            const float t = length_squared <= 0.0001f ? 0.0f : clamp01(glm::dot(point - a, ab) / length_squared);
+            if (glm::length(point - (a + ab * t)) <= reach) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+std::vector<tree_body> standing_trees(const play_area& area, frame_profile* profile) {
+    std::vector<tree_body> trees;
+    trees.reserve(area.trees.size());
+    for (const tree_instance& tree : area.trees) {
+        trees.push_back(tree_body{anchor_on_terrain(area, tree.position, profile), tree.shape});
+    }
+    return trees;
 }

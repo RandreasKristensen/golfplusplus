@@ -110,10 +110,110 @@ delete the item.
 
 ---
 
-## 5. Multiplayer on Steam (see `multiplayer_plan.md`)
+## 5. Multiplayer on Steam
 
-Steam sign-in (including linking beta accounts) is planned as Phase 6 of
-`multiplayer_plan.md`, blocked on the app id. Offline play is a rule in `AGENTS.md`.
+Online play is in the game (`AGENTS.md`); the friends release is `multiplayer_plan.md`.
+Offline play is a rule in `AGENTS.md`.
+
+### Steam login (⛔ blocked: waiting on the Steam app id)
+
+**Do not implement this yet.** It needs a paid Steam app id (Steam Direct, $100)
+and a Steamworks partner account, which the owner doesn't have. SpacetimeAuth needs
+a Steam Publisher Web API key and checks tickets against our own app id, so it
+can't be tested end to end before then (Valve's test app `480` almost certainly won't work).
+Until then nothing may add the Steamworks SDK, `src/platform/steam/` or any Steam
+client code. The only Steam-aware code is the dormant
+server check (`check_login` in `server/golfpp_module/src/account_rules.h`).
+
+Start only when the owner confirms the app id exists. Then:
+
+#### 0. Owner setup and verification
+
+- The owner:
+  - creates a Steam Publisher Web API key in Steamworks and enters it in SpacetimeAuth,
+  - adds the app id to SpacetimeAuth's allowed app ids,
+  - downloads the Steamworks SDK.
+- Verify with a throwaway script. POST `https://auth.spacetimedb.com/oidc/token` with
+  `grant_type=urn:spacetimeauth:steam-ticket`, `steam_ticket=<hex ticket>`,
+  `steam_app_id=<id>`, `client_id=<ours>`, then check:
+  - whether a public client (no secret) is allowed on this grant (the browser client is public; if this grant needs a secret, ship it in `assets/online.json` and say in `AGENTS.md` that it is not truly secret),
+  - whether a refresh token is returned (not needed: a fresh ticket can be fetched any time Steam is running),
+  - the ID token lifetime,
+  - that the claims include `login_method: "steam"`, `provider_id`, `preferred_username` and `steam_owned_games`.
+- **Account linking:** check whether SpacetimeAuth gives a Steam login and a browser login
+  for the same person the same `sub`. It almost certainly doesn't. Either way, our own
+  linking (the link code flow) already handles it; report what you find.
+- Set `steam_app_id` with `admin_set_config` to switch on the ownership check in `check_login`.
+
+#### 1. Steam session (`src/platform/steam/steam_session.{h,cpp}`)
+
+- `std::optional<steam_session> try_start_steam()`: calls `SteamAPI_Init()` (or
+  `SteamAPI_InitFlat`, whichever the SDK version recommends). If Steam isn't running,
+  or the build has no Steam, it returns empty and the game carries on normally.
+  **Never** call `SteamAPI_RestartAppIfNecessary`, since that forces a relaunch through Steam and would block DRM-free/offline play.
+- Owned by `app` (RAII, `SteamAPI_Shutdown` in the destructor). `SteamAPI_RunCallbacks()` runs once per frame. No globals beyond what the Steam API itself keeps.
+- `request_web_api_ticket("spacetimeauth")` wraps `GetAuthTicketForWebApi` and its
+  `GetTicketForWebApiResponse_t` callback. The result arrives as a plain event
+  (`steam_ticket_ready{bytes}` / `steam_ticket_failed{reason}`) that `app` hands to `net_client`.
+- `persona_name()` gives the Steam display name.
+- For dev, `steam_appid.txt` (with our app id) next to the exe. It's in `.gitignore` and never shipped.
+- Game code never includes Steam headers. Only `app` and `src/net/` talk to `steam_session`.
+
+#### 2. Build
+
+- A CMake option `GOLFPP_STEAM` (default `ON` when `GOLFPP_STEAMWORKS_DIR` points at
+  an SDK, else `OFF`) compiles `src/platform/steam/` and links `steam_api64`. The test
+  preset leaves it off. The SDK stays out of the repo. Steam releases ship `steam_api64.dll` next to the exe.
+
+#### 3. Bridge and login flow
+
+- Add `stdb_login_with_steam_ticket(stdb_client*, const uint8_t* ticket, size_t len, uint32_t app_id)`
+  to the C API, and `reqwest` + `rustls` to the bridge for the exchange. `signed_in` events carry the method.
+- The app id comes from the Steam session (`SteamUtils()->GetAppID()`), not from `assets/online.json`.
+- Flow, tried **before** browser sign-in whenever a Steam session exists:
+  1. Get a ticket and hand it to `stdb_login_with_steam_ticket`.
+  2. The bridge exchanges it and connects with `with_token(id_token)`. Nothing is stored on disk; the next launch just gets a new ticket.
+  3. On disconnect because of token expiry: new ticket, exchange, reconnect silently.
+  4. If the exchange fails (Steam offline, app not owned, SpacetimeAuth down), show the error with "RETRY", "SIGN IN WITH BROWSER" (if `allow_non_steam`) and "BACK".
+- With Steam there's nothing to sign out of: the menu shows "SIGNED IN WITH STEAM" instead of "SIGN OUT".
+
+#### 4. Screens
+
+- Login screen: "SIGNING IN WITH STEAM..." in front of the existing browser flow.
+- Name entry: prefilled with the Steam persona name, with unsupported characters dropped and the result cut to 12.
+- First Steam sign-in on a new account: make "I ALREADY HAVE AN ACCOUNT" prominent (a
+  beta tester moving to Steam is the expected case). The linking itself needs no new
+  server code: it's the link code flow with Steam as the new login.
+- All new text goes through the string table.
+
+#### 5. Rules and docs
+
+- Add the Steam rule below to `AGENTS.md`, and `src/platform/steam/` to its layout.
+- Delete this subsection from this file.
+
+#### Done when
+
+1. With Steam running, "PLAY ONLINE" signs in with no browser and no prompt.
+2. With Steam closed, the game starts, "PLAY OFFLINE" works, and online falls back to browser sign-in.
+3. A Steam account that doesn't own the app is rejected by the server.
+4. The test preset still builds and passes without the Steamworks SDK.
+5. A browser account with progress: make a link code, sign in with Steam on a fresh
+   Steam login, enter the code, and see the same name and progress. Afterwards both logins open it.
+
+#### Dependencies (approved)
+
+- **Steamworks SDK** (C++, `steam_api64.dll`): only for the Steam session ticket (and later
+  friends and rich presence). Keep it out of the repo; CMake finds it through
+  `GOLFPP_STEAMWORKS_DIR`. Builds without it work, with no Steam login. Steam releases ship
+  `steam_api64.dll` next to the exe.
+- The bridge needs `reqwest` with `rustls` for the ticket exchange, already pulled in by `oauth2`.
+
+#### Rule for `AGENTS.md` once it is in
+
+Steam is the primary online login but is never required. The game must start, and offline
+must work, without Steam running. No Steam DRM and no `RestartAppIfNecessary`. Steam headers
+are only included by `src/platform/steam/`, `app` and `src/net/`.
+
 
 ### Privacy and GDPR (EU developer)
 - [ ] Write a privacy policy (what we store, where, how long) and link it in Steamworks.

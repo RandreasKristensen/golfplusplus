@@ -1,9 +1,7 @@
 #include "game/course_session.h"
 
-#include "game/course_loader.h"
-#include "game/course_world_loader.h"
-#include "game/hole_loader.h"
-#include "game/progress_rules.h"
+#include "game/content_files.h"
+#include "game/mode_dispatch.h"
 #include "physics/vector_math.h"
 
 #include <utility>
@@ -13,6 +11,7 @@ namespace {
 void reset_play_state(game_state& state) {
     state.ball = ball_state{};
     state.ball.radius = state.tuning.scale.ball_physics_radius_meters;
+    state.shot.reset();
     state.cart = cart_state{};
     state.smoke_emote = emote_state{};
     state.beer_emote = emote_state{};
@@ -26,6 +25,8 @@ void reset_play_state(game_state& state) {
     state.drift_meters_pending = 0.0f;
     state.flight_path_points.clear();
     state.shot_start_position = glm::vec3(0.0f);
+    state.online_hole = online_hole_state{};
+    state.ball_correction.reset();
 }
 
 void face(game_state& state, const float yaw) {
@@ -36,12 +37,11 @@ void face(game_state& state, const float yaw) {
 
 // Ball resting on the tee, player standing behind it facing the pin.
 void tee_up(game_state& state) {
-    const terrain_sample tee = sample_area(state.area, state.hole->tee_position);
-    state.ball.position = tee.point + ground_normal(tee.normal) * state.ball.radius;
-    face(state, yaw_towards(state.ball.position, pin_anchor_position(state)));
-
-    state.player.position = state.ball.position - yaw_direction(state.aim_angle) * state.tuning.player.ball_stand_off_distance;
-    state.player.position.y = terrain_height(state.area, state.player.position);
+    state.ball.position = resting_ball_position(state.area, state.hole->tee_position, state.ball.radius);
+    const glm::vec3 pin = pin_anchor_position(state);
+    face(state, yaw_towards(state.ball.position, pin));
+    state.player.position =
+        tee_stance_position(state.area, state.ball.position, pin, state.tuning.player.ball_stand_off_distance);
 }
 
 // `placed_hole` is in the play area's coordinates.
@@ -50,6 +50,7 @@ void enter_hole(game_state& state, const std::size_t index, const hole_data& pla
     mark_terrain_render_dirty(state);
     reset_play_state(state);
     tee_up(state);
+    record_hole_started(state, index);
 }
 
 // Faces the start of the next hole to play, or down that hole when already
@@ -90,7 +91,7 @@ course_hub build_hub(const course_world_definition& world, const std::vector<hol
     for (std::size_t i = 0; i < holes.size(); ++i) {
         const course_world_hole_start& start = world.hole_starts[i];
         const hole_data placed = place_hole(holes[i], start);
-        hub.markers.push_back(hub_hole_marker{placed.tee_position, placed.pin_position, start.position});
+        hub.markers.push_back(hub_hole_marker{placed.tee_position, placed.pin_position, start.position, placed.wind_seed});
     }
     return hub;
 }
@@ -152,15 +153,11 @@ void complete_current_hole(game_state& state) {
     }
     const std::size_t index = state.hole->index;
     state.round = complete_hole(state.round, index, state.stroke_count);
-    state.save = apply_hole_completed(state.save);
-    state.save_requested = true;
+    record_hole_completed(state);
     state.mode = game_mode::walking;
     state.flight_path_points.clear();
 
     if (round_finished(state.round)) {
-        if (!state.course.practice) {
-            state.save = apply_course_completed(state.save, state.course.id);
-        }
         return;
     }
     if (state.hub) {
@@ -168,6 +165,21 @@ void complete_current_hole(game_state& state) {
     } else {
         enter_linear_hole(state, state.round.current_hole_index);
     }
+}
+
+void abandon_hole(game_state& state, const glm::vec3& position) {
+    if (state.hole && state.hub) {
+        enter_hub(state, position);
+    }
+}
+
+void start_next_round(game_state& state) {
+    if (!state.hub || !state.hole) {
+        return;
+    }
+    const glm::vec3 position = state.hub->world.hole_starts[state.hole->index].return_position;
+    state.round = start_round(state.course_holes.size());
+    enter_hub(state, position);
 }
 
 void retee_ball(game_state& state) {

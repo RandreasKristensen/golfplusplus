@@ -19,7 +19,13 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
+#include <vector>
+
+#if GOLFPP_NET
+#include "core/online_session.h"
+#endif
 
 class app {
 public:
@@ -36,6 +42,12 @@ private:
     void update_menu(frame_profile* profile);
     void update_confirm_menu(frame_profile* profile);
     void update_round(float dt, frame_profile* profile);
+    // How online play is going for the menus; offline only without it.
+    online_menu_status online_status() const;
+    void carry_out(const std::vector<online_request>& requests);
+    // Keeps an online round in its room: restarts it after a reconnect,
+    // and leaves for the menus when the connection or the room is gone.
+    void watch_online_round();
     void play_game_audio();
     void refresh_render_meshes();
     // `snap_camera` cuts to the live view instead of blending (menus).
@@ -62,6 +74,12 @@ private:
     render_static_mesh terrain_render_mesh_;
     render_static_mesh material_overlay_render_mesh_;
     bool cart_loop_playing_ = false;
+
+#if GOLFPP_NET
+    // Online play; updated every frame, menus included, so signing in runs
+    // while they show.
+    std::optional<online_session> online_;
+#endif
 
     // Ctrl toggles the FPS and profiling overlay; the profiler only records
     // while it is shown.

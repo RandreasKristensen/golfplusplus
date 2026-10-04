@@ -8,6 +8,7 @@
 #include "game/game_tuning.h"
 #include "game/hole_data.h"
 #include "physics/terrain.h"
+#include "physics/tree_collision.h"
 #include "profiling/profiling.h"
 
 #include <vector>
@@ -52,3 +53,16 @@ terrain_sample sample_area(const play_area& area, const glm::vec3& position, fra
 float terrain_height(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);
 // `position` moved onto the terrain surface, keeping its XZ.
 glm::vec3 anchor_on_terrain(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);
+// Where a ball of `radius` rests on the ground at `position` (XZ).
+glm::vec3 resting_ball_position(const play_area& area, const glm::vec3& position, float radius);
+
+// Where the player stands at a teed ball: `stand_off` behind it on the
+// line to `pin`, on the ground.
+glm::vec3 tee_stance_position(const play_area& area, const glm::vec3& ball, const glm::vec3& pin, float stand_off);
+
+// True when `position` (XZ) is within reach of one of `roads`: a road's half
+// width plus cart.road_reach_margin, and never less than cart.min_road_reach.
+bool on_cart_road(const std::vector<course_world_cart_road>& roads, const glm::vec3& position, const cart_tuning& cart);
+
+// The area's trees standing on its terrain, as shots hit them.
+std::vector<tree_body> standing_trees(const play_area& area, frame_profile* profile = nullptr);

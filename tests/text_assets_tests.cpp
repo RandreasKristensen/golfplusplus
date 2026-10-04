@@ -82,6 +82,46 @@ TEST_CASE("every text id in text_ids.h exists in en.json and every style id in t
     }
 }
 
+namespace {
+// The values of `constexpr const char* <prefix>... = "...";` lines in `path`.
+std::vector<std::string> declared_values(const std::string& path, const std::string& prefix) {
+    std::ifstream file(path);
+    std::stringstream contents;
+    contents << file.rdbuf();
+    const std::string header = contents.str();
+    std::vector<std::string> values;
+    const std::regex pattern(R"re(constexpr const char\* (\w+) = "([^"]*)";)re");
+    for (auto it = std::sregex_iterator(header.begin(), header.end(), pattern); it != std::sregex_iterator(); ++it) {
+        if ((*it)[1].str().rfind(prefix, 0) == 0) {
+            values.push_back((*it)[2].str());
+        }
+    }
+    return values;
+}
+}
+
+TEST_CASE("every online failure and link result the game can receive has a string") {
+    const std::optional<text_assets> text = shipped_text();
+    REQUIRE(text.has_value());
+    const std::string source = GOLFPP_SOURCE_DIR;
+    const std::string server = source + "/../server/golfpp_module/src";
+
+    std::vector<std::string> errors = declared_values(server + "/server_errors.h", "error_");
+    const std::vector<std::string> bridge = declared_values(source + "/game/net_types.h", "net_failure_");
+    CHECK(errors.size() > 20U);
+    CHECK(bridge.size() > 5U);
+    errors.insert(errors.end(), bridge.begin(), bridge.end());
+    for (const std::string& id : errors) {
+        CHECK(text->strings.entries.count(online_error_text_key(id)) == 1U);
+    }
+
+    const std::vector<std::string> links = declared_values(source + "/game/net_types.h", "link_result_");
+    CHECK(links.size() == 5U);
+    for (const std::string& id : links) {
+        CHECK(text->strings.entries.count(online_link_text_key(id)) == 1U);
+    }
+}
+
 TEST_CASE("every skill has a name in the string table") {
     const std::optional<text_assets> text = shipped_text();
     if (!text) {

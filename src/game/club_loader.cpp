@@ -3,7 +3,6 @@
 #include "game/json_util.h"
 
 #include <algorithm>
-#include <filesystem>
 
 std::optional<club_definition> parse_club_from_text(const std::string& text) {
     const std::optional<json> root = parse_json(text);
@@ -37,11 +36,10 @@ std::optional<club_definition> parse_club_from_text(const std::string& text) {
     return club;
 }
 
-std::vector<club_definition> load_clubs_from_directory(const std::string& directory) {
+std::vector<club_definition> parse_clubs_from_texts(const std::vector<std::string>& texts) {
     std::vector<club_definition> clubs;
-    for (const std::filesystem::path& path : json_files_in_directory(directory)) {
-        const std::optional<std::string> text = read_text_file(path);
-        if (std::optional<club_definition> club = text ? parse_club_from_text(*text) : std::nullopt) {
+    for (const std::string& text : texts) {
+        if (std::optional<club_definition> club = parse_club_from_text(text)) {
             clubs.push_back(std::move(*club));
         }
     }

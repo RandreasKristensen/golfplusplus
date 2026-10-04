@@ -4,13 +4,19 @@
 // rewards with the small hand-made courses in tests/fixtures, so content
 // edits in assets/ do not break them.
 
+#include "game/content_files.h"
 #include "game/course_definition.h"
 #include "game/course_loader.h"
 #include "game/course_session.h"
 #include "game/game_content.h"
 #include "game/game_input.h"
 #include "game/game_state.h"
+#include "game/hole_data.h"
+#include "game/play_area.h"
+#include "game/round_state.h"
+#include "game/text_assets.h"
 #include "physics/terrain.h"
+#include "physics/vector_math.h"
 
 #include <cmath>
 #include <string>
@@ -43,6 +49,12 @@ inline bool near(const glm::vec3& a, const glm::vec3& b, const float epsilon = 0
 inline const game_content& shipped_content() {
     static const game_content content = *load_game_content(asset_root()).content;
     return content;
+}
+
+// The shipped strings, styles and font, loaded once per test run.
+inline const text_assets& shipped_text_assets() {
+    static const text_assets text = *load_text_assets(asset_root());
+    return text;
 }
 
 // Shipped tuning, clubs and rewards; courses and holes from tests/fixtures.
@@ -97,6 +109,46 @@ inline void hit_selected_club(game_state& state) {
     enter_addressing(state);
     update_game(state, action_input(), 0.016f);
     update_game(state, action_input(), 0.016f);
+}
+
+// A straight hole from `tee` to `pin` on a ribbon of the given width.
+inline hole_data straight_hole(const glm::vec3& tee, const glm::vec3& pin, const float width) {
+    hole_data hole;
+    hole.id = "straight";
+    hole.name = "Straight";
+    hole.par = 3;
+    hole.tee_position = tee;
+    hole.pin_position = pin;
+    hole.spline.control_points = {tee, pin};
+    hole.spline.width = width;
+    hole.spline.rough_width = width;
+    return hole;
+}
+
+// Replaces the hole being played with `hole`, as start_course would.
+inline void play_hole(game_state& state, const hole_data& hole) {
+    state.course_holes = {hole};
+    state.round = start_round(1);
+    state.area = build_hole_area(hole, state.tuning);
+    state.hole = active_hole{0, hole.tee_position, hole.pin_position};
+    mark_terrain_render_dirty(state);
+}
+
+// No wind, drag or spin, so ball motion depends only on contact.
+inline void still_air(game_state& state) {
+    state.tuning.wind = wind_tuning{};
+    state.tuning.physics.drag_coeff = 0.0f;
+    state.tuning.physics.magnus_coeff = 0.0f;
+    state.tuning.physics.spin_decay = 0.0f;
+}
+
+inline float horizontal_speed(const glm::vec3& velocity) {
+    return glm::length(horizontal(velocity));
+}
+
+inline glm::vec3 resting_on_terrain(const game_state& state, const glm::vec3& position) {
+    const terrain_sample sample = sample_area(state.area, position);
+    return sample.point + ground_normal(sample.normal) * state.ball.radius;
 }
 
 // A ribbon with no zones (bunker and water depths don't matter then).

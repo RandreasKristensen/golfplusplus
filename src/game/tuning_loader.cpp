@@ -156,6 +156,33 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.xp_drops.lifetime_seconds = xp_drops.number("lifetime_seconds");
     tuning.xp_drops.min_visible_xp = xp_drops.integer("min_visible_xp");
 
+    const section_reader net = section("net");
+    tuning.net.motion_heartbeat_seconds = net.number("motion_heartbeat_seconds");
+    tuning.net.motion_min_interval_seconds = net.number("motion_min_interval_seconds");
+    tuning.net.motion_correction_distance = net.number("motion_correction_distance");
+    tuning.net.remote_extrapolation_seconds = net.number("remote_extrapolation_seconds");
+    tuning.net.remote_correction_seconds = net.number("remote_correction_seconds");
+    tuning.net.shot_correction_distance = net.number("shot_correction_distance");
+    tuning.net.shot_correction_seconds = net.number("shot_correction_seconds");
+    tuning.net.remote_trail_fade_seconds = net.number("remote_trail_fade_seconds");
+    tuning.net.group_join_distance = net.number("group_join_distance");
+    tuning.net.notice_seconds = net.number("notice_seconds");
+
+    const section_reader server = section("server");
+    tuning.server.room_capacity = server.integer("room_capacity");
+    tuning.server.group_capacity = server.integer("group_capacity");
+    tuning.server.name_min_length = server.integer("name_min_length");
+    tuning.server.name_max_length = server.integer("name_max_length");
+    tuning.server.link_code_minutes = server.number("link_code_minutes");
+    tuning.server.link_codes_per_hour = server.integer("link_codes_per_hour");
+    tuning.server.link_failures_per_hour = server.integer("link_failures_per_hour");
+    tuning.server.motion_speed_scale = server.number("motion_speed_scale");
+    tuning.server.motion_distance_slack = server.number("motion_distance_slack");
+    tuning.server.max_motion_gap_seconds = server.number("max_motion_gap_seconds");
+    tuning.server.interact_slack = server.number("interact_slack");
+    tuning.server.wind_time_slack_seconds = server.number("wind_time_slack_seconds");
+    tuning.server.timing_slack_seconds = server.number("timing_slack_seconds");
+
     if (!missing.empty()) {
         result.error = "game tuning is missing or has malformed fields:";
         for (const std::string& field : missing) {

@@ -3,6 +3,7 @@
 #include "renderer/cart_batch.h"
 #include "physics/vector_math.h"
 #include "renderer/primitive_mesh.h"
+#include "renderer/remote_avatar_batch.h"
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -287,5 +288,15 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
     }
     if (scene.show_swing_club) {
         append_swing_club(batch, scene.ball_position, scene.ball_visual_radius_meters, scene.aim_angle, scene.swing_power);
+    }
+    if (scene.remote_avatars != nullptr) {
+        for (const render_remote_avatar& avatar : *scene.remote_avatars) {
+            append_remote_avatar(batch, avatar, scene.avatar_eye_height);
+        }
+    }
+    if (scene.remote_balls != nullptr) {
+        for (const render_remote_ball& ball : *scene.remote_balls) {
+            append_remote_ball(batch, ball, scene.ball_visual_radius_meters);
+        }
     }
 }

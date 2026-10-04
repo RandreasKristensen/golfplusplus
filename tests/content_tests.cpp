@@ -1,11 +1,15 @@
 #include "doctest.h"
 
+#include "net/online_config.h"
+
 #include "core/startup_flow.h"
 #include "game/club_loader.h"
+#include "game/content_files.h"
 #include "game/course_loader.h"
 #include "game/course_world_loader.h"
 #include "game/hole_loader.h"
 #include "game/json_util.h"
+#include "game/net_types.h"
 #include "game/reward_rules.h"
 #include "game/scorecard.h"
 #include "game/text_assets.h"
@@ -246,11 +250,6 @@ namespace {
 // window size, so these cover every resolution.
 const std::vector<overlay_grid> shipped_grids{{554, 416}, {640, 360}, {733, 314}};
 
-const text_assets& shipped_text_assets() {
-    static const text_assets text = *load_text_assets(asset_root());
-    return text;
-}
-
 // A scorecard for `course` with every hole played over par, so every column
 // has its widest text.
 scorecard_data played_scorecard(const course_definition& course, const text_assets& text) {
@@ -278,9 +277,76 @@ scorecard_data played_scorecard(const course_definition& course, const text_asse
     return scorecard;
 }
 
+// The longest course name, which the online menus and HUD show.
+std::string longest_course_name() {
+    std::string longest;
+    for (const course_definition& course : shipped_content().courses) {
+        if (course.name.size() > longest.size()) {
+            longest = course.name;
+        }
+    }
+    return longest;
+}
+
+// Every string the online screens show in their message line: server
+// errors, link results and the menus' own.
+std::vector<std::string> online_messages(const text_assets& text) {
+    std::vector<std::string> messages;
+    for (const auto& [key, value] : text.strings.entries) {
+        if (key.rfind("online.error.", 0) == 0 || key.rfind("online.link.", 0) == 0 || key == text_online_room_lost) {
+            messages.push_back(key);
+        }
+    }
+    return messages;
+}
+
+// Signed in with the longest name, a link code and a few minutes on it.
+online_menu_status busy_online(const std::size_t name_length) {
+    online_menu_status online;
+    online.available = true;
+    online.status = net_status::connected;
+    online.account_id = 7;
+    online.name = std::string(name_length, 'W');
+    online.link_code = std::string(static_cast<std::size_t>(link_code_length), 'W');
+    online.link_code_minutes_left = 99;
+    return online;
+}
+
+// Every online status the sign-in screen tells apart.
+std::vector<online_menu_status> login_statuses() {
+    std::vector<online_menu_status> statuses(6);
+    statuses[1].available = true;
+    statuses[2].available = true;
+    statuses[2].status = net_status::failed;
+    statuses[2].failure_id = "sign_in_timed_out";
+    statuses[3].available = true;
+    statuses[3].status = net_status::waiting_for_browser;
+    statuses[4].available = true;
+    statuses[4].status = net_status::signing_in;
+    statuses[5].available = true;
+    statuses[5].status = net_status::connecting;
+    return statuses;
+}
+
+void check_fits(const overlay_grid& grid,
+                const text_assets& text,
+                const startup_flow_state& state,
+                const startup_catalog& catalog,
+                const online_menu_status& online) {
+    overlay_batch batch;
+    batch.grid = grid;
+    draw_startup_menu(batch, text, make_startup_menu_render_data(state, catalog, text, online));
+    CHECK(batch.truncated_text_count == 0U);
+}
+
 // Every in-round HUD element at once, with the widest values the game shows.
 render_data busy_hud(const text_assets& text, const std::string& club_label) {
     render_data data;
+    data.mode_label = format_text(text, text_hud_mode_online,
+                                  {{"course", longest_course_name()},
+                                   {"room", "99999"},
+                                   {"players", std::to_string(shipped_content().tuning.server.room_capacity)},
+                                   {"capacity", std::to_string(shipped_content().tuning.server.room_capacity)}});
     data.show_power_meter = true;
     data.swing_power = 1.0f;
     data.cart_active = true;
@@ -293,21 +359,58 @@ render_data busy_hud(const text_assets& text, const std::string& club_label) {
     data.xp_drops.push_back(render_xp_drop{skill_icon_id::generic, 99999, 0.5f});
     data.show_rangefinder = true;
     data.rangefinder_label = format_text(text, text_hud_rangefinder, {{"meters", "999"}});
+
+    // Online: a full group of the longest names, over par everywhere, and
+    // their name tags; the G key.
+    const std::size_t longest_name = static_cast<std::size_t>(shipped_content().tuning.server.name_max_length);
+    data.show_scorecard = true;
+    data.scorecard = played_scorecard(shipped_content().courses.front(), text);
+    for (int i = 0; i < shipped_content().tuning.server.group_capacity; ++i) {
+        const std::string name(longest_name, 'W');
+        data.group_scorecard.push_back(group_scorecard_row{name, 99, 999, format_relative_score(text.strings, 99), i == 0});
+        data.name_tags.push_back(render_name_tag{glm::vec3(0.0f), name});
+    }
+    data.controls.show_group_key = true;
     return data;
 }
 }
 
 TEST_CASE("every shipped screen fits its text without cutting any off") {
     const text_assets& text = shipped_text_assets();
-    const startup_catalog catalog = load_startup_catalog(shipped_content());
+    const startup_catalog catalog = load_startup_catalog(shipped_content(), text);
+    const online_menu_status online = busy_online(catalog.name_max_length);
     for (const overlay_grid& grid : shipped_grids) {
-        for (const startup_flow flow : {startup_flow::main, startup_flow::help, startup_flow::hole_picker, startup_flow::course_picker}) {
+        for (const startup_flow flow : {startup_flow::main, startup_flow::help, startup_flow::offline, startup_flow::hole_picker,
+                                        startup_flow::course_picker, startup_flow::link_code_show,
+                                        startup_flow::online_course_picker}) {
             startup_flow_state state;
             state.flow = flow;
-            overlay_batch batch;
-            batch.grid = grid;
-            draw_startup_menu(batch, text, make_startup_menu_render_data(state, catalog, text));
-            CHECK(batch.truncated_text_count == 0U);
+            check_fits(grid, text, state, catalog, online_menu_status{});
+            check_fits(grid, text, state, catalog, online);
+        }
+        for (const online_menu_status& status : login_statuses()) {
+            startup_flow_state state;
+            open_online_login(state);
+            check_fits(grid, text, state, catalog, status);
+        }
+
+        // A full field, and every message the server or the menus can show.
+        for (const startup_flow flow : {startup_flow::main, startup_flow::name_entry, startup_flow::link_code_entry,
+                                        startup_flow::link_code_show, startup_flow::online_course_picker,
+                                        startup_flow::joining}) {
+            for (const std::string& message : online_messages(text)) {
+                startup_flow_state state;
+                state.flow = flow;
+                state.message_key = message;
+                state.field.max_length = catalog.name_max_length;
+                state.field.value = std::string(catalog.name_max_length, 'W');
+                state.joining_course.name = longest_course_name();
+                online_menu_status status = online;
+                if (flow == startup_flow::link_code_show) {
+                    status.link_code.clear();
+                }
+                check_fits(grid, text, state, catalog, status);
+            }
         }
 
         startup_flow_state confirm;
@@ -324,17 +427,46 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
             CHECK(batch.truncated_text_count == 0U);
         }
 
-        for (const course_definition& course : shipped_content().courses) {
-            const scorecard_data scorecard = played_scorecard(course, text);
-            overlay_batch compact;
-            compact.grid = grid;
-            draw_compact_scorecard(compact, text, scorecard);
-            CHECK(compact.truncated_text_count == 0U);
+        // Every refusal the server can send, as the notice.
+        for (const std::string& message : online_messages(text)) {
+            render_data data = busy_hud(text, shipped_content().clubs.front().label);
+            data.notice_label = lookup_text(text, message.c_str());
+            overlay_batch batch;
+            batch.grid = grid;
+            draw_hud(batch, text, data, glm::mat4(1.0f));
+            CHECK(batch.truncated_text_count == 0U);
+        }
 
-            overlay_batch results;
-            results.grid = grid;
-            draw_course_results(results, text, scorecard);
-            CHECK(results.truncated_text_count == 0U);
+        for (const course_definition& course : shipped_content().courses) {
+            for (const bool online_round : {false, true}) {
+                scorecard_data scorecard = played_scorecard(course, text);
+                scorecard.next_round = online_round;
+                overlay_batch compact;
+                compact.grid = grid;
+                draw_compact_scorecard(compact, text, scorecard);
+                CHECK(compact.truncated_text_count == 0U);
+
+                overlay_batch results;
+                results.grid = grid;
+                draw_course_results(results, text, scorecard);
+                CHECK(results.truncated_text_count == 0U);
+            }
         }
     }
+}
+
+TEST_CASE("the shipped online config loads, and dev overrides replace only what they set") {
+    const std::optional<std::string> text = read_text_file(asset_root() + "/" + online_config_path);
+    REQUIRE(text.has_value());
+    const std::optional<online_config> config = parse_online_config_from_text(*text);
+    REQUIRE(config.has_value());
+    CHECK(!config->server_uri.empty());
+    CHECK(config->auth_scopes.find("openid") != std::string::npos);
+    CHECK(!config->anonymous);
+
+    const online_config local = with_overrides(*config, "http://localhost:3000", "", true);
+    CHECK(local.server_uri == "http://localhost:3000");
+    CHECK(local.database == config->database);
+    CHECK(local.anonymous);
+    CHECK(!parse_online_config_from_text("{\"server_uri\": \"x\"}").has_value());
 }

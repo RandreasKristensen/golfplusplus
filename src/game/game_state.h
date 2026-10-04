@@ -11,10 +11,13 @@
 #include "game/game_input.h"
 #include "game/game_tuning.h"
 #include "game/hole_data.h"
+#include "game/motion_sync.h"
+#include "game/net_types.h"
 #include "game/play_area.h"
 #include "game/reward_rules.h"
 #include "game/round_state.h"
 #include "game/save_data.h"
+#include "game/shot_simulation.h"
 #include "game/swing.h"
 #include "physics/ball_state.h"
 #include "physics/terrain.h"
@@ -40,6 +43,9 @@ enum class game_mode {
 struct player_state {
     glm::vec3 position{0.0f};
     float yaw = 0.0f;  // see yaw_direction in physics/vector_math.h
+    // How the player moved this frame, on foot or in the cart.
+    float speed = 0.0f;      // m/s along yaw, negative backwards
+    float turn_rate = 0.0f;  // rad/s, positive turns towards +X like yaw
 };
 
 struct cart_state {
@@ -68,6 +74,7 @@ struct hub_hole_marker {
     glm::vec3 tee_position{0.0f};
     glm::vec3 pin_position{0.0f};
     glm::vec3 start_position{0.0f};
+    std::uint32_t wind_seed = 0;  // the placed hole's, for other players' shots on it
 };
 
 // A course with a course world. Its whole course is the play area, both
@@ -75,6 +82,55 @@ struct hub_hole_marker {
 struct course_hub {
     course_world_definition world;
     std::vector<hub_hole_marker> markers;
+};
+
+// A simulated shot shown over real time while following it.
+struct shot_playback {
+    shot_result result;
+    float elapsed = 0.0f;
+    std::size_t next_event = 0;  // first of result.events not played yet
+    // Online: where the server says it rests, less where it played to here;
+    // blended in over the playback.
+    glm::vec3 correction{0.0f};
+};
+
+// Online: my ball moving to where the server says it rests, after its shot
+// has played here.
+struct ball_blend {
+    glm::vec3 from{0.0f};
+    glm::vec3 to{0.0f};
+    float elapsed = 0.0f;
+};
+
+// Online: what the server has said about the hole being played.
+struct online_hole_state {
+    bool entered = false;  // it has me on this hole
+    bool holed = false;    // it holed my ball here
+};
+
+// Another player in my room as shown here (presentation only): carried on
+// along their last motion, a new motion blending in.
+struct remote_avatar {
+    glm::vec3 position{0.0f};
+    float yaw = 0.0f;
+    motion_mode mode = motion_mode::idle;
+    std::int64_t motion_at = 0;      // the motion followed (server time)
+    glm::vec3 correction{0.0f};      // shown minus followed when that motion arrived
+    float correction_left = 0.0f;    // seconds of the blend still to run
+};
+
+// Another player's shot playing back here, from the server's event.
+struct remote_shot {
+    shot_result result;
+    glm::vec3 correction{0.0f};  // the server's rest less this simulation's
+    float elapsed = 0.0f;
+    std::vector<glm::vec3> trail;
+};
+
+// A message from the server shown for a moment (a refused action).
+struct game_notice {
+    std::string text_key;
+    float age = 0.0f;
 };
 
 // A "+XP" popup. Age runs to tuning.xp_drops.lifetime_seconds.
@@ -135,12 +191,31 @@ struct game_state {
     // The whole course on a hub course; the current hole on a course without one.
     play_area area;
 
+    // Offline or online, fixed from the menu until the player returns to it.
+    // Progress changes only go through game/mode_dispatch.h, which keeps the
+    // two apart: offline touches `save`, online pushes `net_commands`.
+    play_mode play = play_mode::offline;
+
     // The offline save. `save_requested` asks app to write it (hole and course
     // completion); app clears it.
     save_data save;
     bool save_requested = false;
 
+    // Online only. The network client sends and clears `net_commands`, and
+    // fills `online` from the server.
+    std::vector<net_command> net_commands;
+    online_view online;
+    motion_sync_state motion_sync;
+    online_hole_state online_hole;
+    std::optional<ball_blend> ball_correction;
+    std::map<std::uint64_t, remote_avatar> remote_avatars;
+    std::map<std::uint64_t, remote_shot> remote_shots;
+    std::optional<game_notice> notice;
+
+    // Where the ball rests, or where the playing shot has it. Only position
+    // and radius are used: a shot's motion lives in its shot_result.
     ball_state ball;
+    std::optional<shot_playback> shot;  // while following_shot
     player_state player;
     cart_state cart;
     emote_state smoke_emote;
@@ -151,7 +226,7 @@ struct game_state {
     std::size_t selected_club = 0;
     swing_state swing;
     int stroke_count = 0;
-    float hole_time = 0.0f;  // drives the wind
+    float hole_time = 0.0f;  // a shot's wind_time when it is hit
 
     // Hold-to-view overlays, refreshed every update.
     bool rangefinder_active = false;
@@ -185,13 +260,14 @@ game_state make_game_state(const game_content& content, const save_data& save);
 
 void update_game(game_state& state, const game_input& input, float dt, frame_profile* profile = nullptr);
 
-// Adds XP to the save and shows it as an XP drop.
-void award_skill_xp(game_state& state, const xp_reward& reward);
 void update_xp_drops(game_state& state, float dt);
 
 bool in_hub(const game_state& state);
-bool ball_is_moving(const game_state& state);
-bool ball_is_in_cup(const game_state& state);
+bool shot_playing(const game_state& state);
+// The current hole's course for simulate_shot. Borrows from `state`.
+shot_course current_shot_course(const game_state& state);
+// Follows `result` from the ball's position until it has played.
+void play_shot(game_state& state, shot_result result);
 bool can_interact_with_ball(const game_state& state);
 // Index into hub->world.hole_starts of the nearest start of an unplayed hole
 // in reach, or nullopt.

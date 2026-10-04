@@ -3,7 +3,6 @@
 #include "game/json_util.h"
 
 #include <algorithm>
-#include <filesystem>
 
 namespace {
 std::optional<course_world_hole_start> hole_start_from_json(const json& value, const course_definition& course) {
@@ -162,16 +161,3 @@ std::optional<course_world_definition> parse_course_world_from_text(const std::s
     return world;
 }
 
-std::optional<course_world_definition> load_course_world_from_file(const std::string& path,
-                                                                   const course_definition& course) {
-    const std::optional<std::string> text = read_text_file(path);
-    return text ? parse_course_world_from_text(*text, course) : std::nullopt;
-}
-
-std::string course_world_file_path(const std::string& asset_root, const course_definition& course) {
-    if (course.world.empty()) {
-        return {};
-    }
-    const std::filesystem::path reference(course.world);
-    return reference.is_absolute() ? reference.string() : (std::filesystem::path(asset_root) / reference).string();
-}

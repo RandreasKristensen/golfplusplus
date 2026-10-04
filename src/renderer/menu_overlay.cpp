@@ -21,7 +21,8 @@ enum class help_control_icon {
     backspace,
     retee,
     key_1,
-    key_2
+    key_2,
+    key_g
 };
 
 void draw_key_cap(overlay_batch& batch, const text_assets& text, const char* key, const glm::vec2 center, const glm::vec2 half_size) {
@@ -78,6 +79,9 @@ void draw_help_control_icon(overlay_batch& batch,
     case help_control_icon::key_2:
         draw_key_cap(batch, text, text_controls_key_2, center, key_half);
         break;
+    case help_control_icon::key_g:
+        draw_key_cap(batch, text, text_controls_key_g, center, key_half);
+        break;
     }
 }
 
@@ -96,7 +100,7 @@ struct help_column {
     std::vector<help_row> rows;
 };
 
-constexpr float help_column_bottom = -0.70f;
+constexpr float help_column_bottom = -0.80f;
 constexpr float help_row_gap = 0.02f;
 
 ui_rect help_label_box(const help_column& column, const std::size_t row) {
@@ -117,7 +121,8 @@ void draw_startup_help_screen(overlay_batch& batch, const text_assets& text) {
             {help_control_icon::backspace, glm::vec2(0.30f, 0.22f), 0.25f, text_help_backspace},
             {help_control_icon::retee, glm::vec2(0.30f, -0.12f), -0.12f, text_help_retee},
             {help_control_icon::key_1, glm::vec2(0.30f, -0.32f), -0.30f, text_help_key_1},
-            {help_control_icon::key_2, glm::vec2(0.30f, -0.52f), -0.50f, text_help_key_2},
+            {help_control_icon::key_2, glm::vec2(0.30f, -0.48f), -0.46f, text_help_key_2},
+            {help_control_icon::key_g, glm::vec2(0.30f, -0.66f), -0.62f, text_help_key_g},
         }},
     };
 
@@ -260,13 +265,44 @@ void draw_hole_thumbnail(overlay_batch& batch,
 }
 
 bool single_column(const startup_menu_screen screen) {
-    return screen == startup_menu_screen::main || screen == startup_menu_screen::confirm;
-}
+    return screen == startup_menu_screen::main || screen == startup_menu_screen::confirm ||
+        screen == startup_menu_screen::form;
 }
 
-glm::vec2 startup_tile_center(const startup_menu_screen screen, const int index) {
+bool picker(const startup_menu_screen screen) {
+    return screen == startup_menu_screen::hole_picker || screen == startup_menu_screen::course_picker;
+}
+
+// A single column runs down from its top edge to above the footer. Main
+// and confirm columns start under the subtitle; form columns under the form.
+constexpr float column_top = 0.355f;
+constexpr float form_column_top = -0.125f;
+constexpr float column_bottom = -0.775f;
+constexpr float column_pitch = 0.24f;
+constexpr float column_half_width = 0.42f;
+constexpr float column_half_height = 0.095f;
+
+// Tile spacing: the usual pitch, or less when that many tiles would run
+// past the bottom. Tiles shrink with it.
+float column_pitch_for(const startup_menu_screen screen, const int count) {
+    if (screen == startup_menu_screen::form || count <= 1) {
+        return column_pitch;
+    }
+    const float tile_heights = 2.0f * column_half_height / column_pitch;
+    return std::min(column_pitch, (column_top - column_bottom) / (static_cast<float>(count - 1) + tile_heights));
+}
+
+// The form screens' message line, field and code, above their tiles.
+const ui_rect message_box{glm::vec2(0.0f, 0.49f), glm::vec2(0.72f, 0.06f)};
+const ui_rect field_box{glm::vec2(0.0f, 0.20f), glm::vec2(0.42f, 0.09f)};
+const ui_rect code_box{glm::vec2(0.0f, 0.20f), glm::vec2(0.50f, 0.14f)};
+}
+
+glm::vec2 startup_tile_center(const startup_menu_screen screen, const int index, const int count) {
     if (single_column(screen)) {
-        return glm::vec2(0.0f, 0.26f - static_cast<float>(index) * 0.24f);
+        const float top = screen == startup_menu_screen::form ? form_column_top : column_top;
+        const float pitch = column_pitch_for(screen, count);
+        return glm::vec2(0.0f, top - startup_tile_half_size(screen, count).y - static_cast<float>(index) * pitch);
     }
 
     constexpr int columns = 3;
@@ -276,14 +312,17 @@ glm::vec2 startup_tile_center(const startup_menu_screen screen, const int index)
                      0.36f - static_cast<float>(row) * 0.38f);
 }
 
-glm::vec2 startup_tile_half_size(const startup_menu_screen screen) {
-    return single_column(screen) ? glm::vec2(0.42f, 0.095f) : glm::vec2(0.25f, 0.165f);
+glm::vec2 startup_tile_half_size(const startup_menu_screen screen, const int count) {
+    if (!single_column(screen)) {
+        return glm::vec2(0.25f, 0.165f);
+    }
+    return glm::vec2(column_half_width, column_half_height * column_pitch_for(screen, count) / column_pitch);
 }
 
 int startup_tile_at(const startup_menu_screen screen, const int count, const glm::vec2 point) {
-    const glm::vec2 half = startup_tile_half_size(screen);
+    const glm::vec2 half = startup_tile_half_size(screen, count);
     for (int i = 0; i < count; ++i) {
-        const glm::vec2 center = startup_tile_center(screen, i);
+        const glm::vec2 center = startup_tile_center(screen, i, count);
         if (std::abs(point.x - center.x) <= half.x && std::abs(point.y - center.y) <= half.y) {
             return i;
         }
@@ -299,16 +338,32 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
     draw_overlay_quad(batch, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.0f, 0.0f, 0.0f), 0.72f);
     draw_overlay_quad(batch, glm::vec2(0.0f, 0.0f), glm::vec2(0.86f, 0.88f), glm::vec3(0.012f, 0.014f, 0.014f), 0.30f);
     draw_label(batch, text.font, find_text_style(text, style_title), menu.title, ui_rect{glm::vec2(0.0f, 0.80f), glm::vec2(0.78f, 0.10f)});
-    draw_label(batch, text.font, find_text_style(text, style_subtitle), menu.subtitle, ui_rect{glm::vec2(0.0f, 0.66f), glm::vec2(0.70f, 0.045f)});
+    const ui_rect subtitle_box{glm::vec2(0.0f, 0.66f), glm::vec2(0.70f, 0.045f)};
+    const text_style& message_style = find_text_style(text, menu.message_is_error ? style_error : style_subtitle);
+    if (picker(menu.screen) && !menu.message.empty()) {
+        draw_label(batch, text.font, message_style, menu.message, subtitle_box);
+    } else {
+        draw_label(batch, text.font, find_text_style(text, style_subtitle), menu.subtitle, subtitle_box);
+        if (!menu.message.empty()) {
+            draw_label(batch, text.font, message_style, menu.message, message_box);
+        }
+    }
+    if (menu.field) {
+        draw_text_input(batch, text.font, find_text_style(text, style_input), *menu.field, field_box, menu.cursor_time);
+    }
+    if (!menu.code.empty()) {
+        draw_label(batch, text.font, find_text_style(text, style_link_code), menu.code, code_box);
+    }
 
     if (menu.screen == startup_menu_screen::help) {
         draw_startup_help_screen(batch, text);
     }
 
-    const glm::vec2 tile_half = startup_tile_half_size(menu.screen);
+    const int tile_count = static_cast<int>(menu.tiles.size());
+    const glm::vec2 tile_half = startup_tile_half_size(menu.screen, tile_count);
     for (std::size_t i = 0; i < menu.tiles.size(); ++i) {
         const render_startup_tile& tile = menu.tiles[i];
-        const ui_rect tile_box{startup_tile_center(menu.screen, static_cast<int>(i)), tile_half};
+        const ui_rect tile_box{startup_tile_center(menu.screen, static_cast<int>(i), tile_count), tile_half};
         const glm::vec3 panel_color = tile.selected ? glm::vec3(0.20f, 0.16f, 0.065f) : glm::vec3(0.070f, 0.075f, 0.075f);
         const glm::vec3 outline = tile.selected ? glm::vec3(0.94f, 0.72f, 0.22f) : glm::vec3(0.50f, 0.52f, 0.48f);
         draw_overlay_quad(batch, tile_box.center, tile_box.half_size, panel_color, tile.selected ? 0.94f : 0.76f);

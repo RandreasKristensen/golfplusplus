@@ -101,7 +101,7 @@ TEST_CASE("a hub course starts at hole 1's start facing down hole 1") {
     CHECK(nearby_hole_start(state) == std::optional<std::size_t>(0));
     CHECK(near(state.player.yaw, yaw_towards(state.player.position, state.hub->markers[0].pin_position), 0.0001f));
     CHECK(!can_interact_with_ball(state));
-    CHECK(!ball_is_moving(state));
+    CHECK(!shot_playing(state));
 }
 
 TEST_CASE("the hub terrain covers every hole start") {
@@ -113,7 +113,7 @@ TEST_CASE("the hub terrain covers every hole start") {
 }
 
 namespace {
-hole_data straight_hole(const float rise) {
+hole_data rising_hole(const float rise) {
     hole_data hole;
     hole.tee_position = glm::vec3(0.0f);
     hole.pin_position = glm::vec3(0.0f, rise, 200.0f);
@@ -141,7 +141,7 @@ play_area two_hole_course(const float land_height,
     world.ground.columns = 11;
     world.ground.rows = 13;
     world.ground.heights.assign(11U * 13U, land_height);
-    return build_course_area({straight_hole(0.0f), straight_hole(second_rise)}, world, shipped_content().tuning);
+    return build_course_area({rising_hole(0.0f), rising_hole(second_rise)}, world, shipped_content().tuning);
 }
 }
 

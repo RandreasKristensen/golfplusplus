@@ -42,3 +42,40 @@ whole microseconds to keep the lines short.
 
 The overlay text comes from `format_profile_overlay_lines` in
 `src/profiling/profiling.cpp`.
+
+## Online: server energy and traffic
+
+Maincloud bills a database in energy: the work its reducers and subscriptions
+do, what it stores, and the data it sends. A local server (`spacetime start`)
+costs nothing, so check usage on Maincloud.
+
+### Reading it
+
+- **The Maincloud dashboard** (spacetimedb.com, the `golfpp` database): energy
+  used over time. To measure a session, note the figure, play, and read it
+  again. The bar to meet: an hour of two-player play uses well under 1% of the
+  free tier's monthly energy.
+- **`spacetime logs golfpp --server maincloud -f`**: what the module reports
+  (refused logins, errors, panics). A reducer that fails over and over still
+  costs energy each call, so a flood of the same refusal here is worth fixing.
+  `--server local` reads a local server the same way.
+
+### What keeps traffic down
+
+The rules are in `AGENTS.md` ("Offline and online part in one place"); in short:
+
+- Subscriptions are only my own rows and my room's (`src/net/net_client.cpp`),
+  never a whole table. Every row in a room goes to everyone in it, so a full
+  room of 40 multiplies whatever one player's rows cost.
+- Motion is sparse: sent on a change of intent, as a heartbeat while moving,
+  or when others' extrapolation would drift too far, and never more often than
+  `net.motion_min_interval_seconds` (`assets/tuning/game_tuning.json`).
+  Others carry each player on between updates (`extrapolate_motion`).
+- A shot is one event (its inputs and where it rests); every client simulates
+  the flight itself (`src/game/remote_players.h`), so no flight is streamed.
+- `hole_score` keeps every hole an account ever scored and is not subscribed:
+  nothing in the game shows it yet.
+
+Raising the motion rate, adding a subscribed table or a column that changes
+often, or subscribing to history all show up on the dashboard: measure a
+session before and after.

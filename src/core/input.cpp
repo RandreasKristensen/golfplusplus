@@ -26,6 +26,7 @@ input_state next_frame_input(const input_state& input) {
     next.key_r = held_only(input.key_r);
     next.key_1 = held_only(input.key_1);
     next.key_2 = held_only(input.key_2);
+    next.key_g = held_only(input.key_g);
     next.mouse_left = held_only(input.mouse_left);
     return next;
 }

@@ -39,6 +39,8 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
         return &input.key_1;
     case SDL_SCANCODE_2:
         return &input.key_2;
+    case SDL_SCANCODE_G:
+        return &input.key_g;
     default:
         return nullptr;
     }

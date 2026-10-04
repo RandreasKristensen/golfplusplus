@@ -1,15 +1,20 @@
 #include "core/render_frame.h"
 
+#include "core/render_online.h"
+
+#include "game/mode_dispatch.h"
+#include "game/net_types.h"
 #include "game/progress_rules.h"
 #include "game/scorecard.h"
+#include "game/shot_simulation.h"
 #include "game/text_ids.h"
 #include "physics/flight_model.h"
 #include "physics/vector_math.h"
 
 #include <algorithm>
 #include <cmath>
-
-#include <glm/trigonometric.hpp>
+#include <optional>
+#include <string>
 
 namespace {
 // The address view of `ball`: beside it on the player's side, looking along
@@ -31,10 +36,8 @@ std::vector<glm::vec3> aim_preview_points(const game_state& game, frame_profile*
     if (game.selected_club >= game.clubs.size()) {
         return points;
     }
-    const club_stats& club = game.clubs[game.selected_club].stats;
-    const float loft = glm::radians(club.loft_degrees);
     const glm::vec3 velocity =
-        glm::normalize(yaw_direction(game.aim_angle) * std::cos(loft) + world_up * std::sin(loft)) * club.power;
+        launch_ball(game.ball.position, game.aim_angle, game.clubs[game.selected_club].stats, 1.0f, game.tuning).velocity;
     const aim_preview_tuning& tuning = game.tuning.aim_preview;
 
     for (int i = 1; i <= tuning.max_points; ++i) {
@@ -64,6 +67,7 @@ controls_overlay_state controls_from_keys(const input_state& keys) {
     controls.enter_down = keys.enter.is_down;
     controls.backspace_down = keys.backspace.is_down;
     controls.retee_down = keys.key_r.is_down;
+    controls.group_down = keys.key_g.is_down;
     return controls;
 }
 
@@ -97,10 +101,6 @@ std::vector<render_xp_drop> xp_drop_rows(const game_state& game, const std::vect
     return rows;
 }
 
-float cart_top_speed(const cart_tuning& cart) {
-    return cart.speed * cart.drift_speed_boost * std::max(1.0f, cart.road_speed_scale);
-}
-
 void add_hub_markers(render_data& data, const game_state& game) {
     const static_anchor_cache& anchors = game.static_anchors;
     data.hub_tee_markers = &anchors.hub_tee_markers;
@@ -112,7 +112,7 @@ void add_hub_markers(render_data& data, const game_state& game) {
     }
     const std::vector<course_world_collectible>& collectibles = game.hub->world.collectibles;
     for (std::size_t i = 0; i < collectibles.size() && i < anchors.collectibles.size(); ++i) {
-        if (collectible_available(game.save, collectibles[i])) {
+        if (collectible_available(active_progress(game), collectibles[i])) {
             data.collectible_markers.push_back(anchors.collectibles[i]);
         }
     }
@@ -160,6 +160,25 @@ camera_view live_camera_view(const game_state& game) {
     }
     }
     return camera_view{};
+}
+
+namespace {
+// "OFFLINE", or the room online, so the two progress stores are never
+// confused. Without a connection or a room, it says the game is reconnecting.
+std::string mode_label(const game_state& game, const text_assets& text) {
+    if (!is_online(game)) {
+        return lookup_text(text, text_hud_mode_offline);
+    }
+    const std::optional<online_room>& room = game.online.room;
+    if (game.online.status != net_status::connected || !room) {
+        return lookup_text(text, text_hud_mode_reconnecting);
+    }
+    return format_text(text, text_hud_mode_online,
+                       {{"course", game.course.name},
+                        {"room", std::to_string(room->room_id)},
+                        {"players", std::to_string(room->player_count)},
+                        {"capacity", std::to_string(game.tuning.server.room_capacity)}});
+}
 }
 
 render_data make_render_data(const game_state& game,
@@ -213,12 +232,13 @@ render_data make_render_data(const game_state& game,
 
     data.cart_active = game.cart.active;
     data.cart_drifting = game.cart.drift_timer > 0.0f;
-    data.cart_speed_fraction = std::abs(game.cart.velocity) / std::max(0.001f, cart_top_speed(game.tuning.cart));
+    data.cart_speed_fraction = std::abs(game.cart.velocity) / std::max(0.001f, fastest_cart_speed(game.tuning.cart));
     data.smoke_emote_active = game.smoke_emote.active;
     data.smoke_emote_elapsed = game.smoke_emote.elapsed;
     data.beer_emote_active = game.beer_emote.active;
     data.beer_emote_elapsed = game.beer_emote.elapsed;
 
+    data.mode_label = mode_label(game, text);
     data.show_interact_prompt = game.mode == game_mode::walking &&
         (can_interact_with_ball(game) || nearby_hole_start(game) || nearby_collectible(game));
     data.show_power_meter = shot_setup;
@@ -240,11 +260,12 @@ render_data make_render_data(const game_state& game,
     }
     data.show_skills_panel = game.skills_panel_active;
     if (data.show_skills_panel) {
-        data.skills = skill_rows(game.save, skills, text);
+        data.skills = skill_rows(active_progress(game), skills, text);
     }
     if (!data.show_course_results) {
         data.xp_drops = xp_drop_rows(game, skills);
     }
     data.controls = controls_from_keys(keys);
+    add_online_render_data(data, game, text);
     return data;
 }

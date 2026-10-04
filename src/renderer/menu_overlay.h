@@ -1,8 +1,9 @@
 #pragma once
 
-// Startup menus (main, help, hole/course pickers, confirm) drawn into the
-// overlay batch. GL-free. The tile layout functions are shared with the menu
-// flow's mouse hit test (core/startup_flow) so the two can't drift apart.
+// Startup menus (main, help, hole/course pickers, the online forms, confirm)
+// drawn into the overlay batch. GL-free. The tile layout functions are
+// shared with the menu flow's mouse hit test (core/startup_flow) so the two
+// can't drift apart.
 
 #include <optional>
 #include <string>
@@ -14,6 +15,7 @@
 #include "game/text_assets.h"
 #include "physics/material_zone.h"
 #include "renderer/overlay_batch.h"
+#include "renderer/text_input.h"
 
 enum class startup_menu_screen {
     none,
@@ -21,6 +23,7 @@ enum class startup_menu_screen {
     help,
     hole_picker,
     course_picker,
+    form,    // a message, a text field or a code, then a column of tiles
     confirm  // laid out like main
 };
 
@@ -44,13 +47,21 @@ struct render_startup_menu {
     std::string title;
     std::string subtitle;
     std::string footer;
+    // A status line under the subtitle; on the pickers it replaces the subtitle.
+    std::string message;
+    bool message_is_error = false;
+    // Form screens: a text field, or a code shown large.
+    std::optional<text_input_state> field;
+    std::string code;
+    float cursor_time = 0.0f;  // the field's cursor blinks with it
     std::vector<render_startup_tile> tiles;
 };
 
-// Tile layout in overlay clip space: a single column on the main and confirm
-// screens, a three-column grid on the pickers.
-glm::vec2 startup_tile_center(startup_menu_screen screen, int index);
-glm::vec2 startup_tile_half_size(startup_menu_screen screen);
+// Tile layout in overlay clip space for `count` tiles: a single column on
+// the main, form and confirm screens (closer together when there are many),
+// a three-column grid on the pickers.
+glm::vec2 startup_tile_center(startup_menu_screen screen, int index, int count);
+glm::vec2 startup_tile_half_size(startup_menu_screen screen, int count);
 // Index of the tile under `point` (overlay clip space), or -1.
 int startup_tile_at(startup_menu_screen screen, int count, glm::vec2 point);
 

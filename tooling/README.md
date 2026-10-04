@@ -1,13 +1,16 @@
 # golf++ — tooling
 
-Design and import courses for golf++, plus the Windows build helper.
+Design and import courses for golf++, plus the Windows build helper and the
+local multiplayer server.
 
 | Path | What |
 |---|---|
 | `hole_editor/hole-editor.html` | Browser-based editor for holes and course worlds |
 | `osm_import/` | Converts real courses from OpenStreetMap into hole/course/world JSON |
 | `art/make_art.py` | Draws the rough's grass texture and every course's backdrop panorama |
-| `gb.cmd` / `gb.ps1` | Windows release build helper (see below) |
+| `gb.cmd` / `gb.ps1` | Windows release build helper, and local multiplayer testing (see below) |
+| `net/dev.ps1` | The local SpacetimeDB server on demand: start, publish, anonymous logins, stop |
+| `net/check_determinism.ps1` | Golden shots natively and in the server's WASM |
 
 ## art/make_art.py
 
@@ -26,10 +29,38 @@ python tooling/art/make_art.py
 Run from the repo root:
 
 ```pwrshl
-.\tooling\gb      # configure + clean rebuild release
+.\tooling\gb      # configure + build release
 .\tooling\gb -r   # build release, then launch golf++
 .\tooling\gb -rr  # stop the running golf++ from this build, rebuild, relaunch
+.\tooling\gb -m   # local server up (net/dev.ps1), build, launch two anonymous clients on it
+.\tooling\gb -mm  # the same, stopping the running golf++ from this build first
+.\tooling\gb -x   # stop golf++ from this build and the local server
 ```
+
+### Local multiplayer
+
+`gb -m` is all it takes: `net/dev.ps1` starts `spacetime start` in its own
+minimised window when nothing listens on port 3000, builds the server module
+(a few seconds when nothing changed), publishes it as `golfpp` when the
+database is missing or the module changed since the last publish (then
+regenerates the client bindings, before the game builds), and turns on
+anonymous logins. Then two clients start, each its own anonymous account, on
+`http://localhost:3000`, database `golfpp`. `gb -x` stops them and the
+server.
+
+The server only runs while you test: the database lives in SpacetimeDB's data
+directory, so it, its accounts and its settings survive `gb -x`, and the next
+`gb -m` starts in a few seconds. Republishing is an in-place update that
+never deletes data; a module change that would need that fails with a message,
+and then `spacetime publish golfpp --server local --delete-data` (by hand)
+starts the local database over.
+
+`net/dev.ps1` on its own: no arguments brings the server up, `-Down` stops it.
+It needs the spacetime CLI and the Emscripten SDK (`-Emsdk`, else `EMSDK`,
+else `~\emsdk`). Anonymous logins are turned on with `admin_set_config` as the
+publisher, keeping the issuer and client id from `assets/online.json` (so
+browser sign-in works locally too) and the database's link secret (a random
+one for a new database).
 
 ---
 

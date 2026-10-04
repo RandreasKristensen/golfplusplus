@@ -1,0 +1,13 @@
+{
+  "id": "nine_iron",
+  "name": "9 Iron",
+  "label": "9I",
+  "hit_sound": "club_hit_iron",
+  "bag_order": 3,
+  "stats": {
+    "power": 33.5,
+    "loft_degrees": 40.0,
+    "backspin": 0.12,
+    "side_spin": 0.78
+  }
+}

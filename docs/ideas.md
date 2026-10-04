@@ -2,15 +2,19 @@
 
 ## bugs
 
+- Left from Overworld/Underworld logic - you have to press space twice to tee.
+- You get teleportet to the flag when you hit it in the hole
 - water can't be resized in the hole editor (?)
 - power physics are wonky.
 - performance is down again with the new courses.
 
 ## ideas
 
+- Installer, I dont wanna make my friends install a buncha shit.
+-
+- Cart being physically in the world - space for two.
 - editor for visual assets. Collect sound assets from real life. Audio engine for automatic music control. Music panel like osrs.
 - (recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
-
 - fullscreen that scales to any resolution natively
 - wind direction and rain, displayable in a greater tier rangefinder
 - player owned housing (small instances where friends can join and be invited, where you can displayed collectibles, tournament wins and gear like clubsets etc.)
@@ -21,7 +25,7 @@
 - social skill leveling from playing in a group. multiplies other exp gain.
 - handicap "skill" which goes down (and up) over play, so you can play tournaments againts better players like in real life. Not exp like other things, calculated from rounds.
 - Shooting with the mouse, pulling right and then pulling left. Some sort of algorithm measuring the path and tempo, and some physics applied to the ball from it. Should we try to make it cheater proof, or do we not really care if they shoot well since the game is still paced by walking / driving around? Some visualization of your line and how far back you drew the club for power. Maybe fading and drawing the shots with this? that would mean rotating the clubface. maybe something you unlock through a quest(lesson). Consider whether this is worth it sacrificing keyboard only gameplay - or if the setup should just be more configurable with the keyb, choosing how to hit so things like stingers could even be possible.
-- sound engine for music to play automatically i guess
+- sound engine for music, built around weather. Like rainy music sunny music etc. A folder for each in assets. A music controller as well like runescape so you can choose songs yourself, but automatic is built around weather.
 
 ## story
 

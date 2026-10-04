@@ -1,6 +1,6 @@
 #include "renderer/bmp_image.h"
 
-#include "game/json_util.h"
+#include "game/content_files.h"
 
 #include <cstddef>
 #include <cstdlib>
