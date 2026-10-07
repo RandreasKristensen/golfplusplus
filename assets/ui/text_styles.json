@@ -3,6 +3,7 @@
     "title": { "fill": 0.80, "color": [0.95, 0.78, 0.28], "align": "center" },
     "subtitle": { "fill": 0.85, "color": [0.72, 0.72, 0.62], "align": "center" },
     "footer": { "fill": 0.78, "color": [0.56, 0.57, 0.52], "align": "center" },
+    "corner_note": { "fill": 1.0, "max_scale": 1, "wrap": true, "color": [0.56, 0.57, 0.52], "align": "left", "valign": "bottom" },
     "body": { "fill": 1.0, "max_scale": 2, "color": [0.84, 0.84, 0.74], "align": "left", "valign": "top" },
     "error": { "fill": 0.70, "wrap": true, "color": [0.94, 0.38, 0.26], "align": "center" },
     "input": { "fill": 0.70, "color": [0.95, 0.92, 0.80], "align": "left" },

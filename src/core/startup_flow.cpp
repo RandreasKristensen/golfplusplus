@@ -283,6 +283,8 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
             : online.name.empty()          ? lookup_text(text, text_menu_main_signed_in_unnamed)
                                            : format_text(text, text_menu_main_signed_in, {{"name", online.name}});
         menu.footer = lookup_text(text, text_menu_main_footer);
+        menu.version = format_text(text, text_menu_main_version, {{"version", GOLFPP_VERSION}});
+        menu.credits = lookup_text(text, text_menu_main_credits);
         const std::vector<main_menu_item> items = main_menu_items(online);
         for (std::size_t i = 0; i < items.size(); ++i) {
             const auto [title, hint] = main_menu_text(items[i]);

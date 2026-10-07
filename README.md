@@ -26,5 +26,7 @@ On Windows, `.\tooling\gb -r` builds the release preset and launches it, and
 `.\tooling\gb -m` starts a local server and two clients on it for testing
 online play ([tooling/README.md](tooling/README.md)). The server itself builds
 with the SpacetimeDB CLI and the Emscripten SDK ([server/README.md](server/README.md)).
+`.\tooling\release\build_release.ps1` builds the Windows installer players
+download ([tooling/README.md](tooling/README.md)).
 
 `golf++-tests <text>` runs only the tests whose name contains `<text>`.

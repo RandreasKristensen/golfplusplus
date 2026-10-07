@@ -101,6 +101,7 @@ std::vector<std::size_t> stdb_header_layout() {
                                         offsetof(stdb_emote_event, emote_id)});
     describe(sizeof(stdb_link_code), {offsetof(stdb_link_code, code), offsetof(stdb_link_code, expires_at_micros)});
     describe(sizeof(stdb_link_status), {offsetof(stdb_link_status, result), offsetof(stdb_link_status, at_micros)});
+    describe(sizeof(stdb_server_protocol), {offsetof(stdb_server_protocol, version)});
     out.push_back(sizeof(stdb_row));
     describe(sizeof(stdb_event),
              {offsetof(stdb_event, kind), offsetof(stdb_event, text), offsetof(stdb_event, reducer),
@@ -159,6 +160,7 @@ std::int64_t net_client::local_now() const {
 void net_client::start_login(const bool silent_only) {
     if (stdb_begin_login(client_.get(), silent_only)) {
         failure_.clear();
+        outdated_ = false;
         status_ = net_status::signing_in;
     }
 }
@@ -300,12 +302,17 @@ void net_client::handle(const stdb_event& event, game_state& state) {
         guest_ = event.login_method == STDB_LOGIN_ANONYMOUS;
         break;
     case STDB_EVENT_CONNECTED:
+        // Connected once the server's protocol matches (its row, below).
+        // Nothing else is read before: another protocol's rows may not decode.
         forget_session(state);
-        status_ = net_status::connected;
-        subscribe(client_.get(), {"SELECT * FROM my_account", "SELECT * FROM my_link_code", "SELECT * FROM my_link_status"});
+        status_ = net_status::connecting;
+        protocol_subscription_ = subscribe(client_.get(), {"SELECT * FROM server_protocol"});
         break;
     case STDB_EVENT_DISCONNECTED:
         forget_session(state);
+        if (outdated_) {
+            break;  // refuse_server's own disconnect: its failure stands
+        }
         status_ = event.retrying ? net_status::signing_in : net_status::signed_out;
         failure_ = text_of(event.text);
         break;
@@ -316,6 +323,10 @@ void net_client::handle(const stdb_event& event, game_state& state) {
         }
         break;
     case STDB_EVENT_SUBSCRIPTION_FAILED:
+        if (event.subscription == protocol_subscription_) {
+            refuse_server("no server_protocol");  // a server from before it
+            break;
+        }
         failure_ = text_of(event.text);
         break;
     case STDB_EVENT_ROW:
@@ -346,6 +357,18 @@ void net_client::handle_row(const stdb_event& event, game_state& state) {
     const stdb_row& row = event.row;
     const stdb_row_change change = event.change;
     switch (event.table) {
+    case STDB_TABLE_SERVER_PROTOCOL:
+        if (change == STDB_ROW_DELETE) {
+            break;
+        }
+        if (row.server_protocol.version != protocol_version) {
+            refuse_server("server " + std::to_string(row.server_protocol.version) + ", game " +
+                          std::to_string(protocol_version));
+        } else if (status_ != net_status::connected) {
+            status_ = net_status::connected;
+            subscribe(client_.get(), {"SELECT * FROM my_account", "SELECT * FROM my_link_code", "SELECT * FROM my_link_status"});
+        }
+        break;
     case STDB_TABLE_MY_ACCOUNT:
         if (change == STDB_ROW_DELETE) {
             break;
@@ -472,7 +495,15 @@ void net_client::subscribe_room(const std::uint64_t room_id) {
         });
 }
 
+void net_client::refuse_server(const std::string& detail) {
+    outdated_ = true;
+    status_ = net_status::failed;
+    failure_ = std::string(net_failure_outdated_game) + ": " + detail;
+    stdb_disconnect(client_.get());
+}
+
 void net_client::forget_session(game_state& state) {
+    protocol_subscription_ = 0;
     self_subscription_ = 0;
     room_subscription_ = 0;
     link_code_.reset();

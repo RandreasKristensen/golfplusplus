@@ -12,5 +12,5 @@
 
 void update_online_play(game_state& state, float dt);
 // While my finished round waits for the group (game/group_round.h): others'
-// shots and emotes play and notices age; nothing of mine changes.
+// shots and emotes play, notices age, and a refused move of mine puts me back.
 void watch_room(game_state& state, float dt);

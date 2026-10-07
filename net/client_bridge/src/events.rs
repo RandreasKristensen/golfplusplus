@@ -23,6 +23,7 @@ pub enum Row {
     MyAccount(PlayerRow),
     MyLinkCode(LinkCodeView),
     MyLinkStatus(LinkStatus),
+    ServerProtocol(ServerProtocolInfo),
 }
 
 pub enum Event {
@@ -239,6 +240,7 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
             StdbTable::MyLinkStatus,
             StdbRow { link_status: StdbLinkStatus { result: arena.text(&r.result), at_micros: r.at.to_micros_since_unix_epoch() } },
         ),
+        Row::ServerProtocol(r) => (StdbTable::ServerProtocol, StdbRow { server_protocol: StdbServerProtocol { version: r.version } }),
     }
 }
 

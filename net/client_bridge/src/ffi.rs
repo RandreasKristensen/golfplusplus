@@ -86,6 +86,7 @@ pub enum StdbTable {
     MyAccount = 13,
     MyLinkCode = 14,
     MyLinkStatus = 15,
+    ServerProtocol = 16,
 }
 
 #[repr(C)]
@@ -271,6 +272,13 @@ pub struct StdbLinkStatus {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct StdbServerProtocol {
+    /// protocol_version in game/net_types.h.
+    pub version: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub union StdbRow {
     pub player: StdbPlayer,
     pub player_skill: StdbPlayerSkill,
@@ -287,6 +295,7 @@ pub union StdbRow {
     pub emote_event: StdbEmoteEvent,
     pub link_code: StdbLinkCode,
     pub link_status: StdbLinkStatus,
+    pub server_protocol: StdbServerProtocol,
 }
 
 /// One thing that happened. Only the fields named for its kind are set.
@@ -343,6 +352,7 @@ pub fn layout() -> Vec<usize> {
     describe!(out, StdbEmoteEvent, room_id, account_id, emote_id);
     describe!(out, StdbLinkCode, code, expires_at_micros);
     describe!(out, StdbLinkStatus, result, at_micros);
+    describe!(out, StdbServerProtocol, version);
     out.push(size_of::<StdbRow>());
     describe!(out, StdbEvent, kind, text, reducer, subscription, login_method, retrying, table, change, row);
     out.push(size_of::<StdbEventKind>());

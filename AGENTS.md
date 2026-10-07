@@ -72,6 +72,7 @@ Everything is unlocked today: no money, shop, quests or unlock gating.
 | Shots natively vs in the server's WASM | `tooling/net/check_determinism.ps1` |
 | Tooling | `tooling/README.md` (OSM importer, hole editor, art generator) |
 | Course backdrops, ground textures | `tooling/art/make_art.py`, drawn by `src/renderer/backdrop_pass.h` and `assets/shaders/terrain.frag` |
+| What players download: the installer, the zip, `THIRD_PARTY.txt` | `tooling/release/build_release.ps1` (`tooling/README.md`); what it stages is the `install` rules in `CMakeLists.txt` |
 
 Reuse these instead of writing your own: `src/physics/vector_math.h` (yaw,
 horizontal distance, safe normalize, `clamp01`; use `glm::radians` and
@@ -87,6 +88,7 @@ text, so the server can parse the same content without a filesystem),
 cmake --preset test && cmake --build build/test && ./build/test/golf++-tests
 ./build/test/golf++-tests "cart"        # only tests whose name contains "cart"
 cmake --preset release && cmake --build build/release   # ./build/release/golf++
+tooling\release\build_release.ps1                       # the installer and zip for players, in build/dist
 python -m unittest test_osm_golf_convert                # in tooling/osm_import/
 py -3 verify_osm_import.py --all                        # in tooling/osm_import/: every course against testdata/scorecards.json
 ```
@@ -131,8 +133,8 @@ test preset) builds without it: offline only. Tests link `src/net/` against
 a fake bridge (`tests/fake_stdb_bridge.h`); `cargo test` in
 `net/client_bridge` tests the Rust side. `--server <uri> --db <name>
 --anonymous` (or `GOLFPP_SERVER`, `GOLFPP_DB`) point the game at a local or
-self-hosted server. After changing the server's tables or reducers,
-regenerate the bindings: `spacetime generate --lang rust --bin-path
+self-hosted server. After changing the server's tables or reducers, bump
+`protocol_version` and regenerate the bindings: `spacetime generate --lang rust --bin-path
 server/golfpp_module/build/lib.wasm --out-dir net/client_bridge/src/module_bindings`.
 
 The build uses `-Wall -Wextra -Wpedantic -Wshadow` and must stay warning-free.
@@ -144,12 +146,18 @@ on frozen copies of the tuning, clubs and rewards, so feel edits don't move
 them; a new tuning field must be added to that copy too. `GOLFPP_COURSE` and
 `GOLFPP_VSYNC` are in `docs/performance.md`.
 
+The version is `project(VERSION)` in `CMakeLists.txt`; the main menu and the
+installer show it. Players' builds (`build_release.ps1`) set
+`GOLFPP_NO_CONSOLE`, so they open no console window and startup errors are
+only in SDL's log: debug from the presets' builds, which keep the console.
+
 **Do not introduce new dependencies without flagging it first.** The server
 uses the SpacetimeDB CLI, the Emscripten SDK and the SpacetimeDB C++ bindings
 (fetched by `server/golfpp_module/CMakeLists.txt`, pinned to the CLI's
 version). The client bridge uses Rust with the crates in
 `net/client_bridge/Cargo.toml` (`spacetimedb-sdk` pinned to the server's
-version). SpacetimeAuth is approved, configured in its dashboard. The
+version). SpacetimeAuth is approved, configured in its dashboard. Releases
+are built with Inno Setup 6 and Python (`tooling/release`). The
 Steamworks SDK is approved but **blocked** until the owner has a Steam app
 id.
 
@@ -183,6 +191,15 @@ limits are the `server` section of the tuning. Reducers fail with the ids in
 token is read with `connection_jwt_payload` in `lib.cpp`, never
 `AuthCtx::get_jwt`, which never returns one in these bindings. A mid-hole
 disconnect abandons the hole: scores exist only for completed holes.
+
+**Game and server stay in step.** A game plays online only on a server with
+its own `protocol_version` (`src/game/net_types.h`), which the module reports
+in the one-row `server_protocol` view; any other server is told apart before
+anything else is read, and the player is asked to update the game. Every
+change to the module's tables, views or reducers bumps it (and regenerates
+the bindings); the `server_protocol` view itself never changes. Release the
+module first, then the installer built from the same commit
+(`server/README.md`).
 
 **Content is data.** No gameplay numbers, rewards, item stats, sound choices or
 text in C++. Feel numbers go in `game_tuning.json`, rewards in `rewards.json`,
@@ -300,7 +317,8 @@ system.
 
 - No trademarked course names (e.g. Augusta National, St Andrews / Old Course)
   in player-facing text, store material or file names.
-- Course data is OpenStreetMap (ODbL): never remove or hide OSM attribution.
+- Course data is OpenStreetMap (ODbL): never remove or hide OSM attribution
+  (the main menu's credits, `menu.main.credits`, and `THIRD_PARTY.txt`).
 - Heights in Denmark are the Danish Elevation Model (Klimadatastyrelsen, CC BY
   4.0), elsewhere the AWS Terrain Tiles (Terrarium) and their sources (SRTM,
   USGS NED, national DEMs): credit them alongside OSM. The Dataforsyningen
@@ -308,32 +326,29 @@ system.
   gitignored `tooling/osm_import/dataforsyning_token.txt`.
 - Record the source and licence of every audio, image or icon asset; only use
   assets that allow commercial use.
+- Every library the game ships or compiles in has its licence in
+  `THIRD_PARTY.txt` (`tooling/release/third_party.py`): the Rust crates are
+  found by themselves; a new native library goes in its `NATIVE_PACKAGES`
+  and in `third_party_header.txt`.
 - Flag any AI-generated art, audio, text or trailer content to the owner (Steam
   requires disclosure). AI-written code needs no disclosure.
 
 ## Planned work
 
-`docs/multiplayer_plan.md` is the owner-approved plan. Implement one phase per
-run, in order, leaving the build warning-free and all tests passing.
 `docs/steam_todo.md` is the store and release checklist. **Steam login (its
 section 5) is blocked until the owner confirms a Steam app id: don't start it or
 add any Steam code.**
 
-| Phase | What |
-|---|---|
-| 1 | Alpha 0.1, the first release, to friends: installer, Maincloud, client and server versions in step. **Only when the owner says so**: the owner playtests and bug-tests first, and may add features before it |
-
-When anything from the plan or the Steam todo is implemented, update this file
-in the same change, delete it from the plan or todo (renumbering the remaining
-phases and sub-sections, and every cross-reference to them), and add any rules
-it brings.
+When anything from the Steam todo is implemented, update this file in the same
+change, delete it from the todo (renumbering the remaining sections, and every
+cross-reference to them), and add any rules it brings.
 
 ## End of every session
 
-- Search `AGENTS.md`, `README.md`, `docs/multiplayer_plan.md` and
-  `docs/steam_todo.md` for todos, open decisions ("TBD", "decide whether",
-  "owner decides"), "planned" wording and unchecked items that this session
-  implemented or decided; remove them and make sure the result is described
-  where it belongs (code comments first, this file only for rules).
+- Search `AGENTS.md`, `README.md` and `docs/steam_todo.md` for todos, open
+  decisions ("TBD", "decide whether", "owner decides"), "planned" wording and
+  unchecked items that this session implemented or decided; remove them and
+  make sure the result is described where it belongs (code comments first,
+  this file only for rules).
 - Check this file still matches the code: every path in it exists.
 - `docs/ideas.md` is the owner's scratchpad: never clean it up or remove entries.

@@ -186,16 +186,23 @@ never the local one. Republishing keeps its settings and progress: the secret
 is set once per database, not per release. Usage and energy are on the
 database's Maincloud dashboard (`docs/performance.md`).
 
+A release: publish the module, then hand out the installer built from the
+same commit (`tooling/release/build_release.ps1`, `tooling/README.md`).
+Players with an older game are told to update it (below).
+
 ## After changing tables or reducers
 
-The game's client bindings are generated from the module:
+A game plays only on a server with the same `protocol_version`
+(`src/game/net_types.h`), which the module reports in its `server_protocol`
+view; on any other it shows "UPDATE THE GAME". So bump `protocol_version`
+with every change to the module's tables, views or reducers, and generate the
+game's client bindings from the module:
 
 ```
 spacetime generate --lang rust --bin-path server/golfpp_module/build/lib.wasm --out-dir net/client_bridge/src/module_bindings
 ```
 
-then rebuild the game. A game built against other tables or reducers misbehaves
-on this server, so players need the matching build.
+then rebuild the game. Players need the build that matches the server.
 
 ## For golf++ development
 

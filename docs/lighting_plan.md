@@ -8,7 +8,7 @@ and every new effect runs at that resolution except the CRT pass that already ex
 
 **Status: draft, not owner-approved.** The open decisions below need answers before
 Phase 1 starts. Once it is approved, add it to the "Planned work" section of
-`AGENTS.md` in the same way as `docs/multiplayer_plan.md`, and keep the docs in
+`AGENTS.md`, and keep the docs in
 sync under the same rules (delete finished phases, renumber, move rules into
 `AGENTS.md`).
 
@@ -121,7 +121,7 @@ sky_state compute_sky_state(double game_day, double latitude_deg, double longitu
 ### Online: the sky is server state
 
 Online, the server owns the sky, like everything else other players see.
-`docs/multiplayer_plan.md` already makes the server the authority on everything
+`AGENTS.md` already makes the server the authority on everything
 shared and keeps clients to room-scoped subscriptions. The sky follows the same
 rules:
 
@@ -156,9 +156,7 @@ rules:
   it was simulated with, so the server can replay the shot. Not in this plan, but
   don't design `room_sky` in a way that blocks it.
 
-#### Changes to merge into `docs/multiplayer_plan.md` once this plan is approved
-
-These are listed here rather than written into the approved multiplayer plan:
+#### Server and client changes
 
 | Where | Change |
 |---|---|
@@ -168,6 +166,7 @@ These are listed here rather than written into the approved multiplayer plan:
 | Network seam (`src/game/net_types.h`) | `online_view` gets `sky_timeline sky`. An accessor, `active_sky(const game_state&)`, returns the offline or online timeline, like `active_progress` |
 | `net_client` | When the room changes, the sky blends to the new room's state over about 2 s rather than snapping. With no connection, keep extrapolating the last timeline |
 | Traffic | No added calls. One row per room, written only on events |
+| Protocol (`src/game/net_types.h`) | `protocol_version` goes up: a new table and reducers |
 
 Online play exists, so `active_sky` has both paths from the start. Nothing in the
 lighting phases waits on the server: without the room's sky (a local server

@@ -9,7 +9,7 @@ struct club_stats {
     float backspin = 0.0f;             // backspin per m/s of launch speed (Magnus lift)
     float side_spin = 0.0f;            // spin about the aim axis, curves the shot
     float timing_speed = 1.0f;         // swing meter speed multiplier
-    float roll_friction_scale = 1.0f;  // multiplies ground friction while rolling
+    float roll_friction_scale = 1.0f;  // multiplies ground friction while rolling on the green
     float bunker_power = 0.0f;         // share of `power` a shot from a bunker keeps
 };
 

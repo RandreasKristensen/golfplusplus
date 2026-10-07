@@ -621,6 +621,27 @@ TEST_CASE("a finished round's results wait while my group still plays the hole")
     CHECK(state.group_strokes.empty());
 }
 
+TEST_CASE("waiting for the group I can walk, seen in the hub, but play nothing") {
+    game_state state = online_hub();
+    finished_before_group(state);
+    REQUIRE(waiting_for_group(state));
+    state.net_commands.clear();
+    const glm::vec3 before = state.player.position;
+
+    game_input walk;
+    walk.forward_held = true;
+    walk.action = true;
+    for (int i = 0; i < 30; ++i) {
+        update_game(state, walk, 0.05f);
+    }
+    CHECK(horizontal_distance(state.player.position, before) > 1.0f);
+    CHECK(state.mode == game_mode::walking);
+    const auto motion = std::find_if(state.net_commands.begin(), state.net_commands.end(),
+                                     [](const net_command& command) { return command.type == net_command_type::motion; });
+    REQUIRE(motion != state.net_commands.end());
+    CHECK(motion->motion.zone == hub_zone);  // where holing out put me on the server
+}
+
 TEST_CASE("results wait for nobody who gave up the hole or left the group") {
     game_state state = online_hub();
     const std::size_t last = finished_before_group(state);

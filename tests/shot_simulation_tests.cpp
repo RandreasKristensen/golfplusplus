@@ -70,6 +70,13 @@ shot_step step_once(const game_state& state, const ball_state& ball, const float
                      state.tuning, 0.0f, dt);
 }
 
+// No rolling deceleration on any surface but sand.
+void no_roll_deceleration(game_state& state) {
+    state.tuning.ball.green_roll_deceleration = 0.0f;
+    state.tuning.ball.fairway_roll_deceleration = 0.0f;
+    state.tuning.ball.rough_roll_deceleration = 0.0f;
+}
+
 // A ball sitting still on the ground at `position`.
 ball_state resting_ball(const game_state& state, const glm::vec3& position) {
     ball_state ball = state.ball;
@@ -387,12 +394,13 @@ TEST_CASE("a cigarette changes the club only while it is active") {
     CHECK(smoking.timing_speed == club.timing_speed * state.rewards.cigarette.timing_speed_scale);
 }
 
-TEST_CASE("a rolling putt keeps more speed than a rolling wedge shot") {
+TEST_CASE("a rolling putt keeps more speed on the green than a rolling wedge shot") {
     game_state state = started_hole();
     still_air(state);
     state.tuning.ball.ground_restitution = 0.0f;
     state.tuning.ball.settle_speed = 10.0f;
-    ball_state ball = resting_ball(state, state.hole->tee_position);
+    ball_state ball = resting_ball(state, state.hole->pin_position + glm::vec3(1.0f, 0.0f, 0.0f));
+    REQUIRE(sample_area(state.area, ball.position).material == terrain_material::green);
     ball.velocity = glm::vec3(1.0f, 0.0f, 0.0f);
 
     const shot_step putt = step_once(state, ball, 0.05f, 0);
@@ -402,11 +410,30 @@ TEST_CASE("a rolling putt keeps more speed than a rolling wedge shot") {
     CHECK(horizontal_speed(putt.ball.velocity) > horizontal_speed(wedge.ball.velocity));
 }
 
+TEST_CASE("a putt that rolls off the green is caught by the rough") {
+    game_state state = started_hole();
+    still_air(state);
+    // The first rough beside the tee, away from the fairway.
+    glm::vec3 start = state.hole->tee_position;
+    while (sample_area(state.area, start).material != terrain_material::rough) {
+        start.x += 0.5f;
+    }
+    start.x += 1.0f;
+    REQUIRE(sample_area(state.area, start).material == terrain_material::rough);
+    ball_state ball = resting_ball(state, start);
+    ball.velocity = glm::vec3(3.0f, 0.0f, 0.0f);
+
+    const shot_result putt = simulate_ball(ball, state.clubs[0].stats, current_shot_course(state), state.tuning, 0.0f);
+    // v^2 / 2a: under a metre at the rough's deceleration, which the putter
+    // does not soften off the green.
+    CHECK(horizontal_distance(putt.rest_position, ball.position) < 1.5f);
+}
+
 TEST_CASE("contact friction does not depend on the step length") {
     game_state state = started_hole();
     still_air(state);
     state.tuning.ball.ground_restitution = 0.0f;
-    state.tuning.ball.roll_deceleration = 0.0f;
+    no_roll_deceleration(state);
     state.tuning.ball.settle_speed = 10.0f;
     ball_state start = resting_ball(state, state.hole->tee_position);
     start.velocity = glm::vec3(3.0f, 0.0f, 0.0f);
@@ -427,7 +454,9 @@ TEST_CASE("roll friction stops a grounded ball") {
     game_state state = started_hole();
     still_air(state);
     state.tuning.ball.ground_restitution = 0.0f;
-    state.tuning.ball.roll_deceleration = 10.0f;
+    state.tuning.ball.green_roll_deceleration = 10.0f;
+    state.tuning.ball.fairway_roll_deceleration = 10.0f;
+    state.tuning.ball.rough_roll_deceleration = 10.0f;
     state.tuning.ball.settle_speed = 10.0f;
     ball_state ball = resting_ball(state, state.hole->tee_position);
     ball.velocity = glm::vec3(1.0f, 0.0f, 0.0f);
@@ -444,7 +473,7 @@ TEST_CASE("roll friction stops a grounded ball") {
 TEST_CASE("a ball on a slope keeps its velocity along the surface") {
     game_state state = started_hole();
     play_hole(state, straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 5.0f, 10.0f), 8.0f));
-    state.tuning.ball.roll_deceleration = 0.0f;
+    no_roll_deceleration(state);
     state.tuning.ball.settle_speed = 10.0f;
 
     const glm::vec3 tangent = glm::normalize(glm::vec3(0.0f, 5.0f, 10.0f));
@@ -461,7 +490,7 @@ TEST_CASE("the ball lands on the terrain height") {
     play_hole(state, straight_hole(glm::vec3(0.0f, 4.0f, 0.0f), glm::vec3(0.0f, 4.0f, 10.0f), 8.0f));
     still_air(state);
     state.tuning.ball.ground_restitution = 0.0f;
-    state.tuning.ball.roll_deceleration = 0.0f;
+    no_roll_deceleration(state);
     state.tuning.ball.settle_speed = 10.0f;
     ball_state ball = state.ball;
     ball.position = glm::vec3(0.0f, 4.05f, 5.0f);
@@ -565,7 +594,7 @@ shot_result roll_past_cup(const float speed, const float offset) {
     still_air(state);
     state.tuning.ball.ground_restitution = 0.0f;
     state.tuning.ball.ground_friction = 0.0f;
-    state.tuning.ball.roll_deceleration = 0.0f;
+    no_roll_deceleration(state);
     const shot_course course = current_shot_course(state);
     ball_state ball = state.ball;
     ball.position = course.hole.pin + glm::vec3(-(state.tuning.scale.cup_radius_meters + 0.25f), ball.radius, offset);
@@ -655,7 +684,10 @@ shot_result putt(const game_state& state, const glm::vec3& pin, const float dist
 
 TEST_CASE("half power carries about half as far as full power with every club") {
     game_state state = make_game_state(shipped_content(), save_data{});
-    play_hole(state, straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 600.0f), 40.0f));
+    // All green, so the putter rolls as it does on a green.
+    hole_data hole = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 600.0f), 40.0f);
+    hole.material_zones.push_back(material_zone{material_zone_type::green, glm::vec3(0.0f, 0.0f, 300.0f), glm::vec2(400.0f), 0.0f});
+    play_hole(state, hole);
     state.tuning.wind = wind_tuning{};
     const auto carry = [&state](const std::string& club, const float power) {
         shot_input input;
@@ -679,7 +711,9 @@ TEST_CASE("a well-paced putt drops, a hard one runs past and a short one stops a
     for (const float pin_height : {0.0f, -1.0f, 1.0f}) {
         game_state state = started_hole();
         const glm::vec3 pin(0.0f, pin_height, 20.0f);
-        play_hole(state, straight_hole(glm::vec3(0.0f), pin, 20.0f));
+        hole_data hole = straight_hole(glm::vec3(0.0f), pin, 20.0f);
+        hole.material_zones.push_back(material_zone{material_zone_type::green, pin, glm::vec2(12.0f), 0.0f});
+        play_hole(state, hole);
         const float radius = state.tuning.scale.cup_radius_meters;
         for (const float distance : {1.0f, 2.0f, 3.0f, 5.0f, 8.0f}) {
             // The softest putt that holes, and how many steps of the meter hole.

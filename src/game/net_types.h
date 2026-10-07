@@ -145,8 +145,16 @@ enum class net_status {
     failed  // see net_client::failure()
 };
 
-// The failure ids the bridge itself gives (src/net/stdb_bridge.h), besides
-// the server's (server_errors.h). One per line: a test reads them.
+// The server's tables, views and reducers as this game knows them. The
+// module reports its own (the server_protocol view) and the client plays
+// only on a server with the same, else asks for an update
+// (net_failure_outdated_game). Bump it with every change to the module's
+// tables, views or reducers; the server_protocol view itself never changes.
+inline constexpr std::uint32_t protocol_version = 1;
+
+// The failure ids the bridge and the client give (src/net/stdb_bridge.h,
+// net_client), besides the server's (server_errors.h). One per line: a test
+// reads them.
 inline constexpr const char* net_failure_not_connected = "not_connected";
 inline constexpr const char* net_failure_sign_in_cancelled = "sign_in_cancelled";
 inline constexpr const char* net_failure_sign_in_timed_out = "sign_in_timed_out";
@@ -158,6 +166,7 @@ inline constexpr const char* net_failure_connection_rejected = "connection_rejec
 inline constexpr const char* net_failure_connection_lost = "connection_lost";
 inline constexpr const char* net_failure_subscription_failed = "subscription_failed";
 inline constexpr const char* net_failure_request_failed = "request_failed";
+inline constexpr const char* net_failure_outdated_game = "outdated_game";
 
 // A reducer the server refused, with its server_errors.h id.
 struct reducer_failure {

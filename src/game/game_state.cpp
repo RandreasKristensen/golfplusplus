@@ -346,10 +346,18 @@ game_state make_game_state(const game_content& content, const save_data& save) {
 void update_game(game_state& state, const game_input& input, const float raw_dt, frame_profile* profile) {
     const float dt = std::clamp(raw_dt, 0.0f, max_update_seconds);
     if (round_finished(state.round)) {
-        // Online, my results wait for the group; the room plays on meanwhile.
+        // Online, my results wait for the group; the room plays on meanwhile,
+        // and I can walk and drive around it, but play nothing more.
         if (waiting_for_group(state)) {
+            state.player.speed = 0.0f;
+            state.player.turn_rate = 0.0f;
+            update_emotes(state, input, dt);
+            game_input moving = input;
+            moving.action = false;
+            update_walking(state, moving, dt, profile);
             watch_room(state, dt);
             update_remote_players(state, dt);
+            sync_motion(state, dt);
         }
         return;
     }
@@ -413,7 +421,9 @@ bool in_hub(const game_state& state) {
 }
 
 int local_zone(const game_state& state) {
-    return state.hole ? static_cast<int>(state.hole->index) : hub_zone;
+    // A finished round keeps its last hole for the results, but holing out
+    // put me back in the hub.
+    return state.hole && !round_finished(state.round) ? static_cast<int>(state.hole->index) : hub_zone;
 }
 
 bool shot_playing(const game_state& state) {

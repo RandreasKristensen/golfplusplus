@@ -22,6 +22,7 @@ net_client connected_client(game_state& state, const std::uint64_t account_id) {
     fake_bridge().connected = true;
     queue_event(fake_event(STDB_EVENT_SIGNED_IN));
     queue_event(fake_event(STDB_EVENT_CONNECTED));
+    queue_event(server_protocol_event(protocol_version));
     stdb_row row{};
     row.player.account_id = account_id;
     queue_event(row_event(STDB_TABLE_MY_ACCOUNT, STDB_ROW_INSERT, row));
@@ -91,6 +92,9 @@ TEST_CASE("signing in moves through the statuses, and failures say why") {
     CHECK(client.status() == net_status::connecting);
     queue_event(fake_event(STDB_EVENT_CONNECTED));
     client.update(state);
+    CHECK(client.status() == net_status::connecting);  // until the server's protocol arrives
+    queue_event(server_protocol_event(protocol_version));
+    client.update(state);
     CHECK(client.status() == net_status::connected);
     CHECK(client.failure().empty());
     CHECK(!client.guest());
@@ -108,41 +112,43 @@ TEST_CASE("an anonymous sign-in is a guest") {
     CHECK(client.guest());
 }
 
-TEST_CASE("subscriptions go from my views to my rows to my room, never a whole table") {
+TEST_CASE("subscriptions go from the protocol to my views to my rows to my room, never a whole table") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
     std::vector<std::vector<std::string>>& subscriptions = fake_bridge().subscriptions;
-    REQUIRE(subscriptions.size() == 2U);
-    CHECK(any_query_contains(subscriptions[0], "my_account"));
-    CHECK(any_query_contains(subscriptions[1], "FROM player_skill WHERE account_id = 42"));
-    CHECK(any_query_contains(subscriptions[1], "FROM room_member WHERE account_id = 42"));
+    REQUIRE(subscriptions.size() == 3U);
+    CHECK(subscriptions[0] == std::vector<std::string>{"SELECT * FROM server_protocol"});
+    CHECK(any_query_contains(subscriptions[1], "my_account"));
+    CHECK(any_query_contains(subscriptions[2], "FROM player_skill WHERE account_id = 42"));
+    CHECK(any_query_contains(subscriptions[2], "FROM room_member WHERE account_id = 42"));
     // The score history stays on the server: nothing shows it.
-    CHECK(!any_query_contains(subscriptions[1], "hole_score"));
+    CHECK(!any_query_contains(subscriptions[2], "hole_score"));
 
     queue_event(member_row(42, 7, STDB_ROW_INSERT));
     client.update(state);
-    REQUIRE(subscriptions.size() == 3U);
-    CHECK(any_query_contains(subscriptions[2], "FROM avatar_motion WHERE room_id = 7"));
-    CHECK(any_query_contains(subscriptions[2], "FROM shot_event WHERE room_id = 7"));
-    CHECK(any_query_contains(subscriptions[2], "room_member.room_id = 7"));
+    REQUIRE(subscriptions.size() == 4U);
+    CHECK(any_query_contains(subscriptions[3], "FROM avatar_motion WHERE room_id = 7"));
+    CHECK(any_query_contains(subscriptions[3], "FROM shot_event WHERE room_id = 7"));
+    CHECK(any_query_contains(subscriptions[3], "room_member.room_id = 7"));
 
     // Someone else's row changes nothing; my move to another room swaps the subscription.
     queue_event(member_row(43, 9, STDB_ROW_INSERT));
     client.update(state);
-    CHECK(subscriptions.size() == 3U);
+    CHECK(subscriptions.size() == 4U);
     queue_event(member_row(42, 8, STDB_ROW_UPDATE));
     client.update(state);
-    REQUIRE(subscriptions.size() == 4U);
-    CHECK(fake_bridge().unsubscribed == std::vector<std::uint32_t>{3});
-    CHECK(any_query_contains(subscriptions[3], "WHERE room_id = 8"));
+    REQUIRE(subscriptions.size() == 5U);
+    CHECK(fake_bridge().unsubscribed == std::vector<std::uint32_t>{4});
+    CHECK(any_query_contains(subscriptions[4], "WHERE room_id = 8"));
 
     queue_event(member_row(42, 8, STDB_ROW_DELETE));
     client.update(state);
-    const std::vector<std::uint32_t> both{3, 4};
+    const std::vector<std::uint32_t> both{4, 5};
     CHECK(fake_bridge().unsubscribed == both);
 
-    for (const std::vector<std::string>& queries : subscriptions) {
-        for (const std::string& query : queries) {
+    // The one-row protocol view is the only query without a WHERE.
+    for (std::size_t i = 1; i < subscriptions.size(); ++i) {
+        for (const std::string& query : subscriptions[i]) {
             CHECK((query.find("WHERE") != std::string::npos || query.find("my_") != std::string::npos));
         }
     }
@@ -213,7 +219,7 @@ TEST_CASE("my progress rows become online progress, the first snapshot without d
     game_state state = started_hole();
     state.play = play_mode::online;
     net_client client = connected_client(state, 42);
-    const std::uint32_t self = 2;
+    const std::uint32_t self = 3;
 
     queue_event(skill_row(1, 42, "fitness", 500));
     queue_event(skill_row(2, 99, "fitness", 7000));  // someone else's
@@ -253,7 +259,7 @@ TEST_CASE("a lost connection forgets the session's rows") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
     queue_event(skill_row(1, 42, "fitness", 500));
-    queue_event(applied(2));
+    queue_event(applied(3));
     client.update(state);
     REQUIRE(state.online.progress_received);
 
@@ -316,7 +322,7 @@ TEST_CASE("a claim answered in the same update as a later refusal leaves both") 
     game_state state = started_hole();
     state.play = play_mode::online;
     net_client client = connected_client(state, 42);
-    const std::uint32_t self = 2;
+    const std::uint32_t self = 3;
     queue_event(applied(self));
     client.update(state);
     REQUIRE(state.online.progress_received);
@@ -379,6 +385,48 @@ TEST_CASE("picking the ball out of its cup online is sent to the server") {
     CHECK(std::find(names.begin(), names.end(), "stdb_pick_up_ball") != names.end());
 }
 
+TEST_CASE("a server with another protocol asks for an update and reads nothing else") {
+    fake_bridge().reset();
+    game_state state = started_hole();
+    net_client client = *net_client::create(fake_online_config(), "signed in", "failed");
+    client.begin_login();
+    queue_event(fake_event(STDB_EVENT_SIGNED_IN));
+    queue_event(fake_event(STDB_EVENT_CONNECTED));
+    queue_event(server_protocol_event(protocol_version + 1));
+    client.update(state);
+    CHECK(client.status() == net_status::failed);
+    CHECK(failure_id(client.failure()) == net_failure_outdated_game);
+    CHECK(fake_bridge().subscriptions.size() == 1U);  // only the protocol
+    const std::vector<std::string> names = fake_bridge().call_names();
+    CHECK(std::find(names.begin(), names.end(), "stdb_disconnect") != names.end());
+
+    // The bridge's disconnect that follows keeps the failure.
+    queue_event(fake_event(STDB_EVENT_DISCONNECTED));
+    client.update(state);
+    CHECK(client.status() == net_status::failed);
+    CHECK(failure_id(client.failure()) == net_failure_outdated_game);
+
+    // Signing in again starts over.
+    client.begin_login();
+    CHECK(client.status() == net_status::signing_in);
+    CHECK(client.failure().empty());
+}
+
+TEST_CASE("a server without the protocol view asks for an update") {
+    fake_bridge().reset();
+    game_state state = started_hole();
+    net_client client = *net_client::create(fake_online_config(), "signed in", "failed");
+    client.begin_login();
+    queue_event(fake_event(STDB_EVENT_CONNECTED));
+    stdb_event failed = fake_event(STDB_EVENT_SUBSCRIPTION_FAILED);
+    failed.subscription = 1;
+    failed.text = fake_text("subscription_failed: no such table");
+    queue_event(failed);
+    client.update(state);
+    CHECK(client.status() == net_status::failed);
+    CHECK(failure_id(client.failure()) == net_failure_outdated_game);
+}
+
 TEST_CASE("signing in while busy keeps the status") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
@@ -391,7 +439,7 @@ TEST_CASE("signing out, then in again, starts my progress over") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
     queue_event(skill_row(1, 42, "fitness", 500));
-    queue_event(applied(2));
+    queue_event(applied(3));
     client.update(state);
     REQUIRE(state.online.progress_received);
 
@@ -403,11 +451,12 @@ TEST_CASE("signing out, then in again, starts my progress over") {
     // The same account again subscribes to its rows again.
     const std::size_t before = fake_bridge().subscriptions.size();
     queue_event(fake_event(STDB_EVENT_CONNECTED));
+    queue_event(server_protocol_event(protocol_version));
     stdb_row me{};
     me.player.account_id = 42;
     queue_event(row_event(STDB_TABLE_MY_ACCOUNT, STDB_ROW_INSERT, me));
     client.update(state);
-    REQUIRE(fake_bridge().subscriptions.size() == before + 2);
+    REQUIRE(fake_bridge().subscriptions.size() == before + 3);
     CHECK(any_query_contains(fake_bridge().subscriptions.back(), "account_id = 42"));
 }
 
@@ -416,7 +465,7 @@ TEST_CASE("linking this login to another account never mixes their progress") {
     state.play = play_mode::online;
     net_client client = connected_client(state, 42);
     queue_event(skill_row(1, 42, "fitness", 500));
-    queue_event(applied(2));
+    queue_event(applied(3));
     client.update(state);
     REQUIRE(skill_xp(state.online.progress.skills, "fitness") == 500);
 
@@ -424,12 +473,12 @@ TEST_CASE("linking this login to another account never mixes their progress") {
     other.player.account_id = 77;
     queue_event(row_event(STDB_TABLE_MY_ACCOUNT, STDB_ROW_INSERT, other));
     client.update(state);
-    CHECK(std::find(fake_bridge().unsubscribed.begin(), fake_bridge().unsubscribed.end(), 2U) != fake_bridge().unsubscribed.end());
+    CHECK(std::find(fake_bridge().unsubscribed.begin(), fake_bridge().unsubscribed.end(), 3U) != fake_bridge().unsubscribed.end());
     CHECK(!state.online.progress_received);
 
     queue_event(skill_row(1, 42, "fitness", 500, STDB_ROW_DELETE));  // the old account's rows leave
     queue_event(skill_row(9, 77, "golf_swing", 50));
-    queue_event(applied(3));
+    queue_event(applied(4));
     client.update(state);
     CHECK(skill_xp(state.online.progress.skills, "fitness") == 0);
     CHECK(skill_xp(state.online.progress.skills, "golf_swing") == 50);

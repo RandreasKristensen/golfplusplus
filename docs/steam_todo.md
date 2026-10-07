@@ -9,8 +9,7 @@ keeping as a record for the store review). If it changed the code, the content r
 or the build (e.g. renamed courses, a credits screen, a `licenses/` folder, Steam
 login), update `AGENTS.md` in the same change so it describes the result, and drop
 any "planned" or "due to be" wording there about it. Decided items don't stay here as
-open questions: move the decision into `AGENTS.md` or `docs/multiplayer_plan.md` and
-delete the item.
+open questions: move the decision into `AGENTS.md` and delete the item.
 
 ---
 
@@ -22,18 +21,18 @@ delete the item.
   to free promotion.
 
 ### OpenStreetMap attribution (ODbL)
-- [ ] Show "© OpenStreetMap contributors" in the in-game credits (and ideally
-  the course select screen). Nothing in the game credits OSM today.
+- [x] "(C) OpenStreetMap contributors" shows on the main menu, and with the ODbL
+  in `THIRD_PARTY.txt` next to the game. The font has no "©".
 - [ ] Check the ODbL share-alike terms for our changed course data and decide
   how to publish it (e.g. a public repo with the course JSON).
 
 ### Elevation attribution
-- [ ] Credit the elevation data behind the course ground in the credits screen.
-  Every shipped course is Danish, so that is the Danish Elevation Model, CC BY
-  4.0, which asks for the licence, the data owner and a link to the dataset:
-  "Licence: CC BY 4.0. Data owner: Klimadatastyrelsen. Data: Danmarks
-  Højdemodel (DHM/Terræn), dataforsyningen.dk". Check the owner's name on the
-  dataset's page on Dataforsyningen first.
+- [ ] Every shipped course is Danish, so the elevation data is the Danish
+  Elevation Model, CC BY 4.0, which asks for the licence, the data owner and a
+  link to the dataset. The main menu (`menu.main.credits`) and
+  `tooling/release/third_party_header.txt` credit "Klimadatastyrelsen" and
+  "Danmarks Højdemodel (DHM/Terræn), dataforsyningen.dk": check the owner's
+  name on the dataset's page on Dataforsyningen.
 - [ ] A course outside Denmark uses the AWS Terrain Tiles: credit those too,
   from the attribution list on
   https://github.com/tilezen/joerd/blob/master/docs/attribution.md (SRTM, USGS
@@ -44,8 +43,11 @@ delete the item.
   `assets/icons/`. Replace anything that doesn't allow commercial use.
 
 ### Library licences
-- [ ] Ship licence texts for SDL2, SDL2_mixer, GLM, nlohmann/json (and
-  SpacetimeDB SDK / Steamworks SDK if added) in a `licenses/` folder next to the game.
+- [ ] Every library's licence ships in `THIRD_PARTY.txt` (`AGENTS.md`). The
+  SpacetimeDB client SDK crates linked into the game are under the Business
+  Source License 1.1 (its Additional Use Grant allows one production SpacetimeDB
+  instance): check it allows selling the game. The Steamworks SDK's terms go
+  there too when it is added.
 
 ### Name check
 - [ ] Search Steam and trademark databases for "golf++". Check the "++" works in
@@ -113,7 +115,8 @@ delete the item.
 
 ## 5. Multiplayer on Steam
 
-Online play is in the game (`AGENTS.md`); the friends release is `multiplayer_plan.md`.
+Online play is in the game, and friends install it with `tooling/release`
+(`AGENTS.md`).
 Offline play is a rule in `AGENTS.md`.
 
 ### Steam login (⛔ blocked: waiting on the Steam app id)
@@ -240,8 +243,8 @@ are only included by `src/platform/steam/`, `app` and `src/net/`.
 ## 6. Build and release (later)
 
 ### Steam build pipeline
-- [ ] Upload builds with SteamPipe. A Windows release build from `tooling/gb.ps1`
-  should run on a clean machine (all DLLs, the `assets/` folder, no dev paths).
+- [ ] Upload builds with SteamPipe: the folder `tooling/release/build_release.ps1`
+  stages (`build/dist/golfpp-<version>`) runs on a clean machine.
 
 ### Build review
 - [ ] Valve reviews the build before release. It must start, run and match the

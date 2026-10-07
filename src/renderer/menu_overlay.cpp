@@ -371,6 +371,11 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
     }
 
     draw_label(batch, text.font, find_text_style(text, style_footer), menu.footer, ui_rect{glm::vec2(0.0f, -0.86f), glm::vec2(0.78f, 0.05f)});
+    // Beside the main menu's column of tiles, above the footer.
+    const text_style& note_style = find_text_style(text, style_corner_note);
+    draw_label(batch, text.font, note_style, menu.credits, ui_rect{glm::vec2(-0.645f, -0.60f), glm::vec2(0.20f, 0.18f)});
+    draw_label(batch, text.font, with_align(note_style, text_align::right), menu.version,
+               ui_rect{glm::vec2(0.645f, -0.74f), glm::vec2(0.20f, 0.04f)});
 }
 
 void draw_loading_screen(overlay_batch& batch, const text_assets& text) {

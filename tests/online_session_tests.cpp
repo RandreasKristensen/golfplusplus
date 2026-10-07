@@ -44,6 +44,7 @@ void connect(online_session& session, game_state& state) {
     fake_bridge().connected = true;
     queue_event(fake_event(STDB_EVENT_SIGNED_IN));
     queue_event(fake_event(STDB_EVENT_CONNECTED));
+    queue_event(server_protocol_event(protocol_version));
     queue_event(account_row(my_account, anna));
     session.update(state);
 }

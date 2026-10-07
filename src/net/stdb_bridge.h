@@ -70,7 +70,8 @@ typedef enum stdb_table {
     STDB_TABLE_EMOTE_EVENT = 12,
     STDB_TABLE_MY_ACCOUNT = 13,
     STDB_TABLE_MY_LINK_CODE = 14,
-    STDB_TABLE_MY_LINK_STATUS = 15
+    STDB_TABLE_MY_LINK_STATUS = 15,
+    STDB_TABLE_SERVER_PROTOCOL = 16
 } stdb_table;
 
 typedef enum stdb_row_change {
@@ -215,6 +216,10 @@ typedef struct stdb_link_status {
     int64_t at_micros;
 } stdb_link_status;
 
+typedef struct stdb_server_protocol {
+    uint32_t version;  // protocol_version in game/net_types.h
+} stdb_server_protocol;
+
 typedef union stdb_row {
     stdb_player player;
     stdb_player_skill player_skill;
@@ -231,6 +236,7 @@ typedef union stdb_row {
     stdb_emote_event emote_event;
     stdb_link_code link_code;
     stdb_link_status link_status;
+    stdb_server_protocol server_protocol;
 } stdb_row;
 
 // One thing that happened. Only the fields named for its kind are set.
@@ -269,6 +275,8 @@ void stdb_destroy(stdb_client* client);
 // False when already signing in or connected.
 bool stdb_begin_login(stdb_client* client, bool silent_only);
 void stdb_cancel_login(stdb_client* client);
+// Disconnects, keeping the stored sign-in.
+void stdb_disconnect(stdb_client* client);
 // Disconnects and forgets the stored sign-in.
 void stdb_sign_out(stdb_client* client);
 

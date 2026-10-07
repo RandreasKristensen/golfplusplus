@@ -101,7 +101,9 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.ball.bunker_roll_deceleration = ball.number("bunker_roll_deceleration");
     tuning.ball.tree_restitution = ball.number("tree_restitution");
     tuning.ball.tree_friction = ball.number("tree_friction");
-    tuning.ball.roll_deceleration = ball.number("roll_deceleration");
+    tuning.ball.green_roll_deceleration = ball.number("green_roll_deceleration");
+    tuning.ball.fairway_roll_deceleration = ball.number("fairway_roll_deceleration");
+    tuning.ball.rough_roll_deceleration = ball.number("rough_roll_deceleration");
     tuning.ball.settle_speed = ball.number("settle_speed");
     tuning.ball.cup_capture_speed = ball.number("cup_capture_speed");
     tuning.ball.cup_lip_capture_scale = ball.number("cup_lip_capture_scale");

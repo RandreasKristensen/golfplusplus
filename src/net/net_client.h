@@ -5,10 +5,13 @@
 // never sees it: it pushes game_state::net_commands, which update sends, and
 // reads game_state::online, which update fills from the server's rows.
 //
-// Subscriptions are only ever the caller's own rows or its room's: its own views on
-// connecting, then the caller's own rows once the account is known, then the
-// room's rows while in a room (net/room_rows.h). Nothing subscribes to a
-// whole table.
+// On connecting, the client first reads the server's protocol (the one-row
+// server_protocol view) and plays on only when it is the game's own
+// (protocol_version), else fails with net_failure_outdated_game and
+// disconnects. Subscriptions are otherwise only ever the caller's own rows
+// or its room's: its own views once the protocol matches, then its own rows
+// once the account is known, then the room's rows while in a room
+// (net/room_rows.h). Nothing subscribes to a whole table.
 //
 // Refused gameplay reducers (what net_commands send) go to the game in
 // game_state::online; the menus' own go to take_reducer_failure.
@@ -110,6 +113,8 @@ private:
     void handle_row(const stdb_event& event, game_state& state);
     // Gives the game the progress rows changed so far, once complete.
     void deliver_progress(game_state& state);
+    // Disconnects from a server whose protocol is not the game's.
+    void refuse_server(const std::string& detail);
     void subscribe_self();
     void subscribe_room(std::uint64_t room_id);
     // A new connection or a sign-out: its subscriptions are gone.
@@ -123,6 +128,7 @@ private:
     net_status status_ = net_status::signed_out;
     bool guest_ = false;
     std::string failure_;
+    bool outdated_ = false;  // the server's protocol is not the game's
     std::deque<reducer_failure> reducer_failures_;  // oldest first
     std::optional<link_code_info> link_code_;
     std::string link_result_;
@@ -130,6 +136,7 @@ private:
 
     std::uint64_t account_id_ = 0;  // 0 until my_account arrives
     std::uint64_t room_id_ = 0;     // 0 outside a room
+    std::uint32_t protocol_subscription_ = 0;
     std::uint32_t self_subscription_ = 0;
     std::uint32_t room_subscription_ = 0;
     room_rows room_;

@@ -118,6 +118,25 @@ ball_state launch_ball(const glm::vec3& position, const float aim_angle, const c
     return ball;
 }
 
+namespace {
+// m/s^2 a rolling ball loses on `material`, before the club's roll scale.
+float roll_deceleration(const ball_tuning& rules, const terrain_material material) {
+    switch (material) {
+    case terrain_material::green:
+        return rules.green_roll_deceleration;
+    case terrain_material::fairway:
+        return rules.fairway_roll_deceleration;
+    case terrain_material::rough:
+        return rules.rough_roll_deceleration;
+    case terrain_material::bunker:
+        return rules.bunker_roll_deceleration;
+    case terrain_material::water:
+        break;
+    }
+    return 0.0f;  // water: the ball sinks instead (apply_rolling_friction)
+}
+}
+
 shot_step step_shot(const ball_state& ball,
                     const terrain_sample& ground,
                     const shot_course& course,
@@ -127,7 +146,6 @@ shot_step step_shot(const ball_state& ball,
                     const float dt,
                     const tree_grid* trees_near) {
     const ball_tuning& rules = tuning.ball;
-    const float roll_scale = std::max(0.0f, stats.roll_friction_scale);
     const bool was_airborne = !ball_is_grounded(ball, ground);
     const physics_tuning physics = ball_in_water(ball, ground)
         ? with_water_drag(tuning.physics)
@@ -139,6 +157,7 @@ shot_step step_shot(const ball_state& ball,
     const terrain_sample after = sample_area(course.area, step.ball.position);
     const bool in_water = after.material == terrain_material::water;
     const bool in_sand = after.material == terrain_material::bunker;
+    const float roll_scale = after.material == terrain_material::green ? std::max(0.0f, stats.roll_friction_scale) : 1.0f;
     step.ball = resolve_terrain_collision(step.ball,
                                           after,
                                           in_water ? rules.water_restitution
@@ -163,7 +182,7 @@ shot_step step_shot(const ball_state& ball,
                                          tuning.fence.net_restitution, tuning.fence.net_friction);
 
     step.ball = apply_rolling_friction(step.ball, after,
-                                       in_sand ? rules.bunker_roll_deceleration : rules.roll_deceleration * roll_scale,
+                                       roll_deceleration(rules, after.material) * roll_scale,
                                        rules.settle_speed, dt);
     step.ground = sample_area(course.area, step.ball.position);
     return step;

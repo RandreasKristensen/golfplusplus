@@ -56,6 +56,8 @@ pub mod room_member_table;
 pub mod room_row_type;
 pub mod room_table;
 pub mod server_config_row_type;
+pub mod server_protocol_info_type;
+pub mod server_protocol_table;
 pub mod session_row_type;
 pub mod shot_event_row_type;
 pub mod shot_event_table;
@@ -114,6 +116,8 @@ pub use room_member_table::*;
 pub use room_row_type::RoomRow;
 pub use room_table::*;
 pub use server_config_row_type::ServerConfigRow;
+pub use server_protocol_info_type::ServerProtocolInfo;
+pub use server_protocol_table::*;
 pub use session_row_type::SessionRow;
 pub use shot_event_row_type::ShotEventRow;
 pub use shot_event_table::*;
@@ -329,6 +333,7 @@ pub struct DbUpdate {
     player_skill: __sdk::TableUpdate<PlayerSkillRow>,
     room: __sdk::TableUpdate<RoomRow>,
     room_member: __sdk::TableUpdate<RoomMemberRow>,
+    server_protocol: __sdk::TableUpdate<ServerProtocolInfo>,
     shot_event: __sdk::TableUpdate<ShotEventRow>,
     world_flag: __sdk::TableUpdate<WorldFlagRow>,
 }
@@ -381,6 +386,9 @@ impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
                 "room_member" => db_update
                     .room_member
                     .append(room_member_table::parse_table_update(table_update)?),
+                "server_protocol" => db_update
+                    .server_protocol
+                    .append(server_protocol_table::parse_table_update(table_update)?),
                 "shot_event" => db_update
                     .shot_event
                     .append(shot_event_table::parse_table_update(table_update)?),
@@ -453,6 +461,8 @@ impl __sdk::DbUpdate for DbUpdate {
             cache.apply_diff_to_table::<LinkCodeView>("my_link_code", &self.my_link_code);
         diff.my_link_status =
             cache.apply_diff_to_table::<LinkStatus>("my_link_status", &self.my_link_status);
+        diff.server_protocol = cache
+            .apply_diff_to_table::<ServerProtocolInfo>("server_protocol", &self.server_protocol);
 
         diff
     }
@@ -501,6 +511,9 @@ impl __sdk::DbUpdate for DbUpdate {
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "room_member" => db_update
                     .room_member
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "server_protocol" => db_update
+                    .server_protocol
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "shot_event" => db_update
                     .shot_event
@@ -563,6 +576,9 @@ impl __sdk::DbUpdate for DbUpdate {
                 "room_member" => db_update
                     .room_member
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "server_protocol" => db_update
+                    .server_protocol
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "shot_event" => db_update
                     .shot_event
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
@@ -598,6 +614,7 @@ pub struct AppliedDiff<'r> {
     player_skill: __sdk::TableAppliedDiff<'r, PlayerSkillRow>,
     room: __sdk::TableAppliedDiff<'r, RoomRow>,
     room_member: __sdk::TableAppliedDiff<'r, RoomMemberRow>,
+    server_protocol: __sdk::TableAppliedDiff<'r, ServerProtocolInfo>,
     shot_event: __sdk::TableAppliedDiff<'r, ShotEventRow>,
     world_flag: __sdk::TableAppliedDiff<'r, WorldFlagRow>,
     __unused: std::marker::PhantomData<&'r ()>,
@@ -653,6 +670,11 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks.invoke_table_row_callbacks::<RoomMemberRow>(
             "room_member",
             &self.room_member,
+            event,
+        );
+        callbacks.invoke_table_row_callbacks::<ServerProtocolInfo>(
+            "server_protocol",
+            &self.server_protocol,
             event,
         );
         callbacks.invoke_table_row_callbacks::<ShotEventRow>("shot_event", &self.shot_event, event);
@@ -1331,6 +1353,7 @@ impl __sdk::SpacetimeModule for RemoteModule {
         player_skill_table::register_table(client_cache);
         room_table::register_table(client_cache);
         room_member_table::register_table(client_cache);
+        server_protocol_table::register_table(client_cache);
         shot_event_table::register_table(client_cache);
         world_flag_table::register_table(client_cache);
     }
@@ -1349,6 +1372,7 @@ impl __sdk::SpacetimeModule for RemoteModule {
         "player_skill",
         "room",
         "room_member",
+        "server_protocol",
         "shot_event",
         "world_flag",
     ];

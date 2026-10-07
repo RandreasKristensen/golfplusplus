@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(golfpp LANGUAGES CXX)
+project(golfpp VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,6 +9,9 @@ option(GOLFPP_BUILD_TESTS "Build tests" OFF)
 # Online play: the Rust bridge to the SpacetimeDB server (net/client_bridge),
 # built with cargo. Off, the game is offline only and needs no Rust.
 option(GOLFPP_NET "Build online play (needs Rust and cargo)" ON)
+# Players' builds (tooling/release) open no console window; startup errors
+# are then only in SDL's log, so development builds keep the console.
+option(GOLFPP_NO_CONSOLE "Build golf++ without a console window (Windows)" OFF)
 
 # --- Third-party -------------------------------------------------------------
 
@@ -211,6 +214,12 @@ golfpp_library(golfpp-app-logic
     src/core/startup_options.cpp
 )
 target_link_libraries(golfpp-app-logic PUBLIC golfpp-render-data)
+# The version the main menu shows: major.minor, and the patch when there is one.
+set(GOLFPP_VERSION_SHOWN "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+if (PROJECT_VERSION_PATCH)
+    string(APPEND GOLFPP_VERSION_SHOWN ".${PROJECT_VERSION_PATCH}")
+endif()
+target_compile_definitions(golfpp-app-logic PRIVATE GOLFPP_VERSION="${GOLFPP_VERSION_SHOWN}")
 
 # app's side of online play: between the menus and the network client.
 golfpp_library(golfpp-online-session
@@ -251,11 +260,30 @@ target_link_libraries(golfpp PRIVATE
 if (WIN32)
     target_sources(golfpp PRIVATE src/platform/windows/golfpp.rc)
 endif()
+if (WIN32 AND GOLFPP_NO_CONSOLE)
+    set_target_properties(golfpp PROPERTIES WIN32_EXECUTABLE ON)
+endif()
 if (GOLFPP_NET)
     # The bridge after golfpp-net, which calls it: static libraries link in order.
     target_link_libraries(golfpp PRIVATE golfpp-online-session golfpp-net golfpp-client-bridge)
     target_compile_definitions(golfpp PRIVATE GOLFPP_NET=1)
 endif()
+
+# `cmake --install <build> --prefix <dir>`: everything a player's PC needs
+# to run the game from <dir>, which tooling/release/build_release.ps1 packs.
+# The DLLs are whichever the exe loads from outside Windows, found at install
+# time next to the compiler (MinGW's runtime, SDL2, SDL2_mixer and its codecs).
+if (POLICY CMP0207)
+    cmake_policy(SET CMP0207 NEW)  # match the DLLs' paths with forward slashes
+endif()
+get_filename_component(GOLFPP_TOOLCHAIN_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
+install(TARGETS golfpp RUNTIME_DEPENDENCY_SET golfpp-runtime RUNTIME DESTINATION .)
+install(RUNTIME_DEPENDENCY_SET golfpp-runtime
+    DIRECTORIES "${GOLFPP_TOOLCHAIN_BIN}"
+    PRE_EXCLUDE_REGEXES "^api-ms-" "^ext-ms-"
+    POST_EXCLUDE_REGEXES "/[Ww][Ii][Nn][Dd][Oo][Ww][Ss]/"
+    DESTINATION .)
+install(DIRECTORY assets DESTINATION .)
 
 if (GOLFPP_BUILD_TESTS)
     # The server module's plain C++ (server/golfpp_module/src), without the

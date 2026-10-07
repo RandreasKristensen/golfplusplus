@@ -46,6 +46,10 @@ struct render_startup_menu {
     std::string title;
     std::string subtitle;
     std::string footer;
+    // The main menu's bottom corners: the course data's credits and the
+    // game's version.
+    std::string credits;
+    std::string version;
     // A status line under the subtitle; on the pickers it replaces the subtitle.
     std::string message;
     bool message_is_error = false;

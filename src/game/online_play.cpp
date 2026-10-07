@@ -187,6 +187,6 @@ void watch_room(game_state& state, const float dt) {
     if (!is_online(state)) {
         return;
     }
-    state.online.refusals.clear();
+    take_refusals(state);  // a refused move puts me back
     take_room_events(state);
 }

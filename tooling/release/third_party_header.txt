@@ -1,0 +1,35 @@
+golf++: data and software made by others
+========================================
+
+COURSE DATA
+
+The courses are made from OpenStreetMap data.
+  (C) OpenStreetMap contributors. https://www.openstreetmap.org/copyright
+  The course files in assets/holes, assets/courses and assets/course_worlds
+  are derived from it and are available under the Open Database License
+  (ODbL) 1.0: https://opendatacommons.org/licenses/odbl/1-0/
+
+The ground heights of the courses in Denmark come from the Danish Elevation
+Model.
+  Data: Danmarks Hoejdemodel (DHM/Terraen), dataforsyningen.dk.
+  Data owner: Klimadatastyrelsen.
+  Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+
+SOFTWARE
+
+golf++ uses these libraries. Their licences follow, in full.
+
+  SDL2, SDL2_mixer              zlib licence
+  mpg123 (libmpg123)            LGPL 2.1; source at https://www.mpg123.de
+  Opus, opusfile, Ogg           BSD 3-clause
+  libmodplug                    public domain
+  GCC runtime (libgcc,          GPL 3 with the GCC Runtime Library Exception
+    libstdc++)
+  MinGW-w64 winpthreads         MIT and others (see its licence)
+  GLM                           MIT (or the Happy Bunny licence)
+  JSON for Modern C++           MIT, (C) 2013-2023 Niels Lohmann
+  The Rust crates of the online client, listed at the end with their
+  licences.
+
+The DLLs next to golf++.exe are the unchanged libraries; replacing one with
+another build of the same library works as long as it is compatible.

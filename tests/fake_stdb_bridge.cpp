@@ -66,6 +66,12 @@ stdb_event row_event(const stdb_table table, const stdb_row_change change, const
     return event;
 }
 
+stdb_event server_protocol_event(const std::uint32_t version) {
+    stdb_row row{};
+    row.server_protocol.version = version;
+    return row_event(STDB_TABLE_SERVER_PROTOCOL, STDB_ROW_INSERT, row);
+}
+
 stdb_string fake_text(const std::string& text) {
     const std::string& kept = fake_bridge().texts.emplace_back(text);
     return stdb_string{kept.data(), kept.size()};
@@ -99,6 +105,10 @@ bool stdb_begin_login(stdb_client*, const bool silent_only) {
 
 void stdb_cancel_login(stdb_client*) {
     record("stdb_cancel_login");
+}
+
+void stdb_disconnect(stdb_client*) {
+    record("stdb_disconnect");
 }
 
 void stdb_sign_out(stdb_client*) {

@@ -88,6 +88,17 @@ pub unsafe extern "C" fn stdb_cancel_login(client: *mut StdbClient) {
     }
 }
 
+/// Disconnects, keeping the stored sign-in.
+///
+/// # Safety
+/// See `client`.
+#[no_mangle]
+pub unsafe extern "C" fn stdb_disconnect(client: *mut StdbClient) {
+    if let Some(c) = self::client(client) {
+        c.disconnect();
+    }
+}
+
 /// Disconnects and forgets the stored sign-in.
 ///
 /// # Safety

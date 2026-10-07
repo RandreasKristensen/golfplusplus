@@ -47,6 +47,8 @@ stdb_event fake_event(stdb_event_kind kind);
 // Queues an event for the next stdb_poll. Strings must outlive the poll.
 void queue_event(const stdb_event& event);
 stdb_event row_event(stdb_table table, stdb_row_change change, const stdb_row& row);
+// The server's protocol, as it arrives after connecting.
+stdb_event server_protocol_event(std::uint32_t version);
 // A copy of `text` kept by the bridge, so it outlives the poll even when
 // `text` is a temporary.
 stdb_string fake_text(const std::string& text);

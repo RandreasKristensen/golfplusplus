@@ -1,6 +1,7 @@
 #include "game/motion_sync.h"
 
 #include "game/game_state.h"
+#include "game/group_round.h"
 #include "game/mode_dispatch.h"
 #include "physics/vector_math.h"
 
@@ -80,10 +81,11 @@ void push_motion(game_state& state, const net_motion& now) {
     state.motion_sync = motion_sync_state{now, 0.0f};
 }
 
-// A finished round stays on its last hole here while the server has the
-// player in the hub already: nothing is sent for it, from the frame it ends.
+// A finished round stays on its last hole here, in the hub zone as on the
+// server (local_zone). The player moves while its results wait for the
+// group; once they show, nothing is sent.
 bool sends_motion(const game_state& state) {
-    return is_online(state) && !round_finished(state.round);
+    return is_online(state) && (!round_finished(state.round) || waiting_for_group(state));
 }
 }
 

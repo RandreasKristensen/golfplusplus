@@ -9,6 +9,7 @@ local multiplayer server.
 | `osm_import/` | Converts real courses from OpenStreetMap into hole/course/world JSON |
 | `art/make_art.py` | Draws the rough's grass texture and every course's sky and land backdrop panoramas |
 | `gb.cmd` / `gb.ps1` | Windows release build helper, and local multiplayer testing (see below) |
+| `release/build_release.ps1` | What players download: the installer and the zip (see below) |
 | `net/dev.ps1` | The local SpacetimeDB server on demand: start, publish, anonymous logins, stop |
 | `net/check_determinism.ps1` | Golden shots natively and in the server's WASM |
 
@@ -80,6 +81,39 @@ else `~\emsdk`). Anonymous logins are turned on with `admin_set_config` as the
 publisher, keeping the issuer and client id from `assets/online.json` (so
 browser sign-in works locally too) and the database's link secret (a random
 one for a new database).
+
+---
+
+## release (what players download)
+
+```pwrshl
+.\tooling\release\build_release.ps1
+```
+
+builds `build\dist\golfpp-setup-<version>.exe` and `build\dist\golfpp-<version>.zip`,
+the version being `project(VERSION)` in `CMakeLists.txt`. It runs the tests,
+builds the game without a console window in `build\installer`, stages it with
+`cmake --install` (`golf++.exe`, `assets\` and the DLLs it loads, found next
+to the compiler), writes `THIRD_PARTY.txt` next to it (`third_party.py`: the
+data credits and library list in `third_party_header.txt`, then every
+licence, MSYS2's for the native libraries and each linked Rust crate's from
+`cargo metadata`) and compiles `golfpp.iss` with Inno Setup 6. It needs what
+the game's build needs, Python 3 and Inno Setup 6
+([jrsoftware.org](https://jrsoftware.org/isdl.php)).
+
+The installer installs for the current user only
+(`%LOCALAPPDATA%\Programs\golf++`, no administrator rights), with a Start menu
+shortcut, an optional desktop shortcut and an uninstaller. A newer version
+installs over an older one; uninstalling leaves the offline save, the
+settings (`%APPDATA%\golfplusplus`) and the stored login alone. Neither the
+installer nor the game is signed, so Windows SmartScreen says "Windows protected your PC": "More info",
+then "Run anyway". There is no updater: players run the next installer.
+
+A release: bump the version, publish the module to Maincloud
+(`server/README.md`, section 7), then build and hand out the installer from
+the same commit. Before handing it out, install it on a PC without MSYS2, Rust
+or the SpacetimeDB CLI (a missing DLL only shows there), sign in and play a
+hole online, and check it plays offline with no network.
 
 ---
 

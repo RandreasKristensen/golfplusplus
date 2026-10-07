@@ -52,7 +52,13 @@ struct ball_tuning {
     float bunker_roll_deceleration = 0.0f;  // m/s^2
     float tree_restitution = 0.0f;
     float tree_friction = 0.0f;
-    float roll_deceleration = 0.0f;  // m/s^2 while rolling (times the club's roll_friction_scale)
+    // m/s^2 while rolling. Only on the green does the club's
+    // roll_friction_scale apply: a putt that leaves it is caught by the
+    // fairway or rough. A ball holds on a slope while g * sin(slope) is
+    // below its surface's deceleration.
+    float green_roll_deceleration = 0.0f;
+    float fairway_roll_deceleration = 0.0f;
+    float rough_roll_deceleration = 0.0f;
     float settle_speed = 0.0f;       // normal speed below which a grounded ball rolls instead of bouncing
     // A ball whose centre passes straight over the cup's centre drops in only
     // below this speed; faster, it rolls over. Off centre it has less of the

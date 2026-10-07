@@ -369,6 +369,13 @@ struct link_code_view {
 };
 SPACETIMEDB_STRUCT(link_code_view, code, expires_at)
 
+// What server_protocol shows everyone. Never changes, so every game, old or
+// new, can read it.
+struct server_protocol_info {
+    std::uint32_t version;
+};
+SPACETIMEDB_STRUCT(server_protocol_info, version)
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -1565,8 +1572,18 @@ SPACETIMEDB_REDUCER_NAMED(claim_collectible_reducer, "claim_collectible", Reduce
 }
 
 // =============================================================================
-// Views: what only the caller may see
+// Views
 // =============================================================================
+
+// The tables, views and reducers this module has (protocol_version in
+// game/net_types.h): a game subscribes to this before anything else, and
+// plays only when it matches its own.
+SPACETIMEDB_VIEW(std::optional<server_protocol_info>, server_protocol, Public, AnonymousViewContext ctx) {
+    (void)ctx;
+    return server_protocol_info{protocol_version};
+}
+
+// What only the caller may see.
 
 SPACETIMEDB_VIEW(std::optional<player_row>, my_account, Public, ViewContext ctx) {
     const std::optional<account_login_row> login = ctx.db[account_login_identity].find(ctx.sender());

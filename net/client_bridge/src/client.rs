@@ -118,9 +118,13 @@ impl StdbClient {
         self.connecting = None;
     }
 
-    pub fn sign_out(&mut self) {
+    pub fn disconnect(&mut self) {
         self.cancel_login();
         self.close();
+    }
+
+    pub fn sign_out(&mut self) {
+        self.disconnect();
         login::forget_refresh_token(&self.auth);
     }
 
@@ -198,6 +202,7 @@ impl StdbClient {
         watch!(my_account, MyAccount);
         watch!(my_link_code, MyLinkCode);
         watch!(my_link_status, MyLinkStatus);
+        watch!(server_protocol, ServerProtocol);
     }
 
     /// Closes the connection the game asked to close.
