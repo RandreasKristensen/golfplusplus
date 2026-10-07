@@ -1,0 +1,154 @@
+{
+  "id": "horsens_par_3_h04",
+  "name": "Hole 4",
+  "par": 3,
+  "wind_seed": 6286,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    91.23,
+    0.0,
+    -20.32
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        22.81,
+        0.0,
+        -5.08
+      ],
+      [
+        45.62,
+        0.0,
+        -10.16
+      ],
+      [
+        68.42,
+        0.0,
+        -15.24
+      ],
+      [
+        91.23,
+        0.0,
+        -20.32
+      ]
+    ],
+    "width": 20.0,
+    "rough_width": 31.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        91.91,
+        0,
+        -25.16
+      ],
+      "radii": [
+        16.61,
+        5.82
+      ],
+      "rotation_degrees": -85.6
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        -2.92,
+        0.0,
+        12.75
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        13.45,
+        0.0,
+        10.68
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        19.59,
+        0.0,
+        12.83
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        111.87,
+        0.0,
+        -31.97
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -66.81,
+        0.0,
+        56.31
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -75.65,
+        0.0,
+        52.78
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      55.8778488,
+      9.8095874
+    ],
+    "pin_latlon": [
+      55.8780313,
+      9.8110485
+    ],
+    "centerline": "hole_way",
+    "elevation": "dhm",
+    "tee_elevation": 15.68,
+    "hole_way": "way/543942767",
+    "zone_fit": [
+      {
+        "osm": "way/543942779",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.83
+      }
+    ],
+    "made_green": false
+  }
+}

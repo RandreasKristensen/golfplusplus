@@ -1,0 +1,361 @@
+{
+  "id": "horsens_golfklub_h13",
+  "name": "Hole 13",
+  "par": 4,
+  "wind_seed": 1383,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    317.71,
+    0.0,
+    122.92
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        30.2,
+        0.0,
+        17.21
+      ],
+      [
+        60.4,
+        0.0,
+        34.43
+      ],
+      [
+        90.6,
+        0.0,
+        51.64
+      ],
+      [
+        120.8,
+        0.0,
+        68.86
+      ],
+      [
+        150.99,
+        0.0,
+        86.07
+      ],
+      [
+        181.19,
+        0.0,
+        103.29
+      ],
+      [
+        213.96,
+        0.0,
+        112.48
+      ],
+      [
+        248.54,
+        0.0,
+        115.96
+      ],
+      [
+        283.13,
+        0.0,
+        119.44
+      ],
+      [
+        317.71,
+        0.0,
+        122.92
+      ]
+    ],
+    "width": 20.0,
+    "rough_width": 31.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        323.53,
+        0,
+        132.49
+      ],
+      "radii": [
+        14.83,
+        5.93
+      ],
+      "rotation_degrees": 62.9
+    },
+    {
+      "type": "bunker",
+      "center": [
+        200.93,
+        0,
+        85.88
+      ],
+      "radii": [
+        7.52,
+        4.49
+      ],
+      "rotation_degrees": -12.9
+    },
+    {
+      "type": "bunker",
+      "center": [
+        181.88,
+        0,
+        80.96
+      ],
+      "radii": [
+        7.3,
+        4.7
+      ],
+      "rotation_degrees": 28.8
+    },
+    {
+      "type": "bunker",
+      "center": [
+        294.81,
+        0,
+        107.88
+      ],
+      "radii": [
+        7.21,
+        3.27
+      ],
+      "rotation_degrees": 13.7
+    },
+    {
+      "type": "bunker",
+      "center": [
+        304.82,
+        0,
+        114.86
+      ],
+      "radii": [
+        6.25,
+        4.27
+      ],
+      "rotation_degrees": 29.8
+    },
+    {
+      "type": "bunker",
+      "center": [
+        315.23,
+        0,
+        139.59
+      ],
+      "radii": [
+        6.19,
+        3.66
+      ],
+      "rotation_degrees": 65.9
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        339.12,
+        0.0,
+        114.28
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        348.39,
+        0.0,
+        131.42
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        344.47,
+        0.0,
+        116.37
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        350.5,
+        0.0,
+        113.92
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        356.41,
+        0.0,
+        136.41
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        346.18,
+        0.0,
+        158.54
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        353.86,
+        0.0,
+        150.86
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        359.47,
+        0.0,
+        118.82
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        339.97,
+        0.0,
+        168.33
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        335.44,
+        0.0,
+        170.99
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        363.92,
+        0.0,
+        119.13
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        370.67,
+        0.0,
+        131.61
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        375.66,
+        0.0,
+        113.36
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        380.07,
+        0.0,
+        123.74
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      55.8840397,
+      9.8158554
+    ],
+    "pin_latlon": [
+      55.8829355,
+      9.8209437
+    ],
+    "centerline": "hole_way",
+    "elevation": "dhm",
+    "tee_elevation": 4.67,
+    "hole_way": "way/1327812266",
+    "zone_fit": [
+      {
+        "osm": "way/1327812267",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.8
+      },
+      {
+        "osm": "way/923578483",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.83
+      },
+      {
+        "osm": "way/923578484",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.91
+      },
+      {
+        "osm": "way/923578485",
+        "type": "bunker",
+        "pieces": 2,
+        "iou": 0.85
+      },
+      {
+        "osm": "way/923578486",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.93
+      }
+    ],
+    "made_green": false
+  }
+}

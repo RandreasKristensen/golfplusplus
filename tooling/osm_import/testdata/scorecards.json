@@ -37,6 +37,58 @@
         "18": {"par": 4, "metres": 420}
       }
     },
+    "horsens_golfklub": {
+      "name": "Horsens Golfklub",
+      "osm": "way/87897258",
+      "tees": "yellow",
+      "sources": [
+        "https://www.golfingrecord.com/golf-scorecard/f992ef19-68c2-4608-8990-56b803dd8a5f"
+      ],
+      "confidence": "Medium. Pars and yellow-tee lengths from a third-party scorecard, not the club's own. The site labels them yards, but they are metres: they match OSM's hole lines to a few metres. Its hole 14 (125 m) is shorter than its own blue tee (145 m); OSM's line for 14 (168 m) matches the white tee (173 m).",
+      "total_par": 72,
+      "holes": {
+        "1": {"par": 5, "metres": 453},
+        "2": {"par": 4, "metres": 382},
+        "3": {"par": 4, "metres": 372},
+        "4": {"par": 3, "metres": 155},
+        "5": {"par": 4, "metres": 363},
+        "6": {"par": 3, "metres": 168},
+        "7": {"par": 5, "metres": 464},
+        "8": {"par": 3, "metres": 143},
+        "9": {"par": 5, "metres": 460},
+        "10": {"par": 4, "metres": 364},
+        "11": {"par": 3, "metres": 140},
+        "12": {"par": 4, "metres": 334},
+        "13": {"par": 4, "metres": 371},
+        "14": {"par": 3, "metres": 125},
+        "15": {"par": 5, "metres": 476},
+        "16": {"par": 4, "metres": 323},
+        "17": {"par": 4, "metres": 253},
+        "18": {"par": 5, "metres": 470}
+      }
+    },
+    "horsens_par_3": {
+      "name": "Horsens Par 3",
+      "osm": "way/87897258",
+      "tees": "yellow",
+      "sources": [
+        "https://www.golfpass.com/courses/26153-horsens-golf-club-par-3-course/scorecard-and-layout",
+        "https://www.golfingrecord.com/golf-scorecard/27d71208-7d03-4618-82ec-26b5c56e249b"
+      ],
+      "confidence": "Medium. Nine par 3s in metres from GolfPass; GolfingRecord agrees but for hole 1 (183 m). OSM's lines run 10-25% shorter than both, as if drawn from forward tees.",
+      "total_par": 27,
+      "holes": {
+        "1": {"par": 3, "metres": 175},
+        "2": {"par": 3, "metres": 190},
+        "3": {"par": 3, "metres": 198},
+        "4": {"par": 3, "metres": 126},
+        "5": {"par": 3, "metres": 142},
+        "6": {"par": 3, "metres": 129},
+        "7": {"par": 3, "metres": 163},
+        "8": {"par": 3, "metres": 165},
+        "9": {"par": 3, "metres": 225}
+      }
+    },
     "marienlyst_golfklub": {
       "name": "Marienlyst Golfklub",
       "osm": "way/1408711156",

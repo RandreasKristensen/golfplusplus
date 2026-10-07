@@ -360,6 +360,21 @@ THEMES = {
         "sea": [(0.18, 0.10)], "sea_color": (0.34, 0.45, 0.52), "far_coast": (0.0, 0.5),
         "near_land": (0.22, 0.32, 0.18),
     },
+    # Horsens: beech woods on steep hills, the fjord in a gap between them.
+    "horsens_golfklub": {
+        "seed": 4413, "zenith": (0.38, 0.54, 0.77), "cloud": (0.95, 0.94, 0.90), "cloudiness": 0.48,
+        "hills": (1.8, 7.0), "hill": (0.30, 0.43, 0.33),
+        "trees": "broadleaf", "tree_base": 2.0, "tree_spread": 2.4, "tree_count": 640, "tree": (0.12, 0.24, 0.12),
+        "sea": [(0.62, 0.07)], "sea_color": (0.35, 0.47, 0.57), "far_coast": (0.6, 1.4),
+        "near_land": (0.20, 0.33, 0.18),
+    },
+    "horsens_par_3": {
+        "seed": 4419, "zenith": (0.40, 0.56, 0.79), "cloud": (0.96, 0.95, 0.91), "cloudiness": 0.4,
+        "hills": (1.6, 6.5), "hill": (0.30, 0.43, 0.33),
+        "trees": "broadleaf", "tree_base": 2.2, "tree_spread": 2.4, "tree_count": 680, "tree": (0.12, 0.24, 0.12),
+        "sea": [(0.58, 0.06)], "sea_color": (0.35, 0.47, 0.57), "far_coast": (0.6, 1.2),
+        "near_land": (0.20, 0.33, 0.18),
+    },
     # Helsingør: the sound on one side with the far shore low across it, woods
     # on the other.
     "marienlyst_golfklub": {

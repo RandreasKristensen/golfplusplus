@@ -1,0 +1,205 @@
+{
+  "id": "horsens_golfklub_h11",
+  "name": "Hole 11",
+  "par": 3,
+  "wind_seed": 6385,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    -14.1,
+    0.0,
+    -153.72
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        -2.82,
+        0.0,
+        -30.74
+      ],
+      [
+        -5.64,
+        0.0,
+        -61.49
+      ],
+      [
+        -8.46,
+        0.0,
+        -92.23
+      ],
+      [
+        -11.28,
+        0.0,
+        -122.98
+      ],
+      [
+        -14.1,
+        0.0,
+        -153.72
+      ]
+    ],
+    "width": 20.0,
+    "rough_width": 31.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        -20.12,
+        0,
+        -146.31
+      ],
+      "radii": [
+        10.83,
+        6.11
+      ],
+      "rotation_degrees": 37.0
+    },
+    {
+      "type": "green",
+      "center": [
+        -14.31,
+        0,
+        -156.78
+      ],
+      "radii": [
+        8.27,
+        6.87
+      ],
+      "rotation_degrees": -22.7
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        -27.35,
+        0.0,
+        -44.22
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -30.98,
+        0.0,
+        -60.97
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -31.34,
+        0.0,
+        -51.94
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -29.25,
+        0.0,
+        -26.86
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -37.59,
+        0.0,
+        -74.16
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -35.44,
+        0.0,
+        -49.76
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -28.3,
+        0.0,
+        13.99
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -38.15,
+        0.0,
+        0.94
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -42.04,
+        0.0,
+        -10.6
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      55.8825091,
+      9.8081841
+    ],
+    "pin_latlon": [
+      55.88389,
+      9.8079583
+    ],
+    "centerline": "hole_way",
+    "elevation": "dhm",
+    "tee_elevation": 6.41,
+    "hole_way": "way/1327812262",
+    "zone_fit": [
+      {
+        "osm": "way/1327812263",
+        "type": "green",
+        "pieces": 2,
+        "iou": 0.9
+      }
+    ],
+    "made_green": false
+  }
+}

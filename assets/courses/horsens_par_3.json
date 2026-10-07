@@ -1,0 +1,27 @@
+{
+  "id": "horsens_par_3",
+  "name": "Horsens Par 3",
+  "backdrop": {
+    "sky": "backdrops/horsens_par_3_sky.bmp",
+    "land": "backdrops/horsens_par_3_land.bmp",
+    "haze_color": [
+      0.75,
+      0.8,
+      0.83
+    ],
+    "haze_amount": 1.0,
+    "haze_distance": 800
+  },
+  "holes": [
+    "holes/horsens_par_3_h01.json",
+    "holes/horsens_par_3_h02.json",
+    "holes/horsens_par_3_h03.json",
+    "holes/horsens_par_3_h04.json",
+    "holes/horsens_par_3_h05.json",
+    "holes/horsens_par_3_h06.json",
+    "holes/horsens_par_3_h07.json",
+    "holes/horsens_par_3_h08.json",
+    "holes/horsens_par_3_h09.json"
+  ],
+  "world": "course_worlds/horsens_par_3.json"
+}

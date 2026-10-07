@@ -1354,6 +1354,30 @@ def _hole_line_xz(h: dict, origin_lat: float, origin_lon: float) -> list[tuple[f
     return max(lines, key=_polyline_length)
 
 
+def _put_own_green_first(h: dict, origin_lat: float, origin_lon: float) -> None:
+    """
+    The hole's own green and pin first among its greens and pins: those
+    nearest an end of its line. Orientation and the pin read the first of
+    each, and a hole can pick up a second, such as another layout's green
+    and pin beside its tee (Horsens' par 3 green 47 m from the big course's
+    1st tee).
+    """
+    line = _hole_line_xz(h, origin_lat, origin_lon)
+    if not line:
+        return
+
+    def distance_to_line_end(el: dict) -> float:
+        pts = _to_xz_list([el], origin_lat, origin_lon)
+        if not pts:
+            return float("inf")
+        if len(pts) < 3:
+            return min(math.hypot(end[0] - pts[0][0], end[1] - pts[0][1]) for end in (line[0], line[-1]))
+        return min(_point_to_polygon_distance_xz(end, pts) for end in (line[0], line[-1]))
+
+    h["greens"].sort(key=distance_to_line_end)
+    h["pins"].sort(key=distance_to_line_end)
+
+
 def _hole_anchor_xz(h: dict, origin_lat: float, origin_lon: float) -> tuple[float, float]:
     line = _hole_line_xz(h, origin_lat, origin_lon)
     if line:
@@ -1852,6 +1876,8 @@ def group_holes(elements: list) -> dict:
             origin_lat = sum(p[0] for p in all_latlon) / len(all_latlon)
             origin_lon = sum(p[1] for p in all_latlon) / len(all_latlon)
             _assign_to_existing_holes(unassigned, holes, origin_lat, origin_lon)
+            for h in holes.values():
+                _put_own_green_first(h, origin_lat, origin_lon)
         return holes
 
     tee_nodes = [el for el in unassigned if el.get("tags", {}).get("golf") == "tee"]

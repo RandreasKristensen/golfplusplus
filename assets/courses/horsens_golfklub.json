@@ -1,0 +1,36 @@
+{
+  "id": "horsens_golfklub",
+  "name": "Horsens Golfklub",
+  "backdrop": {
+    "sky": "backdrops/horsens_golfklub_sky.bmp",
+    "land": "backdrops/horsens_golfklub_land.bmp",
+    "haze_color": [
+      0.75,
+      0.8,
+      0.83
+    ],
+    "haze_amount": 1.0,
+    "haze_distance": 800
+  },
+  "holes": [
+    "holes/horsens_golfklub_h01.json",
+    "holes/horsens_golfklub_h02.json",
+    "holes/horsens_golfklub_h03.json",
+    "holes/horsens_golfklub_h04.json",
+    "holes/horsens_golfklub_h05.json",
+    "holes/horsens_golfklub_h06.json",
+    "holes/horsens_golfklub_h07.json",
+    "holes/horsens_golfklub_h08.json",
+    "holes/horsens_golfklub_h09.json",
+    "holes/horsens_golfklub_h10.json",
+    "holes/horsens_golfklub_h11.json",
+    "holes/horsens_golfklub_h12.json",
+    "holes/horsens_golfklub_h13.json",
+    "holes/horsens_golfklub_h14.json",
+    "holes/horsens_golfklub_h15.json",
+    "holes/horsens_golfklub_h16.json",
+    "holes/horsens_golfklub_h17.json",
+    "holes/horsens_golfklub_h18.json"
+  ],
+  "world": "course_worlds/horsens_golfklub.json"
+}

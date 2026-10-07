@@ -870,6 +870,23 @@ class SharedGreenTests(unittest.TestCase):
         self.assertEqual(1, len(holes[2]["greens"]), "hole 2 should have the green")
         self.assertEqual(1, len(holes[16]["greens"]), "hole 16 should share it")
 
+    def test_a_green_beside_the_tee_does_not_become_the_holes_green(self):
+        # Another layout's green ~45 m from the tee is grouped first; the pin
+        # still goes on the green the line ends on, and the line keeps its way.
+        elements = [
+            way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.0, 10.0060)]),
+            self._rect(2, {"golf": "green"}, 55.99985, 9.99935, 0.0003, 0.0003),
+            node(4, {"golf": "pin"}, 56.0, 9.9995),
+            self._rect(3, {"golf": "green"}, 55.99985, 10.0058, 0.0003, 0.0004),
+            node(5, {"golf": "pin"}, 56.0, 10.0060),
+        ]
+        holes = conv.group_holes(elements)
+
+        self.assertEqual(3, holes[1]["greens"][0]["id"])
+        self.assertEqual(5, holes[1]["pins"][0]["id"])
+        h_json = conv.hole_to_json(1, holes[1], 56.0, 10.0, "test", None, None)
+        self.assertGreater(math.hypot(h_json["pin"][0], h_json["pin"][2]), 350.0)
+
     def test_a_neighbouring_green_is_not_shared(self):
         # A compact par-3 course: two holes, each with its own small green
         # roughly 25 m apart. Neither should pick up the other's.
