@@ -84,6 +84,12 @@ enum class login_method {
 // "browser", "steam" or "anonymous", as stored in account_login.
 const char* login_method_name(login_method method);
 
+// An anonymous login is a guest: the game stores nothing to sign in with it
+// again, so it lasts one connection. When it disconnects, its account and
+// every row of it are deleted, which frees its name. A guest cannot link
+// logins, as its account goes with it.
+bool is_guest_login(const std::string& stored_method);
+
 // The caller's token, as the host verified it.
 struct login_claims {
     bool present = false;

@@ -5,6 +5,7 @@
 
 #include "test_support.h"
 
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <regex>
@@ -20,6 +21,29 @@ const audio_sound_definition* find_sound(const audio_manifest& manifest, const s
         }
     }
     return nullptr;
+}
+
+// SDL_mixer picks a stream's decoder by the file's extension, so a file
+// whose contents are another format never plays as music.
+bool contents_match_extension(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    std::string head(12, ' ');
+    file.read(head.data(), static_cast<std::streamsize>(head.size()));
+    if (file.gcount() < static_cast<std::streamsize>(head.size())) {
+        return false;
+    }
+    const std::string extension = path.extension().string();
+    if (extension == ".wav") {
+        return head.compare(0, 4, "RIFF") == 0 && head.compare(8, 4, "WAVE") == 0;
+    }
+    if (extension == ".ogg") {
+        return head.compare(0, 4, "OggS") == 0;
+    }
+    if (extension == ".mp3") {
+        const auto byte = [&head](const std::size_t i) { return static_cast<unsigned char>(head[i]); };
+        return head.compare(0, 3, "ID3") == 0 || (byte(0) == 0xFFU && (byte(1) & 0xE0U) == 0xE0U);
+    }
+    return false;
 }
 }
 
@@ -181,4 +205,40 @@ TEST_CASE("every file in the manifest exists") {
     for (const audio_sound_definition& sound : result.manifest->sounds) {
         CHECK(std::filesystem::exists(std::filesystem::path(asset_root()) / "audio" / sound.file));
     }
+}
+
+TEST_CASE("every file in the manifest is the format its extension says") {
+    const audio_manifest_parse_result result = load_audio_manifest_from_file(asset_root() + "/audio/sounds.json");
+    REQUIRE(result.manifest.has_value());
+    for (const audio_sound_definition& sound : result.manifest->sounds) {
+        CHECK(contents_match_extension(std::filesystem::path(asset_root()) / "audio" / sound.file));
+    }
+}
+
+TEST_CASE("the master volume scales every sound and multiplies with the music volume for the ambience") {
+    const audio_manifest_parse_result result = parse_audio_manifest(R"({
+      "master_volume": 0.8,
+      "categories": { "ui": 0.5 },
+      "sounds": [ { "id": "click", "file": "click.wav", "category": "ui", "volume_multiplier": 0.5 } ]
+    })");
+    REQUIRE(result.manifest.has_value());
+    const float mix = sound_mix_gain(*result.manifest, result.manifest->sounds[0]);
+    CHECK(near(mix, 0.2f));
+
+    const audio_levels full;
+    CHECK(near(played_gain(mix, audio_sound_type::sfx, full), 0.2f));
+    CHECK(near(played_gain(mix, audio_sound_type::ambience, full), 0.2f));
+
+    audio_levels levels;
+    levels.master = 0.5f;
+    levels.music = 0.4f;
+    CHECK(near(played_gain(mix, audio_sound_type::sfx, levels), 0.1f));
+    CHECK(near(played_gain(mix, audio_sound_type::loop, levels), 0.1f));
+    CHECK(near(played_gain(mix, audio_sound_type::ambience, levels), 0.04f));
+    levels.master = 0.0f;
+    CHECK(near(played_gain(1.0f, audio_sound_type::sfx, levels), 0.0f));
+    CHECK(near(played_gain(1.0f, audio_sound_type::ambience, levels), 0.0f));
+    levels.master = 2.0f;
+    levels.music = 1.0f;
+    CHECK(near(played_gain(1.0f, audio_sound_type::sfx, levels), 1.0f));
 }

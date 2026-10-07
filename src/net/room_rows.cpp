@@ -20,7 +20,7 @@ void apply_change(Map& rows, const std::uint64_t id, const stdb_row_change chang
 net_motion motion_of(const stdb_motion& m) {
     net_motion motion;
     motion.zone = m.zone;
-    motion.mode = static_cast<motion_mode>(std::min<std::uint8_t>(m.mode, static_cast<std::uint8_t>(motion_mode::aim)));
+    motion.mode = static_cast<motion_mode>(std::min<std::uint8_t>(m.mode, static_cast<std::uint8_t>(motion_mode::swing)));
     motion.position = glm::vec3(m.x, m.y, m.z);
     motion.yaw = m.yaw;
     motion.speed = m.speed;
@@ -94,12 +94,19 @@ bool room_rows::apply(const stdb_event& event,
             state.online.shots.push_back(shot_of(row.shot_event));
         }
         return true;
-    case STDB_TABLE_EMOTE_EVENT:
-        if (change != STDB_ROW_DELETE && row.emote_event.account_id == my_account &&
-            emote_from_name(text_of(row.emote_event.emote_id)) == emote_id::smoke) {
+    case STDB_TABLE_EMOTE_EVENT: {
+        const std::optional<emote_id> emote = emote_from_name(text_of(row.emote_event.emote_id));
+        const std::uint64_t account = row.emote_event.account_id;
+        if (change == STDB_ROW_DELETE || !emote) {
+            return true;
+        }
+        if (account != my_account) {
+            state.online.emotes.push_back(room_emote{account, *emote});
+        } else if (*emote == emote_id::smoke) {
             state.online.smoke_accepted_at = clock.now(local_now);
         }
         return true;
+    }
     default:
         return false;
     }

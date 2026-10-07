@@ -2,6 +2,8 @@
 
 #include "game/json_util.h"
 
+#include <cstddef>
+#include <string>
 #include <vector>
 
 namespace {
@@ -64,8 +66,10 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.terrain.ground_cell_size = terrain.number("ground_cell_size");
     tuning.terrain.ground_blend_distance = terrain.number("ground_blend_distance");
     tuning.terrain.zones.bunker_depth = terrain.number("bunker_depth");
-    tuning.terrain.zones.water_depth = terrain.number("water_depth");
-    tuning.terrain.material_overlay_lift = terrain.number("material_overlay_lift");
+    tuning.terrain.zones.water_depth_per_metre = terrain.number("water_depth_per_metre");
+    tuning.terrain.zones.water_min_depth = terrain.number("water_min_depth");
+    tuning.terrain.zones.water_max_depth = terrain.number("water_max_depth");
+    tuning.terrain.zone_cell_size = terrain.number("zone_cell_size");
     tuning.terrain.material_overlay_spacing = terrain.number("material_overlay_spacing");
 
     const section_reader physics = section("physics");
@@ -86,18 +90,26 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
 
     const section_reader ball = section("ball");
     tuning.ball.stop_speed = ball.number("stop_speed");
+    tuning.ball.water_linger_seconds = ball.number("water_linger_seconds");
     tuning.ball.ground_restitution = ball.number("ground_restitution");
     tuning.ball.ground_friction = ball.number("ground_friction");
     tuning.ball.water_restitution = ball.number("water_restitution");
     tuning.ball.water_friction = ball.number("water_friction");
+    tuning.ball.bunker_restitution = ball.number("bunker_restitution");
+    tuning.ball.bunker_friction = ball.number("bunker_friction");
+    tuning.ball.bunker_roll_deceleration = ball.number("bunker_roll_deceleration");
     tuning.ball.tree_restitution = ball.number("tree_restitution");
     tuning.ball.tree_friction = ball.number("tree_friction");
     tuning.ball.roll_deceleration = ball.number("roll_deceleration");
     tuning.ball.settle_speed = ball.number("settle_speed");
+    tuning.ball.cup_capture_speed = ball.number("cup_capture_speed");
+    tuning.ball.cup_lip_capture_scale = ball.number("cup_lip_capture_scale");
+    tuning.ball.cup_dunk_scale = ball.number("cup_dunk_scale");
 
     const section_reader swing = section("swing");
     tuning.swing.meter_cycle_seconds = swing.number("meter_cycle_seconds");
     tuning.swing.min_power = swing.number("min_power");
+    tuning.swing.power_curve_exponent = swing.number("power_curve_exponent");
     tuning.swing.side_spin_scale = swing.number("side_spin_scale");
 
     const section_reader player = section("player");
@@ -125,7 +137,6 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.cart.off_road_control_scale = cart.number("off_road_control_scale");
 
     const section_reader camera = section("camera");
-    tuning.camera.fov_degrees = camera.number("fov_degrees");
     tuning.camera.walking_eye_height = camera.number("walking_eye_height");
     tuning.camera.walking_look_distance = camera.number("walking_look_distance");
     tuning.camera.aiming_back_distance = camera.number("aiming_back_distance");
@@ -140,6 +151,7 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.camera.follow_look_height = camera.number("follow_look_height");
     tuning.camera.transition_seconds = camera.number("transition_seconds");
     tuning.camera.transition_jump_distance = camera.number("transition_jump_distance");
+    tuning.camera.viewmodel_fov_degrees = camera.number("viewmodel_fov_degrees");
 
     const section_reader aim_preview = section("aim_preview");
     tuning.aim_preview.step_seconds = aim_preview.number("step_seconds");
@@ -182,6 +194,37 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.server.interact_slack = server.number("interact_slack");
     tuning.server.wind_time_slack_seconds = server.number("wind_time_slack_seconds");
     tuning.server.timing_slack_seconds = server.number("timing_slack_seconds");
+
+    const section_reader hole_sign = section("hole_sign");
+    tuning.hole_sign.edge_inset = hole_sign.number("edge_inset");
+    tuning.hole_sign.forward_offset = hole_sign.number("forward_offset");
+    tuning.hole_sign.look_ahead = hole_sign.number("look_ahead");
+    tuning.hole_sign.board_width = hole_sign.number("board_width");
+    tuning.hole_sign.board_height = hole_sign.number("board_height");
+    tuning.hole_sign.board_thickness = hole_sign.number("board_thickness");
+    tuning.hole_sign.board_lift = hole_sign.number("board_lift");
+    tuning.hole_sign.post_radius = hole_sign.number("post_radius");
+
+    const section_reader tee_box = section("tee_box");
+    tuning.tee_box.width = tee_box.number("width");
+    tuning.tee_box.length = tee_box.number("length");
+    tuning.tee_box.padding = tee_box.number("padding");
+    tuning.tee_box.sample_spacing = tee_box.number("sample_spacing");
+
+    const section_reader fence = section("fence");
+    tuning.fence.pole_radius = fence.number("pole_radius");
+    tuning.fence.net_restitution = fence.number("net_restitution");
+    tuning.fence.net_friction = fence.number("net_friction");
+
+    // One entry per lie, named as ball_lie lists them.
+    const json* lies = json_object(*root, "lies");
+    const char* const lie_names[ball_lie_count] = {"tee", "fairway", "rough", "green", "bunker", "water"};
+    for (std::size_t i = 0; i < ball_lie_count; ++i) {
+        const section_reader lie{lies != nullptr ? json_object(*lies, lie_names[i]) : nullptr,
+                                 std::string("lies.") + lie_names[i], &missing};
+        tuning.lies[i].power = lie.number("power");
+        tuning.lies[i].spin = lie.number("spin");
+    }
 
     if (!missing.empty()) {
         result.error = "game tuning is missing or has malformed fields:";

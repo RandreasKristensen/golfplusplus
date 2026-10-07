@@ -34,7 +34,7 @@ std::optional<std::uint64_t> choose_room(const std::vector<room_candidate>& room
 
 // Clients send motion_mode (game/net_types.h) as its underlying number; any
 // below this is a valid mode.
-inline constexpr std::uint8_t motion_mode_count = static_cast<std::uint8_t>(motion_mode::aim) + 1;
+inline constexpr std::uint8_t motion_mode_count = static_cast<std::uint8_t>(motion_mode::swing) + 1;
 
 // The fastest the game moves a player in `mode`: walking speed on foot,
 // the fastest cart in the cart.

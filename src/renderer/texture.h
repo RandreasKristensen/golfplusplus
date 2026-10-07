@@ -1,6 +1,6 @@
 #pragma once
 
-// One RGB image uploaded as an OpenGL 2D texture.
+// One RGBA image uploaded as an OpenGL 2D texture.
 
 #include "renderer/bmp_image.h"
 
@@ -17,7 +17,7 @@ enum class texture_sampling {
 class texture {
 public:
     // Replaces any texture this held. False if `image` is empty.
-    bool upload(const rgb_image& image, texture_sampling sampling);
+    bool upload(const rgba_image& image, texture_sampling sampling);
     void shutdown();
     void bind(int unit) const;
     bool loaded() const { return id_ != 0; }

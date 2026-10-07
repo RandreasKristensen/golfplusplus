@@ -4,7 +4,17 @@
     "trunk_height": 5.0,
     "leaf_radius": 4.7,
     "leaf_height": 6.0,
-    "max_per_hole": 60
+    "max_per_hole": 200,
+    "outside_reach_m": 80.0,
+    "max_distance_from_line_m": 95.0,
+    "wood_m2_per_tree": 150.0
+  },
+  "fence": {
+    "outside_reach_m": 30.0,
+    "max_pole_spacing_m": 10.0,
+    "default_height_m": 1.5,
+    "driving_range_height_m": 12.0,
+    "driving_range_reach_m": 15.0
   },
   "hole": {
     "fallback_width": 20.0,
@@ -33,23 +43,158 @@
     "fallback_road_extra_offset": 8.0,
     "max_shortcut_count": 12
   },
+  "zones": {
+    "good_fit_iou": 0.8,
+    "max_pieces": {
+      "green": 3,
+      "bunker": 6,
+      "water": 16
+    },
+    "min_radius": {
+      "green": 5.0,
+      "bunker": 1.5,
+      "water": 2.0
+    },
+    "missing_green_radius": 10.0,
+    "stream_half_width": 2.5,
+    "stream_piece_length": 30.0
+  },
+  "checks": {
+    "length_warn": 0.12,
+    "length_error": 0.25,
+    "bearing_warn_deg": 25.0,
+    "bearing_error_deg": 45.0,
+    "routing_warn_m": 300.0,
+    "routing_error_m": 700.0,
+    "shared_pin_m": 5.0,
+    "shared_tee_m": 2.0,
+    "overlap_distance_m": 12.0,
+    "overlap_share": 0.6,
+    "start_mismatch_m": 1.0,
+    "projection_error": 0.005,
+    "zone_fit_warn_iou": 0.7,
+    "par_lengths": {
+      "3": [
+        40,
+        260
+      ],
+      "4": [
+        200,
+        520
+      ],
+      "5": [
+        380,
+        660
+      ],
+      "6": [
+        500,
+        800
+      ]
+    }
+  },
+  "audit": {
+    "green_reach_m": 15.0,
+    "tee_reach_m": 15.0,
+    "candidate_tee_m": [25.0, 650.0],
+    "fairway_reach_m": 30.0,
+    "boundary_slack_m": 5.0
+  },
   "courses": {
+    "kalo_par_3": {
+      "ref_prefix": "P"
+    },
     "marienlyst_golfklub": {
       "tree": {
         "trunk_radius": 0.65,
         "trunk_height": 5.0,
         "leaf_radius": 4.7,
         "leaf_height": 6.0,
-        "max_per_hole": 60
+        "max_per_hole": 200
       },
       "world": {
-      "max_shortcut_length": 160.0,
-      "max_cart_road_length": 240.0,
-      "max_path_distance_from_holes": 65.0,
-      "fairway_avoidance_clearance": 10.0,
-      "fallback_road_extra_offset": 10.0,
-      "max_shortcut_count": 8
+        "max_shortcut_length": 160.0,
+        "max_cart_road_length": 240.0,
+        "max_path_distance_from_holes": 65.0,
+        "fairway_avoidance_clearance": 10.0,
+        "fallback_road_extra_offset": 10.0,
+        "max_shortcut_count": 8
+      }
+    },
+    "mollerup_golf_club": {
+      "holes": [
+        {
+          "line": "W1010266853",
+          "par": 3
+        },
+        {
+          "line": "W1010265481",
+          "par": 4
+        },
+        {
+          "line": "W1010262395",
+          "par": 4
+        },
+        {
+          "line": "W1010262153",
+          "par": 4
+        },
+        {
+          "line": "W1010240609",
+          "par": 5
+        },
+        {
+          "line": "W1010260629",
+          "par": 4
+        },
+        {
+          "line": "W1010261316",
+          "par": 3
+        },
+        {
+          "line": "W1010261317",
+          "par": 4
+        },
+        {
+          "line": "W1010266854",
+          "par": 4
+        },
+        {
+          "line": "W1010212755",
+          "par": 5
+        },
+        {
+          "line": "W1010212390",
+          "par": 3
+        },
+        {
+          "line": "W1010211380",
+          "par": 5
+        },
+        {
+          "line": "W1010002827",
+          "par": 3
+        },
+        {
+          "line": "W1010208498",
+          "par": 5
+        },
+        {
+          "line": "W1010208504",
+          "par": 4
+        },
+        {
+          "line": "W1010269508",
+          "par": 3
+        },
+        {
+          "line": "W1010230819",
+          "par": 4
+        },
+        {
+          "line": "W1010226940",
+          "par": 4
+        }
+      ]
     }
   }
-}
 }

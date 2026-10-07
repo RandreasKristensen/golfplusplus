@@ -2,7 +2,7 @@
 
 // Paper scorecards drawn into the overlay batch: the compact card shown
 // during a round, the group's card beside it online, and the full-screen
-// results after the last hole. GL-free.
+// results after the last hole (the group's card beside it, online). GL-free.
 
 #include "game/scorecard.h"
 #include "game/text_assets.h"
@@ -14,5 +14,9 @@ void draw_compact_scorecard(overlay_batch& batch, const text_assets& text, const
 // One row per group member (name, holes played, strokes, against par);
 // nothing when `rows` is empty.
 void draw_group_scorecard(overlay_batch& batch, const text_assets& text, const std::vector<group_scorecard_row>& rows);
-// The full-screen scorecard after the last hole.
-void draw_course_results(overlay_batch& batch, const text_assets& text, const scorecard_data& scorecard);
+// The full-screen scorecard after the last hole; online in a group, with
+// the group's card beside it (`group` empty: none).
+void draw_course_results(overlay_batch& batch,
+                         const text_assets& text,
+                         const scorecard_data& scorecard,
+                         const std::vector<group_scorecard_row>& group);

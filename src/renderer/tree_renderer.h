@@ -12,6 +12,7 @@
 #include "renderer/frustum.h"
 #include "renderer/render_mesh.h"
 #include "renderer/render_tree.h"
+#include "renderer/scene_haze.h"
 #include "renderer/shader.h"
 
 // Draws every course tree with two instanced draw calls: all trunks (unit
@@ -42,13 +43,15 @@ public:
               mesh_source leaf_mesh);
     void shutdown();
 
-    // Uploads instance data if `revision`/tree count changed, then draws.
+    // Uploads instance data if `revision`/tree count changed, then draws,
+    // fading far trees into `haze`.
     // No draw calls are issued when there are no trees, or when the whole batch
     // is outside `frustum`. Returns true when the batch was drawn.
     bool draw(const std::vector<tree_body>& trees,
               std::uint64_t revision,
               const glm::mat4& view,
               const glm::mat4& proj,
+              const scene_haze& haze,
               const view_frustum& frustum,
               frame_profile* profile);
 

@@ -61,38 +61,80 @@
     {
       "type": "green",
       "center": [
-        -109.35,
+        -69.24,
         0,
-        -100.19
+        -140.05
       ],
-      "radius": 22.0
+      "radii": [
+        27.07,
+        12.98
+      ],
+      "rotation_degrees": -36.0
+    },
+    {
+      "type": "green",
+      "center": [
+        -112.27,
+        0,
+        -92.56
+      ],
+      "radii": [
+        15.55,
+        10.99
+      ],
+      "rotation_degrees": -73.1
+    },
+    {
+      "type": "green",
+      "center": [
+        -99.91,
+        0,
+        -114.92
+      ],
+      "radii": [
+        18.6,
+        10.18
+      ],
+      "rotation_degrees": 0.5
     },
     {
       "type": "bunker",
       "center": [
-        -36.95,
+        -36.92,
         0,
-        -72.2
+        -72.02
       ],
-      "radius": 1.7
+      "radii": [
+        1.73,
+        1.66
+      ],
+      "rotation_degrees": 56.6
     },
     {
       "type": "bunker",
       "center": [
-        -43.94,
+        -43.97,
         0,
-        -82.46
+        -82.22
       ],
-      "radius": 2.1
+      "radii": [
+        2.25,
+        1.96
+      ],
+      "rotation_degrees": -63.3
     },
     {
       "type": "bunker",
       "center": [
-        -95.24,
+        -95.01,
         0,
-        -98.19
+        -97.93
       ],
-      "radius": 2.41
+      "radii": [
+        2.54,
+        2.3
+      ],
+      "rotation_degrees": -42.5
     }
   ],
   "trees": [],
@@ -108,6 +150,34 @@
     ],
     "centerline": "hole_way",
     "elevation": "terrarium",
-    "tee_elevation": 6.26
+    "tee_elevation": 6.26,
+    "hole_way": "way/294611914",
+    "zone_fit": [
+      {
+        "osm": "way/294611906",
+        "type": "green",
+        "pieces": 3,
+        "iou": 0.82
+      },
+      {
+        "osm": "way/180275583",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.97
+      },
+      {
+        "osm": "way/180275618",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.94
+      },
+      {
+        "osm": "way/180275643",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.96
+      }
+    ],
+    "made_green": false
   }
 }

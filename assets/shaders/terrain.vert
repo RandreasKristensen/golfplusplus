@@ -13,11 +13,13 @@ out vec3 v_normal;
 out vec3 v_color;
 out float v_rough;
 out vec2 v_ground;
+out vec3 v_world;
 
 void main() {
     gl_Position = u_mvp * vec4(a_pos, 1.0);
     v_normal = normalize(mat3(transpose(inverse(u_model))) * a_normal);
     v_color = a_color;
     v_rough = a_rough;
-    v_ground = (u_model * vec4(a_pos, 1.0)).xz;
+    v_world = (u_model * vec4(a_pos, 1.0)).xyz;
+    v_ground = v_world.xz;
 }

@@ -139,6 +139,7 @@ bool tree_renderer::draw(const std::vector<tree_body>& trees,
                          const std::uint64_t revision,
                          const glm::mat4& view,
                          const glm::mat4& proj,
+                         const scene_haze& haze,
                          const view_frustum& frustum,
                          frame_profile* profile) {
     if (shader_.id() == 0) {
@@ -168,6 +169,7 @@ bool tree_renderer::draw(const std::vector<tree_body>& trees,
     shader_.set_profile(profile);
     shader_.use();
     shader_.set_mat4("u_view_proj", proj * view);
+    set_scene_haze_uniforms(shader_, haze);
 
     shader_.set_vec3("u_color", trunk_color);
     draw_part(trunks_, profile);

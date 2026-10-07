@@ -1,6 +1,7 @@
 #include "game/scorecard.h"
 
 #include "game/game_state.h"
+#include "game/group_round.h"
 #include "game/mode_dispatch.h"
 #include "game/text_ids.h"
 
@@ -55,10 +56,11 @@ std::vector<group_scorecard_row> build_group_scorecard(const game_state& state, 
         row.name = player.name;
         row.me = account == state.online.account_id;
         int par = 0;
-        for (std::size_t i = 0; i < player.round_strokes.size() && i < state.course_holes.size(); ++i) {
-            if (player.round_strokes[i] > 0) {
+        const std::vector<int> strokes = member_round_strokes(state, account);
+        for (std::size_t i = 0; i < strokes.size(); ++i) {
+            if (strokes[i] > 0) {
                 ++row.holes_played;
-                row.strokes += player.round_strokes[i];
+                row.strokes += strokes[i];
                 par += state.course_holes[i].par;
             }
         }

@@ -8,16 +8,13 @@ namespace {
 std::optional<course_world_hole_start> hole_start_from_json(const json& value, const course_definition& course) {
     const std::optional<int> hole_index = json_int(value, "hole_index");
     const std::optional<glm::vec3> position = json_vec3(value, "position");
-    const std::optional<glm::vec3> return_position = json_vec3(value, "return_position");
-    if (!hole_index || *hole_index < 0 || *hole_index >= static_cast<int>(course.holes.size()) ||
-        !position || !return_position) {
+    if (!hole_index || *hole_index < 0 || *hole_index >= static_cast<int>(course.holes.size()) || !position) {
         return std::nullopt;
     }
 
     course_world_hole_start start;
     start.hole_index = *hole_index;
     start.position = *position;
-    start.return_position = *return_position;
     start.interaction_radius = json_float(value, "interaction_radius").value_or(default_hole_start_radius);
     start.rotation_degrees = json_float(value, "rotation_degrees").value_or(0.0f);
     return start;
@@ -71,6 +68,26 @@ std::vector<course_world_cart_road> cart_roads_from_json(const json& root) {
         roads.push_back(course_world_cart_road{json_float(value, "width").value_or(default_cart_road_width), *points});
     }
     return roads;
+}
+
+// No `fences` is no fences; a fence without two poles or a positive height
+// is malformed and refuses the world.
+std::optional<std::vector<course_world_fence>> fences_from_json(const json& root) {
+    std::vector<course_world_fence> fences;
+    const json* array = json_array(root, "fences");
+    if (array == nullptr) {
+        return fences;
+    }
+    for (const json& value : *array) {
+        const json* poles = json_array(value, "poles");
+        const std::optional<std::vector<glm::vec3>> points = poles != nullptr ? json_vec3_array(*poles) : std::nullopt;
+        const std::optional<float> height = json_float(value, "height");
+        if (!points || points->size() < 2 || !height || !(*height > 0.0f)) {
+            return std::nullopt;
+        }
+        fences.push_back(course_world_fence{*points, *height});
+    }
+    return fences;
 }
 
 std::vector<course_world_skill_reward> skill_rewards_from_json(const json& value) {
@@ -151,6 +168,11 @@ std::optional<course_world_definition> parse_course_world_from_text(const std::s
     }
     world.ground = std::move(*ground);
     world.cart_roads = cart_roads_from_json(*root);
+    std::optional<std::vector<course_world_fence>> fences = fences_from_json(*root);
+    if (!fences) {
+        return std::nullopt;
+    }
+    world.fences = std::move(*fences);
     if (const json* collectibles = json_array(*root, "collectibles")) {
         for (const json& value : *collectibles) {
             if (std::optional<course_world_collectible> collectible = collectible_from_json(value)) {

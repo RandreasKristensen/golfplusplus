@@ -1,7 +1,13 @@
 {
   "id": "old_course",
   "name": "Old Course",
-  "backdrop": "backdrops/old_course.bmp",
+  "backdrop": {
+    "sky": "backdrops/old_course_sky.bmp",
+    "land": "backdrops/old_course_land.bmp",
+    "haze_color": [0.78, 0.8, 0.8],
+    "haze_amount": 1.0,
+    "haze_distance": 700
+  },
   "holes": [
     "holes/old_course_h01.json",
     "holes/old_course_h02.json",

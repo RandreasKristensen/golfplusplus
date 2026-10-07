@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "game/course_session.h"
+#include "game/group_round.h"
 #include "game/game_state.h"
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
@@ -13,7 +14,10 @@
 
 #include "test_support.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -139,7 +143,7 @@ TEST_CASE("an online shot tells the server where the player stands first, with t
         if (command.type == net_command_type::take_shot) {
             shot_at = i;
             CHECK(near(command.shot.wind_time, 5.0f, 0.001f));
-        } else if (command.type == net_command_type::motion && command.motion.mode == motion_mode::aim) {
+        } else if (command.type == net_command_type::motion && at_ball(command.motion.mode)) {
             motion_at = std::min(motion_at, i);
         }
     }
@@ -182,6 +186,7 @@ TEST_CASE("online the hole ends when the server says: scored when it holed my ba
     on_hole(state);
     // Holed here: the hole stays open until the server answers.
     const glm::vec3 cup = pin_anchor_position(state);
+    const glm::vec3 stance = state.player.position;
     state.stroke_count = 2;
     play_shot(state, shot_result{cup, true, 0.05f, {state.ball.position, cup}, {}});
     play_out_shot(state);
@@ -191,11 +196,13 @@ TEST_CASE("online the hole ends when the server says: scored when it holed my ba
     state.online.shots.push_back(room_shot{me, 0, 2, shot_input{}, cup, true});
     room_player& self = state.online.players[me];
     self.zone = hub_zone;
-    self.motion->position = state.hub->world.hole_starts[0].return_position;
+    // The server leaves the player where they hit from, as offline.
+    self.motion->position = stance;
     update_game(state, game_input{}, 0.016f);
     CHECK(!state.hole.has_value());
     REQUIRE(hole_played(state.round, 0));
     CHECK(*state.round.strokes[0] == 2);
+    CHECK(near(horizontal(state.player.position), horizontal(stance), 0.001f));
 }
 
 TEST_CASE("online a hole the server ends without holing my ball is given up") {
@@ -241,6 +248,38 @@ TEST_CASE("a refused enter_hole or claim puts the player back where the server h
     state.player.position += glm::vec3(5.0f, 0.0f, 0.0f);
     refuse(state, "claim_collectible", "too_far");
     CHECK(near(state.player.position, accepted, 0.001f));
+}
+
+TEST_CASE("a tee is in use while another player's ball waits on it for the tee shot") {
+    std::map<std::uint64_t, room_ball> balls;
+    CHECK(!tee_in_use(balls, me, 0));
+    balls[me] = room_ball{0, glm::vec3(0.0f), 0};
+    CHECK(!tee_in_use(balls, me, 0));  // my own ball never blocks me
+    balls[other] = room_ball{1, glm::vec3(0.0f), 0};
+    CHECK(!tee_in_use(balls, me, 0));  // on another hole
+    CHECK(tee_in_use(balls, me, 1));
+    balls[other].stroke_count = 1;
+    CHECK(!tee_in_use(balls, me, 1));  // teed off: the tee is free
+}
+
+TEST_CASE("online, a tee another player is using is not taken up and says why") {
+    game_state state = online_hub();
+    state.online.balls[other] = room_ball{0, glm::vec3(0.0f), 0};
+    CHECK(!start_hub_hole(state, 0));
+    CHECK(!state.hole.has_value());
+    CHECK(state.net_commands.empty());
+    REQUIRE(state.notice.has_value());
+    CHECK(state.notice->text_key == text_online_tee_in_use);
+
+    state.online.balls[other].stroke_count = 1;
+    CHECK(start_hub_hole(state, 0));
+    CHECK(state.hole.has_value());
+}
+
+TEST_CASE("offline, the tee is never in use") {
+    game_state state = started_game(fixture_hub_course());
+    state.online.balls[other] = room_ball{0, glm::vec3(0.0f), 0};
+    CHECK(start_hub_hole(state, 0));
 }
 
 TEST_CASE("moving too fast snaps back to the last accepted position, only within the same zone") {
@@ -381,10 +420,104 @@ TEST_CASE("another player's shot plays from the server's event and ends where it
     CHECK(state.remote_shots.empty());
 }
 
+TEST_CASE("another player's emote from the server plays on their avatar, as mine does") {
+    game_state state = online_hub();
+    add_other(state, glm::vec3(3.0f, 0.0f, 0.0f), 0);
+    state.online.emotes.push_back(room_emote{other, emote_id::smoke});
+    state.online.emotes.push_back(room_emote{7, emote_id::drink});  // nobody shown here
+    update_game(state, game_input{}, 0.0f);
+    CHECK(state.online.emotes.empty());
+    const remote_avatar& avatar = state.remote_avatars.at(other);
+    CHECK(avatar.smoke_emote.active);
+    CHECK(!avatar.drink_emote.active);
+
+    update_game(state, game_input{}, 0.02f);
+    CHECK(state.remote_avatars.at(other).smoke_emote.elapsed > 0.0f);
+    state.online.emotes.push_back(room_emote{other, emote_id::drink});
+    wait(state, state.tuning.player.emote_seconds * 0.5f);
+    CHECK(state.remote_avatars.at(other).smoke_emote.active);
+    CHECK(state.remote_avatars.at(other).drink_emote.active);
+    wait(state, state.tuning.player.emote_seconds);
+    CHECK(!state.remote_avatars.at(other).smoke_emote.active);
+    CHECK(!state.remote_avatars.at(other).drink_emote.active);
+}
+
+TEST_CASE("another player addresses their ball and swings with their meter, their shot leaving as it arrives") {
+    game_state state = online_hub();
+    add_other(state, glm::vec3(3.0f, 0.0f, 0.0f), 0);
+    state.online.emotes.push_back(room_emote{other, emote_id::drink});
+    update_game(state, game_input{}, 0.0f);
+    REQUIRE(state.remote_avatars.at(other).drink_emote.active);
+    const hub_hole_marker& marker = state.hub->markers[0];
+    shot_input input;
+    input.ball_start = resting_ball_position(state.area, marker.tee_position, state.ball.radius);
+    input.aim_angle = yaw_towards(marker.tee_position, marker.pin_position);
+    input.club_id = state.clubs.front().id;
+    input.power = 0.8f;
+    state.online.balls[other] = room_ball{0, input.ball_start, 0};
+    room_player& player = state.online.players.at(other);
+    player.motion->yaw = input.aim_angle;
+    CHECK(!remote_address_pose(state, other).has_value());  // walking
+    // Lining it up: no club yet, turning as they turn.
+    player.motion->mode = motion_mode::aim;
+    CHECK(!remote_address_pose(state, other).has_value());
+
+    // Addressing it: the club down at the ball.
+    player.motion->mode = motion_mode::address;
+    std::optional<remote_address> address = remote_address_pose(state, other);
+    REQUIRE(address.has_value());
+    CHECK(near(address->ball_position, input.ball_start));
+    CHECK(address->aim_angle == input.aim_angle);
+    CHECK(address->club_power == 0.0f);
+
+    // Swinging: the club rises with the meter from when the server heard it.
+    player.motion->mode = motion_mode::swing;
+    player.motion_at = state.online.server_now;
+    state.online.server_now += server_micros(0.3);
+    address = remote_address_pose(state, other);
+    REQUIRE(address.has_value());
+    CHECK(near(address->club_power, swing_meter_power(0.3f, 1.0f, state.tuning.swing.meter_cycle_seconds), 0.001f));
+    CHECK(address->club_power > 0.1f);
+
+    // The shot leaves as it arrives, and its swing is over.
+    const glm::vec3 rest = input.ball_start + glm::vec3(3.0f, 0.0f, 3.0f);
+    state.online.balls[other].position = rest;
+    state.online.shots.push_back(room_shot{other, 0, 1, input, rest, false});
+    update_game(state, game_input{}, 0.0f);
+    CHECK(!remote_address_pose(state, other).has_value());
+    // Hitting it doesn't end their emotes: the server and their own game don't either.
+    CHECK(state.remote_avatars.at(other).drink_emote.active);
+    wait(state, 0.1f);
+    std::vector<shown_ball> balls = remote_balls(state);
+    REQUIRE(balls.size() == 1U);
+    CHECK(!near(balls[0].position, input.ball_start, 0.01f));
+
+    // Their next address shows the club again.
+    player.motion->mode = motion_mode::address;
+    player.motion_at = state.online.server_now;
+    CHECK(remote_address_pose(state, other).has_value());
+}
+
+TEST_CASE("my swing tells the server it started, and the shot where I stand") {
+    game_state state = online_hub();
+    on_hole(state);
+    enter_addressing(state);
+    REQUIRE(state.mode == game_mode::addressing);
+    CHECK(current_motion(state).mode == motion_mode::address);
+    CHECK(current_motion(state).turn_rate == 0.0f);
+
+    state.net_commands.clear();
+    update_game(state, action_input(), 0.0f);
+    REQUIRE(state.swing.phase == swing_phase::timing);
+    REQUIRE(!state.net_commands.empty());
+    CHECK(state.net_commands.back().type == net_command_type::motion);
+    CHECK(state.net_commands.back().motion.mode == motion_mode::swing);
+}
+
 TEST_CASE("the group's scorecard has a row per member from the server") {
     game_state state = online_hub();
     state.online.players[me].group_id = 3;
-    state.online.players[me].round_strokes[0] = state.course_holes[0].par + 1;
+    state.round = complete_hole(state.round, 0, state.course_holes[0].par + 1);
     add_other(state, glm::vec3(0.0f), 3);
     state.online.players[other].round_strokes = std::vector<int>(state.course_holes.size(), 0);
     room_player stranger = state.online.players[other];
@@ -404,17 +537,171 @@ TEST_CASE("the group's scorecard has a row per member from the server") {
     CHECK(build_group_scorecard(state, shipped_text_assets().strings).empty());
 }
 
-TEST_CASE("a finished round goes on to the next at the last hole's return point") {
+TEST_CASE("a finished round goes on to the next where the player stands") {
     game_state state = online_hub();
     for (std::size_t i = 0; i < state.course_holes.size(); ++i) {
         start_hub_hole(state, i);
         state.stroke_count = 3;
         complete_current_hole(state);
+        pick_up_from_cup(state);
     }
     REQUIRE(round_finished(state.round));
-    const std::size_t last = state.course_holes.size() - 1;
+    const glm::vec3 standing = state.player.position;
+    REQUIRE(horizontal_distance(standing, state.hub->markers.back().tee_position) < 5.0f);
     start_next_round(state);
     CHECK(!round_finished(state.round));
     CHECK(!state.hole.has_value());
-    CHECK(near(horizontal_distance(state.player.position, state.hub->world.hole_starts[last].return_position), 0.0f, 0.001f));
+    CHECK(near(horizontal(state.player.position), horizontal(standing), 0.001f));
+}
+
+namespace {
+// Grouped with the other player, every hole holed in 3 but the last, which
+// I finish while they still play it. Returns the last hole.
+std::size_t finished_before_group(game_state& state) {
+    state.online.players[me].group_id = 3;
+    add_other(state, glm::vec3(4.0f, 0.0f, 0.0f), 3);
+    const std::size_t last = state.course_holes.size() - 1U;
+    state.online.players[other].round_strokes = std::vector<int>(state.course_holes.size(), 0);
+    state.online.players[other].round_strokes[0] = 5;
+    state.online.players[other].zone = static_cast<int>(last);
+    for (std::size_t i = 0; i <= last; ++i) {
+        start_hub_hole(state, i);
+        state.stroke_count = 3;
+        complete_current_hole(state);
+        pick_up_from_cup(state);
+    }
+    return last;
+}
+}
+
+TEST_CASE("a finished round's results wait while my group still plays the hole") {
+    game_state state = online_hub();
+    const std::size_t last = finished_before_group(state);
+    REQUIRE(round_finished(state.round));
+    CHECK(waiting_for_group(state));
+    CHECK(!round_results_shown(state));
+    update_game(state, game_input{}, 0.0f);  // their round so far arrives
+
+    // The room plays on while I wait: their holing shot plays, and the
+    // server has ended their round (cleared its strokes).
+    const hub_hole_marker& marker = state.hub->markers[last];
+    shot_input input;
+    input.ball_start = resting_ball_position(state.area, marker.pin_position + glm::vec3(2.0f, 0.0f, 0.0f), state.ball.radius);
+    input.aim_angle = yaw_towards(input.ball_start, marker.pin_position);
+    input.club_id = state.clubs.back().id;
+    input.power = 0.3f;
+    state.online.shots.push_back(room_shot{other, static_cast<int>(last), 4, input, marker.pin_position, true});
+    state.online.players[other].zone = hub_zone;
+    state.online.players[other].round_strokes = std::vector<int>(state.course_holes.size(), 0);
+    update_game(state, game_input{}, 0.0f);
+    CHECK(state.online.shots.empty());
+    REQUIRE(state.remote_shots.count(other) == 1U);
+    CHECK(waiting_for_group(state));  // their ball is still rolling
+
+    for (int i = 0; i < 4000 && waiting_for_group(state); ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
+    CHECK(!waiting_for_group(state));
+    CHECK(round_results_shown(state));
+
+    // Everyone's scores, their last hole included.
+    const std::vector<group_scorecard_row> rows = build_group_scorecard(state, shipped_text_assets().strings);
+    REQUIRE(rows.size() == 2U);
+    CHECK(rows[0].holes_played == static_cast<int>(state.course_holes.size()));
+    CHECK(rows[0].strokes == 3 * static_cast<int>(state.course_holes.size()));
+    CHECK(rows[1].holes_played == 2);
+    CHECK(rows[1].strokes == 9);
+
+    start_next_round(state);
+    CHECK(state.group_strokes.empty());
+}
+
+TEST_CASE("results wait for nobody who gave up the hole or left the group") {
+    game_state state = online_hub();
+    const std::size_t last = finished_before_group(state);
+    REQUIRE(waiting_for_group(state));
+    state.online.players[other].zone = hub_zone;  // gave up
+    CHECK(round_results_shown(state));
+
+    state.online.players[other].zone = static_cast<int>(last);
+    REQUIRE(waiting_for_group(state));
+    state.online.players[other].group_id = 0;  // left the group
+    CHECK(round_results_shown(state));
+
+    state.online.players[other].group_id = 3;
+    REQUIRE(waiting_for_group(state));
+    state.online.players.erase(other);  // left the room
+    CHECK(round_results_shown(state));
+}
+
+TEST_CASE("solo and offline results show as the round finishes") {
+    game_state state = online_hub();
+    add_other(state, glm::vec3(4.0f, 0.0f, 0.0f), 0);
+    state.online.players[other].zone = static_cast<int>(state.course_holes.size() - 1U);
+    for (std::size_t i = 0; i < state.course_holes.size(); ++i) {
+        start_hub_hole(state, i);
+        state.stroke_count = 3;
+        complete_current_hole(state);
+        pick_up_from_cup(state);
+    }
+    CHECK(round_results_shown(state));
+
+    game_state offline = started_game(fixture_hub_course());
+    for (std::size_t i = 0; i < offline.course_holes.size(); ++i) {
+        start_hub_hole(offline, i);
+        offline.stroke_count = 3;
+        complete_current_hole(offline);
+        pick_up_from_cup(offline);
+    }
+    CHECK(!waiting_for_group(offline));
+    CHECK(round_results_shown(offline));
+}
+
+namespace {
+// Holed hole 0 and back in the hub, as the server has me; at the cup.
+void holed_at_cup(game_state& state) {
+    on_hole(state);
+    state.stroke_count = 3;
+    complete_current_hole(state);
+    room_player& self = state.online.players[me];
+    self.zone = hub_zone;
+    REQUIRE(state.cup_ball.has_value());
+    state.player.position = *state.cup_ball;
+    self.motion = current_motion(state);
+    state.net_commands.clear();
+}
+
+bool sent(const game_state& state, const net_command_type type) {
+    return std::any_of(state.net_commands.begin(), state.net_commands.end(),
+                       [type](const net_command& command) { return command.type == type; });
+}
+}
+
+TEST_CASE("online the ball is picked out of its cup with the server, and goes back when refused") {
+    game_state state = online_hub();
+    holed_at_cup(state);
+    update_game(state, action_input(), 0.0f);
+    CHECK(!state.cup_ball.has_value());
+    CHECK(sent(state, net_command_type::pick_up_ball));
+
+    state.online.refusals.push_back(reducer_failure{"pick_up_ball", "too_far"});
+    update_game(state, game_input{}, 0.0f);
+    CHECK(state.cup_ball.has_value());
+    REQUIRE(state.notice.has_value());
+    CHECK(state.notice->text_key == online_error_text_key("too_far"));
+}
+
+TEST_CASE("online a hole refused for the ball in the cup puts it back there") {
+    game_state state = online_hub();
+    holed_at_cup(state);
+    update_game(state, action_input(), 0.0f);
+    REQUIRE(!state.cup_ball.has_value());
+
+    REQUIRE(start_hub_hole(state, 1));
+    state.online.refusals.push_back(reducer_failure{"enter_hole", "ball_in_cup"});
+    update_game(state, game_input{}, 0.0f);
+    CHECK(in_hub(state));
+    CHECK(state.cup_ball.has_value());
+    REQUIRE(state.notice.has_value());
+    CHECK(state.notice->text_key == text_ball_in_cup);
 }

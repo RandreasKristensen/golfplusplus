@@ -9,6 +9,7 @@
     "loft_degrees": 2.0,
     "backspin": 0.02,
     "side_spin": 0.97,
+    "bunker_power": 0.3,
     "timing_speed": 0.25,
     "roll_friction_scale": 0.35
   }

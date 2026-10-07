@@ -6,8 +6,8 @@ game_input game_input_from_keys(const input_state& keys) {
     input.back_held = keys.down.is_down;
     input.turn_left_held = keys.left.is_down;
     input.turn_right_held = keys.right.is_down;
-    input.previous_club = keys.up.pressed;
-    input.next_club = keys.down.pressed;
+    input.longer_club = keys.up.pressed;
+    input.shorter_club = keys.down.pressed;
     input.action = keys.space.pressed;
     input.cancel = keys.backspace.pressed || keys.escape.pressed;
     input.retee = keys.key_r.pressed;

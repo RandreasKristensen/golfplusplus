@@ -4,6 +4,7 @@
 #include "game/game_state.h"
 #include "game/mode_dispatch.h"
 #include "game/progression.h"
+#include "game/text_ids.h"
 
 #include "test_support.h"
 
@@ -220,15 +221,17 @@ TEST_CASE("club selection wraps in both directions") {
     game_state state = started_hole();
     enter_aiming(state);
 
-    game_input previous;
-    previous.previous_club = true;
-    update_game(state, previous, 0.016f);
+    game_input shorter;
+    shorter.shorter_club = true;
+    update_game(state, shorter, 0.016f);
     CHECK(state.selected_club == state.clubs.size() - 1);
 
-    game_input next;
-    next.next_club = true;
-    update_game(state, next, 0.016f);
+    game_input longer;
+    longer.longer_club = true;
+    update_game(state, longer, 0.016f);
     CHECK(state.selected_club == 0);
+    update_game(state, longer, 0.016f);
+    CHECK(state.selected_club == 1);
 }
 
 TEST_CASE("cancel returns shot setup to walking") {
@@ -388,4 +391,25 @@ TEST_CASE("xp drops pool small gains and merge repeats of one skill") {
     CHECK(state.xp_drops.size() == 1U);
     update_xp_drops(state, 0.02f);
     CHECK(state.xp_drops.empty());
+}
+
+TEST_CASE("a shot lost in water costs a stroke and is played again from where it was hit") {
+    game_state state = started_hole();
+    const glm::vec3 start = state.ball.position;
+    const glm::vec3 pond = start + glm::vec3(0.0f, -1.0f, 30.0f);
+    state.stroke_count = 1;
+    shot_result lost;
+    lost.rest_position = start;
+    lost.duration = 0.1f;
+    lost.trajectory = {start, pond};
+    lost.penalty_strokes = 1;
+    play_shot(state, lost);
+    for (int i = 0; i < 20 && state.shot; ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
+    CHECK(!state.shot.has_value());
+    CHECK(state.stroke_count == 2);  // the shot was 1; the next one is played as 3
+    CHECK(near(state.ball.position, start, 0.001f));
+    REQUIRE(state.notice.has_value());
+    CHECK(state.notice->text_key == text_hud_water_penalty);
 }

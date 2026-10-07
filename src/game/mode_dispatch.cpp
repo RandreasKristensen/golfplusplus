@@ -124,6 +124,15 @@ void record_retee(game_state& state) {
     push_command(state, std::move(command));
 }
 
+void record_ball_picked_up(game_state& state) {
+    if (!is_online(state)) {
+        return;
+    }
+    net_command command;
+    command.type = net_command_type::pick_up_ball;
+    push_command(state, std::move(command));
+}
+
 void record_hole_given_up(game_state& state) {
     if (!is_online(state)) {
         return;

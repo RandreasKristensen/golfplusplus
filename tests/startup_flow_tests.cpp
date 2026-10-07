@@ -40,7 +40,7 @@ startup_catalog two_courses() {
 }
 }
 
-TEST_CASE("main menu opens online, offline and help, and quits from the last item") {
+TEST_CASE("main menu opens online, offline, help and settings, and quits from the last item") {
     const startup_catalog catalog = two_courses();
 
     startup_flow_state state;
@@ -66,6 +66,11 @@ TEST_CASE("main menu opens online, offline and help, and quits from the last ite
 
     return_to_main_menu(state);
     state.selection = 3;
+    update_startup_menu(state, input, std::nullopt, catalog);
+    CHECK(state.flow == startup_flow::settings);
+
+    return_to_main_menu(state);
+    state.selection = 4;
     const startup_menu_result result = update_startup_menu(state, input, std::nullopt, catalog);
     CHECK(result.action == startup_action::quit);
     CHECK(has_sound(result.sounds, ui_sound::select));
@@ -86,12 +91,30 @@ TEST_CASE("signed in, the main menu adds linking and signing out") {
     REQUIRE(result.requests.size() == 1U);
     CHECK(result.requests[0].type == online_request_type::sign_out);
 
-    // Signed out, the same place is HELP; a selection past the end moves back.
+    // Signed out, the same place is SETTINGS; a selection past the end moves back.
     online = online_menu_status{};
-    state.selection = 5;
+    state.selection = 6;
     result = update_startup_menu(state, input_state{}, std::nullopt, two_courses(), online);
-    CHECK(state.selection == 3);
+    CHECK(state.selection == 4);
     CHECK(result.requests.empty());
+}
+
+TEST_CASE("a guest's main menu has signing out but no linking") {
+    online_menu_status online;
+    online.available = true;
+    online.status = net_status::connected;
+    online.account_id = 7;
+    online.name = "ANNA";
+    online.guest = true;
+
+    // PLAY ONLINE, PLAY OFFLINE, SIGN OUT: the third item signs out.
+    startup_flow_state state;
+    state.selection = 2;
+    input_state input;
+    input.enter.pressed = true;
+    const startup_menu_result result = update_startup_menu(state, input, std::nullopt, two_courses(), online);
+    REQUIRE(result.requests.size() == 1U);
+    CHECK(result.requests[0].type == online_request_type::sign_out);
 }
 
 TEST_CASE("back leaves a sub-menu for its parent and quits from the main menu") {
@@ -142,7 +165,7 @@ TEST_CASE("course picker asks app to start the selected course without leaving t
 TEST_CASE("clicking a tile selects and accepts it") {
     const startup_catalog catalog = two_courses();
     startup_flow_state state;
-    const glm::vec2 help_tile = startup_tile_center(startup_menu_screen::main, 2, 4);
+    const glm::vec2 help_tile = startup_tile_center(startup_menu_screen::main, 2, 5);
     const startup_menu_result result = update_startup_menu(state, input_state{}, help_tile, catalog);
     CHECK(state.flow == startup_flow::help);
     CHECK(has_sound(result.sounds, ui_sound::move));
@@ -167,6 +190,7 @@ TEST_CASE("a long single column closes up so every tile stays above the footer")
 }
 
 TEST_CASE("confirm menu opens on NO and only YES leaves the round") {
+    const std::vector<setting_definition> settings;
     startup_flow_state state;
     enter_playing(state);
     open_confirm_menu(state);
@@ -175,22 +199,22 @@ TEST_CASE("confirm menu opens on NO and only YES leaves the round") {
 
     input_state accept;
     accept.enter.pressed = true;
-    confirm_menu_result result = update_confirm_menu(state, accept, std::nullopt);
+    confirm_menu_result result = update_confirm_menu(state, accept, std::nullopt, settings);
     CHECK(!result.leave_round);
     CHECK(!state.confirm_active);
 
     open_confirm_menu(state);
     input_state up;
     up.up.pressed = true;
-    update_confirm_menu(state, up, std::nullopt);
+    update_confirm_menu(state, up, std::nullopt, settings);
     CHECK(state.confirm_selection == 0);
-    result = update_confirm_menu(state, accept, std::nullopt);
+    result = update_confirm_menu(state, accept, std::nullopt, settings);
     CHECK(result.leave_round);
 
     open_confirm_menu(state);
     input_state cancel;
     cancel.backspace.pressed = true;
-    result = update_confirm_menu(state, cancel, std::nullopt);
+    result = update_confirm_menu(state, cancel, std::nullopt, settings);
     CHECK(!result.leave_round);
     CHECK(!state.confirm_active);
     CHECK(has_sound(result.sounds, ui_sound::back));
@@ -204,11 +228,12 @@ TEST_CASE("menu render data takes its text from the string table") {
     const render_startup_menu main = make_startup_menu_render_data(state, two_courses(), *text);
     CHECK(main.screen == startup_menu_screen::main);
     CHECK(main.title == "GOLF++");
-    CHECK(main.tiles.size() == 4U);
+    CHECK(main.tiles.size() == 5U);
     CHECK(main.tiles[0].title == "PLAY ONLINE");
     CHECK(main.tiles[0].selected);
     CHECK(main.tiles[1].title == "PLAY OFFLINE");
-    CHECK(main.tiles[3].subtitle == "RETURN TO DESKTOP");
+    CHECK(main.tiles[3].title == "SETTINGS");
+    CHECK(main.tiles[4].subtitle == "RETURN TO DESKTOP");
 
     online_menu_status online;
     online.status = net_status::connected;
@@ -216,7 +241,7 @@ TEST_CASE("menu render data takes its text from the string table") {
     online.name = "ANNA";
     const render_startup_menu signed_in = make_startup_menu_render_data(state, two_courses(), *text, online);
     CHECK(signed_in.subtitle == "SIGNED IN AS ANNA");
-    CHECK(signed_in.tiles.size() == 6U);
+    CHECK(signed_in.tiles.size() == 7U);
     CHECK(signed_in.tiles[2].title == "LINK ANOTHER LOGIN");
     CHECK(signed_in.tiles[3].title == "SIGN OUT");
 
@@ -227,10 +252,11 @@ TEST_CASE("menu render data takes its text from the string table") {
     CHECK(courses.tiles[1].subtitle == "0 HOLES  PAR 0");
 
     open_confirm_menu(state);
-    const render_startup_menu confirm = make_confirm_menu_render_data(state, *text);
+    const render_startup_menu confirm = make_confirm_menu_render_data(state, *text, {});
     CHECK(confirm.screen == startup_menu_screen::confirm);
-    CHECK(confirm.title == "ARE YOU SURE");
-    CHECK(confirm.tiles.size() == 2U);
+    CHECK(confirm.title == "LEAVE THE ROUND?");
+    CHECK(confirm.tiles.size() == 3U);
+    CHECK(confirm.tiles[2].title == "SETTINGS");
     CHECK(confirm.tiles[1].title == "NO");
     CHECK(confirm.tiles[1].selected);
 }
@@ -240,7 +266,10 @@ TEST_CASE("a picked hole starts as a one-hole practice course") {
     hole_data hole;
     hole.id = "hole_01";
     hole.name = "New Hole";
-    catalog.holes = {startup_hole_option{"holes/test.json", hole, "backdrops/fixture.bmp"}};
+    course_backdrop backdrop;
+    backdrop.sky = "backdrops/fixture_sky.bmp";
+    backdrop.land = "backdrops/fixture_land.bmp";
+    catalog.holes = {startup_hole_option{"holes/test.json", hole, backdrop}};
     startup_flow_state state;
     state.flow = startup_flow::hole_picker;
 
@@ -252,14 +281,16 @@ TEST_CASE("a picked hole starts as a one-hole practice course") {
     CHECK(result.course.practice);
     CHECK(result.course.holes == std::vector<std::string>{"holes/test.json"});
     CHECK(result.course.name == "New Hole");
-    CHECK(result.course.backdrop == "backdrops/fixture.bmp");
+    CHECK(result.course.backdrop.sky == "backdrops/fixture_sky.bmp");
+    CHECK(result.course.backdrop.land == "backdrops/fixture_land.bmp");
 }
 
 TEST_CASE("every shipped hole is practised in front of its course's backdrop") {
     const startup_catalog catalog = load_startup_catalog(*load_game_content(GOLFPP_ASSETS_DIR).content, shipped_text_assets());
     REQUIRE(!catalog.holes.empty());
     for (const startup_hole_option& option : catalog.holes) {
-        CHECK(!option.backdrop.empty());
+        CHECK(!option.backdrop.sky.empty());
+        CHECK(!option.backdrop.land.empty());
     }
 }
 

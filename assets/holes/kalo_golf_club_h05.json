@@ -67,35 +67,54 @@
     {
       "type": "green",
       "center": [
-        158.88,
+        157.2,
         0,
-        47.28
+        42.57
       ],
-      "radius": 10.07
+      "radii": [
+        11.93,
+        8.51
+      ],
+      "rotation_degrees": 14.1
     },
     {
       "type": "bunker",
       "center": [
-        150.01,
+        149.82,
         0,
-        53.23
+        53.83
       ],
-      "radius": 4.09
+      "radii": [
+        7.6,
+        2.2
+      ],
+      "rotation_degrees": 27.0
     },
     {
       "type": "water",
-      "bounds": [
-        [
-          41.98,
-          0,
-          -12.49
-        ],
-        [
-          141.61,
-          0,
-          43.68
-        ]
-      ]
+      "center": [
+        66.85,
+        0,
+        20.78
+      ],
+      "radii": [
+        25.88,
+        18.82
+      ],
+      "rotation_degrees": -46.1
+    },
+    {
+      "type": "water",
+      "center": [
+        107.53,
+        0,
+        1.98
+      ],
+      "radii": [
+        29.01,
+        15.38
+      ],
+      "rotation_degrees": -9.4
     }
   ],
   "trees": [
@@ -211,6 +230,28 @@
     ],
     "centerline": "hole_way",
     "elevation": "terrarium",
-    "tee_elevation": 79.39
+    "tee_elevation": 79.39,
+    "hole_way": "way/1418916708",
+    "zone_fit": [
+      {
+        "osm": "way/630415796",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.98
+      },
+      {
+        "osm": "way/630415847",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.83
+      },
+      {
+        "osm": "way/96706714",
+        "type": "water",
+        "pieces": 2,
+        "iou": 0.86
+      }
+    ],
+    "made_green": false
   }
 }

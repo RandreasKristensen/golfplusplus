@@ -1,12 +1,14 @@
 #include "game/game_state.h"
 
 #include "game/course_session.h"
+#include "game/group_round.h"
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
 #include "game/online_play.h"
 #include "game/progress_rules.h"
 #include "game/remote_players.h"
 #include "game/shot_simulation.h"
+#include "game/text_ids.h"
 #include "physics/vector_math.h"
 
 #include <algorithm>
@@ -58,20 +60,6 @@ float turn_direction(const game_input& input) {
 // +1 forward, -1 back, 0 for neither or both.
 float walk_direction(const game_input& input) {
     return static_cast<float>(input.forward_held) - static_cast<float>(input.back_held);
-}
-
-void trigger_emote(emote_state& emote) {
-    emote = emote_state{0.0f, true};
-}
-
-void tick_emote(emote_state& emote, const float duration, const float dt) {
-    if (!emote.active) {
-        return;
-    }
-    emote.elapsed += dt;
-    if (emote.elapsed >= duration) {
-        emote = emote_state{};
-    }
 }
 
 // An emote does not restart while it plays, online or off (the server
@@ -173,16 +161,28 @@ void update_cart(game_state& state, const game_input& input, const float dt, fra
     }
 }
 
+// A hole start is its tee: the press that starts the hole also takes up the
+// ball teed there, like any press beside the ball. A ball left in its cup is
+// picked up first: no hole starts before then.
 void interact(game_state& state) {
     if (in_hub(state)) {
-        if (const std::optional<std::size_t> collectible = nearby_collectible(state)) {
+        const bool cup_ball = cup_ball_in_reach(state);
+        const std::optional<std::size_t> collectible = nearby_collectible(state);
+        const std::optional<std::size_t> start = nearby_hole_start(state);
+        if (cup_ball || collectible || start) {
             send_motion_now(state);
-            record_collectible_claim(state, state.hub->world.collectibles[*collectible]);
-        } else if (const std::optional<std::size_t> start = nearby_hole_start(state)) {
-            send_motion_now(state);
-            start_hub_hole(state, *start);
         }
-        return;
+        if (cup_ball) {
+            pick_up_cup_ball(state);
+            return;
+        }
+        if (collectible) {
+            record_collectible_claim(state, state.hub->world.collectibles[*collectible]);
+            return;
+        }
+        if (!start || !start_hub_hole(state, *start)) {
+            return;
+        }
     }
     if (can_interact_with_ball(state)) {
         state.mode = game_mode::aiming;
@@ -215,21 +215,12 @@ void update_walking(game_state& state, const game_input& input, const float dt, 
 }
 
 void change_club(game_state& state, const game_input& input) {
-    if (state.clubs.empty() || (!input.previous_club && !input.next_club)) {
+    if (state.clubs.empty() || (!input.longer_club && !input.shorter_club)) {
         return;
     }
     const std::size_t count = state.clubs.size();
-    state.selected_club = input.previous_club ? (state.selected_club + count - 1) % count : (state.selected_club + 1) % count;
+    state.selected_club = input.shorter_club ? (state.selected_club + count - 1) % count : (state.selected_club + 1) % count;
     push_audio_event(state, audio_event_type::club_change);
-}
-
-glm::vec3 address_position(const game_state& state, frame_profile* profile) {
-    const glm::vec3 forward = yaw_direction(state.aim_angle);
-    glm::vec3 position = state.ball.position
-        + yaw_left(forward) * state.tuning.player.ball_stand_off_distance
-        - forward * state.tuning.player.address_back_distance;
-    position.y = terrain_height(state.area, position, profile);
-    return position;
 }
 
 void update_aiming(game_state& state, const game_input& input, const float dt, frame_profile* profile) {
@@ -239,7 +230,9 @@ void update_aiming(game_state& state, const game_input& input, const float dt, f
     change_club(state, input);
 
     if (input.action) {
-        state.player.position = address_position(state, profile);
+        state.player.position =
+            address_stance_position(state.area, state.ball.position, state.aim_angle, state.tuning.player, profile);
+        state.player.turn_rate = 0.0f;
         state.mode = game_mode::addressing;
         state.swing = swing_state{};
     }
@@ -277,8 +270,8 @@ void update_addressing(game_state& state, const game_input& input, const float d
 
     if (state.swing.phase == swing_phase::timing) {
         state.swing.elapsed += dt;
-        state.swing.power = sample_swing_power(state.swing.elapsed * effective_club_stats(state).timing_speed,
-                                               state.tuning.swing.meter_cycle_seconds);
+        state.swing.power =
+            swing_meter_power(state.swing.elapsed, effective_club_stats(state).timing_speed, state.tuning.swing.meter_cycle_seconds);
     }
     if (!input.action) {
         return;
@@ -286,6 +279,8 @@ void update_addressing(game_state& state, const game_input& input, const float d
     if (state.swing.phase == swing_phase::idle) {
         state.swing = swing_state{swing_phase::timing, 0.0f, 0.0f};
         push_audio_event(state, audio_event_type::swing_start);
+        // Online others raise their club with mine from when the server hears it.
+        send_motion_now(state);
         return;
     }
     launch_shot(state);
@@ -320,6 +315,11 @@ void update_shot_playback(game_state& state, const float dt) {
     }
 
     const bool holed = shot.result.holed;
+    if (shot.result.penalty_strokes > 0) {
+        // Lost in water: the ball is back where it was hit from, a stroke later.
+        state.stroke_count += shot.result.penalty_strokes;
+        state.notice = game_notice{text_hud_water_penalty, 0.0f};
+    }
     state.shot.reset();
     state.mode = game_mode::walking;
     state.flight_path_points.clear();
@@ -346,6 +346,11 @@ game_state make_game_state(const game_content& content, const save_data& save) {
 void update_game(game_state& state, const game_input& input, const float raw_dt, frame_profile* profile) {
     const float dt = std::clamp(raw_dt, 0.0f, max_update_seconds);
     if (round_finished(state.round)) {
+        // Online, my results wait for the group; the room plays on meanwhile.
+        if (waiting_for_group(state)) {
+            watch_room(state, dt);
+            update_remote_players(state, dt);
+        }
         return;
     }
     refresh_static_anchor_cache(state, profile);
@@ -488,12 +493,12 @@ static_anchor_cache build_static_anchor_cache(const game_state& state, frame_pro
         cache.pin_anchor = anchor_on_terrain(area, state.hole->pin_position, profile);
     }
     cache.trees = standing_trees(area, profile);
-    if (in_hub(state)) {
+    if (state.hub) {
         for (const hub_hole_marker& marker : state.hub->markers) {
-            cache.hub_tee_markers.push_back(anchor_on_terrain(area, marker.tee_position, profile));
             cache.hub_pin_markers.push_back(anchor_on_terrain(area, marker.pin_position, profile));
-            cache.hub_start_markers.push_back(anchor_on_terrain(area, marker.start_position, profile));
         }
+    }
+    if (in_hub(state)) {
         for (const course_world_collectible& collectible : state.hub->world.collectibles) {
             cache.collectibles.push_back(anchor_on_terrain(area, collectible.position, profile));
         }

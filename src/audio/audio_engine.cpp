@@ -3,7 +3,6 @@
 #include <SDL.h>
 #include <SDL_mixer.h>
 
-#include <algorithm>
 #include <system_error>
 
 namespace {
@@ -12,11 +11,8 @@ constexpr int mixer_channels = 2;
 constexpr int mixer_chunk_size = 1024;
 constexpr int mixer_voices = 32;
 
-int mixer_volume(const audio_manifest& manifest, const audio_sound_definition& sound) {
-    const auto it = manifest.category_volumes.find(sound.category);
-    const float category = it != manifest.category_volumes.end() ? it->second : 1.0f;
-    const float volume = std::clamp(manifest.master_volume * category * sound.volume_multiplier, 0.0f, 1.0f);
-    return static_cast<int>(volume * static_cast<float>(MIX_MAX_VOLUME) + 0.5f);
+int mixer_volume(const float gain) {
+    return static_cast<int>(gain * static_cast<float>(MIX_MAX_VOLUME) + 0.5f);
 }
 }
 
@@ -79,22 +75,22 @@ bool audio_engine::load_manifest(const std::filesystem::path& manifest_path) {
             continue;
         }
 
-        const int volume = mixer_volume(*result.manifest, sound);
+        const float mix_gain = sound_mix_gain(*result.manifest, sound);
         if (sound.type == audio_sound_type::ambience) {
             std::unique_ptr<Mix_Music, music_deleter> music(Mix_LoadMUS(path.string().c_str()));
             if (!music) {
                 warn_once("load:" + path.string(), "audio load failed: " + path.string() + " - " + Mix_GetError());
                 continue;
             }
-            music_[sound.id] = loaded_music{std::move(music), volume};
+            music_[sound.id] = loaded_music{std::move(music), mix_gain};
         } else {
             std::unique_ptr<Mix_Chunk, chunk_deleter> chunk(Mix_LoadWAV(path.string().c_str()));
             if (!chunk) {
                 warn_once("load:" + path.string(), "audio load failed: " + path.string() + " - " + Mix_GetError());
                 continue;
             }
-            Mix_VolumeChunk(chunk.get(), volume);
-            chunks_[sound.id] = std::move(chunk);
+            Mix_VolumeChunk(chunk.get(), mixer_volume(played_gain(mix_gain, sound.type, levels_)));
+            chunks_[sound.id] = loaded_chunk{std::move(chunk), mix_gain, sound.type};
         }
     }
     return true;
@@ -109,7 +105,7 @@ void audio_engine::play(const std::string& id) {
         warn_once("play:" + id, "audio sound unavailable: " + id);
         return;
     }
-    Mix_PlayChannel(-1, it->second.get(), 0);
+    Mix_PlayChannel(-1, it->second.chunk.get(), 0);
 }
 
 void audio_engine::play_loop(const std::string& id) {
@@ -125,7 +121,7 @@ void audio_engine::play_loop(const std::string& id) {
         warn_once("loop:" + id, "audio loop unavailable: " + id);
         return;
     }
-    const int channel = Mix_PlayChannel(-1, it->second.get(), -1);
+    const int channel = Mix_PlayChannel(-1, it->second.chunk.get(), -1);
     if (channel >= 0) {
         loop_channels_[id] = channel;
     }
@@ -154,9 +150,26 @@ void audio_engine::start_ambience(const std::string& id) {
         warn_once("ambience:" + id, "audio ambience unavailable: " + id);
         return;
     }
-    Mix_VolumeMusic(it->second.volume);
+    Mix_VolumeMusic(mixer_volume(played_gain(it->second.mix_gain, audio_sound_type::ambience, levels_)));
     if (Mix_PlayMusic(it->second.music.get(), -1) == 0) {
         active_ambience_ = id;
+    }
+}
+
+// SDL_mixer reads a chunk's volume while mixing, so a changed chunk volume
+// reaches the channels already playing it, loops included.
+void audio_engine::set_levels(const audio_levels& levels) {
+    levels_ = levels;
+    if (!mixer_open_) {
+        return;
+    }
+    for (const auto& entry : chunks_) {
+        const loaded_chunk& loaded = entry.second;
+        Mix_VolumeChunk(loaded.chunk.get(), mixer_volume(played_gain(loaded.mix_gain, loaded.type, levels_)));
+    }
+    const auto it = music_.find(active_ambience_);
+    if (it != music_.end()) {
+        Mix_VolumeMusic(mixer_volume(played_gain(it->second.mix_gain, audio_sound_type::ambience, levels_)));
     }
 }
 

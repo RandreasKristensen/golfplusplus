@@ -30,6 +30,9 @@ public:
     void stop_loop(const std::string& id);
     // Switches the background ambience (no-op if it is already playing).
     void start_ambience(const std::string& id);
+    // The player's volume levels, applied live: to every loaded sound,
+    // including those playing and looping now, and to the ambience.
+    void set_levels(const audio_levels& levels);
     void shutdown();
 
 private:
@@ -39,9 +42,14 @@ private:
     struct music_deleter {
         void operator()(Mix_Music* music) const;
     };
+    struct loaded_chunk {
+        std::unique_ptr<Mix_Chunk, chunk_deleter> chunk;
+        float mix_gain = 0.0f;  // sound_mix_gain
+        audio_sound_type type = audio_sound_type::sfx;
+    };
     struct loaded_music {
         std::unique_ptr<Mix_Music, music_deleter> music;
-        int volume = 0;
+        float mix_gain = 0.0f;  // sound_mix_gain
     };
 
     void unload_manifest();
@@ -49,9 +57,10 @@ private:
 
     bool initialized_ = false;
     bool mixer_open_ = false;
-    std::unordered_map<std::string, std::unique_ptr<Mix_Chunk, chunk_deleter>> chunks_;
+    std::unordered_map<std::string, loaded_chunk> chunks_;
     std::unordered_map<std::string, loaded_music> music_;
     std::unordered_map<std::string, int> loop_channels_;
     std::unordered_set<std::string> warned_;
     std::string active_ambience_;
+    audio_levels levels_;
 };

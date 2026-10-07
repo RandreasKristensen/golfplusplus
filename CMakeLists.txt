@@ -67,7 +67,9 @@ golfpp_library(golfpp-physics
     src/physics/flight_model.cpp
     src/physics/ground_contact.cpp
     src/physics/ground_mesh.cpp
+    src/physics/material_zone.cpp
     src/physics/terrain.cpp
+    src/physics/fence_collision.cpp
     src/physics/tree_collision.cpp
     src/physics/wind.cpp
 )
@@ -85,7 +87,10 @@ golfpp_library(golfpp-game
     src/game/course_world_loader.cpp
     src/game/game_content.cpp
     src/game/game_state.cpp
+    src/game/group_round.cpp
     src/game/hole_loader.cpp
+    src/game/hole_sign.cpp
+    src/game/tee_box.cpp
     src/game/json_util.cpp
     src/game/mode_dispatch.cpp
     src/game/online_play.cpp
@@ -99,6 +104,7 @@ golfpp_library(golfpp-game
     src/game/round_state.cpp
     src/game/save_data.cpp
     src/game/save_manager.cpp
+    src/game/settings.cpp
     src/game/scorecard.cpp
     src/game/shot_simulation.cpp
     src/game/string_table.cpp
@@ -120,11 +126,18 @@ golfpp_library(golfpp-render-data
     src/renderer/cart_batch.cpp
     src/renderer/control_icons.cpp
     src/renderer/course_map_fill.cpp
+    src/renderer/course_map_overlay.cpp
+    src/renderer/emote_props.cpp
     src/renderer/frustum.cpp
+    src/renderer/fence_batch.cpp
+    src/renderer/hole_sign_batch.cpp
+    src/renderer/water_batch.cpp
+    src/renderer/hole_sign_face.cpp
     src/renderer/hud_overlay.cpp
     src/renderer/menu_overlay.cpp
     src/renderer/online_overlay.cpp
     src/renderer/overlay_batch.cpp
+    src/renderer/overlay_raster.cpp
     src/renderer/pixel_font.cpp
     src/renderer/primitive_mesh.cpp
     src/renderer/render_mesh_chunks.cpp
@@ -193,6 +206,7 @@ golfpp_library(golfpp-app-logic
     src/core/online_menus.cpp
     src/core/render_frame.cpp
     src/core/render_online.cpp
+    src/core/settings_menu.cpp
     src/core/startup_flow.cpp
     src/core/startup_options.cpp
 )
@@ -215,6 +229,9 @@ add_executable(golfpp
     src/renderer/framebuffer.cpp
     src/renderer/gl_loader.cpp
     src/renderer/gl_timer.cpp
+    src/renderer/fence_renderer.cpp
+    src/renderer/hole_sign_renderer.cpp
+    src/renderer/water_renderer.cpp
     src/renderer/overlay_pass.cpp
     src/renderer/renderer.cpp
     src/renderer/shader.cpp
@@ -259,7 +276,12 @@ if (GOLFPP_BUILD_TESTS)
         tests/course_map_fill_tests.cpp
         tests/course_tests.cpp
         tests/dynamic_buffer_tests.cpp
+        tests/fence_tests.cpp
         tests/gameplay_tests.cpp
+        tests/hazard_tests.cpp
+        tests/hole_sign_tests.cpp
+        tests/tee_box_tests.cpp
+        tests/material_zone_tests.cpp
         tests/fake_stdb_bridge.cpp
         tests/mode_dispatch_tests.cpp
         tests/net_client_tests.cpp
@@ -276,6 +298,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/server_content_tests.cpp
         tests/shader_tests.cpp
         tests/shot_simulation_tests.cpp
+        tests/settings_tests.cpp
         tests/startup_flow_tests.cpp
         tests/startup_options_tests.cpp
         tests/text_assets_tests.cpp

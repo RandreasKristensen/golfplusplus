@@ -1,7 +1,13 @@
 {
   "id": "marienlyst_golfklub",
   "name": "Marienlyst Golfklub",
-  "backdrop": "backdrops/marienlyst_golfklub.bmp",
+  "backdrop": {
+    "sky": "backdrops/marienlyst_golfklub_sky.bmp",
+    "land": "backdrops/marienlyst_golfklub_land.bmp",
+    "haze_color": [0.76, 0.8, 0.82],
+    "haze_amount": 1.0,
+    "haze_distance": 800
+  },
   "holes": [
     "holes/marienlyst_golfklub_h01.json",
     "holes/marienlyst_golfklub_h02.json",

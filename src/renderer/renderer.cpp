@@ -1,10 +1,13 @@
 #include "renderer/renderer.h"
 
-#include "renderer/camera_local.h"
+#include "renderer/course_map_overlay.h"
+#include "renderer/cart_batch.h"
+#include "renderer/emote_props.h"
 #include "renderer/gl_loader.h"
 #include "renderer/hud_overlay.h"
 #include "renderer/menu_overlay.h"
 #include "renderer/primitive_mesh.h"
+#include "renderer/remote_avatar_batch.h"
 #include "renderer/scorecard_overlay.h"
 
 #include <algorithm>
@@ -48,6 +51,7 @@ constexpr float material_overlay_offset_factor = -1.0f;
 constexpr float material_overlay_offset_units = -2.0f;
 constexpr int grass_texture_unit = 1;
 constexpr const char* grass_texture_path = "textures/rough_grass.bmp";
+constexpr const char* fence_net_texture_path = "textures/fence_net.bmp";
 constexpr float min_far_plane = 160.0f;
 constexpr float far_plane_extent_scale = 2.5f;
 
@@ -111,79 +115,6 @@ void set_terrain_draw_state(const shader_program& shader,
     shader.set_float("u_alpha", alpha);
     shader.set_int("u_use_vertex_color", use_vertex_color ? 1 : 0);
 }
-
-// ---------------------------------------------------------------------------
-// Course map (needs the retained overlay buffer, so it lives here)
-// ---------------------------------------------------------------------------
-
-const glm::vec3 map_paper(0.76f, 0.72f, 0.55f);
-const glm::vec3 map_paper_shadow(0.14f, 0.12f, 0.09f);
-const glm::vec3 map_fold(0.42f, 0.35f, 0.24f);
-
-void expand_map_bounds(const glm::vec3& position, glm::vec2& min_point, glm::vec2& max_point) {
-    min_point = glm::min(min_point, glm::vec2(position.x, position.z));
-    max_point = glm::max(max_point, glm::vec2(position.x, position.z));
-}
-
-course_map_layout make_course_map_layout(const render_data& data) {
-    glm::vec2 min_point(data.player_position.x, data.player_position.z);
-    glm::vec2 max_point = min_point;
-    if (data.show_hole) {
-        expand_map_bounds(data.tee_position, min_point, max_point);
-        expand_map_bounds(data.pin_position, min_point, max_point);
-        expand_map_bounds(data.ball_position, min_point, max_point);
-    }
-    if (data.terrain_mesh != nullptr && data.terrain_mesh->bounds.valid) {
-        expand_map_bounds(data.terrain_mesh->bounds.min, min_point, max_point);
-        expand_map_bounds(data.terrain_mesh->bounds.max, min_point, max_point);
-    }
-
-    const glm::vec2 size = max_point - min_point;
-    const float span = std::max({1.0f, size.x, size.y});
-
-    course_map_layout layout;
-    layout.world_center = glm::vec3((min_point.x + max_point.x) * 0.5f, 0.0f, (min_point.y + max_point.y) * 0.5f);
-    layout.scale = std::min(layout.half_size.x, layout.half_size.y) * 1.72f / span;
-    return layout;
-}
-
-void draw_map_marker(overlay_batch& batch, const glm::vec2 position, const glm::vec3 color, const float radius) {
-    draw_overlay_quad(batch, position, glm::vec2(radius), glm::vec3(0.04f, 0.035f, 0.025f), 0.55f);
-    draw_overlay_quad(batch, position, glm::vec2(radius * 0.64f), color, 1.0f);
-}
-
-void draw_map_paper(overlay_batch& batch, const course_map_layout& layout) {
-    draw_overlay_quad(batch, layout.center + glm::vec2(0.035f, -0.035f), layout.half_size, map_paper_shadow, 0.42f);
-    draw_overlay_quad(batch, layout.center, layout.half_size, map_paper, 0.96f);
-    draw_overlay_quad(batch, layout.center, glm::vec2(layout.half_size.x, 0.006f), map_fold, 0.18f);
-    draw_overlay_quad(batch, layout.center, glm::vec2(0.006f, layout.half_size.y), map_fold, 0.18f);
-    for (const float side : {1.0f, -1.0f}) {
-        draw_overlay_quad(batch, layout.center + glm::vec2(0.0f, side * layout.half_size.y),
-                          glm::vec2(layout.half_size.x, 0.012f), map_fold, 0.46f);
-        draw_overlay_quad(batch, layout.center + glm::vec2(side * layout.half_size.x, 0.0f),
-                          glm::vec2(0.012f, layout.half_size.y), map_fold, 0.46f);
-    }
-}
-
-void draw_map_markers(overlay_batch& batch, const course_map_layout& layout, const render_data& data) {
-    if (data.trees != nullptr) {
-        for (const tree_body& tree : *data.trees) {
-            const float radius = std::clamp(tree.shape.leaf_radius * layout.scale, 0.012f, 0.028f);
-            draw_map_marker(batch, map_point(layout, tree.base), glm::vec3(0.08f, 0.24f, 0.11f), radius);
-        }
-    }
-    if (data.show_hole) {
-        draw_map_marker(batch, map_point(layout, data.tee_position), glm::vec3(0.34f, 0.21f, 0.12f), 0.023f);
-        draw_map_marker(batch, map_point(layout, data.ball_position), glm::vec3(0.94f, 0.93f, 0.82f), 0.020f);
-    }
-    draw_map_marker(batch, map_point(layout, data.player_position), glm::vec3(0.22f, 0.46f, 0.72f), 0.024f);
-    if (data.show_hole) {
-        const glm::vec2 pin = map_point(layout, data.pin_position);
-        draw_overlay_quad(batch, pin + glm::vec2(0.0f, 0.028f), glm::vec2(0.004f, 0.042f), glm::vec3(0.06f, 0.04f, 0.025f), 0.92f);
-        draw_overlay_quad(batch, pin + glm::vec2(0.022f, 0.055f), glm::vec2(0.028f, 0.018f), glm::vec3(0.76f, 0.17f, 0.12f), 0.96f);
-        draw_map_marker(batch, pin, glm::vec3(0.94f, 0.78f, 0.22f), 0.018f);
-    }
-}
 }
 
 bool renderer::init(SDL_Window* window, const std::string& asset_root) {
@@ -206,13 +137,18 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root) {
                             tree_renderer::mesh_source{cylinder_.vbo, cylinder_.vertex_count},
                             tree_renderer::mesh_source{cone_.vbo, cone_.vertex_count}) &&
         world_marker_renderer_.init(path("world_marker.vert"), path("world_marker.frag")) &&
+        hole_sign_renderer_.init(path("hole_sign.vert"), path("hole_sign.frag")) &&
+        fence_renderer_.init(path("fence.vert"), path("fence.frag"),
+                             (std::filesystem::path(asset_root) / fence_net_texture_path).string()) &&
+        water_renderer_.init(path("water.vert"), path("water.frag"), path("underwater.vert"), path("underwater.frag"),
+                             screen_vao_) &&
         overlay_pass_.init(path("overlay.vert"), path("overlay.frag")) &&
         backdrop_pass_.init(asset_root, path("backdrop.vert"), path("backdrop.frag"), screen_vao_);
     if (!ok) {
         return false;
     }
 
-    const std::optional<rgb_image> grass = load_bmp_file(std::filesystem::path(asset_root) / grass_texture_path);
+    const std::optional<rgba_image> grass = load_bmp_file(std::filesystem::path(asset_root) / grass_texture_path);
     if (!grass || !grass_texture_.upload(*grass, texture_sampling::tiled_detail)) {
         SDL_Log("%s is missing or not an uncompressed 24/32-bit BMP", grass_texture_path);
         return false;
@@ -228,6 +164,9 @@ void renderer::shutdown() {
     gpu_timers_.shutdown();
     tree_renderer_.shutdown();
     world_marker_renderer_.shutdown();
+    hole_sign_renderer_.shutdown();
+    fence_renderer_.shutdown();
+    water_renderer_.shutdown();
     overlay_pass_.shutdown();
     backdrop_pass_.shutdown();
     grass_texture_.shutdown();
@@ -282,15 +221,16 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
     glClearColor(sky_color.r, sky_color.g, sky_color.b, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    const glm::mat4 proj = glm::perspective(glm::radians(std::max(1.0f, data.camera_fov_degrees)),
-                                            static_cast<float>(target_width_) / static_cast<float>(target_height_),
-                                            0.1f,
-                                            std::max(min_far_plane, data.area_extent * far_plane_extent_scale));
+    const glm::mat4 proj = scene_projection(data.camera_fov_degrees, data.area_extent);
     const glm::mat4 view = glm::lookAt(data.camera_position, data.camera_target, glm::vec3(0.0f, 1.0f, 0.0f));
 
     {
         const profile_scope scene_timer(profile, profile_stage::render_scene);
         render_scene(view, proj, data, profile);
+        render_viewmodel(view, data, profile);
+        if (data.camera_underwater) {
+            water_renderer_.draw_underwater(profile);
+        }
     }
     {
         const profile_scope overlay_timer(profile, profile_stage::render_overlay);
@@ -304,6 +244,35 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
     }
 
     gpu_timers_.collect(profile);
+}
+
+void renderer::render_loading_screen(const text_assets& text) {
+    if (window_ == nullptr) {
+        return;
+    }
+    int screen_width = 0;
+    int screen_height = 0;
+    SDL_GL_GetDrawableSize(window_, &screen_width, &screen_height);
+    screen_width = std::max(1, screen_width);
+    screen_height = std::max(1, screen_height);
+    if (!ensure_framebuffer_size(screen_width, screen_height)) {
+        return;
+    }
+
+    scene_fbo_.bind();
+    glViewport(0, 0, target_width_, target_height_);
+    glClearColor(crt_border_color.r, crt_border_color.g, crt_border_color.b, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    draw_loading_screen(overlay_pass_.begin(nullptr, overlay_grid{target_width_, target_height_}), text);
+    overlay_pass_.flush();
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+
+    framebuffer::bind_default();
+    render_crt(screen_width, screen_height);
 }
 
 bool renderer::init_geometry() {
@@ -372,6 +341,12 @@ bool renderer::init_geometry() {
     return true;
 }
 
+glm::mat4 renderer::scene_projection(const float fov_degrees, const float area_extent) const {
+    return glm::perspective(glm::radians(std::max(1.0f, fov_degrees)),
+                            static_cast<float>(target_width_) / static_cast<float>(target_height_), 0.1f,
+                            std::max(min_far_plane, area_extent * far_plane_extent_scale));
+}
+
 bool renderer::ensure_framebuffer_size(const int screen_width, const int screen_height) {
     const float aspect = static_cast<float>(std::max(1, screen_width)) / static_cast<float>(std::max(1, screen_height));
     const float reference_pixels = static_cast<float>(reference_low_res_width * reference_low_res_height);
@@ -426,9 +401,10 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     const glm::mat4 view_proj = proj * view;
 
     gpu_timers_.begin(gpu_profile_stage::terrain);
-    backdrop_pass_.draw(data.backdrop_image != nullptr ? *data.backdrop_image : std::string(), view, proj);
+    const scene_haze haze = backdrop_pass_.draw(data.backdrop, data.camera_position, data.area_extent, view, proj);
     terrain_shader_.use();
     terrain_shader_.set_vec3("u_light_dir", light_direction);
+    set_scene_haze_uniforms(terrain_shader_, haze);
     grass_texture_.bind(grass_texture_unit);
 
     // Backdrop ground under the whole area so the horizon is never empty.
@@ -481,16 +457,16 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
 
     gpu_timers_.begin(gpu_profile_stage::trees);
     cull_stats_.trees_visible = tree_renderer_.draw(data.trees != nullptr ? *data.trees : std::vector<tree_body>{},
-                                                    data.trees_revision, view, proj, frustum, profile);
+                                                    data.trees_revision, view, proj, haze, frustum, profile);
+    hole_sign_renderer_.draw(data.hole_signs, view_proj, light_direction, haze, profile);
+    fence_renderer_.draw_posts(data.fences, view_proj, light_direction, haze, profile);
     gpu_timers_.end();
 
     world_marker_scene markers;
     markers.show_hole = data.show_hole;
-    markers.tee_position = data.tee_position;
     markers.pin_position = data.pin_position;
-    markers.start_markers = &data.start_markers;
-    markers.tee_markers = data.hub_tee_markers;
-    markers.pin_markers = data.hub_pin_markers;
+    markers.tee_boxes = data.tee_boxes;
+    markers.pin_markers = &data.pin_markers;
     markers.collectible_markers = &data.collectible_markers;
     markers.cup_radius_meters = data.cup_radius_meters;
     markers.pin_visual_height_meters = data.pin_visual_height_meters;
@@ -501,17 +477,21 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     markers.ball_visual_radius_meters = data.ball_visual_radius_meters;
     markers.aim_angle = data.aim_angle;
     markers.swing_power = data.swing_power;
-    markers.cart_active = data.cart_active;
-    markers.camera_position = data.camera_position;
-    markers.camera_target = data.camera_target;
     markers.remote_avatars = &data.remote_avatars;
     markers.remote_balls = &data.remote_balls;
     markers.avatar_eye_height = data.avatar_eye_height;
     build_world_marker_batch(world_marker_batch_, markers);
     world_marker_renderer_.draw(world_marker_batch_, view_proj, profile);
 
-    // Emote props blend (smoke puffs), so they go after the opaque markers.
-    render_emotes(view, proj, data);
+    // Other players' emote props blend (smoke puffs), so they go after the
+    // opaque markers.
+    emote_props_.clear();
+    for (const render_remote_avatar& avatar : data.remote_avatars) {
+        if (const std::optional<emote_holder> holder = remote_emote_holder(avatar, data.avatar_eye_height)) {
+            append_emote_props(emote_props_, *holder);
+        }
+    }
+    draw_emote_props(view_proj);
     render_flight_path(view, proj, data, profile);
 
     if (data.show_ball) {
@@ -526,55 +506,60 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
         draw_arrays(ball_shader_, GL_TRIANGLES, 0, ball_.vertex_count);
         glBindVertexArray(0);
     }
+    // Water and nets blend over everything solid, the ball included.
+    water_renderer_.draw_surfaces(data.water, view_proj, haze, profile);
+    fence_renderer_.draw_nets(data.fences, view_proj, light_direction, haze, profile);
 }
 
-void renderer::render_emotes(const glm::mat4& view, const glm::mat4& proj, const render_data& data) {
-    if (!data.smoke_emote_active && !data.beer_emote_active) {
+// What is pinned to the camera, my cart and my emote props, drawn over the
+// scene at the field of view it was posed for (render_data.h).
+void renderer::render_viewmodel(const glm::mat4& view, const render_data& data, frame_profile* profile) {
+    viewmodel_batch_.clear();
+    append_cart_model(viewmodel_batch_, data.cart_active, data.camera_position, data.camera_target);
+    emote_props_.clear();
+    if (data.smoke_emote_active || data.beer_emote_active) {
+        emote_holder mine;
+        mine.eye = data.camera_position;
+        mine.target = data.camera_target;
+        mine.smoke_elapsed = data.smoke_emote_active ? std::optional<float>(data.smoke_emote_elapsed) : std::nullopt;
+        mine.drink_elapsed = data.beer_emote_active ? std::optional<float>(data.beer_emote_elapsed) : std::nullopt;
+        append_emote_props(emote_props_, mine);
+    }
+    if (viewmodel_batch_.empty() && emote_props_.empty()) {
         return;
     }
-    const glm::mat4 view_proj = proj * view;
+    // Never cut into by the world it sits in.
+    glClear(GL_DEPTH_BUFFER_BIT);
+    const glm::mat4 view_proj = scene_projection(data.viewmodel_fov_degrees, data.area_extent) * view;
+    world_marker_renderer_.draw(viewmodel_batch_, view_proj, profile);
+    draw_emote_props(view_proj);
+}
+
+// The emote props collected this frame: the opaque pieces, then the smoke
+// blended over them.
+void renderer::draw_emote_props(const glm::mat4& view_proj) {
+    if (emote_props_.empty()) {
+        return;
+    }
     terrain_shader_.use();
-    const auto draw = [&](const primitive_buffers& mesh, const glm::mat4& model, const glm::vec3& color, const float alpha) {
-        set_terrain_draw_state(terrain_shader_, model, view_proj, color, alpha, false);
-        glBindVertexArray(mesh.vao);
-        draw_arrays(terrain_shader_, GL_TRIANGLES, 0, mesh.vertex_count);
-    };
-    const glm::vec3& eye = data.camera_position;
-    const glm::vec3& target = data.camera_target;
-
-    if (data.smoke_emote_active) {
-        const float t = std::max(0.0f, data.smoke_emote_elapsed);
-        const float ember = 0.55f + 0.45f * std::sin(t * 24.0f);
-        const glm::vec3 cigarette_base(0.08f, -0.42f, 0.78f);
-        const glm::vec3 cigarette_tip(0.30f, -0.47f, 1.12f);
-        draw(cylinder_, local_segment_model(eye, target, cigarette_base, cigarette_tip, 0.026f), glm::vec3(0.88f, 0.82f, 0.62f), 1.0f);
-        draw(ball_, local_sphere_model(eye, target, cigarette_tip, 0.046f), glm::vec3(0.95f, 0.20f + ember * 0.20f, 0.10f), 1.0f);
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        for (int i = 0; i < 5; ++i) {
-            const float f = static_cast<float>(i);
-            const float rise = std::fmod(t * 0.55f + f * 0.18f, 0.90f);
-            const float sway = std::sin(t * 4.0f + f * 1.7f) * 0.055f;
-            const glm::vec3 puff = cigarette_tip + glm::vec3(sway + f * 0.012f, 0.10f + rise, -rise * 0.10f);
-            draw(ball_, local_sphere_model(eye, target, puff, 0.065f + rise * 0.075f), glm::vec3(0.78f, 0.80f, 0.78f),
-                 std::clamp(0.48f - rise * 0.42f, 0.04f, 0.42f));
+    const auto draw = [&](const bool blended) {
+        for (const emote_prop& prop : emote_props_) {
+            if ((prop.alpha < 1.0f) != blended) {
+                continue;
+            }
+            const primitive_buffers& mesh = prop.mesh == emote_prop_mesh::cylinder ? cylinder_
+                                            : prop.mesh == emote_prop_mesh::sphere ? ball_
+                                                                                   : panel_;
+            set_terrain_draw_state(terrain_shader_, prop.model, view_proj, prop.color, prop.alpha, false);
+            glBindVertexArray(mesh.vao);
+            draw_arrays(terrain_shader_, GL_TRIANGLES, 0, mesh.vertex_count);
         }
-        glDisable(GL_BLEND);
-    }
-
-    if (data.beer_emote_active) {
-        const float bob = std::sin(data.beer_emote_elapsed * 9.0f) * 0.035f;
-        const glm::vec3 can(-0.24f, -0.50f + bob, 0.82f);
-        draw(cylinder_,
-             local_cylinder_model(eye, target, can, glm::vec3(glm::radians(-8.0f), 0.0f, glm::radians(10.0f)), glm::vec3(0.145f, 0.48f, 0.145f)),
-             glm::vec3(0.76f, 0.76f, 0.70f), 1.0f);
-        draw(panel_, local_panel_model(eye, target, can + glm::vec3(0.0f, 0.0f, -0.155f), glm::vec3(0.0f), glm::vec2(0.118f, 0.108f)),
-             glm::vec3(0.78f, 0.18f, 0.12f), 1.0f);
-        draw(panel_,
-             local_panel_model(eye, target, can + glm::vec3(0.0f, 0.25f, -0.03f), glm::vec3(glm::radians(90.0f), 0.0f, 0.0f), glm::vec2(0.052f, 0.024f)),
-             glm::vec3(0.18f, 0.18f, 0.16f), 1.0f);
-    }
+    };
+    draw(false);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    draw(true);
+    glDisable(GL_BLEND);
     glBindVertexArray(0);
 }
 
@@ -615,13 +600,13 @@ void renderer::render_flight_path(const glm::mat4& view, const glm::mat4& proj, 
     glBindVertexArray(0);
 }
 
-void renderer::render_course_map(const render_data& data) {
-    const course_map_layout layout = make_course_map_layout(data);
-    draw_map_paper(overlay_pass_.batch(), layout);
+void renderer::render_course_map(const render_data& data, const text_assets& text) {
+    const course_map_layout layout = make_course_map_layout(data, overlay_grid{target_width_, target_height_});
+    draw_course_map_paper(overlay_pass_.batch(), layout);
     update_course_map_fill_cache(course_map_fill_cache_, layout, data.terrain_mesh);
-    // The fill comes from its own retained buffer, between the paper and the markers.
+    // The fill comes from its own retained buffer, between the paper and the marks.
     overlay_pass_.draw_retained(course_map_fill_cache_.fill.vertices, course_map_fill_cache_.revision);
-    draw_map_markers(overlay_pass_.batch(), layout, data);
+    draw_course_map_marks(overlay_pass_.batch(), text, layout, data);
 }
 
 // Flushed as its own draw so its GL cost goes into the debug-overlay counters
@@ -644,10 +629,10 @@ void renderer::render_overlay(const glm::mat4& view_proj, const render_data& dat
     // painter's-order blending holds and the overlay is normally one draw.
     overlay_batch& batch = overlay_pass_.begin(profile, overlay_grid{target_width_, target_height_});
     if (data.show_course_results) {
-        draw_course_results(batch, text, data.scorecard);
+        draw_course_results(batch, text, data.scorecard, data.group_scorecard);
     } else {
         if (data.show_course_map) {
-            render_course_map(data);
+            render_course_map(data, text);
         }
         draw_hud(overlay_pass_.batch(), text, data, view_proj);
         draw_startup_menu(overlay_pass_.batch(), text, data.startup_menu);

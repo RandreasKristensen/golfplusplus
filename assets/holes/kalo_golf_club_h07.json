@@ -67,20 +67,41 @@
     {
       "type": "green",
       "center": [
-        -144.08,
+        -140.21,
         0,
-        96.7
+        90.11
       ],
-      "radius": 10.92
+      "radii": [
+        12.82,
+        9.3
+      ],
+      "rotation_degrees": -6.6
     },
     {
       "type": "bunker",
       "center": [
-        -143.49,
+        -148.52,
         0,
-        103.89
+        103.95
       ],
-      "radius": 5.95
+      "radii": [
+        5.22,
+        3.57
+      ],
+      "rotation_degrees": 19.6
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -138.9,
+        0,
+        105.16
+      ],
+      "radii": [
+        5.89,
+        2.85
+      ],
+      "rotation_degrees": -13.3
     }
   ],
   "trees": [
@@ -152,9 +173,9 @@
     },
     {
       "position": [
-        -180.1,
+        -165.02,
         0.0,
-        143.41
+        118.45
       ],
       "trunk_radius": 0.65,
       "trunk_height": 5.0,
@@ -174,6 +195,22 @@
     ],
     "centerline": "hole_way",
     "elevation": "terrarium",
-    "tee_elevation": 81.86
+    "tee_elevation": 81.86,
+    "hole_way": "way/1418926334",
+    "zone_fit": [
+      {
+        "osm": "way/1418926333",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.99
+      },
+      {
+        "osm": "way/630415840",
+        "type": "bunker",
+        "pieces": 2,
+        "iou": 0.88
+      }
+    ],
+    "made_green": false
   }
 }

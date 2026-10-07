@@ -1,5 +1,7 @@
 #include "renderer/course_map_fill.h"
 
+#include "renderer/terrain_palette.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -20,6 +22,14 @@ void add_triangle_scan_intersection(const glm::vec2 a,
     intersections[static_cast<std::size_t>(intersection_count)] = a.x + (b.x - a.x) * t;
     ++intersection_count;
 }
+}
+
+glm::vec3 course_map_ink(const glm::vec3 ground_color) {
+    return ground_color * 0.72f + glm::vec3(0.10f, 0.08f, 0.04f);
+}
+
+glm::vec3 course_map_material_ink(const terrain_material material) {
+    return course_map_ink(terrain_material_color(material));
 }
 
 bool course_map_layouts_match(const course_map_layout& a, const course_map_layout& b) {
@@ -53,13 +63,29 @@ void append_map_fill_triangle(overlay_batch& batch,
     }
 
     const float area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-    if (std::abs(area) < 0.000001f) {
+    // Only a degenerate triangle covers nothing: the ground's fine cells
+    // around bunkers and ponds are tiny on the map but must still print.
+    if (area == 0.0f) {
         return;
     }
 
-    const float strip_height = std::max(0.0045f, std::min(0.011f, layout.scale * 0.72f));
+    const float strip_height = std::max(0.0045f, std::min(0.011f, layout.scale.y * 0.72f));
     const float y_start = std::max(min_y, clip_min.y);
     const float y_end = std::min(max_y, clip_max.y);
+    const float first_center = clip_min.y + (std::ceil((y_start - clip_min.y) / strip_height - 0.5f) + 0.5f) * strip_height;
+    if (first_center > y_end) {
+        // No strip centre crosses it: one strip over its extent.
+        const float x0 = std::max(min_x, clip_min.x);
+        const float x1 = std::min(max_x, clip_max.x);
+        if (x1 > x0) {
+            draw_overlay_quad(batch,
+                              glm::vec2((x0 + x1) * 0.5f, (y_start + y_end) * 0.5f),
+                              glm::vec2((x1 - x0) * 0.5f, std::max((y_end - y_start) * 0.5f, strip_height * 0.28f)),
+                              color,
+                              0.82f);
+        }
+        return;
+    }
     const int first_strip = static_cast<int>(std::floor((y_start - clip_min.y) / strip_height));
     const int last_strip = static_cast<int>(std::ceil((y_end - clip_min.y) / strip_height));
 
@@ -114,13 +140,12 @@ void append_course_map_fill(overlay_batch& batch,
         const render_terrain_vertex& vb = mesh->vertices[ib];
         const render_terrain_vertex& vc = mesh->vertices[ic];
         const glm::vec3 average_color = (va.color + vb.color + vc.color) / 3.0f;
-        const glm::vec3 ink = average_color * 0.72f + glm::vec3(0.10f, 0.08f, 0.04f);
         append_map_fill_triangle(batch,
                                  layout,
                                  map_point(layout, va.position),
                                  map_point(layout, vb.position),
                                  map_point(layout, vc.position),
-                                 ink);
+                                 course_map_ink(average_color));
     }
 }
 

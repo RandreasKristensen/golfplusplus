@@ -23,11 +23,12 @@
     },
     {
       "name": "test",
-      "displayName": "Test",
+      "displayName": "Test (optimized, with asserts and debug info)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/test",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "GOLFPP_BUILD_TESTS": "ON",
         "GOLFPP_NET": "OFF"

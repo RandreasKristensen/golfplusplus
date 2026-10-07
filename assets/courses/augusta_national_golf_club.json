@@ -1,7 +1,13 @@
 {
   "id": "augusta_national_golf_club",
   "name": "Augusta National Golf Club",
-  "backdrop": "backdrops/augusta_national_golf_club.bmp",
+  "backdrop": {
+    "sky": "backdrops/augusta_national_golf_club_sky.bmp",
+    "land": "backdrops/augusta_national_golf_club_land.bmp",
+    "haze_color": [0.82, 0.83, 0.8],
+    "haze_amount": 1.0,
+    "haze_distance": 900
+  },
   "holes": [
     "holes/augusta_national_golf_club_h01.json",
     "holes/augusta_national_golf_club_h02.json",

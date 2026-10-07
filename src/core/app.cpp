@@ -1,5 +1,6 @@
 #include "core/app.h"
 
+#include "audio/audio_manifest.h"
 #include "audio/sound_ids.h"
 #include "core/event_loop.h"
 #include "core/key_bindings.h"
@@ -7,9 +8,11 @@
 #include "game/asset_resolver.h"
 #include "game/content_files.h"
 #include "game/course_session.h"
+#include "game/group_round.h"
 #include "game/mode_dispatch.h"
 #include "game/net_types.h"
 #include "game/save_manager.h"
+#include "game/settings.h"
 #include "game/text_ids.h"
 #include "renderer/terrain_render_mesh.h"
 
@@ -119,6 +122,9 @@ bool app::init(const startup_options& options) {
         return false;
     }
     text_ = std::move(*text);
+    // The title card stays up while the rest loads, instead of a black window.
+    renderer_.render_loading_screen(text_);
+    window_.swap();
 
     game_content_load_result content = load_game_content(asset_root);
     if (!content.content) {
@@ -149,7 +155,11 @@ bool app::init(const startup_options& options) {
 #endif
 
     const std::string pref_path = sdl_path(SDL_GetPrefPath("golfplusplus", "golf++"));
-    save_path_ = save_file_path(pref_path.empty() ? std::filesystem::path(asset_root) / "saves" : std::filesystem::path(pref_path));
+    const std::filesystem::path save_root =
+        pref_path.empty() ? std::filesystem::path(asset_root) / "saves" : std::filesystem::path(pref_path);
+    save_path_ = save_file_path(save_root);
+    settings_path_ = settings_file_path(save_root);
+    menu_.settings = load_settings(settings_path_, content_.settings);
     const save_load_result save = load_save(save_path_);
     if (save.existing_was_unreadable) {
         if (save.unreadable_backup.empty()) {
@@ -180,6 +190,7 @@ bool app::init(const startup_options& options) {
     set_text_input_enabled(false);
     audio_.init();
     audio_.load_manifest(std::filesystem::path(asset_root) / "audio" / "sounds.json");
+    apply_settings(false);
     audio_.start_ambience(menu_.flow == startup_flow::playing ? sound_ambience_course_day : sound_ambience_menu_vcr);
     running_ = true;
     return true;
@@ -207,7 +218,7 @@ void app::run() {
 
         if (menu_.flow != startup_flow::playing) {
             update_menu(profile);
-        } else if (round_finished(game_.round)) {
+        } else if (round_results_shown(game_)) {
             // Online the server has started the next round already; offline
             // the round ends at the menu.
             const bool next = input_.enter.pressed || input_.space.pressed;
@@ -279,11 +290,21 @@ void app::save_progress() {
     }
 }
 
+void app::apply_settings(const bool write) {
+    audio_.set_levels(audio_levels_from_settings(menu_.settings, content_.settings));
+    if (write && !write_settings(settings_path_, menu_.settings)) {
+        SDL_Log("Failed to write settings %s", settings_path_.string().c_str());
+    }
+}
+
 void app::update_menu(frame_profile* profile) {
     const online_menu_status online = online_status();
     const startup_menu_result result =
         update_startup_menu(menu_, input_, mouse_click_position(input_, window_.sdl_window()), catalog_, online);
     play_ui_sounds(audio_, result.sounds);
+    if (result.settings_changed) {
+        apply_settings(true);
+    }
     carry_out(result.requests);
     if (result.action == startup_action::quit) {
         running_ = false;
@@ -357,8 +378,11 @@ void app::update_confirm_menu(frame_profile* profile) {
         open_confirm_menu(menu_);
     } else {
         const confirm_menu_result result =
-            ::update_confirm_menu(menu_, input_, mouse_click_position(input_, window_.sdl_window()));
+            ::update_confirm_menu(menu_, input_, mouse_click_position(input_, window_.sdl_window()), content_.settings);
         play_ui_sounds(audio_, result.sounds);
+        if (result.settings_changed) {
+            apply_settings(true);
+        }
         if (result.leave_round) {
             return_to_menu();
         }
@@ -369,7 +393,7 @@ void app::update_confirm_menu(frame_profile* profile) {
     if (in_menu) {
         data.startup_menu = make_startup_menu_render_data(menu_, catalog_, text_);
     } else if (menu_.confirm_active) {
-        data.startup_menu = make_confirm_menu_render_data(menu_, text_);
+        data.startup_menu = make_confirm_menu_render_data(menu_, text_, content_.settings);
     }
     present_frame(data, profile);
 }
@@ -412,6 +436,9 @@ void app::refresh_render_meshes() {
     const std::uint64_t revision = game_.terrain_render_revision;
     terrain_render_mesh_ = make_terrain_render_mesh({&game_.area.ground}, revision);
     material_overlay_render_mesh_ = make_terrain_render_mesh({&game_.area.material_overlay}, revision);
+    refresh_render_hole_signs(hole_signs_, game_, text_, revision);
+    fences_ = build_render_fences(game_.area, revision);
+    water_ = build_render_water(game_.area, revision);
     render_meshes_revision_ = revision;
 }
 
@@ -423,8 +450,12 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
     }
 
     const profile_scope timer(profile, profile_stage::make_render_data);
+    // load_game_content refuses settings without the field of view.
+    const float fov_degrees =
+        static_cast<float>(setting_value(menu_.settings, *find_setting(content_.settings, setting_field_of_view)));
     render_data data = make_render_data(game_, input_, text_, content_.skills,
-                                        render_meshes{&terrain_render_mesh_, &material_overlay_render_mesh_}, profile);
+                                        render_meshes{&terrain_render_mesh_, &material_overlay_render_mesh_, &hole_signs_, &fences_, &water_},
+                                        fov_degrees, profile);
 
     const camera_view desired{data.camera_position, data.camera_target, data.camera_fov_degrees};
     const camera_rig rig = active_camera_rig(game_);
@@ -434,6 +465,7 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
     data.camera_position = camera_transition_.shown.position;
     data.camera_target = camera_transition_.shown.target;
     data.camera_fov_degrees = camera_transition_.shown.fov_degrees;
+    data.camera_underwater = under_water(game_.area, data.camera_position);
     return data;
 }
 

@@ -42,6 +42,14 @@ game_content_load_result load_game_content(const std::string& asset_root) {
     }
     content.rewards = *rewards;
 
+    const std::optional<std::string> settings_text = read_text_file(root / setting_definitions_path);
+    std::optional<std::vector<setting_definition>> settings =
+        settings_text ? parse_setting_definitions_from_text(*settings_text) : std::nullopt;
+    if (!settings || !has_applied_settings(*settings)) {
+        return fail(std::string("cannot load ") + setting_definitions_path);
+    }
+    content.settings = std::move(*settings);
+
     content.clubs = load_clubs_from_directory((root / "clubs").string());
     if (content.clubs.empty()) {
         return fail("no valid clubs in clubs/");

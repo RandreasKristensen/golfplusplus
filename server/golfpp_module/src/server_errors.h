@@ -17,6 +17,7 @@ inline constexpr const char* error_has_name = "has_name";
 inline constexpr const char* error_invalid_name = "invalid_name";
 inline constexpr const char* error_name_taken = "name_taken";
 inline constexpr const char* error_too_many_codes = "too_many_codes";
+inline constexpr const char* error_guest_cannot_link = "guest_cannot_link";
 
 // Rooms and groups
 inline constexpr const char* error_unknown_course = "unknown_course";
@@ -34,6 +35,8 @@ inline constexpr const char* error_not_in_hub = "not_in_hub";
 inline constexpr const char* error_not_on_hole = "not_on_hole";
 inline constexpr const char* error_unknown_hole = "unknown_hole";
 inline constexpr const char* error_hole_played = "hole_played";
+inline constexpr const char* error_tee_in_use = "tee_in_use";
+inline constexpr const char* error_ball_in_cup = "ball_in_cup";
 inline constexpr const char* error_too_far = "too_far";
 inline constexpr const char* error_wrong_stroke = "wrong_stroke";
 inline constexpr const char* error_unknown_club = "unknown_club";

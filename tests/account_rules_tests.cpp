@@ -176,3 +176,9 @@ TEST_CASE("other tokens are anonymous, allowed only by config or for the owner")
     CHECK(check_login(local, config, false).method == login_method::anonymous);
     CHECK(check_login(login_claims{}, config, false).method == login_method::anonymous);
 }
+
+TEST_CASE("only anonymous logins are guests") {
+    CHECK(is_guest_login(login_method_name(login_method::anonymous)));
+    CHECK(!is_guest_login(login_method_name(login_method::browser)));
+    CHECK(!is_guest_login(login_method_name(login_method::steam)));
+}

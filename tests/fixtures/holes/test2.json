@@ -52,7 +52,11 @@
         0,
         79.3
       ],
-      "radius": 8.65
+      "radii": [
+        8.65,
+        8.65
+      ],
+      "rotation_degrees": 0
     },
     {
       "type": "bunker",
@@ -61,22 +65,24 @@
         0,
         67.8
       ],
-      "radius": 3.5
+      "radii": [
+        3.5,
+        3.5
+      ],
+      "rotation_degrees": 0
     },
     {
       "type": "water",
-      "bounds": [
-        [
-          -1.14,
-          0,
-          14.69
-        ],
-        [
-          10.86,
-          0,
-          24.69
-        ]
-      ]
+      "center": [
+        4.86,
+        0.0,
+        19.69
+      ],
+      "radii": [
+        6.0,
+        5.0
+      ],
+      "rotation_degrees": 0
     },
     {
       "type": "bunker",
@@ -85,7 +91,11 @@
         0,
         92.52
       ],
-      "radius": 4.6
+      "radii": [
+        4.6,
+        4.6
+      ],
+      "rotation_degrees": 0
     }
   ],
   "trees": [

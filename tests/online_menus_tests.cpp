@@ -183,6 +183,20 @@ TEST_CASE("name entry claims the typed name, shows refusals inline and moves on 
     CHECK(!wants_text_input(state));
 }
 
+TEST_CASE("a guest's name entry has no way to link an account") {
+    startup_flow_state state = at_name_entry();
+    online_menu_status guest = signed_in_as("");
+    guest.guest = true;
+    CHECK(render(state, guest).tiles.size() == 1U);
+
+    input_state down_and_enter = enter();
+    down_and_enter.down.pressed = true;
+    update(state, typed("ANNA"), guest);
+    const startup_menu_result result = update(state, down_and_enter, guest);
+    CHECK(state.flow == startup_flow::name_entry);
+    CHECK(requested(result, online_request_type::claim_name, "ANNA"));
+}
+
 TEST_CASE("a link code from another login switches to that account") {
     startup_flow_state state = at_name_entry();
     const online_menu_status nameless = signed_in_as("");

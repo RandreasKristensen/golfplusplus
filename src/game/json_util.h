@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <nlohmann/json.hpp>
 
@@ -26,6 +27,8 @@ std::optional<bool> json_bool(const json& object, const char* key);
 const json* json_object(const json& object, const char* key);
 const json* json_array(const json& object, const char* key);
 
+// [x, y] of numbers.
+std::optional<glm::vec2> json_vec2(const json& object, const char* key);
 // [x, y, z] of numbers.
 std::optional<glm::vec3> json_vec3(const json& value);
 std::optional<std::vector<glm::vec3>> json_vec3_array(const json& value);

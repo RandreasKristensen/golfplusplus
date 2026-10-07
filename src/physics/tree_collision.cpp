@@ -1,8 +1,10 @@
 #include "physics/tree_collision.h"
 
+#include "physics/collision.h"
 #include "physics/vector_math.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace {
 // Leaves push the ball slightly upwards so it drops out of the canopy.
@@ -12,32 +14,6 @@ glm::vec3 horizontal_push_direction(const ball_state& ball, const glm::vec3& bas
     const glm::vec3 away = horizontal(ball.position - base);
     const glm::vec3 backwards = horizontal(-ball.velocity);
     return safe_normalize(away, safe_normalize(backwards, glm::vec3(1.0f, 0.0f, 0.0f)));
-}
-
-// Tree hits are single impacts, so friction is a one-off fraction of the
-// tangential speed (unlike terrain contact, which lasts several steps).
-ball_state resolve_contact(const ball_state& in,
-                           const glm::vec3& normal,
-                           const float penetration,
-                           const float restitution,
-                           const float friction) {
-    if (penetration <= 0.0f) {
-        return in;
-    }
-
-    ball_state out = in;
-    const glm::vec3 n = safe_normalize(normal, glm::vec3(1.0f, 0.0f, 0.0f));
-    out.position += n * penetration;
-
-    const float normal_speed = glm::dot(out.velocity, n);
-    if (normal_speed < 0.0f) {
-        out.velocity -= (1.0f + clamp01(restitution)) * normal_speed * n;
-    }
-
-    const glm::vec3 normal_velocity = n * glm::dot(out.velocity, n);
-    const glm::vec3 tangent_velocity = out.velocity - normal_velocity;
-    out.velocity = normal_velocity + tangent_velocity * (1.0f - clamp01(friction));
-    return out;
 }
 
 ball_state resolve_trunk_collision(const ball_state& in,
@@ -108,6 +84,67 @@ ball_state resolve_tree_collisions(const ball_state& in,
     ball_state out = in;
     for (const tree_body& tree : trees) {
         out = resolve_tree_collision(out, tree, restitution, friction);
+    }
+    return out;
+}
+
+tree_grid build_tree_grid(const std::vector<tree_body>& trees, const float cell_size) {
+    tree_grid grid;
+    if (trees.empty() || cell_size <= 0.0f) {
+        return grid;
+    }
+    glm::vec2 low(trees.front().base.x, trees.front().base.z);
+    glm::vec2 high = low;
+    for (const tree_body& tree : trees) {
+        low = glm::min(low, glm::vec2(tree.base.x, tree.base.z));
+        high = glm::max(high, glm::vec2(tree.base.x, tree.base.z));
+        grid.reach = std::max({grid.reach, tree.shape.trunk_radius, tree.shape.leaf_radius});
+    }
+    grid.cell_size = cell_size;
+    grid.origin = low;
+    grid.columns = static_cast<int>((high.x - low.x) / cell_size) + 1;
+    grid.rows = static_cast<int>((high.y - low.y) / cell_size) + 1;
+    grid.cells.resize(static_cast<std::size_t>(grid.columns) * static_cast<std::size_t>(grid.rows));
+    for (std::size_t i = 0; i < trees.size(); ++i) {
+        const int column = static_cast<int>((trees[i].base.x - low.x) / cell_size);
+        const int row = static_cast<int>((trees[i].base.z - low.y) / cell_size);
+        grid.cells[static_cast<std::size_t>(row) * static_cast<std::size_t>(grid.columns) +
+                   static_cast<std::size_t>(column)].push_back(static_cast<std::uint32_t>(i));
+    }
+    return grid;
+}
+
+ball_state resolve_tree_collisions(const ball_state& in,
+                                   const std::vector<tree_body>& trees,
+                                   const tree_grid& grid,
+                                   const float restitution,
+                                   const float friction) {
+    if (grid.cells.empty()) {
+        return in;
+    }
+    // Twice the reach: a tree that pushes the ball moves it at most its own
+    // reach, so a tree beyond that could not be touched after the push either.
+    const float search = 2.0f * (grid.reach + std::max(0.0f, in.radius));
+    const auto cell_of = [&grid](const float offset, const int count) {
+        return std::clamp(static_cast<int>(std::floor(offset / grid.cell_size)), -1, count);
+    };
+    const int first_column = cell_of(in.position.x - search - grid.origin.x, grid.columns);
+    const int last_column = cell_of(in.position.x + search - grid.origin.x, grid.columns);
+    const int first_row = cell_of(in.position.z - search - grid.origin.y, grid.rows);
+    const int last_row = cell_of(in.position.z + search - grid.origin.y, grid.rows);
+    std::vector<std::uint32_t> near;
+    for (int row = std::max(first_row, 0); row <= std::min(last_row, grid.rows - 1); ++row) {
+        for (int column = std::max(first_column, 0); column <= std::min(last_column, grid.columns - 1); ++column) {
+            const std::vector<std::uint32_t>& cell =
+                grid.cells[static_cast<std::size_t>(row) * static_cast<std::size_t>(grid.columns) +
+                           static_cast<std::size_t>(column)];
+            near.insert(near.end(), cell.begin(), cell.end());
+        }
+    }
+    std::sort(near.begin(), near.end());
+    ball_state out = in;
+    for (const std::uint32_t index : near) {
+        out = resolve_tree_collision(out, trees[index], restitution, friction);
     }
     return out;
 }

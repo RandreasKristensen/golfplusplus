@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <unordered_map>
+#include <utility>
 
 #include <glm/common.hpp>
 
@@ -98,13 +100,18 @@ float blended_height(const std::vector<terrain_mesh>& holes, const std::vector<h
 }
 
 // Two triangles per cell of a rows x columns vertex grid, tile by tile.
-std::vector<std::uint32_t> tiled_grid_indices(const int rows, const int columns) {
+// Two triangles per cell, tile by tile, leaving out the cells `skip` marks
+// (row-major over the cells).
+std::vector<std::uint32_t> tiled_grid_indices(const int rows, const int columns, const std::vector<bool>& skip) {
     std::vector<std::uint32_t> indices;
     indices.reserve(static_cast<std::size_t>((rows - 1) * (columns - 1) * 6));
     for (int tile_row = 0; tile_row < rows - 1; tile_row += ground_tile_cells) {
         for (int tile_column = 0; tile_column < columns - 1; tile_column += ground_tile_cells) {
             for (int row = tile_row; row < std::min(tile_row + ground_tile_cells, rows - 1); ++row) {
                 for (int column = tile_column; column < std::min(tile_column + ground_tile_cells, columns - 1); ++column) {
+                    if (skip[static_cast<std::size_t>(row * (columns - 1) + column)]) {
+                        continue;
+                    }
                     const std::uint32_t a = static_cast<std::uint32_t>(row * columns + column);
                     const std::uint32_t b = static_cast<std::uint32_t>((row + 1) * columns + column);
                     indices.insert(indices.end(), {a, b, a + 1U, a + 1U, b, b + 1U});
@@ -292,20 +299,131 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
         }
     }
 
+    // The cells over a bunker or pond, and a cell beyond, so the carve is
+    // nothing at their outer edges: only their corners are carved, and when
+    // they are split finer they meet their neighbours without a step.
+    const int cell_columns = columns - 1;
+    std::vector<bool> near_zone(static_cast<std::size_t>((rows - 1) * cell_columns), false);
+    // Every zone whose box reaches a cell, by cell: all that can decide a
+    // point in it, so a fine point there looks at those alone.
+    std::unordered_map<std::size_t, std::vector<material_zone>> cell_zones;
+    for (const material_zone& zone : zones) {
+        const glm::vec2 reach = zone_half_extent(zone);
+        const int column0 = std::clamp(static_cast<int>(std::floor((zone.center.x - reach.x - low.x) / step_x)), 0, cell_columns - 1);
+        const int column1 = std::clamp(static_cast<int>(std::floor((zone.center.x + reach.x - low.x) / step_x)), 0, cell_columns - 1);
+        const int row0 = std::clamp(static_cast<int>(std::floor((zone.center.z - reach.y - low.z) / step_z)), 0, rows - 2);
+        const int row1 = std::clamp(static_cast<int>(std::floor((zone.center.z + reach.y - low.z) / step_z)), 0, rows - 2);
+        for (int row = row0; row <= row1; ++row) {
+            for (int column = column0; column <= column1; ++column) {
+                cell_zones[static_cast<std::size_t>(row * cell_columns + column)].push_back(zone);
+            }
+        }
+    }
+    for (const material_zone& zone : zones) {
+        if (zone.type != material_zone_type::bunker && zone.type != material_zone_type::water) {
+            continue;
+        }
+        const glm::vec2 half = zone_half_extent(zone);
+        const auto cells = [](const float from, const float to, const float origin, const float step, const int count) {
+            return std::pair<int, int>(std::clamp(static_cast<int>(std::floor((from - origin) / step)) - 1, 0, count - 1),
+                                       std::clamp(static_cast<int>(std::floor((to - origin) / step)) + 1, 0, count - 1));
+        };
+        const auto [first_column, last_column] = cells(zone.center.x - half.x, zone.center.x + half.x, low.x, step_x, cell_columns);
+        const auto [first_row, last_row] = cells(zone.center.z - half.y, zone.center.z + half.y, low.z, step_z, rows - 1);
+        for (int row = first_row; row <= last_row; ++row) {
+            for (int column = first_column; column <= last_column; ++column) {
+                near_zone[static_cast<std::size_t>(row * cell_columns + column)] = true;
+            }
+        }
+    }
+    const auto corner_of_near_cell = [&](const int row, const int column) {
+        for (int r = std::max(0, row - 1); r <= std::min(row, rows - 2); ++r) {
+            for (int c = std::max(0, column - 1); c <= std::min(column, cell_columns - 1); ++c) {
+                if (near_zone[static_cast<std::size_t>(r * cell_columns + c)]) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+    const int split = settings.zone_cell_size > 0.0f
+        ? std::max(1, static_cast<int>(std::ceil(std::max(step_x, step_z) / settings.zone_cell_size)))
+        : 1;
+
+    std::vector<float> height(vertex_count, 0.0f);  // before carving
     std::vector<terrain_vertex> vertices;
     vertices.reserve(vertex_count);
     for (int row = 0; row < rows; ++row) {
         for (int column = 0; column < columns; ++column) {
             const std::size_t index = static_cast<std::size_t>(row * columns + column);
+            height[index] = base[index] + offset[index];
             terrain_vertex vertex;
             vertex.position = grid_point(row, column);
-            vertex.position.y = base[index] + offset[index];
+            vertex.position.y = height[index];
+            if (corner_of_near_cell(row, column)) {
+                vertex.position.y -= zone_carve_depth(zones, vertex.position, settings.zones);
+            }
             vertex.material = materials[index];
             vertices.push_back(vertex);
         }
     }
 
-    ground.indices = tiled_grid_indices(rows, columns);
+    const std::vector<bool> fine = split > 1 ? near_zone : std::vector<bool>(near_zone.size(), false);
+    ground.indices = tiled_grid_indices(rows, columns, fine);
+
+    // Fine points are shared between neighbouring fine cells (a coarse grid
+    // point is its own vertex), each at the cell's bilinear height, carved.
+    const long long fine_columns = static_cast<long long>(cell_columns) * split + 1;
+    std::unordered_map<long long, std::uint32_t> fine_vertices;
+    const std::vector<material_zone> no_zones;
+    const auto fine_vertex = [&](const int fine_row, const int fine_column) -> std::uint32_t {
+        if (fine_row % split == 0 && fine_column % split == 0) {
+            return static_cast<std::uint32_t>((fine_row / split) * columns + fine_column / split);
+        }
+        const long long key = static_cast<long long>(fine_row) * fine_columns + fine_column;
+        if (const auto found = fine_vertices.find(key); found != fine_vertices.end()) {
+            return found->second;
+        }
+        const int row = std::min(fine_row / split, rows - 2);
+        const int column = std::min(fine_column / split, cell_columns - 1);
+        const auto local = cell_zones.find(static_cast<std::size_t>(row * cell_columns + column));
+        const std::vector<material_zone>& here = local != cell_zones.end() ? local->second : no_zones;
+        const float u = static_cast<float>(fine_column - column * split) / static_cast<float>(split);
+        const float v = static_cast<float>(fine_row - row * split) / static_cast<float>(split);
+        const auto at = [&](const int r, const int c) { return height[static_cast<std::size_t>(r * columns + c)]; };
+        const float y = (at(row, column) * (1.0f - u) + at(row, column + 1) * u) * (1.0f - v) +
+            (at(row + 1, column) * (1.0f - u) + at(row + 1, column + 1) * u) * v;
+        terrain_vertex vertex;
+        vertex.position = glm::vec3(low.x + step_x * (static_cast<float>(column) + u), 0.0f,
+                                    low.z + step_z * (static_cast<float>(row) + v));
+        const std::vector<hole_hit> hits = hits_at(holes, hole_bounds, vertex.position);
+        const hole_hit* best = winning_hit(holes, hits);
+        vertex.material = surface_material(here, best != nullptr ? &best->sample : nullptr, vertex.position);
+        vertex.position.y = y - zone_carve_depth(here, vertex.position, settings.zones);
+        vertices.push_back(vertex);
+        const std::uint32_t index = static_cast<std::uint32_t>(vertices.size() - 1);
+        fine_vertices.emplace(key, index);
+        return index;
+    };
+    for (int row = 0; row < rows - 1; ++row) {
+        for (int column = 0; column < cell_columns; ++column) {
+            if (!fine[static_cast<std::size_t>(row * cell_columns + column)]) {
+                continue;
+            }
+            for (int i = 0; i < split; ++i) {
+                for (int j = 0; j < split; ++j) {
+                    const int fine_row = row * split + i;
+                    const int fine_column = column * split + j;
+                    const std::uint32_t a = fine_vertex(fine_row, fine_column);
+                    const std::uint32_t a1 = fine_vertex(fine_row, fine_column + 1);
+                    const std::uint32_t b = fine_vertex(fine_row + 1, fine_column);
+                    const std::uint32_t b1 = fine_vertex(fine_row + 1, fine_column + 1);
+                    ground.indices.insert(ground.indices.end(), {a, b, a1, a1, b, b1});
+                }
+            }
+        }
+    }
+
     ground.vertices = with_smooth_normals(std::move(vertices), ground.indices);
     return build_terrain_mesh_index(std::move(ground));
 }

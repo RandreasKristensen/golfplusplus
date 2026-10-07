@@ -33,8 +33,15 @@ enum class motion_mode {
     walk,
     cart,
     drift,
-    aim
+    aim,      // lining up a shot at their ball
+    address,  // stood at the ball, club down
+    swing     // the swing meter running: since this motion's server time
 };
+
+// Whether a player in `mode` is at their ball setting up a shot.
+inline bool at_ball(const motion_mode mode) {
+    return mode == motion_mode::aim || mode == motion_mode::address || mode == motion_mode::swing;
+}
 
 // Where a player is and how they are moving: enough for others to carry the
 // movement on between updates (extrapolate_motion).
@@ -90,6 +97,7 @@ enum class net_command_type {
     claim_collectible,
     emote,
     retee,
+    pick_up_ball,
     create_group,
     join_group,
     leave_group,
@@ -187,6 +195,18 @@ struct room_ball {
     int stroke_count = 0;
 };
 
+// A tee is in use while another player's ball waits on it: they started that
+// hole and have not hit their tee shot. Nobody else tees up there until then:
+// the server's enter_hole refuses it, and the client before asking.
+inline bool tee_in_use(const std::map<std::uint64_t, room_ball>& balls, const std::uint64_t me, const int hole) {
+    for (const auto& [account_id, ball] : balls) {
+        if (account_id != me && ball.zone == hole && ball.stroke_count == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // A shot the server played (a shot_event row): every client plays it from
 // these inputs, and it rests where the server says.
 struct room_shot {
@@ -196,6 +216,12 @@ struct room_shot {
     shot_input input;
     glm::vec3 rest{0.0f};
     bool holed = false;
+};
+
+// Another player's emote the server accepted (an emote_event row).
+struct room_emote {
+    std::uint64_t account_id = 0;
+    emote_id emote = emote_id::smoke;
 };
 
 // The latest server data the game reads in online mode. Only ever filled from
@@ -210,9 +236,10 @@ struct online_view {
     std::map<std::uint64_t, room_player> players;
     std::map<std::uint64_t, room_ball> balls;
     std::map<std::uint64_t, int> group_sizes;
-    // Shots and refused gameplay reducers that arrived and the game has not
-    // taken yet, oldest first.
+    // Shots, others' emotes and refused gameplay reducers that arrived and
+    // the game has not taken yet, oldest first.
     std::vector<room_shot> shots;
+    std::vector<room_emote> emotes;
     std::vector<reducer_failure> refusals;
     // The server's clock now, as near as this client can tell (from its own
     // avatar_motion rows); 0 until known.

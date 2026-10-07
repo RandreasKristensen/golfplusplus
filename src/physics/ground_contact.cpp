@@ -16,12 +16,11 @@ bool ball_is_grounded(const ball_state& ball, const terrain_sample& terrain) {
     return ball_support_distance(ball, terrain) <= ball.radius + grounded_tolerance;
 }
 
-bool ball_in_water(const ball_state& ball, const terrain_sample& terrain, const float water_depth) {
+bool ball_in_water(const ball_state& ball, const terrain_sample& terrain) {
     if (terrain.material != terrain_material::water) {
         return false;
     }
-    const float water_surface = terrain.point.y + std::max(0.0f, water_depth);
-    return ball.position.y - ball.radius <= water_surface;
+    return ball.position.y - ball.radius <= terrain.water_level;
 }
 
 physics_tuning with_water_drag(const physics_tuning& tuning) {
@@ -59,17 +58,11 @@ ball_state apply_rolling_friction(const ball_state& ball,
     return out;
 }
 
-bool path_crosses_cup(const glm::vec3& start,
-                      const glm::vec3& end,
-                      const glm::vec3& cup_center,
-                      const float radius,
-                      const float max_height_above_cup) {
+float path_cup_offset(const glm::vec3& start, const glm::vec3& end, const glm::vec3& cup_center) {
     const glm::vec3 segment = horizontal(end - start);
     const float length_squared = glm::dot(segment, segment);
     const float t = length_squared <= 0.000001f
         ? 1.0f
         : clamp01(glm::dot(horizontal(cup_center - start), segment) / length_squared);
-    const glm::vec3 closest = start + (end - start) * t;
-    return horizontal_distance(closest, cup_center) <= radius &&
-        closest.y <= cup_center.y + max_height_above_cup;
+    return horizontal_distance(start + (end - start) * t, cup_center);
 }

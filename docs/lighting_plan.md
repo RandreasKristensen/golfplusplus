@@ -21,8 +21,8 @@ No new dependencies. Everything is GLSL 330 plus plain C++.
 | Piece | Now |
 |---|---|
 | Sun | One constant `light_direction` in `src/renderer/renderer.cpp` |
-| Sky | Each course's backdrop panorama (`backdrop_pass`, a full-screen pass drawn first); `sky_color` only clears |
-| Terrain | `terrain.frag`: vertex colour × `(0.70 + 0.30·N·L)`. No ambient model, no fog |
+| Sky | Each course's sky panorama, then its land panorama fading into the course's `haze_color` (`backdrop_pass`, a full-screen pass drawn first); `sky_color` only clears |
+| Terrain | `terrain.frag`: vertex colour × `(0.70 + 0.30·N·L)`, then faded into the backdrop's haze with distance (`scene_haze.h`, also on trees). No ambient model |
 | Trees, markers | Unlit flat colour (`world_marker.frag`). Tree normals exist in the primitive VBO but are not used |
 | Ball | `ball.frag`: `0.45 + 0.55·N·L` |
 | Colours | `sky_color`, `backdrop_ground_color`, `ball_color`, `trunk_color`, `leaf_color` and `terrain_palette.cpp` are all C++ constants |

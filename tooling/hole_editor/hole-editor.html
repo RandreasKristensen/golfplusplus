@@ -266,6 +266,7 @@ body {
   <button class="btn"        id="btn-bunker"  onclick="setMode('add_zone','bunker')">+ bunker</button>
   <button class="btn"        id="btn-water"   onclick="setMode('add_zone','water')">+ water</button>
   <button class="btn"        id="btn-tree"    onclick="setMode('add_tree')">+ tree</button>
+  <button class="btn"        id="btn-fence"   onclick="setMode('add_fence')">+ fence</button>
   <div class="sep"></div>
   <button class="btn"        onclick="fitView();render()">fit</button>
   <button class="btn"        onclick="newHole()">new</button>
@@ -347,10 +348,14 @@ body {
           <button class="mini-btn" onclick="fitView();render()">fit world</button>
         </div>
         <div id="world-status" class="panel-note warn">Open a project course with a world file to edit hole placement.</div>
-        <div class="panel-note">World view is limited to moving and rotating complete holes for v1 layout editing.</div>
+        <div class="panel-note">World view moves and rotates complete holes, and draws fences: "+ fence" adds a pole
+          to the selected fence (or starts one) at each click; drag poles, right-click deletes one.</div>
         <div class="section-title" style="margin-top:10px">hole placements</div>
         <div id="hole-start-list"></div>
         <div id="hole-start-edit"></div>
+        <div class="section-title" style="margin-top:10px">fences</div>
+        <div id="fence-list"></div>
+        <div id="fence-edit"></div>
       </div>
 
       <div class="section">
@@ -406,8 +411,8 @@ let hole = {
     rough_width: 28.0
   },
   material_zones: [
-    { type: "green",  center: [0, 0, 80], radius: 6.0 },
-    { type: "bunker", center: [5, 0, 52], radius: 3.5 }
+    { type: "green",  center: [0, 0, 80], radii: [6, 6], rotation_degrees: 0 },
+    { type: "bunker", center: [5, 0, 52], radii: [3.5, 3.5], rotation_degrees: 0 }
   ],
   trees: []
 };
@@ -488,15 +493,45 @@ function distXZ(a, b) {
   return Math.hypot(pa.x - pb.x, pa.z - pb.z);
 }
 
-function waterRectWorld(z) {
-  const a = z.bounds?.[0] || [0,0,0];
-  const b = z.bounds?.[1] || [0,0,0];
-  return {
-    minX: Math.min(a[0], b[0]),
-    maxX: Math.max(a[0], b[0]),
-    minZ: Math.min(a[2], b[2]),
-    maxZ: Math.max(a[2], b[2])
-  };
+// A zone's shape as the game reads it (src/physics/material_zone.h): an
+// ellipse (`center`, `radii` along its own x and z, `rotation_degrees`
+// turning it the way rotate_about_y does, which on this canvas is clockwise).
+const MIN_ZONE_RADIUS = 0.5;
+const ROTATE_HANDLE_PX = 22;
+function zoneShape(z) {
+  const c = z.center || [0,0,0];
+  const r = Array.isArray(z.radii) ? z.radii : [0,0];
+  return { x:+c[0]||0, y:+c[1]||0, z:+c[2]||0, rx:+r[0]||0, rz:+r[1]||0,
+           rot:(+z.rotation_degrees||0) * Math.PI / 180 };
+}
+function setZoneShape(z, s) {
+  const rx = r2(Math.max(MIN_ZONE_RADIUS, s.rx)), rz = r2(Math.max(MIN_ZONE_RADIUS, s.rz));
+  let degrees = r2(s.rot * 180 / Math.PI) % 360;
+  if (degrees > 180) degrees -= 360;
+  if (degrees <= -180) degrees += 360;
+  z.center = [r2(s.x), s.y, r2(s.z)];
+  z.radii = [rx, rz];
+  z.rotation_degrees = r2(degrees);
+}
+// The world point at (lx, lz) in the zone's own frame, and back.
+function zoneWorldPoint(s, lx, lz) {
+  const c = Math.cos(s.rot), sn = Math.sin(s.rot);
+  return { x: s.x + lx*c - lz*sn, z: s.z + lx*sn + lz*c };
+}
+function zoneLocalPoint(s, wx, wz) {
+  const dx = wx - s.x, dz = wz - s.z, c = Math.cos(s.rot), sn = Math.sin(s.rot);
+  return { x: dx*c + dz*sn, z: -dx*sn + dz*c };
+}
+function zoneContains(s, wx, wz) {
+  const l = zoneLocalPoint(s, wx, wz);
+  return s.rx > 0 && s.rz > 0 && (l.x/s.rx)**2 + (l.z/s.rz)**2 <= 1;
+}
+// Canvas handles of a selected zone: one per radius on its own axes, and a
+// rotation handle past the x radius.
+function zoneHandles(s) {
+  const ex = zoneWorldPoint(s, s.rx, 0), ez = zoneWorldPoint(s, 0, s.rz);
+  const er = zoneWorldPoint(s, s.rx + ROTATE_HANDLE_PX / view.scale, 0);
+  return [{ kind:'rx', ...w2c(ex.x, ex.z) }, { kind:'rz', ...w2c(ez.x, ez.z) }, { kind:'rot', ...w2c(er.x, er.z) }];
 }
 
 function vec3(value, fallback = [0, 0, 0]) {
@@ -563,20 +598,10 @@ function transformHolePoint(outline, start, point) {
   };
 }
 
-function syncHoleStartReturnPosition(index) {
-  const start = courseWorld?.hole_starts?.[index];
-  if (!start) return;
-  const outline = activeHoleOutline(start.hole_index);
-  if (!outline) return;
-  const finish = transformHolePoint(outline, start, outline.pin);
-  start.return_position = [r2(finish.x), start.return_position?.[1] || start.position?.[1] || 0, r2(finish.z)];
-}
-
 function setHoleStartPosition(index, x, z) {
   const start = courseWorld?.hole_starts?.[index];
   if (!start) return;
   setVec3XZ(start.position, x, z);
-  syncHoleStartReturnPosition(index);
 }
 
 function splinePtsForControlPoints(controlPoints, n = 100) {
@@ -622,12 +647,13 @@ function pointInRectXZ(pos, rect) {
   return p.x >= rect.minX && p.x <= rect.maxX && p.z >= rect.minZ && p.z <= rect.maxZ;
 }
 
-function setWaterRect(index, rect) {
-  const z = hole.material_zones[index];
-  z.bounds = [
-    [r2(rect.minX), 0, r2(rect.minZ)],
-    [r2(rect.maxX), 0, r2(rect.maxZ)]
-  ];
+function setZoneValue(i, key, v) {
+  if (!Number.isFinite(v)) return;
+  const z = hole.material_zones[i];
+  const s = zoneShape(z);
+  if (key === 'rot') s.rot = v * Math.PI / 180; else s[key] = v;
+  setZoneShape(z, s);
+  markDirty(); render();
 }
 
 function toMeters(worldDistance) {
@@ -676,13 +702,13 @@ function normalizeCourseWorld() {
   if (!Array.isArray(courseWorld.collectibles)) courseWorld.collectibles = [];
   if (!Array.isArray(courseWorld.spawn_zones)) courseWorld.spawn_zones = [];
   if (!Array.isArray(courseWorld.interactables)) courseWorld.interactables = [];
+  if (!Array.isArray(courseWorld.fences)) courseWorld.fences = [];
 
   courseWorld.hole_starts = courseWorld.hole_starts.map((start, i) => ({
     ...start,
     id: start.id || `hole_${String(i + 1).padStart(2, '0')}_start`,
     hole_index: Number.isInteger(+start.hole_index) ? +start.hole_index : i,
     position: vec3(start.position),
-    return_position: vec3(start.return_position),
     interaction_radius: Number.isFinite(+start.interaction_radius) ? Math.max(0.5, +start.interaction_radius) : 4,
     rotation_degrees: normalizeDegrees(start.rotation_degrees)
   }));
@@ -719,6 +745,13 @@ function normalizeCourseWorld() {
     repeatable_cooldown_holes: Number.isInteger(+c.repeatable_cooldown_holes) ? Math.max(0, +c.repeatable_cooldown_holes) : 0,
     reward: c.reward || {}
   }));
+  courseWorld.fences = courseWorld.fences.map(f => ({
+    ...f,
+    poles: (f.poles || []).map(p => vec3(p)).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[2])),
+    height: Number.isFinite(+f.height) && +f.height > 0 ? +f.height : DEFAULT_FENCE_HEIGHT,
+    source: f.source || 'manual',
+    osm_ref: f.osm_ref || ''
+  }));
   courseWorld.interactables = courseWorld.interactables.map((it, i) => ({
     ...it,
     id: it.id || `interactable_${i + 1}`,
@@ -729,9 +762,14 @@ function normalizeCourseWorld() {
   }));
 }
 
+// A drawn fence's height until set; the importer's default for one with no
+// height tag is osm_golf_config.json's fence.default_height_m.
+const DEFAULT_FENCE_HEIGHT = 2;
+
 function defaultGeneratorConfig() {
   return {
-    tree: { trunk_radius: 0.65, trunk_height: 5.0, leaf_radius: 4.7, leaf_height: 6.0, max_per_hole: 60 },
+    tree: { trunk_radius: 0.65, trunk_height: 5.0, leaf_radius: 4.7, leaf_height: 6.0, max_per_hole: 200,
+            outside_reach_m: 80.0, max_distance_from_line_m: 95.0, wood_m2_per_tree: 150.0 },
     hole: { fallback_width: 20.0, fallback_rough_width: 32.0, rough_width_multiplier: 1.55 },
     // Terrain heights the OSM converter samples from a DEM. No UI yet; kept
     // here so saving config from the editor does not drop the section.
@@ -1229,34 +1267,30 @@ function render() {
     const isSel  = (sel && sel.type === 'zone' && sel.index === i) || isAreaSelected({type:'zone', index:i});
     ctx.lineWidth = isSel ? 1.5 : 0.8;
 
-    if (z.type === 'water' && z.bounds) {
-      const rect = waterRectWorld(z);
-      const c0 = w2c(rect.minX, rect.minZ);
-      const c1 = w2c(rect.maxX, rect.maxZ);
-      const rx = Math.min(c0.x,c1.x), ry = Math.min(c0.y,c1.y);
-      const rw = Math.abs(c1.x-c0.x), rh = Math.abs(c1.y-c0.y);
-      ctx.fillStyle = col.fill; ctx.fillRect(rx,ry,rw,rh);
-      ctx.strokeStyle = isSel ? '#f0c060' : col.stroke; ctx.strokeRect(rx,ry,rw,rh);
-      if (isSel) { // corner handles
-        [[rx,ry],[rx+rw,ry],[rx,ry+rh],[rx+rw,ry+rh]].forEach(([hx,hy])=>{
-          ctx.fillStyle='#f0c060'; ctx.beginPath(); ctx.arc(hx,hy,4,0,Math.PI*2); ctx.fill();
-        });
-      }
-    } else if (z.center) {
-      const c = w2c(z.center[0], z.center[2]);
-      const r = (z.radius || 5) * view.scale;
-      ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI*2);
-      ctx.fillStyle = col.fill; ctx.fill();
-      ctx.strokeStyle = isSel ? '#f0c060' : col.stroke; ctx.stroke();
-      if (isSel) { // resize handle
-        ctx.beginPath(); ctx.arc(c.x + r, c.y, 4, 0, Math.PI*2);
-        ctx.fillStyle = '#f0c060'; ctx.fill();
-      }
+    const s = zoneShape(z);
+    const c = w2c(s.x, s.z);
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(s.rot);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s.rx*view.scale, s.rz*view.scale, 0, 0, Math.PI*2);
+    ctx.restore();
+    ctx.fillStyle = col.fill; ctx.fill();
+    ctx.strokeStyle = isSel ? '#f0c060' : col.stroke; ctx.stroke();
+    if (sel && sel.type === 'zone' && sel.index === i) {
+      const handles = zoneHandles(s);
+      const [edge, , rot] = handles;
+      ctx.strokeStyle = '#f0c060'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(edge.x, edge.y); ctx.lineTo(rot.x, rot.y); ctx.stroke();
+      handles.forEach(h => {
+        ctx.beginPath(); ctx.arc(h.x, h.y, h.kind === 'rot' ? 5 : 4, 0, Math.PI*2);
+        if (h.kind === 'rot') { ctx.strokeStyle = '#f0c060'; ctx.lineWidth = 1.5; ctx.stroke(); }
+        else { ctx.fillStyle = '#f0c060'; ctx.fill(); }
+      });
     }
 
     // zone label
-    const lc = z.center ? w2c(z.center[0], z.center[2])
-                        : (() => { const rect=waterRectWorld(z), a=w2c(rect.minX,rect.minZ),b=w2c(rect.maxX,rect.maxZ); return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; })();
+    const lc = c;
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = `${Math.max(8, view.scale * 1.4)}px Courier New`;
     ctx.textAlign = 'center';
@@ -1471,35 +1505,17 @@ function drawAreaSelectionRect() {
 function hit(cx, cy) {
   if (viewScope === 'world') return hitWorld(cx, cy);
   const D = 10;
+  // handles of the selected zone, over everything else
+  if (sel?.type === 'zone' && hole.material_zones[sel.index]) {
+    for (const h of zoneHandles(zoneShape(hole.material_zones[sel.index]))) {
+      if (Math.hypot(cx - h.x, cy - h.y) < 8) return { type:'zone_handle', index:sel.index, kind:h.kind };
+    }
+  }
   for (let i=hole.trees.length-1; i>=0; i--) {
     const t = hole.trees[i];
     const c = w2c(t.position[0], t.position[2]);
     const r = Math.max(8, (t.leaf_radius || 1.6) * view.scale);
     if (Math.hypot(cx-c.x, cy-c.y) <= r) return { type:'tree', index:i };
-  }
-  // water resize handles, only when selected
-  if (sel?.type === 'zone') {
-    const z = hole.material_zones[sel.index];
-    if (z?.type === 'water' && z.bounds) {
-      const rect = waterRectWorld(z);
-      const corners = [
-        { corner:'nw', ...w2c(rect.minX, rect.minZ) },
-        { corner:'ne', ...w2c(rect.maxX, rect.minZ) },
-        { corner:'sw', ...w2c(rect.minX, rect.maxZ) },
-        { corner:'se', ...w2c(rect.maxX, rect.maxZ) }
-      ];
-      for (const h of corners) {
-        if (Math.hypot(cx - h.x, cy - h.y) < 8) return { type:'water_resize', index:sel.index, corner:h.corner };
-      }
-    }
-  }
-  // resize handle (circular zones, only when selected)
-  for (let i=0; i<hole.material_zones.length; i++) {
-    const z = hole.material_zones[i];
-    if (!z.center || !(sel && sel.type==='zone' && sel.index===i)) continue;
-    const c  = w2c(z.center[0], z.center[2]);
-    const hx = c.x + (z.radius||5)*view.scale;
-    if (Math.hypot(cx-hx, cy-c.y) < 7) return { type:'zone_resize', index:i };
   }
   // control points
   for (let i=hole.spline.control_points.length-1; i>=0; i--) {
@@ -1514,21 +1530,21 @@ function hit(cx, cy) {
   // zones
   for (let i=hole.material_zones.length-1; i>=0; i--) {
     const z = hole.material_zones[i];
-    if (z.type==='water' && z.bounds) {
-      const rect = waterRectWorld(z);
-      const a=w2c(rect.minX,rect.minZ), b=w2c(rect.maxX,rect.maxZ);
-      if (cx>=Math.min(a.x,b.x)&&cx<=Math.max(a.x,b.x)&&cy>=Math.min(a.y,b.y)&&cy<=Math.max(a.y,b.y))
-        return { type:'zone', index:i };
-    } else if (z.center) {
-      const c=w2c(z.center[0],z.center[2]);
-      if (Math.hypot(cx-c.x,cy-c.y)<(z.radius||5)*view.scale) return { type:'zone', index:i };
-    }
+    const w = c2w(cx, cy);
+    if (zoneContains(zoneShape(z), w.x, w.z)) return { type:'zone', index:i };
   }
   return null;
 }
 
 function hitWorld(cx, cy) {
   if (!courseWorld) return null;
+  const fences = courseWorld.fences || [];
+  for (let f = fences.length - 1; f >= 0; f--) {
+    for (let i = fences[f].poles.length - 1; i >= 0; i--) {
+      const c = w2c(fences[f].poles[i][0], fences[f].poles[i][2]);
+      if (Math.abs(cx - c.x) <= 6 && Math.abs(cy - c.y) <= 6) return { type:'fence_pole', fence:f, pole:i };
+    }
+  }
   for (let i = (courseWorld.hole_starts || []).length - 1; i >= 0; i--) {
     const hit = hitWorldHolePlacement(cx, cy, courseWorld.hole_starts[i], i);
     if (hit) return hit;
@@ -1560,7 +1576,13 @@ canvas.addEventListener('mousedown', e => {
       render(); return;
     }
     if (viewScope === 'world') {
-      sel = null;
+      const h2 = hit(cx, cy);
+      if (h2?.type === 'fence_pole') {
+        deleteFencePole(h2.fence, h2.pole);
+        markWorldDirty();
+      } else {
+        sel = null;
+      }
       selectedAreaItems = [];
       updatePanel(); render();
       return;
@@ -1619,11 +1641,8 @@ canvas.addEventListener('mousedown', e => {
 
   // place zone
   if (mode==='add_zone') {
-    if (ztype==='water') {
-      hole.material_zones.push({ type:'water', bounds:[[r2(w.x-8),0,r2(w.z-5)],[r2(w.x+8),0,r2(w.z+5)]] });
-    } else {
-      hole.material_zones.push({ type:ztype, center:[r2(w.x),0,r2(w.z)], radius: ztype==='green'?6:3.5 });
-    }
+    const radii = { green:[6,6], bunker:[3.5,3.5], water:[8,5] }[ztype];
+    hole.material_zones.push({ type:ztype, center:[r2(w.x),0,r2(w.z)], radii, rotation_degrees:0 });
     sel = { type:'zone', index: hole.material_zones.length-1 };
     markDirty();
     setMode('select'); updatePanel(); render(); return;
@@ -1647,10 +1666,9 @@ canvas.addEventListener('mousedown', e => {
   const h2 = hit(cx,cy);
   if (h2) {
     selectedAreaItems = [];
-    sel = (h2.type==='zone_resize' || h2.type==='water_resize') ? { type:'zone', index:h2.index } : h2;
+    sel = h2.type==='zone_handle' ? { type:'zone', index:h2.index } : h2;
     const op = origPos(h2);
     drag = { ...h2, cx0:cx, cy0:cy, ox:op.x, oz:op.z };
-    if (h2.type === 'water_resize') drag.rect = waterRectWorld(hole.material_zones[h2.index]);
   } else {
     sel = null;
     pan  = { cx0:cx, cy0:cy, vox:view.ox, voz:view.oz };
@@ -1665,22 +1683,17 @@ function origPos(h2) {
       const p = courseWorld.hole_starts[h2.index].position;
       return { x:p[0], z:p[2] };
     }
+    if (h2.type === 'fence_pole') {
+      const p = courseWorld.fences[h2.fence].poles[h2.pole];
+      return { x:p[0], z:p[2] };
+    }
   }
   if (h2.type==='cp') { const p=hole.spline.control_points[h2.index]; return {x:p[0],z:p[2]}; }
   if (h2.type==='tee') return {x:hole.tee[0],z:hole.tee[2]};
   if (h2.type==='pin') return {x:hole.pin[0],z:hole.pin[2]};
   if (h2.type==='zone') {
-    const z=hole.material_zones[h2.index];
-    if (z.center) return {x:z.center[0],z:z.center[2]};
-    const rect = waterRectWorld(z);
-    return {x:rect.minX,z:rect.minZ};
-  }
-  if (h2.type==='water_resize') {
-    const rect = waterRectWorld(hole.material_zones[h2.index]);
-    if (h2.corner === 'ne') return {x:rect.maxX,z:rect.minZ};
-    if (h2.corner === 'sw') return {x:rect.minX,z:rect.maxZ};
-    if (h2.corner === 'se') return {x:rect.maxX,z:rect.maxZ};
-    return {x:rect.minX,z:rect.minZ};
+    const s = zoneShape(hole.material_zones[h2.index]);
+    return {x:s.x, z:s.z};
   }
   if (h2.type==='tree') { const t=hole.trees[h2.index]; return {x:t.position[0],z:t.position[2]}; }
   return {x:0,z:0};
@@ -1729,6 +1742,30 @@ function drawWorldPath(route, collectionName, routeIndex, color, fillColor) {
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.rect(c.x - 4, c.y - 4, 8, 8); ctx.fill(); ctx.stroke();
   });
+}
+
+function drawWorldFence(fence, index) {
+  const selected = sel?.type === 'fence_pole' && sel.fence === index;
+  const pts = fence.poles.map(p => w2c(p[0], p[2]));
+  ctx.strokeStyle = selected ? '#f0c060' : '#c8c8c0';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  pts.forEach((c, i) => i ? ctx.lineTo(c.x, c.y) : ctx.moveTo(c.x, c.y));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  pts.forEach((c, i) => {
+    const isSel = selected && sel.pole === i;
+    ctx.fillStyle = isSel ? '#f0c060' : '#505048';
+    ctx.strokeStyle = '#101010';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.rect(c.x - 3, c.y - 3, 6, 6); ctx.fill(); ctx.stroke();
+  });
+  if (pts.length > 0) {
+    ctx.font = '9px Courier New';
+    ctx.fillStyle = selected ? '#f0c060' : 'rgba(230,230,210,0.68)';
+    ctx.fillText(`fence ${fence.height} m`, pts[0].x + 6, pts[0].y - 6);
+  }
 }
 
 function drawWorldPoint(pos, label, color, selected = false, radius = 5) {
@@ -1840,10 +1877,12 @@ function renderWorld(W, H) {
   }
 
   (courseWorld.hole_starts || []).forEach((start, i) => drawWorldHolePlacement(start, i));
+  (courseWorld.fences || []).forEach((fence, i) => drawWorldFence(fence, i));
 
   if (mode !== 'select') {
     const hints = {
-      measure: 'click point A, click point B, right-click clears'
+      measure: 'click point A, click point B, right-click clears',
+      add_fence: 'click to add a pole to the selected fence (or start one), right-click a pole to delete it'
     };
     ctx.fillStyle = '#f0c060';
     ctx.font = '11px Courier New';
@@ -1854,25 +1893,6 @@ function renderWorld(W, H) {
   document.getElementById('status').textContent =
     `${view.scale.toFixed(1)}px/m  |  course layout holes:${(courseWorld.hole_starts || []).length}${cursor}`;
   drawScaleBar();
-}
-
-function resizeWaterFromCorner(index, corner, nx, nz, startRect) {
-  const minSize = 1.0;
-  const rect = { ...startRect };
-  if (corner === 'nw') {
-    rect.minX = Math.min(nx, startRect.maxX - minSize);
-    rect.minZ = Math.min(nz, startRect.maxZ - minSize);
-  } else if (corner === 'ne') {
-    rect.maxX = Math.max(nx, startRect.minX + minSize);
-    rect.minZ = Math.min(nz, startRect.maxZ - minSize);
-  } else if (corner === 'sw') {
-    rect.minX = Math.min(nx, startRect.maxX - minSize);
-    rect.maxZ = Math.max(nz, startRect.minZ + minSize);
-  } else if (corner === 'se') {
-    rect.maxX = Math.max(nx, startRect.minX + minSize);
-    rect.maxZ = Math.max(nz, startRect.minZ + minSize);
-  }
-  setWaterRect(index, rect);
 }
 
 canvas.addEventListener('mousemove', e => {
@@ -1897,6 +1917,10 @@ canvas.addEventListener('mousemove', e => {
 
   if (viewScope === 'world' && courseWorld) {
     if (drag.type === 'hole_start') setHoleStartPosition(drag.index, nx, nz);
+    else if (drag.type === 'fence_pole') {
+      const pole = courseWorld.fences[drag.fence].poles[drag.pole];
+      pole[0] = nx; pole[2] = nz;
+    }
     markWorldDirty();
     render();
     return;
@@ -1907,21 +1931,25 @@ canvas.addEventListener('mousemove', e => {
   else if (drag.type==='pin') { hole.pin[0]=nx; hole.pin[2]=nz; }
   else if (drag.type==='tree') { hole.trees[drag.index].position[0]=nx; hole.trees[drag.index].position[2]=nz; }
   else if (drag.type==='zone') {
-    const z=hole.material_zones[drag.index];
-    if (z.center) { z.center[0]=nx; z.center[2]=nz; }
-    else if (z.bounds) {
-      const rect = waterRectWorld(z);
-      const bw=rect.maxX-rect.minX, bh=rect.maxZ-rect.minZ;
-      setWaterRect(drag.index, { minX:nx, minZ:nz, maxX:nx+bw, maxZ:nz+bh });
+    const z = hole.material_zones[drag.index];
+    const s = zoneShape(z);
+    s.x = nx; s.z = nz;
+    setZoneShape(z, s);
+  } else if (drag.type==='zone_handle') {
+    // Each radius follows the mouse along its own axis; the rotation handle
+    // points the zone's own x at the mouse (shift snaps to 15 degrees).
+    const z = hole.material_zones[drag.index];
+    const s = zoneShape(z);
+    const w2 = c2w(cx, cy);
+    const local = zoneLocalPoint(s, w2.x, w2.z);
+    if (drag.kind === 'rx') s.rx = Math.abs(local.x);
+    else if (drag.kind === 'rz') s.rz = Math.abs(local.z);
+    else {
+      const step = Math.PI / 12;
+      const angle = Math.atan2(w2.z - s.z, w2.x - s.x);
+      s.rot = e.shiftKey ? Math.round(angle / step) * step : angle;
     }
-  } else if (drag.type==='water_resize') {
-    resizeWaterFromCorner(drag.index, drag.corner, nx, nz, drag.rect);
-  } else if (drag.type==='zone_resize') {
-    const z=hole.material_zones[drag.index];
-    if (z.center) {
-      const w2=c2w(cx,cy);
-      z.radius = r2(Math.max(0.5, Math.hypot(w2.x-z.center[0], w2.z-z.center[2])));
-    }
+    setZoneShape(z, s);
   }
   markDirty(true, false);
   updatePanel(); render();
@@ -1952,6 +1980,10 @@ function ensureWorldRoute(collectionName) {
 
 function handleWorldLeftClick(w, cx, cy) {
   if (!courseWorld) return false;
+  if (mode === 'add_fence' && !hit(cx, cy)) {
+    addFencePole(r2(w.x), r2(w.z));
+    updatePanel(); render(); return true;
+  }
   if (mode === 'measure') {
     if (!measure.a || measure.b) measure = { a: { x: r2(w.x), z: r2(w.z) }, b: null };
     else measure.b = { x: r2(w.x), z: r2(w.z) };
@@ -1974,8 +2006,45 @@ function handleWorldLeftClick(w, cx, cy) {
   return true;
 }
 
+// A pole at (x, z) on the end of the selected fence, or the first of a new one.
+function addFencePole(x, z) {
+  let f = sel?.type === 'fence_pole' ? sel.fence : -1;
+  if (!courseWorld.fences[f]) {
+    courseWorld.fences.push({ poles: [], height: DEFAULT_FENCE_HEIGHT, source: 'manual', osm_ref: '' });
+    f = courseWorld.fences.length - 1;
+  }
+  courseWorld.fences[f].poles.push([x, 0, z]);
+  sel = { type:'fence_pole', fence:f, pole:courseWorld.fences[f].poles.length - 1 };
+  markWorldDirty();
+}
+
+// Removes a pole; a fence left with none is removed with it.
+function deleteFencePole(f, i) {
+  const fence = courseWorld.fences[f];
+  if (!fence) return;
+  fence.poles.splice(i, 1);
+  if (fence.poles.length === 0) courseWorld.fences.splice(f, 1);
+  sel = fence.poles.length > 0 ? { type:'fence_pole', fence:f, pole:Math.min(i, fence.poles.length - 1) } : null;
+}
+
+function setFenceHeight(f, height) {
+  if (!courseWorld.fences[f] || !(height > 0)) return;
+  courseWorld.fences[f].height = height;
+  markWorldDirty(); render();
+}
+
+function deleteFence(f) {
+  courseWorld.fences.splice(f, 1);
+  sel = null;
+  markWorldDirty(); updatePanel(); render();
+}
+
 function deleteWorldSelection(h2) {
   if (!courseWorld || !h2) return false;
+  if (h2.type === 'fence_pole') {
+    deleteFencePole(h2.fence, h2.pole);
+    return true;
+  }
   if (h2.type === 'cart_point') {
     const route = courseWorld.cart_roads[h2.routeIndex];
     if (!route) return false;
@@ -2020,10 +2089,8 @@ function collectHoleItemsInRect(rect) {
     if (pointInRectXZ(pt, rect)) items.push({ type:'cp', index });
   });
   hole.material_zones.forEach((zone, index) => {
-    const pos = zone.center || (() => {
-      const r = waterRectWorld(zone);
-      return [(r.minX + r.maxX) * 0.5, 0, (r.minZ + r.maxZ) * 0.5];
-    })();
+    const shape = zoneShape(zone);
+    const pos = [shape.x, 0, shape.z];
     if (pointInRectXZ(pos, rect)) items.push({ type:'zone', index });
   });
   hole.trees.forEach((tree, index) => {
@@ -2144,13 +2211,13 @@ window.addEventListener('keydown', e => {
 // ── mode ─────────────────────────────────────────────────────────────────────
 
 function setMode(m, zt) {
-  if (viewScope === 'world' && !['select', 'measure'].includes(m)) {
+  if (viewScope === 'world' && !['select', 'measure', 'add_fence'].includes(m)) {
     m = 'select';
     zt = null;
   }
   mode=m; ztype=zt||null;
   const map = { select:'btn-select', area_select:'btn-area-select', add_cp:'btn-addcp',
-    measure:'btn-measure', add_tree:'btn-tree',
+    measure:'btn-measure', add_tree:'btn-tree', add_fence:'btn-fence',
     'add_zone:green':'btn-green','add_zone:bunker':'btn-bunker','add_zone:water':'btn-water' };
   document.querySelectorAll('#toolbar .btn').forEach(b=>b.classList.remove('active'));
   document.getElementById(viewScope === 'world' ? 'btn-world-view' : 'btn-hole-view')?.classList.add('active');
@@ -2166,6 +2233,8 @@ function updateToolbarForScope() {
     const el = document.getElementById(id);
     if (el) el.style.display = viewScope === 'world' ? 'none' : '';
   });
+  const fenceButton = document.getElementById('btn-fence');
+  if (fenceButton) fenceButton.style.display = viewScope === 'world' ? '' : 'none';
 }
 
 function setViewScope(scope) {
@@ -2267,7 +2336,9 @@ function updatePanel() {
   zList.innerHTML='';
   hole.material_zones.forEach((z,i) => {
     const isSel = sel?.type==='zone' && sel.index===i;
-    const desc = z.center ? `r${(z.radius||0).toFixed(1)} @ ${z.center[0].toFixed(1)},${z.center[2].toFixed(1)}` : 'bounds';
+    const zs = zoneShape(z);
+    const size = `${(zs.rx*2).toFixed(1)}×${(zs.rz*2).toFixed(1)}`;
+    const desc = `${size} ${(zs.rot*180/Math.PI).toFixed(0)}° @ ${zs.x.toFixed(1)},${zs.z.toFixed(1)}`;
     const el = document.createElement('div');
     el.className='list-item'+(isSel?' selected':'');
     el.innerHTML =
@@ -2290,22 +2361,14 @@ function updatePanel() {
   const zEdit = document.getElementById('zone-edit');
   if (sel?.type==='zone') {
     const z = hole.material_zones[sel.index];
-    if (z?.center) {
+    if (z) {
+      const zs = zoneShape(z);
+      const field = (label, key, value, step) =>
+        `<div class="field compact"><label>${label}</label><input type="number" step="${step}" value="${r2(value)}" oninput="setZoneValue(${sel.index},'${key}',+this.value)"></div>`;
       zEdit.innerHTML =
-        `<div class="subfield"><label>radius</label>` +
-        `<input type="number" step="0.5" min="0.5" value="${(z.radius||5).toFixed(1)}" oninput="setZoneR(${sel.index},+this.value)">` +
-        `</div>`;
-    } else if (z?.bounds) {
-      const rect = waterRectWorld(z);
-      const bw = r2(rect.maxX - rect.minX);
-      const bh = r2(rect.maxZ - rect.minZ);
-      zEdit.innerHTML =
-        `<div class="field-row">` +
-        `<div class="field compact"><label>x</label><input type="number" step="0.5" value="${rect.minX}" oninput="setWaterOrigin(${sel.index},+this.value,null)"></div>` +
-        `<div class="field compact"><label>z</label><input type="number" step="0.5" value="${rect.minZ}" oninput="setWaterOrigin(${sel.index},null,+this.value)"></div>` +
-        `</div>` +
-        `<div class="subfield"><label>width</label><input type="number" step="1" value="${bw}" oninput="setWaterW(${sel.index},+this.value)"></div>` +
-        `<div class="subfield"><label>depth</label><input type="number" step="1" value="${bh}" oninput="setWaterH(${sel.index},+this.value)"></div>`;
+        `<div class="field-row">${field('x','x',zs.x,0.5)}${field('z','z',zs.z,0.5)}</div>` +
+        `<div class="field-row">${field('radius x','rx',zs.rx,0.5)}${field('radius z','rz',zs.rz,0.5)}</div>` +
+        `<div class="field-row">${field('rotation °','rot',zs.rot*180/Math.PI,5)}</div>`;
     } else { zEdit.innerHTML=''; }
   } else { zEdit.innerHTML=''; }
 
@@ -2380,6 +2443,41 @@ function updateWorldPanel() {
   });
 
   if (sel?.type === 'hole_start') renderHoleStartEdit(startEdit, sel.index);
+
+  const fenceList = document.getElementById('fence-list');
+  const fenceEdit = document.getElementById('fence-edit');
+  if (!fenceList || !fenceEdit) return;
+  fenceList.innerHTML = '';
+  fenceEdit.innerHTML = '';
+  (courseWorld.fences || []).forEach((fence, i) => {
+    const isSel = sel?.type === 'fence_pole' && sel.fence === i;
+    let length = 0;
+    for (let k = 1; k < fence.poles.length; k++) {
+      length += Math.hypot(fence.poles[k][0] - fence.poles[k - 1][0], fence.poles[k][2] - fence.poles[k - 1][2]);
+    }
+    const el = document.createElement('div');
+    el.className = 'list-item' + (isSel ? ' selected' : '');
+    el.innerHTML =
+      `<span class="item-label">${i + 1}</span>` +
+      `<span class="item-coords">${fence.poles.length} poles, ${length.toFixed(0)} m, ${fence.height} m high` +
+      `${fence.osm_ref ? ' (' + escapeHtml(fence.osm_ref) + ')' : ''}</span>`;
+    el.addEventListener('click', () => {
+      setViewScope('world');
+      sel = { type:'fence_pole', fence:i, pole:0 };
+      updatePanel(); render();
+    });
+    fenceList.appendChild(el);
+  });
+  if (sel?.type === 'fence_pole' && courseWorld.fences[sel.fence]) {
+    const fence = courseWorld.fences[sel.fence];
+    fenceEdit.innerHTML =
+      `<div class="field-row">` +
+      `<div class="field compact"><label>height</label><input type="number" step="0.5" min="0.5" value="${fence.height}" ` +
+      `oninput="setFenceHeight(${sel.fence},+this.value)"></div>` +
+      `<button class="mini-btn" onclick="deleteFence(${sel.fence})">delete fence</button>` +
+      `</div>` +
+      (fence.poles.length < 2 ? `<div class="panel-note warn">A fence needs two poles; one with fewer is not saved.</div>` : '');
+  }
 }
 
 function renderHoleStartEdit(container, index) {
@@ -2550,26 +2648,6 @@ function removeControlPoint(i) {
 }
 function setCpValue(i,k,v) { hole.spline.control_points[i][k]=r2(v); markDirty(); render(); }
 function setVec3Value(vec,k,v) { vec[k]=r2(v); markDirty(); render(); }
-function setZoneR(i,v) { hole.material_zones[i].radius=Math.max(0.5,v); markDirty(); render(); }
-function setWaterOrigin(i,x,zv) {
-  const rect = waterRectWorld(hole.material_zones[i]);
-  const w = rect.maxX - rect.minX;
-  const h = rect.maxZ - rect.minZ;
-  const minX = x === null ? rect.minX : r2(x);
-  const minZ = zv === null ? rect.minZ : r2(zv);
-  setWaterRect(i, { minX, minZ, maxX:minX + w, maxZ:minZ + h });
-  markDirty(); render();
-}
-function setWaterW(i,v){
-  const rect = waterRectWorld(hole.material_zones[i]);
-  setWaterRect(i, { ...rect, maxX: rect.minX + Math.max(1, v) });
-  markDirty(); render();
-}
-function setWaterH(i,v){
-  const rect = waterRectWorld(hole.material_zones[i]);
-  setWaterRect(i, { ...rect, maxZ: rect.minZ + Math.max(1, v) });
-  markDirty(); render();
-}
 function setRoughWidth(v) { hole.spline.rough_width=Math.max(hole.spline.width, v); markDirty(); render(); }
 function setTreeValue(i,k,v) { hole.trees[i][k]=Math.max(k==='trunk_radius'?0.05:0.1, v); markDirty(); render(); }
 function setTreePosition(i,k,v) { hole.trees[i].position[k]=r2(v); markDirty(); render(); }
@@ -2657,7 +2735,6 @@ function setHoleStartAxis(index, axis, value) {
   const p = vec3(start.position);
   p[axis] = r2(value);
   start.position = p;
-  syncHoleStartReturnPosition(index);
   markWorldDirty();
   render();
 }
@@ -2666,7 +2743,6 @@ function setHoleStartRotation(index, value) {
   const start = courseWorld?.hole_starts?.[index];
   if (!start) return;
   start.rotation_degrees = normalizeDegrees(value);
-  syncHoleStartReturnPosition(index);
   markWorldDirty();
   render();
 }
@@ -2729,12 +2805,7 @@ function buildJSON() {
   // A level hole leaves bank out, as hand-made holes always have.
   if (h.spline.bank.every(b => b === 0)) delete h.spline.bank;
   h.material_zones = h.material_zones.map(z=>{
-    if(z.center) z.center=z.center.map(r2);
-    if(z.bounds) {
-      const rect = waterRectWorld(z);
-      z.bounds = [[r2(rect.minX), 0, r2(rect.minZ)], [r2(rect.maxX), 0, r2(rect.maxZ)]];
-    }
-    if(z.radius!==undefined) z.radius=r2(z.radius);
+    setZoneShape(z, zoneShape(z));
     return z;
   });
   h.trees = (h.trees || []).map(t => {
@@ -2756,7 +2827,6 @@ function buildWorldJSON() {
   if (Number.isFinite(+w.spawn?.radius)) w.spawn.radius = r2(w.spawn.radius);
   w.hole_starts = (w.hole_starts || []).map(start => {
     start.position = start.position.map(r2);
-    start.return_position = start.return_position.map(r2);
     start.interaction_radius = r2(start.interaction_radius);
     start.hole_index = Math.round(start.hole_index);
     start.rotation_degrees = normalizeDegrees(start.rotation_degrees);
@@ -2769,6 +2839,11 @@ function buildWorldJSON() {
   };
   w.cart_roads = (w.cart_roads || []).map(cleanPath);
   w.walking_shortcuts = (w.walking_shortcuts || []).map(cleanPath);
+  w.fences = (w.fences || []).filter(f => f.poles.length >= 2).map(f => ({
+    ...f,
+    poles: f.poles.map(p => [r2(p[0]), 0, r2(p[2])]),
+    height: r2(f.height)
+  }));
   w.collectibles = (w.collectibles || []).map(c => {
     c.position = c.position.map(r2);
     c.interaction_radius = r2(c.interaction_radius);
@@ -2834,8 +2909,6 @@ function fitView() {
         });
         const pin = transformHolePoint(outline, start, outline.pin);
         pts.push([pin.x, pin.z]);
-      } else if (Array.isArray(start.return_position)) {
-        pts.push([start.return_position[0], start.return_position[2]]);
       }
     });
     if (pts.length === 0) pts.push([0, 0]);
@@ -2866,7 +2939,7 @@ function newHole() {
     id:'hole_01', name:'New Hole', par:3, wind_seed:Math.floor(Math.random()*9999),
     tee:[0,0,0], pin:[0,0,80],
     spline:{ control_points:[[0,0,0],[0,0,20],[0,0,40],[0,0,60],[0,0,80]], width:18, rough_width:28 },
-    material_zones:[{ type:'green', center:[0,0,80], radius:6 }],
+    material_zones:[{ type:'green', center:[0,0,80], radii:[6,6], rotation_degrees:0 }],
     trees:[]
   };
   sel=null; markDirty(true); fitView(); updatePanel(); render();

@@ -1,66 +1,193 @@
 {
   "_comment": [
-    "Published scorecards for courses used to verify the OSM importer.",
-    "Distances are METRES along the intended line of play from the tee set named",
-    "in 'tees' -- that is how golf measures a hole, so a dogleg's scorecard number",
-    "is longer than the straight tee-to-pin distance. Compare it against the",
-    "generated spline path length, not the pin vector.",
-    "OSM tee polygons are usually the whole teeing ground rather than one marker,",
-    "so expect generated distances to land a little short of championship numbers."
+    "Published reference data for the courses in assets/courses, keyed by course id. osm_checks.py compares every import against it.",
+    "metres: along the line of play from the tee set named in 'tees' -- that is how golf measures a hole, so a dogleg's number is longer than the straight tee-to-pin distance.",
+    "bearing_deg (or faces: N, NE, ... NNW): the compass direction from tee to green, 0 north, 90 east. Optional per hole.",
+    "sources: where the numbers come from; confidence: how far to trust them and how they were taken.",
+    "OSM tee polygons are usually the whole teeing ground rather than one marker, so expect generated distances a little short of championship numbers."
   ],
   "courses": {
+    "augusta_national_golf_club": {
+      "name": "Augusta National Golf Club",
+      "osm": "way/871993734",
+      "tees": "championship",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Augusta_National_Golf_Club"
+      ],
+      "confidence": "Pars, names and lengths: published championship card (Wikipedia). Bearings: from OSM's ref- and name-tagged golf=hole ways, whose lengths agree with the card to a few percent; they guard against the importer turning holes round, not against OSM itself.",
+      "total_par": 72,
+      "holes": {
+        "1": {"par": 4, "metres": 407, "name": "Tea Olive", "bearing_deg": 305},
+        "2": {"par": 5, "metres": 535, "name": "Pink Dogwood", "bearing_deg": 172},
+        "3": {"par": 4, "metres": 320, "name": "Flowering Peach", "bearing_deg": 311},
+        "4": {"par": 3, "metres": 219, "name": "Flowering Crab Apple", "bearing_deg": 266},
+        "5": {"par": 4, "metres": 453, "name": "Magnolia", "bearing_deg": 167},
+        "6": {"par": 3, "metres": 165, "name": "Juniper", "bearing_deg": 14},
+        "7": {"par": 4, "metres": 411, "name": "Pampas", "bearing_deg": 113},
+        "8": {"par": 5, "metres": 521, "name": "Yellow Jasmine", "bearing_deg": 346},
+        "9": {"par": 4, "metres": 421, "name": "Carolina Cherry", "bearing_deg": 122},
+        "10": {"par": 4, "metres": 453, "name": "Camellia", "bearing_deg": 189},
+        "11": {"par": 4, "metres": 475, "name": "White Dogwood", "bearing_deg": 218},
+        "12": {"par": 3, "metres": 142, "name": "Golden Bell", "bearing_deg": 209},
+        "13": {"par": 5, "metres": 498, "name": "Azalea", "bearing_deg": 332},
+        "14": {"par": 4, "metres": 402, "name": "Chinese Fir", "bearing_deg": 91},
+        "15": {"par": 5, "metres": 503, "name": "Firethorn", "bearing_deg": 287},
+        "16": {"par": 3, "metres": 155, "name": "Redbud", "bearing_deg": 336},
+        "17": {"par": 4, "metres": 402, "name": "Nandina", "bearing_deg": 107},
+        "18": {"par": 4, "metres": 425, "name": "Holly", "bearing_deg": 15}
+      }
+    },
     "old_course": {
       "name": "Old Course at St Andrews",
       "osm": "way/1019045811",
       "tees": "championship",
-      "source": "https://en.wikipedia.org/wiki/Old_Course_at_St_Andrews",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Old_Course_at_St_Andrews"
+      ],
+      "confidence": "Pars, names and lengths: published championship card (Wikipedia). Bearings: from OSM's ref- and name-tagged golf=hole ways (out along the shore to the north-west, back to the south-east; the 7th crosses the 11th as on the real course). OSM maps the everyday tees, so a few holes are short of the championship lengths.",
       "total_par": 72,
       "holes": {
-        "1":  {"par": 4, "metres": 344, "name": "Burn"},
-        "2":  {"par": 4, "metres": 414, "name": "Dyke"},
-        "3":  {"par": 4, "metres": 363, "name": "Cartgate (Out)"},
-        "4":  {"par": 4, "metres": 439, "name": "Ginger Beer"},
-        "5":  {"par": 5, "metres": 519, "name": "Hole O'Cross (Out)"},
-        "6":  {"par": 4, "metres": 377, "name": "Heathery (Out)"},
-        "7":  {"par": 4, "metres": 339, "name": "High (Out)"},
-        "8":  {"par": 3, "metres": 160, "name": "Short"},
-        "9":  {"par": 4, "metres": 322, "name": "End"},
-        "10": {"par": 4, "metres": 353, "name": "Bobby Jones"},
-        "11": {"par": 3, "metres": 159, "name": "High (In)"},
-        "12": {"par": 4, "metres": 318, "name": "Heathery (In)"},
-        "13": {"par": 4, "metres": 425, "name": "Hole O'Cross (In)"},
-        "14": {"par": 5, "metres": 565, "name": "Long"},
-        "15": {"par": 4, "metres": 416, "name": "Cartgate (In)"},
-        "16": {"par": 4, "metres": 387, "name": "Corner of the Dyke"},
-        "17": {"par": 4, "metres": 453, "name": "Road"},
-        "18": {"par": 4, "metres": 327, "name": "Tom Morris"}
+        "1": {"par": 4, "metres": 344, "name": "Burn", "bearing_deg": 274},
+        "2": {"par": 4, "metres": 414, "name": "Dyke", "bearing_deg": 312},
+        "3": {"par": 4, "metres": 363, "name": "Cartgate (Out)", "bearing_deg": 331},
+        "4": {"par": 4, "metres": 439, "name": "Ginger Beer", "bearing_deg": 335},
+        "5": {"par": 5, "metres": 519, "name": "Hole O'Cross (Out)", "bearing_deg": 322},
+        "6": {"par": 4, "metres": 377, "name": "Heathery (Out)", "bearing_deg": 310},
+        "7": {"par": 4, "metres": 339, "name": "High (Out)", "bearing_deg": 341},
+        "8": {"par": 3, "metres": 160, "name": "Short", "bearing_deg": 134},
+        "9": {"par": 4, "metres": 322, "name": "End", "bearing_deg": 143},
+        "10": {"par": 4, "metres": 353, "name": "Bobby Jones", "bearing_deg": 315},
+        "11": {"par": 3, "metres": 159, "name": "High (In)", "bearing_deg": 312},
+        "12": {"par": 4, "metres": 318, "name": "Heathery (In)", "bearing_deg": 167},
+        "13": {"par": 4, "metres": 425, "name": "Hole O'Cross (In)", "bearing_deg": 123},
+        "14": {"par": 5, "metres": 565, "name": "Long", "bearing_deg": 142},
+        "15": {"par": 4, "metres": 416, "name": "Cartgate (In)", "bearing_deg": 151},
+        "16": {"par": 4, "metres": 387, "name": "Corner of the Dyke", "bearing_deg": 159},
+        "17": {"par": 4, "metres": 453, "name": "Road", "bearing_deg": 139},
+        "18": {"par": 4, "metres": 327, "name": "Tom Morris", "bearing_deg": 95}
       }
     },
-    "augusta_national": {
-      "name": "Augusta National Golf Club",
-      "osm": "way/871993734",
-      "tees": "championship",
-      "source": "https://en.wikipedia.org/wiki/Augusta_National_Golf_Club",
+    "marienlyst_golfklub": {
+      "name": "Marienlyst Golfklub",
+      "osm": "way/1408711156",
+      "tees": "single tee mat per hole",
+      "sources": [
+        "https://www.marienlyst-golfklub.dk/banen/",
+        "https://www.marienlyst-golfklub.dk/wp-content/uploads/2025/02/Kort-oversigt.png"
+      ],
+      "confidence": "High. Six par 3s, lengths from the club's own course page; bearings measured tee to flag on the club's north-up satellite course map (about +-10 degrees). The club's lengths are rounded and from the mats; OSM's lines run 10-20% short on holes 1 and 5.",
+      "total_par": 18,
+      "holes": {
+        "1": {"par": 3, "metres": 88, "bearing_deg": 274},
+        "2": {"par": 3, "metres": 90, "bearing_deg": 229},
+        "3": {"par": 3, "metres": 65, "bearing_deg": 147},
+        "4": {"par": 3, "metres": 89, "bearing_deg": 300},
+        "5": {"par": 3, "metres": 78, "bearing_deg": 324},
+        "6": {"par": 3, "metres": 76, "bearing_deg": 73}
+      }
+    },
+    "kalo_golf_club": {
+      "name": "Kalø Golf Club",
+      "osm": "way/96706717",
+      "tees": "61 (back)",
+      "sources": [
+        "https://kaloegolf.dk/scorekort-18-huls/",
+        "https://i0.wp.com/kaloegolf.dk/wp-content/uploads/2023/03/18-huls-scorekort.jpg"
+      ],
+      "confidence": "Pars and lengths: the club's official 18-hole scorecard, tee 61. OSM's golf=hole ways carry the same par, handicap and dist:* tags (dist:white on hole 1 is a typo, 3874). Bearings: from those ref-tagged OSM ways oriented to their pin nodes; no club course map was reachable.",
       "total_par": 72,
       "holes": {
-        "1":  {"par": 4, "metres": 407, "name": "Tea Olive"},
-        "2":  {"par": 5, "metres": 535, "name": "Pink Dogwood"},
-        "3":  {"par": 4, "metres": 320, "name": "Flowering Peach"},
-        "4":  {"par": 3, "metres": 219, "name": "Flowering Crab Apple"},
-        "5":  {"par": 4, "metres": 453, "name": "Magnolia"},
-        "6":  {"par": 3, "metres": 165, "name": "Juniper"},
-        "7":  {"par": 4, "metres": 411, "name": "Pampas"},
-        "8":  {"par": 5, "metres": 521, "name": "Yellow Jasmine"},
-        "9":  {"par": 4, "metres": 421, "name": "Carolina Cherry"},
-        "10": {"par": 4, "metres": 453, "name": "Camellia"},
-        "11": {"par": 4, "metres": 475, "name": "White Dogwood"},
-        "12": {"par": 3, "metres": 142, "name": "Golden Bell"},
-        "13": {"par": 5, "metres": 498, "name": "Azalea"},
-        "14": {"par": 4, "metres": 402, "name": "Chinese Fir"},
-        "15": {"par": 5, "metres": 503, "name": "Firethorn"},
-        "16": {"par": 3, "metres": 155, "name": "Redbud"},
-        "17": {"par": 4, "metres": 402, "name": "Nandina"},
-        "18": {"par": 4, "metres": 425, "name": "Holly"}
+        "1": {"par": 4, "metres": 384, "bearing_deg": 335},
+        "2": {"par": 5, "metres": 476, "bearing_deg": 76},
+        "3": {"par": 5, "metres": 453, "bearing_deg": 110},
+        "4": {"par": 4, "metres": 317, "bearing_deg": 293},
+        "5": {"par": 3, "metres": 164, "bearing_deg": 107},
+        "6": {"par": 4, "metres": 390, "bearing_deg": 276},
+        "7": {"par": 3, "metres": 168, "bearing_deg": 236},
+        "8": {"par": 4, "metres": 379, "bearing_deg": 90},
+        "9": {"par": 4, "metres": 292, "bearing_deg": 197},
+        "10": {"par": 3, "metres": 166, "bearing_deg": 236},
+        "11": {"par": 5, "metres": 481, "bearing_deg": 258},
+        "12": {"par": 4, "metres": 284, "bearing_deg": 17},
+        "13": {"par": 4, "metres": 333, "bearing_deg": 70},
+        "14": {"par": 5, "metres": 491, "bearing_deg": 232},
+        "15": {"par": 4, "metres": 393, "bearing_deg": 56},
+        "16": {"par": 4, "metres": 365, "bearing_deg": 236},
+        "17": {"par": 4, "metres": 336, "bearing_deg": 60},
+        "18": {"par": 3, "metres": 159, "bearing_deg": 58}
+      }
+    },
+    "kalo_par_3": {
+      "name": "Kalø Par 3",
+      "osm": "way/96706717 (refs P1-P9)",
+      "tees": "yellow/red",
+      "sources": [
+        "https://kaloegolf.dk/pay-play-golf/",
+        "https://www.openstreetmap.org/way/96706717"
+      ],
+      "confidence": "Medium. The club says 9 par-3 holes of about 80-150 m; per-hole lengths are OSM's dist:yellow tags on the P1-P9 golf=hole ways and bearings are those ways oriented to their pin nodes. No club scorecard or map with per-hole figures was found.",
+      "total_par": 27,
+      "holes": {
+        "1": {"par": 3, "metres": 130, "bearing_deg": 355},
+        "2": {"par": 3, "metres": 80, "bearing_deg": 322},
+        "3": {"par": 3, "metres": 89, "bearing_deg": 314},
+        "4": {"par": 3, "metres": 94, "bearing_deg": 349},
+        "5": {"par": 3, "metres": 94, "bearing_deg": 25},
+        "6": {"par": 3, "metres": 133, "bearing_deg": 212},
+        "7": {"par": 3, "metres": 139, "bearing_deg": 148},
+        "8": {"par": 3, "metres": 121, "bearing_deg": 142},
+        "9": {"par": 3, "metres": 126, "bearing_deg": 132}
+      }
+    },
+    "mollerup_golf_club": {
+      "name": "Mollerup Golf Club",
+      "osm": "way/143371710",
+      "tees": "57 (back)",
+      "sources": [
+        "https://www.mollerupgolfclub.dk/scorekort/",
+        "https://www.mollerupgolfclub.dk/wp-content/uploads/2026/08/Baneoversigt.png",
+        "https://www.golfpass.com/courses/26166-mollerup-golf-club/scorecard-and-layout"
+      ],
+      "confidence": "High. Pars and lengths: the club's scorecard, tee 57 (golfpass lists the same holes in yards). Bearings: tee to green on the club's course overview map (north to the left; about +-10 degrees). OSM's hole ways carry no ref, par or name, so the play order in osm_golf_config.json was matched to that map line by line.",
+      "total_par": 71,
+      "holes": {
+        "1": {"par": 3, "metres": 150, "bearing_deg": 84},
+        "2": {"par": 4, "metres": 300, "bearing_deg": 272},
+        "3": {"par": 4, "metres": 286, "bearing_deg": 250},
+        "4": {"par": 4, "metres": 395, "bearing_deg": 70},
+        "5": {"par": 5, "metres": 435, "bearing_deg": 243},
+        "6": {"par": 4, "metres": 332, "bearing_deg": 262},
+        "7": {"par": 3, "metres": 130, "bearing_deg": 13},
+        "8": {"par": 4, "metres": 353, "bearing_deg": 101},
+        "9": {"par": 4, "metres": 354, "bearing_deg": 63},
+        "10": {"par": 5, "metres": 453, "bearing_deg": 200},
+        "11": {"par": 3, "metres": 133, "bearing_deg": 25},
+        "12": {"par": 5, "metres": 538, "bearing_deg": 38},
+        "13": {"par": 3, "metres": 156, "bearing_deg": 260},
+        "14": {"par": 5, "metres": 491, "bearing_deg": 63},
+        "15": {"par": 4, "metres": 305, "bearing_deg": 265},
+        "16": {"par": 3, "metres": 125, "bearing_deg": 253},
+        "17": {"par": 4, "metres": 417, "bearing_deg": 208},
+        "18": {"par": 4, "metres": 293, "bearing_deg": 26}
+      }
+    },
+    "mollerup_par_3": {
+      "name": "Mollerup Par 3",
+      "osm": "way/1010269501",
+      "tees": "single",
+      "sources": [
+        "https://www.mollerupgolfclub.dk/greenfee-payandplay-2/",
+        "https://www.golfify.io/courses/mollerup-golf-club-par-3"
+      ],
+      "confidence": "High for count and order: the club calls it its '6 hullers par 3 bane' (6 holes, par 18), and the owner, who plays it, confirmed the routing (1 by the road, 2 south-east, 3 south, 4 and 5 back north on the west side, 6 from a tee west of the water to the green by the road). No published per-hole lengths (golfify's 300 m each is a placeholder); hole 6's 90 m and direction are the owner's.",
+      "total_par": 18,
+      "holes": {
+        "1": {"par": 3},
+        "2": {"par": 3},
+        "3": {"par": 3},
+        "4": {"par": 3},
+        "5": {"par": 3},
+        "6": {"par": 3, "metres": 90, "bearing_deg": 74}
       }
     }
   }

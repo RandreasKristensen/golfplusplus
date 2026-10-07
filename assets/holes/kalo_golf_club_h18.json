@@ -67,20 +67,28 @@
     {
       "type": "green",
       "center": [
-        139.23,
+        138.73,
         0,
-        -87.29
+        -79.12
       ],
-      "radius": 11.33
+      "radii": [
+        14.28,
+        8.98
+      ],
+      "rotation_degrees": -44.3
     },
     {
       "type": "bunker",
       "center": [
-        124.42,
+        124.09,
         0,
-        -87.98
+        -87.18
       ],
-      "radius": 7.37
+      "radii": [
+        10.5,
+        5.18
+      ],
+      "rotation_degrees": -49.9
     }
   ],
   "trees": [
@@ -130,9 +138,75 @@
     },
     {
       "position": [
-        -74.96,
+        33.76,
         0.0,
-        -16.64
+        -79.91
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        43.03,
+        0.0,
+        -96.13
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        46.97,
+        0.0,
+        -105.49
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        37.5,
+        0.0,
+        -104.61
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        58.44,
+        0.0,
+        -118.85
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        52.21,
+        0.0,
+        -119.34
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        57.02,
+        0.0,
+        -129.67
       ],
       "trunk_radius": 0.65,
       "trunk_height": 5.0,
@@ -152,6 +226,22 @@
     ],
     "centerline": "hole_way",
     "elevation": "terrarium",
-    "tee_elevation": 76.69
+    "tee_elevation": 76.69,
+    "hole_way": "way/1419027239",
+    "zone_fit": [
+      {
+        "osm": "way/1419027238",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.91
+      },
+      {
+        "osm": "way/630415818",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.86
+      }
+    ],
+    "made_green": false
   }
 }

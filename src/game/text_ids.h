@@ -14,8 +14,14 @@ constexpr const char* text_online_browser_signed_in = "online.browser.signed_in"
 constexpr const char* text_online_browser_failed = "online.browser.failed";
 // Taken out of an online round's room while still connected
 constexpr const char* text_online_room_lost = "online.room_lost";
+// The server's tee_in_use refusal, shown before asking when the tee is taken.
+constexpr const char* text_online_tee_in_use = "online.error.tee_in_use";
+// Starting a hole with the last holed ball still in its cup, offline and the
+// server's ball_in_cup refusal.
+constexpr const char* text_ball_in_cup = "online.error.ball_in_cup";
 
 // Startup menus
+constexpr const char* text_menu_loading = "menu.loading";
 constexpr const char* text_menu_main_title = "menu.main.title";
 constexpr const char* text_menu_main_subtitle = "menu.main.subtitle";
 constexpr const char* text_menu_main_signed_in = "menu.main.signed_in";
@@ -31,6 +37,8 @@ constexpr const char* text_menu_main_sign_out = "menu.main.sign_out";
 constexpr const char* text_menu_main_sign_out_hint = "menu.main.sign_out.hint";
 constexpr const char* text_menu_main_help = "menu.main.help";
 constexpr const char* text_menu_main_help_hint = "menu.main.help.hint";
+constexpr const char* text_menu_main_settings = "menu.main.settings";
+constexpr const char* text_menu_main_settings_hint = "menu.main.settings.hint";
 constexpr const char* text_menu_main_quit = "menu.main.quit";
 constexpr const char* text_menu_main_quit_hint = "menu.main.quit.hint";
 constexpr const char* text_menu_offline_title = "menu.offline.title";
@@ -55,6 +63,12 @@ constexpr const char* text_menu_online_course_picker_subtitle = "menu.online_cou
 constexpr const char* text_menu_confirm_title = "menu.confirm.title";
 constexpr const char* text_menu_confirm_yes = "menu.confirm.yes";
 constexpr const char* text_menu_confirm_no = "menu.confirm.no";
+constexpr const char* text_menu_confirm_settings = "menu.confirm.settings";
+constexpr const char* text_menu_settings_title = "menu.settings.title";
+constexpr const char* text_menu_settings_subtitle = "menu.settings.subtitle";
+constexpr const char* text_menu_settings_footer = "menu.settings.footer";
+constexpr const char* text_menu_settings_back = "menu.settings.back";
+constexpr const char* text_menu_settings_back_hint = "menu.settings.back.hint";
 
 // Online menus
 constexpr const char* text_menu_online_title = "menu.online.title";
@@ -124,9 +138,19 @@ constexpr const char* text_hud_cart_drive = "hud.cart.drive";
 constexpr const char* text_hud_cart_drift = "hud.cart.drift";
 constexpr const char* text_hud_rangefinder = "hud.rangefinder";
 constexpr const char* text_hud_xp_drop = "hud.xp_drop";
+// A shot lost in water, as the ball goes back
+constexpr const char* text_hud_water_penalty = "hud.water_penalty";
 constexpr const char* text_hud_mode_offline = "hud.mode.offline";
 constexpr const char* text_hud_mode_online = "hud.mode.online";
 constexpr const char* text_hud_mode_reconnecting = "hud.mode.reconnecting";
+
+// Hole signs at the tees
+constexpr const char* text_hole_sign_number = "hole_sign.number";
+constexpr const char* text_hole_sign_par = "hole_sign.par";
+constexpr const char* text_hole_sign_length = "hole_sign.length";
+
+// The course map (held up with Enter)
+constexpr const char* text_course_map_hole_number = "course_map.hole_number";
 
 // Skills panel
 constexpr const char* text_skills_title = "skills.title";
@@ -153,6 +177,7 @@ constexpr const char* text_scorecard_hole_row = "scorecard.hole_row";
 constexpr const char* text_scorecard_even = "scorecard.even";
 constexpr const char* text_scorecard_over = "scorecard.over";
 constexpr const char* text_scorecard_under = "scorecard.under";
+constexpr const char* text_scorecard_waiting_for_group = "scorecard.waiting_for_group";
 
 // Text styles
 constexpr const char* style_title = "title";
@@ -171,6 +196,8 @@ constexpr const char* style_control_key_down = "control_key_down";
 constexpr const char* style_hud_label = "hud_label";
 constexpr const char* style_hud_mode = "hud_mode";
 constexpr const char* style_name_tag = "name_tag";
+constexpr const char* style_name_tag_group = "name_tag_group";
+constexpr const char* style_name_tag_friend = "name_tag_friend";
 constexpr const char* style_hud_scale = "hud_scale";
 constexpr const char* style_hud_club = "hud_club";
 constexpr const char* style_cart_label = "cart_label";
@@ -178,6 +205,9 @@ constexpr const char* style_cart_drive = "cart_drive";
 constexpr const char* style_cart_drift = "cart_drift";
 constexpr const char* style_xp_drop = "xp_drop";
 constexpr const char* style_rangefinder = "rangefinder";
+constexpr const char* style_hole_sign_number = "hole_sign_number";
+constexpr const char* style_hole_sign_detail = "hole_sign_detail";
+constexpr const char* style_course_map_hole_number = "course_map_hole_number";
 constexpr const char* style_panel_title = "panel_title";
 constexpr const char* style_panel_header = "panel_header";
 constexpr const char* style_panel_value = "panel_value";

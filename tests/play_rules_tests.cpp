@@ -152,8 +152,12 @@ TEST_CASE("movement earns walking on foot and cart xp only in a cart on a road")
     CHECK(drift.drift);
     CHECK(!drift.walking);
     CHECK(!movement_earns(mode_number(motion_mode::cart), true).drift);
-    CHECK(!movement_earns(mode_number(motion_mode::aim), true).walking);
-    CHECK(motion_mode_count == 5U);
+    for (const motion_mode at : {motion_mode::aim, motion_mode::address, motion_mode::swing}) {
+        const movement_earnings earnings = movement_earns(mode_number(at), true);
+        CHECK(!earnings.walking);
+        CHECK(!earnings.cart);
+    }
+    CHECK(motion_mode_count == 7U);
 }
 
 TEST_CASE("interaction reach is the radius plus slack, horizontally") {

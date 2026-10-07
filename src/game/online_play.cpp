@@ -1,6 +1,7 @@
 #include "game/online_play.h"
 
 #include "game/course_session.h"
+#include "game/group_round.h"
 #include "game/mode_dispatch.h"
 #include "game/remote_players.h"
 #include "game/text_ids.h"
@@ -56,8 +57,20 @@ void restore_ball(game_state& state) {
     state.stroke_count = ball->second.stroke_count;
 }
 
+// A refused pickup, or a hole refused while the server still has my ball in
+// its cup: the ball goes back in the cup.
+void put_cup_ball_back(game_state& state) {
+    if (state.picked_cup_ball && !state.cup_ball) {
+        state.cup_ball = state.picked_cup_ball;
+    }
+    state.picked_cup_ball.reset();
+}
+
 void take_refusals(game_state& state) {
     for (const reducer_failure& refusal : state.online.refusals) {
+        if (refusal.reducer == "pick_up_ball" || online_error_text_key(refusal.error) == text_ball_in_cup) {
+            put_cup_ball_back(state);
+        }
         if (refusal.reducer == "take_shot" || refusal.reducer == "retee") {
             restore_ball(state);
         } else if (refusal.reducer == "enter_hole" || refusal.reducer == "claim_collectible" ||
@@ -96,8 +109,12 @@ void reconcile_my_shot(game_state& state, const room_shot& shot) {
     }
 }
 
-void take_shots(game_state& state) {
+// My shots are reconciled; others' shots and emotes play (remote_players.h).
+// Every member's strokes are kept for the group's scorecard.
+void take_room_events(game_state& state) {
+    note_round_strokes(state);
     for (const room_shot& shot : state.online.shots) {
+        note_holed_shot(state, shot);
         if (shot.account_id == state.online.account_id) {
             reconcile_my_shot(state, shot);
         } else {
@@ -105,6 +122,10 @@ void take_shots(game_state& state) {
         }
     }
     state.online.shots.clear();
+    for (const room_emote& emote : state.online.emotes) {
+        start_remote_emote(state, emote);
+    }
+    state.online.emotes.clear();
 }
 
 void update_ball_correction(game_state& state, const float dt) {
@@ -130,6 +151,7 @@ void follow_server_hole(game_state& state) {
     }
     if (me->zone == static_cast<int>(state.hole->index)) {
         state.online_hole.entered = true;
+        state.picked_cup_ball.reset();  // the server let the hole start: the pickup stood
         return;
     }
     if (state.online_hole.entered && me->zone == hub_zone && !shot_playing(state) && !state.ball_correction) {
@@ -154,7 +176,16 @@ void update_online_play(game_state& state, const float dt) {
         return;
     }
     take_refusals(state);
-    take_shots(state);
+    take_room_events(state);
     update_ball_correction(state, dt);
     follow_server_hole(state);
+}
+
+void watch_room(game_state& state, const float dt) {
+    age_notice(state, dt);
+    if (!is_online(state)) {
+        return;
+    }
+    state.online.refusals.clear();
+    take_room_events(state);
 }

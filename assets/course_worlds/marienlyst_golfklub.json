@@ -29,11 +29,6 @@
         0.0,
         -34.36
       ],
-      "return_position": [
-        105.05,
-        0.0,
-        -42.61
-      ],
       "interaction_radius": 4.0
     },
     {
@@ -43,11 +38,6 @@
         77.03,
         -2.28,
         -63.44
-      ],
-      "return_position": [
-        2.62,
-        0.0,
-        0.05
       ],
       "interaction_radius": 4.0
     },
@@ -59,11 +49,6 @@
         -0.38,
         12.89
       ],
-      "return_position": [
-        11.98,
-        0.0,
-        69.17
-      ],
       "interaction_radius": 4.0
     },
     {
@@ -73,11 +58,6 @@
         29.4,
         4.82,
         111.86
-      ],
-      "return_position": [
-        -53.76,
-        0.0,
-        64.86
       ],
       "interaction_radius": 4.0
     },
@@ -89,11 +69,6 @@
         -0.43,
         34.1
       ],
-      "return_position": [
-        -83.41,
-        0.0,
-        -19.24
-      ],
       "interaction_radius": 4.0
     },
     {
@@ -103,11 +78,6 @@
         -120.38,
         1.03,
         -57.11
-      ],
-      "return_position": [
-        -46.58,
-        0.0,
-        -78.04
       ],
       "interaction_radius": 4.0
     }
@@ -187,6 +157,7 @@
       ]
     }
   ],
+  "fences": [],
   "walking_shortcuts": [],
   "collectibles": [
     {

@@ -1,0 +1,117 @@
+{
+  "id": "mollerup_par_3_h05",
+  "name": "Hole 5",
+  "par": 3,
+  "wind_seed": 4208,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    5.62,
+    -2.37,
+    -79.29
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.55,
+        -0.37,
+        -29.23
+      ],
+      [
+        2.02,
+        -1.11,
+        -45.5
+      ],
+      [
+        4.48,
+        -1.79,
+        -61.7
+      ],
+      [
+        5.62,
+        -2.24,
+        -79.29
+      ]
+    ],
+    "bank": [
+      0.0084,
+      0.0088,
+      0.0081,
+      0.0063,
+      0.0048
+    ],
+    "width": 15.5,
+    "rough_width": 24.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        5.26,
+        0,
+        -78.88
+      ],
+      "radii": [
+        5.21,
+        4.8
+      ],
+      "rotation_degrees": 83.5
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        19.66,
+        0.0,
+        -50.8
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        22.58,
+        0.0,
+        -31.29
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.2106733,
+      10.1917764
+    ],
+    "pin_latlon": [
+      56.2113856,
+      10.1918672
+    ],
+    "centerline": "fairway_shape",
+    "elevation": "terrarium",
+    "tee_elevation": 14.07,
+    "hole_way": "way/1565386486",
+    "zone_fit": [
+      {
+        "osm": "way/1010266857",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.96
+      }
+    ],
+    "made_green": false
+  }
+}

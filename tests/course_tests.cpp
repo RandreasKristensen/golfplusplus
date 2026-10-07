@@ -6,6 +6,7 @@
 #include "game/play_area.h"
 #include "game/progress_rules.h"
 #include "game/scorecard.h"
+#include "game/text_ids.h"
 #include "game/text_assets.h"
 #include "physics/vector_math.h"
 
@@ -45,7 +46,7 @@ void check_anchors_are_fresh(const game_state& state) {
     CHECK(cached.tee_anchor == fresh.tee_anchor);
     CHECK(cached.pin_anchor == fresh.pin_anchor);
     CHECK(same_trees(cached.trees, fresh.trees));
-    CHECK(cached.hub_start_markers == fresh.hub_start_markers);
+    CHECK(cached.hub_pin_markers == fresh.hub_pin_markers);
     CHECK(cached.collectibles == fresh.collectibles);
 }
 }
@@ -224,16 +225,39 @@ TEST_CASE("action at a hole start plays that hole where the hub shows it") {
     CHECK(sample_area(state.area, marker.pin_position).inside_surface);
 }
 
-TEST_CASE("completing a hub hole returns to its return position") {
+TEST_CASE("the action that starts a hole takes up its tee ball, so the tee shot needs no extra press") {
+    game_state state = started_game(fixture_hub_course());
+    walk_to(state, state.hub->markers[0].start_position);
+
+    update_game(state, action_input(), 0.016f);
+    REQUIRE(state.hole.has_value());
+    CHECK(state.mode == game_mode::aiming);
+
+    // Address, start the meter, hit: as from anywhere beside the ball.
+    for (int press = 0; press < 3; ++press) {
+        update_game(state, action_input(), 0.016f);
+    }
+    CHECK(state.stroke_count == 1);
+    CHECK(shot_playing(state));
+}
+
+TEST_CASE("holing out on a hub hole leaves the player where they stand") {
     game_state state = started_game(fixture_hub_course());
     REQUIRE(start_hub_hole(state, 1));
+    const glm::vec3 stance = state.player.position;
+    const glm::vec3 cup = pin_anchor_position(state);
+    REQUIRE(horizontal_distance(stance, cup) > 10.0f);
 
-    finish_hole(state, 4);
+    state.stroke_count = 1;
+    play_shot(state, shot_result{cup, true, 0.05f, {state.ball.position, cup}, {}});
+    for (int i = 0; i < 20 && state.hole; ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
 
     CHECK(in_hub(state));
-    CHECK(*state.round.strokes[1] == 4);
+    CHECK(*state.round.strokes[1] == 1);
     CHECK(state.round.current_hole_index == 2);
-    CHECK(near(horizontal(state.player.position), horizontal(state.hub->world.hole_starts[1].return_position), 0.001f));
+    CHECK(near(horizontal(state.player.position), horizontal(stance), 0.001f));
     CHECK(state.save_requested);
 }
 
@@ -244,15 +268,70 @@ TEST_CASE("hub holes can be played in any order and the round ends after all of 
     finish_hole(state, 5);
     CHECK(!round_finished(state.round));
     CHECK(state.save.completed_course_ids.empty());
+    pick_up_from_cup(state);
     CHECK(!start_hub_hole(state, 2));
 
     REQUIRE(start_hub_hole(state, 0));
     finish_hole(state, 3);
+    pick_up_from_cup(state);
     REQUIRE(start_hub_hole(state, 1));
     finish_hole(state, 4);
 
     CHECK(round_finished(state.round));
     CHECK(state.save.completed_course_ids == std::vector<std::string>{"fixture_hub"});
+}
+
+TEST_CASE("the holed ball waits in its cup until it is picked up, and no hole starts before") {
+    game_state state = started_game(fixture_hub_course());
+    REQUIRE(start_hub_hole(state, 0));
+    const glm::vec3 cup = pin_anchor_position(state);
+    finish_hole(state, 3);
+    REQUIRE(in_hub(state));
+    REQUIRE(state.cup_ball.has_value());
+    CHECK(near(*state.cup_ball, cup));
+
+    CHECK(!start_hub_hole(state, 1));
+    REQUIRE(state.notice.has_value());
+    CHECK(state.notice->text_key == text_ball_in_cup);
+
+    const float reach = state.tuning.player.ball_interact_radius;
+    walk_to(state, cup + glm::vec3(reach + 1.0f, 0.0f, 0.0f));
+    CHECK(!cup_ball_in_reach(state));
+    CHECK(!pick_up_cup_ball(state));
+    CHECK(state.cup_ball.has_value());
+
+    walk_to(state, cup + glm::vec3(reach * 0.5f, 0.0f, 0.0f));
+    CHECK(cup_ball_in_reach(state));
+    update_game(state, action_input(), 0.016f);
+    CHECK(in_hub(state));
+    CHECK(!state.cup_ball.has_value());
+    CHECK(start_hub_hole(state, 1));
+}
+
+TEST_CASE("the ball in the cup stays into the next round and goes when the course is left") {
+    game_state state = started_game(fixture_hub_course());
+    for (std::size_t i = 0; i < state.course_holes.size(); ++i) {
+        REQUIRE(start_hub_hole(state, i));
+        finish_hole(state, 3);
+        pick_up_from_cup(state);
+    }
+    REQUIRE(round_finished(state.round));
+    REQUIRE(state.cup_ball.has_value());  // not picked up: the round ended
+
+    start_next_round(state);
+    CHECK(state.cup_ball.has_value());
+    CHECK(!start_hub_hole(state, 0));
+
+    REQUIRE(start_course(state, state.course));
+    CHECK(!state.cup_ball.has_value());
+    CHECK(start_hub_hole(state, 0));
+}
+
+TEST_CASE("a course without a hub leaves no ball in a cup") {
+    game_state state = started_game(fixture_course({"test", "test2"}));
+    finish_hole(state, 3);
+    CHECK(!state.cup_ball.has_value());
+    CHECK(state.hole.has_value());
 }
 
 TEST_CASE("starts of played holes cannot be used again") {
@@ -342,7 +421,7 @@ TEST_CASE("static anchors stay fresh through hub, hole and course changes") {
     CHECK(state.terrain_render_revision > revision);
     check_anchors_are_fresh(state);
     CHECK(state.static_anchors.trees.size() == state.area.trees.size());
-    CHECK(state.static_anchors.hub_start_markers.size() == 3U);
+    CHECK(state.static_anchors.hub_pin_markers.size() == 3U);
     CHECK(state.static_anchors.collectibles.size() == 3U);
     const std::vector<tree_body> hub_trees = state.static_anchors.trees;
 
@@ -352,7 +431,7 @@ TEST_CASE("static anchors stay fresh through hub, hole and course changes") {
     REQUIRE(state.hole.has_value());
     CHECK(state.terrain_render_revision > revision);
     check_anchors_are_fresh(state);
-    CHECK(state.static_anchors.hub_start_markers.empty());
+    CHECK(state.static_anchors.hub_pin_markers.size() == 3U);
 
     finish_hole(state, 3);
     CHECK(in_hub(state));

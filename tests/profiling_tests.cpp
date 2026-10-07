@@ -281,7 +281,7 @@ TEST_CASE("gpu lines only appear once timer queries have reported") {
 }
 
 TEST_CASE("terrain samples report the triangles they tested as a pure output") {
-    const terrain_mesh mesh = build_terrain_mesh(make_test_spline(), {}, terrain_zone_tuning{});
+    const terrain_mesh mesh = build_terrain_mesh(make_test_spline());
     CHECK(mesh.indices.size() >= 3U);
 
     const terrain_sample inside = sample_terrain_mesh(mesh, glm::vec3(0.0f, 0.0f, 20.0f), 0.0f);

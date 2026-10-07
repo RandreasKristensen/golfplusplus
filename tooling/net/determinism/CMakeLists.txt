@@ -28,7 +28,9 @@ set(sources
   src/physics/flight_model.cpp
   src/physics/ground_contact.cpp
   src/physics/ground_mesh.cpp
+  src/physics/material_zone.cpp
   src/physics/terrain.cpp
+  src/physics/fence_collision.cpp
   src/physics/tree_collision.cpp
   src/physics/wind.cpp
   src/game/club_loader.cpp
@@ -36,6 +38,7 @@ set(sources
   src/game/course_loader.cpp
   src/game/course_world_loader.cpp
   src/game/hole_loader.cpp
+  src/game/hole_sign.cpp
   src/game/json_util.cpp
   src/game/pixel_font_data.cpp
   src/game/play_area.cpp

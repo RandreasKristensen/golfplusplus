@@ -3,7 +3,10 @@
 // Everything the renderer draws in one frame, built by core/render_frame from
 // game state. Plain data; the renderer never reads game state itself.
 
+#include "game/course_definition.h"
+#include "game/remote_players.h"
 #include "game/scorecard.h"
+#include "game/tee_box.h"
 #include "physics/tree_collision.h"
 #include "profiling/profiling.h"
 #include "renderer/menu_overlay.h"
@@ -15,6 +18,10 @@
 #include <vector>
 
 #include <glm/vec3.hpp>
+
+struct render_fences;  // renderer/fence_batch.h
+struct render_water;   // renderer/water_batch.h
+struct render_hole_signs;  // renderer/hole_sign_batch.h
 
 // Which keys are held, for the on-screen key icons.
 struct controls_overlay_state {
@@ -56,10 +63,12 @@ struct render_xp_drop {
     float progress = 0.0f;  // 0 when it appears, 1 when it disappears
 };
 
-// A name over another player's head (world position of the tag).
+// A name over another player's head (world position of the tag), coloured
+// by what they are to me.
 struct render_name_tag {
     glm::vec3 position{0.0f};
     std::string name;
+    player_relationship relationship = player_relationship::unknown;
 };
 
 // Another player's shot trail, fading once their ball stops.
@@ -68,38 +77,54 @@ struct render_trail {
     float alpha = 0.0f;
 };
 
+// A hole's number on the course map, by its tee.
+struct render_map_hole {
+    std::string number;
+    glm::vec3 tee{0.0f};
+};
+
 struct render_data {
     glm::vec3 camera_position{0.0f};
     glm::vec3 camera_target{0.0f, 0.0f, 1.0f};
     float camera_fov_degrees = 0.0f;
+    // My cart and emote props, pinned to the camera, are drawn at this field
+    // of view in a pass of their own, so the player's setting never changes
+    // how they sit in the frame.
+    float viewmodel_fov_degrees = 0.0f;
 
     // Scene. Pointers borrow caches owned by app or game_state that outlive
     // the render call; null means "none this frame".
     const render_static_mesh* terrain_mesh = nullptr;
     const render_static_mesh* material_overlay_mesh = nullptr;
-    // The course's backdrop panorama, relative to the asset root.
-    const std::string* backdrop_image = nullptr;
+    // What is drawn behind the course, and the haze the scene fades into.
+    const course_backdrop* backdrop = nullptr;
     const std::vector<tree_body>* trees = nullptr;
     // Instance data for `trees` is re-uploaded only when this changes.
     std::uint64_t trees_revision = 0;
+    const render_hole_signs* hole_signs = nullptr;  // one at every tee of the area
+    const render_fences* fences = nullptr;          // the course world's fences
+    const render_water* water = nullptr;            // the ponds' surfaces
+    bool camera_underwater = false;                 // the scene is seen from under a pond's surface
     glm::vec3 area_center{0.0f};
     float area_extent = 0.0f;
 
     bool show_ball = false;
-    glm::vec3 ball_position{0.0f};
+    glm::vec3 ball_position{0.0f};  // the drawn ball's centre (drawn_ball_center)
     glm::vec3 player_position{0.0f};
     float ball_visual_radius_meters = 0.0f;
     float cup_radius_meters = 0.0f;
     float pin_visual_height_meters = 0.0f;
-    // The hole being played (tee marker, cup and flag); unset in the hub.
+    // The hole being played (its cup and flag; its tee for the course map);
+    // unset in the hub.
     bool show_hole = false;
     glm::vec3 tee_position{0.0f};
     glm::vec3 pin_position{0.0f};
-    // Hub markers: starts of unplayed holes, every tee and pin, and the
-    // collectibles that can be claimed now.
-    std::vector<glm::vec3> start_markers;
-    const std::vector<glm::vec3>* hub_tee_markers = nullptr;
-    const std::vector<glm::vec3>* hub_pin_markers = nullptr;
+    // Every tee box of the area, hub or hole.
+    const std::vector<tee_box>* tee_boxes = nullptr;
+    // The pins of every hole on the course but the one being played (whose
+    // pin is `pin_position`): a course is one world, so they stay up in a round.
+    std::vector<glm::vec3> pin_markers;
+    // Hub only: the collectibles that can be claimed now.
     std::vector<glm::vec3> collectible_markers;
 
     bool show_aim_indicator = false;
@@ -140,6 +165,11 @@ struct render_data {
     glm::vec3 rangefinder_target{0.0f};
     std::string rangefinder_label;
     bool show_course_map = false;
+    // The course map: the XZ box around every hole's ribbon and zones that it
+    // fits to its paper, and each hole's number at its tee.
+    glm::vec3 course_map_low{0.0f};
+    glm::vec3 course_map_high{0.0f};
+    std::vector<render_map_hole> map_holes;
     bool show_scorecard = false;
     bool show_course_results = false;
     scorecard_data scorecard;

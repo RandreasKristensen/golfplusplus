@@ -28,6 +28,28 @@ audio_manifest_parse_result fail(const std::string& error) {
 }
 }
 
+audio_levels audio_levels_from_settings(const settings_values& values, const std::vector<setting_definition>& definitions) {
+    audio_levels levels;
+    if (const setting_definition* master = find_setting(definitions, setting_master_volume)) {
+        levels.master = setting_fraction(values, *master);
+    }
+    if (const setting_definition* music = find_setting(definitions, setting_music_volume)) {
+        levels.music = setting_fraction(values, *music);
+    }
+    return levels;
+}
+
+float sound_mix_gain(const audio_manifest& manifest, const audio_sound_definition& sound) {
+    const auto it = manifest.category_volumes.find(sound.category);
+    const float category = it != manifest.category_volumes.end() ? it->second : 1.0f;
+    return clamped_volume(manifest.master_volume * category * sound.volume_multiplier);
+}
+
+float played_gain(const float mix_gain, const audio_sound_type type, const audio_levels& levels) {
+    const float music = type == audio_sound_type::ambience ? clamped_volume(levels.music) : 1.0f;
+    return clamped_volume(mix_gain) * clamped_volume(levels.master) * music;
+}
+
 audio_manifest_parse_result parse_audio_manifest(const std::string& text) {
     const std::optional<json> root = parse_json(text);
     if (!root || !root->is_object()) {

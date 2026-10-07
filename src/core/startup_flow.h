@@ -1,7 +1,8 @@
 #pragma once
 
-// Menu flow: main menu, help, the offline pickers, the online screens
-// (core/online_menus.h) and the in-round "are you sure" menu. Turns input
+// Menu flow: main menu, help, settings (core/settings_menu.h), the offline
+// pickers, the online screens (core/online_menus.h) and the in-round "leave
+// the round?" menu, which also opens settings. Turns input
 // into state changes plus actions, online requests and UI sounds for app to
 // carry out, and builds the menu render data. No SDL and no network: app
 // converts mouse clicks to overlay clip space first, and tells the flow how
@@ -12,6 +13,7 @@
 #include "game/game_content.h"
 #include "game/hole_data.h"
 #include "game/net_types.h"
+#include "game/settings.h"
 #include "game/text_assets.h"
 #include "renderer/menu_overlay.h"
 #include "renderer/text_input.h"
@@ -27,6 +29,7 @@
 enum class startup_flow {
     main,
     help,
+    settings,
     offline,  // PLAY OFFLINE: a course or a practice hole
     hole_picker,
     course_picker,
@@ -47,6 +50,7 @@ enum class main_menu_item {
     link_login,
     sign_out,
     help,
+    settings,
     quit
 };
 
@@ -60,8 +64,9 @@ enum class offline_menu_item {
 struct startup_hole_option {
     std::string path;  // relative to the asset root
     hole_data hole;
-    // The backdrop of the first course playing this hole; empty when none does.
-    std::string backdrop;
+    // The backdrop of the first course playing this hole; empty images when
+    // none does.
+    course_backdrop backdrop;
 };
 
 struct startup_course_option {
@@ -78,6 +83,7 @@ struct startup_catalog {
     // which of them a name may use), up to the server's longest name.
     std::string name_chars;
     std::size_t name_max_length = 0;
+    std::vector<setting_definition> settings;  // the settings screen's entries
 };
 
 // How online play is going, as the menus need it. app fills it each frame
@@ -86,6 +92,7 @@ struct startup_catalog {
 struct online_menu_status {
     bool available = false;  // online play is built in and configured
     net_status status = net_status::signed_out;
+    bool guest = false;  // signed in anonymously: guests cannot link logins
     std::string failure_id;  // why sign-in or the connection failed; empty when it did not
     std::uint64_t account_id = 0;  // 0 until my account arrives
     std::string name;              // empty until claimed
@@ -105,8 +112,15 @@ struct startup_flow_state {
     startup_flow flow = startup_flow::main;
     int selection = 0;
     bool confirm_active = false;
-    // 0 = YES, 1 = NO. Opens on NO so a stray key press never quits a round.
+    // 0 = YES, 1 = NO, 2 = SETTINGS. Opens on NO so a stray key press never
+    // quits a round.
     int confirm_selection = 1;
+    // The in-round menu shows settings instead, with this selection.
+    bool confirm_settings = false;
+    int settings_selection = 0;
+    // The player's settings: app loads them, applies them when a menu
+    // reports settings_changed, and saves them. Kept across every screen.
+    settings_values settings;
 
     // A string table key to show in the screen's message line (errors);
     // empty when none. Cleared when the screen changes.
@@ -160,15 +174,18 @@ struct startup_menu_result {
     play_mode play = play_mode::offline;
     std::vector<online_request> requests;
     std::vector<ui_sound> sounds;
+    bool settings_changed = false;
 };
 
 struct confirm_menu_result {
     bool leave_round = false;  // the player confirmed leaving for the main menu
     std::vector<ui_sound> sounds;
+    bool settings_changed = false;
 };
 
 // Every hole file in <asset_root>/holes (sorted by path) and every course,
-// with name entry's rules from the font and the server tuning.
+// with name entry's rules from the font and the server tuning, and the
+// settings screen's entries.
 startup_catalog load_startup_catalog(const game_content& content, const text_assets& text);
 
 // `click` is this frame's left click in overlay clip space.
@@ -187,10 +204,13 @@ bool wants_text_input(const startup_flow_state& state);
 void open_confirm_menu(startup_flow_state& state);
 confirm_menu_result update_confirm_menu(startup_flow_state& state,
                                         const input_state& input,
-                                        std::optional<glm::vec2> click);
+                                        std::optional<glm::vec2> click,
+                                        const std::vector<setting_definition>& settings);
 
 render_startup_menu make_startup_menu_render_data(const startup_flow_state& state,
                                                   const startup_catalog& catalog,
                                                   const text_assets& text,
                                                   const online_menu_status& online = {});
-render_startup_menu make_confirm_menu_render_data(const startup_flow_state& state, const text_assets& text);
+render_startup_menu make_confirm_menu_render_data(const startup_flow_state& state,
+                                                  const text_assets& text,
+                                                  const std::vector<setting_definition>& settings);

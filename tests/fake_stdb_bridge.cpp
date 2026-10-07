@@ -67,7 +67,8 @@ stdb_event row_event(const stdb_table table, const stdb_row_change change, const
 }
 
 stdb_string fake_text(const std::string& text) {
-    return stdb_string{text.data(), text.size()};
+    const std::string& kept = fake_bridge().texts.emplace_back(text);
+    return stdb_string{kept.data(), kept.size()};
 }
 
 extern "C" {
@@ -170,6 +171,10 @@ void stdb_return_to_hub(stdb_client*) {
 
 void stdb_retee(stdb_client*) {
     record("stdb_retee");
+}
+
+void stdb_pick_up_ball(stdb_client*) {
+    record("stdb_pick_up_ball");
 }
 
 void stdb_take_shot(stdb_client*, const stdb_shot* shot) {

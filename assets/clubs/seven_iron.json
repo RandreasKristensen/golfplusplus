@@ -8,6 +8,7 @@
     "power": 38.5,
     "loft_degrees": 34.0,
     "backspin": 0.08,
-    "side_spin": 0.7
+    "side_spin": 0.7,
+    "bunker_power": 0.45
   }
 }

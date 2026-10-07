@@ -1,7 +1,7 @@
-"""Draws golf++'s procedural images: the rough's grass texture and the backdrop
-panorama every course in assets/courses names, as uncompressed 24-bit BMPs.
-Courses without a theme of their own below (fresh imports) get the default
-parkland one, seeded by their id.
+"""Draws golf++'s procedural images: the rough's grass texture, the fences'
+net and the two backdrop panoramas every course in assets/courses names (a sky, and the land
+in front of it), as uncompressed BMPs. Courses without a theme of their own
+below (fresh imports) get the default parkland one, seeded by their id.
 
 Everything is drawn from code and fixed seeds (no source images), so the
 output is the same on every run:
@@ -10,10 +10,19 @@ output is the same on every run:
     python tooling/art/make_art.py --check    # fails if assets/ differs
 
 Panoramas wrap once around the horizon and span BACKDROP_BOTTOM_DEG to
-BACKDROP_TOP_DEG from their bottom row to their top row; keep those in step
-with assets/shaders/backdrop.frag. Below the horizon they fade into the
-backdrop ground colour in src/renderer/renderer.cpp, so the far edge of the
-drawn ground meets them without a seam.
+BACKDROP_TOP_DEG from their bottom row to their top row; keep those and
+MIN_LAND_VISIBILITY in step with assets/shaders/backdrop.frag.
+
+The sky (24-bit) fades to the course's `haze_color` at the horizon. The land
+(32-bit with alpha) is the far ground, hills and treelines in their own
+colours; its alpha is how much of each shows through the haze (0 where the sky
+shows), so the game can change the haze colour, and the sky, with the time of
+day. The further back something sits the hazier it is: the ground towards the
+horizon, then each treeline band, then the hills. Below the horizon the land
+fades into the backdrop ground colour in src/renderer/renderer.cpp at
+FAR_GROUND_HAZE, which the renderer reads back from the bottom row and fades
+the drawn ground to, so the far edge of the drawn ground meets it without a
+seam.
 """
 
 from __future__ import annotations
@@ -35,6 +44,19 @@ BACKDROP_BOTTOM_DEG = -30.0
 BACKDROP_TOP_DEG = 60.0
 # renderer.cpp backdrop_ground_color.
 BACKDROP_GROUND = (0.10, 0.26, 0.13)
+# Land never shows less than this through the haze, so the shader can tell
+# hazy land from sky.
+MIN_LAND_VISIBILITY = 0.15
+# Haze, 0..1, of the ground under the drawn ground's far edge, then of the
+# sea at the horizon (the land there is as hazy as the nearest treeline on it),
+# each treeline band from the back and the hills.
+FAR_GROUND_HAZE = 0.4
+SEA_HORIZON_HAZE = 0.8
+# Treeline bands from the back: (crown size, share of the theme's tree count,
+# haze, how far up the hills they stand). Further lines are smaller, hazier
+# and higher up the far hills, so each shows over the one in front.
+TREE_BANDS = ((0.45, 0.9, 0.72, 0.85), (0.7, 0.8, 0.62, 0.45), (1.0, 0.65, 0.5, 0.0))
+HILL_HAZE = 0.78
 
 GRASS_SIZE = 64
 
@@ -44,7 +66,7 @@ Color = tuple[float, float, float]
 # --- BMP -------------------------------------------------------------------
 
 def bmp_bytes(width: int, height: int, pixels: list[Color]) -> bytes:
-    """`pixels` row by row from the bottom up, 0..1 RGB."""
+    """24-bit, `pixels` row by row from the bottom up, 0..1 RGB."""
     stride = (width * 3 + 3) & ~3
     rows = []
     for row in range(height):
@@ -58,6 +80,20 @@ def bmp_bytes(width: int, height: int, pixels: list[Color]) -> bytes:
     header = struct.pack("<2sIHHI", b"BM", 14 + 40 + len(image), 0, 0, 14 + 40)
     info = struct.pack("<IiiHHIIiiII", 40, width, height, 1, 24, 0, len(image), 2835, 2835, 0, 0)
     return header + info + image
+
+
+def bmp_bytes_with_alpha(width: int, height: int, pixels: list[tuple[float, float, float, float]]) -> bytes:
+    """32-bit with straight alpha (BITMAPV4HEADER, BI_BITFIELDS with an alpha
+    mask, as src/renderer/bmp_image.cpp reads it), `pixels` row by row from
+    the bottom up, 0..1 RGBA."""
+    image = b"".join(bytes((_byte(b), _byte(g), _byte(r), _byte(a))) for r, g, b, a in pixels)
+    info_size = 108
+    header = struct.pack("<2sIHHI", b"BM", 14 + info_size + len(image), 0, 0, 14 + info_size)
+    info = struct.pack("<IiiHHIIiiII", info_size, width, height, 1, 32, 3, len(image), 2835, 2835, 0, 0)
+    masks = struct.pack("<IIII", 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000)
+    # sRGB colour space; its end points and gammas are unused.
+    colour_space = struct.pack("<I", 0x73524742) + bytes(36 + 12)
+    return header + info + masks + colour_space + image
 
 
 def _byte(value: float) -> int:
@@ -149,24 +185,26 @@ def column_wrap_distance(a: float, b: float) -> float:
     return min(d, BACKDROP_WIDTH - d)
 
 
-def tree_line(rng: random.Random, kind: str, base: float, spread: float, density: int, mask: list[float]) -> list[float]:
-    """Top of the nearest tree line per column, in degrees; -inf where none.
-    Crowns are round bumps (broadleaf) or narrow spikes (pine)."""
+def tree_line(rng: random.Random, kind: str, base: float, spread: float, density: int, mask: list[float],
+              size: float) -> list[float]:
+    """Top of one tree line per column, in degrees; -inf where none. Crowns are
+    round bumps (broadleaf) or narrow spikes (pine), `size` times as big as
+    the nearest line's (further lines look smaller)."""
     tops = [-math.inf] * BACKDROP_WIDTH
     for _ in range(density):
         center = rng.uniform(0, BACKDROP_WIDTH)
         if mask[int(center) % BACKDROP_WIDTH] < 0.5:
             continue
-        height = base + rng.uniform(0.0, spread)
+        height = (base + rng.uniform(0.0, spread)) * size
         if kind == "pine":
-            half = rng.uniform(1.6, 3.2)
+            half = rng.uniform(1.6, 3.2) * size
             reach = int(half * 2) + 2
             for dx in range(-reach, reach + 1):
                 column = int(center + dx) % BACKDROP_WIDTH
                 top = height - abs(center - (int(center + dx))) * (height * 0.55) / half
                 tops[column] = max(tops[column], top)
         else:
-            radius = rng.uniform(3.0, 8.0)
+            radius = rng.uniform(3.0, 8.0) * size
             for dx in range(-int(radius) - 1, int(radius) + 2):
                 column = int(center + dx) % BACKDROP_WIDTH
                 inside = radius * radius - (center - int(center + dx)) ** 2
@@ -176,16 +214,54 @@ def tree_line(rng: random.Random, kind: str, base: float, spread: float, density
     return tops
 
 
-def panorama(theme: dict) -> list[Color]:
+def sea_columns(theme: dict) -> list[float]:
+    """Where the sea shows (1) and land (0), per column."""
+    sea = [0.0] * BACKDROP_WIDTH
+    for center, half_width in theme.get("sea", []):
+        for x in range(BACKDROP_WIDTH):
+            distance = column_wrap_distance(x, center * BACKDROP_WIDTH)
+            sea[x] = max(sea[x], 1.0 - smoothstep(half_width * BACKDROP_WIDTH * 0.8, half_width * BACKDROP_WIDTH, distance))
+    return sea
+
+
+def sky_panorama(theme: dict) -> list[Color]:
+    """Horizon haze up to the zenith, with clouds that thin and haze over
+    towards the horizon."""
+    rng = random.Random(theme["seed"] + 2)
+    width, height = BACKDROP_WIDTH, BACKDROP_HEIGHT
+    clouds = periodic_noise_2d(rng, width, 7, 3)
+    cloud_detail = periodic_noise_2d(rng, width, 23, 7)
+    zenith = theme["zenith"]
+    haze = theme["haze_color"]
+    grain = random.Random(theme["seed"] + 3)
+
+    pixels: list[Color] = []
+    for row in range(height):
+        elevation = elevation_of_row(row)
+        sky_t = smoothstep(0.0, 50.0, elevation) ** 0.7
+        far = 1.0 - smoothstep(2.0, 16.0, elevation)
+        for x in range(width):
+            sky = mix(haze, zenith, sky_t)
+            if elevation > 0.0:
+                fraction = elevation / BACKDROP_TOP_DEG
+                density = clouds.at(x, fraction) * 0.7 + cloud_detail.at(x, fraction) * 0.3
+                band = smoothstep(2.0, 10.0, elevation) * (1.0 - smoothstep(35.0, 58.0, elevation))
+                amount = smoothstep(1.0 - theme["cloudiness"], 1.0 - theme["cloudiness"] + 0.18, density) * band
+                cloud = mix(scale(theme["cloud"], 0.88 + 0.12 * density), haze, far * 0.6)
+                sky = mix(sky, cloud, amount * 0.9)
+            jitter = (grain.random() - 0.5) * 0.02
+            pixels.append((sky[0] + jitter, sky[1] + jitter, sky[2] + jitter))
+    return pixels
+
+
+def land_panorama(theme: dict) -> list[tuple[float, float, float, float]]:
+    """Far ground, hills and treelines in their own colours, alpha how much of
+    each shows through the haze. Where the sky shows (alpha 0) the colour is
+    the land's just below, so filtering never bleeds anything else in."""
     rng = random.Random(theme["seed"])
     width, height = BACKDROP_WIDTH, BACKDROP_HEIGHT
 
-    # Where the sea shows (1) and land (0), per column.
-    sea = [0.0] * width
-    for center, half_width in theme.get("sea", []):
-        for x in range(width):
-            distance = column_wrap_distance(x, center * width)
-            sea[x] = max(sea[x], 1.0 - smoothstep(half_width * width * 0.8, half_width * width, distance))
+    sea = sea_columns(theme)
     land = [1.0 - s for s in sea]
 
     hills_shape = fbm_1d(rng, width, 5, 4)
@@ -197,53 +273,56 @@ def panorama(theme: dict) -> list[Color]:
     # Hills drop to the far coast over open water.
     hills = [hills[x] * land[x] + far_coast[x] * sea[x] for x in range(width)]
 
-    trees = tree_line(rng, theme["trees"], theme["tree_base"], theme["tree_spread"], theme["tree_count"], land)
-    tree_wobble = fbm_1d(rng, width, 40, 2)
+    # From the back, so nearer lines cover further ones.
+    bands = []
+    for size, share, haze, lift in TREE_BANDS:
+        tops = tree_line(rng, theme["trees"], theme["tree_base"], theme["tree_spread"],
+                         int(theme["tree_count"] * share), land, size)
+        wobble = fbm_1d(rng, width, 40, 2)
+        bands.append(([tops[x] + hills[x] * lift + (wobble[x] - 0.5) * 0.4 * size for x in range(width)], haze))
+    texture = periodic_noise_2d(rng, width, 23, 7)
 
-    clouds = periodic_noise_2d(rng, width, 7, 3)
-    cloud_detail = periodic_noise_2d(rng, width, 23, 7)
-
-    zenith = theme["zenith"]
-    horizon = theme["horizon"]
-    hill_color = mix(theme["hill"], horizon, 0.3)
+    hill_color = theme["hill"]
     tree_color = theme["tree"]
     sea_color = theme.get("sea_color", (0.2, 0.3, 0.4))
     grain = random.Random(theme["seed"] + 1)
+    below = [BACKDROP_GROUND] * width
 
-    pixels: list[Color] = []
+    pixels: list[tuple[float, float, float, float]] = []
     for row in range(height):
         elevation = elevation_of_row(row)
-        sky_t = smoothstep(0.0, 50.0, elevation) ** 0.7
         for x in range(width):
-            sky = mix(horizon, zenith, sky_t)
-            if elevation > 0.0:
-                fraction = elevation / BACKDROP_TOP_DEG
-                density = clouds.at(x, fraction) * 0.7 + cloud_detail.at(x, fraction) * 0.3
-                band = smoothstep(2.0, 10.0, elevation) * (1.0 - smoothstep(35.0, 58.0, elevation))
-                amount = smoothstep(1.0 - theme["cloudiness"], 1.0 - theme["cloudiness"] + 0.18, density) * band
-                cloud = scale(theme["cloud"], 0.88 + 0.12 * density)
-                sky = mix(sky, cloud, amount * 0.9)
-            color = sky
-
+            color = None
+            haze = 0.0
             if elevation < hills[x]:
                 shade = 0.9 + 0.1 * smoothstep(hills[x] - 3.0, hills[x], elevation)
                 color = scale(hill_color, shade)
-            if elevation < trees[x] + (tree_wobble[x] - 0.5) * 0.4:
-                color = scale(tree_color, 0.85 + 0.25 * cloud_detail.at(x * 3.0, 0.5 + elevation / 20.0))
+                haze = HILL_HAZE
+            for tops, band_haze in bands:
+                if elevation < tops[x]:
+                    color = scale(tree_color, 0.85 + 0.25 * texture.at(x * 3.0, 0.5 + elevation / 20.0))
+                    haze = band_haze
             if elevation < 0.0:
                 ground = mix(theme["near_land"], BACKDROP_GROUND, smoothstep(-0.2, -2.5, elevation))
                 water = mix(sea_color, BACKDROP_GROUND, smoothstep(-1.2, -2.5, elevation))
                 color = mix(ground, water, sea[x])
+                horizon_haze = SEA_HORIZON_HAZE * sea[x] + TREE_BANDS[-1][2] * land[x]
+                haze = FAR_GROUND_HAZE + (horizon_haze - FAR_GROUND_HAZE) * smoothstep(-2.5, 0.0, elevation)
+            if color is None:
+                pixels.append((*below[x], 0.0))
+                continue
             jitter = (grain.random() - 0.5) * 0.02
-            pixels.append((color[0] + jitter, color[1] + jitter, color[2] + jitter))
+            color = (color[0] + jitter, color[1] + jitter, color[2] + jitter)
+            below[x] = color
+            pixels.append((*color, max(MIN_LAND_VISIBILITY, 1.0 - haze)))
     return pixels
 
 
-# Washed-out, slightly warm colours, as a cheap 1989 camcorder saw them.
-# Woods and gentle hills all round; seeded per course.
+# Washed-out, slightly warm colours, as a cheap 1989 camcorder saw them. The
+# horizon is each course's `haze_color`. Woods and gentle hills all round;
+# seeded per course.
 DEFAULT_THEME = {
-    "zenith": (0.38, 0.55, 0.78), "horizon": (0.75, 0.80, 0.83),
-    "cloud": (0.95, 0.94, 0.90), "cloudiness": 0.4,
+    "zenith": (0.38, 0.55, 0.78), "cloud": (0.95, 0.94, 0.90), "cloudiness": 0.4,
     "hills": (1.0, 5.0), "hill": (0.31, 0.44, 0.34),
     "trees": "broadleaf", "tree_base": 1.6, "tree_spread": 2.0, "tree_count": 560, "tree": (0.13, 0.25, 0.13),
     "near_land": (0.20, 0.33, 0.18),
@@ -252,16 +331,14 @@ DEFAULT_THEME = {
 THEMES = {
     # Kalø, Djursland: beech woods and low hills, the bay to one side.
     "kalo_golf_club": {
-        "seed": 1101, "zenith": (0.38, 0.55, 0.78), "horizon": (0.74, 0.80, 0.84),
-        "cloud": (0.95, 0.94, 0.90), "cloudiness": 0.42,
+        "seed": 1101, "zenith": (0.38, 0.55, 0.78), "cloud": (0.95, 0.94, 0.90), "cloudiness": 0.42,
         "hills": (1.5, 6.5), "hill": (0.30, 0.44, 0.34),
         "trees": "broadleaf", "tree_base": 1.8, "tree_spread": 2.0, "tree_count": 520, "tree": (0.13, 0.25, 0.13),
         "sea": [(0.18, 0.09)], "sea_color": (0.36, 0.48, 0.58), "far_coast": (0.0, 0.9),
         "near_land": (0.20, 0.33, 0.18),
     },
     "kalo_par_3": {
-        "seed": 1203, "zenith": (0.40, 0.57, 0.80), "horizon": (0.76, 0.81, 0.84),
-        "cloud": (0.96, 0.95, 0.91), "cloudiness": 0.36,
+        "seed": 1203, "zenith": (0.40, 0.57, 0.80), "cloud": (0.96, 0.95, 0.91), "cloudiness": 0.36,
         "hills": (1.2, 5.5), "hill": (0.30, 0.44, 0.34),
         "trees": "broadleaf", "tree_base": 2.0, "tree_spread": 2.2, "tree_count": 600, "tree": (0.12, 0.24, 0.12),
         "sea": [(0.22, 0.07)], "sea_color": (0.36, 0.48, 0.58), "far_coast": (0.0, 0.8),
@@ -270,8 +347,7 @@ THEMES = {
     # Helsingør: the sound on one side with the far shore low across it, woods
     # on the other.
     "marienlyst_golfklub": {
-        "seed": 2207, "zenith": (0.36, 0.52, 0.76), "horizon": (0.76, 0.80, 0.82),
-        "cloud": (0.94, 0.94, 0.92), "cloudiness": 0.5,
+        "seed": 2207, "zenith": (0.36, 0.52, 0.76), "cloud": (0.94, 0.94, 0.92), "cloudiness": 0.5,
         "hills": (0.8, 4.0), "hill": (0.32, 0.43, 0.36),
         "trees": "broadleaf", "tree_base": 1.6, "tree_spread": 1.8, "tree_count": 380, "tree": (0.14, 0.26, 0.15),
         "sea": [(0.62, 0.2)], "sea_color": (0.34, 0.46, 0.56), "far_coast": (0.4, 1.8),
@@ -280,8 +356,7 @@ THEMES = {
     # A links by the sea: grey northern sky, open bay, dunes and far low hills,
     # hardly a tree.
     "old_course": {
-        "seed": 3301, "zenith": (0.46, 0.55, 0.68), "horizon": (0.78, 0.80, 0.80),
-        "cloud": (0.88, 0.88, 0.87), "cloudiness": 0.62,
+        "seed": 3301, "zenith": (0.46, 0.55, 0.68), "cloud": (0.88, 0.88, 0.87), "cloudiness": 0.62,
         "hills": (0.6, 3.2), "hill": (0.40, 0.45, 0.38),
         "trees": "broadleaf", "tree_base": 0.3, "tree_spread": 0.6, "tree_count": 60, "tree": (0.22, 0.29, 0.18),
         "sea": [(0.35, 0.22)], "sea_color": (0.38, 0.47, 0.54), "far_coast": (0.0, 1.4),
@@ -289,8 +364,7 @@ THEMES = {
     },
     # Tall pines all round under a warm, hazy southern sky.
     "augusta_national_golf_club": {
-        "seed": 4409, "zenith": (0.36, 0.53, 0.80), "horizon": (0.82, 0.83, 0.80),
-        "cloud": (0.97, 0.95, 0.90), "cloudiness": 0.3,
+        "seed": 4409, "zenith": (0.36, 0.53, 0.80), "cloud": (0.97, 0.95, 0.90), "cloudiness": 0.3,
         "hills": (1.0, 4.0), "hill": (0.32, 0.42, 0.32),
         "trees": "pine", "tree_base": 3.0, "tree_spread": 3.5, "tree_count": 900, "tree": (0.10, 0.20, 0.11),
         "near_land": (0.20, 0.30, 0.16),
@@ -321,22 +395,48 @@ def grass_texture() -> list[Color]:
     return [(v * 0.96, v, v * 0.94) for v in values]
 
 
+# --- fence net --------------------------------------------------------------
+
+# The net texture covers NET_TILE_METRES square of net; keep it in step with
+# net_tile_metres in src/renderer/fence_batch.h.
+NET_SIZE = 32
+NET_TILE_METRES = 1.0
+NET_MESH = 8  # texels between strands: a 25 cm diamond mesh
+NET_COLOUR = (0.13, 0.15, 0.13)
+
+
+def net_texture() -> list[tuple[float, float, float, float]]:
+    """Dark strands crossing on both diagonals, opaque, with clear holes
+    between (alpha 0), so mipmaps fade a distant net to a faint grey veil.
+    Tiles both ways."""
+    pixels = []
+    for y in range(NET_SIZE):
+        for x in range(NET_SIZE):
+            strand = (x + y) % NET_MESH == 0 or (x - y) % NET_MESH == 0
+            pixels.append((*NET_COLOUR, 1.0) if strand else (*NET_COLOUR, 0.0))
+    return pixels
+
+
 # --- main -------------------------------------------------------------------
 
-def course_theme(course_id: str) -> dict:
-    if course_id in THEMES:
-        return THEMES[course_id]
-    return {**DEFAULT_THEME, "seed": zlib.crc32(course_id.encode("utf-8"))}
+def course_theme(course: dict) -> dict:
+    theme = THEMES.get(course["id"], {**DEFAULT_THEME, "seed": zlib.crc32(course["id"].encode("utf-8"))})
+    return {**theme, "haze_color": tuple(course["backdrop"]["haze_color"])}
 
 
 def outputs() -> dict[Path, bytes]:
     assets = REPO / "assets"
-    files = {assets / "textures" / "rough_grass.bmp": bmp_bytes(GRASS_SIZE, GRASS_SIZE, grass_texture())}
+    files = {assets / "textures" / "rough_grass.bmp": bmp_bytes(GRASS_SIZE, GRASS_SIZE, grass_texture()),
+             assets / "textures" / "fence_net.bmp": bmp_bytes_with_alpha(NET_SIZE, NET_SIZE, net_texture())}
     for course_file in sorted((assets / "courses").glob("*.json")):
         course = json.loads(course_file.read_text(encoding="utf-8"))
-        backdrop = assets / course["backdrop"]
-        if backdrop not in files:
-            files[backdrop] = bmp_bytes(BACKDROP_WIDTH, BACKDROP_HEIGHT, panorama(course_theme(course["id"])))
+        theme = course_theme(course)
+        sky = assets / course["backdrop"]["sky"]
+        land = assets / course["backdrop"]["land"]
+        if sky not in files:
+            files[sky] = bmp_bytes(BACKDROP_WIDTH, BACKDROP_HEIGHT, sky_panorama(theme))
+        if land not in files:
+            files[land] = bmp_bytes_with_alpha(BACKDROP_WIDTH, BACKDROP_HEIGHT, land_panorama(theme))
     return files
 
 

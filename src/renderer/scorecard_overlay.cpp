@@ -188,18 +188,9 @@ void draw_scorecard_card(overlay_batch& batch,
                    lookup_text(text, scorecard.next_round ? text_scorecard_results_hint_online : text_scorecard_results_hint), layout.hint);
     }
 }
-}
 
-void draw_compact_scorecard(overlay_batch& batch, const text_assets& text, const scorecard_data& scorecard) {
-    draw_scorecard_card(batch, text, scorecard, ui_rect{glm::vec2(-0.48f, 0.32f), glm::vec2(0.44f, 0.44f)}, true);
-}
-
-void draw_group_scorecard(overlay_batch& batch, const text_assets& text, const std::vector<group_scorecard_row>& rows) {
-    if (rows.empty()) {
-        return;
-    }
-    // Right of the compact card, clear of the key icons.
-    const ui_rect card{glm::vec2(0.30f, 0.24f), glm::vec2(0.34f, 0.26f)};
+// One row per group member (name, holes played, strokes, against par).
+void draw_group_card(overlay_batch& batch, const text_assets& text, const std::vector<group_scorecard_row>& rows, const ui_rect& card) {
     draw_paper_card_base(batch, card);
     const ui_rect content = inset_rect(card, glm::vec2(0.03f, 0.0f));
     draw_label(batch, text.font, find_text_style(text, style_scorecard_title), lookup_text(text, text_scorecard_group_title),
@@ -232,8 +223,30 @@ void draw_group_scorecard(overlay_batch& batch, const text_assets& text, const s
         draw_label(batch, text.font, ink, row.holes_played > 0 ? row.relative_label : "", grid_cell(grid, grid_row, 3));
     }
 }
+}
 
-void draw_course_results(overlay_batch& batch, const text_assets& text, const scorecard_data& scorecard) {
+void draw_compact_scorecard(overlay_batch& batch, const text_assets& text, const scorecard_data& scorecard) {
+    draw_scorecard_card(batch, text, scorecard, ui_rect{glm::vec2(-0.48f, 0.32f), glm::vec2(0.44f, 0.44f)}, true);
+}
+
+void draw_group_scorecard(overlay_batch& batch, const text_assets& text, const std::vector<group_scorecard_row>& rows) {
+    if (rows.empty()) {
+        return;
+    }
+    // Right of the compact card, clear of the key icons.
+    draw_group_card(batch, text, rows, ui_rect{glm::vec2(0.30f, 0.24f), glm::vec2(0.34f, 0.26f)});
+}
+
+void draw_course_results(overlay_batch& batch,
+                         const text_assets& text,
+                         const scorecard_data& scorecard,
+                         const std::vector<group_scorecard_row>& group) {
     draw_overlay_quad(batch, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.015f, 0.013f, 0.012f), 0.70f);
-    draw_scorecard_card(batch, text, scorecard, ui_rect{glm::vec2(0.0f), glm::vec2(0.74f, 0.80f)}, false);
+    if (group.empty()) {
+        draw_scorecard_card(batch, text, scorecard, ui_rect{glm::vec2(0.0f), glm::vec2(0.74f, 0.80f)}, false);
+        return;
+    }
+    // My card on the left, the group's beside it.
+    draw_scorecard_card(batch, text, scorecard, ui_rect{glm::vec2(-0.36f, 0.0f), glm::vec2(0.60f, 0.80f)}, false);
+    draw_group_card(batch, text, group, ui_rect{glm::vec2(0.62f, 0.30f), glm::vec2(0.34f, 0.26f)});
 }

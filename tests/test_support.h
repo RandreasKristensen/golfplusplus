@@ -89,6 +89,18 @@ inline game_state started_hole() {
     return started_game(fixture_course({"test", "test2"}));
 }
 
+// Picks the ball left in its cup after holing out (state.cup_ball) from
+// beside the cup, then puts the player back where they stood, so the next
+// hole can start from there.
+inline void pick_up_from_cup(game_state& state) {
+    const glm::vec3 standing = state.player.position;
+    if (state.cup_ball) {
+        state.player.position = *state.cup_ball;
+        pick_up_cup_ball(state);
+    }
+    state.player.position = standing;
+}
+
 inline game_input action_input() {
     game_input input;
     input.action = true;
@@ -151,9 +163,25 @@ inline glm::vec3 resting_on_terrain(const game_state& state, const glm::vec3& po
     return sample.point + ground_normal(sample.normal) * state.ball.radius;
 }
 
+// An unturned ellipse zone; a circle when the radii are equal.
+inline material_zone ellipse_zone(const material_zone_type type,
+                                  const glm::vec3& center,
+                                  const float radius_x,
+                                  const float radius_z) {
+    material_zone zone;
+    zone.type = type;
+    zone.center = center;
+    zone.radii = glm::vec2(radius_x, radius_z);
+    return zone;
+}
+
+inline material_zone circle_zone(const material_zone_type type, const glm::vec3& center, const float radius) {
+    return ellipse_zone(type, center, radius, radius);
+}
+
 // A ribbon with no zones (bunker and water depths don't matter then).
 inline terrain_mesh plain_terrain_mesh(const terrain_spline& spline) {
-    return build_terrain_mesh(spline, {}, terrain_zone_tuning{});
+    return build_terrain_mesh(spline);
 }
 
 inline terrain_sample sample_spline(const terrain_spline& spline, const glm::vec3& position, const float fallback_y) {

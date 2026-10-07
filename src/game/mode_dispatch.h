@@ -40,6 +40,10 @@ void record_collectible_claim(game_state& state, const course_world_collectible&
 // too. Offline needs nothing.
 void record_retee(game_state& state);
 
+// The holed ball was picked out of its cup. Online: pick_up_ball, so the
+// server lets the next hole start too. Offline needs nothing.
+void record_ball_picked_up(game_state& state);
+
 // Every hole entered, hub or not. Online: enter_hole. Offline needs nothing.
 void record_hole_started(game_state& state, std::size_t hole_index);
 

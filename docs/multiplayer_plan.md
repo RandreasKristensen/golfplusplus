@@ -166,7 +166,3 @@ in and plays online with the owner. Not a store release: Steam is `docs/steam_to
 7. A self-hosted local server with `allow_anonymous` works end to end via `--server` and `--anonymous`, following only `server/README.md`.
 8. An hour of two-player play uses well under 1% of the free tier's monthly energy (dashboard).
 
-## Suggested split
-
-1. **Phase 1**: the alpha 0.1 release (installer, Maincloud, versions in step), once the owner
-   says playtesting is done.

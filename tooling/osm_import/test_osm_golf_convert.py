@@ -9,8 +9,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import osm_golf_convert as conv
 import osm_ground as ground
 import osm_elevation as elev
-import osm_elevation as elev
-import osm_elevation as elev
+import osm_checks
+import osm_contact_sheet
+import osm_ellipse
 
 
 def way(osm_id, tags, coords):
@@ -24,6 +25,10 @@ def way(osm_id, tags, coords):
 
 def node(osm_id, tags, lat, lon):
     return {"type": "node", "id": osm_id, "tags": tags, "lat": lat, "lon": lon}
+
+
+def hole_jsons_for(holes, origin_lat, origin_lon):
+    return {num: conv.hole_to_json(num, h, origin_lat, origin_lon, "test_course") for num, h in holes.items()}
 
 
 class OsmGolfConvertTests(unittest.TestCase):
@@ -102,7 +107,7 @@ class OsmGolfConvertTests(unittest.TestCase):
             node(101, {"natural": "tree"}, side_lat, side_lon),
         ]
 
-        conv.assign_trees_to_holes(holes, trees, origin_lat, origin_lon, "course:1")
+        conv.assign_trees_to_holes(holes, trees, origin_lat, origin_lon, "course:1", conv.DEFAULT_CONFIG["tree"])
 
         self.assertEqual(1, len(holes[1]["trees_abs"]))
         self.assertGreater(abs(holes[1]["trees_abs"][0][0]), 20.0)
@@ -110,11 +115,43 @@ class OsmGolfConvertTests(unittest.TestCase):
     def test_wooded_polygon_sampling_is_deterministic(self):
         wood = way(30, {"natural": "wood"}, [(56.0, 10.0), (56.0, 10.001), (56.001, 10.001), (56.001, 10.0)])
 
-        first = conv._sample_wooded_polygon_trees(wood, 56.0, 10.0, 1234)
-        second = conv._sample_wooded_polygon_trees(wood, 56.0, 10.0, 1234)
+        first = conv._sample_wooded_polygon_trees(wood, 56.0, 10.0, 1234, 150.0)
+        second = conv._sample_wooded_polygon_trees(wood, 56.0, 10.0, 1234, 150.0)
 
         self.assertEqual(first, second)
         self.assertGreater(len(first), 0)
+
+    def test_a_wood_is_planted_at_its_configured_density(self):
+        # About 111 m x 62 m: 6900 m2, so about 46 trees at one per 150 m2.
+        wood = way(30, {"natural": "wood"}, [(56.0, 10.0), (56.0, 10.001), (56.001, 10.001), (56.001, 10.0), (56.0, 10.0)])
+        trees = conv._sample_wooded_polygon_trees(wood, 56.0, 10.0, 7, 150.0)
+        self.assertTrue(35 <= len(trees) <= 60, len(trees))
+        west_half = conv._sample_wooded_polygon_trees(wood, 56.0, 10.0, 7, 150.0, near=lambda p: p[0] < 31.0)
+        self.assertTrue(all(p[0] < 31.0 for p in west_half))
+        self.assertLess(len(west_half), len(trees))
+
+    def test_a_wood_between_two_holes_plants_each_tree_once(self):
+        lon_b = 10.0 + 120.0 / (conv.EARTH_METERS_PER_DEGREE_LAT * math.cos(math.radians(56.0)))
+        holes = conv.group_holes([way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.002, 10.0)]),
+                                  way(2, {"golf": "hole", "ref": "2"}, [(56.0, lon_b), (56.002, lon_b)])])
+        mid = (10.0 + lon_b) / 2
+        wood = way(30, {"natural": "wood"}, [(56.0005, mid - 0.0003), (56.0005, mid + 0.0003),
+                                             (56.0015, mid + 0.0003), (56.0015, mid - 0.0003), (56.0005, mid - 0.0003)])
+
+        conv.assign_trees_to_holes(holes, [wood], 56.0, 10.0, "course:1", conv.DEFAULT_CONFIG["tree"])
+
+        one, two = holes[1]["trees_abs"], holes[2]["trees_abs"]
+        self.assertGreater(len(one), 0)
+        self.assertGreater(len(two), 0)
+        self.assertEqual(len(set(one) | set(two)), len(one) + len(two))
+
+    def test_vegetation_is_fetched_beyond_the_course_boundary(self):
+        course = way(9, {"leisure": "golf_course"}, [(56.0, 10.0), (56.0, 10.01), (56.01, 10.01), (56.0, 10.0)])
+        with mock.patch.object(conv, "_query", return_value={"elements": []}) as query:
+            conv._near_course_query(course, conv.VEGETATION_SELECTORS, 80.0)
+        text = query.call_args[0][0]
+        self.assertIn('node["natural"="tree"](area.courseArea);', text)
+        self.assertIn('node["natural"="tree"](around.course:80);', text)
 
     def test_scale_warnings_flag_implausible_hole(self):
         h_json = {
@@ -165,7 +202,8 @@ class OsmGolfConvertTests(unittest.TestCase):
                                           holes,
                                           [service, footway],
                                           origin_lat,
-                                          origin_lon)
+                                          origin_lon,
+                                          hole_jsons_for(holes, origin_lat, origin_lon))
 
         self.assertEqual(2, len(world["hole_starts"]))
         self.assertEqual(0, world["hole_starts"][0]["hole_index"])
@@ -191,7 +229,8 @@ class OsmGolfConvertTests(unittest.TestCase):
                                           holes,
                                           [],
                                           origin_lat,
-                                          origin_lon)
+                                          origin_lon,
+                                          hole_jsons_for(holes, origin_lat, origin_lon))
 
         self.assertEqual(2, len(world["hole_starts"]))
         self.assertEqual(1, len(world["cart_roads"]))
@@ -200,7 +239,8 @@ class OsmGolfConvertTests(unittest.TestCase):
 
         corridors = []
         for num in sorted(holes.keys()):
-            tee_xz, pin_xz = conv._hole_world_anchors(num, holes[num], origin_lat, origin_lon)
+            tee_xz, pin_xz = conv._hole_world_anchors(hole_jsons_for(holes, origin_lat, origin_lon)[num],
+                                                      origin_lat, origin_lon)
             corridors.append(conv._hole_fairway_corridor(holes[num], tee_xz, pin_xz, origin_lat, origin_lon, conv.load_generation_config(None)))
         road_xz = [(p[0], p[2]) for p in world["cart_roads"][0]["polyline"]]
         self.assertFalse(conv._route_overlaps_fairway(road_xz, corridors))
@@ -220,7 +260,8 @@ class OsmGolfConvertTests(unittest.TestCase):
                                           holes,
                                           [crossing_service, side_service],
                                           origin_lat,
-                                          origin_lon)
+                                          origin_lon,
+                                          hole_jsons_for(holes, origin_lat, origin_lon))
 
         self.assertEqual(["cart_way_6"], [route["id"] for route in world["cart_roads"]])
 
@@ -230,6 +271,9 @@ class OsmGolfConvertTests(unittest.TestCase):
             way(2, {"golf": "hole", "ref": "2"}, [(56.001, 10.001), (56.002, 10.001)]),
             way(3, {"golf": "hole", "ref": "3"}, [(56.002, 10.002), (56.003, 10.002)]),
         ])
+        hole_jsons = hole_jsons_for(holes, 56.0, 10.0)
+        for num, height in ((1, 40.0), (2, 52.5), (3, None)):
+            hole_jsons[num]["source"]["tee_elevation"] = height
 
         world = conv.course_world_to_json("test_course",
                                           "Test Course",
@@ -238,7 +282,7 @@ class OsmGolfConvertTests(unittest.TestCase):
                                           [],
                                           56.0,
                                           10.0,
-                                          tee_elevations={1: 40.0, 2: 52.5, 3: None})
+                                          hole_jsons)
 
         self.assertEqual([0.0, 12.5, 0.0], [start["position"][1] for start in world["hole_starts"]])
 
@@ -262,6 +306,7 @@ class OsmGolfConvertTests(unittest.TestCase):
                                           [near_short, near_too_long, far_short],
                                           origin_lat,
                                           origin_lon,
+                                          hole_jsons_for(holes, origin_lat, origin_lon),
                                           config)
 
         self.assertEqual(["shortcut_way_5"], [route["id"] for route in world["walking_shortcuts"]])
@@ -662,37 +707,80 @@ class HoleTagTests(unittest.TestCase):
 
 
 class ZoneTests(unittest.TestCase):
-    def test_elongated_green_uses_equal_area_radius_not_half_its_diagonal(self):
-        # A 30 x 10 m green: Ritter would call it ~15.8 m across.
-        green = [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (0.0, 10.0)]
+    @staticmethod
+    def turned(points, degrees, dx=0.0, dz=0.0):
+        c, s_ = math.cos(math.radians(degrees)), math.sin(math.radians(degrees))
+        return [(x * c - z * s_ + dx, x * s_ + z * c + dz) for x, z in points]
 
-        _cx, _cz, radius = conv._zone_circle({}, green)
+    def test_an_ellipse_keeps_the_polygons_centre_area_and_turn(self):
+        # A 30 x 10 m green turned 30 degrees the way rotate_about_y turns.
+        green = self.turned([(-15, -5), (15, -5), (15, 5), (-15, 5)], 30.0, 40.0, -20.0)
 
-        self.assertAlmostEqual(math.sqrt(300.0 / math.pi), radius, places=1)
+        fitted = osm_ellipse.ellipse_from_polygon(green)
 
-    def test_green_radius_is_capped(self):
-        huge = [(0.0, 0.0), (90.0, 0.0), (90.0, 90.0), (0.0, 90.0)]
+        self.assertAlmostEqual(40.0, fitted["center"][0], places=6)
+        self.assertAlmostEqual(-20.0, fitted["center"][1], places=6)
+        self.assertAlmostEqual(300.0, math.pi * fitted["radii"][0] * fitted["radii"][1], places=3)
+        self.assertGreater(fitted["radii"][0], fitted["radii"][1] * 2.5)
+        self.assertAlmostEqual(30.0, math.degrees(fitted["rotation"]), places=6)
 
-        _cx, _cz, radius = conv._zone_circle({}, huge, max_radius=22.0)
+    def test_a_circle_stays_a_circle(self):
+        ring = [(10 * math.cos(i * math.tau / 48), 10 * math.sin(i * math.tau / 48)) for i in range(48)]
 
-        self.assertEqual(22.0, radius)
+        zone = osm_ellipse.zone_json("green", osm_ellipse.ellipse_from_polygon(ring))
 
-    def test_shared_green_recentres_on_the_pin_that_lies_on_it(self):
-        double_green = [(0.0, 0.0), (60.0, 0.0), (60.0, 30.0), (0.0, 30.0)]
-        pin = (50.0, 15.0)
+        self.assertEqual(zone["radii"][0], zone["radii"][1])
+        self.assertEqual(0.0, zone["rotation_degrees"])
+        self.assertNotIn("radius", zone)
 
-        cx, cz, _r = conv._zone_circle({}, double_green, anchor=pin)
+    def test_the_first_radius_points_along_the_rotation_like_rotate_about_y(self):
+        # Long along +z: rotate_about_y turns local +x onto (cos r, sin r).
+        strip = [(-2.0, -20.0), (2.0, -20.0), (2.0, 20.0), (-2.0, 20.0)]
 
-        self.assertEqual(pin, (cx, cz))
+        zone = osm_ellipse.zone_json("bunker", osm_ellipse.ellipse_from_polygon(strip))
 
-    def test_a_pin_off_the_polygon_does_not_move_a_neighbours_green(self):
-        """Otherwise two greens stack on the same pin."""
-        green = [(0.0, 0.0), (20.0, 0.0), (20.0, 20.0), (0.0, 20.0)]
-        distant_pin = (300.0, 300.0)
+        self.assertGreater(zone["radii"][0], zone["radii"][1])
+        self.assertAlmostEqual(90.0, abs(zone["rotation_degrees"]), places=3)
 
-        cx, cz, _r = conv._zone_circle({}, green, anchor=distant_pin)
+    def test_a_bent_bunker_is_split_into_several_ellipses(self):
+        l_shape = [(0, 0), (40, 0), (40, 6), (6, 6), (6, 40), (0, 40)]
 
-        self.assertEqual((10.0, 10.0), (cx, cz))
+        single, single_iou = osm_ellipse.fit_polygon(l_shape, max_pieces=1)
+        split, split_iou = osm_ellipse.fit_polygon(l_shape, max_pieces=4)
+
+        self.assertEqual(1, len(single))
+        self.assertGreater(len(split), 1)
+        self.assertGreater(split_iou, single_iou + 0.3)
+
+    def test_a_small_green_grows_to_the_minimum_keeping_its_shape(self):
+        small = {"center": (0.0, 0.0), "radii": (4.0, 2.0), "rotation": 0.3}
+
+        grown = osm_ellipse.with_min_radius(small, 5.0)
+
+        self.assertAlmostEqual(25.0, grown["radii"][0] * grown["radii"][1], places=6)
+        self.assertAlmostEqual(2.0, grown["radii"][0] / grown["radii"][1], places=6)
+
+    def test_hole_zones_are_ellipses_with_their_fit_recorded(self):
+        lat, lon = 56.0, 10.0
+        d_lat = 1.0 / conv.EARTH_METERS_PER_DEGREE_LAT
+        d_lon = 1.0 / (conv.EARTH_METERS_PER_DEGREE_LAT * math.cos(math.radians(lat)))
+        def box(osm_id, tags, x0, z0, x1, z1):
+            return way(osm_id, tags, [(lat - z * d_lat, lon + x * d_lon) for x, z in
+                                      ((x0, z0), (x1, z0), (x1, z1), (x0, z1), (x0, z0))])
+        holes = conv.group_holes([
+            way(1, {"golf": "hole", "ref": "1"}, [(lat, lon), (lat + 150 * d_lat, lon)]),
+            box(2, {"golf": "green", "ref": "1"}, -10, -160, 10, -140),
+            box(3, {"golf": "water_hazard", "ref": "1"}, 20, -100, 60, -90),
+        ])
+
+        h_json = conv.hole_to_json(1, holes[1], lat, lon, "test", conv.load_generation_config(None))
+
+        types = sorted(z["type"] for z in h_json["material_zones"])
+        self.assertEqual(["green", "water"], types)
+        for zone in h_json["material_zones"]:
+            self.assertEqual({"type", "center", "radii", "rotation_degrees"}, set(zone))
+        self.assertEqual(["way/2", "way/3"], sorted(f["osm"] for f in h_json["source"]["zone_fit"]))
+        self.assertEqual("way/1", h_json["source"]["hole_way"])
 
 
 class SharedGreenTests(unittest.TestCase):
@@ -762,6 +850,89 @@ class CourseSelectionTests(unittest.TestCase):
     def test_a_missing_prefix_is_an_error_naming_what_exists(self):
         with self.assertRaisesRegex(ValueError, "'P'"):
             conv.select_course_by_ref_prefix(self.ELEMENTS, "X", 56.005, 10.002)
+
+    def test_an_unnumbered_course_is_left_to_grouping(self):
+        unnumbered = [way(1, {"golf": "hole"}, [(56.0, 10.0), (56.0, 10.004)])]
+
+        self.assertEqual(unnumbered, conv.select_course_by_ref_prefix(unnumbered, "", 56.0, 10.002))
+
+
+class HoleListTests(unittest.TestCase):
+    # Two unnumbered hole lines, a stray third one, and a hole mapped only as
+    # a tee, a fairway and a green.
+    ELEMENTS = [
+        way(1, {"golf": "hole"}, [(56.0, 10.0), (56.0, 10.004)]),
+        way(2, {"golf": "hole"}, [(56.001, 10.004), (56.001, 10.0)]),
+        way(3, {"golf": "hole"}, [(56.002, 10.0), (56.002, 10.001)]),
+        way(4, {"golf": "green"}, [(56.003, 10.002), (56.0031, 10.0021), (56.003, 10.0022)]),
+        way(5, {"golf": "fairway"}, [(56.003, 10.0021), (56.003, 10.0005), (56.0031, 10.0021)]),
+        way(6, {"golf": "tee"}, [(56.004, 10.0), (56.004, 10.0001), (56.0041, 10.0)]),
+    ]
+
+    def test_lines_are_numbered_in_list_order_and_others_dropped(self):
+        result = conv.apply_hole_list(self.ELEMENTS, [{"line": "W2", "par": 4}, {"line": "W1"}])
+        holes = conv.group_holes(result)
+
+        self.assertEqual([1, 2], sorted(holes))
+        self.assertEqual(2, holes[1]["lines"][0]["id"])
+        self.assertEqual("4", holes[1]["lines"][0]["tags"]["par"])
+        self.assertEqual(1, holes[2]["lines"][0]["id"])
+        self.assertNotIn(3, [el["id"] for el in result])
+
+    def test_a_fairway_tee_starts_at_its_end_furthest_from_the_green(self):
+        result = conv.apply_hole_list(self.ELEMENTS, [{"tee": "W5", "green": "W4"}])
+        line = [el for el in result if el["tags"].get("golf") == "hole"]
+
+        self.assertEqual(1, len(line))
+        self.assertEqual({"lat": 56.003, "lon": 10.0005}, line[0]["geometry"][0])
+        self.assertEqual("1", [el for el in result if el["id"] == 4][0]["tags"]["ref"])
+
+    def test_a_tee_element_starts_at_its_centre_and_joins_the_hole(self):
+        result = conv.apply_hole_list(self.ELEMENTS, [{"tee": "W6", "green": "W4"}])
+        holes = conv.group_holes(result)
+
+        self.assertEqual([6], [el["id"] for el in holes[1]["tees"]])
+        self.assertEqual([4], [el["id"] for el in holes[1]["greens"]])
+
+    def test_an_id_outside_the_course_is_an_error(self):
+        with self.assertRaisesRegex(ValueError, "W99"):
+            conv.apply_hole_list(self.ELEMENTS, [{"line": "W99"}])
+
+
+class OtherCourseTests(unittest.TestCase):
+    MAIN = way(9, {"leisure": "golf_course"}, [(56.0, 10.002), (56.0, 10.006), (56.004, 10.006), (56.004, 10.002)])
+    PITCH_AND_PUTT = way(10, {"leisure": "golf_course"},
+                         [(56.0, 10.0), (56.0, 10.002), (56.002, 10.002), (56.002, 10.0)])
+
+    def test_features_of_the_course_next_door_are_left_out(self):
+        # Mollerup's Pitch and Putt lies beside the main course, inside the
+        # main course's footprint buffer.
+        theirs = way(1, {"golf": "green"}, [(56.001, 10.0015), (56.0011, 10.0015), (56.001, 10.0016)])
+        ours = way(2, {"golf": "green"}, [(56.003, 10.004), (56.0031, 10.004), (56.003, 10.0041)])
+
+        kept = conv._drop_other_course_features([theirs, ours], self.MAIN, [self.PITCH_AND_PUTT])
+
+        self.assertEqual([2], [el["id"] for el in kept])
+
+    def test_a_feature_where_two_boundaries_overlap_stays(self):
+        # The Old Course's boundary overlaps the New Course's along an edge.
+        neighbour = way(11, {"leisure": "golf_course"}, [(56.0, 10.005), (56.0, 10.009), (56.004, 10.009), (56.004, 10.005)])
+        shared_bunker = way(3, {"golf": "bunker"}, [(56.002, 10.0055), (56.0021, 10.0055), (56.002, 10.0056)])
+
+        kept = conv._drop_other_course_features([shared_bunker], self.MAIN, [neighbour])
+
+        self.assertEqual([3], [el["id"] for el in kept])
+
+    def test_features_of_a_course_drawn_inside_this_one_are_left_out(self):
+        # Mollerup's Pitch and Putt is drawn inside Mollerup Golf Club's boundary.
+        inner = way(12, {"leisure": "golf_course"}, [(56.001, 10.003), (56.001, 10.004), (56.002, 10.004),
+                                                     (56.002, 10.003), (56.001, 10.003)])
+        theirs = way(4, {"golf": "green"}, [(56.0015, 10.0035), (56.0016, 10.0035), (56.0015, 10.0036)])
+        ours = way(5, {"golf": "green"}, [(56.003, 10.005), (56.0031, 10.005), (56.003, 10.0051)])
+
+        kept = conv._drop_other_course_features([theirs, ours], self.MAIN, [inner])
+
+        self.assertEqual([5], [el["id"] for el in kept])
 
 
 class ProjectionTests(unittest.TestCase):
@@ -836,6 +1007,428 @@ class GroundTests(unittest.TestCase):
         first_row_z = grid["origin"][1]
         self.assertAlmostEqual(2.0 + first_row_z * 0.1, grid["heights"][0], places=2)
         self.assertAlmostEqual(2.0 + (first_row_z + 20.0) * 0.1, grid["heights"][columns], places=2)
+
+
+
+def latlon_at(x, z, origin=(56.0, 10.0)):
+    return conv._xz_to_latlon(x, z, *origin)
+
+
+class WorldStartTests(unittest.TestCase):
+    def test_a_hole_start_is_the_tee_its_hole_is_built_from(self):
+        # Two tee boxes: the hole plays from the back one (matching the line's
+        # length); the world must start the hole there too, or the game moves
+        # the whole hole by the gap.
+        line = way(1, {"golf": "hole", "ref": "1"}, [latlon_at(0, 0), latlon_at(0, -300)])
+        front = way(2, {"golf": "tee", "ref": "1"}, [latlon_at(-3, -120), latlon_at(3, -120), latlon_at(3, -125)])
+        back = way(3, {"golf": "tee", "ref": "1"}, [latlon_at(-3, 2), latlon_at(3, 2), latlon_at(3, -2)])
+        holes = conv.group_holes([line, front, back])
+        hole_jsons = hole_jsons_for(holes, 56.0, 10.0)
+
+        world = conv.course_world_to_json("t", "T", way(9, {}, [latlon_at(-50, 50), latlon_at(50, -350)]),
+                                          holes, [], 56.0, 10.0, hole_jsons)
+
+        tee = conv._latlon_to_xz(*hole_jsons[1]["source"]["tee_latlon"], 56.0, 10.0)
+        start = world["hole_starts"][0]["position"]
+        self.assertAlmostEqual(tee[0], start[0], delta=0.01)
+        self.assertAlmostEqual(tee[1], start[2], delta=0.01)
+        self.assertGreater(math.hypot(hole_jsons[1]["pin"][0], hole_jsons[1]["pin"][2]), 280.0)
+
+
+class TeeVariantTests(unittest.TestCase):
+    def test_lines_from_two_tee_sets_to_one_green_are_one_hole(self):
+        white = way(1, {"golf": "hole", "ref": "7", "par": "3"}, [latlon_at(0, 0), latlon_at(0, -170)])
+        yellow = way(2, {"golf": "hole", "ref": "7", "par": "3"}, [latlon_at(40, -60), latlon_at(1, -169)])
+        others = [way(10 + n, {"golf": "hole", "ref": str(n)}, [latlon_at(300 + n * 40, 0), latlon_at(300 + n * 40, -350)])
+                  for n in (1, 2, 3)]
+
+        kept = conv._resolve_duplicate_hole_lines([white, yellow] + others)
+
+        self.assertEqual([1, 11, 12, 13], sorted(el["id"] for el in kept))
+
+
+class MadeGreenTests(unittest.TestCase):
+    def test_a_pin_without_a_green_gets_a_stand_in(self):
+        holes = conv.group_holes([
+            way(1, {"golf": "hole", "ref": "1"}, [latlon_at(0, 0), latlon_at(0, -200)]),
+            node(2, {"golf": "pin", "ref": "1"}, *latlon_at(0, -200)),
+        ])
+
+        h_json = conv.hole_to_json(1, holes[1], 56.0, 10.0, "t", conv.load_generation_config(None))
+
+        greens = [z for z in h_json["material_zones"] if z["type"] == "green"]
+        self.assertEqual(1, len(greens))
+        self.assertTrue(h_json["source"]["made_green"])
+        self.assertAlmostEqual(-200.0, greens[0]["center"][2], delta=0.5)
+
+
+class WaterShapeTests(unittest.TestCase):
+    def test_a_stream_drawn_as_a_line_becomes_a_chain_along_it(self):
+        creek = way(5, {"golf": "water_hazard"}, [latlon_at(0, 0), latlon_at(60, 0), latlon_at(60, -60)])
+        h = conv._empty_hole()
+        h["waters"].append(creek)
+
+        zones, fits = conv._material_zones(h, 56.0, 10.0, (0.0, 0.0), conv.DEFAULT_CONFIG["zones"])
+
+        self.assertGreaterEqual(len(zones), 4)
+        self.assertTrue(fits[0]["stream"])
+        self.assertTrue(all(z["radii"][1] == 2.5 for z in zones))
+
+    def test_a_multipolygon_lake_split_into_member_ways_is_one_ring(self):
+        lake = {"type": "relation", "id": 7, "tags": {"golf": "water_hazard"}, "members": [
+            {"role": "outer", "geometry": [{"lat": a, "lon": b} for a, b in (latlon_at(0, 0), latlon_at(40, 0), latlon_at(40, -20))]},
+            {"role": "outer", "geometry": [{"lat": a, "lon": b} for a, b in (latlon_at(40, -20), latlon_at(0, -20), latlon_at(0, 0))]},
+        ]}
+
+        shapes = conv._element_shapes_xz(lake, 56.0, 10.0)
+
+        self.assertEqual(1, len(shapes))
+        self.assertTrue(shapes[0][1])
+        self.assertAlmostEqual(800.0, abs(osm_ellipse.polygon_area(shapes[0][0])), delta=2.0)
+
+
+def synthetic_course(holes):
+    """
+    Hole JSON and a course world for holes given as (tee_xz, pin_xz, par) in
+    course metres around 56 N 10 E, built the way the converter writes them.
+    """
+    hole_jsons, starts = [], []
+    for index, (tee, pin, par) in enumerate(holes):
+        rel = (pin[0] - tee[0], pin[1] - tee[1])
+        hole_jsons.append({
+            "id": f"t_h{index + 1:02d}", "name": f"Hole {index + 1}", "par": par,
+            "tee": [0.0, 0.0, 0.0], "pin": [rel[0], 0.0, rel[1]],
+            "spline": {"control_points": [[0.0, 0.0, 0.0], [rel[0] / 2, 0.0, rel[1] / 2], [rel[0], 0.0, rel[1]]],
+                       "width": 30.0, "rough_width": 46.0},
+            "material_zones": [{"type": "green", "center": [rel[0], 0, rel[1]], "radii": [12.0, 9.0],
+                                "rotation_degrees": 20.0}],
+            "trees": [],
+            "source": {"tee_latlon": list(latlon_at(*tee)), "pin_latlon": list(latlon_at(*pin))},
+        })
+        starts.append({"id": f"hole_{index + 1:02d}_start", "hole_index": index, "position": [tee[0], 0.0, tee[1]]})
+    world = {"projection": {"origin_lat": 56.0, "origin_lon": 10.0}, "hole_starts": starts}
+    return hole_jsons, world
+
+
+class CheckTests(unittest.TestCase):
+    # Three holes up and down a field: 1 north, 2 south, 3 north.
+    HOLES = [((0, 0), (0, -350), 4), ((40, -350), (40, -200), 3), ((80, -190), (80, -650), 5)]
+    CARD = {"total_par": 12, "holes": {
+        "1": {"par": 4, "metres": 350, "bearing_deg": 0},
+        "2": {"par": 3, "metres": 150, "faces": "S"},
+        "3": {"par": 5, "metres": 460, "bearing_deg": 0}}}
+
+    def codes(self, findings, level="error"):
+        return sorted(item["code"] for item in findings.items if item["level"] == level)
+
+    def check(self, holes=None, card=None, edit=None):
+        hole_jsons, world = synthetic_course(holes or self.HOLES)
+        if edit:
+            edit(hole_jsons, world)
+        return osm_checks.check_course("t", hole_jsons, world, card)
+
+    def card_with(self, number, entry):
+        return {**self.CARD, "holes": {**self.CARD["holes"], number: entry}}
+
+    def test_a_clean_course_has_no_errors_or_warnings(self):
+        findings = self.check(card=self.CARD)
+
+        self.assertEqual([], self.codes(findings, "error") + self.codes(findings, "warn"))
+
+    def test_internal_checks_run_without_a_scorecard(self):
+        def take_hole_ones_green(hole_jsons, world):
+            hole_jsons[1]["pin"] = [-40.0, 0.0, 0.0]
+            hole_jsons[1]["material_zones"][0]["center"] = [-40.0, 0, 0.0]
+
+        findings = self.check(edit=take_hole_ones_green)
+
+        self.assertIn("GREEN_SHARED", self.codes(findings))
+
+    def test_hole_count_and_par(self):
+        card = self.card_with("2", {"par": 4, "metres": 150})
+        card = {**card, "holes": {**card["holes"], "4": {"par": 3}}}
+
+        findings = self.check(card=card)
+
+        self.assertEqual(["HOLE_COUNT", "PAR_MISMATCH"], self.codes(findings))
+
+    def test_a_hole_facing_the_wrong_way(self):
+        findings = self.check(card=self.card_with("1", {"par": 4, "metres": 350, "faces": "W"}))
+
+        self.assertEqual(["HOLE_BEARING"], self.codes(findings))
+        message = [i["message"] for i in findings.items if i["code"] == "HOLE_BEARING"][0]
+        self.assertIn("expected to face west (270°) but faces north (0°)", message)
+
+    def test_a_hole_somewhat_short_is_a_warning(self):
+        findings = self.check(card=self.card_with("3", {"par": 5, "metres": 400}))
+
+        self.assertEqual(["HOLE_LENGTH"], self.codes(findings, "warn"))
+        self.assertEqual([], self.codes(findings))
+
+    def test_a_hole_far_off_finds_the_green_its_tee_pairs_with(self):
+        # Hole 1's tee is 204 m from hole 2's green, not 350 m from its own.
+        findings = self.check(card=self.card_with("1", {"par": 4, "metres": 205}))
+
+        self.assertEqual(["HOLE_LENGTH", "TEE_GREEN_PAIRING"], self.codes(findings))
+        message = [i["message"] for i in findings.items if i["code"] == "TEE_GREEN_PAIRING"][0]
+        self.assertIn("hole 2's green", message)
+
+    def test_a_long_walk_between_holes(self):
+        holes = [((0, 0), (0, -350), 4), ((600, -350), (600, -200), 3)]
+
+        findings = osm_checks.check_course("t", *synthetic_course(holes), None)
+
+        self.assertEqual(["ROUTING"], self.codes(findings, "warn"))
+
+    def test_the_same_hole_twice_overlaps(self):
+        holes = [((0, 0), (0, -350), 4), ((5, -10), (5, -345), 4)]
+
+        findings = osm_checks.check_course("t", *synthetic_course(holes), None)
+
+        self.assertIn("HOLES_OVERLAP", self.codes(findings))
+
+    def test_numbering_start_mismatch_pin_off_green_and_zone_format(self):
+        def break_things(hole_jsons, world):
+            hole_jsons[0]["id"] = "t_h07"
+            world["hole_starts"][1]["position"] = [140.0, 0.0, -350.0]
+            hole_jsons[2]["material_zones"][0]["center"] = [60.0, 0, -100.0]
+            hole_jsons[2]["material_zones"].append({"type": "bunker", "center": [0, 0, -50], "radius": 3})
+
+        findings = self.check(edit=break_things)
+
+        self.assertEqual(["HOLE_START_MISMATCH", "NUMBERING_GAP", "PIN_OFF_GREEN", "ZONE_FORMAT"], self.codes(findings))
+
+    def test_poor_zone_fits_and_made_greens_are_warnings(self):
+        def mark(hole_jsons, world):
+            hole_jsons[0]["source"]["zone_fit"] = [{"osm": "way/9", "type": "bunker", "pieces": 6, "iou": 0.4}]
+            hole_jsons[1]["source"]["made_green"] = True
+
+        self.assertEqual(["GREEN_MADE", "ZONE_FIT"], self.codes(self.check(edit=mark), "warn"))
+
+    def test_holes_are_placed_by_their_start_and_rotation(self):
+        hole_jsons, world = synthetic_course([((0, 0), (0, -100), 3)])
+        world["hole_starts"][0]["rotation_degrees"] = 90.0
+
+        placed = osm_checks.placed_holes(hole_jsons, world)
+
+        # rotate_about_y turns -z (north) onto +x (east).
+        self.assertAlmostEqual(100.0, placed[0]["pin"][0], places=6)
+        self.assertAlmostEqual(0.0, placed[0]["pin"][1], places=6)
+
+    def test_the_contact_sheet_numbers_every_tee_and_green(self):
+        hole_jsons, world = synthetic_course(self.HOLES)
+        placed = osm_checks.placed_holes(hole_jsons, world)
+
+        svg = osm_contact_sheet.render("Test Course", placed, self.CARD,
+                                       osm_checks.check_course("t", hole_jsons, world, self.CARD))
+
+        self.assertTrue(svg.startswith("<svg"))
+        self.assertEqual(3, svg.count("<ellipse"))
+        for number in ("1", "2", "3"):
+            self.assertGreaterEqual(svg.count(f">{number}</text>"), 2)
+        self.assertIn("0 error(s), 0 warning(s)", svg)
+
+
+def box(osm_id, tags, lat, lon, half_m=8.0):
+    """A closed square way of side 2*half_m metres centred on (lat, lon)."""
+    dlat = half_m / 111_320.0
+    dlon = half_m / (111_320.0 * math.cos(math.radians(lat)))
+    corners = [(lat - dlat, lon - dlon), (lat - dlat, lon + dlon), (lat + dlat, lon + dlon),
+               (lat + dlat, lon - dlon), (lat - dlat, lon - dlon)]
+    return way(osm_id, tags, corners)
+
+
+def north_of(lat, metres):
+    return lat + metres / 111_320.0
+
+
+class AuditTests(unittest.TestCase):
+    """osm_audit: every gap in a course's OSM data is reported, with what to map."""
+
+    LAT = 56.0
+    COURSE = way(999, {"leisure": "golf_course", "name": "Test Golf"},
+                 [(55.99, 9.99), (55.99, 10.05), (56.01, 10.05), (56.01, 9.99), (55.99, 9.99)])
+
+    def lon(self, column):
+        return 10.0 + column * 0.005  # about 310 m apart
+
+    def strip(self, column, from_m, to_m, half_width_m=12.0):
+        """A closed fairway-like strip running north along a column."""
+        lon = self.lon(column)
+        dlon = half_width_m / (111_320.0 * math.cos(math.radians(self.LAT)))
+        south, north = north_of(self.LAT, from_m), north_of(self.LAT, to_m)
+        return [(south, lon - dlon), (south, lon + dlon), (north, lon + dlon), (north, lon - dlon), (south, lon - dlon)]
+
+    def complete_hole(self, number, column, par=3, metres=120.0):
+        lon = self.lon(column)
+        green_lat = north_of(self.LAT, metres)
+        return [
+            box(100 + number, {"golf": "tee"}, self.LAT, lon),
+            box(200 + number, {"golf": "green"}, green_lat, lon),
+            way(300 + number, {"golf": "hole", "ref": str(number), "par": str(par), "dist:yellow": str(int(metres))},
+                [(self.LAT, lon), (green_lat, lon)]),
+        ]
+
+    def audit(self, elements, config=None, scorecard=None):
+        import osm_audit
+        return osm_audit.audit_elements(elements, self.COURSE, "test_golf", config or {}, scorecard)
+
+    def codes(self, findings, level=None):
+        return [i["code"] for i in findings.items if level is None or i["level"] == level]
+
+    def scorecard(self, holes):
+        return {"holes": {str(n): {"par": 3, "metres": 120, "bearing_deg": 0} for n in range(1, holes + 1)}}
+
+    def test_a_completely_mapped_course_has_nothing_to_fix(self):
+        elements = self.complete_hole(1, 0) + self.complete_hole(2, 1)
+        elements.append(node(400, {"golf": "pin"}, north_of(self.LAT, 120), self.lon(0)))
+        self.assertEqual(self.codes(self.audit(elements, scorecard=self.scorecard(2))), [])
+
+    def test_a_green_without_a_hole_line_names_the_tee_that_probably_serves_it(self):
+        elements = self.complete_hole(1, 0)
+        elements.append(box(202, {"golf": "green"}, north_of(self.LAT, 100), self.lon(1)))
+        elements.append(box(102, {"golf": "tee"}, self.LAT, self.lon(1)))
+        findings = self.audit(elements, scorecard=self.scorecard(2))
+        self.assertIn("HOLE_LINES_MISSING", self.codes(findings, "warn"))
+        missing = [i for i in findings.items if i["code"] == "HOLE_LINE_MISSING"]
+        self.assertEqual(len(missing), 1)
+        self.assertEqual(missing[0]["level"], "warn")
+        self.assertIn("way/202", missing[0]["message"])
+        self.assertIn("way/102", missing[0]["message"])
+        self.assertIn("to the south", missing[0]["message"])
+        self.assertTrue(missing[0]["link"].startswith("https://www.openstreetmap.org/edit#map="))
+
+    def test_a_green_reached_only_by_a_fairway_points_beyond_its_far_end(self):
+        elements = [box(201, {"golf": "green"}, north_of(self.LAT, 150), self.lon(0)),
+                    way(501, {"golf": "fairway"}, self.strip(0, 60, 140))]
+        findings = self.audit(elements, scorecard=self.scorecard(1))
+        message = next(i["message"] for i in findings.items if i["code"] == "HOLE_LINE_MISSING")
+        self.assertIn("fairway way/501 leads to it from the south", message.lower())
+
+    def test_a_practice_green_is_not_a_missing_hole(self):
+        elements = self.complete_hole(1, 0) + [box(250, {"golf": "green", "name": "Putting green"}, self.LAT, self.lon(2))]
+        self.assertNotIn("HOLE_LINE_MISSING", self.codes(self.audit(elements, scorecard=self.scorecard(1))))
+
+    def test_a_line_drawn_green_to_tee_is_reported_reversed(self):
+        elements = self.complete_hole(1, 0)
+        elements[2]["geometry"].reverse()
+        findings = self.audit(elements, scorecard=self.scorecard(1))
+        self.assertEqual(self.codes(findings, "warn"), [])
+        self.assertIn("HOLE_LINE_REVERSED", self.codes(findings, "info"))
+
+    def test_a_line_with_no_tee_or_green_at_its_ends_asks_for_them(self):
+        elements = [e for e in self.complete_hole(1, 0) if e["tags"]["golf"] == "hole"]
+        findings = self.audit(elements, scorecard=self.scorecard(1))
+        self.assertIn("TEE_MISSING", self.codes(findings, "info"))
+        self.assertIn("GREEN_MISSING", self.codes(findings, "warn"))
+
+    def test_untagged_lines_say_the_par_and_number_were_guessed(self):
+        elements = self.complete_hole(1, 0)
+        elements[2]["tags"] = {"golf": "hole"}
+        findings = self.audit(elements, scorecard=self.scorecard(1))
+        warns = self.codes(findings, "warn")
+        self.assertIn("LINE_NO_PAR", warns)
+        self.assertIn("LINE_NO_REF", warns)
+        self.assertIn("LINE_NO_DIST", self.codes(findings, "info"))
+
+    def test_a_skipped_hole_number_is_a_gap(self):
+        elements = self.complete_hole(1, 0) + self.complete_hole(3, 2)
+        self.assertIn("REF_GAP", self.codes(self.audit(elements), "warn"))
+
+    def test_a_par_four_line_that_crosses_no_fairway_is_noted(self):
+        elements = self.complete_hole(1, 0, par=4, metres=320.0)
+        self.assertIn("FAIRWAY_MISSING", self.codes(self.audit(elements), "info"))
+        fairway = way(501, {"golf": "fairway"}, self.strip(0, 60, 250))
+        self.assertNotIn("FAIRWAY_MISSING", self.codes(self.audit(elements + [fairway])))
+
+    def test_a_config_tee_taken_from_a_fairway_is_a_guess(self):
+        elements = [box(201, {"golf": "green"}, north_of(self.LAT, 150), self.lon(0)),
+                    way(501, {"golf": "fairway"}, self.strip(0, 60, 130))]
+        config = {"holes": [{"tee": "W501", "green": "W201", "par": 3}]}
+        findings = self.audit(elements, config=config, scorecard=self.scorecard(1))
+        self.assertIn("TEE_GUESSED", self.codes(findings, "warn"))
+        missing = next(i for i in findings.items if i["code"] == "HOLE_LINE_MISSING")
+        self.assertEqual(missing["hole"], 1)
+        self.assertIn("course config pairs it", missing["message"])
+
+    def test_a_course_without_a_scorecard_asks_for_one(self):
+        self.assertIn("SCORECARD_MISSING", self.codes(self.audit(self.complete_hole(1, 0)), "warn"))
+        no_lengths = {"holes": {"1": {"par": 3}}}
+        self.assertIn("SCORECARD_NO_LENGTHS",
+                      self.codes(self.audit(self.complete_hole(1, 0), scorecard=no_lengths), "warn"))
+
+    def test_the_todo_is_a_checklist_with_links(self):
+        import osm_audit
+        elements = self.complete_hole(1, 0)
+        elements[2]["geometry"].reverse()
+        text = osm_audit.todo_markdown("Test Golf", self.COURSE, self.audit(elements))
+        self.assertIn("- [ ] **HOLE_LINE_REVERSED**", text)
+        self.assertIn("(https://www.openstreetmap.org/way/301)", text)
+
+    def test_a_tee_outside_the_course_boundary_asks_to_extend_it(self):
+        elements = self.complete_hole(1, 0)
+        for el in elements:
+            el["geometry"] = [{"lat": p["lat"] - 0.0105, "lon": p["lon"]} for p in el["geometry"]]
+        findings = self.audit(elements)
+        outside = [i for i in findings.items if i["code"] == "LINE_OUTSIDE_COURSE"]
+        self.assertEqual(len(outside), 1)
+        self.assertIn("tee end", outside[0]["message"])
+        self.assertIn("way/999", outside[0]["message"])
+
+    def test_a_course_is_fetched_with_its_outline(self):
+        # `out geom bb` is bounds only (the last geometry mode wins), which
+        # left every course without a boundary polygon.
+        with mock.patch.object(conv, "_query", return_value={"elements": []}) as query:
+            conv._fetch_elements_by_ref([("way", 1)])
+        text = query.call_args[0][0]
+        self.assertIn("out geom;", text)
+        self.assertNotIn(" bb", text)
+
+    def test_a_bare_side_of_a_hole_is_named_with_its_direction(self):
+        # A hole playing north (-z) with trees only on its right, the east (+x).
+        trees = [(15.0, -float(z)) for z in range(0, 200, 10)]
+        placed = {"number": 1, "line": [(0.0, 0.0), (0.0, -200.0)], "trees": trees}
+        findings = osm_checks.Findings()
+        osm_checks._check_tree_sides(findings, placed, dict(osm_checks.DEFAULT_TOLERANCES))
+        messages = [i["message"] for i in findings.items if i["code"] == "TREES_SPARSE"]
+        self.assertEqual(len(messages), 1)
+        self.assertIn("left (west)", messages[0])
+
+    def test_a_fence_is_a_pole_at_each_node_and_between_far_ones(self):
+        fence = way(700, {"barrier": "fence"}, [(56.0, 10.0), (north_of(56.0, 25.0), 10.0)])
+        config = conv.DEFAULT_CONFIG["fence"]
+        [out] = conv.fences_to_json([fence], [], 56.0, 10.0, config)
+        self.assertEqual(out["osm_ref"], "way/700")
+        self.assertEqual(len(out["poles"]), 4)  # 25 m at most 10 m apart: three stretches
+        gaps = [math.dist((a[0], a[2]), (b[0], b[2])) for a, b in zip(out["poles"], out["poles"][1:])]
+        self.assertTrue(all(abs(g - 25.0 / 3) < 0.05 for g in gaps), gaps)
+        self.assertEqual((out["height"], out["height_from"]), (config["default_height_m"], "default"))
+
+    def test_a_fence_height_comes_from_its_tag_or_a_driving_range_beside_it(self):
+        config = conv.DEFAULT_CONFIG["fence"]
+        tagged = way(701, {"barrier": "fence", "height": "18 m"}, [(56.0, 10.0), (56.0001, 10.0)])
+        self.assertEqual(conv.fence_height(tagged, [], 56.0, 10.0, config), (18.0, "tag"))
+        driving_range = box(702, {"golf": "driving_range"}, 56.0005, 10.0, half_m=40.0)
+        net = way(703, {"barrier": "fence"}, [(56.0, 10.0), (56.0001, 10.0)])
+        self.assertEqual(conv.fence_height(net, [driving_range], 56.0, 10.0, config),
+                         (config["driving_range_height_m"], "driving_range"))
+        self.assertIsNone(conv._height_tag("tall"))
+        self.assertEqual(conv._height_tag("1.8"), 1.8)
+
+    def test_a_fence_without_a_height_tag_is_noted(self):
+        net = way(703, {"barrier": "fence"}, [(56.0, 10.0), (56.0001, 10.0)])
+        import osm_audit
+        findings = osm_audit.audit_elements(self.complete_hole(1, 0), self.COURSE, "test_golf", {}, None, [net], [])
+        notes = [i for i in findings.items if i["code"] == "FENCE_NO_HEIGHT"]
+        self.assertEqual(len(notes), 1)
+        self.assertIn("way/703", notes[0]["message"])
+
+    def test_a_pond_mapped_only_as_water_is_a_water_hazard(self):
+        pond = box(600, {"natural": "water"}, self.LAT, self.lon(0))
+        self.assertTrue(conv._is_golf_feature(pond))
+        self.assertEqual(conv._as_water_hazard(pond)["tags"]["golf"], "water_hazard")
+        tagged = box(601, {"natural": "water", "golf": "lateral_water_hazard"}, self.LAT, self.lon(0))
+        self.assertEqual(conv._as_water_hazard(tagged)["tags"]["golf"], "lateral_water_hazard")
 
 
 if __name__ == "__main__":

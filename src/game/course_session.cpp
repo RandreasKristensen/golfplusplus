@@ -2,6 +2,8 @@
 
 #include "game/content_files.h"
 #include "game/mode_dispatch.h"
+#include "game/net_types.h"
+#include "game/text_ids.h"
 #include "physics/vector_math.h"
 
 #include <utility>
@@ -127,6 +129,8 @@ bool start_course(game_state& state, const course_definition& course) {
     state.hub = std::move(hub);
     state.xp_drops.clear();
     state.pending_xp_drop_amounts.clear();
+    state.cup_ball.reset();
+    state.picked_cup_ball.reset();
     if (state.hub) {
         state.area = std::move(course_area);
         enter_hub(state, state.hub->world.hole_starts.front().position);
@@ -138,6 +142,15 @@ bool start_course(game_state& state, const course_definition& course) {
 
 bool start_hub_hole(game_state& state, const std::size_t hole_index) {
     if (!in_hub(state) || hole_index >= state.course_holes.size() || hole_played(state.round, hole_index)) {
+        return false;
+    }
+    if (state.cup_ball) {
+        state.notice = game_notice{text_ball_in_cup, 0.0f};
+        return false;
+    }
+    if (is_online(state) &&
+        tee_in_use(state.online.balls, state.online.account_id, static_cast<int>(hole_index))) {
+        state.notice = game_notice{text_online_tee_in_use, 0.0f};
         return false;
     }
     const hole_data& hole = state.course_holes[hole_index];
@@ -156,12 +169,18 @@ void complete_current_hole(game_state& state) {
     record_hole_completed(state);
     state.mode = game_mode::walking;
     state.flight_path_points.clear();
+    // The ball stays in the cup on the course until it is picked up, into
+    // the next round too; a course without a hub moves on to another area.
+    if (state.hub) {
+        state.cup_ball = pin_anchor_position(state);
+    }
 
     if (round_finished(state.round)) {
         return;
     }
+    // The course is one place: the player stays where they holed out from.
     if (state.hub) {
-        enter_hub(state, state.hub->world.hole_starts[index].return_position);
+        enter_hub(state, state.player.position);
     } else {
         enter_linear_hole(state, state.round.current_hole_index);
     }
@@ -177,9 +196,16 @@ void start_next_round(game_state& state) {
     if (!state.hub || !state.hole) {
         return;
     }
-    const glm::vec3 position = state.hub->world.hole_starts[state.hole->index].return_position;
     state.round = start_round(state.course_holes.size());
-    enter_hub(state, position);
+    state.group_strokes.clear();
+    enter_hub(state, state.player.position);
+}
+
+std::size_t course_hole_of_area_hole(const game_state& state, const std::size_t area_hole) {
+    if (!state.hub && state.hole) {
+        return state.hole->index;
+    }
+    return area_hole;
 }
 
 void retee_ball(game_state& state) {
@@ -190,4 +216,19 @@ void retee_ball(game_state& state) {
     reset_play_state(state);
     state.stroke_count = strokes;
     tee_up(state);
+}
+
+bool cup_ball_in_reach(const game_state& state) {
+    return in_hub(state) && state.cup_ball &&
+        horizontal_distance(state.player.position, *state.cup_ball) <= state.tuning.player.ball_interact_radius;
+}
+
+bool pick_up_cup_ball(game_state& state) {
+    if (!cup_ball_in_reach(state)) {
+        return false;
+    }
+    state.picked_cup_ball = state.cup_ball;
+    state.cup_ball.reset();
+    record_ball_picked_up(state);
+    return true;
 }

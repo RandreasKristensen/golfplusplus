@@ -202,14 +202,9 @@ void draw_hole_thumbnail(overlay_batch& batch,
         expand_preview_bounds(glm::vec2(point.x, point.z), raw_min, raw_max);
     }
     for (const material_zone& zone : preview.material_zones) {
-        if (zone.has_radius) {
-            expand_preview_bounds(glm::vec2(zone.center.x + zone.radius, zone.center.z + zone.radius), raw_min, raw_max);
-            expand_preview_bounds(glm::vec2(zone.center.x - zone.radius, zone.center.z - zone.radius), raw_min, raw_max);
-        }
-        if (zone.has_bounds) {
-            expand_preview_bounds(glm::vec2(zone.bounds_min.x, zone.bounds_min.z), raw_min, raw_max);
-            expand_preview_bounds(glm::vec2(zone.bounds_max.x, zone.bounds_max.z), raw_min, raw_max);
-        }
+        const glm::vec2 extent = zone_half_extent(zone);
+        expand_preview_bounds(glm::vec2(zone.center.x, zone.center.z) + extent, raw_min, raw_max);
+        expand_preview_bounds(glm::vec2(zone.center.x, zone.center.z) - extent, raw_min, raw_max);
     }
 
     const bool rotate_long_axis = (raw_max.y - raw_min.y) > (raw_max.x - raw_min.x);
@@ -220,14 +215,10 @@ void draw_hole_thumbnail(overlay_batch& batch,
         expand_preview_bounds(thumbnail_world_point(point, rotate_long_axis), min_point, max_point);
     }
     for (const material_zone& zone : preview.material_zones) {
-        if (zone.has_radius) {
-            expand_preview_bounds(thumbnail_world_point(zone.center + glm::vec3(zone.radius, 0.0f, zone.radius), rotate_long_axis), min_point, max_point);
-            expand_preview_bounds(thumbnail_world_point(zone.center - glm::vec3(zone.radius, 0.0f, zone.radius), rotate_long_axis), min_point, max_point);
-        }
-        if (zone.has_bounds) {
-            expand_preview_bounds(thumbnail_world_point(zone.bounds_min, rotate_long_axis), min_point, max_point);
-            expand_preview_bounds(thumbnail_world_point(zone.bounds_max, rotate_long_axis), min_point, max_point);
-        }
+        const glm::vec2 extent = zone_half_extent(zone);
+        const glm::vec3 corner(extent.x, 0.0f, extent.y);
+        expand_preview_bounds(thumbnail_world_point(zone.center + corner, rotate_long_axis), min_point, max_point);
+        expand_preview_bounds(thumbnail_world_point(zone.center - corner, rotate_long_axis), min_point, max_point);
     }
 
     const glm::vec2 span = glm::max(max_point - min_point, glm::vec2(1.0f));
@@ -246,16 +237,12 @@ void draw_hole_thumbnail(overlay_batch& batch,
     }
 
     for (const material_zone& zone : preview.material_zones) {
+        // Each zone as the rectangle around it, at least a dot across.
         const glm::vec3 color = thumbnail_zone_color(zone.type);
-        if (zone.has_bounds) {
-            const glm::vec2 a = preview_point(zone.bounds_min, center, inset_half, padded_min, scale, rotate_long_axis);
-            const glm::vec2 b = preview_point(zone.bounds_max, center, inset_half, padded_min, scale, rotate_long_axis);
-            draw_overlay_quad(batch, (a + b) * 0.5f, glm::abs(b - a) * 0.5f, color, 0.64f);
-        } else if (zone.has_radius) {
-            const glm::vec2 p = preview_point(zone.center, center, inset_half, padded_min, scale, rotate_long_axis);
-            const float radius = std::max(0.010f, zone.radius * scale);
-            draw_overlay_quad(batch, p, glm::vec2(radius), color, 0.64f);
-        }
+        const glm::vec2 extent = zone_half_extent(zone);
+        const glm::vec2 drawn = rotate_long_axis ? glm::vec2(extent.y, extent.x) : extent;
+        const glm::vec2 p = preview_point(zone.center, center, inset_half, padded_min, scale, rotate_long_axis);
+        draw_overlay_quad(batch, p, glm::max(drawn * scale, glm::vec2(0.010f)), color, 0.64f);
     }
 
     const glm::vec2 tee = preview_point(preview.tee_position, center, inset_half, padded_min, scale, rotate_long_axis);
@@ -281,15 +268,16 @@ constexpr float column_bottom = -0.775f;
 constexpr float column_pitch = 0.24f;
 constexpr float column_half_width = 0.42f;
 constexpr float column_half_height = 0.095f;
+// The least space between two tiles when they close up.
+constexpr float column_min_gap = 0.02f;
 
 // Tile spacing: the usual pitch, or less when that many tiles would run
-// past the bottom. Tiles shrink with it.
+// past the bottom. Tiles shrink with it, giving up their gap first.
 float column_pitch_for(const startup_menu_screen screen, const int count) {
     if (screen == startup_menu_screen::form || count <= 1) {
         return column_pitch;
     }
-    const float tile_heights = 2.0f * column_half_height / column_pitch;
-    return std::min(column_pitch, (column_top - column_bottom) / (static_cast<float>(count - 1) + tile_heights));
+    return std::min(column_pitch, (column_top - column_bottom + column_min_gap) / static_cast<float>(count));
 }
 
 // The form screens' message line, field and code, above their tiles.
@@ -316,7 +304,8 @@ glm::vec2 startup_tile_half_size(const startup_menu_screen screen, const int cou
     if (!single_column(screen)) {
         return glm::vec2(0.25f, 0.165f);
     }
-    return glm::vec2(column_half_width, column_half_height * column_pitch_for(screen, count) / column_pitch);
+    return glm::vec2(column_half_width,
+                     std::min(column_half_height, 0.5f * (column_pitch_for(screen, count) - column_min_gap)));
 }
 
 int startup_tile_at(const startup_menu_screen screen, const int count, const glm::vec2 point) {
@@ -382,4 +371,11 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
     }
 
     draw_label(batch, text.font, find_text_style(text, style_footer), menu.footer, ui_rect{glm::vec2(0.0f, -0.86f), glm::vec2(0.78f, 0.05f)});
+}
+
+void draw_loading_screen(overlay_batch& batch, const text_assets& text) {
+    draw_label(batch, text.font, find_text_style(text, style_title), lookup_text(text, text_menu_main_title),
+               ui_rect{glm::vec2(0.0f, 0.14f), glm::vec2(0.78f, 0.16f)});
+    draw_label(batch, text.font, find_text_style(text, style_subtitle), lookup_text(text, text_menu_loading),
+               ui_rect{glm::vec2(0.0f, -0.12f), glm::vec2(0.70f, 0.045f)});
 }

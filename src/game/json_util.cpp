@@ -70,6 +70,15 @@ const json* json_array(const json& object, const char* key) {
     return value != nullptr && value->is_array() ? value : nullptr;
 }
 
+std::optional<glm::vec2> json_vec2(const json& object, const char* key) {
+    const json* value = member(object, key);
+    if (value == nullptr || !value->is_array() || value->size() != 2 || !(*value)[0].is_number() ||
+        !(*value)[1].is_number()) {
+        return std::nullopt;
+    }
+    return glm::vec2((*value)[0].get<float>(), (*value)[1].get<float>());
+}
+
 std::optional<glm::vec3> json_vec3(const json& value) {
     if (!value.is_array() || value.size() != 3) {
         return std::nullopt;

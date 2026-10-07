@@ -7,6 +7,7 @@
 #include "game/course_definition.h"
 #include "game/game_tuning.h"
 #include "game/reward_rules.h"
+#include "game/settings.h"
 
 #include <optional>
 #include <string>
@@ -19,6 +20,7 @@ struct game_content {
     std::vector<course_definition> courses;  // sorted by file name
     std::vector<skill_definition> skills;    // skills panel order
     reward_rules rewards;
+    std::vector<setting_definition> settings;  // settings screen order
 };
 
 struct game_content_load_result {

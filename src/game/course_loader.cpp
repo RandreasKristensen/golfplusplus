@@ -2,6 +2,28 @@
 
 #include "game/json_util.h"
 
+namespace {
+std::optional<course_backdrop> parse_backdrop(const json& root) {
+    const json* object = json_object(root, "backdrop");
+    if (object == nullptr) {
+        return std::nullopt;
+    }
+    course_backdrop backdrop;
+    backdrop.sky = json_string(*object, "sky").value_or("");
+    backdrop.land = json_string(*object, "land").value_or("");
+    const std::optional<glm::vec3> haze_color = json_vec3(*object, "haze_color");
+    const std::optional<float> haze_amount = json_float(*object, "haze_amount");
+    const std::optional<float> haze_distance = json_float(*object, "haze_distance");
+    if (backdrop.sky.empty() || backdrop.land.empty() || !haze_color || !haze_amount || *haze_amount < 0.0f ||
+        !haze_distance || *haze_distance <= 0.0f) {
+        return std::nullopt;
+    }
+    backdrop.haze_color = *haze_color;
+    backdrop.haze_amount = *haze_amount;
+    backdrop.haze_distance = *haze_distance;
+    return backdrop;
+}
+}
 
 std::optional<course_definition> parse_course_from_text(const std::string& text) {
     const std::optional<json> root = parse_json(text);
@@ -10,8 +32,8 @@ std::optional<course_definition> parse_course_from_text(const std::string& text)
     }
 
     const json* holes = json_array(*root, "holes");
-    const std::optional<std::string> backdrop = json_string(*root, "backdrop");
-    if (holes == nullptr || holes->empty() || !backdrop || backdrop->empty()) {
+    const std::optional<course_backdrop> backdrop = parse_backdrop(*root);
+    if (holes == nullptr || holes->empty() || !backdrop) {
         return std::nullopt;
     }
 

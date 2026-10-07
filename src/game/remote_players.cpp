@@ -3,6 +3,7 @@
 #include "game/mode_dispatch.h"
 #include "game/play_area.h"
 #include "game/shot_simulation.h"
+#include "game/swing.h"
 #include "physics/vector_math.h"
 
 #include <algorithm>
@@ -12,6 +13,9 @@
 #include <glm/geometric.hpp>
 
 namespace {
+// Others' meters run at this speed: the club they hold isn't sent.
+constexpr float base_meter_speed = 1.0f;
+
 bool connected(const game_state& state) {
     return state.online.status == net_status::connected;
 }
@@ -38,6 +42,8 @@ void follow(game_state& state, remote_avatar& avatar, const room_player& player,
     avatar.position = target + avatar.correction * blend;
     avatar.yaw = wrap_angle(motion.yaw + motion.turn_rate * since);
     avatar.mode = motion.mode;
+    tick_emote(avatar.smoke_emote, state.tuning.player.emote_seconds, dt);
+    tick_emote(avatar.drink_emote, state.tuning.player.emote_seconds, dt);
 }
 
 void append_trail_point(std::vector<glm::vec3>& trail, const glm::vec3& point, const float min_spacing) {
@@ -74,6 +80,13 @@ void update_remote_players(game_state& state, const float dt) {
 }
 
 void start_remote_shot(game_state& state, const room_shot& shot) {
+    // Their game sent where they stood just before the shot (launch_shot), so
+    // the motion I have is the one it was hit from.
+    const auto avatar = state.remote_avatars.find(shot.account_id);
+    const auto player = state.online.players.find(shot.account_id);
+    if (avatar != state.remote_avatars.end() && player != state.online.players.end()) {
+        avatar->second.hit_motion_at = player->second.motion_at;
+    }
     if (!state.hub || shot.zone < 0 || static_cast<std::size_t>(shot.zone) >= state.hub->markers.size()) {
         return;
     }
@@ -81,16 +94,51 @@ void start_remote_shot(game_state& state, const room_shot& shot) {
     const shot_course course{state.area, state.static_anchors.trees,
                              shot_hole{anchor_on_terrain(state.area, marker.pin_position), marker.wind_seed}};
     remote_shot playing;
+    playing.input = shot.input;
     playing.result = simulate_shot(shot.input, course, state.tuning, state.clubs, state.rewards);
     playing.correction = shot.rest - playing.result.rest_position;
     playing.trail.push_back(remote_shot_position(playing));
     state.remote_shots[shot.account_id] = std::move(playing);
 }
 
+void start_remote_emote(game_state& state, const room_emote& emote) {
+    const auto avatar = state.remote_avatars.find(emote.account_id);
+    if (avatar == state.remote_avatars.end()) {
+        return;  // not shown (yet)
+    }
+    emote_state& playing = emote.emote == emote_id::smoke ? avatar->second.smoke_emote : avatar->second.drink_emote;
+    if (!playing.active) {
+        trigger_emote(playing);
+    }
+}
+
+std::optional<remote_address> remote_address_pose(const game_state& state, const std::uint64_t account) {
+    const auto avatar = state.remote_avatars.find(account);
+    const auto player = state.online.players.find(account);
+    const auto ball = state.online.balls.find(account);
+    if (avatar == state.remote_avatars.end() || player == state.online.players.end() || ball == state.online.balls.end() ||
+        !player->second.motion) {
+        return std::nullopt;
+    }
+    const net_motion& motion = *player->second.motion;
+    const bool addressing = motion.mode == motion_mode::address || motion.mode == motion_mode::swing;
+    if (!addressing || player->second.motion_at == avatar->second.hit_motion_at) {
+        return std::nullopt;
+    }
+    remote_address address{ball->second.position, motion.yaw, 0.0f};
+    if (motion.mode == motion_mode::swing) {
+        const float since = state.online.server_now != 0
+            ? std::max(0.0f, server_seconds_between(player->second.motion_at, state.online.server_now))
+            : 0.0f;
+        address.club_power = swing_meter_power(since, base_meter_speed, state.tuning.swing.meter_cycle_seconds);
+    }
+    return address;
+}
+
 glm::vec3 remote_shot_position(const remote_shot& shot) {
     const float duration = shot.result.duration;
     const float progress = duration > 0.0f ? std::clamp(shot.elapsed / duration, 0.0f, 1.0f) : 1.0f;
-    return shot_position_at(shot.result, std::min(shot.elapsed, duration)) + shot.correction * progress;
+    return shot_position_at(shot.result, std::clamp(shot.elapsed, 0.0f, duration)) + shot.correction * progress;
 }
 
 bool remote_shot_playing(const remote_shot& shot) {
@@ -112,6 +160,14 @@ std::vector<shown_ball> remote_balls(const game_state& state) {
         }
     }
     return balls;
+}
+
+player_relationship relationship_to(const game_state& state, const room_player& player) {
+    const room_player* me = my_room_player(state);
+    if (me != nullptr && me->group_id != 0 && player.group_id == me->group_id) {
+        return player_relationship::grouped;
+    }
+    return player_relationship::unknown;
 }
 
 int local_zone(const game_state& state) {

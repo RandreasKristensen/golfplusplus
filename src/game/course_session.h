@@ -17,20 +17,37 @@ bool start_course(game_state& state, const course_definition& course);
 
 // Plays hub hole `hole_index` where it sits on the course: the area stays the
 // whole course, with every hole, tree and the land. False when there is no
-// hub, the index is out of range or the hole was already played this round.
+// hub, the index is out of range or the hole was already played this round,
+// and, with a notice, while the last holed ball is still in its cup
+// (state.cup_ball) or, online, another player is using its tee (tee_in_use).
 bool start_hub_hole(game_state& state, std::size_t hole_index);
 
-// Records the hole's strokes, then returns to the hub or loads the next hole.
-// After the last hole the round is finished and the state stays put.
+// Records the hole's strokes, then returns to the hub where the player
+// stands, the ball left in the cup (state.cup_ball), or loads the next hole
+// on a course without a hub. After the last hole the round is finished and
+// the state stays put.
 void complete_current_hole(game_state& state);
 
 // Gives up the hole being played on a hub course, with no score: back in
 // the hub at `position` (online: where the server has the player).
 void abandon_hole(game_state& state, const glm::vec3& position);
 
-// After a finished round on a hub course: a new round, in the hub at the
-// last hole's return point. Online the server starts it there by itself.
+// After a finished round on a hub course: a new round, in the hub where the
+// player stands. Online the server starts it there by itself.
 void start_next_round(game_state& state);
+
+// Which course hole (index into state.course_holes) the area's hole
+// `area_hole` is: in a hub the area holds every hole in course order;
+// otherwise only the hole played.
+std::size_t course_hole_of_area_hole(const game_state& state, std::size_t area_hole);
 
 // Puts the ball back on the tee (no penalty stroke). No-op in the hub.
 void retee_ball(game_state& state);
+
+// The ball left in its cup is within player.ball_interact_radius (XZ) of the
+// player walking the hub.
+bool cup_ball_in_reach(const game_state& state);
+
+// Picks the ball out of its cup when in reach: then the next hole can start.
+// Online the server checks it too (pick_up_ball). False when out of reach.
+bool pick_up_cup_ball(game_state& state);

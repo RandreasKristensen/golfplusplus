@@ -1,0 +1,31 @@
+{
+  "settings": [
+    {
+      "id": "master_volume",
+      "label": "menu.settings.master_volume",
+      "value": "menu.settings.percent",
+      "min": 0,
+      "max": 100,
+      "step": 10,
+      "default": 100
+    },
+    {
+      "id": "music_volume",
+      "label": "menu.settings.music_volume",
+      "value": "menu.settings.percent",
+      "min": 0,
+      "max": 100,
+      "step": 10,
+      "default": 100
+    },
+    {
+      "id": "field_of_view",
+      "label": "menu.settings.field_of_view",
+      "value": "menu.settings.degrees",
+      "min": 50,
+      "max": 90,
+      "step": 5,
+      "default": 60
+    }
+  ]
+}

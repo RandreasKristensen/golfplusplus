@@ -61,6 +61,22 @@ struct emote_state {
     bool active = false;
 };
 
+// Starts an emote from its first frame; mine and other players' alike.
+inline void trigger_emote(emote_state& emote) {
+    emote = emote_state{0.0f, true};
+}
+
+// Plays an emote on for `dt`; it ends after `duration` (player.emote_seconds).
+inline void tick_emote(emote_state& emote, const float duration, const float dt) {
+    if (!emote.active) {
+        return;
+    }
+    emote.elapsed += dt;
+    if (emote.elapsed >= duration) {
+        emote = emote_state{};
+    }
+}
+
 // The hole being played, in the play area's coordinates.
 struct active_hole {
     std::size_t index = 0;
@@ -117,10 +133,16 @@ struct remote_avatar {
     std::int64_t motion_at = 0;      // the motion followed (server time)
     glm::vec3 correction{0.0f};      // shown minus followed when that motion arrived
     float correction_left = 0.0f;    // seconds of the blend still to run
+    emote_state smoke_emote;         // from the server's emote events
+    emote_state drink_emote;
+    // The motion (server time) their last shot was hit from: its swing is over.
+    std::int64_t hit_motion_at = 0;
 };
 
-// Another player's shot playing back here, from the server's event.
+// Another player's shot playing back here, from the server's event: the
+// ball leaves as the event arrives, as mine leaves when I hit it.
 struct remote_shot {
+    shot_input input;
     shot_result result;
     glm::vec3 correction{0.0f};  // the server's rest less this simulation's
     float elapsed = 0.0f;
@@ -169,9 +191,7 @@ struct static_anchor_cache {
     glm::vec3 tee_anchor{0.0f};  // only meaningful while a hole is played
     glm::vec3 pin_anchor{0.0f};
     std::vector<tree_body> trees;
-    std::vector<glm::vec3> hub_tee_markers;
-    std::vector<glm::vec3> hub_pin_markers;
-    std::vector<glm::vec3> hub_start_markers;
+    std::vector<glm::vec3> hub_pin_markers;  // every hole's pin, in the hub and during its rounds
     std::vector<glm::vec3> collectibles;  // one per hub collectible, available or not
 };
 
@@ -188,6 +208,11 @@ struct game_state {
     round_state round;
     std::optional<course_hub> hub;
     std::optional<active_hole> hole;  // nullopt while walking around a hub
+    // On a hub course, where the last holed ball sits in its cup (the cup's
+    // centre on the ground) until the player picks it up: no hole starts
+    // before then (game/course_session.h). Not saved: leaving the course puts
+    // it away.
+    std::optional<glm::vec3> cup_ball;
     // The whole course on a hub course; the current hole on a course without one.
     play_area area;
 
@@ -208,8 +233,13 @@ struct game_state {
     motion_sync_state motion_sync;
     online_hole_state online_hole;
     std::optional<ball_blend> ball_correction;
+    // The ball last picked out of a cup, until the server has me on a hole:
+    // back in the cup if the server refuses the pickup or still has it there.
+    std::optional<glm::vec3> picked_cup_ball;
     std::map<std::uint64_t, remote_avatar> remote_avatars;
     std::map<std::uint64_t, remote_shot> remote_shots;
+    // Others' strokes per hole this round as seen here (game/group_round.h).
+    std::map<std::uint64_t, std::vector<int>> group_strokes;
     std::optional<game_notice> notice;
 
     // Where the ball rests, or where the playing shot has it. Only position

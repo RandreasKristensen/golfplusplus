@@ -66,3 +66,5 @@ glm::vec2 startup_tile_half_size(startup_menu_screen screen, int count);
 int startup_tile_at(startup_menu_screen screen, int count, glm::vec2 point);
 
 void draw_startup_menu(overlay_batch& batch, const text_assets& text, const render_startup_menu& menu);
+// The title card shown while the game loads, before there is a course to draw.
+void draw_loading_screen(overlay_batch& batch, const text_assets& text);

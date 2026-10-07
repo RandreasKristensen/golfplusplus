@@ -135,8 +135,10 @@ the router for players outside your network). The connection is plain HTTP:
 unencrypted, so keep it to people and networks you trust, or put the server
 behind a proxy that adds TLS and use `https://`.
 
-An anonymous player is a new account on every launch: nothing is stored to
-sign in as the same one again. Use browser sign-in for accounts that last.
+An anonymous player is a guest: a new account on every launch, deleted with
+its name, scores and skills when the game disconnects, as nothing is stored
+to sign in as the same one again. Guests cannot link logins. Use browser
+sign-in for accounts that last.
 
 Then in the game: **PLAY ONLINE**, pick a name, pick a course.
 

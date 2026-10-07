@@ -2,15 +2,19 @@
 
 #include "game/json_util.h"
 
-#include <glm/common.hpp>
+#include <glm/trigonometric.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <optional>
 #include <utility>
 #include <vector>
 
 namespace {
-// Trees and zones smaller than this are treated as authoring mistakes.
+// Trees smaller than this are treated as authoring mistakes.
 constexpr float min_tree_dimension = 0.01f;
+// A zone narrower than this (radius or half-size, metres) is a broken one.
+constexpr float min_zone_radius = 0.01f;
 
 material_zone_type material_type_from_string(const std::string& value) {
     if (value == "green") {
@@ -25,39 +29,44 @@ material_zone_type material_type_from_string(const std::string& value) {
     return material_zone_type::unknown;
 }
 
-std::vector<material_zone> material_zones_from_json(const json& root) {
+// One zone, an ellipse (`center`, `radii`, `rotation_degrees`). nullopt
+// when any of those is missing or a radius is not positive, and for the
+// `radius` and `bounds` shapes zones no longer have.
+std::optional<material_zone> material_zone_from_json(const json& object) {
+    if (!object.is_object() || object.contains("radius") || object.contains("bounds")) {
+        return std::nullopt;
+    }
+    const std::optional<glm::vec3> center = json_vec3(object, "center");
+    const std::optional<glm::vec2> radii = json_vec2(object, "radii");
+    const std::optional<float> rotation_degrees = json_float(object, "rotation_degrees");
+    if (!center || !radii || !rotation_degrees || !std::isfinite(*rotation_degrees)) {
+        return std::nullopt;
+    }
+    material_zone zone;
+    zone.type = material_type_from_string(json_string(object, "type").value_or(""));
+    zone.center = *center;
+    zone.radii = *radii;
+    zone.rotation = glm::radians(*rotation_degrees);
+    if (!(zone.radii.x >= min_zone_radius) || !(zone.radii.y >= min_zone_radius) ||
+        !std::isfinite(zone.radii.x) || !std::isfinite(zone.radii.y)) {
+        return std::nullopt;
+    }
+    return zone;
+}
+
+// Every zone, or nullopt when any of them is malformed.
+std::optional<std::vector<material_zone>> material_zones_from_json(const json& root) {
     std::vector<material_zone> zones;
     const json* array = json_array(root, "material_zones");
     if (array == nullptr) {
         return zones;
     }
-
     for (const json& object : *array) {
-        if (!object.is_object()) {
-            continue;
+        const std::optional<material_zone> zone = material_zone_from_json(object);
+        if (!zone) {
+            return std::nullopt;
         }
-
-        material_zone zone;
-        zone.type = material_type_from_string(json_string(object, "type").value_or(""));
-
-        const std::optional<glm::vec3> center = json_vec3(object, "center");
-        const std::optional<float> radius = json_float(object, "radius");
-        if (center && radius) {
-            zone.center = *center;
-            zone.radius = *radius;
-            zone.has_radius = true;
-        }
-
-        if (const json* bounds = json_array(object, "bounds")) {
-            const std::optional<std::vector<glm::vec3>> corners = json_vec3_array(*bounds);
-            if (corners && corners->size() >= 2) {
-                zone.bounds_min = glm::min((*corners)[0], (*corners)[1]);
-                zone.bounds_max = glm::max((*corners)[0], (*corners)[1]);
-                zone.has_bounds = true;
-            }
-        }
-
-        zones.push_back(zone);
+        zones.push_back(*zone);
     }
     return zones;
 }
@@ -135,7 +144,11 @@ std::optional<hole_data> parse_hole_from_text(const std::string& text) {
     hole.spline.rough_width = std::max(*width, json_float(*spline, "rough_width").value_or(*width));
     hole.spline.control_points = *control_points;
     hole.spline.bank = std::move(bank);
-    hole.material_zones = material_zones_from_json(*root);
+    std::optional<std::vector<material_zone>> zones = material_zones_from_json(*root);
+    if (!zones) {
+        return std::nullopt;
+    }
+    hole.material_zones = std::move(*zones);
     hole.trees = trees_from_json(*root);
     return hole;
 }

@@ -1,7 +1,13 @@
 {
   "id": "kalo_par_3",
   "name": "Kal\u00f8 Par 3",
-  "backdrop": "backdrops/kalo_par_3.bmp",
+  "backdrop": {
+    "sky": "backdrops/kalo_par_3_sky.bmp",
+    "land": "backdrops/kalo_par_3_land.bmp",
+    "haze_color": [0.76, 0.81, 0.84],
+    "haze_amount": 1.0,
+    "haze_distance": 600
+  },
   "holes": [
     "holes/kalo_par_3_h01.json",
     "holes/kalo_par_3_h02.json",

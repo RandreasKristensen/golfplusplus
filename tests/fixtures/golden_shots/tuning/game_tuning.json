@@ -11,8 +11,10 @@
     "ground_cell_size": 4.0,
     "ground_blend_distance": 40.0,
     "bunker_depth": 0.55,
-    "water_depth": 0.35,
-    "material_overlay_lift": 0.045,
+    "water_depth_per_metre": 0.06,
+    "water_min_depth": 0.3,
+    "water_max_depth": 0.4,
+    "zone_cell_size": 0.75,
     "material_overlay_spacing": 2.0
   },
   "physics": {
@@ -33,18 +35,26 @@
   },
   "ball": {
     "stop_speed": 0.08,
+    "water_linger_seconds": 0.5,
     "ground_restitution": 0.35,
     "ground_friction": 0.08,
     "water_restitution": 0.05,
     "water_friction": 0.28,
+    "bunker_restitution": 0.0,
+    "bunker_friction": 0.6,
+    "bunker_roll_deceleration": 25.0,
     "tree_restitution": 0.25,
     "tree_friction": 0.35,
     "roll_deceleration": 1.0,
-    "settle_speed": 0.6
+    "settle_speed": 0.6,
+    "cup_capture_speed": 3.0,
+    "cup_lip_capture_scale": 0.4,
+    "cup_dunk_scale": 1.0
   },
   "swing": {
     "meter_cycle_seconds": 1.4,
-    "min_power": 0.15,
+    "min_power": 0.01,
+    "power_curve_exponent": 0.7,
     "side_spin_scale": 4.0
   },
   "player": {
@@ -72,7 +82,6 @@
     "off_road_control_scale": 0.78
   },
   "camera": {
-    "fov_degrees": 60.0,
     "walking_eye_height": 1.65,
     "walking_look_distance": 10.0,
     "aiming_back_distance": 2.0,
@@ -86,7 +95,8 @@
     "address_look_height": 0.25,
     "follow_look_height": 0.25,
     "transition_seconds": 0.55,
-    "transition_jump_distance": 1.5
+    "transition_jump_distance": 1.5,
+    "viewmodel_fov_degrees": 60.0
   },
   "aim_preview": {
     "step_seconds": 0.18,
@@ -129,5 +139,34 @@
     "interact_slack": 2.0,
     "wind_time_slack_seconds": 2.0,
     "timing_slack_seconds": 0.25
+  },
+  "hole_sign": {
+    "edge_inset": 0.6,
+    "forward_offset": 1.5,
+    "look_ahead": 30.0,
+    "board_width": 1.0,
+    "board_height": 1.5,
+    "board_thickness": 0.08,
+    "board_lift": 0.45,
+    "post_radius": 0.06
+  },
+  "tee_box": {
+    "width": 12.0,
+    "length": 8.0,
+    "padding": 0.15,
+    "sample_spacing": 0.5
+  },
+  "fence": {
+    "pole_radius": 0.05,
+    "net_restitution": 0.08,
+    "net_friction": 0.6
+  },
+  "lies": {
+    "tee": { "power": 1.0, "spin": 1.0 },
+    "fairway": { "power": 1.0, "spin": 1.0 },
+    "rough": { "power": 1.0, "spin": 1.0 },
+    "green": { "power": 1.0, "spin": 1.0 },
+    "bunker": { "power": 1.0, "spin": 1.0 },
+    "water": { "power": 1.0, "spin": 1.0 }
   }
 }

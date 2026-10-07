@@ -26,7 +26,9 @@ a separate scene, so other groups stay visible and a stray shot lands on the
 next hole or the ground between. There is exactly one surface
 (`build_ground` in `src/physics/ground_mesh.h`): hole geometry decides the
 height on a hole's fairway, its rough eases into the land, and every height
-and normal comes from that one grid. Courses should be right out of the
+and normal comes from that one grid, except on a tee box
+(`src/game/tee_box.h`): a flat top over the highest ground it covers, which
+`sample_area` returns there. Courses should be right out of the
 importer; the hole editor is for touch-ups.
 
 Golf simulation first, RPG progression second. Online play is the main mode:
@@ -52,6 +54,11 @@ Everything is unlocked today: no money, shop, quests or unlock gating.
 | An online round: the server's answers to my shots and actions | `src/game/online_play.h` |
 | Other players and their shots, as shown | `src/game/remote_players.h`; drawn by `src/renderer/remote_avatar_batch.h`, `src/renderer/online_overlay.h`, `src/core/render_online.h` |
 | Starting courses and holes, the hub | `src/game/course_session.h`, `src/game/play_area.h` |
+| The sign at every tee (placed at runtime, posts stop shots) | `src/game/hole_sign.h`; its face `src/renderer/hole_sign_face.h`, drawn by `src/renderer/hole_sign_renderer.h` |
+| The course map held up with Enter (fitted to the holes, numbered) | `src/renderer/course_map_overlay.h`; its ground `src/renderer/course_map_fill.h` (the one home of map inks) |
+| The tee box at every tee (flat, placed at runtime, the surface on it) | `src/game/tee_box.h`; drawn by `src/renderer/world_marker_batch.h` |
+| Fences in course worlds (shots stop at their nets) | `src/physics/fence_collision.h`; drawn by `src/renderer/fence_renderer.h` |
+| Player settings (volumes, field of view): the screen, the file next to the save | `src/core/settings_menu.h`, `src/game/settings.h`; entries in `assets/ui/settings.json` |
 | XP, collectibles, completion rules | `src/game/progress_rules.h` (pure functions over `save_data`) |
 | Feel numbers | `assets/tuning/game_tuning.json` (struct: `src/game/game_tuning.h`) |
 | Rewards and skills | `assets/progression/*.json` (`src/game/reward_rules.h`) |
@@ -79,7 +86,19 @@ cmake --preset test && cmake --build build/test && ./build/test/golf++-tests
 ./build/test/golf++-tests "cart"        # only tests whose name contains "cart"
 cmake --preset release && cmake --build build/release   # ./build/release/golf++
 python -m unittest test_osm_golf_convert                # in tooling/osm_import/
+py -3 verify_osm_import.py --all                        # in tooling/osm_import/: every course against testdata/scorecards.json
 ```
+
+The `test` preset is optimized (`-O2 -g`, asserts on): the whole suite runs
+in well under a minute, and optimized code is what ships. Step through code
+in the `debug` preset. A test that takes over a second is usually a slow
+game function (building a course, say), not a slow test: fix the function.
+
+An import must verify with 0 errors before holes are touched up in the
+editor: fix the importer, not its output. Where OSM lacks information, the
+import's audit (`osm_audit.py`) says what to map; the owner maps it in OSM and
+re-imports. Per-course overrides in `osm_golf_config.json` are a stop-gap for
+what can't be mapped yet.
 
 The server module builds with the Emscripten SDK and the `spacetime` CLI (from
 PowerShell, after `. <emsdk>\emsdk_env.ps1`):
@@ -203,7 +222,9 @@ server shuts down, and the server stays self-hostable, no Maincloud-only
 features). No Steam DRM, no forced relaunch through Steam. Offline and online
 progress never mix: the local save is offline only, and nothing imports,
 exports or merges between the two. Accounts are not logins: progress is keyed
-by an account id, and one account can have several logins.
+by an account id, and one account can have several logins. An anonymous login
+is a guest (`is_guest_login` in `account_rules.h`): its account is deleted
+when it disconnects, and it cannot link logins.
 
 **Offline and online part in one place.** Every progress change goes through
 `src/game/mode_dispatch.h`: offline applies `progress_rules` to the local save,
@@ -233,7 +254,8 @@ and the text it shows in the browser comes from the string table.
 bumps `current_save_version` and adds a migration step; parsing ignores
 unknown fields and refuses newer versions. Save on hole completion, course
 completion, leaving a round and clean exit; never mid-hole, never transient
-state. An unreadable save is backed up, never overwritten silently. Online
+state. An unreadable save is backed up, never overwritten silently. Player settings are not progress and apply online too: they live in
+`settings.json` next to the save (`src/game/settings.h`), never in it. Online
 progress is never written to disk: only the browser login's refresh token is
 kept, in Windows Credential Manager (`net/client_bridge/src/login.rs`).
 

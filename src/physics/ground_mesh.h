@@ -7,7 +7,10 @@
 // eases from the nearest hole edge into the land (a course world's height
 // grid), or keeps the edge height when there is no land. Materials come from
 // the exact zone shapes and the holes' fairway and rough (surface_material),
-// never from the grid, so their edges stay exact.
+// never from the grid, so their edges stay exact. Bunkers and ponds are bowls
+// carved into it (zone_carve_depth); the grid's cells over them are split into
+// a finer grid so a bowl a few metres across keeps its shape, its edges
+// matching the cells around it.
 
 #include "physics/terrain.h"
 
@@ -36,6 +39,8 @@ struct ground_settings {
     float cell_size = 0.0f;       // grid spacing
     float margin = 0.0f;          // how far the grid reaches past the holes
     float blend_distance = 0.0f;  // from a hole's edge into the land
+    float zone_cell_size = 0.0f;  // the finer spacing over bunkers and ponds
+    terrain_zone_tuning zones;    // how deep they are carved
 };
 
 // `holes` are ribbon meshes (each with its spatial index), `zones` every

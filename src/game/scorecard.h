@@ -47,7 +47,7 @@ struct group_scorecard_row {
 // "EVEN", "+2", "-1": text from the string table.
 std::string format_relative_score(const string_table& strings, int relative_score);
 scorecard_data build_scorecard_data(const game_state& state, const string_table& strings);
-// One row per member of my group, me included, from their room_member
-// round_strokes (this round: the server clears them when it finishes).
-// Empty offline or outside a group.
+// One row per member of my group, me included: mine from my round, theirs
+// as this round has seen them (game/group_round.h). Empty offline or outside
+// a group.
 std::vector<group_scorecard_row> build_group_scorecard(const game_state& state, const string_table& strings);

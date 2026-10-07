@@ -1,7 +1,13 @@
 {
   "id": "fixture_hub",
   "name": "Fixture Hub",
-  "backdrop": "backdrops/fixture.bmp",
+  "backdrop": {
+    "sky": "backdrops/fixture_sky.bmp",
+    "land": "backdrops/fixture_land.bmp",
+    "haze_color": [0.75, 0.8, 0.83],
+    "haze_amount": 1.0,
+    "haze_distance": 500
+  },
   "holes": ["test", "test2", "test3"],
   "world": "course_worlds/hub.json"
 }

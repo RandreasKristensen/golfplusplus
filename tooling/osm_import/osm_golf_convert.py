@@ -34,8 +34,12 @@ try:
 except ImportError:
     requests = None
 
+import osm_audit
+import osm_checks
 import osm_elevation
+import osm_ellipse
 import osm_ground
+import verify_osm_import
 
 # overpass-api.de is the reference instance and is tried first. The mirrors are
 # full-planet instances from the OSM wiki's list, used when the primary is
@@ -74,7 +78,25 @@ DEFAULT_CONFIG = {
         "trunk_height": 5.0,
         "leaf_radius": 4.7,
         "leaf_height": 6.0,
-        "max_per_hole": 60,
+        "max_per_hole": 200,
+        # Trees, woods and scrub this far outside the course boundary are
+        # fetched too: a hole's edge is often the boundary.
+        "outside_reach_m": 80.0,
+        # Trees reach a hole up to this far from its line of play.
+        "max_distance_from_line_m": 95.0,
+        # A wood or scrub area gets one tree per this many square metres.
+        "wood_m2_per_tree": 150.0,
+    },
+    # barrier=fence ways become course-world fences: poles at their nodes,
+    # more where a stretch is long, a net between each pair.
+    "fence": {
+        "outside_reach_m": 30.0,
+        "max_pole_spacing_m": 10.0,
+        # Heights for a fence with no height tag: one along a driving range
+        # (within driving_range_reach_m of it) is the tall ball-stop net.
+        "default_height_m": 1.5,
+        "driving_range_height_m": 12.0,
+        "driving_range_reach_m": 15.0,
     },
     "hole": {
         "fallback_width": 20.0,
@@ -100,6 +122,22 @@ DEFAULT_CONFIG = {
         # Steepest side slope a hole may tilt with, rise per metre across it.
         "max_bank": 0.2,
         "smooth_window": 3,
+    },
+    # Green, bunker and water polygons as ellipses (see osm_ellipse.py).
+    "zones": {
+        # A fit covering its polygon at least this well (intersection over
+        # union) is good enough; below it the polygon is split.
+        "good_fit_iou": 0.8,
+        # Most ellipses one polygon may become.
+        "max_pieces": {"green": 3, "bunker": 6, "water": 16},
+        # Smallest zone, as the radius of a circle of the same area.
+        "min_radius": {"green": 5.0, "bunker": 1.5, "water": 2.0},
+        # The green made at the pin of a hole OSM maps without one.
+        "missing_green_radius": 10.0,
+        # A stream mapped as a line becomes ellipses this wide either side of it.
+        "stream_half_width": 2.5,
+        # ... in pieces no longer than this along it.
+        "stream_piece_length": 30.0,
     },
     # The course world's ground grid (see osm_ground.py).
     "ground": {
@@ -246,6 +284,9 @@ def _wait_for_overpass_slot(max_wait: float = 120.0) -> None:
 
 
 OVERPASS_DISPATCHER_ERROR = re.compile(r"Dispatcher_Client|osm3s_osm_base|runtime error")
+# A dispatcher error that only means the queue is full ("request_read_and_idx::
+# timeout. The server is probably too busy"): overloaded, so back off and retry.
+OVERPASS_BUSY_ERROR = re.compile(r"too busy|request_read_and_idx::timeout")
 
 
 def _http_json(url: str, *, data: dict | None = None, timeout: int = 90) -> dict:
@@ -305,9 +346,12 @@ def _query(q: str) -> dict:
             last_err = e
             status = getattr(getattr(e, "response", None), "status_code", None) or getattr(e, "code", None)
             body = getattr(getattr(e, "response", None), "text", "") or ""
-            restarting = bool(OVERPASS_DISPATCHER_ERROR.search(body))
+            busy = bool(OVERPASS_BUSY_ERROR.search(body))
+            restarting = bool(OVERPASS_DISPATCHER_ERROR.search(body)) and not busy
 
-            if restarting:
+            if busy:
+                label = "is too busy"
+            elif restarting:
                 label = "is restarting its database backend"
             elif status:
                 label = f"returned {status}"
@@ -330,7 +374,7 @@ def _query(q: str) -> dict:
             # 429 and 504 are the server saying it is overloaded. Back off hard
             # and exponentially rather than treating it as a transient blip.
             round_number = attempt // len(OVERPASS_INSTANCES) + 1
-            wait = 15.0 * (2 ** (round_number - 1)) if status in (429, 504) else 3.0
+            wait = 15.0 * (2 ** (round_number - 1)) if busy or status in (429, 504) else 3.0
             print(f"  [warn] {url} {label}; retrying in {wait:.0f}s...", file=sys.stderr)
             time.sleep(wait)
     tried = ", ".join(OVERPASS_INSTANCES)
@@ -440,7 +484,7 @@ def _fetch_elements_by_ref(refs: list[tuple[str, int]]) -> list[dict]:
     if not refs:
         return []
     body = "\n".join(f"  {kind}({oid});" for kind, oid in refs)
-    return _query(f"[out:json][timeout:60];\n(\n{body}\n);\nout geom bb;").get("elements", [])
+    return _query(f"[out:json][timeout:60];\n(\n{body}\n);\nout geom;").get("elements", [])
 
 
 def _nominatim_search(name: str, limit: int = 20) -> list[tuple[str, int]]:
@@ -502,7 +546,7 @@ def _find_course(args) -> tuple[dict, str]:
   relation["leisure"="golf_course"](around:8000,{args.lat},{args.lon});
   way["leisure"="golf_course"](around:8000,{args.lat},{args.lon});
 );
-out geom bb;""").get("elements", [])
+out geom;""").get("elements", [])
     else:
         print("  Resolving name via Nominatim...", file=sys.stderr)
         els = _fetch_elements_by_ref(_nominatim_search(args.name))
@@ -517,7 +561,7 @@ out geom bb;""").get("elements", [])
   relation["leisure"="golf_course"]["name"~"{escaped}",i];
   way["leisure"="golf_course"]["name"~"{escaped}",i];
 );
-out geom bb;""").get("elements", [])
+out geom;""").get("elements", [])
 
     els = [el for el in els if el.get("type") in ("way", "relation")]
     if not els:
@@ -620,8 +664,66 @@ def _element_in_course_footprint(el: dict, course_el: dict, buffer_m: float = 45
     return False
 
 
+def _drop_other_course_features(golf: list[dict], course_el: dict, other_courses: list[dict]) -> list[dict]:
+    """
+    Leave out the golf features of another course mapped next to or inside
+    this one: those whose centre lies inside another leisure=golf_course
+    polygon and not inside this course's own, or inside a course drawn within
+    this one.
+
+    Mollerup's "Pitch and Putt" is its own course drawn inside the main one;
+    left in, its tees and greens attached to whichever main-course hole ended
+    nearest. A feature where two boundaries merely overlap (the Old Course's
+    edge with the New Course's) stays. Import the other course by its own --id.
+    """
+    others = [poly for course in other_courses for poly in _course_footprint_polygons(course)]
+    own = _course_footprint_polygons(course_el)
+    if not others:
+        return golf
+    origin_lat, origin_lon = _centroid([p for poly in others + own for p in poly])
+    to_xz = lambda polys: [[_latlon_to_xz(lat, lon, origin_lat, origin_lon) for lat, lon in poly] for poly in polys]
+    others_xz, own_xz = to_xz(others), to_xz(own)
+
+    def inside_own(pt) -> bool:
+        return any(_point_in_polygon_xz(pt, poly) for poly in own_xz)
+
+    # A course drawn inside this one (Mollerup's Pitch and Putt inside Mollerup
+    # Golf Club) owns everything within it; one that only overlaps an edge
+    # does not.
+    nested = [poly for poly in others_xz if sum(inside_own(p) for p in poly) >= 0.9 * len(poly)]
+
+    def belongs_elsewhere(el: dict) -> bool:
+        pts = _element_geom(el)
+        if not pts:
+            return False
+        centre = _latlon_to_xz(*_centroid(pts), origin_lat, origin_lon)
+        if any(_point_in_polygon_xz(centre, poly) for poly in nested):
+            return True
+        return (any(_point_in_polygon_xz(centre, poly) for poly in others_xz) and
+                not inside_own(centre))
+
+    kept = [el for el in golf if not belongs_elsewhere(el)]
+    if len(kept) != len(golf):
+        names = ", ".join(sorted({c.get("tags", {}).get("name", f"{c['type']}/{c['id']}") for c in other_courses}))
+        print(f"  Left out {len(golf) - len(kept)} feature(s) of the neighbouring course(s): {names}",
+              file=sys.stderr)
+    return kept
+
+
 def _is_golf_feature(el: dict) -> bool:
-    return "golf" in el.get("tags", {})
+    tags = el.get("tags", {})
+    return "golf" in tags or tags.get("natural") == "water"
+
+
+def _as_water_hazard(el: dict) -> dict:
+    """
+    A pond on the course mapped only as natural=water (common: mappers draw
+    the water, not its part in the game) plays as a water hazard.
+    """
+    tags = el.get("tags", {})
+    if "golf" in tags or tags.get("natural") != "water":
+        return el
+    return {**el, "tags": {**tags, "golf": "water_hazard"}}
 
 
 def _is_tree_feature(el: dict) -> bool:
@@ -652,6 +754,8 @@ GOLF_SELECTORS = [
     'relation["golf"]',
     'way["golf"]',
     'node["golf"]',
+    'way["natural"="water"]',
+    'relation["natural"="water"]',
 ]
 VEGETATION_SELECTORS = [
     'node["natural"="tree"]',
@@ -662,6 +766,10 @@ VEGETATION_SELECTORS = [
     'relation["landuse"="forest"]',
     'way["natural"="scrub"]',
     'relation["natural"="scrub"]',
+]
+COURSE_SELECTORS = [
+    'way["leisure"="golf_course"]',
+    'relation["leisure"="golf_course"]',
 ]
 PATH_SELECTORS = [
     'way["highway"~"^(path|service|track|footway|pedestrian)$"]',
@@ -718,8 +826,26 @@ def _scoped_query(course_el: dict, selectors: list[str], timeout: int = 180) -> 
     return _query(f"[out:json][timeout:{timeout}];\n(\n{body}\n);\nout geom;").get("elements", [])
 
 
-def _fetch_elements(course_el: dict) -> tuple[list, list, list]:
-    """Fetch golf, vegetation, and path/service elements scoped to the selected course."""
+def _near_course_query(course_el: dict, selectors: list[str], reach_m: float, timeout: int = 180) -> list[dict]:
+    """
+    Elements inside the course and up to `reach_m` outside its boundary (the
+    woods or fence lining a hole on the boundary are often just outside it).
+    """
+    prelude = _course_area_prelude(course_el)
+    if not prelude:
+        return _scoped_query(course_el, selectors)
+    body = "\n".join(f"  {sel}(area.courseArea);\n  {sel}(around.course:{reach_m:.0f});"
+                     for sel in selectors)
+    query = f"[out:json][timeout:{timeout}];\n{prelude}\n(\n{body}\n);\nout geom;"
+    return _query(query).get("elements", [])
+
+
+def _fetch_elements(course_el: dict, tree_reach_m: float = DEFAULT_CONFIG["tree"]["outside_reach_m"]
+                    ) -> tuple[list, list, list]:
+    """
+    Fetch golf, vegetation, and path/service elements scoped to the selected
+    course; vegetation also `tree_reach_m` beyond its boundary.
+    """
     relation_elements = []
     used_relation_scope = False
     if course_el.get("type") == "relation":
@@ -736,13 +862,17 @@ out geom;""")
 
     fetched = list(relation_elements)
     fetched += _scoped_query(course_el, GOLF_SELECTORS)
-    fetched += _scoped_query(course_el, VEGETATION_SELECTORS)
     fetched += _scoped_query(course_el, PATH_SELECTORS)
+    vegetation = _near_course_query(course_el, VEGETATION_SELECTORS, tree_reach_m)
 
     scoped = [el for el in _dedupe_elements(fetched)
               if _element_in_course_footprint(el, course_el)]
-    golf = [el for el in scoped if _is_golf_feature(el)]
-    trees = [el for el in scoped if _is_tree_feature(el)]
+    other_courses = [el for el in _scoped_query(course_el, COURSE_SELECTORS)
+                     if _element_key(el) != _element_key(course_el)]
+    golf = _drop_other_course_features([_as_water_hazard(el) for el in scoped if _is_golf_feature(el)],
+                                       course_el, other_courses)
+    trees = [el for el in _dedupe_elements(vegetation)
+             if _is_tree_feature(el) and _element_in_course_footprint(el, course_el, tree_reach_m)]
     paths = [el for el in scoped if _is_path_feature(el)]
 
     if course_el.get("type") == "relation" and not used_relation_scope:
@@ -750,6 +880,73 @@ out geom;""")
     if not scoped and course_el.get("type") != "relation":
         print("  [warn] course has weak boundary data; bbox fallback may miss edge features", file=sys.stderr)
     return golf, trees, paths
+
+
+FENCE_SELECTORS = [
+    'way["barrier"="fence"]',
+    'way["golf"="driving_range"]',
+    'relation["golf"="driving_range"]',
+]
+
+
+def _fetch_fences(course_el: dict, fence_config: dict) -> tuple[list, list]:
+    """(fences, driving ranges) in and around the course."""
+    reach = float(fence_config["outside_reach_m"])
+    found = [el for el in _dedupe_elements(_near_course_query(course_el, FENCE_SELECTORS, reach))
+             if _element_in_course_footprint(el, course_el, reach)]
+    fences = [el for el in found if el.get("tags", {}).get("barrier") == "fence" and len(_element_geom(el)) >= 2]
+    ranges = [el for el in found if el.get("tags", {}).get("golf") == "driving_range"]
+    return fences, ranges
+
+
+def _height_tag(value) -> float | None:
+    """Metres from an OSM height tag ("12", "12 m", "1.8"); None if absent or not a length."""
+    m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(m)?\s*", str(value)) if value is not None else None
+    return float(m.group(1)) if m and float(m.group(1)) > 0.0 else None
+
+
+def fence_height(el: dict, ranges: list, origin_lat: float, origin_lon: float, fence_config: dict) -> tuple[float, str]:
+    """A fence's height, and where it came from: "tag", "driving_range" or "default"."""
+    tagged = _height_tag(el.get("tags", {}).get("height"))
+    if tagged is not None:
+        return tagged, "tag"
+    reach = float(fence_config["driving_range_reach_m"])
+    for pt in _to_xz_list([el], origin_lat, origin_lon):
+        for course_range in ranges:
+            if _point_in_element_xz(pt, course_range, origin_lat, origin_lon, pad_m=reach):
+                return float(fence_config["driving_range_height_m"]), "driving_range"
+    return float(fence_config["default_height_m"]), "default"
+
+
+def fences_to_json(fences: list, ranges: list, origin_lat: float, origin_lon: float, fence_config: dict) -> list[dict]:
+    """
+    The course world's fences: a pole at every node of each barrier=fence
+    way, and evenly between two that are more than max_pole_spacing_m apart.
+    Poles stand on the ground in the game, so their y is 0.
+    """
+    spacing = float(fence_config["max_pole_spacing_m"])
+    out = []
+    for el in fences:
+        pts = _to_xz_list([el], origin_lat, origin_lon)
+        poles = [pts[0]]
+        for a, b in zip(pts, pts[1:]):
+            gap = math.dist(a, b)
+            if gap < 0.05:
+                continue
+            steps = max(1, math.ceil(gap / spacing)) if spacing > 0 else 1
+            poles.extend((a[0] + (b[0] - a[0]) * k / steps, a[1] + (b[1] - a[1]) * k / steps)
+                         for k in range(1, steps + 1))
+        if len(poles) < 2:
+            continue
+        height, from_where = fence_height(el, ranges, origin_lat, origin_lon, fence_config)
+        out.append({
+            "poles": [_xyz_from_xz(p) for p in poles],
+            "height": _r(height),
+            "source": "osm",
+            "osm_ref": _format_osm_ref(el),
+            "height_from": from_where,
+        })
+    return out
 
 
 # ── Geometry helpers ──────────────────────────────────────────────────────────
@@ -797,66 +994,6 @@ def _to_xz_list(elements, origin_lat, origin_lon) -> list[tuple[float, float]]:
 def _centroid(pts) -> tuple[float, float]:
     n = len(pts)
     return (sum(p[0] for p in pts) / n, sum(p[1] for p in pts) / n) if n else (0, 0)
-
-
-def _ritter_circle(pts) -> tuple[float, float, float]:
-    """Ritter's approximate minimum bounding circle → (cx, cz, radius)."""
-    if not pts:
-        return 0.0, 0.0, 5.0
-    p = pts[0]
-    q = max(pts, key=lambda t: (t[0]-p[0])**2 + (t[1]-p[1])**2)
-    r = max(pts, key=lambda t: (t[0]-q[0])**2 + (t[1]-q[1])**2)
-    cx, cz = (q[0]+r[0]) / 2, (q[1]+r[1]) / 2
-    rad = math.hypot(q[0]-r[0], q[1]-r[1]) / 2
-    for pt in pts:
-        d = math.hypot(pt[0]-cx, pt[1]-cz)
-        if d > rad:
-            # Grow circle to include pt
-            new_rad = (rad + d) / 2
-            scale = (d - new_rad) / d if d > 0 else 0
-            cx += (pt[0] - cx) * scale
-            cz += (pt[1] - cz) * scale
-            rad = new_rad
-    return cx, cz, max(rad, 2.0)
-
-
-def _polygon_area_xz(pts) -> float:
-    if len(pts) < 3:
-        return 0.0
-    area = 0.0
-    for a, b in zip(pts, pts[1:] + pts[:1]):
-        area += a[0] * b[1] - b[0] * a[1]
-    return abs(area) * 0.5
-
-
-def _zone_circle(el: dict, pts, anchor=None,
-                 min_radius: float = 2.0, max_radius: float = 22.0):
-    """
-    Fit the circle the game will use for a green or bunker → (cx, cz, radius).
-
-    Ritter's bounding circle returns half the longest diagonal, which badly
-    over-states an elongated green and doubles a shared one: the Old Course
-    imported with 50 m "greens". The equal-area radius matches how much ground
-    the zone actually covers, which is what putting and sand behaviour care
-    about. Ritter is kept as an upper bound so the circle never claims to be
-    bigger than the polygon it came from.
-
-    `anchor` (the pin) recentres the circle when the polygon's centroid is too
-    far away to be this hole's part of it.
-    """
-    ritter_x, ritter_z, ritter_r = _ritter_circle(pts)
-    area = _polygon_area_xz(pts)
-    radius = math.sqrt(area / math.pi) if area > 0 else ritter_r
-    radius = max(min_radius, min(radius, ritter_r, max_radius))
-
-    cx, cz = _centroid(pts)
-    if anchor is not None and _point_in_polygon_xz(anchor, pts):
-        # Only recentre when the pin genuinely lies on this polygon. Snapping a
-        # neighbouring hole's green onto our pin would stack two greens on the
-        # same spot.
-        if math.hypot(anchor[0] - cx, anchor[1] - cz) > radius * 0.5:
-            cx, cz = anchor
-    return cx, cz, radius
 
 
 def _aabb(pts) -> tuple:
@@ -1377,6 +1514,11 @@ def _assign_to_existing_holes(unassigned: list, holes: dict, origin_lat: float, 
                     _classify_into(el, holes[num])
 
 
+def _element_length_m(el: dict) -> float:
+    pts = _element_geom(el)
+    return sum(_latlon_distance_m(a[0], a[1], b[0], b[1]) for a, b in zip(pts, pts[1:]))
+
+
 def _resolve_duplicate_hole_lines(elements: list) -> list:
     """
     Drop hole centrelines belonging to a second course inside the same boundary.
@@ -1399,6 +1541,27 @@ def _resolve_duplicate_hole_lines(elements: list) -> list:
         if num is not None:
             by_ref.setdefault(num, []).append(el)
 
+    # Lines for one hole from different tee sets (Kalø's 5th and 7th: one line
+    # from the white tee, one from the yellow) end on the same green. They are
+    # one hole, not two courses: keep the back tee's, the longest.
+    tee_variants = set()
+    for ref, els in by_ref.items():
+        if len(els) < 2:
+            continue
+        longest = max(els, key=_element_length_m)
+        ends = _element_geom(longest)
+        for el in els:
+            if el is longest:
+                continue
+            pts = _element_geom(el)
+            if min(_latlon_distance_m(*a, *b) for a in (pts[0], pts[-1]) for b in (ends[0], ends[-1])) <= 25.0:
+                tee_variants.add(_element_key(el))
+        by_ref[ref] = [el for el in els if _element_key(el) not in tee_variants]
+    if tee_variants:
+        print(f"  Kept the back tee's line where {len(tee_variants)} hole(s) had one line per tee set",
+              file=sys.stderr)
+        elements = [el for el in elements if _element_key(el) not in tee_variants]
+
     contested = {ref: els for ref, els in by_ref.items() if len(els) > 1}
     if not contested:
         return elements
@@ -1407,9 +1570,6 @@ def _resolve_duplicate_hole_lines(elements: list) -> list:
         pts = _element_geom(el)
         return _centroid(pts) if pts else None
 
-    def length_m(el):
-        pts = _element_geom(el)
-        return sum(_latlon_distance_m(a[0], a[1], b[0], b[1]) for a, b in zip(pts, pts[1:]))
 
     anchors = [els[0] for ref, els in by_ref.items() if len(els) == 1]
     if not anchors:
@@ -1418,14 +1578,14 @@ def _resolve_duplicate_hole_lines(elements: list) -> list:
         medians = {}
         for ref, els in by_ref.items():
             for i, el in enumerate(els):
-                medians.setdefault(i, []).append(length_m(el))
+                medians.setdefault(i, []).append(_element_length_m(el))
         best_index = max(medians, key=lambda i: sorted(medians[i])[len(medians[i]) // 2])
         anchors = [els[best_index] for els in by_ref.values() if len(els) > best_index]
         print("  [warn] two complete courses share this boundary; keeping the longer "
               "layout. Use --list and --id to import the other one.", file=sys.stderr)
 
     anchor_points = [p for p in (centroid_latlon(el) for el in anchors) if p]
-    anchor_lengths = sorted(length_m(el) for el in anchors)
+    anchor_lengths = sorted(_element_length_m(el) for el in anchors)
     typical_length = anchor_lengths[len(anchor_lengths) // 2] if anchor_lengths else 300.0
 
     dropped = set()
@@ -1441,7 +1601,7 @@ def _resolve_duplicate_hole_lines(elements: list) -> list:
                 return float("inf")
             nearest = min(_latlon_distance_m(point[0], point[1], a[0], a[1])
                           for a in anchor_points)
-            length_penalty = abs(length_m(el) - typical_length)
+            length_penalty = abs(_element_length_m(el) - typical_length)
             return nearest + length_penalty
 
         keeper = min(els, key=score)
@@ -1501,6 +1661,9 @@ def select_course_by_ref_prefix(elements: list, prefix: str, origin_lat: float, 
     prefix = prefix.upper()
     lines = [el for el in elements if el.get("tags", {}).get("golf") == "hole" and _split_ref(el.get("tags", {}))]
     prefixes = {_split_ref(el["tags"])[0] for el in lines}
+    if not prefixes and not prefix:
+        # Nothing is numbered: grouping falls back to the hole lines and tees.
+        return elements
     if prefix not in prefixes:
         found = ", ".join(repr(p) for p in sorted(prefixes)) or "none"
         raise ValueError(f"no holes with ref prefix {prefix!r} in this boundary (found: {found})")
@@ -1536,6 +1699,77 @@ def select_course_by_ref_prefix(elements: list, prefix: str, origin_lat: float, 
     print(f"  Course with ref prefix {prefix!r}: {kept} hole line(s); "
           f"dropped {len(lines) - kept} line(s) and {foreign} feature(s) of the other course(s)", file=sys.stderr)
     return selected
+
+
+def _parse_osm_ref(text: str) -> tuple[str, int]:
+    """("way", 123) for "W123", ("relation", 7) for "R7", ("node", 5) for "N5"."""
+    kinds = {"W": "way", "R": "relation", "N": "node"}
+    text = str(text).strip()
+    if len(text) < 2 or text[0].upper() not in kinds or not text[1:].isdigit():
+        raise ValueError(f"not an OSM id like W123: {text!r}")
+    return kinds[text[0].upper()], int(text[1:])
+
+
+def apply_hole_list(elements: list, specs: list) -> list:
+    """
+    Number a course's holes from the course's `holes` config, in play order.
+
+    For courses whose OSM data carries no hole numbers. Each entry is either
+    {"line": "W…"}, an unnumbered golf=hole way, or {"tee": "W…", "green": "W…"}
+    for a hole mapped without one: the tee is a golf=tee element (its centre)
+    or the hole's fairway (its point furthest from the green), and a straight
+    hole line is made from there to the green's centre. "par" sets the par
+    where OSM has none. Every hole line not in the list is dropped, so a
+    practice hole or a second layout's line does not become a hole.
+    """
+    by_id = {_element_key(el): el for el in elements}
+
+    def element(text: str) -> dict:
+        key = _parse_osm_ref(text)
+        if key not in by_id:
+            raise ValueError(f"{text} is not a golf feature inside this course")
+        return by_id[key]
+
+    numbered: dict[tuple[str, int], dict] = {}
+    made_lines = []
+    for number, spec in enumerate(specs, start=1):
+        extra = {"ref": str(number)}
+        if "par" in spec:
+            extra["par"] = str(spec["par"])
+        if "line" in spec:
+            line = element(spec["line"])
+            numbered[_element_key(line)] = {**line, "tags": {**line.get("tags", {}), **extra}}
+            continue
+        green = element(spec["green"])
+        tee = element(spec["tee"])
+        green_centre = _centroid(_element_geom(green))
+        tee_points = _element_geom(tee)
+        if tee.get("tags", {}).get("golf") == "fairway":
+            tee_point = max(tee_points, key=lambda p: _latlon_distance_m(p[0], p[1], *green_centre))
+        else:
+            tee_point = _centroid(tee_points)
+            numbered[_element_key(tee)] = {**tee, "tags": {**tee.get("tags", {}), "ref": str(number)}}
+        numbered[_element_key(green)] = {**green, "tags": {**green.get("tags", {}), "ref": str(number)}}
+        made_lines.append({
+            "type": "way",
+            "id": -number,
+            "tags": {"golf": "hole", **extra},
+            "geometry": [{"lat": lat, "lon": lon} for lat, lon in (tee_point, green_centre)],
+        })
+
+    result = []
+    dropped = 0
+    for el in elements:
+        key = _element_key(el)
+        if key in numbered:
+            result.append(numbered[key])
+        elif el.get("tags", {}).get("golf") == "hole":
+            dropped += 1
+        else:
+            result.append(el)
+    print(f"  Holes numbered from the course config: {len(specs)}; "
+          f"dropped {dropped} hole line(s) not in it", file=sys.stderr)
+    return result + made_lines
 
 
 def group_holes(elements: list) -> dict:
@@ -1706,22 +1940,30 @@ def _sample_polyline_points(pts, spacing_m: float = 12.0) -> list[tuple[float, f
     return _resample_polyline(pts, count)
 
 
-def _sample_wooded_polygon_trees(el: dict, origin_lat: float, origin_lon: float,
-                                 seed: int, max_count: int = 24) -> list[tuple[float, float]]:
+def _sample_wooded_polygon_trees(el: dict, origin_lat: float, origin_lon: float, seed: int,
+                                 m2_per_tree: float, near=None) -> list[tuple[float, float]]:
+    """
+    Trees standing in a wood or scrub area: one per `m2_per_tree` on a
+    jittered grid (even, but not in rows), seeded so every run plants the same
+    wood. `near(pt)` keeps only the points it accepts, so a big forest beside a
+    course costs only the strip near its holes.
+    """
     pts = _to_xz_list([el], origin_lat, origin_lon)
-    if len(pts) < 3:
+    if len(pts) < 3 or m2_per_tree <= 0.0:
         return []
     minx, minz, maxx, maxz = _aabb(pts)
-    area = _element_area_m2(el)
-    target = max(1, min(max_count, int(area / 650.0)))
+    spacing = math.sqrt(m2_per_tree)
     rng = random.Random(seed)
     samples = []
-    attempts = target * 30
-    while len(samples) < target and attempts > 0:
-        attempts -= 1
-        pt = (rng.uniform(minx, maxx), rng.uniform(minz, maxz))
-        if _point_in_polygon_xz(pt, pts):
-            samples.append(pt)
+    z = minz
+    while z < maxz:
+        x = minx
+        while x < maxx:
+            pt = (x + rng.uniform(0.0, spacing), z + rng.uniform(0.0, spacing))
+            if (near is None or near(pt)) and _point_in_polygon_xz(pt, pts):
+                samples.append(pt)
+            x += spacing
+        z += spacing
     return samples
 
 
@@ -1737,7 +1979,13 @@ def _nearest_hole_for_tree(pt, hole_shapes: dict[int, tuple[list, tuple]]) -> tu
 
 
 def assign_trees_to_holes(holes: dict, tree_elements: list, origin_lat: float, origin_lon: float,
-                          course_key: str, max_per_hole: int = 60):
+                          course_key: str, tree_config: dict):
+    """
+    Give each hole the trees standing near it: mapped trees and tree rows, and
+    trees planted through mapped woods and scrub (`tree` config), each with
+    the hole whose line it is nearest, up to `max_per_hole` nearest the line.
+    """
+    reach = float(tree_config["max_distance_from_line_m"])
     hole_shapes = {}
     for num, h in holes.items():
         line = _oriented_hole_line_xz(h, origin_lat, origin_lon)
@@ -1746,36 +1994,30 @@ def assign_trees_to_holes(holes: dict, tree_elements: list, origin_lat: float, o
         anchor = _hole_anchor_xz(h, origin_lat, origin_lon)
         hole_shapes[num] = (line, anchor)
 
-    explicit_points = []
-    wooded = []
+    def near_a_hole(pt) -> bool:
+        return _nearest_hole_for_tree(pt, hole_shapes)[1] <= reach
+
+    points = []
     for el in tree_elements:
         tags = el.get("tags", {})
         if el.get("type") == "node" and tags.get("natural") == "tree":
-            explicit_points.extend(_to_xz_list([el], origin_lat, origin_lon))
+            points.extend(_to_xz_list([el], origin_lat, origin_lon))
         elif _is_tree_row(el):
             pts = _to_xz_list([el], origin_lat, origin_lon)
             if len(pts) >= 2:
-                explicit_points.extend(_sample_polyline_points(pts))
+                points.extend(_sample_polyline_points(pts))
         elif _is_wooded_area(el):
-            wooded.append(el)
+            seed = _stable_int_seed(course_key, el.get("type"), el.get("id"))
+            points.extend(_sample_wooded_polygon_trees(el, origin_lat, origin_lon, seed,
+                                                       float(tree_config["wood_m2_per_tree"]), near_a_hole))
 
-    for pt in explicit_points:
+    for pt in points:
         num, dist = _nearest_hole_for_tree(pt, hole_shapes)
-        if num is None or dist > 95.0:
+        if num is None or dist > reach:
             continue
         line, _anchor = hole_shapes[num]
         if _tree_allowed_for_hole(pt, holes[num], line, origin_lat, origin_lon):
             holes[num]["trees_abs"].append(pt)
-
-    for el in wooded:
-        for num, (line, _anchor) in hole_shapes.items():
-            seed = _stable_int_seed(course_key, num, el.get("type"), el.get("id"))
-            for pt in _sample_wooded_polygon_trees(el, origin_lat, origin_lon, seed):
-                dist = _point_polyline_distance(pt, line) if line else 0.0
-                if dist > 85.0:
-                    continue
-                if _tree_allowed_for_hole(pt, holes[num], line, origin_lat, origin_lon):
-                    holes[num]["trees_abs"].append(pt)
 
     for num, h in holes.items():
         deduped = []
@@ -1788,7 +2030,7 @@ def assign_trees_to_holes(holes: dict, tree_elements: list, origin_lat: float, o
             deduped.append(pt)
         line = hole_shapes[num][0]
         deduped.sort(key=lambda p: (_point_polyline_distance(p, line) if line else 0.0, p[0], p[1]))
-        h["trees_abs"] = deduped[:max(0, max_per_hole)]
+        h["trees_abs"] = deduped[:max(0, int(tree_config["max_per_hole"]))]
 
 
 # ── Hole → JSON ───────────────────────────────────────────────────────────────
@@ -1802,6 +2044,94 @@ def _int_tag(value):
         return None
     m = re.match(r"\s*(\d{1,2})", str(value))
     return int(m.group(1)) if m else None
+
+
+def _join_ways(parts: list[list]) -> list[list]:
+    """Chain way segments that share end points into as few polylines as possible."""
+    parts = [list(part) for part in parts if len(part) >= 2]
+    chains = []
+    while parts:
+        chain = parts.pop(0)
+        grown = True
+        while grown and chain[0] != chain[-1]:
+            grown = False
+            for i, part in enumerate(parts):
+                if part[0] == chain[-1]:
+                    chain += part[1:]
+                elif part[-1] == chain[-1]:
+                    chain += part[-2::-1]
+                elif part[-1] == chain[0]:
+                    chain = part[:-1] + chain
+                elif part[0] == chain[0]:
+                    chain = part[:0:-1] + chain
+                else:
+                    continue
+                parts.pop(i)
+                grown = True
+                break
+        chains.append(chain)
+    return chains
+
+
+def _element_shapes_xz(el: dict, origin_lat: float, origin_lon: float) -> list[tuple[list, bool]]:
+    """
+    (points in local metres, closed) for each shape of an area element: the
+    way itself, or a multipolygon relation's outer members joined into rings
+    (its inner rings are islands, which a zone cannot have). A water way that
+    does not close is a stream drawn as a line.
+    """
+    if el["type"] == "relation":
+        parts = [[(pt["lat"], pt["lon"]) for pt in member.get("geometry", [])]
+                 for member in el.get("members", []) if member.get("role", "outer") in ("", "outer")]
+    else:
+        parts = [_element_geom(el)]
+    shapes = []
+    for chain in _join_ways(parts):
+        closed = len(chain) >= 4 and chain[0] == chain[-1]
+        pts = [_latlon_to_xz(lat, lon, origin_lat, origin_lon) for lat, lon in (chain[:-1] if closed else chain)]
+        shapes.append((pts, closed))
+    return shapes
+
+
+def _material_zones(h: dict, origin_lat: float, origin_lon: float, tee_xz: tuple[float, float],
+                    zone_config: dict) -> tuple[list[dict], list[dict]]:
+    """(material zones relative to the tee, fit report per OSM shape)."""
+    good_iou = float(zone_config.get("good_fit_iou", 0.8))
+    half_width = float(zone_config.get("stream_half_width", 2.5))
+    piece_length = float(zone_config.get("stream_piece_length", 30.0))
+    zones, fits = [], []
+    for zone_type, elements in (("green", h["greens"]), ("bunker", h["bunkers"]), ("water", h["waters"])):
+        max_pieces = int(zone_config.get("max_pieces", {}).get(zone_type, 1))
+        min_radius = float(zone_config.get("min_radius", {}).get(zone_type, 0.0))
+        for el in elements:
+            for pts, closed in _element_shapes_xz(el, origin_lat, origin_lon):
+                if closed and len(pts) >= 3:
+                    ellipses, iou = osm_ellipse.fit_polygon(pts, max_pieces, good_iou)
+                    if len(ellipses) == 1:
+                        ellipses = [osm_ellipse.with_min_radius(ellipses[0], min_radius)]
+                    fit = {"iou": round(iou, 2)}
+                elif zone_type == "water" and len(pts) >= 2:
+                    pieces = math.ceil(_polyline_length(pts) / piece_length)
+                    ellipses = osm_ellipse.chain_along(pts, half_width, pieces)
+                    fit = {"stream": True}
+                else:
+                    print(f"  [warn] {_format_osm_ref(el)}: a {zone_type} that is not an area; left out",
+                          file=sys.stderr)
+                    continue
+                zones += [osm_ellipse.zone_json(zone_type, e, tee_xz) for e in ellipses]
+                if ellipses:
+                    fits.append({"osm": _format_osm_ref(el), "type": zone_type, "pieces": len(ellipses), **fit})
+    return zones, fits
+
+
+def _hole_way_ref(h: dict) -> str | None:
+    """"way/123" for the OSM hole way the hole's line comes from; None for none or a made one."""
+    lines = [el for el in h["lines"] if len(_element_geom(el)) >= 2]
+    if not lines:
+        return None
+    line = max(lines, key=lambda el: sum(_latlon_distance_m(*a, *b) for a, b in
+                                          zip(_element_geom(el), _element_geom(el)[1:])))
+    return _format_osm_ref(line) if line.get("id", -1) > 0 else None
 
 
 def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
@@ -1900,46 +2230,19 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
     def rel_xyz(xz, y=0.0): return [_r(xz[0]-tee_x), _r(y), _r(xz[1]-tee_z)]
 
     # ── material zones ────────────────────────────────────────────────────────
-    zones = []
-
-    for el in h["greens"]:
-        pts = _to_xz_list([el], origin_lat, origin_lon)
-        if pts:
-            # Anchor the green on the pin when we have one. A shared double
-            # green covers two holes, so its centroid sits between them; the
-            # pin says which half is this hole's.
-            cx, cz, r = _zone_circle(el, pts, anchor=pin_xz,
-                                     min_radius=5.0, max_radius=float(
-                                         hole_config.get("max_green_radius", 22.0)))
-            zones.append({
-                "type": "green",
-                "center": [_r(cx-tee_x), 0, _r(cz-tee_z)],
-                "radius": _r(r)
-            })
-
-    for el in h["bunkers"]:
-        pts = _to_xz_list([el], origin_lat, origin_lon)
-        if pts:
-            cx, cz, r = _zone_circle(el, pts, anchor=None,
-                                     min_radius=1.5, max_radius=float(
-                                         hole_config.get("max_bunker_radius", 18.0)))
-            zones.append({
-                "type": "bunker",
-                "center": [_r(cx-tee_x), 0, _r(cz-tee_z)],
-                "radius": _r(r)
-            })
-
-    for el in h["waters"]:
-        pts = _to_xz_list([el], origin_lat, origin_lon)
-        if pts:
-            minx, minz, maxx, maxz = _aabb(pts)
-            zones.append({
-                "type": "water",
-                "bounds": [
-                    [_r(minx-tee_x), 0, _r(minz-tee_z)],
-                    [_r(maxx-tee_x), 0, _r(maxz-tee_z)]
-                ]
-            })
+    # Every green, bunker and water polygon becomes one ellipse, or a few when
+    # one cannot follow its shape (osm_ellipse.py). A double green shared by
+    # two holes is emitted whole for both.
+    zone_config = config.get("zones", DEFAULT_CONFIG["zones"])
+    zones, zone_fit = _material_zones(h, origin_lat, origin_lon, (tee_x, tee_z), zone_config)
+    # OSM sometimes maps a pin but no green (Kalø's 11th). A hole needs
+    # something to putt on: a circle at the pin stands in, and the
+    # verification flags it so it is drawn properly in the editor.
+    made_green = not any(zone["type"] == "green" for zone in zones)
+    if made_green:
+        radius = float(zone_config.get("missing_green_radius", 10.0))
+        zones.insert(0, osm_ellipse.zone_json("green", {"center": pin_xz, "radii": (radius, radius), "rotation": 0.0},
+                                              (tee_x, tee_z)))
 
     # ── par and name ──────────────────────────────────────────────────────────
     # h["tags"] is every tag of every element on the hole merged together, so
@@ -1997,7 +2300,13 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
             # The tee's DEM height above sea level. The hole itself is
             # tee-relative; the course world places hole starts at these
             # heights so the holes line up with each other in the hub.
-            "tee_elevation": tee_elevation
+            "tee_elevation": tee_elevation,
+            # The OSM way this hole's line of play came from, if any.
+            "hole_way": _hole_way_ref(h),
+            # How well each zone's ellipses cover its OSM polygon (osm_ellipse.py).
+            "zone_fit": zone_fit,
+            # True when OSM has no green for this hole and a circle at the pin stands in.
+            "made_green": made_green
         }
     }
 
@@ -2026,73 +2335,19 @@ def _scale_warnings(h_json: dict) -> list[str]:
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
-def _xyz(xz: tuple[float, float]) -> list[float]:
-    return [_r(xz[0]), 0.0, _r(xz[1])]
+def _hole_world_anchors(h_json: dict, origin_lat: float, origin_lon: float) -> tuple[tuple[float, float], tuple[float, float]]:
+    """
+    (tee, pin) of a generated hole in the course's shared coordinates.
 
-
-def _hole_tee_xz(h: dict, origin_lat: float, origin_lon: float) -> tuple[float, float]:
-    tee_pts = _to_xz_list(h["tees"], origin_lat, origin_lon)
-    if tee_pts:
-        return _centroid(tee_pts)
-    line = _oriented_hole_line_xz(h, origin_lat, origin_lon)
-    if line:
-        return line[0]
-    return _hole_anchor_xz(h, origin_lat, origin_lon)
-
-
-def _hole_return_xz(h: dict, origin_lat: float, origin_lon: float) -> tuple[float, float]:
-    pin_pts = _to_xz_list(h["pins"], origin_lat, origin_lon)
-    if pin_pts:
-        return _centroid(pin_pts)
-    green_pts = _to_xz_list(h["greens"][:1], origin_lat, origin_lon)
-    if green_pts:
-        return _centroid(green_pts)
-    line = _oriented_hole_line_xz(h, origin_lat, origin_lon)
-    if line:
-        return line[-1]
-    return _hole_anchor_xz(h, origin_lat, origin_lon)
-
-
-def _path_kind(el: dict) -> str:
-    tags = el.get("tags", {})
-    if tags.get("golf") == "cartpath" or tags.get("highway") in ("service", "track"):
-        return "cart_road"
-    return "walking_shortcut"
-
-
-def _hole_world_anchors(hole_num: int, h: dict, origin_lat: float, origin_lon: float) -> tuple[tuple[float, float], tuple[float, float]]:
-    line_pts = _oriented_hole_line_xz(h, origin_lat, origin_lon)
-
-    tee_xz = None
-    if h["tees"]:
-        pts = _to_xz_list(h["tees"][:1], origin_lat, origin_lon)
-        if pts:
-            tee_xz = pts[0]
-    if tee_xz is None and line_pts:
-        tee_xz = line_pts[0]
-    if tee_xz is None and h["fairways"]:
-        pts = _to_xz_list(h["fairways"], origin_lat, origin_lon)
-        if pts:
-            tee_xz = min(pts, key=lambda p: math.hypot(p[0], p[1]))
-    if tee_xz is None:
-        print(f"  [warn] hole {hole_num}: no world tee anchor, using course origin", file=sys.stderr)
-        tee_xz = (0.0, 0.0)
-
-    pin_xz = None
-    if h["pins"]:
-        pts = _to_xz_list(h["pins"][:1], origin_lat, origin_lon)
-        if pts:
-            pin_xz = pts[0]
-    if pin_xz is None and h["greens"]:
-        pts = _to_xz_list(h["greens"][:1], origin_lat, origin_lon)
-        if pts:
-            pin_xz = _centroid(pts)
-    if pin_xz is None and line_pts:
-        pin_xz = line_pts[-1]
-    if pin_xz is None:
-        pin_xz = (tee_xz[0], tee_xz[1] + 100.0)
-
-    return tee_xz, pin_xz
+    Read back from the hole JSON itself, so the course world's hole start is
+    exactly the tee the hole is built from. Picking a tee again here chose a
+    different tee box than hole_to_json on holes with several, and the game,
+    which puts the hole's tee on its start, moved the whole hole by the gap:
+    Mollerup's 4th started 300 m away beside the 1st.
+    """
+    tee_xz = _latlon_to_xz(*h_json["source"]["tee_latlon"], origin_lat, origin_lon)
+    pin = h_json["pin"]
+    return tee_xz, (tee_xz[0] + pin[0], tee_xz[1] + pin[2])
 
 
 def _hole_fairway_corridor(h: dict,
@@ -2377,20 +2632,21 @@ def course_world_to_json(course_id: str,
                          path_elements: list,
                          origin_lat: float,
                          origin_lon: float,
+                         hole_jsons: dict,
                          config: dict | None = None,
-                         tee_elevations: dict | None = None) -> dict:
+                         fences: list | None = None) -> dict:
     """
-    `tee_elevations` maps hole number to the tee's absolute height (the hole
-    JSON's source.tee_elevation). Hole starts are placed at those heights
-    relative to the first hole's tee, which sits at y = 0; holes without one
-    stay at y = 0.
+    `hole_jsons` maps hole number to its generated hole JSON; `fences` are
+    the course world's fences (fences_to_json). Each hole start
+    is that hole's tee, at its height (source.tee_elevation) relative to the
+    first hole's tee, which sits at y = 0; holes without a height stay at 0.
     """
     config = config or DEFAULT_CONFIG
     world_config = config.get("world", {})
     hole_anchors = []
     fairway_corridors = []
     for output_index, hole_num in enumerate(sorted(holes.keys())):
-        tee_xz, pin_xz = _hole_world_anchors(hole_num, holes[hole_num], origin_lat, origin_lon)
+        tee_xz, pin_xz = _hole_world_anchors(hole_jsons[hole_num], origin_lat, origin_lon)
         corridor = _hole_fairway_corridor(holes[hole_num], tee_xz, pin_xz, origin_lat, origin_lon, config)
         side = 1.0
         extra_offset = float(world_config.get("fallback_road_extra_offset", 8.0))
@@ -2425,7 +2681,8 @@ def course_world_to_json(course_id: str,
                                           fairway_corridors,
                                           float(world_config.get("fallback_road_extra_offset", 8.0)))
 
-    tee_elevations = {num: height for num, height in (tee_elevations or {}).items() if height is not None}
+    tee_elevations = {num: h_json["source"].get("tee_elevation") for num, h_json in hole_jsons.items()}
+    tee_elevations = {num: height for num, height in tee_elevations.items() if height is not None}
     base_elevation = tee_elevations.get(hole_anchors[0]["hole_num"], 0.0) if hole_anchors else 0.0
     hole_starts = []
     for anchor in hole_anchors:
@@ -2436,7 +2693,6 @@ def course_world_to_json(course_id: str,
             "id": f"hole_{anchor['hole_num']:02d}_start",
             "hole_index": anchor["hole_index"],
             "position": start_position,
-            "return_position": _xyz_from_xz(anchor["return_xz"]),
             "interaction_radius": float(world_config.get("hole_start_interaction_radius", 4.0))
         })
 
@@ -2460,6 +2716,7 @@ def course_world_to_json(course_id: str,
         },
         "hole_starts": hole_starts,
         "cart_roads": cart_roads,
+        "fences": fences or [],
         "walking_shortcuts": shortcuts,
         "collectibles": _collectible_candidates(course_id, spawn, hole_anchors),
         "spawn_zones": [
@@ -2589,6 +2846,9 @@ Examples:
                     help=f"Cache raw OSM/elevation responses here (default: {default_cache})")
     ap.add_argument("--no-cache", action="store_true",
                     help="Do not read or write the response cache")
+    default_sheets = default_cache / "contact_sheets"
+    ap.add_argument("--sheet-out", default=str(default_sheets), metavar="DIR",
+                    help=f"Where the import's contact sheet SVG goes (default: {default_sheets})")
     ap.add_argument("--refresh", action="store_true",
                     help="Ignore cached responses and re-download from OSM")
     ap.add_argument("--list", dest="list_courses", action="store_true",
@@ -2637,7 +2897,8 @@ Examples:
 
     # ── 2. Fetch golf elements ────────────────────────────────────────────────
     print("→ Fetching golf elements...", file=sys.stderr)
-    elements, tree_elements, path_elements = _fetch_elements(course_el)
+    elements, tree_elements, path_elements = _fetch_elements(course_el, float(config["tree"]["outside_reach_m"]))
+    fence_elements, driving_ranges = _fetch_fences(course_el, config["fence"])
     print(f"  Retrieved {len(elements)} golf elements, {len(tree_elements)} tree/wood elements, and {len(path_elements)} path elements", file=sys.stderr)
 
     if not elements:
@@ -2660,7 +2921,12 @@ Examples:
     # ── 4. Group by hole ──────────────────────────────────────────────────────
     print("→ Grouping elements by hole...", file=sys.stderr)
     try:
-        elements = select_course_by_ref_prefix(elements, args.ref_prefix, origin_lat, origin_lon)
+        elements = select_course_by_ref_prefix(elements, args.ref_prefix or config.get("ref_prefix", ""),
+                                               origin_lat, origin_lon)
+        audit = osm_audit.audit_elements(elements, course_el, course_id, config,
+                                         osm_checks.load_scorecard(course_id), fence_elements, driving_ranges)
+        if config.get("holes"):
+            elements = apply_hole_list(elements, config["holes"])
     except ValueError as e:
         print(f"\n{e}", file=sys.stderr)
         sys.exit(1)
@@ -2677,7 +2943,7 @@ Examples:
                           origin_lat,
                           origin_lon,
                           f"{course_el.get('type')}:{course_el.get('id')}",
-                          int(config.get("tree", {}).get("max_per_hole", 60)))
+                          config["tree"])
 
     # ── 5. Write hole files ───────────────────────────────────────────────────
     out_dir = Path(args.out)
@@ -2693,8 +2959,7 @@ Examples:
     elevation = _make_elevation_sampler(args, config, origin_lat, origin_lon)
 
     source_counts: dict[str, int] = {}
-    tee_elevations: dict[int, float | None] = {}
-    hole_jsons = []
+    hole_jsons: dict[int, dict] = {}
     for num in sorted(holes.keys()):
         print(f"  Processing hole {num}...", file=sys.stderr)
         h_json = hole_to_json(num, holes[num], origin_lat, origin_lon, course_id, config, elevation)
@@ -2703,8 +2968,7 @@ Examples:
         with open(fpath, "w", encoding="utf-8") as f:
             json.dump(h_json, f, indent=2)
         hole_paths.append(f"holes/{fname}")
-        tee_elevations[num] = h_json["source"]["tee_elevation"]
-        hole_jsons.append(h_json)
+        hole_jsons[num] = h_json
         dist = math.hypot(h_json["pin"][0], h_json["pin"][2])
         path_len = _hole_json_path_length(h_json)
         width = h_json["spline"]["width"]
@@ -2720,17 +2984,20 @@ Examples:
 
     # ── 6. Write course manifest ──────────────────────────────────────────────
     world_reference = f"course_worlds/{course_id}.json"
+    world_json = course_world_to_json(course_id,
+                                      course_name,
+                                      course_el,
+                                      holes,
+                                      path_elements,
+                                      origin_lat,
+                                      origin_lon,
+                                      hole_jsons,
+                                      config,
+                                      fences_to_json(fence_elements, driving_ranges, origin_lat, origin_lon,
+                                                     config["fence"]))
     if not args.no_world:
-        world_json = course_world_to_json(course_id,
-                                          course_name,
-                                          course_el,
-                                          holes,
-                                          path_elements,
-                                          origin_lat,
-                                          origin_lon,
-                                          config,
-                                          tee_elevations)
-        world_json["ground"] = _course_ground(world_json, hole_jsons, elevation, origin_lat, origin_lon, config)
+        world_json["ground"] = _course_ground(world_json, list(hole_jsons.values()), elevation,
+                                              origin_lat, origin_lon, config)
         world_file = world_dir / f"{course_id}.json"
         with open(world_file, "w", encoding="utf-8") as f:
             json.dump(world_json, f, indent=2)
@@ -2740,8 +3007,15 @@ Examples:
         course_json = {
             "id": course_id,
             "name": course_name,
-            # Drawn by tooling/art/make_art.py.
-            "backdrop": f"backdrops/{course_id}.bmp",
+            # Drawn by tooling/art/make_art.py, whose sky meets the haze at
+            # the horizon. A mild summer haze; tune it per course by hand.
+            "backdrop": {
+                "sky": f"backdrops/{course_id}_sky.bmp",
+                "land": f"backdrops/{course_id}_land.bmp",
+                "haze_color": [0.75, 0.80, 0.83],
+                "haze_amount": 1.0,
+                "haze_distance": 800,
+            },
             "holes": hole_paths
         }
         if not args.no_world:
@@ -2757,6 +3031,16 @@ Examples:
         print(f"\n→ Centreline sources: {summary}", file=sys.stderr)
     _report_elevation(elevation)
     print(f"→ Done! {len(holes)} hole(s) in {out_dir}/", file=sys.stderr)
+
+    # ── 7. Verify ─────────────────────────────────────────────────────────────
+    findings = verify_osm_import.verify_course(
+        course_id, course_name, [hole_jsons[num] for num in sorted(hole_jsons)], world_json,
+        config.get("checks", {}), Path(args.sheet_out) / f"{course_id}.svg", quiet=True, audit=audit)
+    verify_osm_import.write_osm_todo(course_name, course_el, audit,
+                                     Path(args.sheet_out) / f"{course_id}_osm_todo.md")
+    if findings.count("error"):
+        print("→ The import has errors: fix the importer or the course's config, "
+              "not the generated files.", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@
 // assets/audio/sounds.json. Entries may carry authoring notes
 // ("description", "target_length_seconds") that the game ignores.
 
+#include "game/settings.h"
+
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -32,6 +34,22 @@ struct audio_manifest_parse_result {
     std::optional<audio_manifest> manifest;
     std::string error;
 };
+
+// The player's volume settings, each 0..1: master scales every sound,
+// music scales the ambience on top of master.
+struct audio_levels {
+    float master = 1.0f;
+    float music = 1.0f;
+};
+
+// From the master and music volume settings, each at its fraction of its range.
+audio_levels audio_levels_from_settings(const settings_values& values, const std::vector<setting_definition>& definitions);
+
+// A sound's level in the mix (0..1) from the manifest alone: its master,
+// category and multiplier.
+float sound_mix_gain(const audio_manifest& manifest, const audio_sound_definition& sound);
+// What a sound with `mix_gain` plays at under the player's levels (0..1).
+float played_gain(float mix_gain, audio_sound_type type, const audio_levels& levels);
 
 audio_manifest_parse_result parse_audio_manifest(const std::string& text);
 audio_manifest_parse_result load_audio_manifest_from_file(const std::string& path);

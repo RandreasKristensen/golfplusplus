@@ -1,12 +1,21 @@
 #include "doctest.h"
 
 #include "renderer/course_map_fill.h"
+#include "renderer/course_map_overlay.h"
 #include "renderer/overlay_batch.h"
 #include "renderer/render_mesh.h"
 
+#include "test_support.h"
+
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
+
+#include <glm/common.hpp>
+#include <glm/geometric.hpp>
 
 namespace {
 render_static_mesh make_test_terrain_mesh(const float span, const std::uint64_t revision) {
@@ -44,7 +53,7 @@ render_static_mesh make_test_terrain_mesh(const float span, const std::uint64_t 
 course_map_layout make_test_layout(const float scale) {
     course_map_layout layout;
     layout.world_center = glm::vec3(3.0f, 0.0f, -2.0f);
-    layout.scale = scale;
+    layout.scale = glm::vec2(scale);
     return layout;
 }
 
@@ -134,4 +143,79 @@ TEST_CASE("layout comparison only matches exactly equal layouts") {
     course_map_layout shifted = base;
     shifted.center.y += 0.001f;
     CHECK(!(course_map_layouts_match(base, shifted)));
+}
+
+TEST_CASE("map fill prints triangles smaller than a strip") {
+    overlay_batch batch;
+    const course_map_layout layout = make_test_layout(0.02f);
+    const glm::vec2 corner = layout.center;
+    append_map_fill_triangle(batch, layout, corner, corner + glm::vec2(0.0008f, 0.0f), corner + glm::vec2(0.0f, 0.0008f),
+                             glm::vec3(1.0f));
+    CHECK(overlay_batch_quad_count(batch) == 1U);
+}
+
+TEST_CASE("the map prints water in its own ink, never the bunkers'") {
+    const glm::vec3 water = course_map_material_ink(terrain_material::water);
+    const glm::vec3 bunker = course_map_material_ink(terrain_material::bunker);
+    CHECK(glm::length(water - bunker) > 0.3f);
+    CHECK(water.b > water.r);
+    CHECK(water.b > water.g);
+}
+
+TEST_CASE("the course map fits the course's holes to its paper, square on screen, at every aspect") {
+    render_data data;
+    data.course_map_low = glm::vec3(-100.0f, 0.0f, 50.0f);
+    data.course_map_high = glm::vec3(300.0f, 0.0f, 950.0f);
+    data.player_position = glm::vec3(0.0f, 0.0f, 100.0f);
+    for (const overlay_grid grid : {overlay_grid{554, 416}, overlay_grid{640, 360}, overlay_grid{733, 314}}) {
+        const course_map_layout layout = make_course_map_layout(data, grid);
+        // One world unit is as many pixels across as up.
+        CHECK(std::abs(layout.scale.x * static_cast<float>(grid.width) - layout.scale.y * static_cast<float>(grid.height)) <
+              0.0001f);
+        const glm::vec2 a = map_point(layout, data.course_map_low);
+        const glm::vec2 b = map_point(layout, data.course_map_high);
+        const glm::vec2 low = glm::min(a, b);
+        const glm::vec2 high = glm::max(a, b);
+        const glm::vec2 paper_low = layout.center - layout.half_size;
+        const glm::vec2 paper_high = layout.center + layout.half_size;
+        CHECK(low.x > paper_low.x);
+        CHECK(low.y > paper_low.y);
+        CHECK(high.x < paper_high.x);
+        CHECK(high.y < paper_high.y);
+        // The course fills the paper along its longer side, less a small margin.
+        const glm::vec2 fill = (high - low) / (layout.half_size * 2.0f);
+        CHECK(std::max(fill.x, fill.y) > 0.8f);
+    }
+}
+
+TEST_CASE("every hole gets its number on the course map, inside the paper and clear of the others") {
+    render_data data;
+    data.course_map_low = glm::vec3(0.0f);
+    data.course_map_high = glm::vec3(600.0f, 0.0f, 600.0f);
+    for (int i = 0; i < 18; ++i) {
+        data.map_holes.push_back(render_map_hole{std::to_string(i + 1), glm::vec3(static_cast<float>(i % 6) * 100.0f, 0.0f,
+                                                                                    static_cast<float>(i / 6) * 250.0f)});
+    }
+    // Two tees side by side, as at a clubhouse.
+    data.map_holes.push_back(render_map_hole{"19", data.map_holes.front().tee + glm::vec3(2.0f, 0.0f, 0.0f)});
+    const text_assets& text = shipped_text_assets();
+    for (const overlay_grid grid : {overlay_grid{554, 416}, overlay_grid{640, 360}, overlay_grid{733, 314}}) {
+        const course_map_layout layout = make_course_map_layout(data, grid);
+        const std::vector<ui_rect> boxes = course_map_number_boxes(layout, grid, data.map_holes);
+        REQUIRE(boxes.size() == data.map_holes.size());
+        for (std::size_t i = 0; i < boxes.size(); ++i) {
+            CHECK(rect_left(boxes[i]) >= layout.center.x - layout.half_size.x - 0.0001f);
+            CHECK(rect_right(boxes[i]) <= layout.center.x + layout.half_size.x + 0.0001f);
+            CHECK(rect_bottom(boxes[i]) >= layout.center.y - layout.half_size.y - 0.0001f);
+            CHECK(rect_top(boxes[i]) <= layout.center.y + layout.half_size.y + 0.0001f);
+            for (std::size_t j = 0; j < i; ++j) {
+                const glm::vec2 gap = glm::abs(boxes[i].center - boxes[j].center) - (boxes[i].half_size + boxes[j].half_size);
+                CHECK((gap.x >= 0.0f || gap.y >= 0.0f));
+            }
+        }
+        overlay_batch batch;
+        batch.grid = grid;
+        draw_course_map_marks(batch, text, layout, data);
+        CHECK(batch.truncated_text_count == 0U);
+    }
 }

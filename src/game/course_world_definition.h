@@ -20,7 +20,6 @@
 struct course_world_hole_start {
     int hole_index = -1;
     glm::vec3 position{0.0f};
-    glm::vec3 return_position{0.0f};  // where the player reappears after the hole
     float interaction_radius = 0.0f;
     float rotation_degrees = 0.0f;
 };
@@ -28,6 +27,14 @@ struct course_world_hole_start {
 struct course_world_cart_road {
     float width = 0.0f;
     std::vector<glm::vec3> polyline;
+};
+
+// A fence: poles where it turns (or every few metres along a long run), a
+// net between each pair from the ground up to `height`. Poles stand on the
+// ground; their y is ignored.
+struct course_world_fence {
+    std::vector<glm::vec3> poles;
+    float height = 0.0f;
 };
 
 struct course_world_skill_reward {
@@ -65,5 +72,6 @@ struct course_world_definition {
     // the ground between the holes eases into it.
     height_grid ground;
     std::vector<course_world_cart_road> cart_roads;
+    std::vector<course_world_fence> fences;
     std::vector<course_world_collectible> collectibles;
 };

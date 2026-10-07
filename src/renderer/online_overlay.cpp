@@ -13,14 +13,26 @@ namespace {
 const glm::vec2 name_tag_half(0.20f, 0.026f);
 // Bottom centre, between the power meter and the key icons.
 const ui_rect notice_box = rect_from_edges(-0.26f, -0.86f, 0.60f, -0.70f);
+
+const char* name_tag_style(const player_relationship relationship) {
+    switch (relationship) {
+    case player_relationship::grouped:
+        return style_name_tag_group;
+    case player_relationship::befriended:
+        return style_name_tag_friend;
+    case player_relationship::unknown:
+        break;
+    }
+    return style_name_tag;
+}
 }
 
 void draw_name_tags(overlay_batch& batch,
                     const text_assets& text,
                     const std::vector<render_name_tag>& tags,
                     const glm::mat4& view_proj) {
-    const text_style& style = find_text_style(text, style_name_tag);
     for (const render_name_tag& tag : tags) {
+        const text_style& style = find_text_style(text, name_tag_style(tag.relationship));
         const std::optional<glm::vec2> projected = project_to_screen(view_proj, tag.position);
         if (!projected || tag.name.empty()) {
             continue;

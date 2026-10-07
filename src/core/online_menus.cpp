@@ -187,12 +187,19 @@ void update_login(startup_flow_state& state,
     }
 }
 
+// OK, and I ALREADY HAVE AN ACCOUNT unless a guest, who cannot link.
+int name_entry_tiles(const online_menu_status& online) {
+    return online.guest ? 1 : 2;
+}
+
 void update_name_entry(startup_flow_state& state,
                        const input_state& input,
                        const std::optional<glm::vec2> click,
+                       const online_menu_status& online,
                        startup_menu_result& result) {
     state.field = apply_text_input(state.field, input.text_typed, input.backspace.pressed);
-    const int hit = select_with_input(startup_menu_screen::form, 1, state.selection, 2, input, click, result.sounds);
+    const int hit =
+        select_with_input(startup_menu_screen::form, 1, state.selection, name_entry_tiles(online), input, click, result.sounds);
     if (input.escape.pressed) {
         result.sounds.push_back(ui_sound::back);
         return_to_main_menu(state);
@@ -340,6 +347,7 @@ bool is_online_flow(const startup_flow flow) {
         return true;
     case startup_flow::main:
     case startup_flow::help:
+    case startup_flow::settings:
     case startup_flow::offline:
     case startup_flow::hole_picker:
     case startup_flow::course_picker:
@@ -381,7 +389,7 @@ void update_online_menu(startup_flow_state& state,
         update_login(state, input, click, online, result);
         break;
     case startup_flow::name_entry:
-        update_name_entry(state, input, click, result);
+        update_name_entry(state, input, click, online, result);
         break;
     case startup_flow::link_code_entry:
         update_link_code_entry(state, input, click, catalog, online, result);
@@ -432,7 +440,10 @@ void make_online_menu_render_data(const startup_flow_state& state,
             menu.message = lookup_text(text, text_menu_name_waiting);
         }
         add_tile(menu, lookup_text(text, text_menu_name_ok), lookup_text(text, text_menu_name_ok_hint), selected(0));
-        add_tile(menu, lookup_text(text, text_menu_name_have_account), lookup_text(text, text_menu_name_have_account_hint), selected(1));
+        if (name_entry_tiles(online) > 1) {
+            add_tile(menu, lookup_text(text, text_menu_name_have_account), lookup_text(text, text_menu_name_have_account_hint),
+                     selected(1));
+        }
         break;
     case startup_flow::link_code_entry:
         menu.title = lookup_text(text, text_menu_link_entry_title);

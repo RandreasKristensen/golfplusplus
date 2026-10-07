@@ -8,17 +8,22 @@
 #include "game/reward_rules.h"
 #include "game/shot_simulation.h"
 #include "game/tuning_loader.h"
+#include "physics/flight_model.h"
 #include "physics/ground_contact.h"
 #include "physics/vector_math.h"
 
 #include "test_support.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
 
 namespace {
@@ -181,6 +186,7 @@ TEST_CASE("golden shots land where they always have") {
     REQUIRE(!shots->empty());
 
     int holed = 0;
+    int lost = 0;
     int tree_hits = 0;
     for (std::size_t i = 0; i < shots->size(); ++i) {
         const json& shot = (*shots)[i];
@@ -208,10 +214,112 @@ TEST_CASE("golden shots land where they always have") {
         CHECK(matches);
         holed += result.holed ? 1 : 0;
         tree_hits += count_events(result, shot_event_kind::tree_hit);
+        lost += result.penalty_strokes;
     }
-    // The shots cover the cup and the trees, not only open ground.
+    // The shots cover the cup, the trees and the water, not only open ground.
     CHECK(holed > 0);
     CHECK(tree_hits > 0);
+    CHECK(lost > 0);
+}
+
+TEST_CASE("a ball that goes under water sinks to the floor, lies there, and goes back to where it was hit") {
+    game_state state = started_hole();
+    hole_data hole = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 120.0f), 30.0f);
+    hole.material_zones = {circle_zone(material_zone_type::water, glm::vec3(0.0f, 0.0f, 40.0f), 12.0f)};
+    play_hole(state, hole);
+    still_air(state);
+    const shot_course course = current_shot_course(state);
+    const terrain_sample pond = sample_area(state.area, glm::vec3(0.0f, 0.0f, 40.0f));
+    REQUIRE(pond.material == terrain_material::water);
+    REQUIRE(pond.water_level > pond.point.y + 1.0f);  // a bowl, deeper than a ball
+
+    ball_state ball = state.ball;
+    ball.position = glm::vec3(0.0f, pond.water_level + 3.0f, 40.0f);
+    ball.velocity = glm::vec3(0.0f, -4.0f, 1.0f);
+    const shot_result result = simulate_ball(ball, state.clubs[0].stats, course, state.tuning, 0.0f);
+
+    CHECK(result.penalty_strokes == 1);
+    CHECK(!result.holed);
+    CHECK(result.rest_position == ball.position);  // the next shot is from where this one was
+    // It ends on the floor (under the water), after lying there for the linger.
+    const auto above_floor = [&](const glm::vec3& point) { return point.y - sample_area(state.area, point).point.y; };
+    const glm::vec3 last = result.trajectory.back();
+    CHECK(above_floor(last) < ball.radius + 0.01f);
+    CHECK(last.y < pond.water_level);
+    float reached_floor = result.duration;
+    for (std::size_t i = 0; i < result.trajectory.size(); ++i) {
+        if (above_floor(result.trajectory[i]) < ball.radius + 0.01f) {
+            reached_floor = static_cast<float>(i) * shot_step_seconds * static_cast<float>(shot_steps_per_trajectory_point);
+            break;
+        }
+    }
+    CHECK(result.duration - reached_floor >= state.tuning.ball.water_linger_seconds - 0.05f);
+
+    // A ball on dry ground is not lost.
+    ball.position = glm::vec3(0.0f, 2.0f, 90.0f);
+    CHECK(simulate_ball(ball, state.clubs[0].stats, course, state.tuning, 0.0f).penalty_strokes == 0);
+}
+
+TEST_CASE("from a bunker only a wedge gets the ball out properly") {
+    game_state state = started_hole();
+    hole_data hole = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 300.0f), 30.0f);
+    hole.material_zones = {circle_zone(material_zone_type::bunker, glm::vec3(0.0f, 0.0f, 40.0f), 4.0f)};
+    play_hole(state, hole);
+    still_air(state);
+    const auto club_named = [&](const std::string& id) {
+        return *std::find_if(state.clubs.begin(), state.clubs.end(), [&](const club_definition& c) { return c.id == id; });
+    };
+    const auto carry = [&](const std::string& club, const glm::vec3& from) {
+        shot_input input;
+        input.ball_start = resting_on_terrain(state, from);
+        input.aim_angle = yaw_towards(from, glm::vec3(0.0f, 0.0f, 300.0f));
+        input.club_id = club;
+        input.power = 1.0f;
+        const shot_result result = simulate_shot(input, current_shot_course(state), state.tuning, state.clubs, state.rewards);
+        return horizontal_distance(result.rest_position, input.ball_start);
+    };
+    REQUIRE(lie_at(state.area, glm::vec3(0.0f, 0.0f, 40.0f)) == ball_lie::bunker);
+    const glm::vec3 sand(0.0f, 0.0f, 40.0f);  // off the tee box, which is a tee lie
+    const glm::vec3 fairway(0.0f, 0.0f, 20.0f);
+    REQUIRE(club_named("seven_iron").stats.bunker_power < club_named("sand_wedge").stats.bunker_power);
+    // Sand cuts every club, and an iron loses more of its usual way than a sand wedge does.
+    const float iron_kept = carry("seven_iron", sand) / carry("seven_iron", fairway);
+    const float wedge_kept = carry("sand_wedge", sand) / carry("sand_wedge", fairway);
+    CHECK(iron_kept < 1.0f);
+    CHECK(wedge_kept < 1.0f);
+    CHECK(iron_kept < wedge_kept);
+}
+
+TEST_CASE("a lie's power and spin scale the shot played from it") {
+    game_state state = started_hole();
+    hole_data hole = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 300.0f), 30.0f);
+    hole.material_zones = {circle_zone(material_zone_type::bunker, glm::vec3(0.0f, 0.0f, 40.0f), 4.0f)};
+    play_hole(state, hole);
+    state.tuning.wind = wind_tuning{};  // drag and spin stay: spin must matter
+    for (lie_tuning& lie : state.tuning.lies) {
+        lie = lie_tuning{1.0f, 1.0f};
+    }
+    const auto carry = [&](const glm::vec3& from) {
+        shot_input input;
+        input.ball_start = resting_on_terrain(state, from);
+        input.aim_angle = yaw_towards(from, glm::vec3(0.0f, 0.0f, 300.0f));
+        input.club_id = "sand_wedge";
+        input.power = 1.0f;
+        const shot_result result = simulate_shot(input, current_shot_course(state), state.tuning, state.clubs, state.rewards);
+        return horizontal_distance(result.rest_position, input.ball_start);
+    };
+    const glm::vec3 sand(0.0f, 0.0f, 40.0f);  // off the tee box, which is a tee lie
+    const glm::vec3 fairway(0.0f, 0.0f, 20.0f);
+    REQUIRE(lie_at(state.area, sand) == ball_lie::bunker);
+    REQUIRE(lie_at(state.area, fairway) == ball_lie::fairway);
+    const float from_fairway = carry(fairway);
+
+    state.tuning.lies[static_cast<std::size_t>(ball_lie::bunker)].power = 0.5f;
+    CHECK(carry(sand) < 0.7f * from_fairway);
+    // Only the lie the ball is on counts.
+    CHECK(carry(fairway) == from_fairway);
+    state.tuning.lies[static_cast<std::size_t>(ball_lie::fairway)].spin = 0.0f;
+    CHECK(carry(fairway) != from_fairway);
 }
 
 TEST_CASE("an unknown club leaves the ball where it is") {
@@ -395,12 +503,7 @@ TEST_CASE("the ball bounces off a tree trunk where the tree stands on the terrai
 TEST_CASE("water slows a ball more than grass") {
     game_state wet = started_hole();
     hole_data hole = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 20.0f), 10.0f);
-    material_zone water;
-    water.type = material_zone_type::water;
-    water.center = glm::vec3(0.0f, 0.0f, 10.0f);
-    water.radius = 4.5f;
-    water.has_radius = true;
-    hole.material_zones = {water};
+    hole.material_zones = {circle_zone(material_zone_type::water, glm::vec3(0.0f, 0.0f, 10.0f), 4.5f)};
     play_hole(wet, hole);
 
     game_state dry = started_hole();
@@ -413,7 +516,8 @@ TEST_CASE("water slows a ball more than grass") {
         state->tuning.ball.ground_friction = 0.0f;
         state->tuning.ball.water_friction = 0.0f;
         ball_state ball = state->ball;
-        ball.position = glm::vec3(0.0f, 0.0f, 10.0f);
+        // On the pond's bed, under its water (on the grass, for the dry hole).
+        ball.position = resting_on_terrain(*state, glm::vec3(0.0f, 0.0f, 10.0f));
         ball.velocity = glm::vec3(6.0f, 0.0f, 0.0f);
         speeds.push_back(horizontal_speed(step_once(*state, ball, 0.016f).ball.velocity));
     }
@@ -453,7 +557,10 @@ TEST_CASE("a ball stopping within the cup's horizontal radius is holed") {
     CHECK(!outside.holed);
 }
 
-TEST_CASE("a fast ball crossing the cup drops in") {
+namespace {
+// A ball rolling along the green in +x, frictionless, from before the cup and
+// `offset` to the side of its centre.
+shot_result roll_past_cup(const float speed, const float offset) {
     game_state state = started_hole();
     still_air(state);
     state.tuning.ball.ground_restitution = 0.0f;
@@ -461,13 +568,151 @@ TEST_CASE("a fast ball crossing the cup drops in") {
     state.tuning.ball.roll_deceleration = 0.0f;
     const shot_course course = current_shot_course(state);
     ball_state ball = state.ball;
-    ball.position = course.hole.pin + glm::vec3(-(state.tuning.scale.cup_radius_meters + 0.25f), ball.radius, 0.0f);
-    ball.velocity = glm::vec3(40.0f, 0.0f, 0.0f);
+    ball.position = course.hole.pin + glm::vec3(-(state.tuning.scale.cup_radius_meters + 0.25f), ball.radius, offset);
+    ball.velocity = glm::vec3(speed, 0.0f, 0.0f);
+    return simulate_ball(ball, state.clubs[0].stats, course, state.tuning, 0.0f);
+}
+}
 
-    const shot_result result = simulate_ball(ball, state.clubs[0].stats, course, state.tuning, 0.0f);
+TEST_CASE("a slow ball over the cup's centre drops in") {
+    const game_state state = started_hole();
+    const shot_result result = roll_past_cup(state.tuning.ball.cup_capture_speed * 0.5f, 0.0f);
 
     CHECK(result.holed);
-    CHECK(result.duration < 0.1f);
+    CHECK(result.rest_position.y < current_shot_course(state).hole.pin.y);
+}
+
+TEST_CASE("a fast ball over the cup's centre rolls over it") {
+    const game_state state = started_hole();
+    const shot_result result = roll_past_cup(state.tuning.ball.cup_capture_speed * 4.0f, 0.0f);
+
+    CHECK(!result.holed);
+}
+
+TEST_CASE("a ball on the lip, just outside the cup, stays out") {
+    const game_state state = started_hole();
+    const shot_course course = current_shot_course(state);
+    const float lip = state.tuning.scale.cup_radius_meters + 0.01f;
+
+    const shot_result resting = simulate_ball(resting_ball(state, course.hole.pin + glm::vec3(lip, 0.0f, 0.0f)),
+                                              state.clubs[0].stats, course, state.tuning, 0.0f);
+    CHECK(!resting.holed);
+    CHECK(horizontal_distance(resting.rest_position, course.hole.pin) > state.tuning.scale.cup_radius_meters);
+
+    CHECK(!roll_past_cup(state.tuning.ball.cup_capture_speed * 0.5f, lip).holed);
+}
+
+TEST_CASE("a centred ball drops in faster than one crossing near the lip") {
+    const game_state state = started_hole();
+    const float speed = state.tuning.ball.cup_capture_speed * 0.9f;
+    const float radius = state.tuning.scale.cup_radius_meters;
+
+    CHECK(roll_past_cup(speed, 0.0f).holed);
+    CHECK(!roll_past_cup(speed, radius * 0.95f).holed);
+    // A real ball still drops at about 1.6 m/s over the centre; scaled to the
+    // game's cup, a firm, well-centred putt does too.
+    CHECK(roll_past_cup(2.5f, radius * 0.25f).holed);
+}
+
+namespace {
+// A ball falling onto the green just short of the cup, so it comes down
+// through the cup opening, with `forward` m/s horizontal and `down` m/s
+// vertical speed.
+shot_result fall_into_cup(const float forward, const float down) {
+    game_state state = started_hole();
+    still_air(state);
+    const shot_course course = current_shot_course(state);
+    const float height = 0.3f;
+    const float fall_seconds = (std::sqrt(down * down + 2.0f * gravity_meters_per_second2 * height) - down) / gravity_meters_per_second2;
+    ball_state ball = state.ball;
+    ball.position = course.hole.pin + glm::vec3(-forward * fall_seconds, ball.radius + height, 0.0f);
+    ball.velocity = glm::vec3(forward, -down, 0.0f);
+    ball.spin = glm::vec3(0.0f);
+    return simulate_ball(ball, state.clubs[0].stats, course, state.tuning, 0.0f);
+}
+}
+
+TEST_CASE("a steep ball landing on the cup dunks, a fast low one skips over") {
+    const game_state state = started_hole();
+    // Faster than a rolling ball may drop, but falling steeply.
+    const float forward = state.tuning.ball.cup_capture_speed * 1.6f;
+    CHECK(fall_into_cup(forward, forward * 1.5f).holed);
+    CHECK(!fall_into_cup(forward * 4.0f, 1.0f).holed);
+}
+
+namespace {
+// A putt with the shipped putter and tuning, from `distance` short of `pin` on
+// the line from the tee, aimed at the cup.
+shot_result putt(const game_state& state, const glm::vec3& pin, const float distance, const float power) {
+    shot_input input;
+    input.ball_start = resting_on_terrain(state, pin - glm::vec3(0.0f, 0.0f, distance));
+    input.aim_angle = yaw_towards(input.ball_start, pin);
+    input.club_id = "putter";
+    input.power = power;
+    return simulate_shot(input, current_shot_course(state), state.tuning, state.clubs, state.rewards);
+}
+}
+
+TEST_CASE("half power carries about half as far as full power with every club") {
+    game_state state = make_game_state(shipped_content(), save_data{});
+    play_hole(state, straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 600.0f), 40.0f));
+    state.tuning.wind = wind_tuning{};
+    const auto carry = [&state](const std::string& club, const float power) {
+        shot_input input;
+        input.ball_start = resting_on_terrain(state, glm::vec3(0.0f));
+        input.aim_angle = yaw_towards(input.ball_start, glm::vec3(0.0f, 0.0f, 600.0f));
+        input.club_id = club;
+        input.power = power;
+        return horizontal_distance(simulate(state, input).rest_position, input.ball_start);
+    };
+    for (const club_definition& club : state.clubs) {
+        const float full = carry(club.id, 1.0f);
+        const float half = carry(club.id, 0.5f);
+        CHECK(half > full * 0.38f);
+        CHECK(half < full * 0.56f);
+    }
+}
+
+TEST_CASE("a well-paced putt drops, a hard one runs past and a short one stops at the lip") {
+    constexpr float power_step = 0.005f;
+    // A flat green, one running downhill to the cup and one uphill.
+    for (const float pin_height : {0.0f, -1.0f, 1.0f}) {
+        game_state state = started_hole();
+        const glm::vec3 pin(0.0f, pin_height, 20.0f);
+        play_hole(state, straight_hole(glm::vec3(0.0f), pin, 20.0f));
+        const float radius = state.tuning.scale.cup_radius_meters;
+        for (const float distance : {1.0f, 2.0f, 3.0f, 5.0f, 8.0f}) {
+            // The softest putt that holes, and how many steps of the meter hole.
+            float first = -1.0f;
+            int holing = 0;
+            for (float power = state.tuning.swing.min_power; power <= 1.0f; power += power_step) {
+                if (putt(state, pin, distance, power).holed) {
+                    first = first < 0.0f ? power : first;
+                    ++holing;
+                }
+            }
+            REQUIRE(first > 0.0f);
+            // A short putt can be hit softer than it needs (downhill this
+            // steep, the slope alone runs the softest putt down to the cup).
+            if (pin_height >= 0.0f) {
+                CHECK(first > state.tuning.swing.min_power);
+            }
+            // Not pixel-perfect: a decent swing has some room.
+            CHECK(holing * power_step >= 0.04f);
+
+            const float firm = first + static_cast<float>(holing) * power_step + 0.05f;
+            const shot_result hard = putt(state, pin, distance, firm);
+            CHECK(!hard.holed);
+            CHECK(hard.rest_position.z > pin.z + radius);
+
+            if (first - power_step >= state.tuning.swing.min_power) {
+                const shot_result short_putt = putt(state, pin, distance, first - power_step);
+                CHECK(!short_putt.holed);
+                CHECK(short_putt.rest_position.z < pin.z);
+                CHECK(horizontal_distance(short_putt.rest_position, pin) < radius + 0.3f);
+            }
+        }
+    }
 }
 
 TEST_CASE("playback interpolates the trajectory and ends at the rest") {
@@ -530,4 +775,89 @@ TEST_CASE("holing the last hole finishes the round and completes the course") {
     CHECK(state.save.completed_course_ids == std::vector<std::string>{"fixture_course"});
     CHECK(state.save.holes_completed == 1);
     CHECK(state.ball.position.y < pin.y);
+}
+
+namespace {
+// A shipped course with its first bunker, and the fairway nearest that.
+struct shipped_bunker {
+    game_state state;
+    glm::vec3 sand{0.0f};
+    glm::vec3 fairway{0.0f};
+};
+
+std::optional<shipped_bunker> shipped_bunker_and_fairway() {
+    shipped_bunker found{make_game_state(shipped_content(), save_data{})};
+    const auto course = std::find_if(shipped_content().courses.begin(), shipped_content().courses.end(),
+                                     [](const course_definition& c) { return c.id == "kalo_golf_club"; });
+    if (course == shipped_content().courses.end() || !start_course(found.state, *course)) {
+        return std::nullopt;
+    }
+    const auto zone = std::find_if(found.state.area.zones.begin(), found.state.area.zones.end(),
+                                   [](const material_zone& z) { return z.type == material_zone_type::bunker; });
+    if (zone == found.state.area.zones.end()) {
+        return std::nullopt;
+    }
+    found.sand = resting_on_terrain(found.state, zone->center);
+    float nearest = 1.0e9f;
+    for (float x = -80.0f; x <= 80.0f; x += 2.0f) {
+        for (float z = -80.0f; z <= 80.0f; z += 2.0f) {
+            const glm::vec3 point = zone->center + glm::vec3(x, 0.0f, z);
+            const float distance = horizontal_distance(point, zone->center);
+            if (distance < nearest && lie_at(found.state.area, point) == ball_lie::fairway) {
+                nearest = distance;
+                found.fairway = resting_on_terrain(found.state, point);
+            }
+        }
+    }
+    if (nearest >= 1.0e9f) {
+        return std::nullopt;
+    }
+    return found;
+}
+}
+
+TEST_CASE("a ball in a shipped bunker lies in sand, and a driver from there goes nowhere") {
+    const std::optional<shipped_bunker> found = shipped_bunker_and_fairway();
+    REQUIRE(found.has_value());
+    const shipped_bunker& course = *found;
+    const game_state& state = course.state;
+    REQUIRE(lie_at(state.area, course.sand) == ball_lie::bunker);
+    REQUIRE(lie_at(state.area, course.fairway) == ball_lie::fairway);
+    const auto longest_drive = [&](const glm::vec3& from) {
+        float longest = 0.0f;
+        for (int i = 0; i < 8; ++i) {  // every way round, so one tree cannot decide it
+            shot_input input;
+            input.ball_start = from;
+            input.aim_angle = static_cast<float>(i) * glm::quarter_pi<float>();
+            input.club_id = "driver";
+            input.power = 1.0f;
+            const shot_result result = simulate_shot(input, current_shot_course(state), state.tuning, state.clubs, state.rewards);
+            longest = std::max(longest, horizontal_distance(result.rest_position, from));
+        }
+        return longest;
+    };
+    CHECK(longest_drive(course.sand) < 0.3f * longest_drive(course.fairway));
+}
+
+TEST_CASE("a ball landing in a shipped bunker plugs where it lands") {
+    const std::optional<shipped_bunker> found = shipped_bunker_and_fairway();
+    REQUIRE(found.has_value());
+    const shipped_bunker& course = *found;
+    const game_state& state = course.state;
+    for (const float speed : {8.0f, 15.0f, 25.0f}) {
+        ball_state ball;
+        ball.radius = state.ball.radius;
+        ball.position = course.sand + glm::vec3(-0.5f, 0.5f, 0.0f);
+        ball.velocity = glm::vec3(speed, -speed, 0.0f);
+        const shot_result result = simulate_ball(ball, state.clubs[0].stats, current_shot_course(state), state.tuning, 0.0f);
+        REQUIRE(!result.events.empty());
+        const glm::vec3 landed = shot_position_at(result, result.events.front().time);
+        // No bounce: once down (past the trajectory point it lands between), it never rises off the sand.
+        for (float time = result.events.front().time + 0.05f; time < result.duration; time += shot_step_seconds) {
+            const glm::vec3 at = shot_position_at(result, time);
+            CHECK(at.y - terrain_height(state.area, at) < ball.radius + 0.02f);
+        }
+        CHECK(lie_at(state.area, result.rest_position) == ball_lie::bunker);
+        CHECK(horizontal_distance(result.rest_position, landed) < 0.6f);
+    }
 }

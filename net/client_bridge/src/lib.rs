@@ -201,6 +201,7 @@ reducer!(stdb_create_group, "create_group", |conn, done| conn.reducers.create_gr
 reducer!(stdb_leave_group, "leave_group", |conn, done| conn.reducers.leave_group_then(done));
 reducer!(stdb_return_to_hub, "return_to_hub", |conn, done| conn.reducers.return_to_hub_then(done));
 reducer!(stdb_retee, "retee", |conn, done| conn.reducers.retee_then(done));
+reducer!(stdb_pick_up_ball, "pick_up_ball", |conn, done| conn.reducers.pick_up_ball_then(done));
 reducer!(stdb_create_link_code, "create_link_code", |conn, done| conn.reducers.create_link_code_then(done));
 
 /// # Safety

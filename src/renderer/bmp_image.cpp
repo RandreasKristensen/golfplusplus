@@ -13,6 +13,14 @@ constexpr std::size_t info_header_size = 40;
 constexpr int max_bmp_side = 8192;
 constexpr std::uint32_t bmp_uncompressed = 0;   // BI_RGB
 constexpr std::uint32_t bmp_bitfields = 3;      // BI_BITFIELDS, standard masks only
+// Where BI_BITFIELDS keeps its masks (red, green, blue, then alpha in headers
+// of at least alpha_mask_header_size bytes), and the only ones read.
+constexpr std::size_t red_mask_offset = file_header_size + info_header_size;
+constexpr std::size_t alpha_mask_offset = red_mask_offset + 12;
+constexpr std::size_t alpha_mask_header_size = 56;
+constexpr std::uint32_t standard_masks[] = {0x00FF0000U, 0x0000FF00U, 0x000000FFU};
+constexpr std::uint32_t standard_alpha_mask = 0xFF000000U;
+constexpr std::uint8_t opaque = 255;
 
 std::uint32_t read_u32(const std::string& bytes, const std::size_t offset) {
     std::uint32_t value = 0;
@@ -28,7 +36,7 @@ std::uint16_t read_u16(const std::string& bytes, const std::size_t offset) {
 }
 }
 
-std::optional<rgb_image> parse_bmp(const std::string& bytes) {
+std::optional<rgba_image> parse_bmp(const std::string& bytes) {
     if (bytes.size() < file_header_size + info_header_size || bytes[0] != 'B' || bytes[1] != 'M') {
         return std::nullopt;
     }
@@ -45,6 +53,19 @@ std::optional<rgb_image> parse_bmp(const std::string& bytes) {
         !known_compression) {
         return std::nullopt;
     }
+    bool has_alpha = false;
+    if (compression == bmp_bitfields) {
+        if (bytes.size() < alpha_mask_offset + 4) {
+            return std::nullopt;
+        }
+        for (std::size_t i = 0; i < 3; ++i) {
+            if (read_u32(bytes, red_mask_offset + i * 4) != standard_masks[i]) {
+                return std::nullopt;
+            }
+        }
+        const std::size_t header_size = read_u32(bytes, file_header_size);
+        has_alpha = header_size >= alpha_mask_header_size && read_u32(bytes, alpha_mask_offset) == standard_alpha_mask;
+    }
 
     const std::size_t pixel_bytes = bits / 8U;
     const std::size_t stride = (static_cast<std::size_t>(width) * pixel_bytes + 3U) & ~std::size_t{3};
@@ -52,26 +73,27 @@ std::optional<rgb_image> parse_bmp(const std::string& bytes) {
         return std::nullopt;
     }
 
-    rgb_image image;
+    rgba_image image;
     image.width = width;
     image.height = height;
-    image.pixels.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3U);
+    image.pixels.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4U);
     for (int row = 0; row < height; ++row) {
         const int stored_row = top_down ? height - 1 - row : row;
         const std::size_t source = data_offset + static_cast<std::size_t>(stored_row) * stride;
         for (int column = 0; column < width; ++column) {
             const std::size_t from = source + static_cast<std::size_t>(column) * pixel_bytes;
-            const std::size_t to = (static_cast<std::size_t>(row) * static_cast<std::size_t>(width) + static_cast<std::size_t>(column)) * 3U;
-            // Stored blue, green, red.
+            const std::size_t to = (static_cast<std::size_t>(row) * static_cast<std::size_t>(width) + static_cast<std::size_t>(column)) * 4U;
+            // Stored blue, green, red (, alpha).
             image.pixels[to] = static_cast<std::uint8_t>(bytes[from + 2]);
             image.pixels[to + 1] = static_cast<std::uint8_t>(bytes[from + 1]);
             image.pixels[to + 2] = static_cast<std::uint8_t>(bytes[from]);
+            image.pixels[to + 3] = has_alpha ? static_cast<std::uint8_t>(bytes[from + 3]) : opaque;
         }
     }
     return image;
 }
 
-std::optional<rgb_image> load_bmp_file(const std::filesystem::path& path) {
+std::optional<rgba_image> load_bmp_file(const std::filesystem::path& path) {
     const std::optional<std::string> bytes = read_text_file(path);
     return bytes ? parse_bmp(*bytes) : std::nullopt;
 }

@@ -34,3 +34,27 @@ ball_state resolve_terrain_collision(const ball_state& in,
     out.velocity = normal_velocity + tangent_velocity * contact_friction_keep(friction, dt);
     return out;
 }
+
+ball_state resolve_contact(const ball_state& in,
+                           const glm::vec3& normal,
+                           const float penetration,
+                           const float restitution,
+                           const float friction) {
+    if (penetration <= 0.0f) {
+        return in;
+    }
+
+    ball_state out = in;
+    const glm::vec3 n = safe_normalize(normal, glm::vec3(1.0f, 0.0f, 0.0f));
+    out.position += n * penetration;
+
+    const float normal_speed = glm::dot(out.velocity, n);
+    if (normal_speed < 0.0f) {
+        out.velocity -= (1.0f + clamp01(restitution)) * normal_speed * n;
+    }
+
+    const glm::vec3 normal_velocity = n * glm::dot(out.velocity, n);
+    const glm::vec3 tangent_velocity = out.velocity - normal_velocity;
+    out.velocity = normal_velocity + tangent_velocity * (1.0f - clamp01(friction));
+    return out;
+}

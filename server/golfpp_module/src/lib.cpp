@@ -27,6 +27,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iterator>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -310,6 +311,20 @@ SPACETIMEDB_STRUCT(motion_budget_row, account_id, x, y, z, mode, server_time, sl
 SPACETIMEDB_TABLE(motion_budget_row, motion_budget, Private)
 FIELD_PrimaryKey(motion_budget, account_id)
 
+// A holed ball still in its cup (the cup's centre on the ground), as
+// game_state::cup_ball offline: no hole starts until the player picks it up
+// (pick_up_ball). Gone when they leave the room, as leaving the course
+// puts it away offline.
+struct cup_ball_row {
+    std::uint64_t account_id;
+    float x;
+    float y;
+    float z;
+};
+SPACETIMEDB_STRUCT(cup_ball_row, account_id, x, y, z)
+SPACETIMEDB_TABLE(cup_ball_row, cup_ball, Private)
+FIELD_PrimaryKey(cup_ball, account_id)
+
 // A shot someone in the room hit, with everything needed to simulate it
 // again (shot_input) and where the server's simulation put the ball.
 struct shot_event_row {
@@ -564,6 +579,7 @@ void leave_room_state(ReducerContext& ctx, const std::uint64_t account_id) {
     leave_group_state(ctx, *member);
     ctx.db[avatar_motion_account_id].delete_by_key(account_id);
     ctx.db[ball_account_id].delete_by_key(account_id);
+    ctx.db[cup_ball_account_id].delete_by_key(account_id);
     ctx.db[motion_budget_account_id].delete_by_key(account_id);
     ctx.db[room_member_account_id].delete_by_key(account_id);
     if (std::optional<room_row> joined = ctx.db[room_room_id].find(member->room_id)) {
@@ -705,6 +721,48 @@ void delete_link_code(ReducerContext& ctx, const std::uint64_t account_id) {
     ctx.db[link_code_code].delete_by_key(code->code);
 }
 
+// Deletes `rows` (one account's, from an account_id index) through their
+// table's primary key `by_id`.
+template <typename Rows, typename ById>
+void delete_rows(Rows&& rows, ById&& by_id) {
+    std::vector<std::uint64_t> ids;
+    for (const auto& row : rows) {
+        ids.push_back(row.id);
+    }
+    for (const std::uint64_t id : ids) {
+        by_id.delete_by_key(id);
+    }
+}
+
+// Deletes the account and everything keyed by it: its room state, session,
+// logins, link rows and progress.
+void delete_account(ReducerContext& ctx, const std::uint64_t account_id) {
+    leave_room_state(ctx, account_id);
+    ctx.db[session_account_id].delete_by_key(account_id);
+    delete_link_code(ctx, account_id);
+    ctx.db[link_budget_account_id].delete_by_key(account_id);
+    std::vector<Identity> logins;
+    for (const account_login_row& login : ctx.db[account_login_account_id].filter(account_id)) {
+        logins.push_back(login.identity);
+    }
+    for (const Identity& identity : logins) {
+        ctx.db[link_attempt_identity].delete_by_key(identity);
+        ctx.db[account_login_identity].delete_by_key(identity);
+    }
+    delete_rows(ctx.db[player_skill_account_id].filter(account_id), ctx.db[player_skill_id]);
+    delete_rows(ctx.db[hole_score_account_id].filter(account_id), ctx.db[hole_score_id]);
+    delete_rows(ctx.db[completed_course_account_id].filter(account_id), ctx.db[completed_course_id]);
+    delete_rows(ctx.db[collected_account_id].filter(account_id), ctx.db[collected_id]);
+    delete_rows(ctx.db[world_flag_account_id].filter(account_id), ctx.db[world_flag_id]);
+    ctx.db[player_account_id].delete_by_key(account_id);
+}
+
+// Whether the caller signs in as a guest (is_guest_login).
+bool caller_is_guest(ReducerContext& ctx) {
+    const std::optional<account_login_row> login = ctx.db[account_login_identity].find(ctx.sender());
+    return login && is_guest_login(login->login_method);
+}
+
 void record_link_attempt(ReducerContext& ctx, link_attempt_row attempt, const std::string& result) {
     attempt.last_result = result;
     attempt.last_at = ctx.timestamp;
@@ -803,6 +861,10 @@ SPACETIMEDB_CLIENT_DISCONNECTED(client_disconnected, ReducerContext ctx) {
     if (!live || live->identity != ctx.sender() || !(live->connection_id == caller_connection(ctx))) {
         return Ok();  // an older session ending after a newer one took over
     }
+    if (is_guest_login(login->login_method)) {
+        delete_account(ctx, login->account_id);
+        return Ok();
+    }
     leave_room_state(ctx, login->account_id);
     ctx.db[session_account_id].delete_by_key(login->account_id);
     if (std::optional<player_row> account = ctx.db[player_account_id].find(login->account_id)) {
@@ -877,6 +939,9 @@ SPACETIMEDB_REDUCER(create_link_code, ReducerContext ctx) {
     if (!me.player) {
         return Err(me.error);
     }
+    if (caller_is_guest(ctx)) {
+        return Err(error_guest_cannot_link);
+    }
     const std::optional<server_config_row> config = ctx.db[server_config_id].find(config_id);
     if (!config || config->link_secret.size() < min_link_secret_length) {
         return Err(error_linking_off);
@@ -928,6 +993,9 @@ SPACETIMEDB_REDUCER(redeem_link_code, ReducerContext ctx, std::string typed_code
     if (!me.player) {
         return Err(me.error);
     }
+    if (caller_is_guest(ctx)) {
+        return Err(error_guest_cannot_link);
+    }
     const std::optional<server_config_row> config = ctx.db[server_config_id].find(config_id);
     if (!config || config->link_secret.size() < min_link_secret_length) {
         return Err(error_linking_off);
@@ -975,9 +1043,7 @@ SPACETIMEDB_REDUCER(redeem_link_code, ReducerContext ctx, std::string typed_code
     ctx.db[session_account_id].delete_by_key(from);
     auto others = ctx.db[account_login_account_id].filter(from);
     if (others.begin() == others.end()) {
-        delete_link_code(ctx, from);
-        ctx.db[link_budget_account_id].delete_by_key(from);
-        ctx.db[player_account_id].delete_by_key(from);
+        delete_account(ctx, from);
     } else {
         me.player->online = false;
         ctx.db[player_account_id].update(*me.player);
@@ -1145,7 +1211,7 @@ SPACETIMEDB_REDUCER(update_motion,
     // position), as offline does from beside a ball at rest: allowed from and
     // to within reach of their own ball once its shot has played. It earns
     // nothing.
-    if (!move.allowed && mode == static_cast<std::uint8_t>(motion_mode::aim)) {
+    if (!move.allowed && at_ball(static_cast<motion_mode>(mode))) {
         const std::optional<ball_row> own_ball = ctx.db[ball_account_id].find(me.member->account_id);
         const float reach = content.tuning.player.ball_interact_radius;
         if (own_ball && shot_has_played(*own_ball, ctx.timestamp, content.tuning.server)) {
@@ -1213,7 +1279,8 @@ SPACETIMEDB_REDUCER(update_motion,
     return Ok();
 }
 
-// Starts a hole from its start in the hub, with the ball on the tee.
+// Starts a hole from its start in the hub, with the ball on the tee; not
+// while the last holed ball is still in its cup (cup_ball).
 SPACETIMEDB_REDUCER(enter_hole, ReducerContext ctx, std::int32_t hole_index) {
     member_result me = caller_member(ctx);
     if (!me.member) {
@@ -1231,6 +1298,16 @@ SPACETIMEDB_REDUCER(enter_hole, ReducerContext ctx, std::int32_t hole_index) {
     me.member->round_strokes.resize(course->holes.size(), 0);
     if (hole_played(current_round(*me.member), index)) {
         return Err(error_hole_played);
+    }
+    if (ctx.db[cup_ball_account_id].find(me.member->account_id)) {
+        return Err(error_ball_in_cup);
+    }
+    std::map<std::uint64_t, room_ball> room_balls;
+    for (const ball_row& other : ctx.db[ball_room_id].filter(me.member->room_id)) {
+        room_balls[other.account_id] = room_ball{other.zone, glm::vec3(other.x, other.y, other.z), other.stroke_count};
+    }
+    if (tee_in_use(room_balls, me.member->account_id, hole_index)) {
+        return Err(error_tee_in_use);
     }
     const course_world_hole_start& start = course->world.hole_starts[index];
     const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(me.member->account_id);
@@ -1253,7 +1330,7 @@ SPACETIMEDB_REDUCER(enter_hole, ReducerContext ctx, std::int32_t hole_index) {
 }
 
 // Gives up the hole: no score, back at the hole's start, where it was
-// entered (its return point would make this a free trip across the course).
+// entered.
 SPACETIMEDB_REDUCER(return_to_hub, ReducerContext ctx) {
     member_result me = caller_member(ctx);
     if (!me.member) {
@@ -1367,7 +1444,7 @@ SPACETIMEDB_REDUCER(take_shot,
         ball_now->x = result.rest_position.x;
         ball_now->y = result.rest_position.y;
         ball_now->z = result.rest_position.z;
-        ball_now->stroke_count = stroke;
+        ball_now->stroke_count = stroke + result.penalty_strokes;  // lost in water: back, a stroke later
         ball_now->last_wind_time = input.wind_time;
         ball_now->rests_at = ctx.timestamp + TimeDuration::from_micros(static_cast<std::int64_t>(
                                                  static_cast<double>(result.duration) * static_cast<double>(micros_per_second)));
@@ -1389,9 +1466,39 @@ SPACETIMEDB_REDUCER(take_shot,
     }
     store_progress(ctx, account, before, after);
     ctx.db[ball_account_id].delete_by_key(account);
+    // The ball stays in the cup until it is picked up, as offline.
+    const glm::vec3 cup = course->shot_holes[hole].pin;
+    ctx.db[cup_ball_account_id].delete_by_key(account);
+    ctx.db[cup_ball].insert(cup_ball_row{account, cup.x, cup.y, cup.z});
     me.member->zone = hub_zone;
     ctx.db[room_member_account_id].update(*me.member);
-    place_player(ctx, *me.member, anchor_on_terrain(course->area, course->world.hole_starts[hole].return_position));
+    // The course is one place: the player stays where they holed out from.
+    place_player(ctx, *me.member, player_position);
+    return Ok();
+}
+
+// Picks the holed ball out of its cup, in reach of the last accepted position
+// (player.ball_interact_radius), as pick_up_cup_ball offline. Ok with no ball
+// in a cup: nothing is left to pick up.
+SPACETIMEDB_REDUCER(pick_up_ball, ReducerContext ctx) {
+    const member_result me = caller_member(ctx);
+    if (!me.member) {
+        return refused(me);
+    }
+    const std::optional<cup_ball_row> in_cup = ctx.db[cup_ball_account_id].find(me.member->account_id);
+    if (!in_cup) {
+        return Ok();
+    }
+    if (me.member->zone != hub_zone) {
+        return Err(error_not_in_hub);
+    }
+    const server_content& content = *cached_content();
+    const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(me.member->account_id);
+    if (!budget || !within_interact_reach(position_of(*budget), glm::vec3(in_cup->x, in_cup->y, in_cup->z),
+                                          content.tuning.player.ball_interact_radius, content.tuning.server)) {
+        return Err(error_too_far);
+    }
+    ctx.db[cup_ball_account_id].delete_by_key(me.member->account_id);
     return Ok();
 }
 

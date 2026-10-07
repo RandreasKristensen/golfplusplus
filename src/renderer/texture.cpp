@@ -2,17 +2,14 @@
 
 #include "renderer/gl_loader.h"
 
-bool texture::upload(const rgb_image& image, const texture_sampling sampling) {
+bool texture::upload(const rgba_image& image, const texture_sampling sampling) {
     shutdown();
     if (image.width <= 0 || image.height <= 0 || image.pixels.empty()) {
         return false;
     }
     glGenTextures(1, &id_);
     glBindTexture(GL_TEXTURE_2D, id_);
-    // RGB rows are not padded to 4 bytes.
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, image.width, image.height, 0, GL_RGB, GL_UNSIGNED_BYTE, image.pixels.data());
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.pixels.data());
     if (sampling == texture_sampling::tiled_detail) {
         glGenerateMipmap(GL_TEXTURE_2D);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);

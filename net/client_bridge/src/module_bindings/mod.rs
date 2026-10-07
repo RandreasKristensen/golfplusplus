@@ -20,6 +20,7 @@ pub mod completed_course_row_type;
 pub mod completed_course_table;
 pub mod create_group_reducer;
 pub mod create_link_code_reducer;
+pub mod cup_ball_row_type;
 pub mod emote_event_row_type;
 pub mod emote_event_table;
 pub mod emote_reducer;
@@ -42,6 +43,7 @@ pub mod motion_budget_row_type;
 pub mod my_account_table;
 pub mod my_link_code_table;
 pub mod my_link_status_table;
+pub mod pick_up_ball_reducer;
 pub mod player_row_type;
 pub mod player_skill_row_type;
 pub mod player_skill_table;
@@ -76,6 +78,7 @@ pub use completed_course_row_type::CompletedCourseRow;
 pub use completed_course_table::*;
 pub use create_group_reducer::create_group;
 pub use create_link_code_reducer::create_link_code;
+pub use cup_ball_row_type::CupBallRow;
 pub use emote_event_row_type::EmoteEventRow;
 pub use emote_event_table::*;
 pub use emote_reducer::emote;
@@ -98,6 +101,7 @@ pub use motion_budget_row_type::MotionBudgetRow;
 pub use my_account_table::*;
 pub use my_link_code_table::*;
 pub use my_link_status_table::*;
+pub use pick_up_ball_reducer::pick_up_ball;
 pub use player_row_type::PlayerRow;
 pub use player_skill_row_type::PlayerSkillRow;
 pub use player_skill_table::*;
@@ -156,6 +160,7 @@ pub enum Reducer {
     },
     LeaveGroup,
     LeaveRoom,
+    PickUpBall,
     RedeemLinkCode {
         typed_code: String,
     },
@@ -200,6 +205,7 @@ impl __sdk::Reducer for Reducer {
             Reducer::JoinGroup { .. } => "join_group",
             Reducer::LeaveGroup => "leave_group",
             Reducer::LeaveRoom => "leave_room",
+            Reducer::PickUpBall => "pick_up_ball",
             Reducer::RedeemLinkCode { .. } => "redeem_link_code",
             Reducer::Retee => "retee",
             Reducer::ReturnToHub => "return_to_hub",
@@ -260,6 +266,7 @@ impl __sdk::Reducer for Reducer {
             }
             Reducer::LeaveGroup => __sats::bsatn::to_vec(&leave_group_reducer::LeaveGroupArgs {}),
             Reducer::LeaveRoom => __sats::bsatn::to_vec(&leave_room_reducer::LeaveRoomArgs {}),
+            Reducer::PickUpBall => __sats::bsatn::to_vec(&pick_up_ball_reducer::PickUpBallArgs {}),
             Reducer::RedeemLinkCode { typed_code } => {
                 __sats::bsatn::to_vec(&redeem_link_code_reducer::RedeemLinkCodeArgs {
                     typed_code: typed_code.clone(),

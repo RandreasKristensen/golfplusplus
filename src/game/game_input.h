@@ -9,8 +9,9 @@ struct game_input {
     bool back_held = false;
     bool turn_left_held = false;
     bool turn_right_held = false;
-    bool previous_club = false;
-    bool next_club = false;
+    // The next club up or down the bag (clubs are in bag order, shortest first).
+    bool longer_club = false;
+    bool shorter_club = false;
     // Interact, start the swing, set power, or drift (in the cart).
     bool action = false;
     bool cancel = false;  // leave shot setup

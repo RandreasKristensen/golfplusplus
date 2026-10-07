@@ -25,6 +25,7 @@ online_menu_status online_session::menu_status(const game_state& state, const st
     online_menu_status status;
     status.available = true;
     status.status = net_.status();
+    status.guest = net_.guest();
     if (!net_.failure().empty()) {
         status.failure_id = failure_id(net_.failure());
     }

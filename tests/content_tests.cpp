@@ -16,7 +16,9 @@
 #include "game/text_ids.h"
 #include "game/tuning_loader.h"
 #include "physics/ground_mesh.h"
+#include "game/play_area.h"
 #include "renderer/bmp_image.h"
+#include "renderer/hole_sign_face.h"
 #include "renderer/hud_overlay.h"
 #include "renderer/menu_overlay.h"
 #include "renderer/overlay_batch.h"
@@ -24,6 +26,7 @@
 
 #include "test_support.h"
 
+#include <array>
 #include <algorithm>
 #include <cstddef>
 #include <filesystem>
@@ -49,8 +52,21 @@ TEST_CASE("game tuning names every missing field") {
     const game_tuning_parse_result empty = parse_game_tuning_from_text("{}");
     CHECK(!empty.tuning.has_value());
     CHECK(empty.error.find("ball.stop_speed") != std::string::npos);
-    CHECK(empty.error.find("camera.fov_degrees") != std::string::npos);
+    CHECK(empty.error.find("camera.walking_eye_height") != std::string::npos);
     CHECK(!parse_game_tuning_from_text("not json").tuning.has_value());
+}
+
+TEST_CASE("game tuning needs every lie") {
+    const std::optional<std::string> shipped = read_text_file(asset_root() + "/tuning/game_tuning.json");
+    REQUIRE(shipped.has_value());
+    REQUIRE(parse_game_tuning_from_text(*shipped).tuning.has_value());
+    std::string no_bunker = *shipped;
+    const std::size_t at = no_bunker.find("\"bunker\": { \"power\"");
+    REQUIRE(at != std::string::npos);
+    no_bunker.replace(at, 8, "\"sand\"");
+    const game_tuning_parse_result result = parse_game_tuning_from_text(no_bunker);
+    CHECK(!result.tuning.has_value());
+    CHECK(result.error.find("lies.bunker.power") != std::string::npos);
 }
 
 TEST_CASE("the shipped bag is in order with labels and a rising power ladder") {
@@ -72,13 +88,17 @@ TEST_CASE("the shipped bag is in order with labels and a rising power ladder") {
 TEST_CASE("clubs need stats and a hit sound") {
     const std::optional<club_definition> club = parse_club_from_text(R"({
       "id": "test_iron", "hit_sound": "club_hit_iron",
-      "stats": { "power": 30, "loft_degrees": 30, "backspin": 0.1, "side_spin": 0.5 }
+      "stats": { "power": 30, "loft_degrees": 30, "backspin": 0.1, "side_spin": 0.5, "bunker_power": 0.4 }
     })");
     REQUIRE(club.has_value());
+    CHECK(club->stats.bunker_power == 0.4f);
     CHECK(club->name == "test_iron");
     CHECK(club->stats.timing_speed == 1.0f);
     CHECK(club->stats.roll_friction_scale == 1.0f);
     CHECK(!parse_club_from_text(R"({"id": "x", "stats": {"power": 1, "loft_degrees": 1, "backspin": 0, "side_spin": 0}})"));
+    // No bunker_power: how a club plays from sand is not guessed.
+    CHECK(!parse_club_from_text(R"({"id": "x", "hit_sound": "club_hit_iron",
+      "stats": {"power": 1, "loft_degrees": 1, "backspin": 0, "side_spin": 0}})"));
 }
 
 TEST_CASE("every reward pays into a listed skill") {
@@ -100,7 +120,7 @@ TEST_CASE("holes parse with tree defaults and reject bad geometry") {
       "tee": [0, 0, 0], "pin": [0, 0, 40],
       "spline": { "control_points": [[0, 0, 0], [0, 0, 40]], "width": 12, "rough_width": 24 },
       "trees": [ { "position": [14, 0, 20], "leaf_radius": 2.5 }, { "position": ["bad", 0, 20] } ],
-      "material_zones": [ { "type": "lava", "center": [0, 0, 20], "radius": 3 } ]
+      "material_zones": [ { "type": "lava", "center": [0, 0, 20], "radii": [3, 3], "rotation_degrees": 0 } ]
     })");
     REQUIRE(hole.has_value());
     CHECK(hole->name == "tree_hole");
@@ -129,36 +149,80 @@ TEST_CASE("courses list holes by id or path") {
     CHECK(course->id == "course_01");
     CHECK(course->name == "The Big Three");
     CHECK((course->holes == std::vector<std::string>{"test", "test2", "test3"}));
-    CHECK(course->backdrop == "backdrops/fixture.bmp");
+    CHECK(course->backdrop.sky == "backdrops/fixture_sky.bmp");
+    CHECK(course->backdrop.land == "backdrops/fixture_land.bmp");
+    CHECK(near(course->backdrop.haze_color.z, 0.83f));
+    CHECK(near(course->backdrop.haze_amount, 1.0f));
+    CHECK(near(course->backdrop.haze_distance, 500.0f));
     CHECK(course_hole_path("root", *course, 0) == (std::filesystem::path("root") / "holes" / "test.json").string());
     CHECK(course_hole_path("root", *course, 3).empty());
 
-    CHECK(!parse_course_from_text(R"({"id": "empty", "backdrop": "b.bmp", "holes": []})"));
-    CHECK(!parse_course_from_text(R"({"id": "bad", "backdrop": "b.bmp", "holes": ["ok", 3]})"));
+    const std::string backdrop =
+        R"("backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500})";
+    CHECK(parse_course_from_text(R"({"id": "ok", )" + backdrop + R"(, "holes": ["ok"]})"));
+    CHECK(!parse_course_from_text(R"({"id": "empty", )" + backdrop + R"(, "holes": []})"));
+    CHECK(!parse_course_from_text(R"({"id": "bad", )" + backdrop + R"(, "holes": ["ok", 3]})"));
     CHECK(!parse_course_from_text(R"({"id": "no_backdrop", "holes": ["ok"]})"));
+    CHECK(!parse_course_from_text(R"({"id": "one_image", "backdrop": "b.bmp", "holes": ["ok"]})"));
+    CHECK(!parse_course_from_text(
+        R"({"id": "no_land", "backdrop": {"sky": "s.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500}, "holes": ["ok"]})"));
+    CHECK(!parse_course_from_text(
+        R"({"id": "no_haze", "backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_amount": 1, "haze_distance": 500}, "holes": ["ok"]})"));
+    CHECK(!parse_course_from_text(
+        R"({"id": "flat_haze", "backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 0}, "holes": ["ok"]})"));
+}
+
+namespace {
+// The pixel at `row` (from the bottom) and `column` as RGBA.
+std::vector<int> bmp_pixel(const rgba_image& image, const int row, const int column) {
+    const std::size_t at = static_cast<std::size_t>((row * image.width + column) * 4);
+    return {image.pixels[at], image.pixels[at + 1], image.pixels[at + 2], image.pixels[at + 3]};
+}
 }
 
 TEST_CASE("bmp images decode bottom row first") {
-    // 4 x 2: red, green, blue, white along the bottom; black, grey, yellow,
-    // cyan along the top.
-    const std::optional<rgb_image> image = load_bmp_file(fixture_root() + "/backdrops/fixture.bmp");
+    // 4 x 2, 24-bit: red, green, blue, white along the bottom; black, grey,
+    // yellow, cyan along the top. No alpha: every pixel is opaque.
+    const std::optional<rgba_image> image = load_bmp_file(fixture_root() + "/backdrops/fixture_sky.bmp");
     REQUIRE(image.has_value());
     CHECK(image->width == 4);
     CHECK(image->height == 2);
-    REQUIRE(image->pixels.size() == 24U);
-    const auto pixel = [&image](const int row, const int column) {
-        const std::size_t at = static_cast<std::size_t>((row * image->width + column) * 3);
-        return std::vector<int>{image->pixels[at], image->pixels[at + 1], image->pixels[at + 2]};
-    };
-    CHECK((pixel(0, 0) == std::vector<int>{255, 0, 0}));
-    CHECK((pixel(0, 2) == std::vector<int>{0, 0, 255}));
-    CHECK((pixel(1, 2) == std::vector<int>{255, 255, 0}));
-    CHECK((pixel(1, 3) == std::vector<int>{0, 255, 255}));
+    REQUIRE(image->pixels.size() == 32U);
+    CHECK((bmp_pixel(*image, 0, 0) == std::vector<int>{255, 0, 0, 255}));
+    CHECK((bmp_pixel(*image, 0, 2) == std::vector<int>{0, 0, 255, 255}));
+    CHECK((bmp_pixel(*image, 1, 2) == std::vector<int>{255, 255, 0, 255}));
+    CHECK((bmp_pixel(*image, 1, 3) == std::vector<int>{0, 255, 255, 255}));
 
-    const std::string bytes = *read_text_file(fixture_root() + "/backdrops/fixture.bmp");
+    const std::string bytes = *read_text_file(fixture_root() + "/backdrops/fixture_sky.bmp");
     CHECK(!parse_bmp(bytes.substr(0, bytes.size() - 4)));
     CHECK(!parse_bmp("BM not an image at all, just some text long enough to pass the header size"));
     CHECK(!load_bmp_file(fixture_root() + "/backdrops/missing.bmp"));
+}
+
+TEST_CASE("32-bit bmp images with an alpha mask keep their alpha") {
+    // 4 x 2, as tooling/art/make_art.py writes the land panoramas: red,
+    // green, blue, white along the bottom with alpha 255, 128, 0 and 64.
+    const std::optional<rgba_image> image = load_bmp_file(fixture_root() + "/backdrops/fixture_land.bmp");
+    REQUIRE(image.has_value());
+    CHECK(image->width == 4);
+    CHECK(image->height == 2);
+    CHECK((bmp_pixel(*image, 0, 0) == std::vector<int>{255, 0, 0, 255}));
+    CHECK((bmp_pixel(*image, 0, 1) == std::vector<int>{0, 255, 0, 128}));
+    CHECK((bmp_pixel(*image, 0, 2) == std::vector<int>{0, 0, 255, 0}));
+    CHECK((bmp_pixel(*image, 0, 3) == std::vector<int>{255, 255, 255, 64}));
+    CHECK((bmp_pixel(*image, 1, 2) == std::vector<int>{255, 255, 0, 255}));
+
+    // The same pixels without the alpha mask are opaque; other masks are refused.
+    std::string bytes = *read_text_file(fixture_root() + "/backdrops/fixture_land.bmp");
+    constexpr std::size_t alpha_mask = 66;
+    constexpr std::size_t red_mask = 54;
+    std::string no_alpha = bytes;
+    no_alpha.replace(alpha_mask, 4, std::string(4, '\0'));
+    const std::optional<rgba_image> opaque = parse_bmp(no_alpha);
+    REQUIRE(opaque.has_value());
+    CHECK((bmp_pixel(*opaque, 0, 2) == std::vector<int>{0, 0, 255, 255}));
+    bytes.replace(red_mask, 4, std::string(4, '\0'));
+    CHECK(!parse_bmp(bytes));
 }
 
 TEST_CASE("course worlds need exactly one start per hole") {
@@ -176,12 +240,12 @@ TEST_CASE("course worlds need exactly one start per hole") {
 
     const course_definition one_hole = fixture_course({"test"});
     CHECK(!parse_course_world_from_text(
-        R"({"hole_starts": [{"hole_index": 4, "position": [0, 0, 0], "return_position": [1, 0, 1]}]})", one_hole));
+        R"({"hole_starts": [{"hole_index": 4, "position": [0, 0, 0]}]})", one_hole));
     CHECK(!parse_course_world_from_text(R"({"hole_starts": []})", one_hole));
     const course_definition two_holes = fixture_course({"test", "test2"});
     CHECK(!parse_course_world_from_text(R"({"hole_starts": [
-        {"hole_index": 0, "position": [0, 0, 0], "return_position": [1, 0, 1]},
-        {"hole_index": 0, "position": [9, 0, 0], "return_position": [1, 0, 1]}]})", two_holes));
+        {"hole_index": 0, "position": [0, 0, 0]},
+        {"hole_index": 0, "position": [9, 0, 0]}]})", two_holes));
 }
 
 TEST_CASE("a hole's bank is optional, one number per control point") {
@@ -204,7 +268,7 @@ TEST_CASE("course worlds need a complete ground grid") {
     CHECK(world->ground.columns * world->ground.rows == static_cast<int>(world->ground.heights.size()));
 
     const course_definition one_hole = fixture_course({"test"});
-    const std::string start = R"("hole_starts": [{"hole_index": 0, "position": [0, 0, 0], "return_position": [1, 0, 1]}])";
+    const std::string start = R"("hole_starts": [{"hole_index": 0, "position": [0, 0, 0]}])";
     const auto with_ground = [&](const std::string& ground) { return "{" + start + ground + "}"; };
     const std::optional<course_world_definition> parsed = parse_course_world_from_text(
         with_ground(R"(, "ground": {"origin": [5, 7], "cell_size": 10, "columns": 2, "rows": 2, "heights": [0, 1, 2, 3]})"), one_hole);
@@ -219,11 +283,20 @@ TEST_CASE("every shipped course, hole, world and image loads") {
     const game_content& content = shipped_content();
     // A course file the loader refuses would drop out of the menus silently.
     CHECK(content.courses.size() == json_files_in_directory(std::filesystem::path(content.asset_root) / "courses").size());
-    const std::optional<rgb_image> grass = load_bmp_file(std::filesystem::path(content.asset_root) / "textures" / "rough_grass.bmp");
+    const std::optional<rgba_image> grass = load_bmp_file(std::filesystem::path(content.asset_root) / "textures" / "rough_grass.bmp");
     CHECK(grass.has_value());
     for (const course_definition& course : content.courses) {
-        const std::optional<rgb_image> backdrop = load_bmp_file(std::filesystem::path(content.asset_root) / course.backdrop);
-        CHECK(backdrop.has_value());
+        // The land panorama shows the sky above it and the far ground (never
+        // fully hazed) along its bottom.
+        const std::optional<rgba_image> sky = load_bmp_file(std::filesystem::path(content.asset_root) / course.backdrop.sky);
+        const std::optional<rgba_image> land = load_bmp_file(std::filesystem::path(content.asset_root) / course.backdrop.land);
+        REQUIRE(sky.has_value());
+        REQUIRE(land.has_value());
+        CHECK(land->width == sky->width);
+        CHECK(land->height == sky->height);
+        CHECK(bmp_pixel(*land, land->height - 1, 0)[3] == 0);
+        CHECK(bmp_pixel(*land, 0, 0)[3] > 0);
+        CHECK(bmp_pixel(*land, 0, 0)[3] < 255);
         for (std::size_t i = 0; i < course.holes.size(); ++i) {
             CHECK(load_hole_from_file(course_hole_path(content.asset_root, course, i)).has_value());
         }
@@ -363,16 +436,41 @@ render_data busy_hud(const text_assets& text, const std::string& club_label) {
     // Online: a full group of the longest names, over par everywhere, and
     // their name tags; the G key.
     const std::size_t longest_name = static_cast<std::size_t>(shipped_content().tuning.server.name_max_length);
+    const std::array<player_relationship, 3> relationships{player_relationship::unknown, player_relationship::grouped,
+                                                           player_relationship::befriended};
     data.show_scorecard = true;
     data.scorecard = played_scorecard(shipped_content().courses.front(), text);
     for (int i = 0; i < shipped_content().tuning.server.group_capacity; ++i) {
         const std::string name(longest_name, 'W');
         data.group_scorecard.push_back(group_scorecard_row{name, 99, 999, format_relative_score(text.strings, 99), i == 0});
-        data.name_tags.push_back(render_name_tag{glm::vec3(0.0f), name});
+        data.name_tags.push_back(render_name_tag{glm::vec3(0.0f), name, relationships[static_cast<std::size_t>(i) % relationships.size()]});
     }
     data.controls.show_group_key = true;
     return data;
 }
+}
+
+TEST_CASE("the shipped hole sign's board has its face texture's shape") {
+    const hole_sign_tuning& sign = shipped_content().tuning.hole_sign;
+    CHECK(near(sign.board_width / sign.board_height,
+               static_cast<float>(hole_sign_face_width) / static_cast<float>(hole_sign_face_height), 0.001f));
+}
+
+TEST_CASE("every shipped hole sign fits its number, par and a four-digit length") {
+    const text_assets& text = shipped_text_assets();
+    const play_area area = build_hole_area(straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 300.0f), 30.0f),
+                                           shipped_content().tuning);
+    REQUIRE(area.signs.size() == 1U);
+    for (const course_definition& course : shipped_content().courses) {
+        for (std::size_t i = 0; i < course.holes.size(); ++i) {
+            const std::optional<hole_data> hole = load_hole_from_file(course_hole_path(shipped_content().asset_root, course, i));
+            REQUIRE(hole.has_value());
+            overlay_batch batch;
+            draw_hole_sign_face(batch, text, make_hole_sign_labels(text, static_cast<int>(i) + 1, hole->par, 9999), area,
+                                area.signs.front());
+            CHECK(batch.truncated_text_count == 0U);
+        }
+    }
 }
 
 TEST_CASE("every shipped screen fits its text without cutting any off") {
@@ -417,8 +515,25 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
         open_confirm_menu(confirm);
         overlay_batch confirm_batch;
         confirm_batch.grid = grid;
-        draw_startup_menu(confirm_batch, text, make_confirm_menu_render_data(confirm, text));
+        draw_startup_menu(confirm_batch, text, make_confirm_menu_render_data(confirm, text, catalog.settings));
         CHECK(confirm_batch.truncated_text_count == 0U);
+
+        // Settings from the main menu and in a round, at every setting's
+        // widest values.
+        for (const bool lowest : {true, false}) {
+            startup_flow_state settings;
+            settings.flow = startup_flow::settings;
+            for (const setting_definition& definition : catalog.settings) {
+                settings.settings[definition.id] = lowest ? definition.min : definition.max;
+            }
+            check_fits(grid, text, settings, catalog, online);
+            open_confirm_menu(settings);
+            settings.confirm_settings = true;
+            overlay_batch settings_batch;
+            settings_batch.grid = grid;
+            draw_startup_menu(settings_batch, text, make_confirm_menu_render_data(settings, text, catalog.settings));
+            CHECK(settings_batch.truncated_text_count == 0U);
+        }
 
         for (const club_definition& club : shipped_content().clubs) {
             overlay_batch batch;
@@ -427,8 +542,10 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
             CHECK(batch.truncated_text_count == 0U);
         }
 
-        // Every refusal the server can send, as the notice.
-        for (const std::string& message : online_messages(text)) {
+        // Every refusal the server can send, and waiting for the group, as the notice.
+        std::vector<std::string> notices = online_messages(text);
+        notices.push_back(text_scorecard_waiting_for_group);
+        for (const std::string& message : notices) {
             render_data data = busy_hud(text, shipped_content().clubs.front().label);
             data.notice_label = lookup_text(text, message.c_str());
             overlay_batch batch;
@@ -448,10 +565,21 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
 
                 overlay_batch results;
                 results.grid = grid;
-                draw_course_results(results, text, scorecard);
+                draw_course_results(results, text, scorecard, {});
                 CHECK(results.truncated_text_count == 0U);
+                if (online_round) {
+                    overlay_batch group_results;
+                    group_results.grid = grid;
+                    draw_course_results(group_results, text, scorecard, busy_hud(text, shipped_content().clubs.front().label).group_scorecard);
+                    CHECK(group_results.truncated_text_count == 0U);
+                }
             }
         }
+
+        overlay_batch loading;
+        loading.grid = grid;
+        draw_loading_screen(loading, text);
+        CHECK(loading.truncated_text_count == 0U);
     }
 }
 
@@ -470,3 +598,4 @@ TEST_CASE("the shipped online config loads, and dev overrides replace only what 
     CHECK(local.anonymous);
     CHECK(!parse_online_config_from_text("{\"server_uri\": \"x\"}").has_value());
 }
+

@@ -77,6 +77,9 @@ public:
     void update(game_state& state);
 
     net_status status() const { return status_; }
+    // Signed in anonymously: a guest, whose account the server deletes when
+    // it disconnects, and who cannot link logins.
+    bool guest() const { return guest_; }
     // Why sign-in or the connection failed ("id: detail", ids in
     // stdb_bridge.h), or the last subscription failure.
     const std::string& failure() const { return failure_; }
@@ -122,6 +125,7 @@ private:
     std::unique_ptr<stdb_client, client_deleter> client_;
     std::chrono::steady_clock::time_point started_ = std::chrono::steady_clock::now();
     net_status status_ = net_status::signed_out;
+    bool guest_ = false;
     std::string failure_;
     std::deque<reducer_failure> reducer_failures_;  // oldest first
     std::optional<link_code_info> link_code_;

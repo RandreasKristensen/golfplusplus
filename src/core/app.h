@@ -13,6 +13,9 @@
 #include "game/text_assets.h"
 #include "profiling/profiling.h"
 #include "renderer/camera_transition.h"
+#include "renderer/fence_batch.h"
+#include "renderer/hole_sign_batch.h"
+#include "renderer/water_batch.h"
 #include "renderer/render_data.h"
 #include "renderer/render_mesh.h"
 #include "renderer/renderer.h"
@@ -39,6 +42,9 @@ private:
     bool reset_to_menu_backdrop();
     void return_to_menu();
     void save_progress();
+    // Plays the menus' audio settings (music volume) and, when `write`,
+    // saves them. make_frame reads the field of view every frame.
+    void apply_settings(bool write);
     void update_menu(frame_profile* profile);
     void update_confirm_menu(frame_profile* profile);
     void update_round(float dt, frame_profile* profile);
@@ -67,12 +73,16 @@ private:
     // saving is disabled so the unreadable file is never overwritten.
     bool saving_enabled_ = true;
     std::filesystem::path save_path_;
+    std::filesystem::path settings_path_;
 
     // Presentation state, never read by game logic.
     camera_transition_state camera_transition_;
     std::uint64_t render_meshes_revision_ = 0;
     render_static_mesh terrain_render_mesh_;
     render_static_mesh material_overlay_render_mesh_;
+    render_hole_signs hole_signs_;
+    render_fences fences_;
+    render_water water_;
     bool cart_loop_playing_ = false;
 
 #if GOLFPP_NET

@@ -11,10 +11,9 @@ float ball_support_distance(const ball_state& ball, const terrain_sample& terrai
 // True when the ball touches the ground (within a millimetre).
 bool ball_is_grounded(const ball_state& ball, const terrain_sample& terrain);
 
-// True when the ball's lowest point is below the water surface. Water zones
-// are carved `water_depth` below the surface, so the surface sits that far
-// above the sampled mesh.
-bool ball_in_water(const ball_state& ball, const terrain_sample& terrain, float water_depth);
+// True over water when the ball's lowest point is below the pond's surface
+// (terrain.water_level; the sampled point is the bed of its bowl).
+bool ball_in_water(const ball_state& ball, const terrain_sample& terrain);
 
 // Physics with the extra water drag and spin decay added.
 physics_tuning with_water_drag(const physics_tuning& tuning);
@@ -28,10 +27,6 @@ ball_state apply_rolling_friction(const ball_state& ball,
                                   float settle_speed,
                                   float dt);
 
-// True when the horizontal path start -> end passes within `radius` of the
-// cup centre while the ball centre is at most `max_height_above_cup` above it.
-bool path_crosses_cup(const glm::vec3& start,
-                      const glm::vec3& end,
-                      const glm::vec3& cup_center,
-                      float radius,
-                      float max_height_above_cup);
+// How close the horizontal path start -> end comes to the cup centre,
+// anywhere along it, not only at its ends.
+float path_cup_offset(const glm::vec3& start, const glm::vec3& end, const glm::vec3& cup_center);

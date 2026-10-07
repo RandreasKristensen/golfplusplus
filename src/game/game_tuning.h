@@ -8,13 +8,18 @@
 #include "physics/physics_tuning.h"
 #include "physics/terrain.h"
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
+
 #include <glm/vec3.hpp>
 
 struct world_scale_tuning {
     float meters_per_world_unit = 0.0f;
     float ball_physics_radius_meters = 0.0f;
     float ball_visual_radius_meters = 0.0f;
-    // Drawn and holed at this radius: much larger than a real cup (arcade).
+    // Drawn and holed at this radius: a ball holes when its centre is inside.
+    // Sized to the drawn ball as a real cup is to a real ball.
     float cup_radius_meters = 0.0f;
     float pin_visual_height_meters = 0.0f;
 };
@@ -25,27 +30,47 @@ struct terrain_build_tuning {
     // How far from a hole's edge the ground takes to ease into the course's land.
     float ground_blend_distance = 0.0f;
     terrain_zone_tuning zones;      // bunker and water carve depths
-    float material_overlay_lift = 0.0f;
-    // Greatest gap between the drawn zone shapes' vertices, so they bend with
-    // the ground grid instead of sinking under it.
+    float zone_cell_size = 0.0f;    // the ground's spacing over bunkers and ponds
+    // Longest side of a drawn zone shape's outline (build_material_overlay_mesh).
     float material_overlay_spacing = 0.0f;
 };
 
 struct ball_tuning {
     float stop_speed = 0.0f;  // below this (and grounded) the ball is at rest
+    // A ball lost in water lies on the pond's floor this long before it goes
+    // back to where it was hit from.
+    float water_linger_seconds = 0.0f;
     float ground_restitution = 0.0f;
     float ground_friction = 0.0f;  // per 1/60 s of contact, see physics/collision.h
     float water_restitution = 0.0f;
     float water_friction = 0.0f;
+    // Sand catches a ball: it plugs instead of bouncing and stops within a
+    // hand's width, whatever the club's roll_friction_scale.
+    float bunker_restitution = 0.0f;
+    float bunker_friction = 0.0f;
+    float bunker_roll_deceleration = 0.0f;  // m/s^2
     float tree_restitution = 0.0f;
     float tree_friction = 0.0f;
     float roll_deceleration = 0.0f;  // m/s^2 while rolling (times the club's roll_friction_scale)
     float settle_speed = 0.0f;       // normal speed below which a grounded ball rolls instead of bouncing
+    // A ball whose centre passes straight over the cup's centre drops in only
+    // below this speed; faster, it rolls over. Off centre it has less of the
+    // cup to fall into (a shorter chord), down to cup_lip_capture_scale of it
+    // on the lip.
+    float cup_capture_speed = 0.0f;
+    float cup_lip_capture_scale = 0.0f;
+    // A ball landing in the cup from the air may come in faster by this many
+    // m/s of horizontal speed per m/s it falls at: a steep dunk drops, a fast
+    // low ball skips over.
+    float cup_dunk_scale = 0.0f;
 };
 
 struct swing_tuning {
     float meter_cycle_seconds = 0.0f;  // one full 0 -> 1 -> 0 swing meter cycle
     float min_power = 0.0f;
+    // Launch speed is the club's power times meter power to this exponent:
+    // below 1 it flattens the curve, so half power carries about half as far.
+    float power_curve_exponent = 0.0f;
     float side_spin_scale = 0.0f;      // multiplies club_stats::side_spin
 };
 
@@ -81,9 +106,9 @@ struct cart_tuning {
 };
 
 // Camera rigs. "back" is against the aim direction, "side" is to the
-// player's left (the address stance side).
+// player's left (the address stance side). The field of view is the
+// player's setting (game/settings.h), not tuning.
 struct camera_tuning {
-    float fov_degrees = 0.0f;
     float walking_eye_height = 0.0f;
     float walking_look_distance = 0.0f;
     float aiming_back_distance = 0.0f;
@@ -98,6 +123,10 @@ struct camera_tuning {
     float follow_look_height = 0.0f;
     float transition_seconds = 0.0f;        // blend time on rig changes and teleports
     float transition_jump_distance = 0.0f;  // eye movement per frame that counts as a teleport
+    // What is held before my eyes (my cart from the driver's seat, my emote
+    // props) is drawn at this field of view, the one it was posed for,
+    // whatever the player's setting.
+    float viewmodel_fov_degrees = 0.0f;
 };
 
 // The dotted arc shown while aiming.
@@ -164,10 +193,59 @@ struct server_tuning {
     float timing_slack_seconds = 0.0f;
 };
 
+// The sign at every hole's tee (game/hole_sign.h), in world units. It stands
+// on the tee box at its right edge looking down the hole, its face looking
+// across the tee, and its posts stop shots like tree trunks.
+struct hole_sign_tuning {
+    float edge_inset = 0.0f;      // the board's middle, inside the tee box's right edge
+    float forward_offset = 0.0f;  // along the hole from the tee (negative: behind it)
+    float look_ahead = 0.0f;  // the hole's direction at the tee: towards its line this far down
+    float board_width = 0.0f;   // along the hole
+    float board_height = 0.0f;
+    float board_thickness = 0.0f;
+    float board_lift = 0.0f;    // the board's bottom edge over the higher post's foot
+    float post_radius = 0.0f;
+};
+
+// The tee box at every hole's tee (game/tee_box.h), in world units.
+struct tee_box_tuning {
+    float width = 0.0f;   // across the hole
+    float length = 0.0f;  // down the hole
+    float padding = 0.0f;  // its top over the highest ground it covers
+    float sample_spacing = 0.0f;  // between the ground samples that find that height
+};
+
 // The fastest a cart goes: drifting on a road.
 inline float fastest_cart_speed(const cart_tuning& cart) {
     return cart.speed * cart.drift_speed_boost * (cart.road_speed_scale > 1.0f ? cart.road_speed_scale : 1.0f);
 }
+
+// Fences (course worlds): their poles stop shots like tree trunks, their nets
+// catch them, giving back little of the speed.
+struct fence_tuning {
+    float pole_radius = 0.0f;
+    float net_restitution = 0.0f;
+    float net_friction = 0.0f;
+};
+
+// What the ball lies on when it is hit: a tee box, else the material under it.
+// Underlying values index game_tuning::lies; keep `ball_lie_count` in sync.
+enum class ball_lie : std::uint8_t {
+    tee,
+    fairway,
+    rough,
+    green,
+    bunker,
+    water
+};
+inline constexpr std::size_t ball_lie_count = 6;
+
+// How a lie changes a shot played from it: multipliers on the club's power
+// and backspin. From a bunker the club's own bunker_power applies as well.
+struct lie_tuning {
+    float power = 0.0f;
+    float spin = 0.0f;
+};
 
 struct game_tuning {
     world_scale_tuning scale;
@@ -184,4 +262,8 @@ struct game_tuning {
     xp_drop_tuning xp_drops;
     net_tuning net;
     server_tuning server;
+    hole_sign_tuning hole_sign;
+    tee_box_tuning tee_box;
+    fence_tuning fence;
+    std::array<lie_tuning, ball_lie_count> lies{};  // by ball_lie
 };

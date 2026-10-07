@@ -1,10 +1,10 @@
 #include "renderer/world_marker_batch.h"
 
-#include "renderer/cart_batch.h"
 #include "physics/vector_math.h"
 #include "renderer/primitive_mesh.h"
 #include "renderer/remote_avatar_batch.h"
 
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/constants.hpp>
@@ -14,17 +14,27 @@
 #include <cmath>
 
 namespace {
-const glm::vec3 tee_color(0.45f, 0.30f, 0.16f);
-const glm::vec3 start_marker_color(0.82f, 0.68f, 0.28f);
+// A tee box: grey tiles with grout between them, a mat of fake turf on top.
+const glm::vec3 tee_grout_color(0.30f, 0.30f, 0.29f);
+const glm::vec3 tee_tile_color(0.56f, 0.56f, 0.53f);
+const glm::vec3 tee_mat_color(0.22f, 0.66f, 0.26f);
 const glm::vec3 collectible_color(0.36f, 0.78f, 0.86f);
 const glm::vec3 cup_color(0.03f, 0.03f, 0.035f);
 const glm::vec3 pin_pole_color(0.95f, 0.90f, 0.68f);
 const glm::vec3 flag_color(0.96f, 0.78f, 0.20f);
 const glm::vec3 aim_dot_color(0.95f, 0.78f, 0.22f);
 
-constexpr float hole_tee_scale = 1.8f;
-constexpr float start_marker_scale = 2.2f;
-constexpr float hub_tee_scale = 1.45f;
+// Tiles are about this many metres square, with this much grout between them.
+constexpr float tee_tile_size = 1.5f;
+constexpr float tee_grout_gap = 0.08f;
+// Over the box's top: the tiles, then the mat. The sides reach this far
+// under the lowest ground, so they never stop short of it.
+constexpr float tee_tile_lift = 0.01f;
+constexpr float tee_mat_lift = 0.02f;
+constexpr float tee_side_bury = 0.2f;
+// The mat's share of the box's top, across and along the hole.
+constexpr float tee_mat_share_across = 0.7f;
+constexpr float tee_mat_share_along = 0.75f;
 constexpr float collectible_scale = 1.2f;
 constexpr float opaque = 1.0f;
 
@@ -179,6 +189,53 @@ void append_ground_marker(world_marker_batch& batch,
     batch.append_disc(ground_marker_model(position, scale), color, opaque, true);
 }
 
+glm::mat4 ground_rect_model(const glm::vec3& center, const glm::vec3& down_hole, const glm::vec2& half_size) {
+    const glm::vec3 along = safe_normalize(horizontal(down_hole), glm::vec3(0.0f, 0.0f, 1.0f));
+    const glm::vec3 across = glm::normalize(glm::cross(along, world_up));
+    glm::mat4 model(1.0f);
+    model[0] = glm::vec4(across * half_size.x, 0.0f);
+    model[1] = glm::vec4(along * half_size.y, 0.0f);
+    model[2] = glm::vec4(world_up, 0.0f);
+    model[3] = glm::vec4(center, 1.0f);
+    return model;
+}
+
+void append_tee_box(world_marker_batch& batch, const tee_box& box) {
+    const glm::vec3 along = box.down_hole;
+    const glm::vec3 across = glm::normalize(glm::cross(along, world_up));
+    const glm::vec2 half(box.half_width, box.half_length);
+
+    // The top in grout colour, and the four sides down into the ground.
+    batch.append_quad(ground_rect_model(box.center, along, half), tee_grout_color, opaque, true);
+    const float side_half_height = (box.center.y - box.bottom + tee_side_bury) * 0.5f;
+    const glm::vec3 side_middle(box.center.x, box.center.y - side_half_height, box.center.z);
+    for (const float sign : {-1.0f, 1.0f}) {
+        batch.append_quad(world_panel_model(side_middle + along * (half.y * sign), across, 0.0f,
+                                            glm::vec2(half.x, side_half_height)),
+                          tee_grout_color, opaque, true);
+        batch.append_quad(world_panel_model(side_middle + across * (half.x * sign), along, 0.0f,
+                                            glm::vec2(half.y, side_half_height)),
+                          tee_grout_color, opaque, true);
+    }
+
+    // Whole tiles across the top, as near tee_tile_size as fits.
+    const int tiles_across = std::max(1, static_cast<int>(std::lround(2.0f * half.x / tee_tile_size)));
+    const int tiles_along = std::max(1, static_cast<int>(std::lround(2.0f * half.y / tee_tile_size)));
+    const glm::vec2 tile(2.0f * half.x / static_cast<float>(tiles_across), 2.0f * half.y / static_cast<float>(tiles_along));
+    const glm::vec2 tile_half = glm::max(tile * 0.5f - glm::vec2(tee_grout_gap * 0.5f), glm::vec2(0.0f));
+    for (int row = 0; row < tiles_along; ++row) {
+        for (int column = 0; column < tiles_across; ++column) {
+            const float x = (static_cast<float>(column) + 0.5f) * tile.x - half.x;
+            const float y = (static_cast<float>(row) + 0.5f) * tile.y - half.y;
+            const glm::vec3 center = box.center + across * x + along * y + world_up * tee_tile_lift;
+            batch.append_quad(ground_rect_model(center, along, tile_half), tee_tile_color, opaque, true);
+        }
+    }
+
+    const glm::vec2 mat_half(half.x * tee_mat_share_across, half.y * tee_mat_share_along);
+    batch.append_quad(ground_rect_model(box.center + world_up * tee_mat_lift, along, mat_half), tee_mat_color, opaque, true);
+}
+
 void append_pin_cup(world_marker_batch& batch, const glm::vec3& position, const float cup_radius_meters) {
     // The cup never writes depth so the ball and flagstick stay visible through it.
     batch.append_disc(pin_cup_model(position, cup_radius_meters * 2.0f), cup_color, opaque, false);
@@ -203,31 +260,56 @@ void append_aim_dots(world_marker_batch& batch, const std::vector<glm::vec3>& po
     }
 }
 
+namespace {
+constexpr float club_shaft_length = 1.10f;
+// The shaft's lean back from straight down at address, and how much further
+// it swings back at full power.
+constexpr float club_address_angle_degrees = 12.0f;
+constexpr float club_backswing_degrees = 60.0f;
+// Half the height of the club head's tallest panel: at address the head's
+// bottom rests on the ground under the ball.
+constexpr float club_head_half_height = 0.045f;
+
+// The club's frame at a ball: the side it swings back to, and the axis its head lies along.
+struct club_axes {
+    glm::vec3 swing_side{0.0f};
+    glm::vec3 head_axis{0.0f};
+};
+
+club_axes swing_club_axes(const float aim_angle) {
+    const glm::vec3 forward = yaw_direction(aim_angle);
+    glm::vec3 player_side = glm::normalize(glm::cross(world_up, forward));
+    if (glm::length(player_side) <= 0.0001f) {
+        player_side = glm::vec3(1.0f, 0.0f, 0.0f);
+    }
+    return club_axes{-rotate_top_down_ccw_90_y(player_side), rotate_top_down_ccw_90_y(forward)};
+}
+}
+
+glm::vec3 swing_club_grip(const glm::vec3& ball_position, const float ball_visual_radius_meters, const float aim_angle) {
+    const club_axes axes = swing_club_axes(aim_angle);
+    const float ball_radius = std::max(0.02f, ball_visual_radius_meters);
+    const float ground_y = ball_position.y - ball_radius;
+    glm::vec3 grip = ball_position + axes.swing_side * (ball_radius + 0.10f) - axes.head_axis * 0.36f;
+    grip.y = ground_y + club_head_half_height + club_shaft_length * std::cos(glm::radians(club_address_angle_degrees));
+    return grip;
+}
+
 void append_swing_club(world_marker_batch& batch,
                        const glm::vec3& ball_position,
                        const float ball_visual_radius_meters,
                        const float aim_angle,
                        const float swing_power) {
     const float power = std::clamp(swing_power, 0.0f, 1.0f);
-    const glm::vec3 forward = yaw_direction(aim_angle);
-    const glm::vec3 up(0.0f, 1.0f, 0.0f);
-    glm::vec3 player_side = glm::normalize(glm::cross(up, forward));
-    if (glm::length(player_side) <= 0.0001f) {
-        player_side = glm::vec3(1.0f, 0.0f, 0.0f);
-    }
-
-    const glm::vec3 club_swing_side = -rotate_top_down_ccw_90_y(player_side);
-    const glm::vec3 club_head_axis = rotate_top_down_ccw_90_y(forward);
+    const glm::vec3 up = world_up;
+    const club_axes axes = swing_club_axes(aim_angle);
+    const glm::vec3 club_swing_side = axes.swing_side;
+    const glm::vec3 club_head_axis = axes.head_axis;
     const glm::vec3 club_face_axis = club_head_axis;
 
-    const float ball_radius = std::max(0.02f, ball_visual_radius_meters);
-    const float shaft_length = 1.10f;
-    const float swing_angle = glm::radians(12.0f + power * 60.0f);
-
-    const glm::vec3 grip_position = ball_position
-        + club_swing_side * (ball_radius + 0.10f)
-        - club_head_axis * 0.36f
-        + up * (shaft_length * 0.92f + ball_radius * 0.35f);
+    const float shaft_length = club_shaft_length;
+    const float swing_angle = glm::radians(club_address_angle_degrees + power * club_backswing_degrees);
+    const glm::vec3 grip_position = swing_club_grip(ball_position, ball_visual_radius_meters, aim_angle);
 
     const glm::vec3 shaft_direction = glm::normalize(club_swing_side * std::sin(swing_angle) -
                                                      up * std::cos(swing_angle));
@@ -242,7 +324,7 @@ void append_swing_club(world_marker_batch& batch,
                       glm::vec3(0.16f, 0.15f, 0.13f),
                       opaque,
                       true);
-    batch.append_quad(world_panel_model(head_center + club_head_axis * 0.055f, -club_face_axis, 0.0f, glm::vec2(0.14f, 0.045f)),
+    batch.append_quad(world_panel_model(head_center + club_head_axis * 0.055f, -club_face_axis, 0.0f, glm::vec2(0.14f, club_head_half_height)),
                       glm::vec3(0.20f, 0.19f, 0.17f),
                       opaque,
                       true);
@@ -254,24 +336,22 @@ void append_swing_club(world_marker_batch& batch,
 
 void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene) {
     batch.clear();
-    append_cart_model(batch, scene.cart_active, scene.camera_position, scene.camera_target);
-
-    if (scene.show_hole) {
-        append_ground_marker(batch, scene.tee_position, hole_tee_scale, tee_color);
-        append_pin_cup(batch, scene.pin_position, scene.cup_radius_meters);
-        append_pin_flagstick(batch, scene.pin_position, scene.pin_visual_height_meters);
-    }
 
     const std::vector<glm::vec3> none;
     const auto markers = [&none](const std::vector<glm::vec3>* positions) -> const std::vector<glm::vec3>& {
         return positions != nullptr ? *positions : none;
     };
-    for (const glm::vec3& position : markers(scene.start_markers)) {
-        append_ground_marker(batch, position, start_marker_scale, start_marker_color);
+    if (scene.tee_boxes != nullptr) {
+        for (const tee_box& box : *scene.tee_boxes) {
+            append_tee_box(batch, box);
+        }
     }
-    for (const glm::vec3& position : markers(scene.tee_markers)) {
-        append_ground_marker(batch, position, hub_tee_scale, tee_color);
+
+    if (scene.show_hole) {
+        append_pin_cup(batch, scene.pin_position, scene.cup_radius_meters);
+        append_pin_flagstick(batch, scene.pin_position, scene.pin_visual_height_meters);
     }
+
     for (const glm::vec3& position : markers(scene.collectible_markers)) {
         append_ground_marker(batch, position, collectible_scale, collectible_color);
     }
@@ -291,7 +371,7 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
     }
     if (scene.remote_avatars != nullptr) {
         for (const render_remote_avatar& avatar : *scene.remote_avatars) {
-            append_remote_avatar(batch, avatar, scene.avatar_eye_height);
+            append_remote_avatar(batch, avatar, scene.avatar_eye_height, scene.ball_visual_radius_meters);
         }
     }
     if (scene.remote_balls != nullptr) {

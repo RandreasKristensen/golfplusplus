@@ -7,18 +7,36 @@ local multiplayer server.
 |---|---|
 | `hole_editor/hole-editor.html` | Browser-based editor for holes and course worlds |
 | `osm_import/` | Converts real courses from OpenStreetMap into hole/course/world JSON |
-| `art/make_art.py` | Draws the rough's grass texture and every course's backdrop panorama |
+| `art/make_art.py` | Draws the rough's grass texture and every course's sky and land backdrop panoramas |
 | `gb.cmd` / `gb.ps1` | Windows release build helper, and local multiplayer testing (see below) |
 | `net/dev.ps1` | The local SpacetimeDB server on demand: start, publish, anonymous logins, stop |
 | `net/check_determinism.ps1` | Golden shots natively and in the server's WASM |
 
 ## art/make_art.py
 
-Draws `assets/textures/rough_grass.bmp` and the backdrop each course file in
-`assets/courses/` names (`"backdrop"`), from code and fixed seeds. Courses
-without a hand-tuned theme in the script (fresh imports) get a default
-parkland one. Run it after importing a course; `--check` fails if `assets/` is
-out of date.
+Draws `assets/textures/rough_grass.bmp` and the two backdrop panoramas each
+course file in `assets/courses/` names, from code and fixed seeds:
+
+```json
+"backdrop": {
+  "sky": "backdrops/<id>_sky.bmp",
+  "land": "backdrops/<id>_land.bmp",
+  "haze_color": [0.75, 0.80, 0.83],
+  "haze_amount": 1.0,
+  "haze_distance": 800
+}
+```
+
+The sky fades to `haze_color` at the horizon. The land (far ground, hills and
+two or three treelines, 32-bit with alpha) is drawn in its own colours, its
+alpha saying how much of it shows through the haze: the further back, the
+hazier. The game draws the sky, then the land fading into `haze_color`
+(`haze_amount` scales the haze, 1 as drawn), and fades its own ground and
+trees into the same haze over `haze_distance` metres, so the drawn ground
+melts into the backdrop. Change `haze_color` and rerun the script, as the sky
+is drawn to meet it. Courses without a hand-tuned theme in the script (fresh
+imports) get a default parkland one. Run it after importing a course;
+`--check` fails if `assets/` is out of date.
 
 ```
 python tooling/art/make_art.py
@@ -44,7 +62,8 @@ minimised window when nothing listens on port 3000, builds the server module
 (a few seconds when nothing changed), publishes it as `golfpp` when the
 database is missing or the module changed since the last publish (then
 regenerates the client bindings, before the game builds), and turns on
-anonymous logins. Then two clients start, each its own anonymous account, on
+anonymous logins. Then two clients start, each its own guest account (deleted
+when it closes, so its name is free again next time), on
 `http://localhost:3000`, database `golfpp`. `gb -x` stops them and the
 server.
 
@@ -102,13 +121,15 @@ labels update as you place them. Switch back to select when done.
 Right-click clears the measurement. Useful for checking zone radii or fairway
 lengths against real distances before committing.
 
-**+ green / + bunker** — click to place a circular material zone at that
-position. Greens default to radius 6 m, bunkers to 3.5 m. Select the zone
-afterward to adjust center and radius in the panel.
-
-**+ water** — click to place a rectangular water hazard (16 × 10 m default).
-Select it to drag the corner handles, move the whole hazard, or edit origin,
-width, and depth directly in the panel.
+**+ green / + bunker / + water** — click to place an elliptical material zone
+at that position: greens a 6 m circle, bunkers 3.5 m, water 8 × 5 m radii.
+Select a zone to drag it, drag the two filled handles to set each radius along
+the zone's own axes, and drag the ring handle to turn it (shift snaps to
+15°); the panel edits the same centre, radii and rotation. A zone is saved as
+`{"type": "green", "center": [x, y, z], "radii": [rx, rz],
+"rotation_degrees": d}` (a circle is `[r, r]`); the rotation turns the zone
+the way a course world's hole `rotation_degrees` turns a hole, and the two add
+up when the hole is placed.
 
 **+ tree** — click to place a tree with default proportions (trunk 0.35 r ×
 2.4 h, leaves 1.6 r × 3.2 h). Tree mode stays active so repeated clicks paint
@@ -131,8 +152,8 @@ Select a point on the canvas or in the list to edit X/Y/Z numerically. The Y
 value controls elevation; leave at 0 for a flat hole. Selecting the tee or pin
 also exposes X/Y/Z fields for quick cleanup.
 
-**Material zones** — lists all greens, bunkers, and water hazards. Circular
-zones show center and radius; water zones show the two corner bounds.
+**Material zones** — lists all greens, bunkers, and water hazards with their
+size, rotation and centre.
 
 **Trees** — lists all placed trees. Select one to fine-tune trunk and leaf
 dimensions.
@@ -202,7 +223,8 @@ py -3 osm_golf_convert.py "Marienlyst Golfklub" --config osm_golf_config.json
 # Flat holes and flat ground, no elevation tiles
 py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-elevation
 
-# One boundary holding two courses told apart by ref (Kalø: 1-18 and P1-P9)
+# One boundary holding two courses told apart by ref (Kalø: 1-18 and P1-P9);
+# the course's config entry can set "ref_prefix" instead
 py -3 osm_golf_convert.py --id W96706717 --ref-prefix P --course-name "Kalø Par 3"
 
 # Re-download instead of reusing the cached OSM responses
@@ -296,7 +318,10 @@ A full 18-hole import is normally under ten requests.
     "trunk_height": 5.0,
     "leaf_radius": 4.7,
     "leaf_height": 6.0,
-    "max_per_hole": 60
+    "max_per_hole": 200,
+    "outside_reach_m": 80.0,
+    "max_distance_from_line_m": 95.0,
+    "wood_m2_per_tree": 150.0
   },
   "hole": {
     "fallback_width": 20.0,
@@ -322,8 +347,17 @@ A full 18-hole import is normally under ten requests.
 }
 ```
 
+Trees come from `natural=tree` nodes, `natural=tree_row` lines, and woods and
+scrub planted at one tree per `wood_m2_per_tree` (an even jittered grid), both
+inside the course and up to `outside_reach_m` beyond its boundary, where a
+hole's edge often is. Each tree goes to the hole whose line it is nearest, up
+to `max_distance_from_line_m` away, keeping the `max_per_hole` nearest the line;
+none stand on the fairway's middle or on greens, bunkers and water.
+
 The top-level values are defaults. Entries under `courses` are keyed by the
-generated course id and override only the fields listed there.
+generated course id and override only the fields listed there. The file also
+holds `elevation`, `ground`, `zones` (ellipse fitting, see below) and `checks`
+(verification tolerances, see below).
 
 The HTML hole editor also loads this file when you open the project root. Use
 its generator config panel for tree defaults and path filtering values, then
@@ -334,24 +368,38 @@ regenerating Marienlyst does not silently keep stale course-specific settings.
 ### Course-world editing
 
 `hole-editor.html` has a world view for course hub data. Open the project root,
-select a course with a `world` manifest entry, then switch to world view to edit:
+select a course with a `world` manifest entry, then switch to world view to:
 
-- cart road polylines
-- walking shortcut polylines and unlock level
-- collectible positions and simple reward fields
-- interactable/sign positions
+- move and rotate complete holes (drag a hole's outline; Q/E or the panel turns it)
+- draw fences: **+ fence** adds a pole where you click, to the end of the
+  selected fence or as the first pole of a new one; drag poles to move them,
+  right-click one to delete it, and set the fence's height in the panel. A
+  fence needs two poles to be saved.
 
-Walking shortcuts, spawn zones and interactables are authored here but the game
-does not read them yet; they are placeholders for NPC/interaction work.
+Cart roads, walking shortcuts, collectibles and interactables come from the
+importer and are not edited in world view. Walking shortcuts, spawn zones and
+interactables are not read by the game yet; they are placeholders for
+NPC/interaction work.
 
-Use area select in either hole view or world view to drag a selection rectangle
-around editable points/items. The editor highlights everything inside the box
-and can bulk-delete selected route points, trees, zones, collectibles, and
-interactables. Fixed anchors such as tees, pins, spawn, and hole starts are
-selectable for inspection but are not bulk-deleted.
+Use area select in hole view to drag a selection rectangle around editable
+points; the editor highlights everything inside the box and can bulk-delete
+selected trees, zones and control points.
 
 Save hole, save world, and save config are separate on purpose. Hole JSON uses
 per-hole local coordinates, while world JSON uses shared course coordinates.
+
+### Fences
+
+A course world's `fences` are `{"poles": [[x, 0, z], ...], "height": h}` in
+course coordinates: a pole at each point and a net between each pair, from the
+ground (poles stand on it; their y is ignored) up to `height` metres. Shots hit
+both: poles like tree trunks, nets catching the ball with little bounce
+(`fence` in the game's tuning). The importer makes one from every
+`barrier=fence` way within `fence.outside_reach_m` of the course: a pole at each
+node, and more where two are over `fence.max_pole_spacing_m` apart. Its height
+is the way's `height` tag, else `fence.driving_range_height_m` along a
+`golf=driving_range` (the tall ball-stop net), else `fence.default_height_m`;
+an untagged fence is a `FENCE_NO_HEIGHT` note in the audit.
 
 ### Output
 
@@ -382,98 +430,122 @@ The course manifest follows the same format as the hand-authored course files:
 
 ### What the converter does
 
-1. Locates the course on OSM and reads its bounding box.
-2. Fetches all `golf=*` elements inside that box (fairways, greens, bunkers,
-   water hazards, tees, pins).
-3. Groups elements by hole using, in order: **hole relations** (if the course
-   is fully mapped), **`ref` tags** on individual elements, or **spatial
-   proximity** to tee nodes as a fallback.
-4. For each hole:
+1. Locates the course on OSM and reads its boundary.
+2. Fetches every `golf=*` element inside it (fairways, greens, bunkers, water
+   hazards, tees, pins, hole ways) and every pond (`natural=water`, played as
+   a water hazard), leaving out those of a neighbouring course's boundary
+   (see below).
+3. Audits them for missing information (below) and writes what to map in OSM.
+4. Groups elements by hole using, in order: **hole relations** (if the course
+   is fully mapped), **`ref` tags** on individual elements, the course's
+   **`holes` list** in the config, or **spatial proximity** as a fallback.
+5. For each hole:
    - Reprojects WGS84 coordinates to local metres with the tee at `[0, 0, 0]`.
-   - Extracts the fairway centerline by slicing the polygon perpendicular to
-     the tee→pin axis and taking midpoints, producing 5 spline control points.
+   - Takes the line of play from the `golf=hole` way, else the fairway
+     polygon's centreline, else a straight line.
    - Estimates fairway width from the polygon's cross-section.
-   - Fits bounding circles (Ritter's algorithm) to green and bunker polygons.
-   - Converts water hazard polygons to axis-aligned bounding boxes.
-   - Estimates par from tee-to-pin distance if OSM doesn't have a `par` tag.
+   - Fits every green, bunker and water polygon with ellipses (below).
+   - Estimates par from the length if OSM has no `par` tag.
+6. Writes the course world, each hole start exactly on its hole's tee.
+7. Verifies the result and draws its contact sheet (below).
+
+### Zones are ellipses
+
+A material zone is `{"type": "bunker", "center": [x, y, z], "radii": [rx, rz],
+"rotation_degrees": d}`, turned about the vertical like a hole start
+(`rotate_about_y`: the first radius lies along `(cos d, sin d)` in x/z).
+`osm_ellipse.py` fits each OSM polygon from its area-weighted second moments,
+scaled to the polygon's area. A shape one ellipse cannot follow is cut in half
+across its long axis where the fit is worst, again and again, or laid out as a
+chain of ellipses along its centre line (a creek), up to `zones.max_pieces`; a
+stream mapped as a line becomes a chain `zones.stream_half_width` wide. How
+well the ellipses cover each polygon (intersection over union) is recorded in
+the hole's `source.zone_fit` next to the OSM way, and a poor fit is a
+`ZONE_FIT` warning. A hole whose pin has no green in OSM gets a circle at the
+pin (`source.made_green`, a `GREEN_MADE` warning).
 
 ### Verifying an import
 
-`verify_osm_import.py` checks a generated course against independent ground
-truth and prints a per-hole table plus a pass/fail summary.
+Every import ends with a verification, and `verify_osm_import.py` runs the same
+checks on what is already in `assets/` (after a re-import or hand edits):
 
 ```bash
-py -3 verify_osm_import.py --id W1019045811 \
-    --holes ../../assets/holes --scorecard old_course
+py -3 verify_osm_import.py mollerup_golf_club
+py -3 verify_osm_import.py --all --quiet       # exit status 1 on any error
 ```
 
-It runs four checks:
-
-| Check | Question it answers |
-|---|---|
-| Projection fidelity | Is a metre in the output really a metre on the ground? |
-| Scorecard accuracy | Does the hole play its published length? |
-| Plausibility | Are widths, green radii and pars in the range real courses occupy? |
-| Loader contract | Will `hole_loader.cpp` actually accept this file? |
-
-The projection check recomputes distances from the tee and pin coordinates the
-converter recorded in each hole's `source` block, using Vincenty's formula on
-the WGS84 ellipsoid — code that shares nothing with the converter's flat-earth
-projection. A disagreement there is a converter bug.
-
-The scorecard check compares against `testdata/scorecards.json`, which holds
-published hole-by-hole distances in metres. Add a course by adding an entry;
-each one records the tee set and the source it was taken from. Note that golf
-measures a hole *along the line of play*, so a dogleg's scorecard number is
-longer than the straight tee-to-pin distance — the check compares against the
-spline path length for that reason.
-
-Current results:
+It checks the generated files — holes, course world and the course's entry in
+`testdata/scorecards.json` — and audits the course's OSM data again (from the
+cache, else OSM; `--no-osm` skips that), and prints a per-hole table (par,
+length, direction, and the scorecard's beside them) and coded findings
+(`osm_checks.py`):
 
 ```
-Augusta National (way/871993734)
-  projection fidelity : mean 0.201%  worst 0.359%
-  scorecard accuracy  : mean -1.3%   18/18 holes within 12%
-  total par           : 72  (scorecard 72)
-  0 failures, 0 warnings
-
-Old Course, St Andrews (way/1019045811)
-  projection fidelity : mean 0.117%  worst 0.255%
-  scorecard accuracy  : mean -3.8%   17/18 holes within 12%
-  total par           : 72  (scorecard 72)
-  0 failures, 1 warning
-
-Marienlyst Golfklub (way/1408711156)
-  projection fidelity : mean 0.157%  worst 0.226%
-  total par           : 18  (6 holes, all par 3)
-  0 failures, 0 warnings
+WARN  HOLE_LENGTH: hole 4 is 322 m, the scorecard says 395 m (-19%)
+ERROR HOLE_BEARING: hole 6 was expected to face west (270°) but faces north (355°)
 ```
 
-Marienlyst is a useful check of a different kind: its hole distances reproduce
-the hand-corrected course already in `assets/holes/` to within half a metre on
-all six holes.
+An **error** means the course is wrong; a correct import has none. A
+**warning** is worth a look in the editor; an **info** note is true of real
+courses too. Tolerances are the `checks` section of `osm_golf_config.json`.
 
-Both courses also import with every hole's par matching the scorecard, and the
-Old Course's hole names come through in order — Burn, Dyke, Cartgate (Out) …
-Road, Tom Morris — which is a useful independent check that hole numbering and
-identity are right.
+| Code | Level | Needs a scorecard | Meaning |
+|---|---|---|---|
+| `HOLE_COUNT` | error | – | Holes imported against the scorecard's, or against the world's hole starts |
+| `NUMBERING_GAP` | error | – | Hole files out of order or numbers missing |
+| `PAR_MISMATCH`, `TOTAL_PAR` | error | yes | Par differs from the scorecard |
+| `HOLE_LENGTH` | warn / error | yes | Length along the line of play off the scorecard by `length_warn` / `length_error` |
+| `HOLE_BEARING` | warn / error | yes | Tee-to-pin direction off the scorecard's by `bearing_warn_deg` / `bearing_error_deg` |
+| `TEE_GREEN_PAIRING` | error | yes | A hole far off its length whose tee matches another hole's green |
+| `NAME_MISMATCH` | warn | yes | Hole name differs from the scorecard's |
+| `HOLE_START_MISMATCH` | error | – | The world hole start is not the hole's tee, so the game draws the hole elsewhere |
+| `PROJECTION` | error | – | Tee-to-pin distance differs from the geodesic (Vincenty) one |
+| `GREEN_SHARED` | error | – | Two holes finish on the same pin |
+| `HOLES_OVERLAP` | error | – | One hole runs along another for most of its length: imported twice |
+| `GREEN_MISSING`, `PIN_OFF_GREEN` | error | – | A hole without a green, or whose pin is off it |
+| `LOADER`, `ZONE_FORMAT` | error | – | Something `hole_loader.cpp` would refuse (e.g. an old `radius` zone) |
+| `ROUTING` | warn / error | – | Long walk from a green to the next tee, naming a nearer tee if there is one |
+| `PAR_LENGTH`, `LINE_DETOUR` | warn | – | A length implausible for its par; a line of play far longer than tee to pin |
+| `ZONE_FIT`, `GREEN_MADE`, `TEE_SHARED` | warn | – | See above; two holes starting on one spot |
+| `HOLES_CROSS` | info | – | Two holes cross (the Old Course's 7th and 11th really do) |
+| `TREES_SPARSE` | info | – | A side of a hole with hardly a tree (`sparse_trees_per_100m` within `tree_side_m`), named left/right with its compass direction: if it is wooded in real life, map the trees in OSM |
 
-A systematic few percent short is expected and is not a converter fault: OSM
-maps the everyday teeing grounds, while published yardages are from the
-championship tees, which are often separate and unmapped. The Old Course's
-remaining warning is its 2nd hole, 62 m short for exactly that reason.
+**Contact sheet.** Each verification also writes a north-up SVG of the course
+(`osm_contact_sheet.py`) to `.osm_cache/contact_sheets/<course>.svg` (the path
+is printed; `--sheet-out` changes it): every hole's line from a numbered disc
+at the tee to its number at the green, the greens, bunkers and water as the
+game sees them, a dashed red arrow along the scorecard's direction for each
+hole, grey dashes from each green to the next tee, and the findings. Hold it
+beside the club's course map: a wrongly numbered or reversed hole is obvious
+in a minute.
+
+**Reference data.** `testdata/scorecards.json` holds, per course id, the
+published par and length of each hole (`metres`, along the line of play, from
+the tee set named in `tees`), optionally its direction (`bearing_deg`, or
+`faces`: `N`, `NE`, … `NNW`), the `sources` and a `confidence` note saying how
+the numbers were taken. Every course in `assets/courses` has one.
+
+Current results (`--all`): no errors. Warnings: Marienlyst's 1st and 5th are
+16-19% short of the club's rounded lengths; Mollerup's 4th is 19% short of the
+back tee (OSM's tee is the 53 tee's) and its 13th 20% long (OSM's hole way
+starts behind the back tee), and a snaking bunker on its 4th fits its
+ellipses at 62%; Kalø's 11th has no green in OSM; the Old Course's 2nd is
+62 m short of the championship tee, which OSM does not map; Mollerup Par 3's
+card has no lengths but the 6th's.
 
 ### Typical workflow
 
 ```bash
-# 1. Convert
-python osm_golf_convert.py "Skandinavisk Golf Center"
+# 1. Convert, and read the audit and the verification
+py -3 osm_golf_convert.py "Skandinavisk Golf Center"
 
-# 2. Open the editor and paste in a hole to review and fix up
+# 2. Fill the gaps in .osm_cache/contact_sheets/<course>_osm_todo.md in OSM,
+#    add the course's scorecard to testdata/scorecards.json, and re-import
+#    (--refresh to fetch your edits) until the audit has no warnings and the
+#    verification no errors
+
+# 3. Only then touch up holes in the editor
 open ../hole_editor/hole-editor.html
-# → import → paste hole JSON → adjust spline / zones → export
-
-# 3. Save the cleaned JSON back to ../../assets/holes
 ```
 
 ### Two courses on one site
@@ -489,16 +561,99 @@ sits to them and how well its length matches theirs. Features that carry a
 contested ref but sit far from the winning centreline — the other layout's
 tees, pins, greens and bunkers — go with it. The run prints what it dropped.
 
+Two lines with one ref that end on the same green are one hole mapped once per
+tee set (Kalø's 5th and 7th), not two courses: the back tee's line is kept.
+
 If you actually wanted the other layout, find its own polygon with `--list`
 and import that by `--id`.
 
-### OSM data quality
+When another course has its own `leisure=golf_course` beside or inside the
+boundary (Mollerup's "Pitch and Putt" is drawn inside Mollerup Golf Club's; St
+Andrews' New Course is beside the Old), every golf feature inside a course
+drawn within this one, or inside another boundary and outside this one, is
+left out, and the run says how many; where two boundaries only overlap at an
+edge, features stay. Import the other
+course by its own `--id`, with `--course-name` for a better name than OSM's:
 
-Results depend on how thoroughly the course is mapped in OSM. Well-mapped
-courses have full hole relations with tees, pins, fairways, greens, and
-hazards — these convert cleanly. Courses with only a boundary outline will
-produce holes with straight splines and no hazard zones; use the editor to
-fill in the detail.
+```bash
+py -3 osm_golf_convert.py --id W143371710                                    # Mollerup Golf Club
+py -3 osm_golf_convert.py --id W1010269501 --course-name "Mollerup Par 3"
+```
+
+### Courses without hole numbers
+
+Some courses are mapped with no `ref` on anything, so nothing says which hole
+is which. The fix is in OSM: tag each `golf=hole` line `ref=<hole number>`
+(the audit's `LINE_NO_REF`). Until then, give such a course its holes in play
+order under `holes` in its `courses` entry of `osm_golf_config.json`, worked
+out from the published scorecard (pars and lengths) and from each green being
+a short walk from the next tee:
+
+```json
+"mollerup_golf_club": {
+  "holes": [
+    {"line": "W1010266853", "par": 3},
+    {"tee": "W1010269500", "green": "W1010266856", "par": 3},
+    ...
+  ]
+}
+```
+
+`line` is a `golf=hole` way. A hole mapped without one takes a `tee` and a
+`green`: the tee is a `golf=tee` element, or the hole's fairway, whose point
+furthest from the green becomes the tee (a guess, `TEE_GUESSED`: better to
+map the hole's line). `par` is used where OSM has none.
+Hole lines not in the list are dropped (Mollerup has a 19th line that is on no
+scorecard). The direction a line is drawn in does not matter: half of
+Mollerup's run green to tee, and each hole is turned to end at its pin.
+
+Mollerup Golf Club's list was matched line by line to the club's course map
+(mollerupgolfclub.dk/baneguide), and its verification checks every hole's
+length and direction against the club's card and map. Mollerup Par 3 needs no
+list: its six hole lines are mapped and numbered in OSM.
+
+### Missing OSM data: the audit
+
+Wherever OSM is silent the converter guesses — a hole with no `golf=hole` line
+gets a made-up tee, a line without `par` a par from its length — and a guess
+can be wrong without any check noticing (the scorecard checks can't catch a
+short hole on a course whose card has no lengths). So every import first
+audits the raw OSM features (`osm_audit.py`) and reports each gap as a coded
+finding saying what is missing, where, and what to draw or tag:
+
+```
+WARN  LINE_OUTSIDE_COURSE: hole 6's line way/1565386487's tee end at (56.211556, 10.190986) is 28 m
+      outside the course boundary way/1010269501, so what is mapped there (the tee, water, bunkers) is
+      left out of the import: extend the boundary (leisure=golf_course) to take it in
+WARN  LINE_NO_PAR: hole 4's line way/1565386485 has no par tag, so par 3 was guessed from its 166 m:
+      tag par= from the scorecard
+```
+
+The same findings are written as a checklist to
+`.osm_cache/contact_sheets/<course>_osm_todo.md`, with a link to every feature
+and to the OSM editor at every spot, and the warnings are on the contact
+sheet. Fix them in OSM (the map gets better for everyone) and re-import with
+`--refresh`; a well-mapped course audits with no warnings. A **warn** is a
+guess the import made; an **info** note is only less complete than it could
+be. Distances are the `audit` section of `osm_golf_config.json`.
+
+| Code | Level | What is missing, and what to map |
+|---|---|---|
+| `HOLE_LINES_MISSING` | warn | Fewer `golf=hole` lines than the scorecard's holes (the holes are listed one by one below it) |
+| `HOLE_LINE_MISSING` | warn | A green no hole line ends on: draw the line tee to green, with `ref` and `par`. Names unused tees nearby and the fairway leading to it |
+| `TEE_GUESSED` | warn | The course config takes a hole's tee from its fairway's far end: map the tee and the line, then drop the hole from the config |
+| `GREEN_MISSING` | warn | Nothing tagged `golf=green` at a line's end: the import makes a round green |
+| `LINE_OUTSIDE_COURSE` | warn | A hole line's tee or green end lies outside the course boundary, so what is mapped there is left out: extend the boundary |
+| `LINE_NO_PAR`, `LINE_NO_REF` | warn | Par guessed from the length, hole numbered from where it lies (info when the config supplies it) |
+| `REF_GAP` | warn | No line has some hole number |
+| `SCORECARD_MISSING`, `SCORECARD_NO_LENGTHS` | warn | Nothing in `testdata/scorecards.json` to check the import against; research the club's card |
+| `SCORECARD_NO_DIRECTIONS`, `LINE_NO_DIST` | info | No directions in the card; no `dist:*` tags on the lines |
+| `FAIRWAY_MISSING` | info | A par 4 or 5 whose line crosses no fairway |
+| `HOLE_LINE_REVERSED`, `TEE_MISSING` | info | A line drawn green to tee (reverse the way); no `golf=tee` area at a line's start |
+| `GREEN_UNUSED`, `TEE_UNUSED` | info | A green or tee no hole uses: a practice green (name it so) or a hole still to map |
+| `SECOND_LAYOUT`, `LINE_UNUSED`, `REF_SHARED` | info | Lines left out: another layout in the boundary, or not in the config's hole list; one ref on several lines |
+| `FENCE_NO_HEIGHT` | info | A fence without a `height` tag, and the height it was given: tag `height=` |
+| `PIN_MISSING`, `COURSE_NAME_MISSING` | info | Pins go in the middle of their greens; an unnamed boundary |
 
 Check coverage before running by pasting this into
 [overpass-turbo.eu](https://overpass-turbo.eu):
@@ -524,14 +679,19 @@ and will need the editor.
 
 Even a cleanly imported course is a starting point, not a finished one:
 
-- **Green and bunker shapes.** OSM polygons become circles, and a DEM cannot
-  see green contours or bunker lips. Expect to reshape these.
+- **Green and bunker shapes.** OSM polygons become ellipses (a few for a bent
+  bunker), and a DEM cannot see green contours or bunker lips. Expect to touch
+  these up; `ZONE_FIT` names the ones that fit worst.
 - **Elevation detail.** A 10–30 m DEM gives the landform, not the mounding.
-- **Trees.** Positions come from `natural=tree` nodes and sampled woodland, so
-  they are plausible rather than exact, and are capped per hole.
-- **Water.** Hazards become axis-aligned boxes, which is rarely the real shape.
+- **Trees.** Positions come from `natural=tree` nodes and planted woodland, so
+  they are plausible rather than exact, and are capped per hole. Trees OSM
+  doesn't have are better mapped there (`TREES_SPARSE` points at bare sides).
+- **Water.** Lakes and creeks become chains of ellipses; check their banks.
 - **Fairway width** falls back to 20 m wherever OSM has no fairway polygon, or
   where the polygon is a shared double fairway and therefore not one hole's.
+  The fairway ribbon is one width from tee to green, so a wide fairway (OSM
+  gives Augusta's 47-70 m) also reaches 25-35 m either side of the tee, where
+  a real fairway starts well out from it.
 
 What you should *not* have to redo by hand is the overall layout: hole
 positions, lengths, doglegs, par, and the fall of the land.

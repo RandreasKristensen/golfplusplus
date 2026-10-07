@@ -35,7 +35,7 @@
     },
     {
       "id": "swing_start",
-      "file": "sfx/swing_start.wav",
+      "file": "sfx/swing_start.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Power meter starts, subtle club grip or backswing cue.",
@@ -44,7 +44,7 @@
     },
     {
       "id": "club_hit_driver",
-      "file": "sfx/club_hit_driver.wav",
+      "file": "sfx/club_hit_driver.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Loud wooden or metal golf drive hit, short transient.",
@@ -53,7 +53,7 @@
     },
     {
       "id": "club_hit_iron",
-      "file": "sfx/club_hit_iron.wav",
+      "file": "sfx/club_hit_iron.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Crisp iron strike.",
@@ -62,7 +62,7 @@
     },
     {
       "id": "club_hit_wedge",
-      "file": "sfx/club_hit_wedge.wav",
+      "file": "sfx/club_hit_wedge.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Softer wedge chip hit.",
@@ -71,7 +71,7 @@
     },
     {
       "id": "club_hit_putter",
-      "file": "sfx/club_hit_putter.wav",
+      "file": "sfx/club_hit_putter.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Small putter tap.",
@@ -80,7 +80,7 @@
     },
     {
       "id": "ball_land_grass",
-      "file": "sfx/ball_land_grass.wav",
+      "file": "sfx/ball_land_grass.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Ball thump on grass.",
@@ -89,7 +89,7 @@
     },
     {
       "id": "ball_land_bunker",
-      "file": "sfx/ball_land_bunker.wav",
+      "file": "sfx/ball_land_bunker.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Muffled sand impact.",
@@ -98,7 +98,7 @@
     },
     {
       "id": "ball_splash",
-      "file": "sfx/ball_splash.wav",
+      "file": "sfx/ball_splash.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Small water splash.",
@@ -107,7 +107,7 @@
     },
     {
       "id": "ball_tree_hit",
-      "file": "sfx/ball_tree_hit.wav",
+      "file": "sfx/ball_tree_hit.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Woody knock and leaves rustle.",
@@ -116,7 +116,7 @@
     },
     {
       "id": "ball_cup",
-      "file": "sfx/ball_cup.wav",
+      "file": "sfx/ball_cup.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Ball dropping into cup.",
@@ -134,7 +134,7 @@
     },
     {
       "id": "cart_start",
-      "file": "sfx/cart_start.wav",
+      "file": "sfx/cart_start.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Golf cart motor start or engage.",
@@ -143,7 +143,7 @@
     },
     {
       "id": "cart_drive_loop",
-      "file": "sfx/cart_drive_loop.ogg",
+      "file": "sfx/cart_drive_loop.mp3",
       "type": "loop",
       "category": "gameplay",
       "description": "Low golf cart electric motor loop, seamless.",
@@ -152,7 +152,7 @@
     },
     {
       "id": "cart_drift",
-      "file": "sfx/cart_drift.wav",
+      "file": "sfx/cart_drift.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Silly tire skid on grass.",
@@ -161,7 +161,7 @@
     },
     {
       "id": "emote_smoke",
-      "file": "sfx/emote_smoke.wav",
+      "file": "sfx/emote_smoke.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Lighter inhale and exhale cue.",
@@ -170,7 +170,7 @@
     },
     {
       "id": "emote_beer",
-      "file": "sfx/emote_beer.wav",
+      "file": "sfx/emote_beer.mp3",
       "type": "sfx",
       "category": "gameplay",
       "description": "Can open plus sip or glug.",
@@ -179,7 +179,7 @@
     },
     {
       "id": "ambience_course_day",
-      "file": "ambience/course_day.ogg",
+      "file": "ambience/course_day.mp3",
       "type": "ambience",
       "category": "ambience",
       "description": "Outdoor golf course bed: light wind, distant birds, no music, seamless.",
@@ -188,7 +188,7 @@
     },
     {
       "id": "ambience_menu_vcr",
-      "file": "ambience/menu_vcr.wav",
+      "file": "ambience/menu_vcr.mp3",
       "type": "ambience",
       "category": "ambience",
       "description": "Very quiet CRT/VCR hum for menus, seamless.",

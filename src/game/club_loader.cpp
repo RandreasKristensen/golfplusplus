@@ -17,7 +17,8 @@ std::optional<club_definition> parse_club_from_text(const std::string& text) {
     const std::optional<float> loft_degrees = json_float(*stats, "loft_degrees");
     const std::optional<float> backspin = json_float(*stats, "backspin");
     const std::optional<float> side_spin = json_float(*stats, "side_spin");
-    if (!id || !hit_sound || !power || !loft_degrees || !backspin || !side_spin) {
+    const std::optional<float> bunker_power = json_float(*stats, "bunker_power");
+    if (!id || !hit_sound || !power || !loft_degrees || !backspin || !side_spin || !bunker_power) {
         return std::nullopt;
     }
 
@@ -31,6 +32,7 @@ std::optional<club_definition> parse_club_from_text(const std::string& text) {
     club.stats.loft_degrees = *loft_degrees;
     club.stats.backspin = *backspin;
     club.stats.side_spin = *side_spin;
+    club.stats.bunker_power = *bunker_power;
     club.stats.timing_speed = json_float(*stats, "timing_speed").value_or(1.0f);
     club.stats.roll_friction_scale = json_float(*stats, "roll_friction_scale").value_or(1.0f);
     return club;

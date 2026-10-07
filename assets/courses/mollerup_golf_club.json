@@ -1,0 +1,32 @@
+{
+  "id": "mollerup_golf_club",
+  "name": "Mollerup Golf Club",
+  "backdrop": {
+    "sky": "backdrops/mollerup_golf_club_sky.bmp",
+    "land": "backdrops/mollerup_golf_club_land.bmp",
+    "haze_color": [0.75, 0.8, 0.83],
+    "haze_amount": 1.0,
+    "haze_distance": 800
+  },
+  "holes": [
+    "holes/mollerup_golf_club_h01.json",
+    "holes/mollerup_golf_club_h02.json",
+    "holes/mollerup_golf_club_h03.json",
+    "holes/mollerup_golf_club_h04.json",
+    "holes/mollerup_golf_club_h05.json",
+    "holes/mollerup_golf_club_h06.json",
+    "holes/mollerup_golf_club_h07.json",
+    "holes/mollerup_golf_club_h08.json",
+    "holes/mollerup_golf_club_h09.json",
+    "holes/mollerup_golf_club_h10.json",
+    "holes/mollerup_golf_club_h11.json",
+    "holes/mollerup_golf_club_h12.json",
+    "holes/mollerup_golf_club_h13.json",
+    "holes/mollerup_golf_club_h14.json",
+    "holes/mollerup_golf_club_h15.json",
+    "holes/mollerup_golf_club_h16.json",
+    "holes/mollerup_golf_club_h17.json",
+    "holes/mollerup_golf_club_h18.json"
+  ],
+  "world": "course_worlds/mollerup_golf_club.json"
+}

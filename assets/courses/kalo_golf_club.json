@@ -1,7 +1,13 @@
 {
   "id": "kalo_golf_club",
   "name": "Kal\u00f8 Golf Club",
-  "backdrop": "backdrops/kalo_golf_club.bmp",
+  "backdrop": {
+    "sky": "backdrops/kalo_golf_club_sky.bmp",
+    "land": "backdrops/kalo_golf_club_land.bmp",
+    "haze_color": [0.74, 0.8, 0.84],
+    "haze_amount": 1.0,
+    "haze_distance": 800
+  },
   "holes": [
     "holes/kalo_golf_club_h01.json",
     "holes/kalo_golf_club_h02.json",

@@ -206,42 +206,16 @@ TEST_CASE("terrain mesh centerline follows spline height") {
     CHECK(checked_sections >= terrain.sample_count);
 }
 
-TEST_CASE("bunkers and greens win over the water box around them") {
-    material_zone green_zone;
-    green_zone.type = material_zone_type::green;
-    green_zone.center = glm::vec3(0.0f, 0.0f, 10.0f);
-    green_zone.radius = 6.0f;
-    green_zone.has_radius = true;
-
-    material_zone bunker_zone;
-    bunker_zone.type = material_zone_type::bunker;
-    bunker_zone.center = glm::vec3(5.0f, 0.0f, 10.0f);
-    bunker_zone.radius = 2.0f;
-    bunker_zone.has_radius = true;
-
-    material_zone water_zone;
-    water_zone.type = material_zone_type::water;
-    water_zone.bounds_min = glm::vec3(-20.0f, 0.0f, -20.0f);
-    water_zone.bounds_max = glm::vec3(20.0f, 0.0f, 40.0f);
-    water_zone.has_bounds = true;
+TEST_CASE("bunkers and greens win over the water around them") {
+    const material_zone green_zone = circle_zone(material_zone_type::green, glm::vec3(0.0f, 0.0f, 10.0f), 6.0f);
+    const material_zone bunker_zone = circle_zone(material_zone_type::bunker, glm::vec3(5.0f, 0.0f, 10.0f), 2.0f);
+    const material_zone water_zone = ellipse_zone(material_zone_type::water, glm::vec3(0.0f, 0.0f, 10.0f), 25.0f, 30.0f);
 
     const std::vector<material_zone> zones = {water_zone, green_zone, bunker_zone};
     CHECK(zone_material_at(zones, glm::vec3(0.0f, 0.0f, 10.0f)) == terrain_material::green);
     CHECK(zone_material_at(zones, glm::vec3(5.5f, 0.0f, 10.0f)) == terrain_material::bunker);
     CHECK(zone_material_at(zones, glm::vec3(-10.0f, 0.0f, 10.0f)) == terrain_material::water);
     CHECK(!zone_material_at(zones, glm::vec3(-30.0f, 0.0f, 10.0f)));
-}
-
-TEST_CASE("a turned box zone covers its turned footprint") {
-    material_zone water_zone;
-    water_zone.type = material_zone_type::water;
-    water_zone.bounds_min = glm::vec3(-4.0f, 0.0f, -1.0f);
-    water_zone.bounds_max = glm::vec3(4.0f, 0.0f, 1.0f);
-    water_zone.rotation = glm::radians(90.0f);
-    water_zone.has_bounds = true;
-
-    CHECK(zone_material_at({water_zone}, glm::vec3(0.0f, 0.0f, 3.5f)) == terrain_material::water);
-    CHECK(!zone_material_at({water_zone}, glm::vec3(3.5f, 0.0f, 0.0f)));
 }
 
 TEST_CASE("terrain mesh separates fairway from authored rough ribbon") {
@@ -277,14 +251,10 @@ TEST_CASE("zones decide the material by their exact shape, on the ribbon and pas
     terrain.sample_count = 12;
 
     // A green on the last control point, wider than the ribbon.
-    material_zone green_zone;
-    green_zone.type = material_zone_type::green;
-    green_zone.center = glm::vec3(0.0f, 0.0f, 20.0f);
-    green_zone.radius = 8.0f;
-    green_zone.has_radius = true;
+    const material_zone green_zone = circle_zone(material_zone_type::green, glm::vec3(0.0f, 0.0f, 20.0f), 8.0f);
     const std::vector<material_zone> zones = {green_zone};
 
-    const std::vector<terrain_mesh> holes{build_terrain_mesh(terrain, zones, terrain_zone_tuning{})};
+    const std::vector<terrain_mesh> holes{build_terrain_mesh(terrain)};
     for (const terrain_vertex& vertex : holes[0].vertices) {
         CHECK((vertex.material == terrain_material::fairway || vertex.material == terrain_material::rough));
     }
@@ -302,7 +272,29 @@ TEST_CASE("zones decide the material by their exact shape, on the ribbon and pas
     CHECK(material_at(glm::vec3(30.0f, 0.0f, 5.0f)) == terrain_material::rough);
 }
 
-TEST_CASE("radius material overlay samples downhill terrain height") {
+namespace {
+// Every overlay vertex and triangle centre is on the ground it was cut from,
+// and inside `zone`.
+void check_overlay_on_ground(const terrain_mesh& overlay, const terrain_mesh& ground, const material_zone& zone,
+                             const terrain_material material) {
+    const auto on_ground = [&ground](const glm::vec3& point) {
+        return near(point.y, sample_terrain_anchor(ground, point, point.y).point.y, 0.0005f);
+    };
+    for (const terrain_vertex& vertex : overlay.vertices) {
+        CHECK(vertex.material == material);
+        CHECK(on_ground(vertex.position));
+        const std::optional<float> distance = zone_normalized_distance(zone, vertex.position);
+        CHECK(distance.value_or(0.0f) <= 1.0001f);
+    }
+    for (std::size_t i = 0; i + 2U < overlay.indices.size(); i += 3U) {
+        const glm::vec3 centre = (overlay.vertices[overlay.indices[i]].position + overlay.vertices[overlay.indices[i + 1U]].position
+                                  + overlay.vertices[overlay.indices[i + 2U]].position) / 3.0f;
+        CHECK(on_ground(centre));
+    }
+}
+}
+
+TEST_CASE("material overlay lies on the downhill ground it is cut from") {
     terrain_spline terrain;
     terrain.control_points = {
         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -311,35 +303,20 @@ TEST_CASE("radius material overlay samples downhill terrain height") {
     terrain.width = 12.0f;
     terrain.sample_count = 20;
 
-    material_zone bunker_zone;
-    bunker_zone.type = material_zone_type::bunker;
-    bunker_zone.center = glm::vec3(0.0f, 0.0f, 10.0f);
-    bunker_zone.radius = 2.0f;
-    bunker_zone.has_radius = true;
+    const material_zone bunker_zone = circle_zone(material_zone_type::bunker, glm::vec3(0.0f, 0.0f, 10.0f), 2.0f);
+    const terrain_mesh ground = plain_terrain_mesh(terrain);
+    const terrain_mesh overlay = build_material_overlay_mesh(ground, {bunker_zone}, 1.0f);
 
-    constexpr float lift = 0.045f;
-    const terrain_mesh terrain_mesh_data = plain_terrain_mesh(terrain);
-    const terrain_mesh overlay = build_material_overlay_mesh(terrain_mesh_data, {bunker_zone}, lift, 1.0f);
-
-    // A centre and two rings of 32, one metre apart.
-    CHECK(overlay.vertices.size() == 65U);
-    CHECK(overlay.indices.size() == 288U);
-    if (overlay.vertices.empty()) {
-        return;
-    }
-    CHECK(near(overlay.vertices.front().position.x, bunker_zone.center.x));
-    CHECK(near(overlay.vertices.front().position.z, bunker_zone.center.z));
-
+    REQUIRE(overlay.indices.size() >= 3U);
+    check_overlay_on_ground(overlay, ground, bunker_zone, terrain_material::bunker);
     bool found_sample_below_authored_height = false;
     for (const terrain_vertex& vertex : overlay.vertices) {
-        CHECK(vertex.material == terrain_material::bunker);
         found_sample_below_authored_height = found_sample_below_authored_height || vertex.position.y < -0.5f;
-        CHECK(vertex.position.y < bunker_zone.center.y + lift - 0.5f);
     }
     CHECK(found_sample_below_authored_height);
 }
 
-TEST_CASE("bounds material overlay samples downhill terrain height") {
+TEST_CASE("turned ellipse material overlay covers its shape on the ground") {
     terrain_spline terrain;
     terrain.control_points = {
         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -348,34 +325,26 @@ TEST_CASE("bounds material overlay samples downhill terrain height") {
     terrain.width = 12.0f;
     terrain.sample_count = 20;
 
-    material_zone water_zone;
-    water_zone.type = material_zone_type::water;
-    water_zone.bounds_min = glm::vec3(-2.0f, 0.0f, 8.0f);
-    water_zone.bounds_max = glm::vec3(2.0f, 0.0f, 12.0f);
-    water_zone.has_bounds = true;
+    // 4 m long, 2 m wide, turned a quarter so its long axis runs along z.
+    material_zone water_zone = ellipse_zone(material_zone_type::water, glm::vec3(0.0f, 0.0f, 10.0f), 2.0f, 1.0f);
+    water_zone.rotation = glm::radians(90.0f);
 
-    constexpr float lift = 0.045f;
-    const terrain_mesh terrain_mesh_data = plain_terrain_mesh(terrain);
-    const terrain_mesh overlay = build_material_overlay_mesh(terrain_mesh_data, {water_zone}, lift, 1.0f);
+    const terrain_mesh ground = plain_terrain_mesh(terrain);
+    const terrain_mesh overlay = build_material_overlay_mesh(ground, {water_zone}, 1.0f);
 
-    // 4 x 4 m at one-metre spacing.
-    CHECK(overlay.vertices.size() == 25U);
-    CHECK(overlay.indices.size() == 96U);
-    if (overlay.vertices.empty()) {
-        return;
-    }
-    CHECK(near(overlay.vertices.front().position.x, water_zone.bounds_min.x));
-    CHECK(near(overlay.vertices.front().position.z, water_zone.bounds_min.z));
-    CHECK(near(overlay.vertices.back().position.x, water_zone.bounds_max.x));
-    CHECK(near(overlay.vertices.back().position.z, water_zone.bounds_max.z));
-
-    bool found_sample_below_authored_height = false;
+    REQUIRE(overlay.indices.size() >= 3U);
+    check_overlay_on_ground(overlay, ground, water_zone, terrain_material::water);
+    float min_x = 1.0e9f, max_x = -1.0e9f, min_z = 1.0e9f, max_z = -1.0e9f;
     for (const terrain_vertex& vertex : overlay.vertices) {
-        CHECK(vertex.material == terrain_material::water);
-        found_sample_below_authored_height = found_sample_below_authored_height || vertex.position.y < -0.5f;
-        CHECK(vertex.position.y < water_zone.bounds_min.y + lift - 0.5f);
+        min_x = std::min(min_x, vertex.position.x);
+        max_x = std::max(max_x, vertex.position.x);
+        min_z = std::min(min_z, vertex.position.z);
+        max_z = std::max(max_z, vertex.position.z);
     }
-    CHECK(found_sample_below_authored_height);
+    CHECK(near(min_x, -1.0f, 0.01f));
+    CHECK(near(max_x, 1.0f, 0.01f));
+    CHECK(near(min_z, 8.0f, 0.01f));
+    CHECK(near(max_z, 12.0f, 0.01f));
 }
 
 TEST_CASE("spline terrain samples loaded elevation") {
@@ -716,32 +685,13 @@ terrain_spline index_test_spline() {
 }
 
 std::vector<material_zone> index_test_zones() {
-    material_zone green_zone;
-    green_zone.type = material_zone_type::green;
-    green_zone.center = glm::vec3(2.0f, 0.0f, 58.0f);
-    green_zone.radius = 6.0f;
-    green_zone.has_radius = true;
-
-    material_zone bunker_zone;
-    bunker_zone.type = material_zone_type::bunker;
-    bunker_zone.center = glm::vec3(5.0f, 0.0f, 44.0f);
-    bunker_zone.radius = 4.0f;
-    bunker_zone.has_radius = true;
-
-    material_zone water_zone;
-    water_zone.type = material_zone_type::water;
-    water_zone.center = glm::vec3(-3.0f, 0.0f, 26.0f);
-    water_zone.radius = 5.0f;
-    water_zone.has_radius = true;
-
-    return {green_zone, bunker_zone, water_zone};
+    return {circle_zone(material_zone_type::green, glm::vec3(2.0f, 0.0f, 58.0f), 6.0f),
+            circle_zone(material_zone_type::bunker, glm::vec3(5.0f, 0.0f, 44.0f), 4.0f),
+            circle_zone(material_zone_type::water, glm::vec3(-3.0f, 0.0f, 26.0f), 5.0f)};
 }
 
 terrain_mesh index_test_mesh() {
-    terrain_zone_tuning tuning;
-    tuning.bunker_depth = 0.6f;
-    tuning.water_depth = 0.4f;
-    return build_terrain_mesh(index_test_spline(), index_test_zones(), tuning);
+    return build_terrain_mesh(index_test_spline());
 }
 }
 
@@ -764,7 +714,7 @@ TEST_CASE("terrain spatial index is built by the mesh builders") {
     CHECK(ground.spatial_index.cells_x > 0);
     CHECK(ground.spatial_index.triangle_count == static_cast<uint32_t>(ground.indices.size() / 3U));
 
-    const terrain_mesh overlay = build_material_overlay_mesh(ground, index_test_zones(), 0.02f, 1.0f);
+    const terrain_mesh overlay = build_material_overlay_mesh(ground, index_test_zones(), 1.0f);
     CHECK(overlay.spatial_index.cells_x > 0);
     CHECK(overlay.spatial_index.triangle_count == static_cast<uint32_t>(overlay.indices.size() / 3U));
 }
@@ -1082,9 +1032,8 @@ TEST_CASE("terrain spatial index keeps triangles tested per sample near constant
     terrain_spline large_spline = index_test_spline();
     large_spline.sample_count = 256;
 
-    const terrain_zone_tuning tuning;
-    const terrain_mesh small_mesh = build_terrain_mesh(small_spline, index_test_zones(), tuning);
-    const terrain_mesh large_mesh = build_terrain_mesh(large_spline, index_test_zones(), tuning);
+    const terrain_mesh small_mesh = build_terrain_mesh(small_spline);
+    const terrain_mesh large_mesh = build_terrain_mesh(large_spline);
     CHECK(large_mesh.indices.size() > small_mesh.indices.size() * 2U);
     if (small_mesh.indices.size() < 3U || large_mesh.indices.size() < 3U) {
         return;
@@ -1121,4 +1070,31 @@ TEST_CASE("terrain spatial index keeps triangles tested per sample near constant
     CHECK(large_average < 32.0);
     CHECK(large_average < full_scan_average * 0.05);
     CHECK(large_average < small_average * 4.0);
+}
+
+TEST_CASE("the tree grid hits exactly what testing every tree hits") {
+    std::vector<tree_body> trees;
+    for (int i = 0; i < 400; ++i) {
+        // A scattered wood, some trees close enough to touch each other.
+        const float x = static_cast<float>((i * 37) % 200) - 100.0f + static_cast<float>(i % 7) * 0.3f;
+        const float z = static_cast<float>((i * 53) % 160) - 80.0f + static_cast<float>(i % 5) * 0.4f;
+        trees.push_back(tree_body{glm::vec3(x, static_cast<float>(i % 3), z), tree_shape{0.6f, 4.0f, 4.0f + static_cast<float>(i % 4), 6.0f}});
+    }
+    const tree_grid grid = build_tree_grid(trees, 16.0f);
+    int touched = 0;
+    for (int i = 0; i < 2000; ++i) {
+        ball_state ball;
+        ball.radius = 0.021f;
+        ball.position = glm::vec3(static_cast<float>((i * 29) % 240) - 120.0f + 0.13f * static_cast<float>(i % 11),
+                                  static_cast<float>(i % 12),
+                                  static_cast<float>((i * 41) % 200) - 100.0f + 0.17f * static_cast<float>(i % 13));
+        ball.velocity = glm::vec3(static_cast<float>(i % 9) - 4.0f, -1.0f, static_cast<float>(i % 7) - 3.0f);
+        const ball_state every = resolve_tree_collisions(ball, trees, 0.3f, 0.2f);
+        const ball_state near = resolve_tree_collisions(ball, trees, grid, 0.3f, 0.2f);
+        CHECK(every.position == near.position);
+        CHECK(every.velocity == near.velocity);
+        touched += every.position != ball.position ? 1 : 0;
+    }
+    CHECK(touched > 50);  // the test reaches into canopies, not only empty air
+    CHECK(resolve_tree_collisions(ball_state{}, {}, build_tree_grid({}, 16.0f), 0.3f, 0.2f).position == glm::vec3(0.0f));
 }

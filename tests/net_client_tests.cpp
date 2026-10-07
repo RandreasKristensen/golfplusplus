@@ -93,6 +93,19 @@ TEST_CASE("signing in moves through the statuses, and failures say why") {
     client.update(state);
     CHECK(client.status() == net_status::connected);
     CHECK(client.failure().empty());
+    CHECK(!client.guest());
+}
+
+TEST_CASE("an anonymous sign-in is a guest") {
+    fake_bridge().reset();
+    game_state state = started_hole();
+    net_client client = *net_client::create(fake_online_config(), "signed in", "failed");
+    client.begin_login();
+    stdb_event signed_in = fake_event(STDB_EVENT_SIGNED_IN);
+    signed_in.login_method = STDB_LOGIN_ANONYMOUS;
+    queue_event(signed_in);
+    client.update(state);
+    CHECK(client.guest());
 }
 
 TEST_CASE("subscriptions go from my views to my rows to my room, never a whole table") {
@@ -360,6 +373,17 @@ TEST_CASE("a retee online is sent to the server") {
     CHECK(std::find(names.begin(), names.end(), "stdb_retee") != names.end());
 }
 
+TEST_CASE("picking the ball out of its cup online is sent to the server") {
+    game_state state = started_hole();
+    net_client client = connected_client(state, 42);
+    state.play = play_mode::online;
+    fake_bridge().calls.clear();
+    record_ball_picked_up(state);
+    client.update(state);
+    const std::vector<std::string> names = fake_bridge().call_names();
+    CHECK(std::find(names.begin(), names.end(), "stdb_pick_up_ball") != names.end());
+}
+
 TEST_CASE("signing in while busy keeps the status") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
@@ -417,7 +441,7 @@ TEST_CASE("linking this login to another account never mixes their progress") {
     CHECK(state.xp_drops.empty());
 }
 
-TEST_CASE("my room's rows become its players, balls, groups and shots") {
+TEST_CASE("my room's rows become its players, balls, groups, shots and emotes") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
     queue_event(member_row(42, 7, STDB_ROW_INSERT));
@@ -427,6 +451,7 @@ TEST_CASE("my room's rows become its players, balls, groups and shots") {
     const std::string other = "OTHER";
     const std::string club = "driver";
     const std::string smoke = "smoke";
+    const std::string drink = "drink";
     const std::vector<std::int32_t> strokes{4, 0};
     stdb_row row{};
     row.room_member = stdb_room_member{43, 7, 9, 1, 5000000, strokes.data(), strokes.size()};
@@ -455,6 +480,9 @@ TEST_CASE("my room's rows become its players, balls, groups and shots") {
     queue_event(row_event(STDB_TABLE_SHOT_EVENT, STDB_ROW_INSERT, row));
     row = stdb_row{};
     row.emote_event = stdb_emote_event{7, 42, fake_text(smoke)};
+    queue_event(row_event(STDB_TABLE_EMOTE_EVENT, STDB_ROW_INSERT, row));
+    row = stdb_row{};
+    row.emote_event = stdb_emote_event{7, 43, fake_text(drink)};
     queue_event(row_event(STDB_TABLE_EMOTE_EVENT, STDB_ROW_INSERT, row));
     client.update(state);
 
@@ -486,6 +514,10 @@ TEST_CASE("my room's rows become its players, balls, groups and shots") {
     CHECK(shot.input.cigarette_active);
     CHECK(near(shot.input.ball_start, glm::vec3(1.0f, 2.0f, 3.0f)));
     CHECK(near(shot.rest, glm::vec3(7.0f, 8.0f, 9.0f)));
+    // Others' emotes go to the game to play; mine only lights my cigarette.
+    REQUIRE(state.online.emotes.size() == 1U);
+    CHECK(state.online.emotes.front().account_id == 43U);
+    CHECK(state.online.emotes.front().emote == emote_id::drink);
 
     // Leaving the room forgets all of it.
     queue_event(member_row(42, 7, STDB_ROW_DELETE));

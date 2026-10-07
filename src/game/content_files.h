@@ -1,6 +1,6 @@
 #pragma once
 
-// Reading files from disk: the one home for file I/O in game code. Every
+// Reading and writing files on disk: the one home for file I/O in game code. Every
 // loader's parse_*_from_text takes text, so the server module (which has no
 // filesystem) parses the same content from its embedded copy; these
 // functions feed the game the same text from assets/. None of them throw: an
@@ -19,6 +19,10 @@
 
 // The whole file, byte for byte (binary files too).
 std::optional<std::string> read_text_file(const std::filesystem::path& path);
+
+// Writes `text` to `path` (creating its directory) through a temporary
+// file, so a crash never leaves a half-written file. False on failure.
+bool replace_text_file(const std::filesystem::path& path, const std::string& text);
 
 // Every *.json file directly in `directory`, sorted by path. Empty when the
 // directory is missing or unreadable.

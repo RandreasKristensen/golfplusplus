@@ -2,6 +2,7 @@
 
 #include "core/menu_controls.h"
 #include "core/online_menus.h"
+#include "core/settings_menu.h"
 #include "game/content_files.h"
 #include "game/pixel_font_data.h"
 #include "game/text_ids.h"
@@ -11,7 +12,8 @@
 #include <utility>
 
 namespace {
-constexpr int confirm_item_count = 2;
+constexpr int confirm_item_count = 3;
+constexpr int confirm_settings_item = 2;
 
 render_hole_preview make_hole_preview(const hole_data& hole) {
     render_hole_preview preview;
@@ -42,6 +44,7 @@ startup_course_option make_course_option(const std::string& asset_root, const co
 startup_menu_screen screen_for_flow(const startup_flow flow) {
     switch (flow) {
     case startup_flow::main:
+    case startup_flow::settings:
     case startup_flow::offline:
         return startup_menu_screen::main;
     case startup_flow::help:
@@ -67,10 +70,13 @@ startup_menu_screen screen_for_flow(const startup_flow flow) {
 std::vector<main_menu_item> main_menu_items(const online_menu_status& online) {
     std::vector<main_menu_item> items{main_menu_item::play_online, main_menu_item::play_offline};
     if (signed_in(online)) {
-        items.push_back(main_menu_item::link_login);
+        if (!online.guest) {
+            items.push_back(main_menu_item::link_login);
+        }
         items.push_back(main_menu_item::sign_out);
     }
     items.push_back(main_menu_item::help);
+    items.push_back(main_menu_item::settings);
     items.push_back(main_menu_item::quit);
     return items;
 }
@@ -87,6 +93,8 @@ std::pair<const char*, const char*> main_menu_text(const main_menu_item item) {
         return {text_menu_main_sign_out, text_menu_main_sign_out_hint};
     case main_menu_item::help:
         return {text_menu_main_help, text_menu_main_help_hint};
+    case main_menu_item::settings:
+        return {text_menu_main_settings, text_menu_main_settings_hint};
     case main_menu_item::quit:
         return {text_menu_main_quit, text_menu_main_quit_hint};
     }
@@ -118,8 +126,8 @@ course_definition practice_course(const startup_hole_option& option) {
     return course;
 }
 
-// The backdrop of the first course that plays the hole at `path`, empty when none does.
-std::string backdrop_for_hole(const game_content& content, const std::filesystem::path& path) {
+// The backdrop of the first course that plays the hole at `path`, empty images when none does.
+course_backdrop backdrop_for_hole(const game_content& content, const std::filesystem::path& path) {
     for (const course_definition& course : content.courses) {
         for (std::size_t i = 0; i < course.holes.size(); ++i) {
             std::error_code error;
@@ -157,6 +165,9 @@ void accept_main_menu(startup_flow_state& state, const online_menu_status& onlin
     case main_menu_item::help:
         open_screen(state, startup_flow::help);
         break;
+    case main_menu_item::settings:
+        open_screen(state, startup_flow::settings);
+        break;
     case main_menu_item::quit:
         result.action = startup_action::quit;
         break;
@@ -192,6 +203,7 @@ startup_catalog load_startup_catalog(const game_content& content, const text_ass
     }
     catalog.name_chars = font_charset(text.font);
     catalog.name_max_length = static_cast<std::size_t>(content.tuning.server.name_max_length);
+    catalog.settings = content.settings;
     return catalog;
 }
 
@@ -204,6 +216,15 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
     state.clock_seconds = online.clock_seconds;
     if (is_online_flow(state.flow)) {
         update_online_menu(state, input, click, catalog, online, result);
+        return result;
+    }
+    if (state.flow == startup_flow::settings) {
+        const settings_menu_result settings =
+            update_settings_menu(state.selection, state.settings, catalog.settings, input, click, result.sounds);
+        result.settings_changed = settings.changed;
+        if (settings.back) {
+            return_to_main_menu(state);
+        }
         return result;
     }
 
@@ -255,7 +276,9 @@ void enter_playing(startup_flow_state& state) {
 }
 
 void return_to_main_menu(startup_flow_state& state) {
+    settings_values settings = std::move(state.settings);
     state = startup_flow_state{};
+    state.settings = std::move(settings);
 }
 
 void open_online_login(startup_flow_state& state) {
@@ -269,17 +292,31 @@ bool wants_text_input(const startup_flow_state& state) {
 void open_confirm_menu(startup_flow_state& state) {
     state.confirm_active = true;
     state.confirm_selection = 1;
+    state.confirm_settings = false;
 }
 
 confirm_menu_result update_confirm_menu(startup_flow_state& state,
                                         const input_state& input,
-                                        const std::optional<glm::vec2> click) {
+                                        const std::optional<glm::vec2> click,
+                                        const std::vector<setting_definition>& settings) {
     confirm_menu_result result;
+    if (state.confirm_settings) {
+        const settings_menu_result outcome =
+            update_settings_menu(state.settings_selection, state.settings, settings, input, click, result.sounds);
+        result.settings_changed = outcome.changed;
+        state.confirm_settings = !outcome.back;
+        return result;
+    }
     const int hit = select_with_input(startup_menu_screen::confirm, 1, state.confirm_selection, confirm_item_count,
                                       input, click, result.sounds);
 
     if (input.enter.pressed || input.space.pressed || hit >= 0) {
         result.sounds.push_back(ui_sound::select);
+        if (state.confirm_selection == confirm_settings_item) {
+            state.confirm_settings = true;
+            state.settings_selection = 0;
+            return result;
+        }
         state.confirm_active = false;
         result.leave_round = state.confirm_selection == 0;
     } else if (input.escape.pressed || input.backspace.pressed) {
@@ -327,6 +364,8 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
         add_tile(menu, lookup_text(text, text_menu_offline_play_course), lookup_text(text, text_menu_offline_play_course_hint), selected(0));
         add_tile(menu, lookup_text(text, text_menu_offline_play_hole), lookup_text(text, text_menu_offline_play_hole_hint), selected(1));
         break;
+    case startup_flow::settings:
+        return make_settings_menu_render_data(state.selection, state.settings, catalog.settings, text);
     case startup_flow::help:
         menu.title = lookup_text(text, text_menu_help_title);
         menu.subtitle = lookup_text(text, text_menu_help_subtitle);
@@ -354,11 +393,17 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
     return menu;
 }
 
-render_startup_menu make_confirm_menu_render_data(const startup_flow_state& state, const text_assets& text) {
+render_startup_menu make_confirm_menu_render_data(const startup_flow_state& state,
+                                                  const text_assets& text,
+                                                  const std::vector<setting_definition>& settings) {
+    if (state.confirm_settings) {
+        return make_settings_menu_render_data(state.settings_selection, state.settings, settings, text);
+    }
     render_startup_menu menu;
     menu.screen = startup_menu_screen::confirm;
     menu.title = lookup_text(text, text_menu_confirm_title);
     add_tile(menu, lookup_text(text, text_menu_confirm_yes), "", state.confirm_selection == 0);
     add_tile(menu, lookup_text(text, text_menu_confirm_no), "", state.confirm_selection == 1);
+    add_tile(menu, lookup_text(text, text_menu_confirm_settings), "", state.confirm_selection == confirm_settings_item);
     return menu;
 }

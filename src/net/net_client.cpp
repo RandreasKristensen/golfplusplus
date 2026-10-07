@@ -21,7 +21,7 @@ std::string text_of(const stdb_string& text) {
 // The reducers net_commands call: the game answers their refusals.
 bool gameplay_reducer(const std::string& reducer) {
     for (const char* name : {"update_motion", "take_shot", "enter_hole", "claim_collectible", "emote", "retee",
-                             "return_to_hub", "create_group", "join_group", "leave_group"}) {
+                             "pick_up_ball", "return_to_hub", "create_group", "join_group", "leave_group"}) {
         if (reducer == name) {
             return true;
         }
@@ -293,6 +293,9 @@ void net_client::send_commands(game_state& state) {
         case net_command_type::retee:
             stdb_retee(client);
             break;
+        case net_command_type::pick_up_ball:
+            stdb_pick_up_ball(client);
+            break;
         case net_command_type::create_group:
             stdb_create_group(client);
             break;
@@ -321,6 +324,7 @@ void net_client::handle(const stdb_event& event, game_state& state) {
         break;
     case STDB_EVENT_SIGNED_IN:
         status_ = net_status::connecting;
+        guest_ = event.login_method == STDB_LOGIN_ANONYMOUS;
         break;
     case STDB_EVENT_CONNECTED:
         forget_session(state);

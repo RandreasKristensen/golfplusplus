@@ -294,6 +294,7 @@ void stdb_update_motion(stdb_client* client, const stdb_motion* motion);
 void stdb_enter_hole(stdb_client* client, int32_t hole_index);
 void stdb_return_to_hub(stdb_client* client);
 void stdb_retee(stdb_client* client);
+void stdb_pick_up_ball(stdb_client* client);
 void stdb_take_shot(stdb_client* client, const stdb_shot* shot);
 void stdb_emote(stdb_client* client, const char* emote_id, size_t len);
 void stdb_claim_collectible(stdb_client* client, const char* collectible_id, size_t len);

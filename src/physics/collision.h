@@ -18,3 +18,13 @@ ball_state resolve_terrain_collision(const ball_state& in,
                                      float restitution,
                                      float friction,
                                      float dt);
+
+// One impact against an obstacle (a tree, a sign post, a fence): pushes the
+// ball `penetration` out along `normal`, reflects its speed into the obstacle
+// by `restitution` and takes `friction` of its sideways speed, once (unlike
+// terrain contact, which lasts several steps). Nothing for no penetration.
+ball_state resolve_contact(const ball_state& in,
+                           const glm::vec3& normal,
+                           float penetration,
+                           float restitution,
+                           float friction);

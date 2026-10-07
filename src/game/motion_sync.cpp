@@ -25,8 +25,9 @@ bool same_intent(const net_motion& a, const net_motion& b) {
 motion_mode current_motion_mode(const game_state& state) {
     switch (state.mode) {
     case game_mode::aiming:
-    case game_mode::addressing:
         return motion_mode::aim;
+    case game_mode::addressing:
+        return state.swing.phase == swing_phase::timing ? motion_mode::swing : motion_mode::address;
     case game_mode::following_shot:
         return motion_mode::idle;
     case game_mode::walking:

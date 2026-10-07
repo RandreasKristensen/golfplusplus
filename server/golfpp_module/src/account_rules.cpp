@@ -168,6 +168,10 @@ const char* login_method_name(const login_method method) {
     return "anonymous";
 }
 
+bool is_guest_login(const std::string& stored_method) {
+    return stored_method == login_method_name(login_method::anonymous);
+}
+
 login_claims parse_login_claims(const std::string& payload) {
     const std::optional<json> root = parse_json(payload);
     if (!root || !root->is_object()) {
