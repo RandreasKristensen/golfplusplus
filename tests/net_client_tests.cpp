@@ -344,20 +344,15 @@ TEST_CASE("menu actions call their reducers") {
     fake_bridge().calls.clear();
     client.claim_name("Alpha");
     client.join_course("kalo_par_3");
-    client.create_group();
-    client.join_group(9);
-    client.leave_group();
-    client.return_to_hub();
     client.leave_room();
     client.create_link_code();
     client.redeem_link_code("ab2c-d3ef");
-    const std::vector<std::string> expected{"stdb_claim_name",  "stdb_join_course",      "stdb_create_group",
-                                            "stdb_join_group",  "stdb_leave_group",      "stdb_return_to_hub",
-                                            "stdb_leave_room",  "stdb_create_link_code", "stdb_redeem_link_code"};
+    const std::vector<std::string> expected{"stdb_claim_name", "stdb_join_course", "stdb_leave_room",
+                                            "stdb_create_link_code", "stdb_redeem_link_code"};
     CHECK(fake_bridge().call_names() == expected);
     CHECK(fake_bridge().calls[0].text == "Alpha");
-    CHECK(fake_bridge().calls[3].number == 9);
-    CHECK(fake_bridge().calls[8].text == "ab2c-d3ef");
+    CHECK(fake_bridge().calls[1].text == "kalo_par_3");
+    CHECK(fake_bridge().calls[4].text == "ab2c-d3ef");
 }
 
 TEST_CASE("a retee online is sent to the server") {

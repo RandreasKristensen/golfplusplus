@@ -552,8 +552,7 @@ open ../hole_editor/hole-editor.html
 
 A single `leisure=golf_course` polygon often covers more than one layout.
 Augusta National's contains the Par 3 Course, so hole refs 1–9 appear twice —
-once for a 410 m par 4 and once for a 125 m par 3 — and the two used to merge
-into single impossible holes carrying the wrong par.
+once for a 410 m par 4 and once for a 125 m par 3.
 
 The converter detects contested refs and keeps the layout that the
 unambiguously-numbered holes belong to, judging each candidate by how close it

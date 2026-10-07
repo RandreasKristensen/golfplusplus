@@ -144,10 +144,11 @@ TEST_CASE("holes parse with tree defaults and reject bad geometry") {
 }
 
 TEST_CASE("courses list holes by id or path") {
-    const std::optional<course_definition> course = load_course_from_file(fixture_root() + "/courses/course_01.json");
+    const std::optional<course_definition> course = load_course_from_file(fixture_root() + "/courses/hub.json");
     REQUIRE(course.has_value());
-    CHECK(course->id == "course_01");
-    CHECK(course->name == "The Big Three");
+    CHECK(course->id == "fixture_hub");
+    CHECK(course->name == "Fixture Hub");
+    CHECK(course->world == "course_worlds/hub.json");
     CHECK((course->holes == std::vector<std::string>{"test", "test2", "test3"}));
     CHECK(course->backdrop.sky == "backdrops/fixture_sky.bmp");
     CHECK(course->backdrop.land == "backdrops/fixture_land.bmp");
@@ -159,17 +160,21 @@ TEST_CASE("courses list holes by id or path") {
 
     const std::string backdrop =
         R"("backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500})";
-    CHECK(parse_course_from_text(R"({"id": "ok", )" + backdrop + R"(, "holes": ["ok"]})"));
-    CHECK(!parse_course_from_text(R"({"id": "empty", )" + backdrop + R"(, "holes": []})"));
-    CHECK(!parse_course_from_text(R"({"id": "bad", )" + backdrop + R"(, "holes": ["ok", 3]})"));
-    CHECK(!parse_course_from_text(R"({"id": "no_backdrop", "holes": ["ok"]})"));
-    CHECK(!parse_course_from_text(R"({"id": "one_image", "backdrop": "b.bmp", "holes": ["ok"]})"));
+    const std::string named = R"("id": "ok", "name": "Ok", "world": "w.json", )";
+    CHECK(parse_course_from_text("{" + named + backdrop + R"(, "holes": ["ok"]})"));
+    CHECK(!parse_course_from_text("{" + named + backdrop + R"(, "holes": []})"));
+    CHECK(!parse_course_from_text("{" + named + backdrop + R"(, "holes": ["ok", 3]})"));
+    CHECK(!parse_course_from_text(R"({"name": "Ok", "world": "w.json", )" + backdrop + R"(, "holes": ["ok"]})"));
+    CHECK(!parse_course_from_text(R"({"id": "ok", "world": "w.json", )" + backdrop + R"(, "holes": ["ok"]})"));
+    CHECK(!parse_course_from_text(R"({"id": "ok", "name": "Ok", )" + backdrop + R"(, "holes": ["ok"]})"));
+    CHECK(!parse_course_from_text("{" + named + R"("holes": ["ok"]})"));
+    CHECK(!parse_course_from_text("{" + named + R"("backdrop": "b.bmp", "holes": ["ok"]})"));
     CHECK(!parse_course_from_text(
-        R"({"id": "no_land", "backdrop": {"sky": "s.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500}, "holes": ["ok"]})"));
+        "{" + named + R"("backdrop": {"sky": "s.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500}, "holes": ["ok"]})"));
     CHECK(!parse_course_from_text(
-        R"({"id": "no_haze", "backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_amount": 1, "haze_distance": 500}, "holes": ["ok"]})"));
+        "{" + named + R"("backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_amount": 1, "haze_distance": 500}, "holes": ["ok"]})"));
     CHECK(!parse_course_from_text(
-        R"({"id": "flat_haze", "backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 0}, "holes": ["ok"]})"));
+        "{" + named + R"("backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 0}, "holes": ["ok"]})"));
 }
 
 namespace {
@@ -238,11 +243,11 @@ TEST_CASE("course worlds need exactly one start per hole") {
     CHECK(world->collectibles.size() == 3U);
     CHECK(world->collectibles[2].requirement.min_level == 2);
 
-    const course_definition one_hole = fixture_course({"test"});
+    const course_definition one_hole = course_of({"test"});
     CHECK(!parse_course_world_from_text(
         R"({"hole_starts": [{"hole_index": 4, "position": [0, 0, 0]}]})", one_hole));
     CHECK(!parse_course_world_from_text(R"({"hole_starts": []})", one_hole));
-    const course_definition two_holes = fixture_course({"test", "test2"});
+    const course_definition two_holes = course_of({"test", "test2"});
     CHECK(!parse_course_world_from_text(R"({"hole_starts": [
         {"hole_index": 0, "position": [0, 0, 0]},
         {"hole_index": 0, "position": [9, 0, 0]}]})", two_holes));
@@ -267,7 +272,7 @@ TEST_CASE("course worlds need a complete ground grid") {
     REQUIRE(world.has_value());
     CHECK(world->ground.columns * world->ground.rows == static_cast<int>(world->ground.heights.size()));
 
-    const course_definition one_hole = fixture_course({"test"});
+    const course_definition one_hole = course_of({"test"});
     const std::string start = R"("hole_starts": [{"hole_index": 0, "position": [0, 0, 0]}])";
     const auto with_ground = [&](const std::string& ground) { return "{" + start + ground + "}"; };
     const std::optional<course_world_definition> parsed = parse_course_world_from_text(
@@ -436,8 +441,7 @@ render_data busy_hud(const text_assets& text, const std::string& club_label) {
     // Online: a full group of the longest names, over par everywhere, and
     // their name tags; the G key.
     const std::size_t longest_name = static_cast<std::size_t>(shipped_content().tuning.server.name_max_length);
-    const std::array<player_relationship, 3> relationships{player_relationship::unknown, player_relationship::grouped,
-                                                           player_relationship::befriended};
+    const std::array<player_relationship, 2> relationships{player_relationship::unknown, player_relationship::grouped};
     data.show_scorecard = true;
     data.scorecard = played_scorecard(shipped_content().courses.front(), text);
     for (int i = 0; i < shipped_content().tuning.server.group_capacity; ++i) {
@@ -458,7 +462,7 @@ TEST_CASE("the shipped hole sign's board has its face texture's shape") {
 
 TEST_CASE("every shipped hole sign fits its number, par and a four-digit length") {
     const text_assets& text = shipped_text_assets();
-    const play_area area = build_hole_area(straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 300.0f), 30.0f),
+    const play_area area = hole_area(straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 300.0f), 30.0f),
                                            shipped_content().tuning);
     REQUIRE(area.signs.size() == 1U);
     for (const course_definition& course : shipped_content().courses) {
@@ -478,8 +482,7 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
     const startup_catalog catalog = load_startup_catalog(shipped_content(), text);
     const online_menu_status online = busy_online(catalog.name_max_length);
     for (const overlay_grid& grid : shipped_grids) {
-        for (const startup_flow flow : {startup_flow::main, startup_flow::help, startup_flow::offline, startup_flow::hole_picker,
-                                        startup_flow::course_picker, startup_flow::link_code_show,
+        for (const startup_flow flow : {startup_flow::main, startup_flow::help, startup_flow::course_picker, startup_flow::link_code_show,
                                         startup_flow::online_course_picker}) {
             startup_flow_state state;
             state.flow = flow;

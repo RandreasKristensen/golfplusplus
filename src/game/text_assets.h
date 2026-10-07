@@ -17,9 +17,9 @@ struct text_assets {
 };
 
 // Paths relative to the asset root.
-constexpr const char* text_font_path = "fonts/pixel_font.json";
-constexpr const char* text_strings_path = "text/en.json";
-constexpr const char* text_styles_path = "ui/text_styles.json";
+inline constexpr const char* text_font_path = "fonts/pixel_font.json";
+inline constexpr const char* text_strings_path = "text/en.json";
+inline constexpr const char* text_styles_path = "ui/text_styles.json";
 
 std::optional<text_assets> parse_text_assets(const std::string& font_json,
                                              const std::string& strings_json,

@@ -64,7 +64,7 @@ enum class profile_stage : std::size_t {
     count
 };
 
-constexpr std::size_t profile_stage_count = static_cast<std::size_t>(profile_stage::count);
+inline constexpr std::size_t profile_stage_count = static_cast<std::size_t>(profile_stage::count);
 
 enum class gpu_profile_stage : std::size_t {
     terrain = 0,
@@ -74,7 +74,7 @@ enum class gpu_profile_stage : std::size_t {
     count
 };
 
-constexpr std::size_t gpu_profile_stage_count = static_cast<std::size_t>(gpu_profile_stage::count);
+inline constexpr std::size_t gpu_profile_stage_count = static_cast<std::size_t>(gpu_profile_stage::count);
 
 // Plain data. Zero-initialised means "nothing recorded".
 struct frame_profile {

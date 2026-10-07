@@ -366,7 +366,6 @@ class CenterlineTests(unittest.TestCase):
         self.assertLessEqual(long_hole, 14)
 
     def test_fairway_width_survives_a_hole_way_centerline(self):
-        """Regression: picking the hole way used to throw the measured width away."""
         line = [(0.0, 0.0), (0.0, 150.0), (0.0, 300.0)]
         fairway = [(-25.0, 0.0), (25.0, 0.0), (25.0, 300.0), (-25.0, 300.0)]
         config = {"fallback_width": 20.0, "rough_width_multiplier": 1.55}
@@ -630,10 +629,7 @@ class SharedSiteTests(unittest.TestCase):
 
 class TeeSelectionTests(unittest.TestCase):
     def test_the_tee_matching_the_surveyed_length_is_chosen(self):
-        """
-        Taking the tee furthest from the pin reaches past the back tee onto a
-        neighbouring hole's, which used to stretch Augusta's 15th by 60 m.
-        """
+        """The tee furthest from the pin can be a neighbouring hole's."""
         h = conv._empty_hole()
         line = [(0.0, 0.0), (0.0, 500.0)]
         pin = (0.0, 500.0)
@@ -682,7 +678,6 @@ class HoleTagTests(unittest.TestCase):
         self.assertEqual([], conv._parse_hole_numbers({"name": "Road"}))
 
     def test_par_and_name_come_from_the_hole_way_not_the_merged_tags(self):
-        """A bunker's name used to be able to become the hole's name."""
         holes = conv.group_holes([
             way(1, {"golf": "hole", "ref": "1", "par": "5", "name": "Long"},
                 [(56.0, 10.0), (56.0045, 10.0)]),

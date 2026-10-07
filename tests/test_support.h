@@ -65,11 +65,13 @@ inline game_content fixture_content() {
     return content;
 }
 
-inline course_definition fixture_course(const std::vector<std::string>& holes) {
+// A course listing `holes`, to parse a course world against.
+inline course_definition course_of(const std::vector<std::string>& holes) {
     course_definition course;
-    course.id = "fixture_course";
-    course.name = "Fixture Course";
+    course.id = "course_of";
+    course.name = "Course Of";
     course.holes = holes;
+    course.world = "course_worlds/course_of.json";
     return course;
 }
 
@@ -84,9 +86,12 @@ inline game_state started_game(const course_definition& course) {
     return state;
 }
 
-// A fresh state on hole 1 of a two-hole fixture course.
+// A fresh state on hole 1 of the fixture hub course (its start is the
+// hole's own tee, unturned, so hole and course coordinates agree).
 inline game_state started_hole() {
-    return started_game(fixture_course({"test", "test2"}));
+    game_state state = started_game(fixture_hub_course());
+    start_hub_hole(state, 0);
+    return state;
 }
 
 // Picks the ball left in its cup after holing out (state.cup_ball) from
@@ -137,13 +142,34 @@ inline hole_data straight_hole(const glm::vec3& tee, const glm::vec3& pin, const
     return hole;
 }
 
-// Replaces the hole being played with `hole`, as start_course would.
+// A course of `hole` alone, started at its own tee and without land, so it
+// keeps its own heights.
+inline course_world_definition hole_world(const hole_data& hole) {
+    course_world_definition world;
+    world.hole_starts = {course_world_hole_start{0, hole.tee_position, 0.0f, 0.0f}};
+    return world;
+}
+
+inline play_area hole_area(const hole_data& hole, const game_tuning& tuning) {
+    return build_course_area({hole}, hole_world(hole), tuning);
+}
+
+// Replaces the course with `hole` alone, and plays it.
 inline void play_hole(game_state& state, const hole_data& hole) {
     state.course_holes = {hole};
     state.round = start_round(1);
-    state.area = build_hole_area(hole, state.tuning);
-    state.hole = active_hole{0, hole.tee_position, hole.pin_position};
+    state.area = hole_area(hole, state.tuning);
+    state.hub = course_hub{hole_world(hole), {hub_hole_marker{hole.tee_position, hole.pin_position, hole.wind_seed}}};
+    state.hole = active_hole{0, hole.tee_position, hole.pin_position, hole.wind_seed};
     mark_terrain_render_dirty(state);
+}
+
+// A course of the fixture hub's hole 1 alone, being played: holing it
+// finishes the round.
+inline game_state single_hole_course() {
+    game_state state = started_hole();
+    play_hole(state, state.course_holes.front());
+    return state;
 }
 
 // No wind, drag or spin, so ball motion depends only on contact.

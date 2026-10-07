@@ -1,8 +1,8 @@
 #pragma once
 
 // The ground the player is on: a whole course, with every hole placed where
-// its course world puts it on the course's land, or one hole on its own for a
-// course without a world. Built from content, never saved.
+// its course world puts it on the course's land. Built from content, never
+// saved.
 
 #include "game/course_world_definition.h"
 #include "game/game_tuning.h"
@@ -58,12 +58,10 @@ struct play_area {
 glm::vec3 place_hole_point(const hole_data& hole, const course_world_hole_start& start, const glm::vec3& point);
 hole_data place_hole(const hole_data& hole, const course_world_hole_start& start);
 
-// One hole on its own, in the coordinates of `hole`.
-play_area build_hole_area(const hole_data& hole, const game_tuning& tuning);
-
 // The whole course: every hole placed by its hole start (`holes[i]` belongs to
-// `world.hole_starts[i]`), on the world's land. Each hole's terrain is built
-// in hole space before placing, so turned zones shape it the same way.
+// `world.hole_starts[i]`), on the world's land (none when its grid is empty:
+// the holes keep their own heights). Each hole's terrain is built in hole
+// space before placing, so turned zones shape it the same way.
 play_area build_course_area(const std::vector<hole_data>& holes,
                             const course_world_definition& world,
                             const game_tuning& tuning);

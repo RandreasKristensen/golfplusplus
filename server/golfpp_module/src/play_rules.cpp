@@ -1,7 +1,7 @@
 #include "play_rules.h"
 
 #include "physics/vector_math.h"
-#include "server_errors.h"
+#include "game/server_errors.h"
 
 #include <algorithm>
 #include <cmath>
@@ -11,10 +11,6 @@
 namespace {
 bool is_mode(const std::uint8_t mode, const motion_mode wanted) {
     return mode == static_cast<std::uint8_t>(wanted);
-}
-
-bool in_cart(const std::uint8_t mode) {
-    return is_mode(mode, motion_mode::cart) || is_mode(mode, motion_mode::drift);
 }
 }
 
@@ -33,7 +29,7 @@ std::optional<std::uint64_t> choose_room(const std::vector<room_candidate>& room
 }
 
 float mode_speed(const std::uint8_t mode, const game_tuning& tuning) {
-    return in_cart(mode) ? fastest_cart_speed(tuning.cart) : tuning.player.walk_speed;
+    return in_cart(static_cast<motion_mode>(mode)) ? fastest_cart_speed(tuning.cart) : tuning.player.walk_speed;
 }
 
 motion_check check_motion(const net_motion& previous,
@@ -69,7 +65,7 @@ motion_check check_motion(const net_motion& previous,
 movement_earnings movement_earns(const std::uint8_t mode, const bool on_road) {
     movement_earnings earnings;
     earnings.walking = is_mode(mode, motion_mode::walk);
-    earnings.cart = in_cart(mode) && on_road;
+    earnings.cart = in_cart(static_cast<motion_mode>(mode)) && on_road;
     earnings.drift = is_mode(mode, motion_mode::drift) && on_road;
     return earnings;
 }

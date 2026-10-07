@@ -436,7 +436,7 @@ void app::refresh_render_meshes() {
     const std::uint64_t revision = game_.terrain_render_revision;
     terrain_render_mesh_ = make_terrain_render_mesh({&game_.area.ground}, revision);
     material_overlay_render_mesh_ = make_terrain_render_mesh({&game_.area.material_overlay}, revision);
-    refresh_render_hole_signs(hole_signs_, game_, text_, revision);
+    refresh_render_hole_signs(hole_signs_, game_.area, hole_sign_texts(game_), text_, revision);
     fences_ = build_render_fences(game_.area, revision);
     water_ = build_render_water(game_.area, revision);
     render_meshes_revision_ = revision;

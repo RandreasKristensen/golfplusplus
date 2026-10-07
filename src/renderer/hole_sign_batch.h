@@ -4,12 +4,11 @@
 // (hole_sign_face.h) and every sign's model in one vertex list, its board
 // with the texture on the face and wood elsewhere, on two posts. Painting
 // the faces samples the ground for every texel, so it is rebuilt only when
-// the signs themselves change (a new course, or the next hole of a course
-// without a hub), never per frame or per hole of a hub.
+// the signs themselves change (a new course), never per frame or per hole.
 // GL-free; renderer/hole_sign_renderer draws it.
 
-#include "game/game_state.h"
 #include "game/hole_sign.h"
+#include "game/play_area.h"
 #include "game/text_assets.h"
 #include "renderer/bmp_image.h"
 
@@ -34,9 +33,16 @@ struct render_hole_sign {
     std::size_t vertex_count = 0;
 };
 
-// What a sign was built from: which course hole, and where it stands.
+// What one sign's face says (core/render_frame.h hole_sign_texts).
+struct hole_sign_text {
+    int number = 0;  // the course hole, from 1
+    int par = 0;
+    int meters = 0;
+};
+
+// What a sign was built from: what it says, and where it stands.
 struct hole_sign_source {
-    std::size_t course_hole = 0;
+    hole_sign_text text;
     glm::vec3 board_center{0.0f};
 };
 
@@ -53,9 +59,15 @@ struct render_hole_signs {
 // Appends `sign`'s board and posts as triangles.
 void append_hole_sign_model(std::vector<hole_sign_vertex>& vertices, const hole_sign& sign);
 
-// Every sign of `game`'s play area, with the number, par and length of the
-// course hole each stands at.
-render_hole_signs build_render_hole_signs(const game_state& game, const text_assets& text, std::uint64_t revision);
+// Every sign of `area`, each saying `texts[i]` (one per area.signs[i]).
+render_hole_signs build_render_hole_signs(const play_area& area,
+                                          const std::vector<hole_sign_text>& texts,
+                                          const text_assets& text,
+                                          std::uint64_t revision);
 // Rebuilds `signs` (with `revision`) unless they were built from the same
-// signs as `game`'s; true when it did.
-bool refresh_render_hole_signs(render_hole_signs& signs, const game_state& game, const text_assets& text, std::uint64_t revision);
+// signs saying the same; true when it did.
+bool refresh_render_hole_signs(render_hole_signs& signs,
+                               const play_area& area,
+                               const std::vector<hole_sign_text>& texts,
+                               const text_assets& text,
+                               std::uint64_t revision);

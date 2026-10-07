@@ -1,7 +1,7 @@
 #pragma once
 
 // Menu flow: main menu, help, settings (core/settings_menu.h), the offline
-// pickers, the online screens (core/online_menus.h) and the in-round "leave
+// course picker, the online screens (core/online_menus.h) and the in-round "leave
 // the round?" menu, which also opens settings. Turns input
 // into state changes plus actions, online requests and UI sounds for app to
 // carry out, and builds the menu render data. No SDL and no network: app
@@ -30,9 +30,7 @@ enum class startup_flow {
     main,
     help,
     settings,
-    offline,  // PLAY OFFLINE: a course or a practice hole
-    hole_picker,
-    course_picker,
+    course_picker,  // PLAY OFFLINE
     online_login,          // PLAY ONLINE: signing in, until my account is known
     name_entry,            // a new account picks its name...
     link_code_entry,       // ...or links this login to an account it already has
@@ -54,21 +52,6 @@ enum class main_menu_item {
     quit
 };
 
-// PLAY OFFLINE's items, top to bottom.
-enum class offline_menu_item {
-    play_course,
-    play_hole,
-    count
-};
-
-struct startup_hole_option {
-    std::string path;  // relative to the asset root
-    hole_data hole;
-    // The backdrop of the first course playing this hole; empty images when
-    // none does.
-    course_backdrop backdrop;
-};
-
 struct startup_course_option {
     course_definition course;
     int total_par = 0;
@@ -77,7 +60,6 @@ struct startup_course_option {
 
 // Everything the menus show, loaded once at startup.
 struct startup_catalog {
-    std::vector<startup_hole_option> holes;
     std::vector<startup_course_option> courses;
     // What name entry accepts: the font's characters (the server decides
     // which of them a name may use), up to the server's longest name.
@@ -183,8 +165,7 @@ struct confirm_menu_result {
     bool settings_changed = false;
 };
 
-// Every hole file in <asset_root>/holes (sorted by path) and every course,
-// with name entry's rules from the font and the server tuning, and the
+// Every course, with name entry's rules from the font and the server tuning, and the
 // settings screen's entries.
 startup_catalog load_startup_catalog(const game_content& content, const text_assets& text);
 

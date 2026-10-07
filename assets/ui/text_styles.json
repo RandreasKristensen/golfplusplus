@@ -20,7 +20,6 @@
     "hud_mode": { "fill": 0.80, "color": [0.70, 0.72, 0.64], "align": "center" },
     "name_tag": { "fill": 0.85, "max_scale": 1, "color": [0.94, 0.94, 0.92], "align": "center" },
     "name_tag_group": { "fill": 0.85, "max_scale": 1, "color": [0.36, 0.62, 0.98], "align": "center" },
-    "name_tag_friend": { "fill": 0.85, "max_scale": 1, "color": [0.44, 0.90, 0.40], "align": "center" },
     "hud_scale": { "fill": 0.75, "color": [0.88, 0.86, 0.72], "align": "center" },
     "hud_club": { "fill": 0.60, "max_scale": 3, "wrap": true, "color": [0.90, 0.88, 0.76], "align": "center" },
     "cart_label": { "fill": 0.90, "color": [0.94, 0.86, 0.52], "align": "left" },

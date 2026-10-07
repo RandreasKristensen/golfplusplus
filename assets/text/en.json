@@ -20,14 +20,6 @@
   "menu.main.quit": "QUIT",
   "menu.main.quit.hint": "RETURN TO DESKTOP",
 
-  "menu.offline.title": "PLAY OFFLINE",
-  "menu.offline.subtitle": "YOUR OFFLINE PROGRESS, SAVED ON THIS PC",
-  "menu.offline.footer": "ARROWS MOVE  ENTER SELECT  BACKSPACE BACK",
-  "menu.offline.play_course": "PLAY COURSE",
-  "menu.offline.play_course.hint": "PLAY ORDERED HOLES",
-  "menu.offline.play_hole": "PLAY HOLE",
-  "menu.offline.play_hole.hint": "PICK ONE HOLE",
-
   "menu.online.title": "PLAY ONLINE",
   "menu.online.footer": "ARROWS MOVE  ENTER SELECT  ESC BACK",
   "menu.login.subtitle": "SIGN IN TO PLAY WITH OTHERS",
@@ -77,11 +69,6 @@
   "menu.help.title": "CONTROLS",
   "menu.help.subtitle": "CURRENT GAMEPLAY INPUTS",
   "menu.help.footer": "BACKSPACE BACK  ESC BACK",
-
-  "menu.hole_picker.title": "PLAY HOLE",
-  "menu.hole_picker.subtitle": "CHOOSE A SINGLE HOLE",
-  "menu.hole_picker.footer": "ARROWS MOVE  ENTER START  BACKSPACE BACK",
-  "menu.hole_picker.tile": "PAR {par}",
 
   "menu.course_picker.title": "PLAY COURSE",
   "menu.course_picker.subtitle": "CHOOSE A COURSE",

@@ -7,7 +7,7 @@
 #include "game/game_tuning.h"
 #include "game/net_types.h"
 #include "game/pixel_font_data.h"
-#include "server_errors.h"
+#include "game/server_errors.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -77,11 +77,10 @@ std::optional<rate_window> use_rate_window(const rate_window& window,
 
 enum class login_method {
     browser,
-    steam,
     anonymous
 };
 
-// "browser", "steam" or "anonymous", as stored in account_login.
+// "browser" or "anonymous", as stored in account_login.
 const char* login_method_name(login_method method);
 
 // An anonymous login is a guest: the game stores nothing to sign in with it
@@ -95,7 +94,6 @@ struct login_claims {
     bool present = false;
     std::string issuer;
     std::vector<std::string> audience;
-    std::string raw_payload;  // the JWT payload JSON
 };
 
 // The claims of a JWT payload (JSON): `aud` may be one string or several.
@@ -106,18 +104,9 @@ struct login_config {
     std::string auth_issuer;
     std::string auth_audience;  // our client id at the auth issuer
     bool allow_anonymous = false;
-    std::uint32_t steam_app_id = 0;  // 0: no ownership check
-    bool allow_non_steam = true;
 };
 
-struct login_check {
-    std::optional<login_method> method;  // nullopt: refuse the connection
-    std::string steam_id;                // Steam logins only
-};
-
-// Tokens from our issuer for our client are browser or Steam logins
-// (login_method "steam" in the payload). A Steam login must own
-// steam_app_id when it is set; browser logins need allow_non_steam. Any
-// other token is an anonymous login, accepted only with allow_anonymous or
-// for the module's owner.
-login_check check_login(const login_claims& claims, const login_config& config, bool is_owner);
+// Tokens from our issuer for our client are browser logins. Any other token
+// is an anonymous login, accepted only with allow_anonymous or for the
+// module's owner. nullopt: refuse the connection.
+std::optional<login_method> check_login(const login_claims& claims, const login_config& config, bool is_owner);

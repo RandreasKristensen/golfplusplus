@@ -412,6 +412,10 @@ bool in_hub(const game_state& state) {
     return state.hub.has_value() && !state.hole.has_value();
 }
 
+int local_zone(const game_state& state) {
+    return state.hole ? static_cast<int>(state.hole->index) : hub_zone;
+}
+
 bool shot_playing(const game_state& state) {
     return state.shot.has_value();
 }

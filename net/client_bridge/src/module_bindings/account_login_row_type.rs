@@ -10,7 +10,6 @@ pub struct AccountLoginRow {
     pub identity: __sdk::Identity,
     pub account_id: u64,
     pub login_method: String,
-    pub steam_id: String,
     pub linked_at: __sdk::Timestamp,
 }
 
@@ -25,7 +24,6 @@ pub struct AccountLoginRowCols {
     pub identity: __sdk::__query_builder::Col<AccountLoginRow, __sdk::Identity>,
     pub account_id: __sdk::__query_builder::Col<AccountLoginRow, u64>,
     pub login_method: __sdk::__query_builder::Col<AccountLoginRow, String>,
-    pub steam_id: __sdk::__query_builder::Col<AccountLoginRow, String>,
     pub linked_at: __sdk::__query_builder::Col<AccountLoginRow, __sdk::Timestamp>,
 }
 
@@ -36,7 +34,6 @@ impl __sdk::__query_builder::HasCols for AccountLoginRow {
             identity: __sdk::__query_builder::Col::new(table_name, "identity"),
             account_id: __sdk::__query_builder::Col::new(table_name, "account_id"),
             login_method: __sdk::__query_builder::Col::new(table_name, "login_method"),
-            steam_id: __sdk::__query_builder::Col::new(table_name, "steam_id"),
             linked_at: __sdk::__query_builder::Col::new(table_name, "linked_at"),
         }
     }

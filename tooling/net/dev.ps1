@@ -211,7 +211,7 @@ function Enable-Anonymous {
     Say "turning on anonymous logins"
     $result = Invoke-Spacetime @("call", $database, "admin_set_config",
                                  (Json-Argument $online.auth_issuer), (Json-Argument $online.auth_client_id),
-                                 "true", "0", "true", (Json-Argument $secret), "--server", "local")
+                                 "true", (Json-Argument $secret), "--server", "local")
     if (-not $result.ok -or (Get-ConfigValue "allow_anonymous") -ne "true") {
         $result.messages | ForEach-Object { Write-Host $_ }
         throw "Could not turn on anonymous logins (only the publisher can)."

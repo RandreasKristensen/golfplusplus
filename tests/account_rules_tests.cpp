@@ -45,8 +45,8 @@ login_config official_config() {
     return config;
 }
 
-login_claims claims_from(const std::string& issuer, const std::string& payload) {
-    return login_claims{true, issuer, {"golfpp"}, payload};
+login_claims claims_from(const std::string& issuer) {
+    return login_claims{true, issuer, {"golfpp"}};
 }
 
 const std::string secret(min_link_secret_length, 's');
@@ -128,57 +128,28 @@ TEST_CASE("rate windows allow the limit, then refuse until the period passes") {
     CHECK(!use_rate_window(rate_window{}, hour * 20, hour, 0).has_value());
 }
 
-TEST_CASE("logins from our issuer are browser or steam logins") {
+TEST_CASE("logins from our issuer for our client are browser logins") {
     const login_config config = official_config();
-    const login_check browser = check_login(claims_from(config.auth_issuer, R"({"login_method":"google"})"), config, false);
-    REQUIRE(browser.method.has_value());
-    CHECK(*browser.method == login_method::browser);
+    CHECK(check_login(claims_from(config.auth_issuer), config, false) == login_method::browser);
 
-    const login_check steam =
-        check_login(claims_from(config.auth_issuer, R"({"login_method":"steam","provider_id":"7656"})"), config, false);
-    REQUIRE(steam.method.has_value());
-    CHECK(*steam.method == login_method::steam);
-    CHECK(steam.steam_id == "7656");
-
-    login_claims wrong_audience = claims_from(config.auth_issuer, "{}");
+    login_claims wrong_audience = claims_from(config.auth_issuer);
     wrong_audience.audience = {"someone_else"};
-    CHECK(!check_login(wrong_audience, config, false).method.has_value());
-
-    login_config steam_only = config;
-    steam_only.allow_non_steam = false;
-    CHECK(!check_login(claims_from(config.auth_issuer, "{}"), steam_only, false).method.has_value());
-    CHECK(!check_login(claims_from("https://elsewhere", "{}"), steam_only, false).method.has_value());
-}
-
-TEST_CASE("a steam login must own the app only once an app id is set") {
-    login_config config = official_config();
-    const std::string unchecked = R"({"login_method":"steam"})";
-    CHECK(check_login(claims_from(config.auth_issuer, unchecked), config, false).method == login_method::steam);
-
-    config.steam_app_id = 480;
-    const std::string owns = R"({"login_method":"steam","steam_owned_games":[{"appid":480,"ownsapp":true}]})";
-    const std::string lent = R"({"login_method":"steam","steam_owned_games":[{"appid":480,"ownsapp":false}]})";
-    const std::string other = R"({"login_method":"steam","steam_owned_games":[{"appid":10,"ownsapp":true}]})";
-    CHECK(check_login(claims_from(config.auth_issuer, owns), config, false).method == login_method::steam);
-    CHECK(!check_login(claims_from(config.auth_issuer, lent), config, false).method.has_value());
-    CHECK(!check_login(claims_from(config.auth_issuer, other), config, false).method.has_value());
-    CHECK(!check_login(claims_from(config.auth_issuer, unchecked), config, false).method.has_value());
+    CHECK(!check_login(wrong_audience, config, false).has_value());
 }
 
 TEST_CASE("other tokens are anonymous, allowed only by config or for the owner") {
     login_config config = official_config();
-    const login_claims local = claims_from("http://localhost", "{}");
-    CHECK(!check_login(local, config, false).method.has_value());
-    CHECK(!check_login(login_claims{}, config, false).method.has_value());
-    CHECK(check_login(local, config, true).method == login_method::anonymous);
+    const login_claims local = claims_from("http://localhost");
+    CHECK(!check_login(local, config, false).has_value());
+    CHECK(!check_login(login_claims{}, config, false).has_value());
+    CHECK(check_login(local, config, true) == login_method::anonymous);
 
     config.allow_anonymous = true;
-    CHECK(check_login(local, config, false).method == login_method::anonymous);
-    CHECK(check_login(login_claims{}, config, false).method == login_method::anonymous);
+    CHECK(check_login(local, config, false) == login_method::anonymous);
+    CHECK(check_login(login_claims{}, config, false) == login_method::anonymous);
 }
 
 TEST_CASE("only anonymous logins are guests") {
     CHECK(is_guest_login(login_method_name(login_method::anonymous)));
     CHECK(!is_guest_login(login_method_name(login_method::browser)));
-    CHECK(!is_guest_login(login_method_name(login_method::steam)));
 }

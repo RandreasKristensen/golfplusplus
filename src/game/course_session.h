@@ -10,9 +10,9 @@
 
 #include <glm/vec3.hpp>
 
-// Loads every hole of `course`, then enters its hub (when it has a course
-// world) or hole 1. Clears the round. False, with `state` unchanged, when a
-// hole or the world cannot be loaded.
+// Loads every hole of `course` and its world, then enters the hub at hole 1's
+// start. Clears the round. False, with `state` unchanged, when a hole or the
+// world cannot be loaded.
 bool start_course(game_state& state, const course_definition& course);
 
 // Plays hub hole `hole_index` where it sits on the course: the area stays the
@@ -23,23 +23,17 @@ bool start_course(game_state& state, const course_definition& course);
 bool start_hub_hole(game_state& state, std::size_t hole_index);
 
 // Records the hole's strokes, then returns to the hub where the player
-// stands, the ball left in the cup (state.cup_ball), or loads the next hole
-// on a course without a hub. After the last hole the round is finished and
-// the state stays put.
+// stands, the ball left in the cup (state.cup_ball). After the last hole the
+// round is finished and the state stays put.
 void complete_current_hole(game_state& state);
 
-// Gives up the hole being played on a hub course, with no score: back in
-// the hub at `position` (online: where the server has the player).
+// Gives up the hole being played, with no score: back in the hub at
+// `position` (online: where the server has the player).
 void abandon_hole(game_state& state, const glm::vec3& position);
 
-// After a finished round on a hub course: a new round, in the hub where the
-// player stands. Online the server starts it there by itself.
+// After a finished round: a new round, in the hub where the player stands.
+// Online the server starts it there by itself.
 void start_next_round(game_state& state);
-
-// Which course hole (index into state.course_holes) the area's hole
-// `area_hole` is: in a hub the area holds every hole in course order;
-// otherwise only the hole played.
-std::size_t course_hole_of_area_hole(const game_state& state, std::size_t area_hole);
 
 // Puts the ball back on the tee (no penalty stroke). No-op in the hub.
 void retee_ball(game_state& state);

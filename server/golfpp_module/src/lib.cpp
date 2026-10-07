@@ -18,7 +18,7 @@
 #include "module_cache.h"
 #include "physics/vector_math.h"
 #include "play_rules.h"
-#include "server_errors.h"
+#include "game/server_errors.h"
 
 #include <spacetimedb.h>
 
@@ -47,12 +47,9 @@ struct server_config_row {
     std::string auth_issuer;
     std::string auth_audience;
     bool allow_anonymous;
-    std::uint32_t steam_app_id;
-    bool allow_non_steam;
     std::string link_secret;  // keys link codes (make_link_code); empty: linking is off
 };
-SPACETIMEDB_STRUCT(server_config_row, id, owner, auth_issuer, auth_audience, allow_anonymous, steam_app_id, allow_non_steam,
-                   link_secret)
+SPACETIMEDB_STRUCT(server_config_row, id, owner, auth_issuer, auth_audience, allow_anonymous, link_secret)
 SPACETIMEDB_TABLE(server_config_row, server_config, Private)
 FIELD_PrimaryKey(server_config, id)
 
@@ -77,10 +74,9 @@ struct account_login_row {
     Identity identity;
     std::uint64_t account_id;
     std::string login_method;  // login_method_name
-    std::string steam_id;      // Steam logins only, for friends later; never a key
     Timestamp linked_at;
 };
-SPACETIMEDB_STRUCT(account_login_row, identity, account_id, login_method, steam_id, linked_at)
+SPACETIMEDB_STRUCT(account_login_row, identity, account_id, login_method, linked_at)
 SPACETIMEDB_TABLE(account_login_row, account_login, Private)
 FIELD_PrimaryKey(account_login, identity)
 FIELD_Index(account_login, account_id)
@@ -391,8 +387,7 @@ ConnectionId caller_connection(const ReducerContext& ctx) {
 }
 
 login_config config_rules(const server_config_row& config) {
-    return login_config{config.auth_issuer, config.auth_audience, config.allow_anonymous, config.steam_app_id,
-                        config.allow_non_steam};
+    return login_config{config.auth_issuer, config.auth_audience, config.allow_anonymous};
 }
 
 // The caller's account when this call comes from its live session.
@@ -785,7 +780,7 @@ SPACETIMEDB_INIT(init, ReducerContext ctx) {
     if (cached_content() == nullptr) {
         return Err("embedded content does not load: " + content_error());
     }
-    ctx.db[server_config].insert(server_config_row{config_id, ctx.sender(), "", "", false, 0, true, ""});
+    ctx.db[server_config].insert(server_config_row{config_id, ctx.sender(), "", "", false, ""});
     return Ok();
 }
 
@@ -828,8 +823,8 @@ SPACETIMEDB_CLIENT_CONNECTED(client_connected, ReducerContext ctx) {
     }
     const std::optional<std::string> payload = connection_jwt_payload(ctx);
     const login_claims claims = payload ? parse_login_claims(*payload) : login_claims{};
-    const login_check check = check_login(claims, config_rules(*config), ctx.sender() == config->owner);
-    if (!check.method) {
+    const std::optional<login_method> method = check_login(claims, config_rules(*config), ctx.sender() == config->owner);
+    if (!method) {
         // For whoever sets the server up: which issuer and audience came,
         // to compare with admin_set_config's (neither is secret).
         std::string audience;
@@ -844,8 +839,7 @@ SPACETIMEDB_CLIENT_CONNECTED(client_connected, ReducerContext ctx) {
     if (!login) {
         const player_row created =
             ctx.db[player].insert(player_row{0, "", "", false, 0, ctx.timestamp, ctx.timestamp});
-        login = account_login_row{ctx.sender(), created.account_id, login_method_name(*check.method), check.steam_id,
-                                  ctx.timestamp};
+        login = account_login_row{ctx.sender(), created.account_id, login_method_name(*method), ctx.timestamp};
         ctx.db[account_login].insert(*login);
     }
     start_session(ctx, login->account_id);
@@ -883,8 +877,6 @@ SPACETIMEDB_REDUCER(admin_set_config,
                     std::string auth_issuer,
                     std::string auth_audience,
                     bool allow_anonymous,
-                    std::uint32_t steam_app_id,
-                    bool allow_non_steam,
                     std::string link_secret) {
     std::optional<server_config_row> config = ctx.db[server_config_id].find(config_id);
     if (!config || ctx.sender() != config->owner) {
@@ -896,8 +888,6 @@ SPACETIMEDB_REDUCER(admin_set_config,
     config->auth_issuer = auth_issuer;
     config->auth_audience = auth_audience;
     config->allow_anonymous = allow_anonymous;
-    config->steam_app_id = steam_app_id;
-    config->allow_non_steam = allow_non_steam;
     config->link_secret = link_secret;
     ctx.db[server_config_id].update(*config);
     return Ok();

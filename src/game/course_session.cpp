@@ -93,15 +93,9 @@ course_hub build_hub(const course_world_definition& world, const std::vector<hol
     for (std::size_t i = 0; i < holes.size(); ++i) {
         const course_world_hole_start& start = world.hole_starts[i];
         const hole_data placed = place_hole(holes[i], start);
-        hub.markers.push_back(hub_hole_marker{placed.tee_position, placed.pin_position, start.position, placed.wind_seed});
+        hub.markers.push_back(hub_hole_marker{placed.tee_position, placed.pin_position, placed.wind_seed});
     }
     return hub;
-}
-
-void enter_linear_hole(game_state& state, const std::size_t index) {
-    const hole_data& hole = state.course_holes[index];
-    state.area = build_hole_area(hole, state.tuning);
-    enter_hole(state, index, hole);
 }
 }
 
@@ -111,32 +105,22 @@ bool start_course(game_state& state, const course_definition& course) {
         return false;
     }
 
-    std::optional<course_hub> hub;
-    play_area course_area;
-    if (!course.world.empty()) {
-        const std::optional<course_world_definition> world =
-            load_course_world_from_file(course_world_file_path(state.asset_root, course), course);
-        if (!world) {
-            return false;
-        }
-        hub = build_hub(*world, *holes);
-        course_area = build_course_area(*holes, *world, state.tuning);
+    const std::optional<course_world_definition> world =
+        load_course_world_from_file(course_world_file_path(state.asset_root, course), course);
+    if (!world) {
+        return false;
     }
 
     state.course = course;
+    state.area = build_course_area(*holes, *world, state.tuning);
+    state.hub = build_hub(*world, *holes);
     state.course_holes = std::move(*holes);
     state.round = start_round(state.course_holes.size());
-    state.hub = std::move(hub);
     state.xp_drops.clear();
     state.pending_xp_drop_amounts.clear();
     state.cup_ball.reset();
     state.picked_cup_ball.reset();
-    if (state.hub) {
-        state.area = std::move(course_area);
-        enter_hub(state, state.hub->world.hole_starts.front().position);
-    } else {
-        enter_linear_hole(state, 0);
-    }
+    enter_hub(state, state.hub->world.hole_starts.front().position);
     return true;
 }
 
@@ -169,21 +153,14 @@ void complete_current_hole(game_state& state) {
     record_hole_completed(state);
     state.mode = game_mode::walking;
     state.flight_path_points.clear();
-    // The ball stays in the cup on the course until it is picked up, into
-    // the next round too; a course without a hub moves on to another area.
-    if (state.hub) {
-        state.cup_ball = pin_anchor_position(state);
-    }
+    // The ball stays in the cup until it is picked up, into the next round too.
+    state.cup_ball = pin_anchor_position(state);
 
     if (round_finished(state.round)) {
         return;
     }
-    // The course is one place: the player stays where they holed out from.
-    if (state.hub) {
-        enter_hub(state, state.player.position);
-    } else {
-        enter_linear_hole(state, state.round.current_hole_index);
-    }
+    // The player stays where they holed out from.
+    enter_hub(state, state.player.position);
 }
 
 void abandon_hole(game_state& state, const glm::vec3& position) {
@@ -199,13 +176,6 @@ void start_next_round(game_state& state) {
     state.round = start_round(state.course_holes.size());
     state.group_strokes.clear();
     enter_hub(state, state.player.position);
-}
-
-std::size_t course_hole_of_area_hole(const game_state& state, const std::size_t area_hole) {
-    if (!state.hub && state.hole) {
-        return state.hole->index;
-    }
-    return area_hole;
 }
 
 void retee_ball(game_state& state) {

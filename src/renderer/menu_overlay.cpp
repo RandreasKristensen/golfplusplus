@@ -257,7 +257,7 @@ bool single_column(const startup_menu_screen screen) {
 }
 
 bool picker(const startup_menu_screen screen) {
-    return screen == startup_menu_screen::hole_picker || screen == startup_menu_screen::course_picker;
+    return screen == startup_menu_screen::course_picker;
 }
 
 // A single column runs down from its top edge to above the footer. Main

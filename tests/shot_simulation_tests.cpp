@@ -755,14 +755,15 @@ TEST_CASE("a holed shot completes the hole once it has played") {
     CHECK(hole_played(state.round, 0));
     CHECK(*state.round.strokes[0] == 2);
     CHECK(state.round.current_hole_index == 1);
-    CHECK(state.hole->index == 1);
+    CHECK(in_hub(state));
+    CHECK(state.cup_ball.has_value());
     CHECK(state.stroke_count == 0);
     CHECK(state.mode == game_mode::walking);
     CHECK(state.save_requested);
 }
 
 TEST_CASE("holing the last hole finishes the round and completes the course") {
-    game_state state = started_game(fixture_course({"test"}));
+    game_state state = single_hole_course();
     state.stroke_count = 3;
     const shot_course course = current_shot_course(state);
     const glm::vec3 pin = course.hole.pin;
@@ -772,7 +773,7 @@ TEST_CASE("holing the last hole finishes the round and completes the course") {
 
     CHECK(round_finished(state.round));
     CHECK(*state.round.strokes[0] == 3);
-    CHECK(state.save.completed_course_ids == std::vector<std::string>{"fixture_course"});
+    CHECK(state.save.completed_course_ids == std::vector<std::string>{"fixture_hub"});
     CHECK(state.save.holes_completed == 1);
     CHECK(state.ball.position.y < pin.y);
 }

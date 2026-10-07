@@ -69,8 +69,8 @@ bool cigarette_lit(const game_state& state);
 const room_player* my_room_player(const game_state& state);
 
 // Called once state.round has the hole. Offline: the save's hole count, the
-// course when the round is finished (not on practice courses), and a save
-// request. Online the server records it from the holed shot.
+// course when the round is finished, and a save request. Online the server
+// records it from the holed shot.
 void record_hole_completed(game_state& state);
 
 // Online progress from the server. Skills that gained XP since the last

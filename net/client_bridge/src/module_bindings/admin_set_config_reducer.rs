@@ -10,8 +10,6 @@ pub(super) struct AdminSetConfigArgs {
     pub auth_issuer: String,
     pub auth_audience: String,
     pub allow_anonymous: bool,
-    pub steam_app_id: u32,
-    pub allow_non_steam: bool,
     pub link_secret: String,
 }
 
@@ -21,8 +19,6 @@ impl From<AdminSetConfigArgs> for super::Reducer {
             auth_issuer: args.auth_issuer,
             auth_audience: args.auth_audience,
             allow_anonymous: args.allow_anonymous,
-            steam_app_id: args.steam_app_id,
-            allow_non_steam: args.allow_non_steam,
             link_secret: args.link_secret,
         }
     }
@@ -48,16 +44,12 @@ pub trait admin_set_config {
         auth_issuer: String,
         auth_audience: String,
         allow_anonymous: bool,
-        steam_app_id: u32,
-        allow_non_steam: bool,
         link_secret: String,
     ) -> __sdk::Result<()> {
         self.admin_set_config_then(
             auth_issuer,
             auth_audience,
             allow_anonymous,
-            steam_app_id,
-            allow_non_steam,
             link_secret,
             |_, _| {},
         )
@@ -74,8 +66,6 @@ pub trait admin_set_config {
         auth_issuer: String,
         auth_audience: String,
         allow_anonymous: bool,
-        steam_app_id: u32,
-        allow_non_steam: bool,
         link_secret: String,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
@@ -90,8 +80,6 @@ impl admin_set_config for super::RemoteReducers {
         auth_issuer: String,
         auth_audience: String,
         allow_anonymous: bool,
-        steam_app_id: u32,
-        allow_non_steam: bool,
         link_secret: String,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
@@ -103,8 +91,6 @@ impl admin_set_config for super::RemoteReducers {
                 auth_issuer,
                 auth_audience,
                 allow_anonymous,
-                steam_app_id,
-                allow_non_steam,
                 link_secret,
             },
             callback,

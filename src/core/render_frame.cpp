@@ -125,7 +125,7 @@ void add_course_map(render_data& data, const game_state& game, const text_assets
         if (sign.line_of_play.empty()) {
             continue;
         }
-        const std::size_t number = course_hole_of_area_hole(game, sign.area_hole) + 1;
+        const std::size_t number = sign.area_hole + 1;
         data.map_holes.push_back(render_map_hole{
             format_text(text, text_course_map_hole_number, {{"hole", std::to_string(number)}}), sign.line_of_play.front()});
     }
@@ -206,6 +206,16 @@ std::string mode_label(const game_state& game, const text_assets& text) {
 
 glm::vec3 drawn_ball_center(const glm::vec3& physics_center, const world_scale_tuning& scale) {
     return physics_center + world_up * (scale.ball_visual_radius_meters - scale.ball_physics_radius_meters);
+}
+
+std::vector<hole_sign_text> hole_sign_texts(const game_state& game) {
+    std::vector<hole_sign_text> texts;
+    for (const hole_sign& sign : game.area.signs) {
+        const int par = sign.area_hole < game.course_holes.size() ? game.course_holes[sign.area_hole].par : 0;
+        const int meters = rounded_rangefinder_meters(sign.length * game.tuning.scale.meters_per_world_unit);
+        texts.push_back(hole_sign_text{static_cast<int>(sign.area_hole) + 1, par, meters});
+    }
+    return texts;
 }
 
 render_data make_render_data(const game_state& game,

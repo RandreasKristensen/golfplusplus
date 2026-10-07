@@ -4,6 +4,7 @@
 #include "game/group_round.h"
 #include "game/mode_dispatch.h"
 #include "game/remote_players.h"
+#include "game/server_errors.h"
 #include "game/text_ids.h"
 
 #include <algorithm>
@@ -68,15 +69,15 @@ void put_cup_ball_back(game_state& state) {
 
 void take_refusals(game_state& state) {
     for (const reducer_failure& refusal : state.online.refusals) {
-        if (refusal.reducer == "pick_up_ball" || online_error_text_key(refusal.error) == text_ball_in_cup) {
+        if (refusal.reducer == reducer_pick_up_ball || refusal.error == error_ball_in_cup) {
             put_cup_ball_back(state);
         }
-        if (refusal.reducer == "take_shot" || refusal.reducer == "retee") {
+        if (refusal.reducer == reducer_take_shot || refusal.reducer == reducer_retee) {
             restore_ball(state);
-        } else if (refusal.reducer == "enter_hole" || refusal.reducer == "claim_collectible" ||
-                   (refusal.reducer == "update_motion" && refusal.error == "wrong_zone")) {
+        } else if (refusal.reducer == reducer_enter_hole || refusal.reducer == reducer_claim_collectible ||
+                   (refusal.reducer == reducer_update_motion && refusal.error == error_wrong_zone)) {
             return_to_server(state);
-        } else if (refusal.reducer == "update_motion") {
+        } else if (refusal.reducer == reducer_update_motion) {
             // Too fast: back to the last accepted position. Only when the
             // zones agree; a zone change on its way is not undone here.
             const room_player* me = my_room_player(state);

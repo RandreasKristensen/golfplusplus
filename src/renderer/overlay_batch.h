@@ -24,7 +24,7 @@ struct overlay_vertex {
     glm::vec4 color = glm::vec4(0.0f);     // rgb + alpha, not premultiplied
 };
 
-constexpr std::size_t overlay_vertices_per_quad = 6;
+inline constexpr std::size_t overlay_vertices_per_quad = 6;
 
 // Size in pixels of the low-res target the overlay is drawn into. Text is
 // laid out on this grid so every font pixel is a whole block of target pixels.
@@ -44,7 +44,7 @@ struct overlay_batch {
 };
 
 // Unit-quad corners (x, y), two triangles.
-constexpr std::array<std::array<float, 2>, overlay_vertices_per_quad> overlay_unit_quad_corners{{
+inline constexpr std::array<std::array<float, 2>, overlay_vertices_per_quad> overlay_unit_quad_corners{{
     {{-1.0f, -1.0f}},
     {{ 1.0f, -1.0f}},
     {{ 1.0f,  1.0f}},

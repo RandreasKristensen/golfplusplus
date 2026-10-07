@@ -104,9 +104,7 @@ TEST_CASE("every online failure and link result the game can receive has a strin
     const std::optional<text_assets> text = shipped_text();
     REQUIRE(text.has_value());
     const std::string source = GOLFPP_SOURCE_DIR;
-    const std::string server = source + "/../server/golfpp_module/src";
-
-    std::vector<std::string> errors = declared_values(server + "/server_errors.h", "error_");
+    std::vector<std::string> errors = declared_values(source + "/game/server_errors.h", "error_");
     const std::vector<std::string> bridge = declared_values(source + "/game/net_types.h", "net_failure_");
     CHECK(errors.size() > 20U);
     CHECK(bridge.size() > 5U);

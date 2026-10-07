@@ -117,9 +117,7 @@ TEST_CASE("holes with a malformed zone fail to load") {
              R"({ "type": "green", "center": [0, 0, 20], "radii": [3, "3"], "rotation_degrees": 0 })",
              R"({ "type": "green", "center": [0, 0, 20], "radii": [3, 3] })",
              R"({ "type": "green", "radii": [3, 3], "rotation_degrees": 0 })",
-             R"({ "type": "green", "center": [0, 0, 20], "radii": [3, 3], "rotation_degrees": 0, "radius": 3 })",
              R"({ "type": "water", "bounds": [[0, 0, 0], [5, 0, 9]] })",
-             R"({ "type": "water", "center": [0, 0, 20], "radii": [3, 3], "rotation_degrees": 0, "bounds": [[0, 0, 0], [5, 0, 9]] })",
              R"({ "type": "bunker" })",
              R"(7)"}) {
         CHECK(!hole_with_zone(zone).has_value());

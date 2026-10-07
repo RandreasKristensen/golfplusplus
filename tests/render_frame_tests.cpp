@@ -17,7 +17,7 @@ render_data frame_for(const game_state& state, const float fov_degrees = test_fo
 }
 }
 
-TEST_CASE("a hole frame without a course world shows the ball, tee box and pin but no other pins") {
+TEST_CASE("a hole frame shows the ball, every tee box and the pin") {
     game_state state = started_hole();
     refresh_static_anchor_cache(state);
     const render_data data = frame_for(state);
@@ -26,8 +26,7 @@ TEST_CASE("a hole frame without a course world shows the ball, tee box and pin b
     CHECK(data.show_hole);
     CHECK(data.pin_position == state.static_anchors.pin_anchor);
     REQUIRE(data.tee_boxes != nullptr);
-    CHECK(data.tee_boxes->size() == 1U);
-    CHECK(data.pin_markers.empty());
+    CHECK(data.tee_boxes->size() == state.area.tee_boxes.size());
     CHECK(data.show_interact_prompt);
     CHECK(data.camera_fov_degrees == test_fov_degrees);
 }

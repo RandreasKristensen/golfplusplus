@@ -1,7 +1,7 @@
 #pragma once
 
 // What the player wants this frame, independent of keys. core/key_bindings
-// fills it from the keyboard; tests (and later the network) fill it directly.
+// fills it from the keyboard; tests fill it directly.
 // "held" fields are true every frame the control is down; the others only on
 // the frame it is pressed.
 struct game_input {

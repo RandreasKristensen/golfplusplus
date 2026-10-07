@@ -22,6 +22,11 @@
 #include <vector>
 
 namespace {
+// `seconds` as server time (microseconds).
+std::int64_t server_micros(const double seconds) {
+    return static_cast<std::int64_t>(seconds * 1000000.0);
+}
+
 constexpr std::uint64_t me = 1;
 constexpr std::uint64_t other = 2;
 const std::int64_t start_time = server_micros(1000.0);

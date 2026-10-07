@@ -19,5 +19,5 @@ float sample_swing_power(float elapsed, float cycle_seconds);
 
 // How far a golfer's club is raised `elapsed` seconds into their swing, the
 // meter running at a club's `timing_speed`: my meter, and the club others
-// see me raise (remote_swing_pose in remote_players.h).
+// see me raise (remote_address_pose in remote_players.h).
 float swing_meter_power(float elapsed, float timing_speed, float cycle_seconds);

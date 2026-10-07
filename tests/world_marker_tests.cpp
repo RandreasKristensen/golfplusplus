@@ -8,6 +8,7 @@
 #include "renderer/world_marker_batch.h"
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -31,7 +32,7 @@ std::vector<float> expected_disc_vertices() {
     std::vector<float> vertices;
     constexpr int segments = 18;
     constexpr float radius = 0.5f;
-    constexpr float pi = 3.14159265358979323846f;
+    const float pi = glm::pi<float>();
     for (int i = 0; i < segments; ++i) {
         const float a0 = 2.0f * pi * static_cast<float>(i) / static_cast<float>(segments);
         const float a1 = 2.0f * pi * static_cast<float>(i + 1) / static_cast<float>(segments);
@@ -255,11 +256,11 @@ std::vector<glm::vec3> make_arc(const std::size_t count) {
 
 TEST_CASE("world marker unit disc and quad have the expected vertices") {
     const std::vector<glm::vec3> disc = make_unit_disc_positions(world_marker_disc_segments);
-    const std::vector<glm::vec3> old = expected_disc_positions();
+    const std::vector<glm::vec3> expected = expected_disc_positions();
     REQUIRE(disc.size() == disc_vertex_count);
-    REQUIRE(old.size() == disc_vertex_count);
+    REQUIRE(expected.size() == disc_vertex_count);
     for (std::size_t i = 0; i < disc.size(); ++i) {
-        CHECK(disc[i] == old[i]);
+        CHECK(disc[i] == expected[i]);
     }
     CHECK(make_unit_quad_positions() == expected_quad_positions());
     CHECK(make_unit_disc_positions(0).empty());
@@ -545,10 +546,10 @@ void expected_mesh_vertex(std::vector<float>& vertices, const glm::vec3 position
     });
 }
 
-// renderer.cpp's make_cylinder_vertices, before it moved to primitive_mesh.
+// The unit cylinder primitive_mesh should build, written out independently.
 std::vector<float> expected_cylinder_vertices(const int segments) {
     std::vector<float> vertices;
-    constexpr float pi = 3.14159265358979323846f;
+    const float pi = glm::pi<float>();
     for (int i = 0; i < segments; ++i) {
         const float a0 = 2.0f * pi * static_cast<float>(i) / static_cast<float>(segments);
         const float a1 = 2.0f * pi * static_cast<float>(i + 1) / static_cast<float>(segments);
@@ -577,10 +578,10 @@ std::vector<float> expected_cylinder_vertices(const int segments) {
     return vertices;
 }
 
-// renderer.cpp's make_sphere_vertices, before it moved to primitive_mesh.
+// The unit sphere primitive_mesh should build, written out independently.
 std::vector<float> expected_sphere_vertices(const int latitude_segments, const int longitude_segments) {
     std::vector<float> vertices;
-    constexpr float pi = 3.14159265358979323846f;
+    const float pi = glm::pi<float>();
     const auto append = [&vertices](const glm::vec3 normal) {
         constexpr float radius = 1.0f;
         const glm::vec3 position = normal * radius;

@@ -18,8 +18,6 @@ const char* name_tag_style(const player_relationship relationship) {
     switch (relationship) {
     case player_relationship::grouped:
         return style_name_tag_group;
-    case player_relationship::befriended:
-        return style_name_tag_friend;
     case player_relationship::unknown:
         break;
     }

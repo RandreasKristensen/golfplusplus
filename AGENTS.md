@@ -177,7 +177,7 @@ changed in `src/game` changes online play too. What only the server checks
 (names, logins, link codes, speed, reach, shot validity) lives in the plain
 `*_rules` files next to `lib.cpp`, which only reads and writes rows. Its
 limits are the `server` section of the tuning. Reducers fail with the ids in
-`server_errors.h`, which the client shows from its string table. The caller's
+`src/game/server_errors.h`, which the client shows from its string table. The caller's
 token is read with `connection_jwt_payload` in `lib.cpp`, never
 `AuthCtx::get_jwt`, which never returns one in these bindings. A mid-hole
 disconnect abandons the hole: scores exist only for completed holes.
@@ -264,7 +264,10 @@ kept, in Windows Credential Manager (`net/client_bridge/src/login.rs`).
 Bad patterns replicate: assume whatever you write will be copied.
 
 - Each header's first comment says what the file is for. Comments explain
-  what and why; never history ("used to", "the old …", "after the refactor").
+  what and why, briefly, and only what the code can't say: nobody reads
+  them but agents, so every line costs context. Never history ("used to",
+  "previously", "the old …", "no longer", "after the refactor"), in code,
+  tests or tooling; when you find one, delete it rather than rewording it.
 - One home per job. Before writing a helper, search for it (see the shared
   helpers above). Never copy a function into a second file.
 - Delete dead code, unused fields and unused JSON keys instead of leaving them

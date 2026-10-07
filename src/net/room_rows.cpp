@@ -1,22 +1,11 @@
 #include "net/room_rows.h"
 
+#include "net/bridge_rows.h"
+
 #include <algorithm>
 #include <utility>
 
 namespace {
-std::string text_of(const stdb_string& text) {
-    return text.data != nullptr ? std::string(text.data, text.len) : std::string();
-}
-
-template <typename Map>
-void apply_change(Map& rows, const std::uint64_t id, const stdb_row_change change, typename Map::mapped_type value) {
-    if (change == STDB_ROW_DELETE) {
-        rows.erase(id);
-    } else {
-        rows[id] = std::move(value);
-    }
-}
-
 net_motion motion_of(const stdb_motion& m) {
     net_motion motion;
     motion.zone = m.zone;

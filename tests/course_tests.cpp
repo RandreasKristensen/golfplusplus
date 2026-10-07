@@ -28,6 +28,14 @@ void finish_hole(game_state& state, const int strokes) {
     complete_current_hole(state);
 }
 
+// Starts hub hole `index` (the last holed ball picked up first) and holes
+// out in `strokes`.
+void play_hub_hole(game_state& state, const std::size_t index, const int strokes) {
+    pick_up_from_cup(state);
+    REQUIRE(start_hub_hole(state, index));
+    finish_hole(state, strokes);
+}
+
 void walk_to(game_state& state, const glm::vec3& position) {
     state.player.position = position;
 }
@@ -51,43 +59,13 @@ void check_anchors_are_fresh(const game_state& state) {
 }
 }
 
-TEST_CASE("a course without a world plays its holes in order") {
-    game_state state = started_game(fixture_course({"test", "test2"}));
-    REQUIRE(state.hole.has_value());
-    CHECK(!state.hub.has_value());
-    CHECK(state.hole->index == 0);
-    CHECK(state.course_holes.size() == 2U);
-    CHECK(can_interact_with_ball(state));
-
-    finish_hole(state, 3);
-    REQUIRE(state.hole.has_value());
-    CHECK(state.hole->index == 1);
-    CHECK(*state.round.strokes[0] == 3);
-    CHECK(!round_finished(state.round));
-    CHECK(state.stroke_count == 0);
-
-    finish_hole(state, 4);
-    CHECK(round_finished(state.round));
-    CHECK(state.save.holes_completed == 2);
-}
-
-TEST_CASE("a practice hole does not complete a course") {
-    course_definition practice = fixture_course({"test"});
-    practice.practice = true;
-    game_state state = started_game(practice);
-
-    finish_hole(state, 2);
-
-    CHECK(round_finished(state.round));
-    CHECK(state.save.completed_course_ids.empty());
-    CHECK(state.save.holes_completed == 1);
-}
-
 TEST_CASE("a course with a missing hole or world does not start") {
     game_state state = make_game_state(fixture_content(), save_data{});
-    CHECK(!start_course(state, fixture_course({"test", "missing_hole"})));
+    course_definition missing_hole = fixture_hub_course();
+    missing_hole.holes[1] = "missing_hole";
+    CHECK(!start_course(state, missing_hole));
 
-    course_definition missing_world = fixture_course({"test"});
+    course_definition missing_world = fixture_hub_course();
     missing_world.world = "course_worlds/missing.json";
     CHECK(!start_course(state, missing_world));
     CHECK(state.course_holes.empty());
@@ -212,7 +190,7 @@ TEST_CASE("a hub hole is played on the whole course") {
 TEST_CASE("action at a hole start plays that hole where the hub shows it") {
     game_state state = started_game(fixture_hub_course());
     const hub_hole_marker marker = state.hub->markers[2];
-    walk_to(state, marker.start_position);
+    walk_to(state, state.hub->world.hole_starts[2].position);
 
     update_game(state, action_input(), 0.016f);
 
@@ -227,7 +205,7 @@ TEST_CASE("action at a hole start plays that hole where the hub shows it") {
 
 TEST_CASE("the action that starts a hole takes up its tee ball, so the tee shot needs no extra press") {
     game_state state = started_game(fixture_hub_course());
-    walk_to(state, state.hub->markers[0].start_position);
+    walk_to(state, state.hub->world.hole_starts[0].position);
 
     update_game(state, action_input(), 0.016f);
     REQUIRE(state.hole.has_value());
@@ -327,13 +305,6 @@ TEST_CASE("the ball in the cup stays into the next round and goes when the cours
     CHECK(start_hub_hole(state, 0));
 }
 
-TEST_CASE("a course without a hub leaves no ball in a cup") {
-    game_state state = started_game(fixture_course({"test", "test2"}));
-    finish_hole(state, 3);
-    CHECK(!state.cup_ball.has_value());
-    CHECK(state.hole.has_value());
-}
-
 TEST_CASE("starts of played holes cannot be used again") {
     game_state state = started_game(fixture_hub_course());
     REQUIRE(start_hub_hole(state, 0));
@@ -413,7 +384,7 @@ TEST_CASE("road reach uses each road's own width") {
 }
 
 TEST_CASE("static anchors stay fresh through hub, hole and course changes") {
-    game_state state = started_game(fixture_course({"test"}));
+    game_state state = started_hole();
     check_anchors_are_fresh(state);
 
     std::uint64_t revision = state.terrain_render_revision;
@@ -458,13 +429,13 @@ TEST_CASE("a replacement state keeps the terrain revision increasing") {
 }
 
 TEST_CASE("the scorecard lists every hole and totals the played ones") {
-    game_state state = started_game(fixture_course({"test", "test2", "test3"}));
+    game_state state = started_game(fixture_hub_course());
     const string_table strings = shipped_strings();
 
-    finish_hole(state, 4);
+    play_hub_hole(state, 0, 4);
     scorecard_data card = build_scorecard_data(state, strings);
     REQUIRE(card.rows.size() == 3U);
-    CHECK(card.course_name == "Fixture Course");
+    CHECK(card.course_name == "Fixture Hub");
     CHECK(card.current_hole_index == 1U);
     CHECK(card.rows[0].hole_name == "New Hole");
     CHECK(card.rows[0].played);
@@ -475,8 +446,8 @@ TEST_CASE("the scorecard lists every hole and totals the played ones") {
     CHECK(card.total_par == 3);
     CHECK(card.total_strokes == 4);
 
-    finish_hole(state, 2);
-    finish_hole(state, 3);
+    play_hub_hole(state, 1, 2);
+    play_hub_hole(state, 2, 3);
     card = build_scorecard_data(state, strings);
     CHECK(card.finished);
     CHECK(card.total_par == 9);
@@ -485,13 +456,13 @@ TEST_CASE("the scorecard lists every hole and totals the played ones") {
 }
 
 TEST_CASE("a new course starts with a clean scorecard") {
-    game_state state = started_game(fixture_course({"test", "test2"}));
+    game_state state = started_hole();
     finish_hole(state, 4);
 
-    REQUIRE(start_course(state, fixture_course({"test3"})));
+    REQUIRE(start_course(state, fixture_hub_course()));
     const scorecard_data card = build_scorecard_data(state, shipped_strings());
 
-    REQUIRE(card.rows.size() == 1U);
+    REQUIRE(card.rows.size() == 3U);
     CHECK(!card.rows[0].played);
     CHECK(card.total_strokes == 0);
 }

@@ -1,5 +1,6 @@
 #include "doctest.h"
 
+#include "core/render_frame.h"
 #include "game/course_session.h"
 #include "game/game_state.h"
 #include "game/hole_sign.h"
@@ -34,7 +35,7 @@ hole_data wide_hole(const float fairway, const float rough) {
 }
 
 play_area area_for(const hole_data& hole) {
-    return build_hole_area(hole, shipped_content().tuning);
+    return hole_area(hole, shipped_content().tuning);
 }
 
 const hole_sign_tuning& sign_tuning() {
@@ -182,21 +183,23 @@ TEST_CASE("a hole sign's face shows the hole in map inks and its labels fit") {
 
 TEST_CASE("render hole signs are rebuilt only when the signs change") {
     game_state state = started_game(fixture_hub_course());
+    const text_assets& text = shipped_text_assets();
     render_hole_signs signs;
-    CHECK(refresh_render_hole_signs(signs, state, shipped_text_assets(), 1));
+    CHECK(refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, 1));
     CHECK(signs.revision == 1U);
     REQUIRE(start_hub_hole(state, 1));
-    CHECK(!refresh_render_hole_signs(signs, state, shipped_text_assets(), 2));
+    CHECK(!refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, 2));
     CHECK(signs.revision == 1U);
 
-    game_state linear = started_hole();
-    CHECK(refresh_render_hole_signs(signs, linear, shipped_text_assets(), 3));
+    std::vector<hole_sign_text> renumbered = hole_sign_texts(state);
+    renumbered.front().par += 1;
+    CHECK(refresh_render_hole_signs(signs, state.area, renumbered, text, 3));
     CHECK(signs.revision == 3U);
 }
 
 TEST_CASE("render hole signs carry a face and a model per sign, numbered by course hole") {
     game_state state = started_game(fixture_hub_course());
-    const render_hole_signs signs = build_render_hole_signs(state, shipped_text_assets(), 7);
+    const render_hole_signs signs = build_render_hole_signs(state.area, hole_sign_texts(state), shipped_text_assets(), 7);
     CHECK(signs.revision == 7U);
     REQUIRE(signs.signs.size() == state.area.signs.size());
     CHECK(signs.truncated_text_count == 0U);

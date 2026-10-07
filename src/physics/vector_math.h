@@ -7,6 +7,7 @@
 #include <cmath>
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 #include <glm/vec3.hpp>
 
 inline constexpr glm::vec3 world_up{0.0f, 1.0f, 0.0f};
@@ -50,8 +51,8 @@ inline glm::vec3 yaw_direction(const float yaw) {
 // `angle` in [-pi, pi). A shot's aim is wrapped before it is simulated or
 // sent, so every machine takes the same sine and cosine of it.
 inline float wrap_angle(const float angle) {
-    const float pi = 3.14159265359f;
-    const float two_pi = 6.28318530718f;
+    const float pi = glm::pi<float>();
+    const float two_pi = glm::two_pi<float>();
     float wrapped = angle - two_pi * std::floor((angle + pi) / two_pi);
     // Rounding can leave a large angle just outside the turn.
     if (wrapped >= pi) {

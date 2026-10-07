@@ -39,18 +39,6 @@ void sip_round(std::uint64_t& v0, std::uint64_t& v1, std::uint64_t& v2, std::uin
 bool is_name_digit(const char32_t c) {
     return c >= U'0' && c <= U'9';
 }
-
-// Whether the payload's steam_owned_games lists `app_id` as owned. Entries
-// are objects with "appid" and "ownsapp" (SpacetimeAuth's Steam claims).
-bool steam_owns_app(const json& payload, const std::uint32_t app_id) {
-    const json* games = json_array(payload, "steam_owned_games");
-    if (games == nullptr) {
-        return false;
-    }
-    return std::any_of(games->begin(), games->end(), [app_id](const json& game) {
-        return game.is_object() && json_uint32(game, "appid") == app_id && json_bool(game, "ownsapp") == true;
-    });
-}
 }
 
 name_check check_player_name(const std::string& requested, const pixel_font_data& font, const server_tuning& tuning) {
@@ -160,8 +148,6 @@ const char* login_method_name(const login_method method) {
     switch (method) {
     case login_method::browser:
         return "browser";
-    case login_method::steam:
-        return "steam";
     case login_method::anonymous:
         return "anonymous";
     }
@@ -185,33 +171,17 @@ login_claims parse_login_claims(const std::string& payload) {
     } else {
         claims.audience = json_string_array(*root, "aud");
     }
-    claims.raw_payload = payload;
     return claims;
 }
 
-login_check check_login(const login_claims& claims, const login_config& config, const bool is_owner) {
-    login_check check;
+std::optional<login_method> check_login(const login_claims& claims, const login_config& config, const bool is_owner) {
     const bool ours = claims.present && !config.auth_issuer.empty() && claims.issuer == config.auth_issuer &&
         std::find(claims.audience.begin(), claims.audience.end(), config.auth_audience) != claims.audience.end();
-    if (!ours) {
-        if (config.allow_anonymous || is_owner) {
-            check.method = login_method::anonymous;
-        }
-        return check;
+    if (ours) {
+        return login_method::browser;
     }
-
-    const std::optional<json> payload = parse_json(claims.raw_payload);
-    const bool steam = payload && json_string(*payload, "login_method") == std::string("steam");
-    if (!steam) {
-        if (config.allow_non_steam) {
-            check.method = login_method::browser;
-        }
-        return check;
+    if (config.allow_anonymous || is_owner) {
+        return login_method::anonymous;
     }
-    if (config.steam_app_id != 0 && !steam_owns_app(*payload, config.steam_app_id)) {
-        return check;
-    }
-    check.method = login_method::steam;
-    check.steam_id = json_string(*payload, "provider_id").value_or("");
-    return check;
+    return std::nullopt;
 }

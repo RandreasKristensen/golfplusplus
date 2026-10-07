@@ -9,7 +9,6 @@
 ## ideas
 
 - Any way to just scale up the fidelity of the height map we build? Some very important features are getting lost in the current fidelity. Very few holes actually look like they do in real life.
-- We need some functionality that changes physics in bunkers, and something to happen when 
 - Cart being physically in the world - space for two. A driver left side, and a passenger right side.
 - editor for visual assets. Collect sound assets from real life. Audio engine for automatic music control. Music panel like osrs. sadly has to be 3d, how do we make it usable
 - (recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.

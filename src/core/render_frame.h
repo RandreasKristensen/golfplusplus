@@ -9,6 +9,7 @@
 #include "game/text_assets.h"
 #include "profiling/profiling.h"
 #include "renderer/camera_transition.h"
+#include "renderer/hole_sign_batch.h"
 #include "renderer/render_data.h"
 #include "renderer/render_mesh.h"
 
@@ -23,6 +24,10 @@ camera_view live_camera_view(const game_state& game, float fov_degrees);
 // ball is bigger than the physical one, so it is raised to touch the ground
 // where the physical ball does, never sunk into it.
 glm::vec3 drawn_ball_center(const glm::vec3& physics_center, const world_scale_tuning& scale);
+
+// What each sign of the play area says (area.signs order): its course hole,
+// par and length.
+std::vector<hole_sign_text> hole_sign_texts(const game_state& game);
 
 // The scene meshes the frame borrows (see render_data); app rebuilds them
 // whenever game_state::terrain_render_revision changes.

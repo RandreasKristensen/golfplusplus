@@ -83,8 +83,6 @@ A new database lets no game in until the owner sets it up with
 | `auth_issuer` | The sign-in provider whose logins count as accounts (`""`: none) |
 | `auth_audience` | The game's client id at that provider |
 | `allow_anonymous` | `true`: any game may connect without signing in |
-| `steam_app_id` | `0` (Steam logins are not in use) |
-| `allow_non_steam` | `true` |
 | `link_secret` | Keys the link codes that join two logins into one account: at least 32 characters, kept private (it never leaves the server). `""` turns linking off |
 
 **Friends, no sign-in** (simplest for a private server): anonymous logins on.
@@ -101,10 +99,10 @@ then (Windows PowerShell 5.1 needs the inner quotes escaped; in PowerShell 7 and
 Bash they are written plainly):
 
 ```powershell
-spacetime call golfpp admin_set_config '\"\"' '\"\"' true 0 true '\"<secret>\"' --server local
+spacetime call golfpp admin_set_config '\"\"' '\"\"' true '\"<secret>\"' --server local
 ```
 ```bash
-spacetime call golfpp admin_set_config '""' '""' true 0 true '"<secret>"' --server local
+spacetime call golfpp admin_set_config '""' '""' true '"<secret>"' --server local
 ```
 
 **Sign-in with a browser**: pass the provider's issuer and the game's client id
@@ -179,7 +177,7 @@ The official server, for the owner:
 ```
 spacetime login
 spacetime publish golfpp --server maincloud --bin-path server/golfpp_module/build/lib.wasm
-spacetime call golfpp admin_set_config <issuer> <client id> false 0 true <secret> --server maincloud
+spacetime call golfpp admin_set_config <issuer> <client id> false <secret> --server maincloud
 ```
 
 with SpacetimeAuth's issuer, the game's client id and a link secret of its own

@@ -43,5 +43,4 @@ std::string course_hole_path(const std::string& asset_root, const course_definit
 
 std::optional<course_world_definition> load_course_world_from_file(const std::string& path,
                                                                    const course_definition& course);
-// Empty when the course has no world.
 std::string course_world_file_path(const std::string& asset_root, const course_definition& course);

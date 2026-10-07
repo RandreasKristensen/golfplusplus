@@ -1,7 +1,7 @@
 #pragma once
 
-// The ids reducers fail with. They are stable: the client turns them into
-// text from its string table, so a new id needs a string there too.
+// The ids the server's reducers fail with, shared with the client, which
+// turns them into text from its string table: a new id needs a string there.
 
 // Accounts
 inline constexpr const char* error_server_unavailable = "server_unavailable";

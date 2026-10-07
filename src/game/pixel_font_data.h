@@ -1,7 +1,7 @@
 #pragma once
 
 // Bitmap pixel font as data (assets/fonts/pixel_font.json). Parsed here so the
-// charset is available to game code (and later the server's name rules);
+// charset is available to game code and the server's name rules;
 // drawn by renderer/pixel_font. No statics: the font is loaded once by app and
 // passed around by const reference.
 

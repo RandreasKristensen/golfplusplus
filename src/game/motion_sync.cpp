@@ -61,7 +61,7 @@ bool should_send_motion(const motion_sync_state& sync, const net_motion& now, co
 
 net_motion current_motion(const game_state& state) {
     net_motion motion;
-    motion.zone = state.hole ? static_cast<int>(state.hole->index) : hub_zone;
+    motion.zone = local_zone(state);
     motion.mode = current_motion_mode(state);
     motion.position = state.player.position;
     motion.yaw = state.player.yaw;

@@ -125,7 +125,7 @@ std::optional<course_world_definition> load_course_world_from_file(const std::st
 }
 
 std::string course_world_file_path(const std::string& asset_root, const course_definition& course) {
-    return course.world.empty() ? std::string() : under_asset_root(asset_root, course.world);
+    return under_asset_root(asset_root, course.world);
 }
 
 bool replace_text_file(const std::filesystem::path& path, const std::string& text) {

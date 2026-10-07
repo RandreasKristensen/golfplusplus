@@ -5,7 +5,7 @@
 // never sees it: it pushes game_state::net_commands, which update sends, and
 // reads game_state::online, which update fills from the server's rows.
 //
-// Subscriptions follow the plan's traffic rules: the caller's own views on
+// Subscriptions are only ever the caller's own rows or its room's: its own views on
 // connecting, then the caller's own rows once the account is known, then the
 // room's rows while in a room (net/room_rows.h). Nothing subscribes to a
 // whole table.
@@ -65,10 +65,6 @@ public:
     void claim_name(const std::string& name);
     void join_course(const std::string& course_id);
     void leave_room();
-    void create_group();
-    void join_group(std::uint64_t group_id);
-    void leave_group();
-    void return_to_hub();
     void create_link_code();
     void redeem_link_code(const std::string& code);
 

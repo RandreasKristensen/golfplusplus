@@ -44,6 +44,7 @@ set(sources
   src/game/play_area.cpp
   src/game/reward_rules.cpp
   src/game/shot_simulation.cpp
+  src/game/tee_box.cpp
   src/game/tuning_loader.cpp
   src/game/utf8.cpp
 )

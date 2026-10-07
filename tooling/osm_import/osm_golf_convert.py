@@ -492,9 +492,8 @@ def _nominatim_search(name: str, limit: int = 20) -> list[tuple[str, int]]:
     Geocode a course name to OSM refs.
 
     Overpass has no name index, so `way["name"~"..."]` is a planet-wide scan:
-    it takes minutes when it does not simply time out or get rate-limited. This
-    is why searching by name used to fail while --lat/--lon worked. Nominatim
-    *is* a name index, answers in well under a second, and hands back the very
+    it takes minutes when it does not simply time out or get rate-limited.
+    Nominatim *is* a name index, answers in well under a second, and hands back the very
     OSM ids Overpass wants.
     """
     key = f"{name}|{limit}"
@@ -1116,9 +1115,7 @@ def _hole_centerline(h: dict, line_pts, fw_pts, tee_xz, pin_xz,
       3. A straight tee→pin line.
 
     Width always comes from the fairway polygon when there is one, regardless
-    of which source shaped the centreline. Previously the two were coupled, so
-    any hole that fell back to the hole way also threw away a perfectly good
-    measured width in favour of the 20 m default.
+    of which source shaped the centreline.
     """
     direct = math.hypot(pin_xz[0] - tee_xz[0], pin_xz[1] - tee_xz[1])
 

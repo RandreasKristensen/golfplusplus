@@ -43,6 +43,11 @@ inline bool at_ball(const motion_mode mode) {
     return mode == motion_mode::aim || mode == motion_mode::address || mode == motion_mode::swing;
 }
 
+// Whether a player in `mode` is driving a cart, drifting or not.
+inline bool in_cart(const motion_mode mode) {
+    return mode == motion_mode::cart || mode == motion_mode::drift;
+}
+
 // Where a player is and how they are moving: enough for others to carry the
 // movement on between updates (extrapolate_motion).
 struct net_motion {
@@ -103,6 +108,20 @@ enum class net_command_type {
     leave_group,
     return_to_hub
 };
+
+// The server's reducers that net_commands call, by name: a refusal
+// (reducer_failure) names the one it came from.
+inline constexpr const char* reducer_update_motion = "update_motion";
+inline constexpr const char* reducer_take_shot = "take_shot";
+inline constexpr const char* reducer_enter_hole = "enter_hole";
+inline constexpr const char* reducer_claim_collectible = "claim_collectible";
+inline constexpr const char* reducer_emote = "emote";
+inline constexpr const char* reducer_retee = "retee";
+inline constexpr const char* reducer_pick_up_ball = "pick_up_ball";
+inline constexpr const char* reducer_return_to_hub = "return_to_hub";
+inline constexpr const char* reducer_create_group = "create_group";
+inline constexpr const char* reducer_join_group = "join_group";
+inline constexpr const char* reducer_leave_group = "leave_group";
 
 // One outbound intent. Only the fields named for its type are meaningful.
 struct net_command {
@@ -169,10 +188,6 @@ struct online_room {
 // Server times are microseconds since the Unix epoch, on the server's clock.
 inline float server_seconds_between(const std::int64_t earlier, const std::int64_t later) {
     return static_cast<float>(static_cast<double>(later - earlier) / 1000000.0);
-}
-
-inline std::int64_t server_micros(const double seconds) {
-    return static_cast<std::int64_t>(seconds * 1000000.0);
 }
 
 // A player in my room, me included: their room_member, player and

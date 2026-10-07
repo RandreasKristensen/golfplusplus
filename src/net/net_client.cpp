@@ -2,6 +2,7 @@
 
 #include "game/mode_dispatch.h"
 #include "game/net_types.h"
+#include "net/bridge_rows.h"
 
 #include <array>
 #include <cstddef>
@@ -14,14 +15,11 @@ stdb_string view(const std::string& text) {
     return stdb_string{text.data(), text.size()};
 }
 
-std::string text_of(const stdb_string& text) {
-    return text.data != nullptr ? std::string(text.data, text.len) : std::string();
-}
-
 // The reducers net_commands call: the game answers their refusals.
 bool gameplay_reducer(const std::string& reducer) {
-    for (const char* name : {"update_motion", "take_shot", "enter_hole", "claim_collectible", "emote", "retee",
-                             "pick_up_ball", "return_to_hub", "create_group", "join_group", "leave_group"}) {
+    for (const char* name : {reducer_update_motion, reducer_take_shot, reducer_enter_hole, reducer_claim_collectible,
+                             reducer_emote, reducer_retee, reducer_pick_up_ball, reducer_return_to_hub,
+                             reducer_create_group, reducer_join_group, reducer_leave_group}) {
         if (reducer == name) {
             return true;
         }
@@ -43,15 +41,6 @@ std::uint32_t subscribe(stdb_client* client, const std::vector<std::string>& que
         views.push_back(view(query));
     }
     return stdb_subscribe(client, views.data(), views.size());
-}
-
-template <typename Map>
-void apply_change(Map& rows, const std::uint64_t id, const stdb_row_change change, typename Map::mapped_type value) {
-    if (change == STDB_ROW_DELETE) {
-        rows.erase(id);
-    } else {
-        rows[id] = std::move(value);
-    }
 }
 }
 
@@ -199,22 +188,6 @@ void net_client::leave_room() {
     stdb_leave_room(client_.get());
 }
 
-void net_client::create_group() {
-    stdb_create_group(client_.get());
-}
-
-void net_client::join_group(const std::uint64_t group_id) {
-    stdb_join_group(client_.get(), group_id);
-}
-
-void net_client::leave_group() {
-    stdb_leave_group(client_.get());
-}
-
-void net_client::return_to_hub() {
-    stdb_return_to_hub(client_.get());
-}
-
 void net_client::create_link_code() {
     stdb_create_link_code(client_.get());
 }
@@ -358,7 +331,7 @@ void net_client::handle(const stdb_event& event, game_state& state) {
         // A refused claim leaves the collectible as it was: offer it again.
         // One client's reducers run in order, so once the claims answered
         // before it have left the list (with their progress), it is the oldest.
-        if (failure.reducer == "claim_collectible") {
+        if (failure.reducer == reducer_claim_collectible) {
             deliver_progress(state);
             if (!state.online.pending_claims.empty()) {
                 state.online.pending_claims.erase(state.online.pending_claims.begin());

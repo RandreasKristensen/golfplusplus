@@ -122,8 +122,7 @@ and a Steamworks partner account, which the owner doesn't have. SpacetimeAuth ne
 a Steam Publisher Web API key and checks tickets against our own app id, so it
 can't be tested end to end before then (Valve's test app `480` almost certainly won't work).
 Until then nothing may add the Steamworks SDK, `src/platform/steam/` or any Steam
-client code. The only Steam-aware code is the dormant
-server check (`check_login` in `server/golfpp_module/src/account_rules.h`).
+code, the server included.
 
 Start only when the owner confirms the app id exists. Then:
 
@@ -143,7 +142,11 @@ Start only when the owner confirms the app id exists. Then:
 - **Account linking:** check whether SpacetimeAuth gives a Steam login and a browser login
   for the same person the same `sub`. It almost certainly doesn't. Either way, our own
   linking (the link code flow) already handles it; report what you find.
-- Set `steam_app_id` with `admin_set_config` to switch on the ownership check in `check_login`.
+- Server (`check_login` in `server/golfpp_module/src/account_rules.h`): a `steam`
+  login method for tokens from our issuer whose payload has `login_method: "steam"`;
+  a `steam_app_id` in `server_config` (set by `admin_set_config`) that such a login
+  must own (`steam_owned_games` lists it with `ownsapp`); an `allow_non_steam` switch
+  for browser logins; the Steam id (`provider_id`) kept on `account_login` for friends.
 
 #### 1. Steam session (`src/platform/steam/steam_session.{h,cpp}`)
 

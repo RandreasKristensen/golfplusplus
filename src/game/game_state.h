@@ -89,12 +89,11 @@ struct active_hole {
 struct hub_hole_marker {
     glm::vec3 tee_position{0.0f};
     glm::vec3 pin_position{0.0f};
-    glm::vec3 start_position{0.0f};
     std::uint32_t wind_seed = 0;  // the placed hole's, for other players' shots on it
 };
 
-// A course with a course world. Its whole course is the play area, both
-// while walking around and while playing a hole.
+// The course's world and where each hole sits in it. The whole course is
+// the play area, both while walking around and while playing a hole.
 struct course_hub {
     course_world_definition world;
     std::vector<hub_hole_marker> markers;
@@ -206,15 +205,14 @@ struct game_state {
     course_definition course;
     std::vector<hole_data> course_holes;  // as authored, in hole coordinates
     round_state round;
-    std::optional<course_hub> hub;
-    std::optional<active_hole> hole;  // nullopt while walking around a hub
-    // On a hub course, where the last holed ball sits in its cup (the cup's
+    std::optional<course_hub> hub;    // nullopt until a course starts
+    std::optional<active_hole> hole;  // nullopt while walking around the hub
+    // Where the last holed ball sits in its cup (the cup's
     // centre on the ground) until the player picks it up: no hole starts
     // before then (game/course_session.h). Not saved: leaving the course puts
     // it away.
     std::optional<glm::vec3> cup_ball;
-    // The whole course on a hub course; the current hole on a course without one.
-    play_area area;
+    play_area area;  // the whole course
 
     // Offline or online, fixed from the menu until the player returns to it.
     // Progress changes only go through game/mode_dispatch.h, which keeps the
@@ -293,6 +291,8 @@ void update_game(game_state& state, const game_input& input, float dt, frame_pro
 void update_xp_drops(game_state& state, float dt);
 
 bool in_hub(const game_state& state);
+// The zone I play in (net_motion::zone): hub_zone, or the hole's index.
+int local_zone(const game_state& state);
 bool shot_playing(const game_state& state);
 // The current hole's course for simulate_shot. Borrows from `state`.
 shot_course current_shot_course(const game_state& state);

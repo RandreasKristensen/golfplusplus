@@ -323,19 +323,8 @@ glm::vec3 closest_barycentric_on_edge(const glm::vec3& position,
     return barycentric;
 }
 
-// Triangle row of a ribbon mesh. Used to keep consecutive samples on the same
-// ribbon (`previous_sample`) and to scan one row as a contiguous range.
-int triangle_row(const terrain_mesh& mesh, const int triangle_index) {
-    const int triangles_per_row = (mesh.cross_section_count - 1) * 2;
-    if (mesh.section_count <= 0 || triangles_per_row <= 0) {
-        return 0;
-    }
-    return std::clamp(triangle_index / triangles_per_row, 0, mesh.section_count - 1);
-}
-
-// Centreline point of the vertex row the triangle starts on. Derived from the
-// triangle's own vertices so it stays right in meshes that append several
-// ribbons (each ribbon has one more vertex row than triangle rows).
+// Centreline point of the vertex row the triangle starts on: where a ribbon
+// folds over itself, the section nearest the query wins.
 glm::vec3 triangle_section_center(const terrain_mesh& mesh, const int triangle_index) {
     const int columns = mesh.cross_section_count;
     if (columns <= 0) {
@@ -349,7 +338,6 @@ glm::vec3 triangle_section_center(const terrain_mesh& mesh, const int triangle_i
 
 struct terrain_candidate {
     terrain_sample sample;
-    int row = 0;
     float section_distance = std::numeric_limits<float>::max();
     float height_distance = std::numeric_limits<float>::max();
     float edge_distance = std::numeric_limits<float>::max();
@@ -364,19 +352,12 @@ int compare_near(const float a, const float b) {
     return a > b + epsilon ? 1 : 0;
 }
 
-// Candidates on the preferred row win; then the keys are compared in order;
-// the lower triangle index breaks exact ties so the result never depends on
-// scan order.
+// The keys are compared in order; the lower triangle index breaks exact
+// ties so the result never depends on scan order.
 bool ranks_before(const terrain_candidate& candidate,
                   const terrain_candidate& best,
-                  const int preferred_row,
                   const std::array<float, 3>& candidate_keys,
                   const std::array<float, 3>& best_keys) {
-    const bool candidate_preferred = preferred_row >= 0 && candidate.row == preferred_row;
-    const bool best_preferred = preferred_row >= 0 && best.row == preferred_row;
-    if (candidate_preferred != best_preferred) {
-        return candidate_preferred;
-    }
     for (std::size_t i = 0; i < candidate_keys.size(); ++i) {
         const int order = compare_near(candidate_keys[i], best_keys[i]);
         if (order != 0) {
@@ -386,14 +367,14 @@ bool ranks_before(const terrain_candidate& candidate,
     return candidate.sample.triangle_index < best.sample.triangle_index;
 }
 
-bool is_better_inside_candidate(const terrain_candidate& candidate, const terrain_candidate& best, const int preferred_row) {
-    return ranks_before(candidate, best, preferred_row,
+bool is_better_inside_candidate(const terrain_candidate& candidate, const terrain_candidate& best) {
+    return ranks_before(candidate, best,
                         {candidate.section_distance, candidate.height_distance, candidate.sample.distance_from_center},
                         {best.section_distance, best.height_distance, best.sample.distance_from_center});
 }
 
-bool is_better_edge_candidate(const terrain_candidate& candidate, const terrain_candidate& best, const int preferred_row) {
-    return ranks_before(candidate, best, preferred_row,
+bool is_better_edge_candidate(const terrain_candidate& candidate, const terrain_candidate& best) {
+    return ranks_before(candidate, best,
                         {candidate.edge_distance, candidate.section_distance, candidate.sample.distance_from_center},
                         {best.edge_distance, best.section_distance, best.sample.distance_from_center});
 }
@@ -651,7 +632,6 @@ terrain_scan_state scan_triangle(const terrain_mesh& mesh,
                                  const glm::vec3& position,
                                  const glm::vec3& query_point,
                                  const float fallback_y,
-                                 const int preferred_row,
                                  const int triangle_index,
                                  const scan_pass pass,
                                  const terrain_scan_state& state) {
@@ -661,7 +641,6 @@ terrain_scan_state scan_triangle(const terrain_mesh& mesh,
     const terrain_vertex& a = triangle_vertex(mesh, triangle_index, 0U);
     const terrain_vertex& b = triangle_vertex(mesh, triangle_index, 1U);
     const terrain_vertex& c = triangle_vertex(mesh, triangle_index, 2U);
-    const int row = triangle_row(mesh, triangle_index);
     const float section_distance = distance_xz_squared(query_point, triangle_section_center(mesh, triangle_index));
 
     const std::optional<glm::vec3> barycentric = barycentric_xz(position, a.position, b.position, c.position);
@@ -673,10 +652,9 @@ terrain_scan_state scan_triangle(const terrain_mesh& mesh,
         candidate.sample = sample_from_barycentric(mesh, triangle_index, *barycentric, true);
         candidate.sample.point.x = position.x;
         candidate.sample.point.z = position.z;
-        candidate.row = row;
         candidate.section_distance = section_distance;
         candidate.height_distance = std::abs(candidate.sample.point.y - fallback_y);
-        if (!next.has_inside || is_better_inside_candidate(candidate, next.best_inside, preferred_row)) {
+        if (!next.has_inside || is_better_inside_candidate(candidate, next.best_inside)) {
             next.best_inside = candidate;
             next.has_inside = true;
         }
@@ -693,9 +671,8 @@ terrain_scan_state scan_triangle(const terrain_mesh& mesh,
         candidate.sample = sample_from_barycentric(mesh, triangle_index, edge_barycentric, false);
         candidate.edge_distance = distance_squared(query_point, candidate.sample.point);
         candidate.sample.distance_from_center += std::sqrt(candidate.edge_distance);
-        candidate.row = row;
         candidate.section_distance = section_distance;
-        if (!next.has_edge || is_better_edge_candidate(candidate, next.best_edge, preferred_row)) {
+        if (!next.has_edge || is_better_edge_candidate(candidate, next.best_edge)) {
             next.best_edge = candidate;
             next.has_edge = true;
         }
@@ -1034,10 +1011,7 @@ terrain_mesh build_terrain_mesh_index(terrain_mesh mesh) {
     return mesh;
 }
 
-terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
-                                   const glm::vec3& position,
-                                   const float fallback_y,
-                                   const terrain_sample* previous_sample) {
+terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& position, const float fallback_y) {
     if (mesh.vertices.empty() || mesh.indices.size() < 3U) {
         terrain_sample sample;
         sample.point = glm::vec3(position.x, fallback_y, position.z);
@@ -1046,11 +1020,8 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
 
     const int triangle_count = static_cast<int>(mesh.indices.size() / 3U);
     const glm::vec3 query_point(position.x, fallback_y, position.z);
-    const int preferred_row = previous_sample != nullptr && previous_sample->triangle_index >= 0
-        ? triangle_row(mesh, previous_sample->triangle_index)
-        : -1;
     const auto scan = [&](const int triangle, const scan_pass pass, const terrain_scan_state& state) {
-        return scan_triangle(mesh, position, query_point, fallback_y, preferred_row, triangle, pass, state);
+        return scan_triangle(mesh, position, query_point, fallback_y, triangle, pass, state);
     };
 
     const terrain_mesh_index& index = mesh.spatial_index;
@@ -1076,24 +1047,10 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
         return finish_terrain_scan(state, query_point);
     }
 
-    // Pass 2: off the surface, so the nearest edge wins. Candidates on the
-    // previous sample's row outrank all others, so when that row has
-    // triangles the winner is among them.
-    const int triangles_per_row = (mesh.cross_section_count - 1) * 2;
-    if (preferred_row >= 0 && mesh.section_count > 0 && triangles_per_row > 0) {
-        const int first = preferred_row * triangles_per_row;
-        const int last = std::min(first + triangles_per_row, triangle_count);
-        for (int triangle = first; triangle < last; ++triangle) {
-            state = scan(triangle, scan_pass::edge_only, state);
-        }
-        if (state.has_edge) {
-            return finish_terrain_scan(state, query_point);
-        }
-    }
-
-    // Expanding-ring search over the grid. Stops once nothing unvisited can be
-    // closer than the best edge distance so far; the gathered set is a
-    // superset of every triangle that could win.
+    // Pass 2: off the surface, so the nearest edge wins: an expanding-ring
+    // search over the grid. Stops once nothing unvisited can be closer than
+    // the best edge distance so far; the gathered set is a superset of every
+    // triangle that could win.
     std::vector<std::uint32_t> candidates;
     float best_distance = std::numeric_limits<float>::max();
     const int max_radius = std::max(index.cells_x, index.cells_z);
@@ -1143,7 +1100,7 @@ std::optional<terrain_sample> sample_terrain_inside(const terrain_mesh& mesh, co
     const glm::vec3 query_point(position.x, 0.0f, position.z);
     terrain_scan_state state;
     const auto scan = [&](const int triangle) {
-        state = scan_triangle(mesh, position, query_point, 0.0f, -1, triangle, scan_pass::inside_only, state);
+        state = scan_triangle(mesh, position, query_point, 0.0f, triangle, scan_pass::inside_only, state);
     };
     const terrain_mesh_index& index = mesh.spatial_index;
     if (terrain_index_matches(mesh, index)) {
@@ -1162,11 +1119,4 @@ std::optional<terrain_sample> sample_terrain_inside(const terrain_mesh& mesh, co
         return std::nullopt;
     }
     return finish_terrain_scan(state, query_point);
-}
-
-terrain_sample sample_terrain_anchor(const terrain_mesh& mesh, const glm::vec3& position, const float fallback_y) {
-    terrain_sample sample = sample_terrain_mesh(mesh, position, fallback_y);
-    sample.point.x = position.x;
-    sample.point.z = position.z;
-    return sample;
 }

@@ -13,7 +13,7 @@ namespace {
 play_area flat_area(const std::vector<material_zone>& zones) {
     hole_data hole = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 300.0f), 60.0f);
     hole.material_zones = zones;
-    return build_hole_area(hole, shipped_content().tuning);
+    return hole_area(hole, shipped_content().tuning);
 }
 
 const terrain_zone_tuning& zone_tuning() {

@@ -49,7 +49,7 @@ TEST_CASE("every hole of a hub course gets a tee box on its tee, facing like its
 
 TEST_CASE("a tee box on a slope is flat over its highest ground, its sides down to its lowest") {
     const play_area area =
-        build_hole_area(straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 12.0f, 120.0f), 30.0f), shipped_content().tuning);
+        hole_area(straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 12.0f, 120.0f), 30.0f), shipped_content().tuning);
     REQUIRE(area.tee_boxes.size() == 1U);
     const tee_box& box = area.tee_boxes.front();
 
@@ -78,8 +78,8 @@ TEST_CASE("a tee box on a slope is flat over its highest ground, its sides down 
 
 TEST_CASE("a teed-up ball rests on the tee box") {
     const game_state state = started_hole();
-    REQUIRE(state.area.tee_boxes.size() == 1U);
-    const tee_box& box = state.area.tee_boxes.front();
+    REQUIRE(state.area.tee_boxes.size() == state.course_holes.size());
+    const tee_box& box = state.area.tee_boxes[state.hole->index];
     CHECK(on_tee_box(box, state.ball.position));
     CHECK(std::abs(state.ball.position.y - (box.center.y + state.ball.radius)) < 1e-4f);
     CHECK(on_tee_box(box, state.player.position));

@@ -12,8 +12,6 @@ pub struct ServerConfigRow {
     pub auth_issuer: String,
     pub auth_audience: String,
     pub allow_anonymous: bool,
-    pub steam_app_id: u32,
-    pub allow_non_steam: bool,
     pub link_secret: String,
 }
 
@@ -30,8 +28,6 @@ pub struct ServerConfigRowCols {
     pub auth_issuer: __sdk::__query_builder::Col<ServerConfigRow, String>,
     pub auth_audience: __sdk::__query_builder::Col<ServerConfigRow, String>,
     pub allow_anonymous: __sdk::__query_builder::Col<ServerConfigRow, bool>,
-    pub steam_app_id: __sdk::__query_builder::Col<ServerConfigRow, u32>,
-    pub allow_non_steam: __sdk::__query_builder::Col<ServerConfigRow, bool>,
     pub link_secret: __sdk::__query_builder::Col<ServerConfigRow, String>,
 }
 
@@ -44,8 +40,6 @@ impl __sdk::__query_builder::HasCols for ServerConfigRow {
             auth_issuer: __sdk::__query_builder::Col::new(table_name, "auth_issuer"),
             auth_audience: __sdk::__query_builder::Col::new(table_name, "auth_audience"),
             allow_anonymous: __sdk::__query_builder::Col::new(table_name, "allow_anonymous"),
-            steam_app_id: __sdk::__query_builder::Col::new(table_name, "steam_app_id"),
-            allow_non_steam: __sdk::__query_builder::Col::new(table_name, "allow_non_steam"),
             link_secret: __sdk::__query_builder::Col::new(table_name, "link_secret"),
         }
     }

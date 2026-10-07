@@ -30,10 +30,9 @@ material_zone_type material_type_from_string(const std::string& value) {
 }
 
 // One zone, an ellipse (`center`, `radii`, `rotation_degrees`). nullopt
-// when any of those is missing or a radius is not positive, and for the
-// `radius` and `bounds` shapes zones no longer have.
+// when any of those is missing or a radius is not positive.
 std::optional<material_zone> material_zone_from_json(const json& object) {
-    if (!object.is_object() || object.contains("radius") || object.contains("bounds")) {
+    if (!object.is_object()) {
         return std::nullopt;
     }
     const std::optional<glm::vec3> center = json_vec3(object, "center");

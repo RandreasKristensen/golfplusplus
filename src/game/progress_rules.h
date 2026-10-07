@@ -1,8 +1,8 @@
 #pragma once
 
 // Pure rules over the progress record (save_data): no game_state, no I/O.
-// Offline play applies them to the local save; the planned server applies the
-// same functions to its own copy.
+// Offline play applies them to the local save; the server applies the same
+// functions to its own copy.
 
 #include "game/course_world_definition.h"
 #include "game/reward_rules.h"

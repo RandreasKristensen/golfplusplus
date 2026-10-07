@@ -49,6 +49,15 @@ void award_skill_xp(game_state& state, const xp_reward& reward) {
 void push_command(game_state& state, net_command command) {
     state.net_commands.push_back(std::move(command));
 }
+
+// Online: pushes a command of `type` with no fields. Offline: nothing.
+void push_online_command(game_state& state, const net_command_type type) {
+    if (is_online(state)) {
+        net_command command;
+        command.type = type;
+        push_command(state, std::move(command));
+    }
+}
 }
 
 bool is_online(const game_state& state) {
@@ -116,30 +125,15 @@ void record_hole_started(game_state& state, const std::size_t hole_index) {
 }
 
 void record_retee(game_state& state) {
-    if (!is_online(state)) {
-        return;
-    }
-    net_command command;
-    command.type = net_command_type::retee;
-    push_command(state, std::move(command));
+    push_online_command(state, net_command_type::retee);
 }
 
 void record_ball_picked_up(game_state& state) {
-    if (!is_online(state)) {
-        return;
-    }
-    net_command command;
-    command.type = net_command_type::pick_up_ball;
-    push_command(state, std::move(command));
+    push_online_command(state, net_command_type::pick_up_ball);
 }
 
 void record_hole_given_up(game_state& state) {
-    if (!is_online(state)) {
-        return;
-    }
-    net_command command;
-    command.type = net_command_type::return_to_hub;
-    push_command(state, std::move(command));
+    push_online_command(state, net_command_type::return_to_hub);
 }
 
 void request_group(game_state& state) {
@@ -160,12 +154,7 @@ void request_group(game_state& state) {
 }
 
 void request_leave_group(game_state& state) {
-    if (!is_online(state)) {
-        return;
-    }
-    net_command command;
-    command.type = net_command_type::leave_group;
-    push_command(state, std::move(command));
+    push_online_command(state, net_command_type::leave_group);
 }
 
 const room_player* my_room_player(const game_state& state) {
@@ -195,7 +184,7 @@ void record_hole_completed(game_state& state) {
         return;
     }
     state.save = apply_hole_completed(state.save);
-    if (round_finished(state.round) && !state.course.practice) {
+    if (round_finished(state.round)) {
         state.save = apply_course_completed(state.save, state.course.id);
     }
     state.save_requested = true;

@@ -21,7 +21,6 @@ enum class startup_menu_screen {
     none,
     main,
     help,
-    hole_picker,
     course_picker,
     form,    // a message, a text field or a code, then a column of tiles
     confirm  // laid out like main

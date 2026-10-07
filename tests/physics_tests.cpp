@@ -41,63 +41,6 @@ wind_tuning test_wind() {
     wind.phase_angle_scale = 1.3f;
     return wind;
 }
-
-terrain_mesh crossing_branch_mesh() {
-    terrain_mesh mesh;
-    mesh.section_count = 2;
-    mesh.cross_section_count = 4;
-    mesh.width = 2.0f;
-    mesh.vertices.resize(16);
-
-    const glm::vec3 normal(0.0f, 1.0f, 0.0f);
-
-    const glm::vec3 branch_a[8] = {
-        glm::vec3(-2.0f, 0.0f, -0.8f),
-        glm::vec3(-2.0f, 0.0f,  0.8f),
-        glm::vec3( 2.0f, 0.0f, -0.8f),
-        glm::vec3( 2.0f, 0.0f,  0.8f),
-        glm::vec3(-2.0f, 0.0f, -0.8f),
-        glm::vec3(-2.0f, 0.0f,  0.8f),
-        glm::vec3( 2.0f, 0.0f, -0.8f),
-        glm::vec3( 2.0f, 0.0f,  0.8f)
-    };
-
-    const glm::vec3 branch_b[8] = {
-        glm::vec3(-0.8f, 5.0f, -2.0f),
-        glm::vec3( 0.8f, 5.0f, -2.0f),
-        glm::vec3(-0.8f, 5.0f,  2.0f),
-        glm::vec3( 0.8f, 5.0f,  2.0f),
-        glm::vec3(-0.8f, 5.0f, -2.0f),
-        glm::vec3( 0.8f, 5.0f, -2.0f),
-        glm::vec3(-0.8f, 5.0f,  2.0f),
-        glm::vec3( 0.8f, 5.0f,  2.0f)
-    };
-
-    for (int i = 0; i < 8; ++i) {
-        mesh.vertices[static_cast<std::size_t>(i)].position = branch_a[i];
-        mesh.vertices[static_cast<std::size_t>(i)].normal = normal;
-        mesh.vertices[static_cast<std::size_t>(i)].distance_from_center = 0.0f;
-        mesh.vertices[static_cast<std::size_t>(i)].material = terrain_material::fairway;
-
-        mesh.vertices[static_cast<std::size_t>(i + 8)].position = branch_b[i];
-        mesh.vertices[static_cast<std::size_t>(i + 8)].normal = normal;
-        mesh.vertices[static_cast<std::size_t>(i + 8)].distance_from_center = 0.0f;
-        mesh.vertices[static_cast<std::size_t>(i + 8)].material = terrain_material::green;
-    }
-
-    mesh.indices = {
-        0U, 1U, 2U,
-        1U, 3U, 2U,
-        4U, 5U, 6U,
-        5U, 7U, 6U,
-        8U, 9U, 10U,
-        9U, 11U, 10U,
-        12U, 13U, 14U,
-        13U, 15U, 14U
-    };
-
-    return mesh;
-}
 }
 
 TEST_CASE("ball decelerates under aerodynamic drag") {
@@ -278,7 +221,7 @@ namespace {
 void check_overlay_on_ground(const terrain_mesh& overlay, const terrain_mesh& ground, const material_zone& zone,
                              const terrain_material material) {
     const auto on_ground = [&ground](const glm::vec3& point) {
-        return near(point.y, sample_terrain_anchor(ground, point, point.y).point.y, 0.0005f);
+        return near(point.y, sample_terrain_mesh(ground, point, point.y).point.y, 0.0005f);
     };
     for (const terrain_vertex& vertex : overlay.vertices) {
         CHECK(vertex.material == material);
@@ -434,7 +377,7 @@ TEST_CASE("terrain sampling clamps outside ribbon as rough") {
     CHECK(sample.distance_from_center > 8.9f);
 }
 
-TEST_CASE("terrain anchor sampling preserves authored horizontal position outside ribbon") {
+TEST_CASE("terrain sampling outside the ribbon takes the nearest edge as rough") {
     terrain_spline terrain;
     terrain.control_points = {
         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -444,17 +387,14 @@ TEST_CASE("terrain anchor sampling preserves authored horizontal position outsid
     terrain.sample_count = 20;
 
     const terrain_mesh mesh = plain_terrain_mesh(terrain);
-    const glm::vec3 authored(12.0f, 0.0f, 10.0f);
-    const terrain_sample sample = sample_terrain_anchor(mesh, authored, -5.0f);
+    const terrain_sample sample = sample_terrain_mesh(mesh, glm::vec3(12.0f, 0.0f, 10.0f), -5.0f);
 
     CHECK(sample.triangle_index >= 0);
     CHECK(!sample.inside_surface);
-    CHECK(near(sample.point.x, authored.x));
-    CHECK(near(sample.point.z, authored.z));
     CHECK(sample.material == terrain_material::rough);
 }
 
-TEST_CASE("terrain anchor height follows nearby downhill and uphill terrain outside ribbon") {
+TEST_CASE("terrain height outside the ribbon follows nearby downhill and uphill terrain") {
     terrain_spline downhill;
     downhill.control_points = {
         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -466,12 +406,8 @@ TEST_CASE("terrain anchor height follows nearby downhill and uphill terrain outs
     terrain_spline uphill = downhill;
     uphill.control_points[1].y = 6.0f;
 
-    const terrain_sample downhill_sample = sample_terrain_anchor(plain_terrain_mesh(downhill),
-                                                                 glm::vec3(12.0f, 0.0f, 10.0f),
-                                                                 0.0f);
-    const terrain_sample uphill_sample = sample_terrain_anchor(plain_terrain_mesh(uphill),
-                                                               glm::vec3(12.0f, 0.0f, 10.0f),
-                                                               0.0f);
+    const terrain_sample downhill_sample = sample_terrain_mesh(plain_terrain_mesh(downhill), glm::vec3(12.0f, 0.0f, 10.0f), 0.0f);
+    const terrain_sample uphill_sample = sample_terrain_mesh(plain_terrain_mesh(uphill), glm::vec3(12.0f, 0.0f, 10.0f), 0.0f);
 
     CHECK(downhill_sample.point.y < -1.0f);
     CHECK(uphill_sample.point.y > 1.0f);
@@ -538,32 +474,6 @@ TEST_CASE("a banked ribbon tilts across, rising towards its lateral side") {
     const float lateral = sample_terrain_mesh(mesh, glm::vec3(-4.0f, 0.0f, 20.0f), 0.0f).point.y;
     const float other = sample_terrain_mesh(mesh, glm::vec3(4.0f, 0.0f, 20.0f), 0.0f).point.y;
     CHECK(near(lateral - other, 0.8f, 0.01f));
-}
-
-TEST_CASE("terrain sampling stays on the hinted branch through a crossing overlap") {
-    const terrain_mesh mesh = crossing_branch_mesh();
-    const glm::vec3 crossing(0.0f, 0.0f, 0.0f);
-
-    terrain_sample lower_hint;
-    lower_hint.triangle_index = 0;
-    lower_hint.inside_surface = true;
-    terrain_sample upper_hint;
-    upper_hint.triangle_index = 6;
-    upper_hint.inside_surface = true;
-
-    const terrain_sample lower_cross = sample_terrain_mesh(mesh, crossing, 0.0f, &lower_hint);
-    const terrain_sample upper_cross = sample_terrain_mesh(mesh, crossing, 0.0f, &upper_hint);
-
-    CHECK(lower_hint.inside_surface);
-    CHECK(upper_hint.inside_surface);
-    CHECK(lower_cross.inside_surface);
-    CHECK(upper_cross.inside_surface);
-    CHECK(lower_cross.material == terrain_material::fairway);
-    CHECK(upper_cross.material == terrain_material::green);
-    CHECK(std::abs(lower_cross.point.y - 0.0f) < 0.001f);
-    CHECK(std::abs(upper_cross.point.y - 5.0f) < 0.001f);
-    CHECK(lower_cross.triangle_index == lower_hint.triangle_index);
-    CHECK(upper_cross.triangle_index == upper_hint.triangle_index);
 }
 
 TEST_CASE("terrain collision uses spline elevation and is deterministic") {
@@ -827,17 +737,6 @@ TEST_CASE("indexed terrain sampling matches the full scan on mesh edges and beyo
         }
     }
     CHECK(mismatches == 0);
-
-    // sample_terrain_anchor shares the same path and must agree too.
-    int anchor_mismatches = 0;
-    for (const glm::vec3& probe : probes) {
-        const terrain_sample indexed = sample_terrain_anchor(mesh, probe, 0.0f);
-        const terrain_sample reference = sample_terrain_anchor(reference_mesh, probe, 0.0f);
-        if (!same_terrain_sample(indexed, reference)) {
-            ++anchor_mismatches;
-        }
-    }
-    CHECK(anchor_mismatches == 0);
 }
 
 TEST_CASE("indexed terrain sampling matches the full scan on the ground mesh") {
@@ -863,57 +762,7 @@ TEST_CASE("indexed terrain sampling matches the full scan on the ground mesh") {
     CHECK(mismatches == 0);
 }
 
-TEST_CASE("indexed terrain sampling matches the full scan when walking with previous_sample") {
-    const terrain_mesh mesh = index_test_mesh();
-    const terrain_mesh reference_mesh = without_spatial_index(mesh);
-    CHECK(mesh.indices.size() >= 3U);
-    if (mesh.indices.size() < 3U) {
-        return;
-    }
-
-    int mismatches = 0;
-    int hinted_samples = 0;
-    long long indexed_triangles = 0;
-    long long reference_triangles = 0;
-
-    for (int lane = -8; lane <= 8; ++lane) {
-        terrain_sample indexed_previous;
-        terrain_sample reference_previous;
-        bool has_previous = false;
-
-        for (int step = -4; step <= 64; ++step) {
-            const glm::vec3 position(static_cast<float>(lane) * 2.5f, 0.0f, static_cast<float>(step));
-            const terrain_sample indexed =
-                sample_terrain_mesh(mesh, position, -1.0f, has_previous ? &indexed_previous : nullptr);
-            const terrain_sample reference =
-                sample_terrain_mesh(reference_mesh, position, -1.0f, has_previous ? &reference_previous : nullptr);
-
-            if (has_previous) {
-                ++hinted_samples;
-                indexed_triangles += indexed.triangles_tested;
-                reference_triangles += reference.triangles_tested;
-            }
-            if (!same_terrain_sample(indexed, reference)) {
-                ++mismatches;
-            }
-
-            indexed_previous = indexed;
-            reference_previous = reference;
-            has_previous = true;
-        }
-    }
-
-    CHECK(mismatches == 0);
-    CHECK(hinted_samples > 0);
-    CHECK(indexed_triangles < reference_triangles);
-    std::cout << "  [terrain index] previous_sample walk: " << hinted_samples
-            << " hinted samples | avg triangles tested full scan: "
-            << (static_cast<double>(reference_triangles) / static_cast<double>(hinted_samples))
-            << " | avg triangles tested indexed: "
-            << (static_cast<double>(indexed_triangles) / static_cast<double>(hinted_samples)) << "\n";
-}
-
-TEST_CASE("repeated indexed samples with previous_sample are deterministic") {
+TEST_CASE("repeated indexed samples are deterministic") {
     const terrain_mesh mesh = index_test_mesh();
     CHECK(mesh.indices.size() >= 3U);
     if (mesh.indices.size() < 3U) {
@@ -930,20 +779,11 @@ TEST_CASE("repeated indexed samples with previous_sample are deterministic") {
     };
 
     for (const glm::vec3& probe : probes) {
-        const terrain_sample seed = sample_terrain_mesh(mesh, probe, 0.0f);
-        const terrain_sample first = sample_terrain_mesh(mesh, probe, 0.0f, &seed);
+        const terrain_sample first = sample_terrain_mesh(mesh, probe, 0.0f);
         for (int repeat = 0; repeat < 16; ++repeat) {
-            const terrain_sample again = sample_terrain_mesh(mesh, probe, 0.0f, &seed);
+            const terrain_sample again = sample_terrain_mesh(mesh, probe, 0.0f);
             CHECK(same_terrain_sample(again, first));
             CHECK(again.triangles_tested == first.triangles_tested);
-        }
-
-        // Feeding a sample back into itself must reach a fixed point too.
-        terrain_sample chained = first;
-        for (int repeat = 0; repeat < 16; ++repeat) {
-            const terrain_sample next = sample_terrain_mesh(mesh, probe, 0.0f, &chained);
-            CHECK(same_terrain_sample(next, chained));
-            chained = next;
         }
     }
 }

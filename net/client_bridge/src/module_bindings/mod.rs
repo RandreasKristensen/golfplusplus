@@ -134,8 +134,6 @@ pub enum Reducer {
         auth_issuer: String,
         auth_audience: String,
         allow_anonymous: bool,
-        steam_app_id: u32,
-        allow_non_steam: bool,
         link_secret: String,
     },
     ClaimCollectibleReducer {
@@ -221,15 +219,11 @@ impl __sdk::Reducer for Reducer {
                 auth_issuer,
                 auth_audience,
                 allow_anonymous,
-                steam_app_id,
-                allow_non_steam,
                 link_secret,
             } => __sats::bsatn::to_vec(&admin_set_config_reducer::AdminSetConfigArgs {
                 auth_issuer: auth_issuer.clone(),
                 auth_audience: auth_audience.clone(),
                 allow_anonymous: allow_anonymous.clone(),
-                steam_app_id: steam_app_id.clone(),
-                allow_non_steam: allow_non_steam.clone(),
                 link_secret: link_secret.clone(),
             }),
             Reducer::ClaimCollectibleReducer { collectible_id } => __sats::bsatn::to_vec(

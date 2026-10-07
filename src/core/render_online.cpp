@@ -20,10 +20,6 @@ namespace {
 constexpr float tag_height_on_foot = 1.30f;
 constexpr float tag_height_in_cart = 1.55f;
 
-bool in_cart(const motion_mode mode) {
-    return mode == motion_mode::cart || mode == motion_mode::drift;
-}
-
 float trail_alpha(const remote_shot& shot, const game_tuning& tuning) {
     const float after = shot.elapsed - shot.result.duration;
     if (after <= 0.0f) {

@@ -55,12 +55,8 @@ struct shown_ball {
 std::vector<shown_ball> remote_balls(const game_state& state);
 
 // What another player is to me, which colours their name tag.
-// `befriended` is for friends, which nothing marks yet.
-enum class player_relationship { unknown, grouped, befriended };
+enum class player_relationship { unknown, grouped };
 player_relationship relationship_to(const game_state& state, const room_player& player);
-
-// The zone I play in: hub_zone, or the hole's index.
-int local_zone(const game_state& state);
 
 // The nearest other player in my zone within `distance` of me (XZ), as shown.
 std::optional<std::uint64_t> nearest_player(const game_state& state, float distance);

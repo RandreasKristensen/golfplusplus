@@ -7,8 +7,6 @@
 #include "game/pixel_font_data.h"
 #include "game/text_ids.h"
 
-#include <filesystem>
-#include <system_error>
 #include <utility>
 
 namespace {
@@ -45,12 +43,9 @@ startup_menu_screen screen_for_flow(const startup_flow flow) {
     switch (flow) {
     case startup_flow::main:
     case startup_flow::settings:
-    case startup_flow::offline:
         return startup_menu_screen::main;
     case startup_flow::help:
         return startup_menu_screen::help;
-    case startup_flow::hole_picker:
-        return startup_menu_screen::hole_picker;
     case startup_flow::course_picker:
     case startup_flow::online_course_picker:
         return startup_menu_screen::course_picker;
@@ -105,46 +100,10 @@ int item_count(const startup_flow flow, const startup_catalog& catalog, const on
     switch (flow) {
     case startup_flow::main:
         return static_cast<int>(main_menu_items(online).size());
-    case startup_flow::offline:
-        return static_cast<int>(offline_menu_item::count);
-    case startup_flow::hole_picker:
-        return static_cast<int>(catalog.holes.size());
     case startup_flow::course_picker:
         return static_cast<int>(catalog.courses.size());
     default:
         return 0;
-    }
-}
-
-course_definition practice_course(const startup_hole_option& option) {
-    course_definition course;
-    course.id = "practice_" + option.hole.id;
-    course.name = option.hole.name;
-    course.holes = {option.path};
-    course.backdrop = option.backdrop;
-    course.practice = true;
-    return course;
-}
-
-// The backdrop of the first course that plays the hole at `path`, empty images when none does.
-course_backdrop backdrop_for_hole(const game_content& content, const std::filesystem::path& path) {
-    for (const course_definition& course : content.courses) {
-        for (std::size_t i = 0; i < course.holes.size(); ++i) {
-            std::error_code error;
-            if (std::filesystem::equivalent(course_hole_path(content.asset_root, course, i), path, error)) {
-                return course.backdrop;
-            }
-        }
-    }
-    return {};
-}
-
-// Where back goes from an offline screen.
-void go_back(startup_flow_state& state) {
-    if (state.flow == startup_flow::hole_picker || state.flow == startup_flow::course_picker) {
-        open_screen(state, startup_flow::offline);
-    } else {
-        return_to_main_menu(state);
     }
 }
 
@@ -154,7 +113,7 @@ void accept_main_menu(startup_flow_state& state, const online_menu_status& onlin
         open_play_online(state, online, result);
         break;
     case main_menu_item::play_offline:
-        open_screen(state, startup_flow::offline);
+        open_screen(state, startup_flow::course_picker);
         break;
     case main_menu_item::link_login:
         open_link_code_show(state, online, result);
@@ -181,23 +140,6 @@ bool signed_in(const online_menu_status& online) {
 
 startup_catalog load_startup_catalog(const game_content& content, const text_assets& text) {
     startup_catalog catalog;
-    const std::filesystem::path root(content.asset_root);
-    for (const std::filesystem::path& path : json_files_in_directory(root / "holes")) {
-        std::optional<hole_data> hole = load_hole_from_file(path.string());
-        if (!hole) {
-            continue;
-        }
-        if (hole->id.empty()) {
-            hole->id = path.stem().string();
-        }
-        if (hole->name.empty()) {
-            hole->name = hole->id;
-        }
-        std::error_code error;
-        const std::filesystem::path relative = std::filesystem::relative(path, root, error);
-        catalog.holes.push_back(startup_hole_option{error ? path.string() : relative.generic_string(), std::move(*hole),
-                                                    backdrop_for_hole(content, path)});
-    }
     for (const course_definition& course : content.courses) {
         catalog.courses.push_back(make_course_option(content.asset_root, course));
     }
@@ -229,7 +171,7 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
     }
 
     const int count = item_count(state.flow, catalog, online);
-    const bool picker = state.flow == startup_flow::hole_picker || state.flow == startup_flow::course_picker;
+    const bool picker = state.flow == startup_flow::course_picker;
     const int hit = select_with_input(screen_for_flow(state.flow), picker ? picker_columns : 1, state.selection, count, input,
                                       click, result.sounds);
 
@@ -238,7 +180,7 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
         if (state.flow == startup_flow::main) {
             result.action = startup_action::quit;
         } else {
-            go_back(state);
+            return_to_main_menu(state);
         }
         return result;
     }
@@ -251,15 +193,6 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
     switch (state.flow) {
     case startup_flow::main:
         accept_main_menu(state, online, result);
-        break;
-    case startup_flow::offline:
-        open_screen(state, static_cast<offline_menu_item>(state.selection) == offline_menu_item::play_course
-                               ? startup_flow::course_picker
-                               : startup_flow::hole_picker);
-        break;
-    case startup_flow::hole_picker:
-        result.action = startup_action::start_course;
-        result.course = practice_course(catalog.holes[selected]);
         break;
     case startup_flow::course_picker:
         result.action = startup_action::start_course;
@@ -357,29 +290,12 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
         }
         break;
     }
-    case startup_flow::offline:
-        menu.title = lookup_text(text, text_menu_offline_title);
-        menu.subtitle = lookup_text(text, text_menu_offline_subtitle);
-        menu.footer = lookup_text(text, text_menu_offline_footer);
-        add_tile(menu, lookup_text(text, text_menu_offline_play_course), lookup_text(text, text_menu_offline_play_course_hint), selected(0));
-        add_tile(menu, lookup_text(text, text_menu_offline_play_hole), lookup_text(text, text_menu_offline_play_hole_hint), selected(1));
-        break;
     case startup_flow::settings:
         return make_settings_menu_render_data(state.selection, state.settings, catalog.settings, text);
     case startup_flow::help:
         menu.title = lookup_text(text, text_menu_help_title);
         menu.subtitle = lookup_text(text, text_menu_help_subtitle);
         menu.footer = lookup_text(text, text_menu_help_footer);
-        break;
-    case startup_flow::hole_picker:
-        menu.title = lookup_text(text, text_menu_hole_picker_title);
-        menu.subtitle = lookup_text(text, text_menu_hole_picker_subtitle);
-        menu.footer = lookup_text(text, text_menu_hole_picker_footer);
-        for (std::size_t i = 0; i < catalog.holes.size(); ++i) {
-            const hole_data& hole = catalog.holes[i].hole;
-            add_tile(menu, hole.name, format_text(text, text_menu_hole_picker_tile, {{"par", std::to_string(hole.par)}}), selected(i));
-            menu.tiles.back().preview = make_hole_preview(hole);
-        }
         break;
     case startup_flow::course_picker:
         menu.title = lookup_text(text, text_menu_course_picker_title);

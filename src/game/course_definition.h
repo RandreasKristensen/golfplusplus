@@ -31,11 +31,7 @@ struct course_definition {
     // Hole references: a path relative to the asset root, or a bare hole id
     // meaning holes/<id>.json. See course_hole_path.
     std::vector<std::string> holes;
-    // Optional course world (hub) path relative to the asset root.
+    // The course world, relative to the asset root.
     std::string world;
-    // Every course file has one; empty images only on a practice hole no
-    // course plays.
     course_backdrop backdrop;
-    // A single hole from the hole picker: completing it does not complete a course.
-    bool practice = false;
 };

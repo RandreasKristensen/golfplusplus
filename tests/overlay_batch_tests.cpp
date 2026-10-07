@@ -10,19 +10,20 @@
 #include <cstddef>
 
 namespace {
-// The old path drew the unit screen quad with u_mvp = model. Reproduce that
-// transform on the CPU for comparison.
-glm::vec2 old_matrix_corner(const glm::mat4& model, const std::size_t corner_index) {
+// A quad is the unit screen quad moved by its model matrix (translate,
+// rotate, scale). The batch writes the corners directly; this gives them
+// through the matrix, for comparison.
+glm::vec2 matrix_corner(const glm::mat4& model, const std::size_t corner_index) {
     const std::array<float, 2>& corner = overlay_unit_quad_corners[corner_index];
     const glm::vec4 clip = model * glm::vec4(corner[0], corner[1], 0.0f, 1.0f);
     return glm::vec2(clip.x, clip.y);
 }
 
-glm::mat4 old_axis_aligned_model(const glm::vec2 center, const glm::vec2 half_size) {
+glm::mat4 axis_aligned_model(const glm::vec2 center, const glm::vec2 half_size) {
     return glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(center, 0.0f)), glm::vec3(half_size, 1.0f));
 }
 
-glm::mat4 old_rotated_model(const glm::vec2 center, const glm::vec2 half_size, const float angle) {
+glm::mat4 rotated_model(const glm::vec2 center, const glm::vec2 half_size, const float angle) {
     glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(center, 0.0f));
     model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
     return glm::scale(model, glm::vec3(half_size, 1.0f));
@@ -35,7 +36,7 @@ void check_quad_matches(const overlay_batch& batch,
                         const float alpha) {
     for (std::size_t corner = 0; corner < overlay_vertices_per_quad; ++corner) {
         const overlay_vertex& vertex = batch.vertices[quad_index * overlay_vertices_per_quad + corner];
-        const glm::vec2 expected = old_matrix_corner(model, corner);
+        const glm::vec2 expected = matrix_corner(model, corner);
         CHECK(vertex.position.x == expected.x);
         CHECK(vertex.position.y == expected.y);
         CHECK(vertex.color == glm::vec4(color, alpha));
@@ -43,7 +44,7 @@ void check_quad_matches(const overlay_batch& batch,
 }
 }
 
-TEST_CASE("overlay quad corners match the old translate*scale matrix path") {
+TEST_CASE("overlay quad corners match the translate*scale model matrix") {
     overlay_batch batch;
     const glm::vec2 center(0.78f, -0.31f);
     const glm::vec2 half_size(0.17f, 0.12f);
@@ -54,11 +55,11 @@ TEST_CASE("overlay quad corners match the old translate*scale matrix path") {
         return;
     }
     CHECK(overlay_batch_quad_count(batch) == 1U);
-    check_quad_matches(batch, 0, old_axis_aligned_model(center, half_size), glm::vec3(0.055f, 0.06f, 0.07f), 0.82f);
+    check_quad_matches(batch, 0, axis_aligned_model(center, half_size), glm::vec3(0.055f, 0.06f, 0.07f), 0.82f);
 
     // Bit-exact for the axis-aligned case: no rotation terms involved.
     for (std::size_t corner = 0; corner < overlay_vertices_per_quad; ++corner) {
-        CHECK(batch.vertices[corner].position == old_matrix_corner(old_axis_aligned_model(center, half_size), corner));
+        CHECK(batch.vertices[corner].position == matrix_corner(axis_aligned_model(center, half_size), corner));
     }
 }
 
@@ -72,7 +73,7 @@ TEST_CASE("overlay quad defaults to opaque alpha") {
     CHECK(batch.vertices[0].color.a == 1.0f);
 }
 
-TEST_CASE("rotated overlay quad corners match the old translate*rotate*scale matrix path") {
+TEST_CASE("rotated overlay quad corners match the translate*rotate*scale model matrix") {
     const float angles[] = {0.0f, 0.37f, 1.5707964f, -2.25f, 3.14159265f, 5.9f};
     for (const float angle : angles) {
         overlay_batch batch;
@@ -83,7 +84,7 @@ TEST_CASE("rotated overlay quad corners match the old translate*rotate*scale mat
         if (!(batch.vertices.size() == overlay_vertices_per_quad)) {
             return;
         }
-        check_quad_matches(batch, 0, old_rotated_model(center, half_size, angle), glm::vec3(0.9f, 0.1f, 0.3f), 0.5f);
+        check_quad_matches(batch, 0, rotated_model(center, half_size, angle), glm::vec3(0.9f, 0.1f, 0.3f), 0.5f);
     }
 }
 
@@ -98,7 +99,7 @@ TEST_CASE("overlay segment is a rotated quad along the segment and skips zero le
     }
 
     const glm::vec2 delta = end - start;
-    const glm::mat4 model = old_rotated_model((start + end) * 0.5f,
+    const glm::mat4 model = rotated_model((start + end) * 0.5f,
                                               glm::vec2(std::sqrt(delta.x * delta.x + delta.y * delta.y) * 0.5f, 0.004f),
                                               std::atan2(delta.y, delta.x));
     check_quad_matches(batch, 0, model, glm::vec3(0.5f), 0.75f);
@@ -122,7 +123,7 @@ TEST_CASE("overlay batch keeps submission order for painter's-order blending") {
         CHECK(batch.vertices[overlay_vertices_per_quad + corner].color == glm::vec4(1.0f, 0.0f, 0.0f, 0.3f));
         CHECK(batch.vertices[2 * overlay_vertices_per_quad + corner].color == glm::vec4(0.0f, 1.0f, 0.0f, 0.9f));
     }
-    check_quad_matches(batch, 2, old_axis_aligned_model(glm::vec2(0.5f), glm::vec2(0.1f)), glm::vec3(0.0f, 1.0f, 0.0f), 0.9f);
+    check_quad_matches(batch, 2, axis_aligned_model(glm::vec2(0.5f), glm::vec2(0.1f)), glm::vec3(0.0f, 1.0f, 0.0f), 0.9f);
 }
 
 TEST_CASE("clearing the overlay batch keeps its capacity for reuse") {

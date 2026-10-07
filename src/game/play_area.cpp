@@ -235,32 +235,26 @@ hole_data place_hole(const hole_data& hole, const course_world_hole_start& start
     return placed;
 }
 
-play_area build_hole_area(const hole_data& hole, const game_tuning& tuning) {
-    play_area area;
-    area.ground_y = hole.tee_position.y;
-    area.trees = hole.trees;
-    area.holes.push_back(build_hole_mesh(hole, tuning));
-    area.zones = hole.material_zones;
-    return with_signs(with_tee_boxes(with_bounds(with_ground(std::move(area), nullptr, ribbon_width(hole), tuning)), {hole}, tuning),
-                      {hole}, tuning);
-}
-
 play_area build_course_area(const std::vector<hole_data>& holes,
                             const course_world_definition& world,
                             const game_tuning& tuning) {
     play_area course;
     std::vector<hole_data> placed_holes;
     float margin = 0.0f;
+    const height_grid* land = world.ground.heights.empty() ? nullptr : &world.ground;
     for (std::size_t i = 0; i < holes.size() && i < world.hole_starts.size(); ++i) {
         const hole_data placed = place_hole(holes[i], world.hole_starts[i]);
-        course.holes.push_back(fit_rough_to_land(place_mesh(build_hole_mesh(holes[i], tuning), holes[i], world.hole_starts[i]),
-                                                 holes[i].spline.width, world.ground));
+        terrain_mesh mesh = place_mesh(build_hole_mesh(holes[i], tuning), holes[i], world.hole_starts[i]);
+        course.holes.push_back(land != nullptr ? fit_rough_to_land(std::move(mesh), holes[i].spline.width, *land) : std::move(mesh));
         course.zones.insert(course.zones.end(), placed.material_zones.begin(), placed.material_zones.end());
         course.trees.insert(course.trees.end(), placed.trees.begin(), placed.trees.end());
         margin = std::max(margin, ribbon_width(holes[i]));
         placed_holes.push_back(placed);
     }
-    play_area grounded = with_tee_boxes(with_bounds(with_ground(std::move(course), &world.ground, margin, tuning)),
+    if (!placed_holes.empty()) {
+        course.ground_y = placed_holes.front().tee_position.y;
+    }
+    play_area grounded = with_tee_boxes(with_bounds(with_ground(std::move(course), land, margin, tuning)),
                                         placed_holes, tuning);
     return with_fences(with_signs(std::move(grounded), placed_holes, tuning), world.fences, tuning.fence);
 }

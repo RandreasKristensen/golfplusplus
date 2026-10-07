@@ -3,7 +3,7 @@
 #include "game/net_types.h"
 #include "physics/vector_math.h"
 #include "play_rules.h"
-#include "server_errors.h"
+#include "game/server_errors.h"
 
 #include "server_test_support.h"
 

@@ -189,7 +189,7 @@ TEST_CASE("an online claim is not sent again until the server answers") {
 
 TEST_CASE("starting a hub hole sends enter_hole online") {
     game_state start = started_game(fixture_hub_course());
-    start.player.position = start.hub->markers[1].start_position;
+    start.player.position = start.hub->world.hole_starts[1].position;
 
     const mode_pair pair = run_both(start, [](game_state& state) { update_game(state, action_input(), 0.016f); });
 
@@ -199,20 +199,6 @@ TEST_CASE("starting a hub hole sends enter_hole online") {
     CHECK(sent[0].type == net_command_type::enter_hole);
     CHECK(sent[0].hole_index == 1U);
     CHECK(pair.online.hole.has_value());
-}
-
-TEST_CASE("every hole entered sends enter_hole online, hub or not") {
-    const mode_pair pair = run_both(started_hole(), [](game_state& state) {
-        state.stroke_count = 2;
-        complete_current_hole(state);
-    });
-
-    REQUIRE(pair.online.hole.has_value());
-    CHECK(pair.online.hole->index == 1U);
-    const std::vector<net_command> sent = gameplay_commands(pair.online);
-    REQUIRE(sent.size() == 1U);
-    CHECK(sent[0].type == net_command_type::enter_hole);
-    CHECK(sent[0].hole_index == 1U);
 }
 
 TEST_CASE("a retee is sent online only") {
@@ -227,21 +213,21 @@ TEST_CASE("a retee is sent online only") {
 }
 
 TEST_CASE("completing a hole and the course is saved offline only") {
-    const mode_pair pair = run_both(started_game(fixture_course({"test"})), [](game_state& state) {
+    const mode_pair pair = run_both(single_hole_course(), [](game_state& state) {
         state.stroke_count = 2;
         complete_current_hole(state);
     });
 
     CHECK(round_finished(pair.offline.round));
     CHECK(pair.offline.save.holes_completed == 1);
-    CHECK(pair.offline.save.completed_course_ids == std::vector<std::string>{"fixture_course"});
+    CHECK(pair.offline.save.completed_course_ids == std::vector<std::string>{"fixture_hub"});
     CHECK(pair.offline.save_requested);
     CHECK(round_finished(pair.online.round));
     CHECK(gameplay_commands(pair.online).empty());
 }
 
 TEST_CASE("no motion is sent for a round that just finished") {
-    game_state state = in_mode(started_game(fixture_course({"test"})), play_mode::online);
+    game_state state = in_mode(single_hole_course(), play_mode::online);
     state.stroke_count = 2;
     complete_current_hole(state);
     REQUIRE(round_finished(state.round));
@@ -425,7 +411,7 @@ TEST_CASE("extrapolated motion follows the yaw convention, straight and turning"
 TEST_CASE("online, the server hears where the player stands right before entering a hole") {
     game_state state = started_game(fixture_hub_course());
     state.play = play_mode::online;
-    const glm::vec3 start = state.hub->markers[1].start_position;
+    const glm::vec3 start = state.hub->world.hole_starts[1].position;
     state.player.position = start;
     state.net_commands.clear();
     update_game(state, action_input(), 0.016f);

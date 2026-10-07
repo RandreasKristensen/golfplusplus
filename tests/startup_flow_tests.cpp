@@ -16,17 +16,6 @@ bool has_sound(const std::vector<ui_sound>& sounds, const ui_sound sound) {
     return std::find(sounds.begin(), sounds.end(), sound) != sounds.end();
 }
 
-// From the main menu: PLAY OFFLINE, then PLAY HOLE.
-void open_offline_hole_picker(startup_flow_state& state, const startup_catalog& catalog) {
-    return_to_main_menu(state);
-    input_state accept;
-    accept.enter.pressed = true;
-    state.selection = 1;
-    update_startup_menu(state, accept, std::nullopt, catalog);
-    state.selection = 1;
-    update_startup_menu(state, accept, std::nullopt, catalog);
-}
-
 startup_catalog two_courses() {
     course_definition first;
     first.id = "first";
@@ -52,12 +41,7 @@ TEST_CASE("main menu opens online, offline, help and settings, and quits from th
     return_to_main_menu(state);
     state.selection = 1;
     update_startup_menu(state, input, std::nullopt, catalog);
-    CHECK(state.flow == startup_flow::offline);
-    update_startup_menu(state, input, std::nullopt, catalog);
     CHECK(state.flow == startup_flow::course_picker);
-
-    open_offline_hole_picker(state, catalog);
-    CHECK(state.flow == startup_flow::hole_picker);
 
     return_to_main_menu(state);
     state.selection = 2;
@@ -117,7 +101,7 @@ TEST_CASE("a guest's main menu has signing out but no linking") {
     CHECK(result.requests[0].type == online_request_type::sign_out);
 }
 
-TEST_CASE("back leaves a sub-menu for its parent and quits from the main menu") {
+TEST_CASE("back leaves a sub-menu for the main menu and quits from there") {
     const startup_catalog catalog = two_courses();
     startup_flow_state state;
     state.flow = startup_flow::course_picker;
@@ -126,13 +110,10 @@ TEST_CASE("back leaves a sub-menu for its parent and quits from the main menu") 
     input_state input;
     input.escape.pressed = true;
     startup_menu_result result = update_startup_menu(state, input, std::nullopt, catalog);
-    CHECK(state.flow == startup_flow::offline);
+    CHECK(state.flow == startup_flow::main);
     CHECK(state.selection == 0);
     CHECK(result.action == startup_action::none);
     CHECK(has_sound(result.sounds, ui_sound::back));
-
-    update_startup_menu(state, input, std::nullopt, catalog);
-    CHECK(state.flow == startup_flow::main);
 
     result = update_startup_menu(state, input, std::nullopt, catalog);
     CHECK(result.action == startup_action::quit);
@@ -261,45 +242,11 @@ TEST_CASE("menu render data takes its text from the string table") {
     CHECK(confirm.tiles[1].selected);
 }
 
-TEST_CASE("a picked hole starts as a one-hole practice course") {
-    startup_catalog catalog;
-    hole_data hole;
-    hole.id = "hole_01";
-    hole.name = "New Hole";
-    course_backdrop backdrop;
-    backdrop.sky = "backdrops/fixture_sky.bmp";
-    backdrop.land = "backdrops/fixture_land.bmp";
-    catalog.holes = {startup_hole_option{"holes/test.json", hole, backdrop}};
-    startup_flow_state state;
-    state.flow = startup_flow::hole_picker;
-
-    input_state input;
-    input.enter.pressed = true;
-    const startup_menu_result result = update_startup_menu(state, input, std::nullopt, catalog);
-
-    CHECK(result.action == startup_action::start_course);
-    CHECK(result.course.practice);
-    CHECK(result.course.holes == std::vector<std::string>{"holes/test.json"});
-    CHECK(result.course.name == "New Hole");
-    CHECK(result.course.backdrop.sky == "backdrops/fixture_sky.bmp");
-    CHECK(result.course.backdrop.land == "backdrops/fixture_land.bmp");
-}
-
-TEST_CASE("every shipped hole is practised in front of its course's backdrop") {
-    const startup_catalog catalog = load_startup_catalog(*load_game_content(GOLFPP_ASSETS_DIR).content, shipped_text_assets());
-    REQUIRE(!catalog.holes.empty());
-    for (const startup_hole_option& option : catalog.holes) {
-        CHECK(!option.backdrop.sky.empty());
-        CHECK(!option.backdrop.land.empty());
-    }
-}
-
 TEST_CASE("the catalog totals each course's par and previews hole 1") {
     const startup_catalog catalog = load_startup_catalog(*load_game_content(GOLFPP_ASSETS_DIR).content, shipped_text_assets());
     REQUIRE(!catalog.courses.empty());
     CHECK(catalog.name_max_length > 0U);
     CHECK(catalog.name_chars.find('A') != std::string::npos);
-    CHECK(!catalog.holes.empty());
     for (const startup_course_option& option : catalog.courses) {
         CHECK(option.total_par >= static_cast<int>(option.course.holes.size()) * 3);
         CHECK(option.preview.has_value());

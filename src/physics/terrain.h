@@ -87,9 +87,8 @@ struct terrain_mesh_index {
 struct terrain_mesh {
     std::vector<terrain_vertex> vertices;
     std::vector<std::uint32_t> indices;
-    // Ribbon layout: vertex rows of `cross_section_count` vertices. Several
-    // ribbons with the same cross_section_count can be appended into one mesh
-    // (the course hub). Zero for meshes that are not ribbons.
+    // Ribbon layout: vertex rows of `cross_section_count` vertices. Zero for
+    // meshes that are not ribbons.
     int section_count = 0;
     int cross_section_count = 0;
     float width = 0.0f;
@@ -159,18 +158,10 @@ std::vector<terrain_vertex> with_smooth_normals(std::vector<terrain_vertex> vert
 terrain_mesh build_terrain_mesh_index(terrain_mesh mesh);
 
 // Height, normal and material at `position` (XZ). Off the mesh, the nearest
-// edge is used and the material is rough. `previous_sample` (optional) keeps
-// the result on the same ribbon where ribbons overlap.
-terrain_sample sample_terrain_mesh(const terrain_mesh& mesh,
-                                   const glm::vec3& position,
-                                   float fallback_y,
-                                   const terrain_sample* previous_sample = nullptr);
+// edge is used and the material is rough.
+terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& position, float fallback_y);
 
 // The containing triangle's sample, or nothing when `position` is off the
 // surface. Unlike sample_terrain_mesh it never searches for the nearest edge,
 // so it stays cheap far from the mesh.
 std::optional<terrain_sample> sample_terrain_inside(const terrain_mesh& mesh, const glm::vec3& position);
-
-// Like sample_terrain_mesh, but keeps the query's exact XZ (only the height
-// comes from the terrain). Used to place objects that sit on the ground.
-terrain_sample sample_terrain_anchor(const terrain_mesh& mesh, const glm::vec3& position, float fallback_y);

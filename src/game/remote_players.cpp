@@ -170,10 +170,6 @@ player_relationship relationship_to(const game_state& state, const room_player& 
     return player_relationship::unknown;
 }
 
-int local_zone(const game_state& state) {
-    return state.hole ? static_cast<int>(state.hole->index) : hub_zone;
-}
-
 std::optional<std::uint64_t> nearest_player(const game_state& state, const float distance) {
     std::optional<std::uint64_t> best;
     float best_distance = std::numeric_limits<float>::max();

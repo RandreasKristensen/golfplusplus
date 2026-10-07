@@ -348,8 +348,6 @@ bool is_online_flow(const startup_flow flow) {
     case startup_flow::main:
     case startup_flow::help:
     case startup_flow::settings:
-    case startup_flow::offline:
-    case startup_flow::hole_picker:
     case startup_flow::course_picker:
     case startup_flow::playing:
         return false;

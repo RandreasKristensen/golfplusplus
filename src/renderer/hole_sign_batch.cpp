@@ -1,6 +1,5 @@
 #include "renderer/hole_sign_batch.h"
 
-#include "game/course_session.h"
 #include "physics/vector_math.h"
 #include "renderer/hole_sign_face.h"
 #include "renderer/overlay_raster.h"
@@ -64,29 +63,30 @@ void append_box(std::vector<hole_sign_vertex>& vertices,
     }
 }
 
-
-std::vector<hole_sign_source> hole_sign_sources(const game_state& game) {
+std::vector<hole_sign_source> hole_sign_sources(const play_area& area, const std::vector<hole_sign_text>& texts) {
     std::vector<hole_sign_source> sources;
-    for (const hole_sign& sign : game.area.signs) {
-        sources.push_back(hole_sign_source{course_hole_of_area_hole(game, sign.area_hole), sign.board_center});
+    for (std::size_t i = 0; i < area.signs.size() && i < texts.size(); ++i) {
+        sources.push_back(hole_sign_source{texts[i], area.signs[i].board_center});
     }
     return sources;
+}
+
+bool same_source(const hole_sign_source& a, const hole_sign_source& b) {
+    return a.text.number == b.text.number && a.text.par == b.text.par && a.text.meters == b.text.meters &&
+        a.board_center == b.board_center;
 }
 }
 
 bool refresh_render_hole_signs(render_hole_signs& signs,
-                               const game_state& game,
+                               const play_area& area,
+                               const std::vector<hole_sign_text>& texts,
                                const text_assets& text,
                                const std::uint64_t revision) {
-    const std::vector<hole_sign_source> sources = hole_sign_sources(game);
-    const bool same = sources.size() == signs.sources.size() &&
-        std::equal(sources.begin(), sources.end(), signs.sources.begin(), [](const hole_sign_source& a, const hole_sign_source& b) {
-            return a.course_hole == b.course_hole && a.board_center == b.board_center;
-        });
-    if (same) {
+    const std::vector<hole_sign_source> sources = hole_sign_sources(area, texts);
+    if (std::equal(sources.begin(), sources.end(), signs.sources.begin(), signs.sources.end(), same_source)) {
         return false;
     }
-    signs = build_render_hole_signs(game, text, revision);
+    signs = build_render_hole_signs(area, texts, text, revision);
     return true;
 }
 
@@ -100,21 +100,19 @@ void append_hole_sign_model(std::vector<hole_sign_vertex>& vertices, const hole_
     }
 }
 
-render_hole_signs build_render_hole_signs(const game_state& game, const text_assets& text, const std::uint64_t revision) {
+render_hole_signs build_render_hole_signs(const play_area& area,
+                                          const std::vector<hole_sign_text>& texts,
+                                          const text_assets& text,
+                                          const std::uint64_t revision) {
     render_hole_signs signs;
     signs.revision = revision;
-    signs.sources = hole_sign_sources(game);
+    signs.sources = hole_sign_sources(area, texts);
     overlay_batch batch;
-    for (const hole_sign& sign : game.area.signs) {
-        const std::size_t index = course_hole_of_area_hole(game, sign.area_hole);
-        if (index >= game.course_holes.size()) {
-            continue;
-        }
-        const int meters = rounded_rangefinder_meters(sign.length * game.tuning.scale.meters_per_world_unit);
-        const hole_sign_labels labels =
-            make_hole_sign_labels(text, static_cast<int>(index) + 1, game.course_holes[index].par, meters);
+    for (std::size_t i = 0; i < area.signs.size() && i < texts.size(); ++i) {
+        const hole_sign& sign = area.signs[i];
+        const hole_sign_labels labels = make_hole_sign_labels(text, texts[i].number, texts[i].par, texts[i].meters);
         clear_overlay_batch(batch);
-        draw_hole_sign_face(batch, text, labels, game.area, sign);
+        draw_hole_sign_face(batch, text, labels, area, sign);
         signs.truncated_text_count += batch.truncated_text_count;
 
         render_hole_sign drawn;
