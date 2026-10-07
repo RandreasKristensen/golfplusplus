@@ -20,7 +20,10 @@ std::optional<course_world_hole_start> hole_start_from_json(const json& value, c
     return start;
 }
 
-// The land under the course. Every cell must have a height.
+// The land under the course. `heights_cm` holds one array per row of the
+// grid, in whole centimetres: a row's first entry is its height, every next
+// one the step from the one before (small numbers, so a fine grid stays a
+// small file). Every cell must have a height.
 std::optional<height_grid> ground_from_json(const json& root) {
     const json* ground = json_object(root, "ground");
     if (ground == nullptr) {
@@ -30,10 +33,10 @@ std::optional<height_grid> ground_from_json(const json& root) {
     const std::optional<float> cell_size = json_float(*ground, "cell_size");
     const std::optional<int> columns = json_int(*ground, "columns");
     const std::optional<int> rows = json_int(*ground, "rows");
-    const json* heights = json_array(*ground, "heights");
+    const json* height_rows = json_array(*ground, "heights_cm");
     if (origin == nullptr || origin->size() != 2 || !(*origin)[0].is_number() || !(*origin)[1].is_number() ||
-        !cell_size || !(*cell_size > 0.0f) || !columns || *columns < 2 || !rows || *rows < 2 || heights == nullptr ||
-        heights->size() != static_cast<std::size_t>(*columns) * static_cast<std::size_t>(*rows)) {
+        !cell_size || !(*cell_size > 0.0f) || !columns || *columns < 2 || !rows || *rows < 2 || height_rows == nullptr ||
+        height_rows->size() != static_cast<std::size_t>(*rows)) {
         return std::nullopt;
     }
 
@@ -43,12 +46,19 @@ std::optional<height_grid> ground_from_json(const json& root) {
     grid.cell_size = *cell_size;
     grid.columns = *columns;
     grid.rows = *rows;
-    grid.heights.reserve(heights->size());
-    for (const json& height : *heights) {
-        if (!height.is_number()) {
+    grid.heights.reserve(static_cast<std::size_t>(*columns) * static_cast<std::size_t>(*rows));
+    for (const json& row : *height_rows) {
+        if (!row.is_array() || row.size() != static_cast<std::size_t>(*columns)) {
             return std::nullopt;
         }
-        grid.heights.push_back(height.get<float>());
+        long long centimetres = 0;
+        for (const json& step : row) {
+            if (!step.is_number_integer()) {
+                return std::nullopt;
+            }
+            centimetres += step.get<long long>();
+            grid.heights.push_back(static_cast<float>(centimetres) * 0.01f);
+        }
     }
     return grid;
 }

@@ -24,9 +24,11 @@ RuneScape-style skills. A course is one continuous area on its real land
 (the course world's `ground` grid): holes are played where they sit, never in
 a separate scene, so other groups stay visible and a stray shot lands on the
 next hole or the ground between. There is exactly one surface
-(`build_ground` in `src/physics/ground_mesh.h`): hole geometry decides the
-height on a hole's fairway, its rough eases into the land, and every height
-and normal comes from that one grid, except on a tee box
+(`build_ground` in `src/physics/ground_mesh.h`): the land decides the height
+everywhere, holes included, and a hole only lifts it by its own heights (0 for
+an imported hole, so hole-editor touch-ups are lifts), finer on fairways and
+greens so the land's detail is where the ball rolls; every height and normal
+comes from that one grid, except on a tee box
 (`src/game/tee_box.h`): a flat top over the highest ground it covers, which
 `sample_area` returns there. Courses should be right out of the
 importer; the hole editor is for touch-ups.
@@ -297,11 +299,13 @@ NPC and interaction work, which should become one data-driven interaction
 system.
 
 - No trademarked course names (e.g. Augusta National, St Andrews / Old Course)
-  in new player-facing text, store material or file names. The existing ones
-  are due to be renamed.
+  in player-facing text, store material or file names.
 - Course data is OpenStreetMap (ODbL): never remove or hide OSM attribution.
-- Heights are from the AWS Terrain Tiles (Terrarium) and their sources (SRTM,
-  USGS NED, national DEMs): credit them alongside OSM.
+- Heights in Denmark are the Danish Elevation Model (Klimadatastyrelsen, CC BY
+  4.0), elsewhere the AWS Terrain Tiles (Terrarium) and their sources (SRTM,
+  USGS NED, national DEMs): credit them alongside OSM. The Dataforsyningen
+  token that fetches the Danish model is personal: it lives only in the
+  gitignored `tooling/osm_import/dataforsyning_token.txt`.
 - Record the source and licence of every audio, image or icon asset; only use
   assets that allow commercial use.
 - Flag any AI-generated art, audio, text or trailer content to the owner (Steam

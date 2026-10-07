@@ -1,0 +1,24 @@
+{
+  "id": "himmerland_par_3",
+  "name": "Himmerland Par 3",
+  "backdrop": {
+    "sky": "backdrops/himmerland_par_3_sky.bmp",
+    "land": "backdrops/himmerland_par_3_land.bmp",
+    "haze_color": [
+      0.75,
+      0.8,
+      0.83
+    ],
+    "haze_amount": 1.0,
+    "haze_distance": 800
+  },
+  "holes": [
+    "holes/himmerland_par_3_h01.json",
+    "holes/himmerland_par_3_h02.json",
+    "holes/himmerland_par_3_h03.json",
+    "holes/himmerland_par_3_h04.json",
+    "holes/himmerland_par_3_h05.json",
+    "holes/himmerland_par_3_h06.json"
+  ],
+  "world": "course_worlds/himmerland_par_3.json"
+}

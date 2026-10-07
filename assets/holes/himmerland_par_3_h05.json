@@ -1,0 +1,299 @@
+{
+  "id": "himmerland_par_3_h05",
+  "name": "Hole 5",
+  "par": 3,
+  "wind_seed": 4361,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    74.1,
+    0.0,
+    -99.63
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        51.01,
+        0.0,
+        -92.33
+      ],
+      [
+        59.73,
+        0.0,
+        -95.47
+      ],
+      [
+        67.86,
+        0.0,
+        -99.05
+      ],
+      [
+        77.45,
+        0.0,
+        -101.53
+      ],
+      [
+        74.1,
+        0.0,
+        -99.63
+      ]
+    ],
+    "width": 27.1,
+    "rough_width": 42.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        74.44,
+        0,
+        -99.54
+      ],
+      "radii": [
+        13.51,
+        7.89
+      ],
+      "rotation_degrees": -5.7
+    },
+    {
+      "type": "bunker",
+      "center": [
+        64.92,
+        0,
+        -108.47
+      ],
+      "radii": [
+        3.37,
+        1.73
+      ],
+      "rotation_degrees": -30.9
+    },
+    {
+      "type": "bunker",
+      "center": [
+        69.57,
+        0,
+        -111.19
+      ],
+      "radii": [
+        3.16,
+        2.03
+      ],
+      "rotation_degrees": 2.7
+    },
+    {
+      "type": "water",
+      "center": [
+        21.88,
+        0,
+        -25.17
+      ],
+      "radii": [
+        19.74,
+        10.45
+      ],
+      "rotation_degrees": -63.1
+    },
+    {
+      "type": "water",
+      "center": [
+        -5.42,
+        0,
+        25.23
+      ],
+      "radii": [
+        11.42,
+        4.02
+      ],
+      "rotation_degrees": -11.3
+    },
+    {
+      "type": "water",
+      "center": [
+        33.18,
+        0,
+        -52.57
+      ],
+      "radii": [
+        12.41,
+        10.63
+      ],
+      "rotation_degrees": -47.7
+    },
+    {
+      "type": "water",
+      "center": [
+        47.55,
+        0,
+        -66.35
+      ],
+      "radii": [
+        15.01,
+        9.87
+      ],
+      "rotation_degrees": 57.2
+    },
+    {
+      "type": "water",
+      "center": [
+        34.75,
+        0,
+        20.04
+      ],
+      "radii": [
+        12.28,
+        7.03
+      ],
+      "rotation_degrees": -20.3
+    },
+    {
+      "type": "water",
+      "center": [
+        32.26,
+        0,
+        -12.88
+      ],
+      "radii": [
+        11.74,
+        7.22
+      ],
+      "rotation_degrees": -52.2
+    },
+    {
+      "type": "water",
+      "center": [
+        49.78,
+        0,
+        -7.55
+      ],
+      "radii": [
+        10.23,
+        6.16
+      ],
+      "rotation_degrees": 39.9
+    },
+    {
+      "type": "water",
+      "center": [
+        28.15,
+        0,
+        6.2
+      ],
+      "radii": [
+        10.24,
+        4.62
+      ],
+      "rotation_degrees": -86.1
+    },
+    {
+      "type": "water",
+      "center": [
+        62.2,
+        0,
+        -66.95
+      ],
+      "radii": [
+        10.36,
+        6.75
+      ],
+      "rotation_degrees": 50.3
+    },
+    {
+      "type": "water",
+      "center": [
+        71.99,
+        0,
+        -56.02
+      ],
+      "radii": [
+        11.34,
+        7.51
+      ],
+      "rotation_degrees": -42.2
+    },
+    {
+      "type": "water",
+      "center": [
+        20.24,
+        0,
+        24.66
+      ],
+      "radii": [
+        7.74,
+        4.77
+      ],
+      "rotation_degrees": 25.8
+    },
+    {
+      "type": "water",
+      "center": [
+        65.95,
+        0,
+        -77.93
+      ],
+      "radii": [
+        11.65,
+        6.66
+      ],
+      "rotation_degrees": 12.0
+    },
+    {
+      "type": "water",
+      "center": [
+        82.55,
+        0,
+        -73.24
+      ],
+      "radii": [
+        10.18,
+        8.73
+      ],
+      "rotation_degrees": -53.9
+    }
+  ],
+  "trees": [],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.8710197,
+      9.3970462
+    ],
+    "pin_latlon": [
+      56.8719147,
+      9.3982641
+    ],
+    "centerline": "fairway_shape",
+    "elevation": "dhm",
+    "tee_elevation": 18.89,
+    "hole_way": "way/1565793222",
+    "zone_fit": [
+      {
+        "osm": "way/1465046045",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.93
+      },
+      {
+        "osm": "way/1465046039",
+        "type": "bunker",
+        "pieces": 2,
+        "iou": 0.89
+      },
+      {
+        "osm": "way/1030087440",
+        "type": "water",
+        "pieces": 13,
+        "iou": 0.8
+      }
+    ],
+    "made_green": false
+  }
+}

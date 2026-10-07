@@ -1,0 +1,36 @@
+{
+  "id": "himmerland_new_course",
+  "name": "Himmerland New Course",
+  "backdrop": {
+    "sky": "backdrops/himmerland_new_course_sky.bmp",
+    "land": "backdrops/himmerland_new_course_land.bmp",
+    "haze_color": [
+      0.75,
+      0.8,
+      0.83
+    ],
+    "haze_amount": 1.0,
+    "haze_distance": 800
+  },
+  "holes": [
+    "holes/himmerland_new_course_h01.json",
+    "holes/himmerland_new_course_h02.json",
+    "holes/himmerland_new_course_h03.json",
+    "holes/himmerland_new_course_h04.json",
+    "holes/himmerland_new_course_h05.json",
+    "holes/himmerland_new_course_h06.json",
+    "holes/himmerland_new_course_h07.json",
+    "holes/himmerland_new_course_h08.json",
+    "holes/himmerland_new_course_h09.json",
+    "holes/himmerland_new_course_h10.json",
+    "holes/himmerland_new_course_h11.json",
+    "holes/himmerland_new_course_h12.json",
+    "holes/himmerland_new_course_h13.json",
+    "holes/himmerland_new_course_h14.json",
+    "holes/himmerland_new_course_h15.json",
+    "holes/himmerland_new_course_h16.json",
+    "holes/himmerland_new_course_h17.json",
+    "holes/himmerland_new_course_h18.json"
+  ],
+  "world": "course_worlds/himmerland_new_course.json"
+}

@@ -16,15 +16,10 @@ delete the item.
 
 ## 1. Legal and licensing (blocks the store page)
 
-### Rename trademarked courses
-- [ ] `augusta_national_golf_club.json` and `old_course.json` use protected names
-  (Augusta National, St Andrews / Old Course). Rename them to fictional names.
-- [ ] Never show those names, or clearly recognisable footage of them, on the
-  store page, in the trailer or in social content.
-
 ### Ask real clubs for permission
-- [ ] For any real course we keep under its real name (e.g. Marienlyst), get
-  written permission from the club. Small clubs often say yes to free promotion.
+- [ ] For any real course we keep under its real name (e.g. Marienlyst,
+  Himmerland), get written permission from the club. Small clubs often say yes
+  to free promotion.
 
 ### OpenStreetMap attribution (ODbL)
 - [ ] Show "© OpenStreetMap contributors" in the in-game credits (and ideally
@@ -32,9 +27,15 @@ delete the item.
 - [ ] Check the ODbL share-alike terms for our changed course data and decide
   how to publish it (e.g. a public repo with the course JSON).
 
-### Elevation attribution (Terrain Tiles)
-- [ ] Credit the elevation data behind hole heights and course ground in the
-  credits screen, using the attribution list on
+### Elevation attribution
+- [ ] Credit the elevation data behind the course ground in the credits screen.
+  Every shipped course is Danish, so that is the Danish Elevation Model, CC BY
+  4.0, which asks for the licence, the data owner and a link to the dataset:
+  "Licence: CC BY 4.0. Data owner: Klimadatastyrelsen. Data: Danmarks
+  Højdemodel (DHM/Terræn), dataforsyningen.dk". Check the owner's name on the
+  dataset's page on Dataforsyningen first.
+- [ ] A course outside Denmark uses the AWS Terrain Tiles: credit those too,
+  from the attribution list on
   https://github.com/tilezen/joerd/blob/master/docs/attribution.md (SRTM, USGS
   NED and the national DEMs of the countries our courses are in).
 

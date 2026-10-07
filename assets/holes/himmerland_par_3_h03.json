@@ -1,0 +1,143 @@
+{
+  "id": "himmerland_par_3_h03",
+  "name": "Hole 3",
+  "par": 3,
+  "wind_seed": 8423,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    -85.42,
+    0.0,
+    97.31
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        -71.12,
+        0.0,
+        79.8
+      ],
+      [
+        -75.87,
+        0.0,
+        86.92
+      ],
+      [
+        -83.07,
+        0.0,
+        91.9
+      ],
+      [
+        -88.7,
+        0.0,
+        98.25
+      ],
+      [
+        -85.42,
+        0.0,
+        97.31
+      ]
+    ],
+    "width": 31.0,
+    "rough_width": 48.1
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        -85.56,
+        0,
+        97.77
+      ],
+      "radii": [
+        13.22,
+        8.7
+      ],
+      "rotation_degrees": -34.2
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -98.43,
+        0,
+        91.27
+      ],
+      "radii": [
+        2.64,
+        1.87
+      ],
+      "rotation_degrees": -42.2
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -94.51,
+        0,
+        88.41
+      ],
+      "radii": [
+        2.78,
+        1.67
+      ],
+      "rotation_degrees": -16.8
+    },
+    {
+      "type": "water",
+      "center": [
+        -37.48,
+        0,
+        37.98
+      ],
+      "radii": [
+        39.26,
+        15.05
+      ],
+      "rotation_degrees": -53.1
+    }
+  ],
+  "trees": [],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.8718923,
+      9.3973298
+    ],
+    "pin_latlon": [
+      56.8710182,
+      9.3959258
+    ],
+    "centerline": "fairway_shape",
+    "elevation": "dhm",
+    "tee_elevation": 19.81,
+    "hole_way": "way/1565793225",
+    "zone_fit": [
+      {
+        "osm": "way/1465046043",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.89
+      },
+      {
+        "osm": "way/1465046035",
+        "type": "bunker",
+        "pieces": 2,
+        "iou": 0.92
+      },
+      {
+        "osm": "way/1030087441",
+        "type": "water",
+        "pieces": 1,
+        "iou": 0.81
+      }
+    ],
+    "made_green": false
+  }
+}

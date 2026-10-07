@@ -36,6 +36,7 @@ except ImportError:
 
 import osm_audit
 import osm_checks
+import osm_dhm
 import osm_elevation
 import osm_ellipse
 import osm_ground
@@ -114,14 +115,15 @@ DEFAULT_CONFIG = {
         "fallback_road_extra_offset": 8.0,
         "max_shortcut_count": 12,
     },
+    # Where heights come from: the Danish lidar model where it covers the
+    # course (osm_dhm.py), else the Terrarium tiles (osm_elevation.py). Each
+    # sets the ground grid's cell to suit its detail.
     "elevation": {
         "enabled": True,
-        # Terrarium tile zoom (see osm_elevation.py); 14 is ~5–8 m per pixel.
-        "zoom": 14,
-        "max_grade": 0.25,
-        # Steepest side slope a hole may tilt with, rise per metre across it.
-        "max_bank": 0.2,
-        "smooth_window": 3,
+        # DHM squares are fetched at this many metres per pixel.
+        "dhm": {"pixel_size": 1.0, "ground_cell_size": 2.0},
+        # Terrarium tile zoom; 14 is ~5–8 m per pixel.
+        "terrarium": {"zoom": 14, "ground_cell_size": 20.0},
     },
     # Green, bunker and water polygons as ellipses (see osm_ellipse.py).
     "zones": {
@@ -139,9 +141,11 @@ DEFAULT_CONFIG = {
         # ... in pieces no longer than this along it.
         "stream_piece_length": 30.0,
     },
-    # The course world's ground grid (see osm_ground.py).
+    # The course world's ground grid (see osm_ground.py): its cell when it
+    # is flat (no elevation; else the elevation source's), and how far past
+    # the holes it reaches.
     "ground": {
-        "cell_size": 20.0,
+        "flat_cell_size": 20.0,
         "margin": 120.0,
     },
     "courses": {},
@@ -2189,42 +2193,17 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
               file=sys.stderr)
 
     # ── elevation ─────────────────────────────────────────────────────────────
-    # OSM has no usable height data for golf features, so heights come from a
-    # DEM instead. Only the spline carries elevation (heights and side slope):
-    # the game builds terrain as a ribbon swept along these control points and
-    # samples zone and tree heights off that mesh, so baking y anywhere else
-    # would be ignored.
-    ctrl_y = [0.0] * len(ctrl_xz)
-    pin_y = 0.0
+    # The land decides the height on a hole: the course world's ground grid
+    # carries it, and a hole's own heights only lift it (touch-ups in the
+    # hole editor), so an imported hole is flat. Only the tee's height is
+    # kept, to place the hole start.
     tee_elevation = None
-    bank = None
     if elevation is not None:
-        elevation_config = (config or DEFAULT_CONFIG).get("elevation", {})
-        samples = elevation.elevations(
-            [_xz_to_latlon(x, z, origin_lat, origin_lon) for x, z in ctrl_xz] +
-            [_xz_to_latlon(pin_x, pin_z, origin_lat, origin_lon)])
-        distances = osm_elevation.polyline_distances(ctrl_xz)
-        pin_distance = distances[-1] + math.hypot(pin_x - ctrl_xz[-1][0], pin_z - ctrl_xz[-1][1])
-        absolute = osm_elevation.cleaned_profile(
-            samples, distances + [pin_distance],
-            max_grade=float(elevation_config.get("max_grade", 0.25)),
-            smooth_window=int(elevation_config.get("smooth_window", 3)))
-        tee_elevation = round(absolute[0], 2)
-        profile = osm_elevation.relative_profile(absolute)
-        ctrl_y, pin_y = profile[:-1], profile[-1]
-
-        # The land's side slope across the hole, so the ribbon tilts with a
-        # hillside instead of burying one edge and floating the other.
-        ribbon_width = max(width, rough_width)
-        sides = osm_elevation.lateral_offsets(ctrl_xz, ribbon_width * 0.5)
-        side_heights = elevation.elevations(
-            [_xz_to_latlon(x, z, origin_lat, origin_lon) for pair in sides for x, z in pair])
-        bank = osm_elevation.bank_profile(side_heights[0::2], side_heights[1::2], ribbon_width,
-                                          max_bank=float(elevation_config.get("max_bank", 0.2)),
-                                          smooth_window=int(elevation_config.get("smooth_window", 3)))
+        sample = elevation.elevation(*_xz_to_latlon(tee_x, tee_z, origin_lat, origin_lon))
+        tee_elevation = round(sample, 2) if sample is not None else None
 
     # Control points relative to this hole's tee (which is [0,0,0])
-    def rel_xyz(xz, y=0.0): return [_r(xz[0]-tee_x), _r(y), _r(xz[1]-tee_z)]
+    def rel_xyz(xz): return [_r(xz[0]-tee_x), 0.0, _r(xz[1]-tee_z)]
 
     # ── material zones ────────────────────────────────────────────────────────
     # Every green, bunker and water polygon becomes one ellipse, or a few when
@@ -2275,10 +2254,9 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
         "par": par,
         "wind_seed": _stable_int_seed(course_id, hole_num, "wind") % 9999 + 1,
         "tee": [0.0, 0.0, 0.0],
-        "pin": [_r(pin_x-tee_x), _r(pin_y), _r(pin_z-tee_z)],
+        "pin": [_r(pin_x-tee_x), 0.0, _r(pin_z-tee_z)],
         "spline": {
-            "control_points": [rel_xyz(p, y) for p, y in zip(ctrl_xz, ctrl_y)],
-            **({"bank": bank} if bank is not None else {}),
+            "control_points": [rel_xyz(p) for p in ctrl_xz],
             "width": width,
             "rough_width": rough_width
         },
@@ -2294,9 +2272,8 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
             "pin_latlon": [round(c, 7) for c in _xz_to_latlon(pin_x, pin_z, origin_lat, origin_lon)],
             "centerline": ctrl_source,
             "elevation": elevation.dataset if elevation is not None else None,
-            # The tee's DEM height above sea level. The hole itself is
-            # tee-relative; the course world places hole starts at these
-            # heights so the holes line up with each other in the hub.
+            # The tee's DEM height above sea level: the course world places
+            # hole starts at these heights relative to hole 1's.
             "tee_elevation": tee_elevation,
             # The OSM way this hole's line of play came from, if any.
             "hole_way": _hole_way_ref(h),
@@ -2734,16 +2711,35 @@ def course_world_to_json(course_id: str,
 
 
 def _make_elevation_sampler(args, config: dict, origin_lat: float, origin_lon: float):
-    """Build a DEM sampler for this course, or None when elevation is disabled."""
+    """
+    The DEM sampler for this course: the Danish lidar model where it covers
+    the course, else Terrarium; None when elevation is disabled. Its
+    `ground_cell_size` is the ground grid's cell.
+    """
     elevation_config = config.get("elevation", {})
     if args.no_elevation or not elevation_config.get("enabled", True):
-        print("  Elevation sampling disabled; every hole will be flat.", file=sys.stderr)
+        print("  Elevation sampling disabled; the ground will be flat.", file=sys.stderr)
         return None
 
-    sampler = osm_elevation.ElevationSampler(cache_dir=_CACHE_DIR,
-                                             zoom=int(elevation_config.get("zoom", osm_elevation.DEFAULT_ZOOM)),
-                                             refresh=_CACHE_REFRESH)
-    print(f"  Sampling elevation from {sampler.dataset} tiles at zoom {sampler.zoom}", file=sys.stderr)
+    if osm_dhm.in_coverage(origin_lat, origin_lon):
+        token = osm_dhm.read_token()
+        if token is None:
+            raise SystemExit(f"This course is in Denmark, whose heights come from the Danish Elevation Model. "
+                             f"Put a Dataforsyningen token (free at dataforsyningen.dk) in "
+                             f"{osm_dhm.TOKEN_FILE.name} next to osm_dhm.py or in {osm_dhm.TOKEN_ENV}, "
+                             f"or import with --no-elevation.")
+        dhm_config = elevation_config.get("dhm", {})
+        sampler = osm_dhm.DhmSampler(token, cache_dir=_CACHE_DIR,
+                                     pixel_size=float(dhm_config.get("pixel_size", 1.0)),
+                                     refresh=_CACHE_REFRESH)
+        sampler.ground_cell_size = float(dhm_config.get("ground_cell_size", 2.0))
+    else:
+        terrarium_config = elevation_config.get("terrarium", {})
+        sampler = osm_elevation.ElevationSampler(cache_dir=_CACHE_DIR,
+                                                 zoom=int(terrarium_config.get("zoom", osm_elevation.DEFAULT_ZOOM)),
+                                                 refresh=_CACHE_REFRESH)
+        sampler.ground_cell_size = float(terrarium_config.get("ground_cell_size", 20.0))
+    print(f"  Sampling elevation from {sampler.description}", file=sys.stderr)
     return sampler
 
 
@@ -2756,9 +2752,10 @@ def _report_elevation(sampler) -> None:
 def _course_ground(world: dict, hole_jsons: list[dict], sampler,
                    origin_lat: float, origin_lon: float, config: dict) -> dict:
     ground_config = config.get("ground", {})
+    cell_size = sampler.ground_cell_size if sampler is not None else float(ground_config.get("flat_cell_size", 20.0))
     return osm_ground.ground_grid(world, hole_jsons, sampler,
                                   lambda x, z: _xz_to_latlon(x, z, origin_lat, origin_lon),
-                                  float(ground_config.get("cell_size", 20.0)),
+                                  cell_size,
                                   float(ground_config.get("margin", 120.0)))
 
 
@@ -2781,12 +2778,11 @@ def _write_ground_only(args) -> None:
     origin_lat, origin_lon = float(projection["origin_lat"]), float(projection["origin_lon"])
     elevation = _make_elevation_sampler(args, config, origin_lat, origin_lon)
     world["ground"] = _course_ground(world, hole_jsons, elevation, origin_lat, origin_lon, config)
-    with open(world_path, "w", encoding="utf-8") as f:
-        json.dump(world, f, indent=2)
-        f.write("\n")
+    world_path.write_text(osm_ground.course_world_text(world), encoding="utf-8")
     _report_elevation(elevation)
     ground = world["ground"]
-    relief = max(ground["heights"]) - min(ground["heights"])
+    heights = osm_ground.heights_from_rows_cm(ground["heights_cm"])
+    relief = max(heights) - min(heights)
     print(f"→ Ground: {ground['columns']}x{ground['rows']} cells of {ground['cell_size']} m, "
           f"relief {relief:.1f} m, in {world_path}", file=sys.stderr)
 
@@ -2851,7 +2847,7 @@ Examples:
     ap.add_argument("--list", dest="list_courses", action="store_true",
                     help="List matching courses with their --id values and exit")
     ap.add_argument("--no-elevation", action="store_true",
-                    help="Leave every control point at y=0 instead of sampling a DEM")
+                    help="Write flat ground instead of sampling a DEM")
     ap.add_argument("--no-course", action="store_true",
                     help="Skip writing the course manifest JSON")
     ap.add_argument("--no-world", action="store_true",
@@ -2971,11 +2967,9 @@ Examples:
         width = h_json["spline"]["width"]
         source = h_json["source"]["centerline"]
         source_counts[source] = source_counts.get(source, 0) + 1
-        ys = [p[1] for p in h_json["spline"]["control_points"]]
-        relief = f"  relief {max(ys) - min(ys):.0f}m" if elevation else ""
         print(f"    {fname}  par {h_json['par']}  direct {dist:.0f}m  path {path_len:.0f}m  "
               f"width {width:.1f}m  zones {len(h_json['material_zones'])}  "
-              f"trees {len(h_json['trees'])}  line:{source}{relief}", file=sys.stderr)
+              f"trees {len(h_json['trees'])}  line:{source}", file=sys.stderr)
         for warning in _scale_warnings(h_json):
             print(f"      [warn] {warning}", file=sys.stderr)
 
@@ -2996,8 +2990,7 @@ Examples:
         world_json["ground"] = _course_ground(world_json, list(hole_jsons.values()), elevation,
                                               origin_lat, origin_lon, config)
         world_file = world_dir / f"{course_id}.json"
-        with open(world_file, "w", encoding="utf-8") as f:
-            json.dump(world_json, f, indent=2)
+        world_file.write_text(osm_ground.course_world_text(world_json), encoding="utf-8")
         print(f"\n-> Course world: {world_file}", file=sys.stderr)
 
     if not args.no_course:

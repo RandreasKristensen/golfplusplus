@@ -1,8 +1,8 @@
 {
   "shots": [
     { "hole": 0, "club": "driver", "power": 1.0, "aim_offset_degrees": 0.0, "wind_time": 0.0, "cigarette": false, "rest": [145.3476, 0.0247, 153.0036], "holed": false, "duration": 4.8667, "events": "LLL" },
-    { "hole": 0, "club": "seven_iron", "power": 0.7, "aim_offset_degrees": 5.0, "wind_time": 3.25, "cigarette": false, "rest": [76.2926, 0.0213, 67.3449], "holed": false, "duration": 5.5917, "events": "LLLL" },
-    { "hole": 1, "club": "pitching_wedge", "power": 0.5, "aim_offset_degrees": -10.0, "wind_time": 12.0, "cigarette": true, "rest": [191.6419, 0.6623, 46.1489], "holed": false, "duration": 4.4750, "events": "LLL" },
+    { "hole": 0, "club": "seven_iron", "power": 0.7, "aim_offset_degrees": 5.0, "wind_time": 3.25, "cigarette": false, "rest": [76.2915, 0.0213, 67.3499], "holed": false, "duration": 5.5917, "events": "LLLL" },
+    { "hole": 1, "club": "pitching_wedge", "power": 0.5, "aim_offset_degrees": -10.0, "wind_time": 12.0, "cigarette": true, "rest": [191.6275, 0.6964, 46.3275], "holed": false, "duration": 4.4833, "events": "LLL" },
     { "hole": 1, "club": "four_wood", "power": 0.9, "aim_offset_degrees": 20.0, "wind_time": 7.5, "cigarette": false, "rest": [259.6143, 0.0225, 165.5000], "holed": false, "duration": 5.0000, "events": "LL" },
     { "hole": 2, "club": "putter", "power": 0.4, "aim_offset_degrees": 0.0, "wind_time": 1.0, "cigarette": false, "rest": [392.1143, 0.0213, 0.0766], "holed": false, "duration": 2.3667, "events": "LL" },
     { "hole": 2, "club": "sand_wedge", "power": 0.727, "aim_offset_degrees": -30.0, "wind_time": 30.0, "cigarette": true, "rest": [400.0000, 0.1713, 0.0000], "holed": false, "duration": 3.6917, "events": "LL" },

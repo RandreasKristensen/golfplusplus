@@ -59,7 +59,7 @@ TEST_CASE("a ball rolling along a net is kept off it") {
 TEST_CASE("course worlds carry fences, and refuse a fence that is not one") {
     const course_definition one_hole = course_of({"test"});
     const std::string start = R"("hole_starts": [{"hole_index": 0, "position": [0, 0, 0]}],
-        "ground": {"origin": [-50, -50], "cell_size": 50, "columns": 3, "rows": 3, "heights": [0, 0, 0, 0, 0, 0, 0, 0, 0]})";
+        "ground": {"origin": [-50, -50], "cell_size": 50, "columns": 3, "rows": 3, "heights_cm": [[0, 0, 0], [0, 0, 0], [0, 0, 0]]})";
     const auto with_fences = [&](const std::string& fences) { return "{" + start + fences + "}"; };
 
     const std::optional<course_world_definition> none = parse_course_world_from_text(with_fences(""), one_hole);

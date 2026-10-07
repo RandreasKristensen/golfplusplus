@@ -1,0 +1,114 @@
+{
+  "id": "himmerland_par_3_h01",
+  "name": "Hole 1",
+  "par": 3,
+  "wind_seed": 106,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    17.51,
+    0.0,
+    57.33
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        11.35,
+        0.0,
+        44.82
+      ],
+      [
+        16.78,
+        0.0,
+        55.18
+      ],
+      [
+        17.51,
+        0.0,
+        57.33
+      ]
+    ],
+    "width": 21.7,
+    "rough_width": 33.6
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        17.73,
+        0,
+        57.74
+      ],
+      "radii": [
+        12.73,
+        8.75
+      ],
+      "rotation_degrees": 49.9
+    },
+    {
+      "type": "bunker",
+      "center": [
+        23.73,
+        0,
+        42.99
+      ],
+      "radii": [
+        3.44,
+        3.16
+      ],
+      "rotation_degrees": 63.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        27.0,
+        0,
+        48.58
+      ],
+      "radii": [
+        3.62,
+        3.17
+      ],
+      "rotation_degrees": -80.4
+    }
+  ],
+  "trees": [],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.8730367,
+      9.3979776
+    ],
+    "pin_latlon": [
+      56.8725217,
+      9.3982655
+    ],
+    "centerline": "fairway_shape",
+    "elevation": "dhm",
+    "tee_elevation": 20.07,
+    "hole_way": "way/1565793223",
+    "zone_fit": [
+      {
+        "osm": "way/1465046046",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.93
+      },
+      {
+        "osm": "way/1465046040",
+        "type": "bunker",
+        "pieces": 2,
+        "iou": 0.92
+      }
+    ],
+    "made_green": false
+  }
+}

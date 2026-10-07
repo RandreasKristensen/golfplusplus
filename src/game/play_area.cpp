@@ -74,7 +74,7 @@ float ribbon_width(const hole_data& hole) {
 
 ground_settings ground_settings_for(const float margin, const game_tuning& tuning) {
     return ground_settings{tuning.terrain.ground_cell_size, margin, tuning.terrain.ground_blend_distance,
-                           tuning.terrain.zone_cell_size, tuning.terrain.zones};
+                           tuning.terrain.fairway_cell_size, tuning.terrain.zone_cell_size, tuning.terrain.zones};
 }
 
 // Points around a pond's edge where its water level is found.
@@ -199,16 +199,16 @@ terrain_mesh build_hole_mesh(const hole_data& hole, const game_tuning& tuning) {
     return build_terrain_mesh(spline);
 }
 
-// Eases a placed hole's rough into the course's land: the hole's own height
-// across the fairway, the land's height at the ribbon's outer edge, so
-// neighbouring holes meet on the land rather than on each other's heights.
-terrain_mesh fit_rough_to_land(terrain_mesh hole, const float fairway_width, const height_grid& land) {
+// A placed hole's ribbon as its lift over the course's land: the hole's own
+// heights over its tee (at `tee_height`) across the fairway, easing to none
+// at the ribbon's outer edge, so neighbouring holes meet on the land rather
+// than on each other's heights.
+terrain_mesh lift_over_land(terrain_mesh hole, const float tee_height, const float fairway_width) {
     const float fairway_half = fairway_width * 0.5f;
     const float rough_band = std::max(0.001f, hole.width * 0.5f - fairway_half);
     for (terrain_vertex& vertex : hole.vertices) {
         const float t = clamp01((std::abs(vertex.distance_from_center) - fairway_half) / rough_band);
-        const float land_height = sample_height_grid(land, vertex.position.x, vertex.position.z);
-        vertex.position.y += t * t * (3.0f - 2.0f * t) * (land_height - vertex.position.y);
+        vertex.position.y = (vertex.position.y - tee_height) * (1.0f - t * t * (3.0f - 2.0f * t));
     }
     hole.vertices = with_smooth_normals(std::move(hole.vertices), hole.indices);
     return build_terrain_mesh_index(std::move(hole));
@@ -245,7 +245,8 @@ play_area build_course_area(const std::vector<hole_data>& holes,
     for (std::size_t i = 0; i < holes.size() && i < world.hole_starts.size(); ++i) {
         const hole_data placed = place_hole(holes[i], world.hole_starts[i]);
         terrain_mesh mesh = place_mesh(build_hole_mesh(holes[i], tuning), holes[i], world.hole_starts[i]);
-        course.holes.push_back(land != nullptr ? fit_rough_to_land(std::move(mesh), holes[i].spline.width, *land) : std::move(mesh));
+        course.holes.push_back(land != nullptr ? lift_over_land(std::move(mesh), placed.tee_position.y, holes[i].spline.width)
+                                               : std::move(mesh));
         course.zones.insert(course.zones.end(), placed.material_zones.begin(), placed.material_zones.end());
         course.trees.insert(course.trees.end(), placed.trees.begin(), placed.trees.end());
         margin = std::max(margin, ribbon_width(holes[i]));

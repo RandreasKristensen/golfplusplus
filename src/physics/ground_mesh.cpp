@@ -99,9 +99,8 @@ float blended_height(const std::vector<terrain_mesh>& holes, const std::vector<h
     return weighted / total;
 }
 
-// Two triangles per cell of a rows x columns vertex grid, tile by tile.
-// Two triangles per cell, tile by tile, leaving out the cells `skip` marks
-// (row-major over the cells).
+// Two triangles per cell of a rows x columns vertex grid, tile by tile,
+// leaving out the cells `skip` marks (row-major over the cells).
 std::vector<std::uint32_t> tiled_grid_indices(const int rows, const int columns, const std::vector<bool>& skip) {
     std::vector<std::uint32_t> indices;
     indices.reserve(static_cast<std::size_t>((rows - 1) * (columns - 1) * 6));
@@ -244,7 +243,38 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
         return glm::vec3(low.x + step_x * static_cast<float>(column), 0.0f, low.z + step_z * static_cast<float>(row));
     };
 
-    // On the holes: the blended hole height. Materials as surface_material.
+    // Every zone whose box reaches a cell, by cell: all that can decide a
+    // point in it, so a point there looks at those alone. A point's cell is
+    // found the way a box's cells are, so a box holding it is always listed.
+    const int cell_rows = rows - 1;
+    const int cell_columns = columns - 1;
+    const std::size_t cell_count = static_cast<std::size_t>(cell_rows * cell_columns);
+    const auto cell_column_at = [&](const float x) {
+        return std::clamp(static_cast<int>(std::floor((x - low.x) / step_x)), 0, cell_columns - 1);
+    };
+    const auto cell_row_at = [&](const float z) {
+        return std::clamp(static_cast<int>(std::floor((z - low.z) / step_z)), 0, cell_rows - 1);
+    };
+    std::unordered_map<std::size_t, std::vector<material_zone>> cell_zones;
+    for (const material_zone& zone : zones) {
+        const glm::vec2 reach = zone_half_extent(zone);
+        for (int row = cell_row_at(zone.center.z - reach.y); row <= cell_row_at(zone.center.z + reach.y); ++row) {
+            for (int column = cell_column_at(zone.center.x - reach.x); column <= cell_column_at(zone.center.x + reach.x); ++column) {
+                cell_zones[static_cast<std::size_t>(row * cell_columns + column)].push_back(zone);
+            }
+        }
+    }
+    const std::vector<material_zone> no_zones;
+    const auto zones_at = [&](const glm::vec3& point) -> const std::vector<material_zone>& {
+        const auto found = cell_zones.find(static_cast<std::size_t>(cell_row_at(point.z) * cell_columns + cell_column_at(point.x)));
+        return found != cell_zones.end() ? found->second : no_zones;
+    };
+
+    // On the holes: the blended hole height (with land, the lift over it).
+    // Materials as surface_material.
+    const auto land_at = [land](const glm::vec3& point) {
+        return land != nullptr ? sample_height_grid(*land, point.x, point.z) : 0.0f;
+    };
     std::vector<bool> on_hole(vertex_count, false);
     std::vector<float> base(vertex_count, 0.0f);
     std::vector<std::optional<float>> offsets(vertex_count);
@@ -253,18 +283,18 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
         for (int column = 0; column < columns; ++column) {
             const std::size_t index = static_cast<std::size_t>(row * columns + column);
             const glm::vec3 point = grid_point(row, column);
-            base[index] = land != nullptr ? sample_height_grid(*land, point.x, point.z) : 0.0f;
+            base[index] = land_at(point);
             const std::vector<hole_hit> hits = hits_at(holes, hole_bounds, point);
             const hole_hit* best = winning_hit(holes, hits);
             if (best != nullptr) {
                 on_hole[index] = true;
-                offsets[index] = blended_height(holes, hits) - base[index];
+                offsets[index] = blended_height(holes, hits);
             }
-            materials[index] = surface_material(zones, best != nullptr ? &best->sample : nullptr, point);
+            materials[index] = surface_material(zones_at(point), best != nullptr ? &best->sample : nullptr, point);
         }
     }
 
-    // Off the holes: each hole's offset from the land (or its height, without
+    // Off the holes: each hole's lift over the land (or its height, without
     // land) diffuses outward and, with land, fades to nothing over the blend
     // distance. A nearest-hole rule would leave a cliff wherever two holes'
     // areas meet; smoothing has no such line. The spread is the first guess,
@@ -302,23 +332,7 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
     // The cells over a bunker or pond, and a cell beyond, so the carve is
     // nothing at their outer edges: only their corners are carved, and when
     // they are split finer they meet their neighbours without a step.
-    const int cell_columns = columns - 1;
-    std::vector<bool> near_zone(static_cast<std::size_t>((rows - 1) * cell_columns), false);
-    // Every zone whose box reaches a cell, by cell: all that can decide a
-    // point in it, so a fine point there looks at those alone.
-    std::unordered_map<std::size_t, std::vector<material_zone>> cell_zones;
-    for (const material_zone& zone : zones) {
-        const glm::vec2 reach = zone_half_extent(zone);
-        const int column0 = std::clamp(static_cast<int>(std::floor((zone.center.x - reach.x - low.x) / step_x)), 0, cell_columns - 1);
-        const int column1 = std::clamp(static_cast<int>(std::floor((zone.center.x + reach.x - low.x) / step_x)), 0, cell_columns - 1);
-        const int row0 = std::clamp(static_cast<int>(std::floor((zone.center.z - reach.y - low.z) / step_z)), 0, rows - 2);
-        const int row1 = std::clamp(static_cast<int>(std::floor((zone.center.z + reach.y - low.z) / step_z)), 0, rows - 2);
-        for (int row = row0; row <= row1; ++row) {
-            for (int column = column0; column <= column1; ++column) {
-                cell_zones[static_cast<std::size_t>(row * cell_columns + column)].push_back(zone);
-            }
-        }
-    }
+    std::vector<bool> near_zone(cell_count, false);
     for (const material_zone& zone : zones) {
         if (zone.type != material_zone_type::bunker && zone.type != material_zone_type::water) {
             continue;
@@ -329,7 +343,7 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
                                        std::clamp(static_cast<int>(std::floor((to - origin) / step)) + 1, 0, count - 1));
         };
         const auto [first_column, last_column] = cells(zone.center.x - half.x, zone.center.x + half.x, low.x, step_x, cell_columns);
-        const auto [first_row, last_row] = cells(zone.center.z - half.y, zone.center.z + half.y, low.z, step_z, rows - 1);
+        const auto [first_row, last_row] = cells(zone.center.z - half.y, zone.center.z + half.y, low.z, step_z, cell_rows);
         for (int row = first_row; row <= last_row; ++row) {
             for (int column = first_column; column <= last_column; ++column) {
                 near_zone[static_cast<std::size_t>(row * cell_columns + column)] = true;
@@ -337,7 +351,7 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
         }
     }
     const auto corner_of_near_cell = [&](const int row, const int column) {
-        for (int r = std::max(0, row - 1); r <= std::min(row, rows - 2); ++r) {
+        for (int r = std::max(0, row - 1); r <= std::min(row, cell_rows - 1); ++r) {
             for (int c = std::max(0, column - 1); c <= std::min(column, cell_columns - 1); ++c) {
                 if (near_zone[static_cast<std::size_t>(r * cell_columns + c)]) {
                     return true;
@@ -346,78 +360,159 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
         }
         return false;
     };
-    const int split = settings.zone_cell_size > 0.0f
-        ? std::max(1, static_cast<int>(std::ceil(std::max(step_x, step_z) / settings.zone_cell_size)))
-        : 1;
 
-    std::vector<float> height(vertex_count, 0.0f);  // before carving
+    // How many parts each cell is split into along each side. The zone split
+    // is a multiple of the fairway split, so every split cell's points lie on
+    // one lattice of `lattice` steps per cell side.
+    const auto split_for = [&](const float spacing) {
+        return spacing > 0.0f ? std::max(1, static_cast<int>(std::ceil(std::max(step_x, step_z) / spacing))) : 1;
+    };
+    const int fairway_split = land != nullptr ? split_for(settings.fairway_cell_size) : 1;
+    const int lattice = fairway_split * ((split_for(settings.zone_cell_size) + fairway_split - 1) / fairway_split);
+    std::vector<int> cell_split(cell_count, 1);
+    for (int row = 0; row < cell_rows; ++row) {
+        for (int column = 0; column < cell_columns; ++column) {
+            const std::size_t cell_index = static_cast<std::size_t>(row * cell_columns + column);
+            bool fairway = false;
+            for (const int corner : {row * columns + column, row * columns + column + 1,
+                                     (row + 1) * columns + column, (row + 1) * columns + column + 1}) {
+                const terrain_material material = materials[static_cast<std::size_t>(corner)];
+                fairway = fairway || material == terrain_material::fairway || material == terrain_material::green;
+            }
+            cell_split[cell_index] = near_zone[cell_index] ? lattice : (fairway ? fairway_split : 1);
+        }
+    }
+
     std::vector<terrain_vertex> vertices;
     vertices.reserve(vertex_count);
     for (int row = 0; row < rows; ++row) {
         for (int column = 0; column < columns; ++column) {
             const std::size_t index = static_cast<std::size_t>(row * columns + column);
-            height[index] = base[index] + offset[index];
             terrain_vertex vertex;
             vertex.position = grid_point(row, column);
-            vertex.position.y = height[index];
+            vertex.position.y = base[index] + offset[index];
             if (corner_of_near_cell(row, column)) {
-                vertex.position.y -= zone_carve_depth(zones, vertex.position, settings.zones);
+                vertex.position.y -= zone_carve_depth(zones_at(vertex.position), vertex.position, settings.zones);
             }
             vertex.material = materials[index];
             vertices.push_back(vertex);
         }
     }
 
-    const std::vector<bool> fine = split > 1 ? near_zone : std::vector<bool>(near_zone.size(), false);
-    ground.indices = tiled_grid_indices(rows, columns, fine);
+    std::vector<bool> split(cell_count, false);
+    for (std::size_t i = 0; i < cell_count; ++i) {
+        split[i] = cell_split[i] > 1;
+    }
+    ground.indices = tiled_grid_indices(rows, columns, split);
 
-    // Fine points are shared between neighbouring fine cells (a coarse grid
-    // point is its own vertex), each at the cell's bilinear height, carved.
-    const long long fine_columns = static_cast<long long>(cell_columns) * split + 1;
-    std::unordered_map<long long, std::uint32_t> fine_vertices;
-    const std::vector<material_zone> no_zones;
-    const auto fine_vertex = [&](const int fine_row, const int fine_column) -> std::uint32_t {
-        if (fine_row % split == 0 && fine_column % split == 0) {
-            return static_cast<std::uint32_t>((fine_row / split) * columns + fine_column / split);
+    // Lattice points count lattice steps from the grid's low corner. A grid
+    // point is its own vertex; the others are shared by the split cells that
+    // use them.
+    const long long lattice_columns = static_cast<long long>(cell_columns) * lattice + 1;
+    std::unordered_map<long long, std::uint32_t> lattice_vertices;
+    // The first and last cell, along one axis, whose closed side holds a lattice index.
+    const auto touching_cells = [lattice](const int lattice_index, const int count) {
+        const int first = lattice_index % lattice == 0 ? lattice_index / lattice - 1 : lattice_index / lattice;
+        return std::pair<int, int>(std::clamp(first, 0, count - 1), std::clamp(lattice_index / lattice, 0, count - 1));
+    };
+    const auto lattice_position = [&](const int lattice_row, const int lattice_column) {
+        return glm::vec3(low.x + step_x * static_cast<float>(lattice_column) / static_cast<float>(lattice), 0.0f,
+                         low.z + step_z * static_cast<float>(lattice_row) / static_cast<float>(lattice));
+    };
+    // The cell holding a lattice point.
+    const auto cell_of = [&](const int lattice_row, const int lattice_column) {
+        return std::pair<int, int>(std::min(lattice_row / lattice, cell_rows - 1), std::min(lattice_column / lattice, cell_columns - 1));
+    };
+    // A lattice point's own height: the land there plus the offset bilinear
+    // over its cell, carved by the zones of a near-zone cell it touches.
+    const auto own_height = [&](const int lattice_row, const int lattice_column) {
+        const glm::vec3 position = lattice_position(lattice_row, lattice_column);
+        const auto [row, column] = cell_of(lattice_row, lattice_column);
+        const float u = static_cast<float>(lattice_column - column * lattice) / static_cast<float>(lattice);
+        const float v = static_cast<float>(lattice_row - row * lattice) / static_cast<float>(lattice);
+        const auto at = [&](const int r, const int c) { return offset[static_cast<std::size_t>(r * columns + c)]; };
+        const float y = land_at(position) +
+            (at(row, column) * (1.0f - u) + at(row, column + 1) * u) * (1.0f - v) +
+            (at(row + 1, column) * (1.0f - u) + at(row + 1, column + 1) * u) * v;
+        const auto [first_row, last_row] = touching_cells(lattice_row, cell_rows);
+        const auto [first_column, last_column] = touching_cells(lattice_column, cell_columns);
+        for (int r = first_row; r <= last_row; ++r) {
+            for (int c = first_column; c <= last_column; ++c) {
+                const std::size_t cell_index = static_cast<std::size_t>(r * cell_columns + c);
+                if (near_zone[cell_index]) {
+                    return y - zone_carve_depth(zones_at(position), position, settings.zones);
+                }
+            }
         }
-        const long long key = static_cast<long long>(fine_row) * fine_columns + fine_column;
-        if (const auto found = fine_vertices.find(key); found != fine_vertices.end()) {
+        return y;
+    };
+    const auto aligned_height = [&](const int lattice_row, const int lattice_column) {
+        if (lattice_row % lattice == 0 && lattice_column % lattice == 0) {
+            return vertices[static_cast<std::size_t>((lattice_row / lattice) * columns + lattice_column / lattice)].position.y;
+        }
+        return own_height(lattice_row, lattice_column);
+    };
+    // A point on the lattice of every cell it touches has its own height.
+    // Otherwise it lies on the side of a coarser cell, which is straight
+    // between two of that cell's points, so it takes its height from that
+    // line and the cells either side meet without a crack.
+    const auto lattice_height = [&](const int lattice_row, const int lattice_column) {
+        const auto [first_row, last_row] = touching_cells(lattice_row, cell_rows);
+        const auto [first_column, last_column] = touching_cells(lattice_column, cell_columns);
+        int stride = 1;
+        for (int r = first_row; r <= last_row; ++r) {
+            for (int c = first_column; c <= last_column; ++c) {
+                stride = std::max(stride, lattice / cell_split[static_cast<std::size_t>(r * cell_columns + c)]);
+            }
+        }
+        const int row_rest = lattice_row % stride;
+        const int column_rest = lattice_column % stride;
+        if (row_rest != 0) {
+            const float a = aligned_height(lattice_row - row_rest, lattice_column);
+            const float b = aligned_height(lattice_row - row_rest + stride, lattice_column);
+            return a + (b - a) * static_cast<float>(row_rest) / static_cast<float>(stride);
+        }
+        if (column_rest != 0) {
+            const float a = aligned_height(lattice_row, lattice_column - column_rest);
+            const float b = aligned_height(lattice_row, lattice_column - column_rest + stride);
+            return a + (b - a) * static_cast<float>(column_rest) / static_cast<float>(stride);
+        }
+        return aligned_height(lattice_row, lattice_column);
+    };
+    const auto lattice_vertex = [&](const int lattice_row, const int lattice_column) -> std::uint32_t {
+        if (lattice_row % lattice == 0 && lattice_column % lattice == 0) {
+            return static_cast<std::uint32_t>((lattice_row / lattice) * columns + lattice_column / lattice);
+        }
+        const long long key = static_cast<long long>(lattice_row) * lattice_columns + lattice_column;
+        if (const auto found = lattice_vertices.find(key); found != lattice_vertices.end()) {
             return found->second;
         }
-        const int row = std::min(fine_row / split, rows - 2);
-        const int column = std::min(fine_column / split, cell_columns - 1);
-        const auto local = cell_zones.find(static_cast<std::size_t>(row * cell_columns + column));
-        const std::vector<material_zone>& here = local != cell_zones.end() ? local->second : no_zones;
-        const float u = static_cast<float>(fine_column - column * split) / static_cast<float>(split);
-        const float v = static_cast<float>(fine_row - row * split) / static_cast<float>(split);
-        const auto at = [&](const int r, const int c) { return height[static_cast<std::size_t>(r * columns + c)]; };
-        const float y = (at(row, column) * (1.0f - u) + at(row, column + 1) * u) * (1.0f - v) +
-            (at(row + 1, column) * (1.0f - u) + at(row + 1, column + 1) * u) * v;
         terrain_vertex vertex;
-        vertex.position = glm::vec3(low.x + step_x * (static_cast<float>(column) + u), 0.0f,
-                                    low.z + step_z * (static_cast<float>(row) + v));
+        vertex.position = lattice_position(lattice_row, lattice_column);
         const std::vector<hole_hit> hits = hits_at(holes, hole_bounds, vertex.position);
         const hole_hit* best = winning_hit(holes, hits);
-        vertex.material = surface_material(here, best != nullptr ? &best->sample : nullptr, vertex.position);
-        vertex.position.y = y - zone_carve_depth(here, vertex.position, settings.zones);
+        vertex.material = surface_material(zones_at(vertex.position), best != nullptr ? &best->sample : nullptr, vertex.position);
+        vertex.position.y = lattice_height(lattice_row, lattice_column);
         vertices.push_back(vertex);
         const std::uint32_t index = static_cast<std::uint32_t>(vertices.size() - 1);
-        fine_vertices.emplace(key, index);
+        lattice_vertices.emplace(key, index);
         return index;
     };
-    for (int row = 0; row < rows - 1; ++row) {
+    for (int row = 0; row < cell_rows; ++row) {
         for (int column = 0; column < cell_columns; ++column) {
-            if (!fine[static_cast<std::size_t>(row * cell_columns + column)]) {
+            const int parts = cell_split[static_cast<std::size_t>(row * cell_columns + column)];
+            if (parts == 1) {
                 continue;
             }
-            for (int i = 0; i < split; ++i) {
-                for (int j = 0; j < split; ++j) {
-                    const int fine_row = row * split + i;
-                    const int fine_column = column * split + j;
-                    const std::uint32_t a = fine_vertex(fine_row, fine_column);
-                    const std::uint32_t a1 = fine_vertex(fine_row, fine_column + 1);
-                    const std::uint32_t b = fine_vertex(fine_row + 1, fine_column);
-                    const std::uint32_t b1 = fine_vertex(fine_row + 1, fine_column + 1);
+            const int stride = lattice / parts;
+            for (int i = 0; i < parts; ++i) {
+                for (int j = 0; j < parts; ++j) {
+                    const int lattice_row = row * lattice + i * stride;
+                    const int lattice_column = column * lattice + j * stride;
+                    const std::uint32_t a = lattice_vertex(lattice_row, lattice_column);
+                    const std::uint32_t a1 = lattice_vertex(lattice_row, lattice_column + stride);
+                    const std::uint32_t b = lattice_vertex(lattice_row + stride, lattice_column);
+                    const std::uint32_t b1 = lattice_vertex(lattice_row + stride, lattice_column + stride);
                     ground.indices.insert(ground.indices.end(), {a, b, a1, a1, b, b1});
                 }
             }

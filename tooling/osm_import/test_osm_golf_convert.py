@@ -8,6 +8,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import osm_golf_convert as conv
 import osm_ground as ground
+import osm_dhm as dhm
 import osm_elevation as elev
 import osm_checks
 import osm_contact_sheet
@@ -421,26 +422,12 @@ class CenterlineTests(unittest.TestCase):
 
 
 class ElevationTests(unittest.TestCase):
-    def test_relative_profile_puts_the_tee_at_zero(self):
-        absolute = elev.cleaned_profile([42.0, 45.0, 48.0], [0.0, 100.0, 200.0])
-        profile = elev.relative_profile(absolute)
-
-        self.assertGreater(absolute[0], 40.0)
-        self.assertEqual(0.0, profile[0])
-        self.assertGreater(profile[-1], 0.0)
-
     def test_gaps_are_interpolated_not_zeroed(self):
         self.assertEqual([10.0, 20.0, 30.0, 40.0], elev.fill_gaps([10.0, None, None, 40.0]))
+        self.assertEqual([2.0, 2.0, 2.0], elev.fill_gaps([None, 2.0, None]))
 
     def test_all_missing_elevation_degrades_to_flat(self):
         self.assertEqual([0.0, 0.0, 0.0], elev.fill_gaps([None, None, None]))
-
-    def test_slope_limit_rejects_a_dem_spike(self):
-        """A building or tree canopy beside a fairway reads as a cliff."""
-        limited = elev.limit_slope([0.0, 0.0, 60.0, 0.0], [0.0, 50.0, 100.0, 150.0],
-                                   max_grade=0.25)
-
-        self.assertLessEqual(max(limited), 0.25 * 50.0 + 0.01)
 
     def test_png_decoding_undoes_row_filters(self):
         import struct
@@ -460,14 +447,6 @@ class ElevationTests(unittest.TestCase):
 
         self.assertEqual((2, 2), (width, height))
         self.assertEqual(rows, decoded)
-
-    def test_bank_rises_towards_the_lateral_side_and_is_clamped(self):
-        # Heading +z, the lateral side (-dz, dx) is -x.
-        sides = elev.lateral_offsets([(0.0, 0.0), (0.0, 100.0)], 10.0)
-        self.assertEqual(((-10.0, 0.0), (10.0, 0.0)), sides[0])
-
-        bank = elev.bank_profile([12.0, 30.0, None], [10.0, 0.0, 5.0], 20.0, max_bank=0.2, smooth_window=1)
-        self.assertEqual([0.1, 0.2, 0.0], bank)
 
     def test_terrarium_pixels_decode_to_metres(self):
         # 32768 + 76.5 m = 128 * 256 + 76 + 128 / 256
@@ -491,7 +470,7 @@ class ElevationTests(unittest.TestCase):
             self.assertEqual(0, sampler.tiles_downloaded)
             self.assertEqual(1, sampler.tiles_from_cache)
 
-    def test_hole_json_carries_elevation_into_control_points(self):
+    def test_an_imported_hole_is_flat_and_keeps_its_tee_height(self):
         holes = conv.group_holes([
             way(1, {"golf": "hole", "ref": "1", "par": "4"}, [(56.0, 10.0), (56.0027, 10.0)]),
             node(2, {"golf": "tee"}, 56.0, 10.0),
@@ -501,16 +480,16 @@ class ElevationTests(unittest.TestCase):
         class RampSampler:
             dataset = "test"
 
-            def elevations(self, latlons):
-                # 1 m of rise per 0.0001 degrees of latitude.
-                return [(lat - 56.0) * 10000.0 for lat, _lon in latlons]
+            def elevation(self, lat, _lon):
+                # 1 m of rise per 0.0001 degrees of latitude, from 40 m.
+                return 40.0 + (lat - 56.0) * 10000.0
 
         h_json = conv.hole_to_json(1, holes[1], 56.0, 10.0, "test", None, RampSampler())
-        ys = [p[1] for p in h_json["spline"]["control_points"]]
 
-        self.assertEqual(0.0, ys[0], "the tee must stay at y=0")
-        self.assertGreater(ys[-1], 5.0, "an uphill hole must rise")
-        self.assertEqual(sorted(ys), ys, "a monotonic ramp must stay monotonic")
+        self.assertTrue(all(p[1] == 0.0 for p in h_json["spline"]["control_points"]))
+        self.assertEqual(0.0, h_json["pin"][1])
+        self.assertNotIn("bank", h_json["spline"])
+        self.assertAlmostEqual(40.0, h_json["source"]["tee_elevation"], places=1)
 
     def test_elevation_is_optional(self):
         holes = conv.group_holes([
@@ -520,6 +499,93 @@ class ElevationTests(unittest.TestCase):
         h_json = conv.hole_to_json(1, holes[1], 56.0, 10.0, "test", None, None)
 
         self.assertTrue(all(p[1] == 0.0 for p in h_json["spline"]["control_points"]))
+        self.assertIsNone(h_json["source"]["tee_elevation"])
+
+
+class DhmTests(unittest.TestCase):
+    @staticmethod
+    def float_tiff(width, height, values):
+        """An uncompressed, striped float32 TIFF, as the WCS sends, one strip per row."""
+        import struct
+
+        header_size = 8
+        data = struct.pack(f"<{width * height}f", *values)
+        strip_offsets = [header_size + row * width * 4 for row in range(height)]
+        tags = [(256, 3, 1, width), (257, 3, 1, height), (258, 3, 1, 32), (259, 3, 1, 1),
+                (277, 3, 1, 1), (278, 3, 1, 1), (339, 3, 1, 3)]
+        ifd_offset = header_size + len(data)
+        arrays_offset = ifd_offset + 2 + 12 * (len(tags) + 2) + 4
+        entries = [struct.pack("<HHI", tag, kind, 1) + struct.pack("<HH", value, 0) for tag, kind, _n, value in tags]
+        entries.append(struct.pack("<HHII", 273, 4, height, arrays_offset))
+        entries.append(struct.pack("<HHII", 279, 4, height, arrays_offset + 4 * height))
+        entries.sort(key=lambda entry: struct.unpack("<H", entry[:2])[0])
+        ifd = struct.pack("<H", len(entries)) + b"".join(entries) + struct.pack("<I", 0)
+        arrays = struct.pack(f"<{height}I", *strip_offsets) + struct.pack(f"<{height}I", *([width * 4] * height))
+        return b"II" + struct.pack("<HI", 42, ifd_offset) + data + ifd + arrays
+
+    def test_utm_on_the_central_meridian_is_the_scaled_meridian_arc(self):
+        east, north = dhm.utm32(56.0, 9.0)
+
+        self.assertAlmostEqual(500000.0, east, places=3)
+        # GRS80 meridian arc to 56 degrees, times 0.9996.
+        self.assertAlmostEqual(6206079.587, north, places=2)
+
+    def test_utm_eastings_grow_east_of_the_central_meridian(self):
+        west, _ = dhm.utm32(56.0, 8.0)
+        east, _ = dhm.utm32(56.0, 10.0)
+
+        self.assertAlmostEqual(500000.0 - west, east - 500000.0, places=3)
+        self.assertGreater(east, 562000.0)
+
+    def test_float_tiffs_read_row_by_row(self):
+        width, height, pixels = dhm.read_float_tiff(self.float_tiff(3, 2, [1.0, 2.0, 3.0, 4.0, 5.0, 6.5]))
+
+        self.assertEqual((3, 2), (width, height))
+        self.assertEqual([1.0, 2.0, 3.0, 4.0, 5.0, 6.5], list(pixels))
+
+    def test_compressed_tiffs_are_refused(self):
+        tiff = bytearray(self.float_tiff(1, 1, [1.0]))
+        compression = tiff.index(bytes([3, 1, 3, 0, 1, 0, 0, 0, 1, 0]))  # tag 259, SHORT, 1, value 1
+        tiff[compression + 8] = 8
+        with self.assertRaises(ValueError):
+            dhm.read_float_tiff(bytes(tiff))
+
+    def test_sampler_reads_cached_squares_without_the_network(self):
+        import tempfile
+        from pathlib import Path
+
+        lat, lon = 56.31, 10.40
+        east, north = dhm.utm32(lat, lon)
+        square_east, square_north = int(east // 1000) * 1000, (int(north // 1000) + 1) * 1000
+        with tempfile.TemporaryDirectory() as cache:
+            sampler = dhm.DhmSampler("token", cache_dir=Path(cache), pixel_size=100.0, verbose=False)
+            square = Path(cache) / "dhm" / "100m" / f"{square_east}_{square_north}.tif"
+            square.parent.mkdir(parents=True)
+            # 10 x 10 pixels of 100 m, each 12.5 m high but one, which has no data.
+            square.write_bytes(self.float_tiff(10, 10, [12.5] * 77 + [-9999.0] + [12.5] * 22))
+            with mock.patch.object(sampler, "_download", side_effect=AssertionError("no network")):
+                inside = (square_east + 250.0, square_north - 250.0)
+                beside_no_data = (square_east + 760.0, square_north - 760.0)
+                heights = [sampler.elevation(*self.latlon_of(sampler, *inside)),
+                           sampler.elevation(*self.latlon_of(sampler, *beside_no_data))]
+            self.assertAlmostEqual(12.5, heights[0], places=3)
+            self.assertIsNone(heights[1])
+            self.assertEqual(0, sampler.tiles_downloaded)
+            self.assertEqual(1, sampler.tiles_from_cache)
+
+    @staticmethod
+    def latlon_of(_sampler, east, north):
+        """Inverts utm32 by Newton steps, close enough to land in the same pixel."""
+        lat, lon = 56.0, 10.0
+        for _ in range(20):
+            e, n = dhm.utm32(lat, lon)
+            lat += (north - n) / 111200.0
+            lon += (east - e) / (111200.0 * math.cos(math.radians(lat)))
+        return lat, lon
+
+    def test_courses_outside_denmark_are_not_covered(self):
+        self.assertTrue(dhm.in_coverage(56.31, 10.40))
+        self.assertFalse(dhm.in_coverage(56.34, -2.80))
 
 
 class LookupTests(unittest.TestCase):
@@ -990,18 +1056,35 @@ class GroundTests(unittest.TestCase):
         self.assertEqual([-150.0, -50.0], grid["origin"])
         self.assertGreaterEqual(grid["origin"][0] + (grid["columns"] - 1) * 20.0, 150.0)
         self.assertGreaterEqual(grid["origin"][1] + (grid["rows"] - 1) * 20.0, 350.0)
-        self.assertEqual(grid["columns"] * grid["rows"], len(grid["heights"]))
-        self.assertEqual({0.0}, set(grid["heights"]))
+        self.assertEqual(grid["rows"], len(grid["heights_cm"]))
+        self.assertTrue(all(len(row) == grid["columns"] for row in grid["heights_cm"]))
+        self.assertEqual({0.0}, set(ground.heights_from_rows_cm(grid["heights_cm"])))
 
     def test_heights_are_relative_to_hole_one_start(self):
         grid = ground.ground_grid(self.WORLD, self.HOLES, self.HeightFromZ(), lambda x, z: (z, x), 20.0, 50.0)
+        heights = ground.heights_from_rows_cm(grid["heights_cm"])
 
         # Hole 1's start is at z = 0 and y = 2, so z = 0 maps to y = 2 and
         # every 10 m north adds 1 m.
         columns = grid["columns"]
         first_row_z = grid["origin"][1]
-        self.assertAlmostEqual(2.0 + first_row_z * 0.1, grid["heights"][0], places=2)
-        self.assertAlmostEqual(2.0 + (first_row_z + 20.0) * 0.1, grid["heights"][columns], places=2)
+        self.assertAlmostEqual(2.0 + first_row_z * 0.1, heights[0], places=2)
+        self.assertAlmostEqual(2.0 + (first_row_z + 20.0) * 0.1, heights[columns], places=2)
+
+    def test_rows_are_a_height_then_steps_in_centimetres(self):
+        rows = ground.height_rows_cm([1.0, 1.25, 0.9, -2.0, -2.004, 0.0], 3)
+
+        self.assertEqual([[100, 25, -35], [-200, 0, 200]], rows)
+        self.assertEqual([1.0, 1.25, 0.9, -2.0, -2.0, 0.0], ground.heights_from_rows_cm(rows))
+
+    def test_a_world_is_written_with_one_ground_row_per_line(self):
+        import json
+
+        world = {"id": "w", "ground": {"columns": 2, "rows": 2, "heights_cm": [[1, 2], [3, -4]]}, "fences": []}
+        text = ground.course_world_text(world)
+
+        self.assertEqual(world, json.loads(text))
+        self.assertIn("\n      [1,2],\n      [3,-4]\n", text)
 
 
 

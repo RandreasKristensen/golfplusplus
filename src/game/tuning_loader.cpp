@@ -69,6 +69,7 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.terrain.zones.water_depth_per_metre = terrain.number("water_depth_per_metre");
     tuning.terrain.zones.water_min_depth = terrain.number("water_min_depth");
     tuning.terrain.zones.water_max_depth = terrain.number("water_max_depth");
+    tuning.terrain.fairway_cell_size = terrain.number("fairway_cell_size");
     tuning.terrain.zone_cell_size = terrain.number("zone_cell_size");
     tuning.terrain.material_overlay_spacing = terrain.number("material_overlay_spacing");
 

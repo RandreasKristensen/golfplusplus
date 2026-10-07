@@ -1,16 +1,19 @@
 #pragma once
 
 // The ground of a play area: one surface that every height and normal comes
-// from, for physics and drawing alike. It is a regular grid. Inside a hole the
-// hole's ribbon decides the height; where holes overlap they blend, weighted
-// towards the hole a point is deeper inside; away from the holes the ground
-// eases from the nearest hole edge into the land (a course world's height
-// grid), or keeps the edge height when there is no land. Materials come from
-// the exact zone shapes and the holes' fairway and rough (surface_material),
-// never from the grid, so their edges stay exact. Bunkers and ponds are bowls
-// carved into it (zone_carve_depth); the grid's cells over them are split into
-// a finer grid so a bowl a few metres across keeps its shape, its edges
-// matching the cells around it.
+// from, for physics and drawing alike. It is a regular grid. With land (a
+// course world's height grid) the land decides the height and each hole lifts
+// it by the hole's own heights (an imported hole's are 0: the land is the
+// hole); without land the holes are the height. Where holes overlap they
+// blend, weighted towards the hole a point is deeper inside; away from the
+// holes their lift fades into the land, or without land keeps the edge height.
+// Materials come from the exact zone shapes and the holes' fairway and rough
+// (surface_material), never from the grid, so their edges stay exact. On land
+// the cells over fairways and greens are split finer, so the land's detail is
+// there where the ball rolls. Bunkers and ponds are bowls carved into it
+// (zone_carve_depth), their cells split finer still so a bowl a few metres
+// across keeps its shape. A split cell meets coarser neighbours without a
+// crack.
 
 #include "physics/terrain.h"
 
@@ -39,12 +42,14 @@ struct ground_settings {
     float cell_size = 0.0f;       // grid spacing
     float margin = 0.0f;          // how far the grid reaches past the holes
     float blend_distance = 0.0f;  // from a hole's edge into the land
-    float zone_cell_size = 0.0f;  // the finer spacing over bunkers and ponds
+    float fairway_cell_size = 0.0f;  // the finer spacing over fairways and greens, on land
+    float zone_cell_size = 0.0f;     // the finer spacing over bunkers and ponds
     terrain_zone_tuning zones;    // how deep they are carved
 };
 
-// `holes` are ribbon meshes (each with its spatial index), `zones` every
-// hole's zones in the same coordinates; `land` may be null. The grid covers
+// `holes` are ribbon meshes (each with its spatial index): with `land`, their
+// heights are their lift over it, else heights. `zones` are every hole's
+// zones in the same coordinates; `land` may be null. The grid covers
 // every hole plus the margin, and all of `land`. Its vertices carry
 // surface_material, for drawing.
 terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,

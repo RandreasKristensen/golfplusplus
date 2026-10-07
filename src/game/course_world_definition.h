@@ -68,8 +68,8 @@ struct course_world_definition {
     // One per hole, in hole order (hole_starts[i].hole_index == i). A course
     // begins at hole 1's start.
     std::vector<course_world_hole_start> hole_starts;
-    // Land heights in course coordinates (hole 1's start is the reference);
-    // the ground between the holes eases into it.
+    // Land heights in course coordinates (hole 1's start is the reference):
+    // the ground's height, which the holes lift by their own heights.
     height_grid ground;
     std::vector<course_world_cart_road> cart_roads;
     std::vector<course_world_fence> fences;

@@ -1,0 +1,400 @@
+{
+  "id": "himmerland_new_course_h02",
+  "name": "Hole 2",
+  "par": 3,
+  "wind_seed": 527,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    -134.53,
+    0.0,
+    127.77
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        -22.42,
+        0.0,
+        21.3
+      ],
+      [
+        -44.84,
+        0.0,
+        42.59
+      ],
+      [
+        -67.26,
+        0.0,
+        63.89
+      ],
+      [
+        -89.69,
+        0.0,
+        85.18
+      ],
+      [
+        -112.11,
+        0.0,
+        106.48
+      ],
+      [
+        -134.53,
+        0.0,
+        127.77
+      ]
+    ],
+    "width": 63.2,
+    "rough_width": 98.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        -133.77,
+        0,
+        126.47
+      ],
+      "radii": [
+        17.44,
+        8.6
+      ],
+      "rotation_degrees": 74.0
+    },
+    {
+      "type": "green",
+      "center": [
+        -123.18,
+        0,
+        19.81
+      ],
+      "radii": [
+        17.96,
+        8.25
+      ],
+      "rotation_degrees": 52.7
+    },
+    {
+      "type": "green",
+      "center": [
+        -172.52,
+        0,
+        43.08
+      ],
+      "radii": [
+        19.76,
+        7.69
+      ],
+      "rotation_degrees": 34.8
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -120.59,
+        0,
+        123.11
+      ],
+      "radii": [
+        2.59,
+        2.03
+      ],
+      "rotation_degrees": -74.8
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -119.7,
+        0,
+        118.81
+      ],
+      "radii": [
+        3.18,
+        2.12
+      ],
+      "rotation_degrees": 2.8
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -121.95,
+        0,
+        142.4
+      ],
+      "radii": [
+        2.85,
+        1.68
+      ],
+      "rotation_degrees": 9.2
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -120.14,
+        0,
+        139.46
+      ],
+      "radii": [
+        2.67,
+        1.83
+      ],
+      "rotation_degrees": 44.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -136.44,
+        0,
+        -16.73
+      ],
+      "radii": [
+        9.54,
+        2.86
+      ],
+      "rotation_degrees": 65.9
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -134.71,
+        0,
+        -3.51
+      ],
+      "radii": [
+        7.09,
+        5.9
+      ],
+      "rotation_degrees": -19.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -109.12,
+        0,
+        14.54
+      ],
+      "radii": [
+        7.7,
+        3.69
+      ],
+      "rotation_degrees": 53.1
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -170.93,
+        0,
+        26.93
+      ],
+      "radii": [
+        8.09,
+        3.82
+      ],
+      "rotation_degrees": 43.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -170.04,
+        0,
+        17.01
+      ],
+      "radii": [
+        5.37,
+        2.29
+      ],
+      "rotation_degrees": -22.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -165.74,
+        0,
+        11.2
+      ],
+      "radii": [
+        4.93,
+        2.93
+      ],
+      "rotation_degrees": 72.9
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -201.48,
+        0,
+        37.89
+      ],
+      "radii": [
+        4.21,
+        3.47
+      ],
+      "rotation_degrees": 68.8
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -178.23,
+        0,
+        55.01
+      ],
+      "radii": [
+        5.11,
+        3.63
+      ],
+      "rotation_degrees": 44.0
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        -96.29,
+        0.0,
+        55.59
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -29.38,
+        0.0,
+        68.32
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -105.43,
+        0.0,
+        59.51
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -90.74,
+        0.0,
+        132.94
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -124.68,
+        0.0,
+        66.36
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -37.86,
+        0.0,
+        92.14
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.8714356,
+      9.3907157
+    ],
+    "pin_latlon": [
+      56.8702878,
+      9.3885046
+    ],
+    "centerline": "hole_way",
+    "elevation": "dhm",
+    "tee_elevation": 24.4,
+    "hole_way": "way/737656161",
+    "zone_fit": [
+      {
+        "osm": "way/737656159",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.91
+      },
+      {
+        "osm": "way/738556059",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.87
+      },
+      {
+        "osm": "way/738557317",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.82
+      },
+      {
+        "osm": "way/737656157",
+        "type": "bunker",
+        "pieces": 2,
+        "iou": 0.81
+      },
+      {
+        "osm": "way/737656158",
+        "type": "bunker",
+        "pieces": 2,
+        "iou": 0.86
+      },
+      {
+        "osm": "way/738556057",
+        "type": "bunker",
+        "pieces": 2,
+        "iou": 0.85
+      },
+      {
+        "osm": "way/738556058",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.86
+      },
+      {
+        "osm": "way/738557314",
+        "type": "bunker",
+        "pieces": 3,
+        "iou": 0.83
+      },
+      {
+        "osm": "way/738557315",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.96
+      },
+      {
+        "osm": "way/738557316",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.96
+      }
+    ],
+    "made_green": false
+  }
+}

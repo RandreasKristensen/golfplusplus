@@ -1,0 +1,237 @@
+{
+  "id": "himmerland_new_course_h09",
+  "name": "Hole 9",
+  "par": 5,
+  "wind_seed": 8410,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    272.64,
+    0.0,
+    -417.44
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        13.26,
+        0.0,
+        -37.91
+      ],
+      [
+        26.51,
+        0.0,
+        -75.82
+      ],
+      [
+        39.77,
+        0.0,
+        -113.74
+      ],
+      [
+        53.03,
+        0.0,
+        -151.65
+      ],
+      [
+        66.29,
+        0.0,
+        -189.56
+      ],
+      [
+        79.54,
+        0.0,
+        -227.47
+      ],
+      [
+        92.8,
+        0.0,
+        -265.38
+      ],
+      [
+        113.74,
+        0.0,
+        -297.12
+      ],
+      [
+        147.92,
+        0.0,
+        -318.21
+      ],
+      [
+        182.1,
+        0.0,
+        -339.3
+      ],
+      [
+        216.28,
+        0.0,
+        -360.4
+      ],
+      [
+        244.83,
+        0.0,
+        -388.46
+      ],
+      [
+        272.64,
+        0.0,
+        -417.44
+      ]
+    ],
+    "width": 46.1,
+    "rough_width": 71.5
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        273.04,
+        0,
+        -417.45
+      ],
+      "radii": [
+        18.06,
+        6.75
+      ],
+      "rotation_degrees": -46.8
+    },
+    {
+      "type": "bunker",
+      "center": [
+        275.26,
+        0,
+        -403.89
+      ],
+      "radii": [
+        3.73,
+        2.57
+      ],
+      "rotation_degrees": -37.3
+    },
+    {
+      "type": "water",
+      "center": [
+        169.45,
+        0,
+        -368.76
+      ],
+      "radii": [
+        13.58,
+        9.84
+      ],
+      "rotation_degrees": -46.0
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        113.95,
+        0.0,
+        -202.19
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -23.41,
+        0.0,
+        -182.58
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -27.84,
+        0.0,
+        -170.19
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -21.66,
+        0.0,
+        -198.19
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -35.2,
+        0.0,
+        -180.8
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    },
+    {
+      "position": [
+        -33.61,
+        0.0,
+        -185.41
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.8628747,
+      9.3769553
+    ],
+    "pin_latlon": [
+      56.8666245,
+      9.3814364
+    ],
+    "centerline": "hole_way",
+    "elevation": "dhm",
+    "tee_elevation": 33.3,
+    "hole_way": "way/737704936",
+    "zone_fit": [
+      {
+        "osm": "way/737704935",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.86
+      },
+      {
+        "osm": "way/737704934",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.85
+      },
+      {
+        "osm": "way/1030087438",
+        "type": "water",
+        "pieces": 1,
+        "iou": 0.81
+      }
+    ],
+    "made_green": false
+  }
+}

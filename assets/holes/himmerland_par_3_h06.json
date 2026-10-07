@@ -1,0 +1,142 @@
+{
+  "id": "himmerland_par_3_h06",
+  "name": "Hole 6",
+  "par": 3,
+  "wind_seed": 1891,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    58.82,
+    0.0,
+    -111.53
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        48.89,
+        0.0,
+        -88.1
+      ],
+      [
+        54.08,
+        0.0,
+        -95.6
+      ],
+      [
+        56.32,
+        0.0,
+        -104.65
+      ],
+      [
+        58.52,
+        0.0,
+        -113.72
+      ],
+      [
+        58.82,
+        0.0,
+        -111.53
+      ]
+    ],
+    "width": 19.0,
+    "rough_width": 29.4
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        59.04,
+        0,
+        -111.59
+      ],
+      "radii": [
+        13.04,
+        8.08
+      ],
+      "rotation_degrees": -81.8
+    },
+    {
+      "type": "bunker",
+      "center": [
+        68.97,
+        0,
+        -106.83
+      ],
+      "radii": [
+        3.34,
+        1.53
+      ],
+      "rotation_degrees": -49.4
+    },
+    {
+      "type": "bunker",
+      "center": [
+        48.97,
+        0,
+        -108.09
+      ],
+      "radii": [
+        2.74,
+        1.54
+      ],
+      "rotation_degrees": -85.8
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        15.69,
+        0.0,
+        -95.75
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 5.0,
+      "leaf_radius": 4.7,
+      "leaf_height": 6.0
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.8720737,
+      9.3987628
+    ],
+    "pin_latlon": [
+      56.8730756,
+      9.3997295
+    ],
+    "centerline": "fairway_shape",
+    "elevation": "dhm",
+    "tee_elevation": 19.13,
+    "hole_way": "way/1565793221",
+    "zone_fit": [
+      {
+        "osm": "way/1465046047",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.86
+      },
+      {
+        "osm": "way/1465046027",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.91
+      },
+      {
+        "osm": "way/1465046041",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.88
+      }
+    ],
+    "made_green": false
+  }
+}

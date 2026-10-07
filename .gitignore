@@ -24,3 +24,6 @@ __pycache__/
 
 # Cached OSM / elevation responses for the course importer
 tooling/osm_import/.osm_cache/
+
+# Dataforsyningen token for the Danish elevation model (tooling/osm_import/osm_dhm.py)
+tooling/osm_import/dataforsyning_token.txt

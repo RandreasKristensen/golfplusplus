@@ -2,16 +2,20 @@
 """
 osm_ground.py — The ground height grid of a course world.
 
-Each hole carries tee-relative heights along its spline. The ground grid is
-the land between and around the holes, sampled from the same DEM, so the game
-can build one continuous course: holes sit on real ground instead of floating
-over a flat plane. Heights are in course coordinates, where hole 1's start is
-the reference (its tee sits at its `position.y`).
+The land under and around every hole, sampled from the DEM: the game's
+ground takes its height from it everywhere, holes included (an imported
+hole's own heights are 0, so it lies on the land as it is). Heights are in
+course coordinates, where hole 1's start is the reference (its tee sits at
+its `position.y`). The cell is the DEM's: 2 m on the Danish lidar, where it
+shows green contours and bunker lips, 20 m on Terrarium.
 
-The game blends the grid into each hole's edge, so the grid only needs to be
-right at the scale of the landform; a cell of 15–25 m matches the DEMs.
+The grid is written as `heights_cm`, one array per row in whole centimetres:
+a row's first entry is its height and every next one the step from the one
+before, so even a 2 m grid stays a few megabytes. course_world_text writes
+each row on one line.
 """
 
+import json
 import math
 
 import osm_elevation
@@ -44,8 +48,8 @@ def ground_grid(world: dict,
                 cell_size: float,
                 margin: float) -> dict:
     """
-    The course world's "ground" entry: a row-major grid (rows along z, columns
-    along x) covering every hole plus `margin`. `holes[i]` belongs to
+    The course world's "ground" entry: a grid (rows along z, columns along x)
+    covering every hole plus `margin`. `holes[i]` belongs to
     world["hole_starts"][i]. `to_latlon(x, z)` projects course space to
     latitude/longitude. Without a sampler the ground is flat at y = 0.
     """
@@ -75,5 +79,36 @@ def ground_grid(world: dict,
         "cell_size": cell_size,
         "columns": columns,
         "rows": rows,
-        "heights": heights,
+        "heights_cm": height_rows_cm(heights, columns),
     }
+
+
+def height_rows_cm(heights: list[float], columns: int) -> list[list[int]]:
+    """Row-major metres as `heights_cm` rows: each row's first height, then steps."""
+    rows = []
+    for start in range(0, len(heights), columns):
+        centimetres = [round(h * 100.0) for h in heights[start:start + columns]]
+        rows.append(centimetres[:1] + [b - a for a, b in zip(centimetres, centimetres[1:])])
+    return rows
+
+
+def heights_from_rows_cm(rows: list[list[int]]) -> list[float]:
+    """`heights_cm` rows back as row-major metres."""
+    heights = []
+    for row in rows:
+        total = 0
+        for step in row:
+            total += step
+            heights.append(total / 100.0)
+    return heights
+
+
+def course_world_text(world: dict) -> str:
+    """A course world as JSON, indented, with each ground row on one line."""
+    rows = world.get("ground", {}).get("heights_cm")
+    if rows is None:
+        return json.dumps(world, indent=2) + "\n"
+    marker = "@@heights_cm@@"
+    text = json.dumps({**world, "ground": {**world["ground"], "heights_cm": marker}}, indent=2)
+    lines = ",\n".join("      " + json.dumps(row, separators=(",", ":")) for row in rows)
+    return text.replace(f'"{marker}"', "[\n" + lines + "\n    ]") + "\n"

@@ -148,9 +148,11 @@ spline.
 on the canvas.
 
 **Control points** — lists every spline point with its X/Y/Z coordinates.
-Select a point on the canvas or in the list to edit X/Y/Z numerically. The Y
-value controls elevation; leave at 0 for a flat hole. Selecting the tee or pin
-also exposes X/Y/Z fields for quick cleanup.
+Select a point on the canvas or in the list to edit X/Y/Z numerically. On a
+course with land (every imported one) Y lifts the land under the hole by that
+much: an imported hole is 0 everywhere, so the land is the hole as it is, and
+a touch-up raises or lowers it. Selecting the tee or pin also exposes X/Y/Z
+fields for quick cleanup.
 
 **Material zones** — lists all greens, bunkers, and water hazards with their
 size, rotation and centre.
@@ -220,7 +222,7 @@ py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-course
 # Use generator tuning, including tree dimensions and hub path filtering
 py -3 osm_golf_convert.py "Marienlyst Golfklub" --config osm_golf_config.json
 
-# Flat holes and flat ground, no elevation tiles
+# Flat ground, no elevation
 py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-elevation
 
 # One boundary holding two courses told apart by ref (Kalø: 1-18 and P1-P9);
@@ -238,56 +240,49 @@ name into the right id once, so later re-imports are reproducible.
 ### Elevation
 
 OSM carries no usable height data for golf features, so the converter samples a
-digital elevation model and bakes the result into each hole's spline control
-points and the course world's ground grid. This is the same idea as the LiDAR
-import in TGC Designer Tools.
+digital elevation model into the course world's `ground` grid. The game takes
+every height from that land, holes included: an imported hole is flat (every
+`y` is 0) and only lifts the land by its own heights, which the hole editor
+can touch up. This is the same idea as the LiDAR import in TGC Designer Tools.
 
-The DEM is the [Terrarium elevation tiles](https://registry.opendata.aws/terrain-tiles/)
-from AWS Open Data: PNG map tiles whose pixels encode height, built from SRTM
-(~30 m) worldwide, USGS NED (10 m or better) in the USA and national lidar in
-some European countries. They are free, need no account and have no rate limit.
-A course needs a handful of tiles at zoom 14 (`elevation.zoom`), about 65 KB
-each, downloaded once into `.osm_cache/terrarium/`. A hundred courses is in the
-tens of megabytes, and every later import, moved hole or new ground grid in the
-same area reads the cache with no network at all. The sources require
+**In Denmark** the DEM is the Danish Elevation Model (Danmarks Højdemodel,
+DHM/Terræn, on [Dataforsyningen](https://dataforsyningen.dk); `osm_dhm.py`):
+national lidar, a 0.4 m bare-earth grid with trees and buildings removed. It
+shows green contours, bunker hollows, mounds and swales. It comes from Dataforsyningen's WCS, which needs a free token: put it
+in `osm_import/dataforsyning_token.txt` (gitignored, never commit it) or the
+`DATAFORSYNINGEN_TOKEN` environment variable. The converter fetches 1 km
+squares at `elevation.dhm.pixel_size` metres (1), 4 MB and a few seconds each,
+into `.osm_cache/dhm/`; an 18-hole course is 6-9 squares. The ground grid is
+`elevation.dhm.ground_cell_size` metres (2), about 2 MB of course world.
+
+**Elsewhere** it is the [Terrarium elevation tiles](https://registry.opendata.aws/terrain-tiles/)
+from AWS Open Data (`osm_elevation.py`): PNG map tiles whose pixels encode
+height, built from SRTM (~30 m) worldwide, USGS NED (10 m or better) in the
+USA and national lidar in some European countries. They are free, need no
+account and have no rate limit. A course needs a handful of tiles at zoom 14
+(`elevation.terrarium.zoom`), about 65 KB each, in `.osm_cache/terrarium/`.
+That gives the landform (the uphill second shot, the valley to carry, a plateau
+green) but not green contours, bunker lips or mounding, so its ground grid is
+coarse: `elevation.terrarium.ground_cell_size` metres (20).
+
+Both are downloaded once: every later import, moved hole or new ground grid in
+the same area reads the cache with no network at all. Both require
 attribution: see `docs/steam_todo.md`.
 
-Each control point also gets a `bank`: the land's side slope across the hole
-(rise per metre towards the right looking down the hole),
-clamped to `elevation.max_bank`, so a hole on a hillside tilts with the hill.
-The game keeps the hole's own height across the fairway and eases its rough
-into the course's land, so neighbouring holes meet on the land. Hand-made holes
-leave `bank` out and stay level; the hole editor shows and edits it per point.
-
-Hole heights are made relative to the tee, so every hole still starts at
-`y = 0` (its tee's real height goes in `source.tee_elevation`, and the course
-world puts each hole start at that height relative to hole 1, so holes line up
-on the course); smoothed, because neighbouring control points can straddle a
-DEM cell boundary; and slope-limited, because a DEM occasionally reads a
-clubhouse roof or tree canopy next to a fairway as a cliff.
-
-**What this does and does not give you.** A 10–30 m DEM reproduces the landform
-of a hole — the uphill second shot, the valley you have to carry, a plateau
-green, the general fall of a fairway. It cannot see green contours, bunker
-lips, or mounding, because those are smaller than one DEM cell. Expect to keep
-doing green and bunker shaping in the hole editor; expect not to have to
-rebuild the overall shape of the land.
-
-The course world also gets a `ground` grid: the DEM sampled every
-`ground.cell_size` metres (20 by default) over every hole plus
-`ground.margin`, relative to hole 1's start. It is the land between the holes;
-the game eases it into each hole's edge. To add or refresh it on a course world
-that already exists, including a hand-made one (it needs `projection`):
+The `ground` grid covers every hole plus `ground.margin`, with heights
+relative to hole 1's start: each hole's tee height above sea level goes in
+`source.tee_elevation`, and the course world puts each hole start at that
+height relative to hole 1. It is stored as `heights_cm`, one line per grid row
+in whole centimetres (a row's first height, then the step to each next one),
+which keeps a 2 m grid small. To add or refresh it on a course world that
+already exists, including a hand-made one (it needs `projection`):
 
 ```bash
 py -3 osm_golf_convert.py --ground-only marienlyst_golfklub
 ```
 
-With `--no-elevation` the ground is written flat.
-
-Only the spline carries elevation. The game builds terrain as a ribbon swept
-along the control points and samples zone and tree heights off that mesh, so
-writing `y` anywhere else in the hole JSON would be ignored.
+With `--no-elevation` the ground is written flat, every `ground.flat_cell_size`
+metres.
 
 ### Caching and rate limits
 
@@ -679,18 +674,18 @@ and will need the editor.
 Even a cleanly imported course is a starting point, not a finished one:
 
 - **Green and bunker shapes.** OSM polygons become ellipses (a few for a bent
-  bunker), and a DEM cannot see green contours or bunker lips. Expect to touch
-  these up; `ZONE_FIT` names the ones that fit worst.
-- **Elevation detail.** A 10–30 m DEM gives the landform, not the mounding.
+  bunker). Expect to touch these up; `ZONE_FIT` names the ones that fit worst.
+- **Elevation detail outside Denmark.** A 10–30 m DEM gives the landform, not
+  green contours or mounding.
 - **Trees.** Positions come from `natural=tree` nodes and planted woodland, so
   they are plausible rather than exact, and are capped per hole. Trees OSM
   doesn't have are better mapped there (`TREES_SPARSE` points at bare sides).
 - **Water.** Lakes and creeks become chains of ellipses; check their banks.
 - **Fairway width** falls back to 20 m wherever OSM has no fairway polygon, or
   where the polygon is a shared double fairway and therefore not one hole's.
-  The fairway ribbon is one width from tee to green, so a wide fairway (OSM
-  gives Augusta's 47-70 m) also reaches 25-35 m either side of the tee, where
-  a real fairway starts well out from it.
+  The fairway ribbon is one width from tee to green, so a wide fairway (47-70 m
+  in OSM on some courses) also reaches 25-35 m either side of the tee, where a
+  real fairway starts well out from it.
 
 What you should *not* have to redo by hand is the overall layout: hole
 positions, lengths, doglegs, par, and the fall of the land.

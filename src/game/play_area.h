@@ -29,8 +29,9 @@ struct play_area {
     glm::vec3 holes_low{0.0f};
     glm::vec3 holes_high{0.0f};
     std::vector<tree_instance> trees;
-    // Each hole's ribbon: where the ground takes hole heights from, and the
-    // fairway or rough at any point. Never drawn or sampled for height directly.
+    // Each hole's ribbon: where the ground takes hole heights from (on land,
+    // its lift over the land), and the fairway or rough at any point. Never
+    // drawn or sampled for height directly.
     std::vector<terrain_mesh> holes;
     // Every hole's greens, bunkers and water, placed like the holes. Their
     // exact shapes decide the material, on a ribbon or off it.

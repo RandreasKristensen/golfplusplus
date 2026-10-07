@@ -964,6 +964,19 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground,
             high = glm::max(high, outline.back());
         }
         const glm::vec2 centre(zone.center.x, zone.center.z);
+        // The outline holds the zone shrunk by this much (a stretched regular
+        // polygon holds its stretched inner circle), so a triangle whose
+        // corners are all in that needs no cutting.
+        const float surely_inside = std::cos(glm::pi<float>() / static_cast<float>(segments));
+        // The zones that can win anywhere under this one: those whose boxes meet its box.
+        std::vector<material_zone> overlapping;
+        for (const material_zone& other : zones) {
+            const glm::vec2 reach = zone_half_extent(other);
+            if (other.center.x + reach.x >= low.x && other.center.x - reach.x <= high.x &&
+                other.center.z + reach.y >= low.y && other.center.z - reach.y <= high.y) {
+                overlapping.push_back(other);
+            }
+        }
 
         // Each ground triangle under the zone, cut to its outline. The pieces
         // lie in the ground's own triangles, so the shape is exactly on the
@@ -981,7 +994,11 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground,
             if (triangle_high.x < low.x || triangle_low.x > high.x || triangle_high.y < low.y || triangle_low.y > high.y) {
                 continue;
             }
-            for (std::size_t i = 0; i < outline.size() && polygon.size() >= 3U; ++i) {
+            const bool inside = std::all_of(polygon.begin(), polygon.end(), [&](const overlay_point& point) {
+                const std::optional<float> distance = zone_normalized_distance(zone, point.position);
+                return distance && *distance <= surely_inside;
+            });
+            for (std::size_t i = 0; !inside && i < outline.size() && polygon.size() >= 3U; ++i) {
                 polygon = clip_to_edge(std::move(polygon), outline[i], outline[(i + 1U) % outline.size()], centre);
             }
             if (polygon.size() < 3U) {
@@ -993,7 +1010,7 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground,
                 terrain_vertex vertex;
                 vertex.position = point.position;
                 vertex.normal = safe_normalize(point.normal, world_up);
-                vertex.material = zone_material_at(zones, point.position).value_or(*material);
+                vertex.material = zone_material_at(overlapping, point.position).value_or(*material);
                 mesh.vertices.push_back(vertex);
             }
             for (std::uint32_t i = 1U; i + 1U < static_cast<std::uint32_t>(polygon.size()); ++i) {

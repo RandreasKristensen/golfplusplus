@@ -30,7 +30,8 @@ struct terrain_build_tuning {
     // How far from a hole's edge the ground takes to ease into the course's land.
     float ground_blend_distance = 0.0f;
     terrain_zone_tuning zones;      // bunker and water carve depths
-    float zone_cell_size = 0.0f;    // the ground's spacing over bunkers and ponds
+    float fairway_cell_size = 0.0f;  // the ground's spacing over fairways and greens, on land
+    float zone_cell_size = 0.0f;     // the ground's spacing over bunkers and ponds
     // Longest side of a drawn zone shape's outline (build_material_overlay_mesh).
     float material_overlay_spacing = 0.0f;
 };

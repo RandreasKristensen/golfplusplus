@@ -7,64 +7,34 @@
     "OSM tee polygons are usually the whole teeing ground rather than one marker, so expect generated distances a little short of championship numbers."
   ],
   "courses": {
-    "augusta_national_golf_club": {
-      "name": "Augusta National Golf Club",
-      "osm": "way/871993734",
-      "tees": "championship",
+    "himmerland_new_course": {
+      "name": "Himmerland New Course",
+      "osm": "way/105136582",
+      "tees": "back (tee 68)",
       "sources": [
-        "https://en.wikipedia.org/wiki/Augusta_National_Golf_Club"
+        "https://www.golfpass.com/courses/28628-himmerland-golf-new-course/scorecard-and-layout"
       ],
-      "confidence": "Pars, names and lengths: published championship card (Wikipedia). Bearings: from OSM's ref- and name-tagged golf=hole ways, whose lengths agree with the card to a few percent; they guard against the importer turning holes round, not against OSM itself.",
-      "total_par": 72,
+      "confidence": "Medium. Pars and back-tee metres from a third-party scorecard (GolfPass), not the club's own; the pars match OSM's ref-tagged hole ways, par 6 on the 11th included. Formerly the Backtee course.",
+      "total_par": 73,
       "holes": {
-        "1": {"par": 4, "metres": 407, "name": "Tea Olive", "bearing_deg": 305},
-        "2": {"par": 5, "metres": 535, "name": "Pink Dogwood", "bearing_deg": 172},
-        "3": {"par": 4, "metres": 320, "name": "Flowering Peach", "bearing_deg": 311},
-        "4": {"par": 3, "metres": 219, "name": "Flowering Crab Apple", "bearing_deg": 266},
-        "5": {"par": 4, "metres": 453, "name": "Magnolia", "bearing_deg": 167},
-        "6": {"par": 3, "metres": 165, "name": "Juniper", "bearing_deg": 14},
-        "7": {"par": 4, "metres": 411, "name": "Pampas", "bearing_deg": 113},
-        "8": {"par": 5, "metres": 521, "name": "Yellow Jasmine", "bearing_deg": 346},
-        "9": {"par": 4, "metres": 421, "name": "Carolina Cherry", "bearing_deg": 122},
-        "10": {"par": 4, "metres": 453, "name": "Camellia", "bearing_deg": 189},
-        "11": {"par": 4, "metres": 475, "name": "White Dogwood", "bearing_deg": 218},
-        "12": {"par": 3, "metres": 142, "name": "Golden Bell", "bearing_deg": 209},
-        "13": {"par": 5, "metres": 498, "name": "Azalea", "bearing_deg": 332},
-        "14": {"par": 4, "metres": 402, "name": "Chinese Fir", "bearing_deg": 91},
-        "15": {"par": 5, "metres": 503, "name": "Firethorn", "bearing_deg": 287},
-        "16": {"par": 3, "metres": 155, "name": "Redbud", "bearing_deg": 336},
-        "17": {"par": 4, "metres": 402, "name": "Nandina", "bearing_deg": 107},
-        "18": {"par": 4, "metres": 425, "name": "Holly", "bearing_deg": 15}
-      }
-    },
-    "old_course": {
-      "name": "Old Course at St Andrews",
-      "osm": "way/1019045811",
-      "tees": "championship",
-      "sources": [
-        "https://en.wikipedia.org/wiki/Old_Course_at_St_Andrews"
-      ],
-      "confidence": "Pars, names and lengths: published championship card (Wikipedia). Bearings: from OSM's ref- and name-tagged golf=hole ways (out along the shore to the north-west, back to the south-east; the 7th crosses the 11th as on the real course). OSM maps the everyday tees, so a few holes are short of the championship lengths.",
-      "total_par": 72,
-      "holes": {
-        "1": {"par": 4, "metres": 344, "name": "Burn", "bearing_deg": 274},
-        "2": {"par": 4, "metres": 414, "name": "Dyke", "bearing_deg": 312},
-        "3": {"par": 4, "metres": 363, "name": "Cartgate (Out)", "bearing_deg": 331},
-        "4": {"par": 4, "metres": 439, "name": "Ginger Beer", "bearing_deg": 335},
-        "5": {"par": 5, "metres": 519, "name": "Hole O'Cross (Out)", "bearing_deg": 322},
-        "6": {"par": 4, "metres": 377, "name": "Heathery (Out)", "bearing_deg": 310},
-        "7": {"par": 4, "metres": 339, "name": "High (Out)", "bearing_deg": 341},
-        "8": {"par": 3, "metres": 160, "name": "Short", "bearing_deg": 134},
-        "9": {"par": 4, "metres": 322, "name": "End", "bearing_deg": 143},
-        "10": {"par": 4, "metres": 353, "name": "Bobby Jones", "bearing_deg": 315},
-        "11": {"par": 3, "metres": 159, "name": "High (In)", "bearing_deg": 312},
-        "12": {"par": 4, "metres": 318, "name": "Heathery (In)", "bearing_deg": 167},
-        "13": {"par": 4, "metres": 425, "name": "Hole O'Cross (In)", "bearing_deg": 123},
-        "14": {"par": 5, "metres": 565, "name": "Long", "bearing_deg": 142},
-        "15": {"par": 4, "metres": 416, "name": "Cartgate (In)", "bearing_deg": 151},
-        "16": {"par": 4, "metres": 387, "name": "Corner of the Dyke", "bearing_deg": 159},
-        "17": {"par": 4, "metres": 453, "name": "Road", "bearing_deg": 139},
-        "18": {"par": 4, "metres": 327, "name": "Tom Morris", "bearing_deg": 95}
+        "1": {"par": 4, "metres": 388},
+        "2": {"par": 3, "metres": 203},
+        "3": {"par": 4, "metres": 355},
+        "4": {"par": 5, "metres": 565},
+        "5": {"par": 4, "metres": 434},
+        "6": {"par": 4, "metres": 472},
+        "7": {"par": 3, "metres": 186},
+        "8": {"par": 4, "metres": 417},
+        "9": {"par": 5, "metres": 514},
+        "10": {"par": 3, "metres": 155},
+        "11": {"par": 6, "metres": 658},
+        "12": {"par": 4, "metres": 444},
+        "13": {"par": 5, "metres": 629},
+        "14": {"par": 4, "metres": 420},
+        "15": {"par": 4, "metres": 393},
+        "16": {"par": 3, "metres": 145},
+        "17": {"par": 4, "metres": 410},
+        "18": {"par": 4, "metres": 420}
       }
     },
     "marienlyst_golfklub": {

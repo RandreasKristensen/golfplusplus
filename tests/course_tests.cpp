@@ -13,6 +13,7 @@
 #include "test_support.h"
 
 #include <algorithm>
+#include <cmath>
 #include <optional>
 
 #include <glm/geometric.hpp>
@@ -102,10 +103,27 @@ hole_data rising_hole(const float rise) {
     return hole;
 }
 
-// Two parallel holes `spacing` m apart, a flat one and one that starts
-// `second_height` higher and climbs `second_rise`, on land that sits
-// `land_height` everywhere.
-play_area two_hole_course(const float land_height,
+// Land over x and z from -200 to 200 and -200 to 260, every `cell` metres,
+// at `height(x, z)`.
+template <typename height_function>
+height_grid land_grid(const float cell, const height_function& height) {
+    height_grid land;
+    land.origin_x = -200.0f;
+    land.origin_z = -200.0f;
+    land.cell_size = cell;
+    land.columns = static_cast<int>(400.0f / cell) + 1;
+    land.rows = static_cast<int>(460.0f / cell) + 1;
+    for (int row = 0; row < land.rows; ++row) {
+        for (int column = 0; column < land.columns; ++column) {
+            land.heights.push_back(height(land.origin_x + cell * static_cast<float>(column), land.origin_z + cell * static_cast<float>(row)));
+        }
+    }
+    return land;
+}
+
+// Two parallel holes `spacing` m apart, a flat one and one whose start is
+// `second_height` up and which climbs `second_rise`, on `land`.
+play_area two_hole_course(const height_grid& land,
                           const float spacing = 80.0f,
                           const float second_height = 10.0f,
                           const float second_rise = 15.0f) {
@@ -114,22 +132,27 @@ play_area two_hole_course(const float land_height,
     world.hole_starts[0].hole_index = 0;
     world.hole_starts[1].hole_index = 1;
     world.hole_starts[1].position = glm::vec3(spacing, second_height, 0.0f);
-    world.ground.origin_x = -200.0f;
-    world.ground.origin_z = -200.0f;
-    world.ground.cell_size = 50.0f;
-    world.ground.columns = 11;
-    world.ground.rows = 13;
-    world.ground.heights.assign(11U * 13U, land_height);
+    world.ground = land;
     return build_course_area({rising_hole(0.0f), rising_hole(second_rise)}, world, shipped_content().tuning);
+}
+
+play_area two_hole_course(const float land_height,
+                          const float spacing = 80.0f,
+                          const float second_height = 10.0f,
+                          const float second_rise = 15.0f) {
+    return two_hole_course(land_grid(50.0f, [land_height](float, float) { return land_height; }), spacing, second_height, second_rise);
 }
 }
 
-TEST_CASE("on a hole's fairway the ground is the hole, whatever the land does") {
-    const play_area course = two_hole_course(30.0f);
+TEST_CASE("on land a hole lies on the land, lifted by its own heights") {
+    // The land slopes; the second hole's start height is not its height.
+    const play_area course = two_hole_course(land_grid(50.0f, [](const float x, const float z) { return 30.0f + 0.05f * x + 0.02f * z; }));
     for (float z = 20.0f; z <= 180.0f; z += 7.3f) {
         for (float x = -8.0f; x <= 8.0f; x += 2.9f) {
-            const glm::vec3 point(x, 0.0f, z);
-            CHECK(near(sample_area(course, point).point.y, sample_terrain_mesh(course.holes[0], point, 0.0f).point.y, 0.1f));
+            const float land = 30.0f + 0.05f * x + 0.02f * z;
+            CHECK(near(sample_area(course, glm::vec3(x, 0.0f, z)).point.y, land, 0.1f));
+            const float second = land + 0.05f * 80.0f + 15.0f * z / 200.0f;
+            CHECK(near(sample_area(course, glm::vec3(80.0f + x, 0.0f, z)).point.y, second, 0.3f));
         }
     }
 }
@@ -142,28 +165,55 @@ TEST_CASE("off the holes the ball lands on the ground, which follows the land fa
 
 }
 
-TEST_CASE("a hole's rough eases from its fairway into the land") {
-    // The flat hole's fairway is 20 m wide and its ribbon 32 m.
+TEST_CASE("a hole's rough eases its lift into the land") {
+    // The climbing hole is 7.5 m up halfway; its fairway is 20 m wide and its ribbon 32 m.
     const play_area course = two_hole_course(3.0f);
-    CHECK(near(sample_area(course, glm::vec3(-9.0f, 0.0f, 100.0f)).point.y, 0.0f, 0.2f));
-    CHECK(near(sample_area(course, glm::vec3(-16.5f, 0.0f, 100.0f)).point.y, 3.0f, 0.2f));
-    const float halfway = sample_area(course, glm::vec3(-13.0f, 0.0f, 100.0f)).point.y;
-    CHECK(halfway > 0.5f);
-    CHECK(halfway < 2.5f);
+    CHECK(near(sample_area(course, glm::vec3(72.5f, 0.0f, 100.0f)).point.y, 10.5f, 0.3f));
+    CHECK(near(sample_area(course, glm::vec3(63.5f, 0.0f, 100.0f)).point.y, 3.0f, 0.3f));
+    const float halfway = sample_area(course, glm::vec3(67.0f, 0.0f, 100.0f)).point.y;
+    CHECK(halfway > 4.0f);
+    CHECK(halfway < 9.5f);
 }
 
 TEST_CASE("overlapping holes at different heights make one continuous surface") {
-    // 20 m apart with 32 m wide ribbons: they overlap by 12 m, 3 m apart in height.
-    const play_area course = two_hole_course(0.0f, 20.0f, 3.0f, 0.0f);
-    float previous = sample_area(course, glm::vec3(-20.0f, 0.0f, 60.0f)).point.y;
+    // 20 m apart with 32 m wide ribbons: they overlap by 12 m, 3 m apart in height halfway.
+    const play_area course = two_hole_course(0.0f, 20.0f, 0.0f, 6.0f);
+    float previous = sample_area(course, glm::vec3(-20.0f, 0.0f, 100.0f)).point.y;
     for (float x = -19.5f; x <= 40.0f; x += 0.5f) {
-        const float y = sample_area(course, glm::vec3(x, 0.0f, 60.0f)).point.y;
+        const float y = sample_area(course, glm::vec3(x, 0.0f, 100.0f)).point.y;
         CHECK(std::abs(y - previous) < 0.5f);
         previous = y;
     }
     // Deep inside each hole, that hole's own height.
-    CHECK(near(sample_area(course, glm::vec3(-2.0f, 0.0f, 60.0f)).point.y, 0.0f, 0.3f));
-    CHECK(near(sample_area(course, glm::vec3(22.0f, 0.0f, 60.0f)).point.y, 3.0f, 0.3f));
+    CHECK(near(sample_area(course, glm::vec3(-2.0f, 0.0f, 100.0f)).point.y, 0.0f, 0.3f));
+    CHECK(near(sample_area(course, glm::vec3(22.0f, 0.0f, 100.0f)).point.y, 3.0f, 0.3f));
+}
+
+TEST_CASE("on a fairway the ground keeps land detail its coarse cells would lose, without cracks") {
+    // Bumps 12.6 m apart on a 2 m grid: a 4 m cell cuts across them, a 2 m one follows them.
+    const auto bumps = [](const float x, const float z) { return std::sin(x * 0.5f) * std::sin(z * 0.5f); };
+    const play_area course = two_hole_course(land_grid(2.0f, bumps), 80.0f, 0.0f, 0.0f);
+    float fairway_error = 0.0f;
+    float open_error = 0.0f;
+    for (float z = 20.0f; z <= 180.0f; z += 0.37f) {
+        for (float x = -8.0f; x <= 8.0f; x += 0.53f) {
+            fairway_error = std::max(fairway_error, std::abs(sample_area(course, glm::vec3(x, 0.0f, z)).point.y - bumps(x, z)));
+            const float open_x = x + 150.0f;
+            open_error = std::max(open_error, std::abs(sample_area(course, glm::vec3(open_x, 0.0f, z)).point.y - bumps(open_x, z)));
+        }
+    }
+    CHECK(fairway_error < 0.3f);
+    CHECK(open_error > 0.5f);
+    // Across the fairway's edge, where its finer cells meet the coarse ones, the
+    // surface has no step.
+    for (float z = 30.0f; z <= 170.0f; z += 3.1f) {
+        float previous = sample_area(course, glm::vec3(-30.0f, 0.0f, z)).point.y;
+        for (float x = -29.95f; x <= 30.0f; x += 0.05f) {
+            const float y = sample_area(course, glm::vec3(x, 0.0f, z)).point.y;
+            CHECK(std::abs(y - previous) < 0.1f);
+            previous = y;
+        }
+    }
 }
 
 TEST_CASE("holes are placed by their start, rotated around the tee") {

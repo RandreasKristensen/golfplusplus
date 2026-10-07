@@ -1,0 +1,176 @@
+{
+  "id": "himmerland_par_3_h04",
+  "name": "Hole 4",
+  "par": 3,
+  "wind_seed": 5666,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    98.24,
+    0.0,
+    46.75
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        24.56,
+        0.0,
+        11.69
+      ],
+      [
+        49.12,
+        0.0,
+        23.38
+      ],
+      [
+        73.68,
+        0.0,
+        35.06
+      ],
+      [
+        98.24,
+        0.0,
+        46.75
+      ]
+    ],
+    "width": 34.3,
+    "rough_width": 53.2
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        98.54,
+        0,
+        46.82
+      ],
+      "radii": [
+        12.78,
+        7.74
+      ],
+      "rotation_degrees": 5.4
+    },
+    {
+      "type": "bunker",
+      "center": [
+        109.67,
+        0,
+        57.0
+      ],
+      "radii": [
+        4.68,
+        1.37
+      ],
+      "rotation_degrees": -36.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        93.7,
+        0,
+        57.95
+      ],
+      "radii": [
+        5.37,
+        1.96
+      ],
+      "rotation_degrees": 19.2
+    },
+    {
+      "type": "bunker",
+      "center": [
+        93.84,
+        0,
+        35.9
+      ],
+      "radii": [
+        4.25,
+        1.57
+      ],
+      "rotation_degrees": 0.3
+    },
+    {
+      "type": "bunker",
+      "center": [
+        24.07,
+        0,
+        1.46
+      ],
+      "radii": [
+        3.27,
+        2.29
+      ],
+      "rotation_degrees": -15.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        30.1,
+        0,
+        1.88
+      ],
+      "radii": [
+        3.27,
+        2.43
+      ],
+      "rotation_degrees": -18.4
+    }
+  ],
+  "trees": [],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.870905,
+      9.3954054
+    ],
+    "pin_latlon": [
+      56.870485,
+      9.3970201
+    ],
+    "centerline": "hole_way",
+    "elevation": "dhm",
+    "tee_elevation": 20.06,
+    "hole_way": "way/1565793226",
+    "zone_fit": [
+      {
+        "osm": "way/1465046042",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.94
+      },
+      {
+        "osm": "way/1465046031",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.84
+      },
+      {
+        "osm": "way/1465046032",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.81
+      },
+      {
+        "osm": "way/1465046033",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.86
+      },
+      {
+        "osm": "way/1465046034",
+        "type": "bunker",
+        "pieces": 2,
+        "iou": 0.86
+      }
+    ],
+    "made_green": false
+  }
+}

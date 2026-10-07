@@ -344,6 +344,22 @@ THEMES = {
         "sea": [(0.22, 0.07)], "sea_color": (0.36, 0.48, 0.58), "far_coast": (0.0, 0.8),
         "near_land": (0.20, 0.33, 0.18),
     },
+    # Himmerland: heath and pine plantations on rolling inland hills, a lake
+    # to one side.
+    "himmerland_new_course": {
+        "seed": 3307, "zenith": (0.40, 0.56, 0.78), "cloud": (0.95, 0.94, 0.90), "cloudiness": 0.45,
+        "hills": (1.4, 6.0), "hill": (0.33, 0.42, 0.33),
+        "trees": "pine", "tree_base": 2.2, "tree_spread": 2.6, "tree_count": 700, "tree": (0.11, 0.21, 0.12),
+        "sea": [(0.28, 0.06)], "sea_color": (0.34, 0.45, 0.52), "far_coast": (0.0, 0.5),
+        "near_land": (0.22, 0.32, 0.18),
+    },
+    "himmerland_par_3": {
+        "seed": 3311, "zenith": (0.42, 0.57, 0.79), "cloud": (0.96, 0.95, 0.91), "cloudiness": 0.4,
+        "hills": (1.2, 5.0), "hill": (0.33, 0.42, 0.33),
+        "trees": "pine", "tree_base": 2.4, "tree_spread": 2.6, "tree_count": 760, "tree": (0.11, 0.21, 0.12),
+        "sea": [(0.18, 0.10)], "sea_color": (0.34, 0.45, 0.52), "far_coast": (0.0, 0.5),
+        "near_land": (0.22, 0.32, 0.18),
+    },
     # Helsingør: the sound on one side with the far shore low across it, woods
     # on the other.
     "marienlyst_golfklub": {
@@ -352,22 +368,6 @@ THEMES = {
         "trees": "broadleaf", "tree_base": 1.6, "tree_spread": 1.8, "tree_count": 380, "tree": (0.14, 0.26, 0.15),
         "sea": [(0.62, 0.2)], "sea_color": (0.34, 0.46, 0.56), "far_coast": (0.4, 1.8),
         "near_land": (0.21, 0.33, 0.19),
-    },
-    # A links by the sea: grey northern sky, open bay, dunes and far low hills,
-    # hardly a tree.
-    "old_course": {
-        "seed": 3301, "zenith": (0.46, 0.55, 0.68), "cloud": (0.88, 0.88, 0.87), "cloudiness": 0.62,
-        "hills": (0.6, 3.2), "hill": (0.40, 0.45, 0.38),
-        "trees": "broadleaf", "tree_base": 0.3, "tree_spread": 0.6, "tree_count": 60, "tree": (0.22, 0.29, 0.18),
-        "sea": [(0.35, 0.22)], "sea_color": (0.38, 0.47, 0.54), "far_coast": (0.0, 1.4),
-        "near_land": (0.30, 0.36, 0.20),
-    },
-    # Tall pines all round under a warm, hazy southern sky.
-    "augusta_national_golf_club": {
-        "seed": 4409, "zenith": (0.36, 0.53, 0.80), "cloud": (0.97, 0.95, 0.90), "cloudiness": 0.3,
-        "hills": (1.0, 4.0), "hill": (0.32, 0.42, 0.32),
-        "trees": "pine", "tree_base": 3.0, "tree_spread": 3.5, "tree_count": 900, "tree": (0.10, 0.20, 0.11),
-        "near_land": (0.20, 0.30, 0.16),
     },
 }
 

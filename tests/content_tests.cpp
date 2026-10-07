@@ -276,12 +276,12 @@ TEST_CASE("course worlds need a complete ground grid") {
     const std::string start = R"("hole_starts": [{"hole_index": 0, "position": [0, 0, 0]}])";
     const auto with_ground = [&](const std::string& ground) { return "{" + start + ground + "}"; };
     const std::optional<course_world_definition> parsed = parse_course_world_from_text(
-        with_ground(R"(, "ground": {"origin": [5, 7], "cell_size": 10, "columns": 2, "rows": 2, "heights": [0, 1, 2, 3]})"), one_hole);
+        with_ground(R"(, "ground": {"origin": [5, 7], "cell_size": 10, "columns": 2, "rows": 2, "heights_cm": [[0, 100], [200, 100]]})"), one_hole);
     REQUIRE(parsed.has_value());
     CHECK(near(sample_height_grid(parsed->ground, 10.0f, 12.0f), 1.5f));
     CHECK(!parse_course_world_from_text(with_ground(""), one_hole));
     CHECK(!parse_course_world_from_text(
-        with_ground(R"(, "ground": {"origin": [0, 0], "cell_size": 10, "columns": 2, "rows": 2, "heights": [0, 1, 2]})"), one_hole));
+        with_ground(R"(, "ground": {"origin": [0, 0], "cell_size": 10, "columns": 2, "rows": 2, "heights_cm": [[0, 100], [200]]})"), one_hole));
 }
 
 TEST_CASE("every shipped course, hole, world and image loads") {

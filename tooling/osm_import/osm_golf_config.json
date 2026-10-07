@@ -23,13 +23,17 @@
   },
   "elevation": {
     "enabled": true,
-    "zoom": 14,
-    "max_grade": 0.25,
-    "max_bank": 0.2,
-    "smooth_window": 3
+    "dhm": {
+      "pixel_size": 1.0,
+      "ground_cell_size": 2.0
+    },
+    "terrarium": {
+      "zoom": 14,
+      "ground_cell_size": 20.0
+    }
   },
   "ground": {
-    "cell_size": 20.0,
+    "flat_cell_size": 20.0,
     "margin": 120.0
   },
   "world": {
@@ -100,6 +104,16 @@
     "boundary_slack_m": 5.0
   },
   "courses": {
+    "himmerland_par_3": {
+      "holes": [
+        {"line": "W1565793223"},
+        {"line": "W1565793224"},
+        {"line": "W1565793225"},
+        {"line": "W1565793226"},
+        {"line": "W1565793222"},
+        {"line": "W1565793221"}
+      ]
+    },
     "kalo_par_3": {
       "ref_prefix": "P"
     },

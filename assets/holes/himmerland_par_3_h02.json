@@ -1,0 +1,316 @@
+{
+  "id": "himmerland_par_3_h02",
+  "name": "Hole 2",
+  "par": 3,
+  "wind_seed": 2439,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    -140.61,
+    0.0,
+    21.93
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        -113.44,
+        0.0,
+        13.25
+      ],
+      [
+        -122.72,
+        0.0,
+        12.99
+      ],
+      [
+        -131.42,
+        0.0,
+        16.5
+      ],
+      [
+        -139.8,
+        0.0,
+        22.06
+      ],
+      [
+        -140.61,
+        0.0,
+        21.93
+      ]
+    ],
+    "width": 26.1,
+    "rough_width": 40.5
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        -140.68,
+        0,
+        22.09
+      ],
+      "radii": [
+        14.16,
+        7.61
+      ],
+      "rotation_degrees": -67.1
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -253.76,
+        0,
+        -63.82
+      ],
+      "radii": [
+        4.24,
+        3.19
+      ],
+      "rotation_degrees": -80.2
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -250.31,
+        0,
+        -43.04
+      ],
+      "radii": [
+        3.65,
+        1.8
+      ],
+      "rotation_degrees": 23.7
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -248.77,
+        0,
+        -46.39
+      ],
+      "radii": [
+        2.64,
+        2.18
+      ],
+      "rotation_degrees": 32.2
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -240.03,
+        0,
+        28.78
+      ],
+      "radii": [
+        12.73,
+        3.53
+      ],
+      "rotation_degrees": -82.7
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -129.59,
+        0,
+        29.8
+      ],
+      "radii": [
+        7.16,
+        3.37
+      ],
+      "rotation_degrees": -47.0
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -154.8,
+        0,
+        25.86
+      ],
+      "radii": [
+        2.45,
+        2.01
+      ],
+      "rotation_degrees": -27.7
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -154.01,
+        0,
+        29.78
+      ],
+      "radii": [
+        2.67,
+        1.48
+      ],
+      "rotation_degrees": 76.4
+    },
+    {
+      "type": "bunker",
+      "center": [
+        -150.76,
+        0,
+        10.95
+      ],
+      "radii": [
+        6.48,
+        2.31
+      ],
+      "rotation_degrees": -44.1
+    },
+    {
+      "type": "water",
+      "center": [
+        -315.99,
+        0,
+        6.54
+      ],
+      "radii": [
+        19.76,
+        5.85
+      ],
+      "rotation_degrees": -51.2
+    },
+    {
+      "type": "water",
+      "center": [
+        -285.49,
+        0,
+        -2.84
+      ],
+      "radii": [
+        14.1,
+        10.63
+      ],
+      "rotation_degrees": 0.8
+    },
+    {
+      "type": "water",
+      "center": [
+        -297.34,
+        0,
+        -20.22
+      ],
+      "radii": [
+        22.73,
+        12.67
+      ],
+      "rotation_degrees": -4.8
+    },
+    {
+      "type": "water",
+      "center": [
+        -293.58,
+        0,
+        -42.03
+      ],
+      "radii": [
+        23.78,
+        12.59
+      ],
+      "rotation_degrees": 21.3
+    },
+    {
+      "type": "water",
+      "center": [
+        -277.89,
+        0,
+        18.9
+      ],
+      "radii": [
+        15.56,
+        6.59
+      ],
+      "rotation_degrees": -77.7
+    },
+    {
+      "type": "water",
+      "center": [
+        -274.15,
+        0,
+        42.28
+      ],
+      "radii": [
+        15.34,
+        7.57
+      ],
+      "rotation_degrees": 42.9
+    }
+  ],
+  "trees": [],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      56.8722485,
+      9.3985878
+    ],
+    "pin_latlon": [
+      56.8720515,
+      9.3962767
+    ],
+    "centerline": "fairway_shape",
+    "elevation": "dhm",
+    "tee_elevation": 19.43,
+    "hole_way": "way/1565793224",
+    "zone_fit": [
+      {
+        "osm": "way/1465046044",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.87
+      },
+      {
+        "osm": "way/738046129",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.81
+      },
+      {
+        "osm": "way/738046130",
+        "type": "bunker",
+        "pieces": 2,
+        "iou": 0.83
+      },
+      {
+        "osm": "way/738231934",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.83
+      },
+      {
+        "osm": "way/1465046036",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.82
+      },
+      {
+        "osm": "way/1465046037",
+        "type": "bunker",
+        "pieces": 2,
+        "iou": 0.88
+      },
+      {
+        "osm": "way/1465046038",
+        "type": "bunker",
+        "pieces": 1,
+        "iou": 0.82
+      },
+      {
+        "osm": "way/430418471",
+        "type": "water",
+        "pieces": 6,
+        "iou": 0.82
+      }
+    ],
+    "made_green": false
+  }
+}

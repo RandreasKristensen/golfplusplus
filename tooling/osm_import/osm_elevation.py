@@ -4,7 +4,8 @@ osm_elevation.py — Sample real terrain elevation for imported OSM courses.
 
 OpenStreetMap does not carry usable height data for golf features, so the
 importer reads a digital elevation model (DEM) instead and bakes the result
-into each hole's spline and the course world's ground grid.
+into the course world's ground grid. In Denmark it reads the national lidar
+model instead (osm_dhm.py); this is the fallback everywhere else.
 
 The DEM is the Terrarium elevation tiles from the AWS Open Data "Terrain
 Tiles" set (https://registry.opendata.aws/terrain-tiles/): 256x256 PNG map
@@ -17,7 +18,7 @@ for the full list and its attribution requirements.
 
 Resolution honesty: a 10–30 m DEM reproduces the landform of a hole — uphill
 tee shots, valleys, plateau greens, the slope of a fairway — but it cannot see
-green contours, bunker lips, or mounding. Those stay a hole-editor job.
+green contours, bunker lips, or mounding.
 
 Only the standard library is used (PNG decoding is zlib plus row filters).
 """
@@ -120,6 +121,7 @@ class ElevationSampler:
     def __init__(self, cache_dir: Path | None = None, zoom: int = DEFAULT_ZOOM,
                  refresh: bool = False, verbose: bool = True):
         self.dataset = DATASET
+        self.description = f"Terrarium tiles at zoom {zoom}"
         self.zoom = zoom
         self.cache_dir = Path(cache_dir) / DATASET / str(zoom) if cache_dir else None
         self.refresh = refresh
@@ -190,127 +192,15 @@ class ElevationSampler:
 
 def fill_gaps(values: list[float | None]) -> list[float]:
     """
-    Replace None entries by interpolating between known neighbours. An all-None
-    series becomes all zeros, which is the pre-elevation behaviour.
+    Replace None entries by interpolating between the known neighbours either
+    side (the nearest one at the ends). An all-None series becomes all zeros.
     """
     known = [i for i, v in enumerate(values) if v is not None]
     if not known:
         return [0.0] * len(values)
-
-    out: list[float] = []
-    for i, value in enumerate(values):
-        if value is not None:
-            out.append(float(value))
-            continue
-        before = [k for k in known if k < i]
-        after = [k for k in known if k > i]
-        if before and after:
-            a, b = before[-1], after[0]
-            t = (i - a) / (b - a)
-            out.append(float(values[a]) + (float(values[b]) - float(values[a])) * t)
-        elif before:
-            out.append(float(values[before[-1]]))
-        else:
-            out.append(float(values[after[0]]))
-    return out
-
-
-def smooth(values: list[float], window: int = 3) -> list[float]:
-    """
-    Small centred moving average. DEM cells are 10–30 m wide, so neighbouring
-    control points can straddle a cell boundary and produce a step that is
-    sampling noise rather than real terrain.
-    """
-    if window < 2 or len(values) < 3:
-        return list(values)
-    half = window // 2
-    out = []
-    for i in range(len(values)):
-        lo = max(0, i - half)
-        hi = min(len(values), i + half + 1)
-        window_values = values[lo:hi]
-        out.append(sum(window_values) / len(window_values))
-    return out
-
-
-def limit_slope(values: list[float], distances: list[float], max_grade: float) -> list[float]:
-    """
-    Clamp the rise between consecutive points to `max_grade` (rise over run).
-
-    A DEM occasionally picks up a building, a tree canopy or a bridge deck next
-    to a fairway. Real golf holes essentially never exceed ~25% sustained grade,
-    so anything steeper is treated as a sampling artefact rather than terrain.
-    """
-    if len(values) < 2:
-        return list(values)
-    out = [values[0]]
-    for i in range(1, len(values)):
-        run = max(0.5, distances[i] - distances[i - 1])
-        delta = values[i] - out[-1]
-        cap = max_grade * run
-        out.append(out[-1] + max(-cap, min(cap, delta)))
-    return out
-
-
-def cleaned_profile(values: list[float | None],
-                    distances: list[float],
-                    max_grade: float = 0.25,
-                    smooth_window: int = 3) -> list[float]:
-    """
-    Raw DEM samples gap-filled, smoothed and slope-limited, still in absolute
-    DEM metres. The first entry is the tee's height above sea level, which the
-    course world uses to place holes relative to each other.
-    """
-    filled = fill_gaps(values)
-    smoothed = smooth(filled, smooth_window)
-    return limit_slope(smoothed, distances, max_grade)
-
-
-def relative_profile(profile: list[float]) -> list[float]:
-    """A cleaned profile shifted so the first point (the tee) sits at y = 0."""
-    base = profile[0] if profile else 0.0
-    return [round(v - base, 2) for v in profile]
-
-
-def lateral_offsets(points: list[tuple[float, float]], half_width: float) -> list[tuple[tuple[float, float], tuple[float, float]]]:
-    """
-    For each point of an (x, z) polyline, the points `half_width` to either
-    side: first towards the lateral side (-dz, dx) of the direction of travel
-    (the right looking down the hole), the side the game's ribbon `bank`
-    rises towards, then the other side.
-    """
-    out = []
-    for i, (x, z) in enumerate(points):
-        ax, az = points[max(i - 1, 0)]
-        bx, bz = points[min(i + 1, len(points) - 1)]
-        dx, dz = bx - ax, bz - az
-        length = math.hypot(dx, dz) or 1.0
-        nx, nz = -dz / length, dx / length
-        out.append(((x + nx * half_width, z + nz * half_width), (x - nx * half_width, z - nz * half_width)))
-    return out
-
-
-def bank_profile(lateral: list[float | None],
-                 other: list[float | None],
-                 width: float,
-                 max_bank: float = 0.2,
-                 smooth_window: int = 3) -> list[float]:
-    """
-    Side slope per control point from DEM heights `width` apart across the
-    hole: rise per metre towards the lateral side, clamped to `max_bank`
-    (steeper reads a bank, wall or building next to the hole) and smoothed
-    like the height profile. A point missing either side is level.
-    """
-    raw = []
-    for a, b in zip(lateral, other):
-        slope = 0.0 if a is None or b is None or width <= 0.0 else (a - b) / width
-        raw.append(max(-max_bank, min(max_bank, slope)))
-    return [round(v, 4) for v in smooth(raw, smooth_window)]
-
-
-def polyline_distances(points: list[tuple[float, float]]) -> list[float]:
-    """Cumulative along-path distance for a list of (x, z) metres."""
-    out = [0.0]
-    for a, b in zip(points, points[1:]):
-        out.append(out[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
+    out = [float(values[known[0]])] * known[0]
+    for a, b in zip(known, known[1:]):
+        start, end = float(values[a]), float(values[b])
+        out.extend(start + (end - start) * (i - a) / (b - a) for i in range(a, b))
+    out.extend([float(values[known[-1]])] * (len(values) - known[-1]))
     return out

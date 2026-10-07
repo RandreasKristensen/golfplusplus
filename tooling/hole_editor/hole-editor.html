@@ -773,7 +773,8 @@ function defaultGeneratorConfig() {
     hole: { fallback_width: 20.0, fallback_rough_width: 32.0, rough_width_multiplier: 1.55 },
     // Terrain heights the OSM converter samples from a DEM. No UI yet; kept
     // here so saving config from the editor does not drop the section.
-    elevation: { enabled: true, dataset: 'auto', max_grade: 0.25, smooth_window: 3 },
+    elevation: { enabled: true, dhm: { pixel_size: 1.0, ground_cell_size: 2.0 },
+                 terrarium: { zoom: 14, ground_cell_size: 20.0 } },
     world: {
       hole_start_interaction_radius: 4.0,
       fallback_cart_width: 4.0,
@@ -2855,7 +2856,12 @@ function buildWorldJSON() {
     it.interaction_radius = r2(it.interaction_radius);
     return it;
   });
-  return JSON.stringify(w, null, 2);
+  // The ground's rows stay one line each (as osm_ground.course_world_text writes them).
+  const rows = w.ground?.heights_cm;
+  if (!rows) return JSON.stringify(w, null, 2);
+  w.ground.heights_cm = '@@heights_cm@@';
+  return JSON.stringify(w, null, 2).replace('"@@heights_cm@@"',
+    '[\n' + rows.map(row => '      ' + JSON.stringify(row)).join(',\n') + '\n    ]');
 }
 
 function refreshExport() {
