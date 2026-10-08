@@ -6,7 +6,7 @@
 //! on its own thread and reports through a channel, so the game never waits.
 //!
 //! The result is an ID token, which the server accepts as the connection's
-//! token. Another sign-in method (Steam, docs/steam_todo.md) produces the same
+//! token. Another sign-in method (Steam, docs/launch_todo.md) produces the same
 //! `LoginMessage::Token`.
 
 use oauth2::basic::{

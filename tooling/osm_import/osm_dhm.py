@@ -11,7 +11,7 @@ Terrarium (osm_elevation.py) elsewhere.
 It is served by Dataforsyningen's WCS, which needs a free token: put it in
 dataforsyning_token.txt next to this file (gitignored) or the
 DATAFORSYNINGEN_TOKEN environment variable. Data owner: Klimadatastyrelsen,
-licence CC BY 4.0; see docs/steam_todo.md for the credit.
+licence CC BY 4.0; see docs/launch_todo.md for the credit.
 
 The model is fetched in 1 km squares of the UTM 32N grid at `pixel_size`
 metres (the WCS resamples bilinearly), each downloaded once and cached on

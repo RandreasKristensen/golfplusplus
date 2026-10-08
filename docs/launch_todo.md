@@ -1,19 +1,63 @@
-# Steam todo
+# Commercial launch todo
 
-What has to be true before golf++ gets a Steam "Coming Soon" page (wishlists),
-and later before release. Researched 2026-09-30; re-check Steamworks docs before
+What has to be true before golf++ is sold: on our own site and on Steam, launched
+together, with a free offline trial and a closed test server running ahead of it to
+build an audience. Steam parts researched 2026-09-30; re-check Steamworks docs before
 acting, policies change.
 
 **Keep this in sync:** when an item is done, remove it (or tick it, if it's worth
 keeping as a record for the store review). If it changed the code, the content rules
-or the build (e.g. renamed courses, a credits screen, a `licenses/` folder, Steam
-login), update `AGENTS.md` in the same change so it describes the result, and drop
-any "planned" or "due to be" wording there about it. Decided items don't stay here as
+or the build (e.g. membership, the trial build, a credits screen, Steam login),
+update `AGENTS.md` in the same change so it describes the result, and drop any
+"planned" or "due to be" wording there about it. Decided items don't stay here as
 open questions: move the decision into `AGENTS.md` and delete the item.
 
 ---
 
-## 1. Legal and licensing (blocks the store page)
+## 1. The plan
+
+| | What it is | What it costs us |
+|---|---|---|
+| **Free trial** | Its own free build: offline only, the par 3 courses and a couple of quests. Downloadable from our site before release; the Steam demo later | Nothing (no server) |
+| **The game** | One purchase. Offline complete forever, private and modded servers, and the first month on the official servers | That first month's hosting |
+| **Membership** | The official servers, renewed a month (or a cheaper 3 or 6 months) at a time, not a running subscription. A lapsed account keeps its online progress, frozen until it renews | Hosting, paid for by the renewal |
+
+Why this shape: a bought game keeps working without us ("Stop Killing Games",
+`AGENTS.md`), so nothing offline is ever locked. What costs money every month, the
+official servers and the work on them, is what's paid for every month. Offline
+progress is the local save, separate from online and moddable; modded servers cost
+us nothing and grow the game. Goal: the game pays for itself while it is developed,
+a side income better, a living best.
+
+Measured so far: about 3 TeV per player-hour on Maincloud with 2 players in a room
+($10 buys 25,000 TeV). Every update fans out to the whole room, so busier rooms cost
+more per player.
+
+### Open decisions
+- [ ] Prices: the game with its first month, a month's renewal, the 3 and 6 month
+  passes. Payment fees take about $0.30 + 3% of each payment off our own site, 30%
+  on Steam: small payments lose the most.
+- [ ] What the trial holds: which par 3 courses, which quests (there are no
+  quests in the game yet), whether it has smoking and drinking.
+- [ ] How an own-site purchase reaches an online account: most likely a code
+  redeemed in game, like the link code flow, that adds the first month.
+
+---
+
+## 2. Legal, licensing and business (blocks any sale)
+
+### The business
+- [ ] Check what selling takes in Denmark before the first sale: registering the
+  business (CVR), VAT and tax. Steam and a merchant-of-record payment service
+  (Paddle, Lemon Squeezy) collect EU VAT from buyers for us; selling through Stripe
+  directly makes the VAT ours.
+- [ ] Terms of sale for the game and membership: what a membership is, refunds, and
+  that offline and private servers keep working without one.
+
+### Privacy and GDPR (EU developer)
+- [ ] Write a privacy policy (what we store, where, how long), on our site and in Steamworks.
+- [ ] Let players delete their account and data. Lapsed accounts are kept, frozen;
+  only the player deletes them.
 
 ### Ask real clubs for permission
 - [ ] For any real course we keep under its real name (e.g. Marienlyst,
@@ -41,6 +85,8 @@ open questions: move the decision into `AGENTS.md` and delete the item.
 ### Audio and asset licences
 - [ ] Record the source and licence of every file in `assets/audio/` and
   `assets/icons/`. Replace anything that doesn't allow commercial use.
+- [ ] Audit assets for AI-generated content (Steam's content survey asks; AI-written
+  code needs no disclosure). Prefer hand-made assets for anything players see or hear.
 
 ### Library licences
 - [ ] Every library's licence ships in `THIRD_PARTY.txt` (`AGENTS.md`). The
@@ -51,11 +97,87 @@ open questions: move the decision into `AGENTS.md` and delete the item.
 
 ### Name check
 - [ ] Search Steam and trademark databases for "golf++". Check the "++" works in
-  Steam search, hashtags and video titles.
+  Steam search, hashtags, video titles and as a web address.
 
 ---
 
-## 2. Steamworks account
+## 3. What the game needs for the plan
+
+### Membership
+- [ ] A `paid_until` time on the account (the server's `player` row). `join_course`
+  refuses an account past it with a new `server_errors.h` id, which the game shows
+  as "renew your membership". Offline never sees any of this.
+- [ ] A `require_membership` switch in `server_config` (`admin_set_config`): on for
+  the official server, off by default, so self-hosted servers are unaffected and
+  nothing becomes Maincloud-only.
+- [ ] Owner-only reducers to add time to an account (testers, support, refunds), and
+  redeemable codes that add time (own-site sales, gifts).
+- [ ] Bump `protocol_version` with the new tables and reducers.
+
+### Free trial build
+- [ ] `build_release.ps1` stages a trial too: built with `-DGOLFPP_NET=OFF`
+  (offline only) and only the trial's courses in `assets/`.
+- [ ] Its offline save is the full game's (same format and folder), so a trial
+  player who buys keeps their progress. The trial's save version never runs
+  ahead of the released game's.
+- [ ] Quests, if the trial is to have some: there is no quest system yet.
+
+### Modded servers
+- [ ] A content hash: the server reports a hash of its compiled-in content next to
+  `protocol_version`, and the game refuses a server whose content differs from its
+  own ("this server uses different content") instead of playing shots locally on
+  other courses or tuning. Later the server could name the mod pack to load.
+
+### Names and moderation
+- [ ] Filter player names, let players report names, and add tools to rename or ban.
+  Chat, if added later, needs the same.
+
+### Cheating
+- [ ] The server decides shots, scores and XP. Swing power is still trusted from
+  the client. That's fine for casual play; fix it before leaderboards or ranked play.
+
+### Credits screen
+- [ ] A credits screen in the menu: the data credits on the main menu and the
+  licences in `THIRD_PARTY.txt` until then.
+
+### Steam Deck / controller
+- [ ] Optional but valuable: controller support and a Deck-friendly UI scale.
+
+---
+
+## 4. Before launch: testing and an audience
+
+### Our own site
+- [ ] A site with the free trial download, a form to request access to the test
+  server, the Steam page link once it exists, the privacy policy and the data
+  credits.
+
+### Closed test server
+- [ ] A second Maincloud database for testers (`golfpp-test`), with
+  `require_membership` on: access is membership time the owner grants (section 3),
+  so testing exercises the real thing. Testers install the normal build pointed at
+  it (`--server https://maincloud.spacetimedb.com --db golfpp-test`). Anonymous
+  logins stay off there, and its energy comes out of the same monthly budget.
+- [ ] Every release is then published to `golfpp-test` before `golfpp`, so a
+  module change that needs a manual migration shows there first: local
+  (`gb -m`), `golfpp-test`, `golfpp`, then the installer.
+- [ ] Measure TeV per player-hour against room size (2, 4, 8+ players), then set
+  prices and watch the dashboard. The server is a permanent obligation once the
+  game is sold.
+
+### Footage
+- [ ] One course that looks great from every camera angle: clean splines, trees,
+  hole starts, cart roads.
+- [ ] Swing, ball flight, putting and the hub walk/cart loop feel good enough to
+  show in 10-second clips without explanation.
+
+### Content
+- [ ] Short clips (TikTok, Shorts, Reels), lots of them, from now on. Every post
+  links to the trial or, once it is live, the Steam page: wishlists are the metric.
+
+---
+
+## 5. Steamworks account
 
 ### Partner onboarding
 - [ ] Create the Steamworks partner account, complete identity, tax and bank
@@ -63,11 +185,11 @@ open questions: move the decision into `AGENTS.md` and delete the item.
 
 ### Steam Direct fee
 - [ ] Pay the $100 app fee (recouped after $1,000 in sales). This creates the app
-  id used for the store page and builds.
+  id used for the store page and builds, and unblocks Steam login (section 7).
 
 ---
 
-## 3. Store page ("Coming Soon")
+## 6. Store page ("Coming Soon") and demo
 
 ### Capsule art
 - [ ] Make all required capsule images (header, small, main, vertical, library
@@ -79,18 +201,26 @@ open questions: move the decision into `AGENTS.md` and delete the item.
 
 ### Trailer
 - [ ] A 30–60 s trailer that shows golf in the first 5 seconds: swing, ball
-  flight, the VHS look, the hub, cart drifting, skill level-ups.
+  flight, the VHS look, the hub, cart drifting, skill level-ups, other players.
 
 ### Description and tags
-- [ ] Short description (one hook sentence) and long description. List
-  multiplayer as "planned" until it ships.
-- [ ] Pick tags that match similar successful games (golf, retro, relaxing, RPG-lite).
+- [ ] Short description (one hook sentence) and long description, saying plainly
+  that the purchase includes a month on the official servers, that membership
+  renews it, and that offline and private servers never need one.
+- [ ] Pick tags that match similar successful games (golf, retro, relaxing,
+  RPG-lite, MMO).
 
-### Content survey and AI disclosure
-- [ ] Fill in the content survey. AI-written code does not need disclosure (Jan 2026
-  rules), but any AI-generated art, audio, text or trailer content does.
-- [ ] Audit assets for AI-generated content. Prefer hand-made assets for anything
-  players see or hear.
+### Content survey
+- [ ] Fill in the content survey, with the AI disclosure from section 2.
+
+### Membership on Steam
+- [ ] Sell renewals as in-game purchases (Steam microtransactions, pre-paid months).
+  Check how Steam wants a purchase that includes time, and paid renewals, set up and
+  disclosed (subscription MMOs like FFXIV and EVE are on Steam).
+
+### Demo
+- [ ] The free trial as the Steam demo: its own free app on the game's page.
+- [ ] Steam Next Fest: only one before release, so enter it with the demo.
 
 ### Review timing
 - [ ] Submit for review at least 7 business days before the page should go live,
@@ -98,28 +228,10 @@ open questions: move the decision into `AGENTS.md` and delete the item.
 
 ---
 
-## 4. Game readiness for footage
-
-### One polished course
-- [ ] One course that looks great from every camera angle in the trailer:
-  clean splines, trees, hole starts, cart roads.
-
-### Core loop feel
-- [ ] Swing, ball flight, putting and the hub walk/cart loop feel good enough to
-  show in 10-second clips without explanation.
-
-### Credits screen
-- [ ] A credits screen in the menu (needed for OSM attribution and licences anyway).
-
----
-
-## 5. Multiplayer on Steam
+## 7. Steam login (⛔ blocked: waiting on the Steam app id)
 
 Online play is in the game, and friends install it with `tooling/release`
-(`AGENTS.md`).
-Offline play is a rule in `AGENTS.md`.
-
-### Steam login (⛔ blocked: waiting on the Steam app id)
+(`AGENTS.md`). Offline play is a rule in `AGENTS.md`.
 
 **Do not implement this yet.** It needs a paid Steam app id (Steam Direct, $100)
 and a Steamworks partner account, which the owner doesn't have. SpacetimeAuth needs
@@ -196,7 +308,7 @@ Start only when the owner confirms the app id exists. Then:
 #### 5. Rules and docs
 
 - Add the Steam rule below to `AGENTS.md`, and `src/platform/steam/` to its layout.
-- Delete this subsection from this file.
+- Delete this section from this file.
 
 #### Done when
 
@@ -221,26 +333,13 @@ Steam is the primary online login but is never required. The game must start, an
 must work, without Steam running. No Steam DRM and no `RestartAppIfNecessary`. Steam headers
 are only included by `src/platform/steam/`, `app` and `src/net/`.
 
-
-### Privacy and GDPR (EU developer)
-- [ ] Write a privacy policy (what we store, where, how long) and link it in Steamworks.
-- [ ] Let players delete their account and data.
-
-### Names and moderation
-- [ ] Filter player names, let players report names, and add tools to rename or ban.
-  Chat, if added later, needs the same.
-
-### Cheating
-- [ ] The server decides shots, scores and XP. Swing power is still trusted from
-  the client. That's fine for casual play; fix it before leaderboards or ranked play.
-
-### Server costs and uptime
-- [ ] Estimate the Maincloud cost at launch player counts and set up monitoring.
-  The server becomes a permanent obligation once the game is sold.
-
 ---
 
-## 6. Build and release (later)
+## 8. Launch: our site and Steam on the same day
+
+### Selling on our site
+- [ ] A payment service for the game and membership on our site (a merchant of
+  record, section 2), with the purchase reaching the account as a code (section 1).
 
 ### Steam build pipeline
 - [ ] Upload builds with SteamPipe: the folder `tooling/release/build_release.ps1`
@@ -250,19 +349,6 @@ are only included by `src/platform/steam/`, `app` and `src/net/`.
 - [ ] Valve reviews the build before release. It must start, run and match the
   store page. The page must be Coming Soon for at least 2 weeks before release.
 
-### Steam Deck / controller
-- [ ] Optional but valuable: controller support and a Deck-friendly UI scale.
-
----
-
-## 7. Marketing
-
-### Content before launch
-- [ ] Start posting short clips as soon as the page is live. Every post links to
-  the Steam page. Wishlists are the metric.
-
-### Steam Next Fest
-- [ ] You can only enter one Next Fest before release. Save it for a polished demo.
-
-### Demo
-- [ ] A demo with one course and the hub loop, released during or just before Next Fest.
+### The official servers
+- [ ] `require_membership` on for the official server, the test server's testers
+  moved over or granted time, and the dashboard watched through launch week.

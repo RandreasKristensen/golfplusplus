@@ -301,7 +301,7 @@ coarse: `elevation.terrarium.ground_cell_size` metres (20).
 
 Both are downloaded once: every later import, moved hole or new ground grid in
 the same area reads the cache with no network at all. Both require
-attribution: see `docs/steam_todo.md`.
+attribution: see `docs/launch_todo.md`.
 
 The `ground` grid covers every hole plus `ground.margin`, with heights
 relative to hole 1's start: each hole's tee height above sea level goes in

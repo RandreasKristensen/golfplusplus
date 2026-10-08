@@ -335,17 +335,18 @@ system.
 
 ## Planned work
 
-`docs/steam_todo.md` is the store and release checklist. **Steam login (its
-section 5) is blocked until the owner confirms a Steam app id: don't start it or
-add any Steam code.**
+`docs/launch_todo.md` is the commercial launch plan and checklist: the free
+trial, membership for the official servers, our own site and Steam. **Steam
+login (its section 7) is blocked until the owner confirms a Steam app id: don't
+start it or add any Steam code.**
 
-When anything from the Steam todo is implemented, update this file in the same
+When anything from the launch todo is implemented, update this file in the same
 change, delete it from the todo (renumbering the remaining sections, and every
 cross-reference to them), and add any rules it brings.
 
 ## End of every session
 
-- Search `AGENTS.md`, `README.md` and `docs/steam_todo.md` for todos, open
+- Search `AGENTS.md`, `README.md` and `docs/launch_todo.md` for todos, open
   decisions ("TBD", "decide whether", "owner decides"), "planned" wording and
   unchecked items that this session implemented or decided; remove them and
   make sure the result is described where it belongs (code comments first,
