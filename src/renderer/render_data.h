@@ -241,10 +241,12 @@ struct render_data {
     // HUD.
     // Which progress this round plays for: offline, or the online room.
     std::string mode_label;
-    // Over the ball: the swing clock shows, its hand at swing_power; D
-    // starts the backswing, then A hits.
+    // Over the ball: the swing clock shows, its hand at swing_power; E
+    // starts the backswing, then Q hits.
     bool show_swing_clock = false;
     bool swing_running = false;
+    // Something in reach that F acts on (game_state.h interact_available).
+    bool show_interact_prompt = false;
     int stroke_count = 0;
     std::string selected_club_label;  // short, e.g. "7I"
     std::string selected_club_name;

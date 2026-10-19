@@ -51,7 +51,7 @@ void return_to_server(game_state& state) {
     snap_to(state, *me->motion);
 }
 
-// A refused shot or retee: the ball goes back to the server's, with its
+// A refused shot: the ball goes back to the server's, with its
 // strokes; without one, the player goes back to the server too.
 void restore_ball(game_state& state) {
     const auto ball = state.online.balls.find(state.online.account_id);
@@ -84,7 +84,7 @@ void take_refusals(game_state& state) {
         if (refusal.reducer == reducer_pick_up_ball || refusal.error == error_ball_in_cup) {
             put_cup_ball_back(state);
         }
-        if (refusal.reducer == reducer_take_shot || refusal.reducer == reducer_retee) {
+        if (refusal.reducer == reducer_take_shot) {
             restore_ball(state);
         } else if (refusal.reducer == reducer_enter_hole || refusal.reducer == reducer_claim_collectible ||
                    (refusal.reducer == reducer_update_motion && refusal.error == error_wrong_zone)) {

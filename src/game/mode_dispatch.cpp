@@ -124,10 +124,6 @@ void record_hole_started(game_state& state, const std::size_t hole_index) {
     push_command(state, std::move(command));
 }
 
-void record_retee(game_state& state) {
-    push_online_command(state, net_command_type::retee);
-}
-
 void record_ball_picked_up(game_state& state) {
     push_online_command(state, net_command_type::pick_up_ball);
 }

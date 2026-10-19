@@ -451,18 +451,6 @@ TEST_CASE("starts of played holes cannot be used again") {
     CHECK(!nearby_hole_start(state).has_value());
 }
 
-TEST_CASE("retee does nothing in the hub") {
-    game_state state = started_game(fixture_hub_course());
-    const glm::vec3 before = state.player.position;
-
-    game_input retee;
-    retee.retee = true;
-    update_game(state, retee, 0.016f);
-
-    CHECK(in_hub(state));
-    CHECK(state.player.position == before);
-}
-
 TEST_CASE("claiming a hub collectible gives its xp as an xp drop") {
     game_state state = started_game(fixture_hub_course());
     const course_world_collectible& lost_ball = state.hub->world.collectibles[1];

@@ -30,6 +30,9 @@ golf++ uses these libraries. Their licences follow, in full.
   JSON for Modern C++           MIT, (C) 2013-2023 Niels Lohmann
   The Rust crates of the online client, listed at the end with their
   licences.
+  SpacetimeDB C++ bindings      Business Source License 1.1, compiled into
+    (the server module)         the server; its text is the SpacetimeDB
+                                licence with the Rust crates below
 
 The DLLs next to golf++.exe are the unchanged libraries; replacing one with
 another build of the same library works as long as it is compatible.

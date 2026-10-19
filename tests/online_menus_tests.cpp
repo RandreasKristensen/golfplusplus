@@ -50,7 +50,7 @@ input_state typed(const std::string& text) {
 }
 
 startup_menu_result update(startup_flow_state& state, const input_state& input, const online_menu_status& online) {
-    return update_startup_menu(state, input, std::nullopt, one_course(), online);
+    return update_startup_menu(state, input, menu_pointer{}, one_course(), online);
 }
 
 render_startup_menu render(const startup_flow_state& state, const online_menu_status& online) {

@@ -28,8 +28,9 @@ input_state next_frame_input(const input_state& input) {
     next.key_s = held_only(input.key_s);
     next.key_d = held_only(input.key_d);
     next.key_e = held_only(input.key_e);
+    next.key_f = held_only(input.key_f);
+    next.key_q = held_only(input.key_q);
     next.key_m = held_only(input.key_m);
-    next.key_r = held_only(input.key_r);
     next.key_1 = held_only(input.key_1);
     next.key_2 = held_only(input.key_2);
     next.key_g = held_only(input.key_g);

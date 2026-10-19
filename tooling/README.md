@@ -90,16 +90,22 @@ one for a new database).
 .\tooling\release\build_release.ps1
 ```
 
-builds `build\dist\golfpp-setup-<version>.exe` and `build\dist\golfpp-<version>.zip`,
-the version being `project(VERSION)` in `CMakeLists.txt`. It runs the tests,
+builds `build\dist\golfpp-setup-<version>.exe`, `build\dist\golfpp-<version>.zip`
+and `build\dist\golfpp-server-<version>.zip`, the version being
+`project(VERSION)` in `CMakeLists.txt`. It runs the tests,
 builds the game without a console window in `build\installer`, stages it with
 `cmake --install` (`golf++.exe`, `assets\` and the DLLs it loads, found next
 to the compiler), writes `THIRD_PARTY.txt` next to it (`third_party.py`: the
 data credits and library list in `third_party_header.txt`, then every
 licence, MSYS2's for the native libraries and each linked Rust crate's from
-`cargo metadata`) and compiles `golfpp.iss` with Inno Setup 6. It needs what
-the game's build needs, Python 3 and Inno Setup 6
-([jrsoftware.org](https://jrsoftware.org/isdl.php)).
+`cargo metadata`) and compiles `golfpp.iss` with Inno Setup 6. Then it builds
+the server module (`spacetime build`, in a shell of its own so the Emscripten
+environment stays out of the game's build) and zips the server package:
+`golfpp.wasm`, `server/hosting.md` as its `README.md`, `LICENSE.txt` and
+`THIRD_PARTY.txt`, for owners who run their own server. It needs what the
+game's build needs, Python 3, Inno Setup 6
+([jrsoftware.org](https://jrsoftware.org/isdl.php)), the spacetime CLI and the
+Emscripten SDK (`-Emsdk`, else `EMSDK`, else `~\emsdk`).
 
 The installer installs for the current user only
 (`%LOCALAPPDATA%\Programs\golf++`, no administrator rights), with a Start menu
@@ -110,8 +116,8 @@ installer nor the game is signed, so Windows SmartScreen says "Windows protected
 then "Run anyway". There is no updater: players run the next installer.
 
 A release: bump the version, publish the module to Maincloud
-(`server/README.md`, section 7), then build and hand out the installer from
-the same commit. Before handing it out, install it on a PC without MSYS2, Rust
+(`server/README.md`, Maincloud), then build and hand out the installer and
+the server package from the same commit. Before handing it out, install it on a PC without MSYS2, Rust
 or the SpacetimeDB CLI (a missing DLL only shows there), sign in and play a
 hole online, and check it plays offline with no network.
 

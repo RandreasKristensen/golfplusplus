@@ -313,7 +313,6 @@ void stdb_leave_group(stdb_client* client);
 void stdb_update_motion(stdb_client* client, const stdb_motion* motion);
 void stdb_enter_hole(stdb_client* client, int32_t hole_index);
 void stdb_return_to_hub(stdb_client* client);
-void stdb_retee(stdb_client* client);
 void stdb_pick_up_ball(stdb_client* client);
 void stdb_board_cart(stdb_client* client, uint64_t owner);
 void stdb_leave_cart(stdb_client* client);

@@ -362,19 +362,6 @@ TEST_CASE("menu actions call their reducers") {
     CHECK(fake_bridge().calls[4].text == "ab2c-d3ef");
 }
 
-TEST_CASE("a retee online is sent to the server") {
-    game_state state = started_hole();
-    net_client client = connected_client(state, 42);
-    state.play = play_mode::online;
-    fake_bridge().calls.clear();
-    game_input retee;
-    retee.retee = true;
-    update_game(state, retee, 0.016f);
-    client.update(state);
-    const std::vector<std::string> names = fake_bridge().call_names();
-    CHECK(std::find(names.begin(), names.end(), "stdb_retee") != names.end());
-}
-
 TEST_CASE("picking the ball out of its cup online is sent to the server") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);

@@ -309,6 +309,9 @@ shot_course current_shot_course(const game_state& state);
 // Follows `result` from the ball's position until it has played.
 void play_shot(game_state& state, shot_result result);
 bool can_interact_with_ball(const game_state& state);
+// Walking on foot with something interact would act on in reach: the ball,
+// a cart seat, and in the hub a hole start, a collectible or the ball in its cup.
+bool interact_available(const game_state& state);
 // Index into hub->world.hole_starts of the nearest start of an unplayed hole
 // in reach, or nullopt.
 std::optional<std::size_t> nearby_hole_start(const game_state& state);

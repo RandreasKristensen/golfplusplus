@@ -37,10 +37,6 @@ void record_movement(game_state& state, const movement_xp_rate& rate, float& pen
 // Offline: claims it on the save. Online: claim_collectible.
 void record_collectible_claim(game_state& state, const course_world_collectible& collectible);
 
-// The ball went back to the tee. Online: retee, so the server's ball does
-// too. Offline needs nothing.
-void record_retee(game_state& state);
-
 // The holed ball was picked out of its cup. Online: pick_up_ball, so the
 // server lets the next hole start too. Offline needs nothing.
 void record_ball_picked_up(game_state& state);

@@ -160,13 +160,13 @@ void leave_to_main(startup_flow_state& state, const online_menu_status& online, 
 
 void update_login(startup_flow_state& state,
                   const input_state& input,
-                  const std::optional<glm::vec2> click,
+                  const menu_pointer& pointer,
                   const online_menu_status& online,
                   startup_menu_result& result) {
     const std::vector<login_tile> tiles = login_tiles(online);
     const int count = static_cast<int>(tiles.size());
-    const int hit = select_with_input(startup_menu_screen::form, 1, state.selection, count, input, click, result.sounds);
-    if (input.escape.pressed || input.backspace.pressed) {
+    const int hit = select_with_input(startup_menu_screen::form, 1, state.selection, count, input, pointer, result.sounds);
+    if (input.escape.pressed) {
         result.sounds.push_back(ui_sound::back);
         leave_to_main(state, online, result);
         return;
@@ -194,12 +194,12 @@ int name_entry_tiles(const online_menu_status& online) {
 
 void update_name_entry(startup_flow_state& state,
                        const input_state& input,
-                       const std::optional<glm::vec2> click,
+                       const menu_pointer& pointer,
                        const online_menu_status& online,
                        startup_menu_result& result) {
     state.field = apply_text_input(state.field, input.text_typed, input.backspace.pressed);
     const int hit =
-        select_with_input(startup_menu_screen::form, 1, state.selection, name_entry_tiles(online), input, click, result.sounds);
+        select_with_input(startup_menu_screen::form, 1, state.selection, name_entry_tiles(online), input, pointer, result.sounds);
     if (input.escape.pressed) {
         result.sounds.push_back(ui_sound::back);
         return_to_main_menu(state);
@@ -224,12 +224,12 @@ void update_name_entry(startup_flow_state& state,
 
 void update_link_code_entry(startup_flow_state& state,
                             const input_state& input,
-                            const std::optional<glm::vec2> click,
+                            const menu_pointer& pointer,
                             const startup_catalog& catalog,
                             const online_menu_status& online,
                             startup_menu_result& result) {
     state.field = apply_text_input(state.field, input.text_typed, input.backspace.pressed);
-    const int hit = select_with_input(startup_menu_screen::form, 1, state.selection, 2, input, click, result.sounds);
+    const int hit = select_with_input(startup_menu_screen::form, 1, state.selection, 2, input, pointer, result.sounds);
     const bool back = input.escape.pressed || (accepted(input, hit) && state.selection == 1);
     if (back) {
         result.sounds.push_back(ui_sound::back);
@@ -249,13 +249,13 @@ void update_link_code_entry(startup_flow_state& state,
 
 void update_online_course_picker(startup_flow_state& state,
                                  const input_state& input,
-                                 const std::optional<glm::vec2> click,
+                                 const menu_pointer& pointer,
                                  const startup_catalog& catalog,
                                  startup_menu_result& result) {
     const int count = static_cast<int>(catalog.courses.size());
-    const int hit = select_with_input(startup_menu_screen::course_picker, picker_columns, state.selection, count, input, click,
+    const int hit = select_with_input(startup_menu_screen::course_picker, picker_columns, state.selection, count, input, pointer,
                                       result.sounds);
-    if (input.escape.pressed || input.backspace.pressed) {
+    if (input.escape.pressed) {
         result.sounds.push_back(ui_sound::back);
         return_to_main_menu(state);
         return;
@@ -272,13 +272,13 @@ void update_online_course_picker(startup_flow_state& state,
 
 void update_waiting_screen(startup_flow_state& state,
                            const input_state& input,
-                           const std::optional<glm::vec2> click,
+                           const menu_pointer& pointer,
                            startup_menu_result& result) {
-    const int hit = select_with_input(startup_menu_screen::form, 1, state.selection, 1, input, click, result.sounds);
-    if (!(accepted(input, hit) || input.space.pressed || input.escape.pressed || input.backspace.pressed)) {
+    const int hit = select_with_input(startup_menu_screen::form, 1, state.selection, 1, input, pointer, result.sounds);
+    if (!(accepted(input, hit) || input.space.pressed || input.escape.pressed)) {
         return;
     }
-    result.sounds.push_back(input.escape.pressed || input.backspace.pressed ? ui_sound::back : ui_sound::select);
+    result.sounds.push_back(input.escape.pressed ? ui_sound::back : ui_sound::select);
     if (state.flow == startup_flow::joining) {
         request(result, online_request_type::leave_room);
         open_screen(state, startup_flow::online_course_picker);
@@ -349,6 +349,7 @@ bool is_online_flow(const startup_flow flow) {
     case startup_flow::help:
     case startup_flow::settings:
     case startup_flow::course_picker:
+    case startup_flow::exit_prompt:
     case startup_flow::playing:
         return false;
     }
@@ -373,7 +374,7 @@ void open_link_code_show(startup_flow_state& state, const online_menu_status& on
 
 void update_online_menu(startup_flow_state& state,
                         const input_state& input,
-                        const std::optional<glm::vec2> click,
+                        const menu_pointer& pointer,
                         const startup_catalog& catalog,
                         const online_menu_status& online,
                         startup_menu_result& result) {
@@ -384,20 +385,20 @@ void update_online_menu(startup_flow_state& state,
 
     switch (state.flow) {
     case startup_flow::online_login:
-        update_login(state, input, click, online, result);
+        update_login(state, input, pointer, online, result);
         break;
     case startup_flow::name_entry:
-        update_name_entry(state, input, click, online, result);
+        update_name_entry(state, input, pointer, online, result);
         break;
     case startup_flow::link_code_entry:
-        update_link_code_entry(state, input, click, catalog, online, result);
+        update_link_code_entry(state, input, pointer, catalog, online, result);
         break;
     case startup_flow::online_course_picker:
-        update_online_course_picker(state, input, click, catalog, result);
+        update_online_course_picker(state, input, pointer, catalog, result);
         break;
     case startup_flow::link_code_show:
     case startup_flow::joining:
-        update_waiting_screen(state, input, click, result);
+        update_waiting_screen(state, input, pointer, result);
         break;
     default:
         break;

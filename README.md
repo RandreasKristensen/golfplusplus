@@ -5,10 +5,13 @@ Play real-world courses imported from OpenStreetMap, walk or drive between
 holes, and level up skills like golfing, fitness, cart driving and smoking.
 
 Play online with up to 40 players on a course, in groups of up to 4 sharing a
-scorecard, or offline on your own. Offline never needs a server or an account,
-and anyone can run their own server ([server/README.md](server/README.md)).
+scorecard, or offline on your own. Offline never needs a server or an account.
 
-![golf++](docs/imgs/07_vibes.png)
+![golf++](docs/imgs/09_visuals.png)
+
+golf++ is in alpha, heading for a commercial release. The source is public to
+read, not to use: all rights are reserved ([LICENSE](LICENSE)). The course
+data is OpenStreetMap's, under the ODbL.
 
 ## Build
 
@@ -27,6 +30,7 @@ On Windows, `.\tooling\gb -r` builds the release preset and launches it, and
 online play ([tooling/README.md](tooling/README.md)). The server itself builds
 with the SpacetimeDB CLI and the Emscripten SDK ([server/README.md](server/README.md)).
 `.\tooling\release\build_release.ps1` builds the Windows installer players
-download ([tooling/README.md](tooling/README.md)).
+download and the server package owners run their own server from
+([tooling/README.md](tooling/README.md), [server/hosting.md](server/hosting.md)).
 
 `golf++-tests <text>` runs only the tests whose name contains `<text>`.

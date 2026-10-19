@@ -1,4 +1,9 @@
-# **scratchpad
+# **scratchpad**
+
+Todo
+- new hitting system with curves, lefthanded/righthanded, natural fade/draw, pitching/hitting speed, 
+
+
 
 ## **Test feedback**
 
@@ -7,7 +12,6 @@
 - final scorecard says 10 hole 10
 - when setting up its kinda bugged where you stand; It should always be the same for people viewing other people, as it is for them
 - grouping is a little bugged? Maybe mostly when youve already played
-- See everything on scorecard
 
 ## **bugs**
 
@@ -20,9 +24,6 @@ Each of these could be a new 0.x release. Bugs are 0.0.x releases, but probably 
 After that the game will enter beta where it should mostly be balance, changes from feedback, and creating content - more skills, more levelup rewards from skills, importing and testing more courses, more things to buy from the shop, more ways to earn money and exp. 
 When the game feels balanced, full and fun, release :D
 
-0. **Licensing**
-
-Figure out how youre licensing this? idk if getting it stolen is something I should be scared of, I seem to remember no license = heavy license dont use type beat.
 
 1. **new shooting physics system.**
 
@@ -59,6 +60,7 @@ Basically all of these will be unlocked through quests, but all will be availabl
 
 clubs, gear(cart, smokes, rangefinder etc.), levels, inventory, music, friends&party, scorecard, map. Some cool physical way of getting the stuff out of a bag. Friends, music and map on the phone, clubs, smokes and rangefinder in a bag on your back or in the cart.
 A view of how many people are in each course. Just 0/40 -> 40+ if more than one room.
+social panel - friends, grouping - by dapping up?
 
 4. **Real visual asset- and sound asset-, and weather systems, Day night cycle + Visual assets, sound assets**
 

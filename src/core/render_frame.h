@@ -40,10 +40,11 @@ struct render_meshes {
 };
 
 // The in-round frame (no menus, no debug text); `fov_degrees` is the
-// player's field of view setting.
+// player's field of view setting, `interact_prompt` its interact prompt one.
 render_data make_render_data(const game_state& game,
                              const text_assets& text,
                              const std::vector<skill_definition>& skills,
                              const render_meshes& meshes,
                              float fov_degrees,
+                             bool interact_prompt,
                              frame_profile* profile = nullptr);

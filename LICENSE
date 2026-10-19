@@ -1,0 +1,28 @@
+golf++
+Copyright (c) 2026 RandreasKristensen. All rights reserved.
+
+This repository is public so its source can be read, as a reference and as a
+portfolio of the author's work. It is not open source. Reading it grants no
+licence to use it.
+
+Without the author's written permission you may not:
+  - build, run or install the game, the server or the tooling from this source;
+  - copy, modify, distribute or sell this source, or anything built from it;
+  - host a server for the game, or publish the game or its content anywhere.
+
+Builds the author gives you directly (alpha and test builds) may be installed
+and played by you, for testing, and not passed on. The server package that
+comes with them may be run for playing with others who were given the same
+build.
+
+The following are not the author's and keep their own licences:
+  - The course data in assets/holes, assets/courses and assets/course_worlds
+    is derived from OpenStreetMap, (C) OpenStreetMap contributors, and is
+    available under the Open Database License (ODbL) 1.0.
+  - Ground heights in Denmark come from the Danish Elevation Model
+    (Klimadatastyrelsen), CC BY 4.0.
+  - The libraries in vendor/ and those the game links are under the licences
+    listed in THIRD_PARTY.txt, written by tooling/release/third_party.py.
+
+"golf++" and its logo are the author's and are not licensed for use by anyone
+else.

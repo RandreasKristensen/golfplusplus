@@ -19,7 +19,7 @@ constexpr float test_fov_degrees = 60.0f;
 
 render_data frame_for(const game_state& state, const float fov_degrees = test_fov_degrees) {
     static const text_assets text = *load_text_assets(asset_root());
-    return make_render_data(state, text, shipped_content().skills, render_meshes{}, fov_degrees);
+    return make_render_data(state, text, shipped_content().skills, render_meshes{}, fov_degrees, true);
 }
 }
 
@@ -34,6 +34,22 @@ TEST_CASE("a hole frame shows the ball, every tee box and the pin") {
     REQUIRE(data.tee_boxes != nullptr);
     CHECK(data.tee_boxes->size() == state.area.tee_boxes.size());
     CHECK(data.camera_fov_degrees == test_fov_degrees);
+}
+
+TEST_CASE("the interact prompt shows beside the ball on foot, not away from it, over it or with the setting off") {
+    game_state state = started_hole();
+    REQUIRE(interact_available(state));
+    CHECK(frame_for(state).show_interact_prompt);
+    CHECK(!make_render_data(state, *load_text_assets(asset_root()), shipped_content().skills, render_meshes{}, test_fov_degrees, false)
+               .show_interact_prompt);
+
+    state.mode = game_mode::addressing;
+    CHECK(!frame_for(state).show_interact_prompt);
+
+    state.mode = game_mode::walking;
+    state.player.position = state.ball.position + glm::vec3(60.0f, 0.0f, 0.0f);
+    CHECK(!interact_available(state));
+    CHECK(!frame_for(state).show_interact_prompt);
 }
 
 TEST_CASE("the drawn ball sits on the ground, not sunk into it") {

@@ -35,9 +35,6 @@ void abandon_hole(game_state& state, const glm::vec3& position);
 // Online the server starts it there by itself.
 void start_next_round(game_state& state);
 
-// Puts the ball back on the tee (no penalty stroke). No-op in the hub.
-void retee_ball(game_state& state);
-
 // The ball left in its cup is within player.ball_interact_radius (XZ) of the
 // player walking the hub.
 bool cup_ball_in_reach(const game_state& state);

@@ -169,16 +169,6 @@ void start_next_round(game_state& state) {
     enter_hub(state, state.player.position);
 }
 
-void retee_ball(game_state& state) {
-    if (!state.hole) {
-        return;
-    }
-    const int strokes = state.stroke_count;
-    reset_play_state(state);
-    state.stroke_count = strokes;
-    tee_up(state);
-}
-
 bool cup_ball_in_reach(const game_state& state) {
     return in_hub(state) && state.cup_ball &&
         horizontal_distance(state.player.position, *state.cup_ball) <= state.tuning.player.ball_interact_radius;

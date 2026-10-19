@@ -17,15 +17,14 @@ enum class help_control_icon {
     wasd,
     arrows,
     mouse,
-    key_e,
+    key_f,
     swing,
     space,
     shift,
     key_m,
     tab,
     caps_lock,
-    backspace,
-    retee,
+    escape,
     key_1,
     key_2,
     key_g
@@ -71,12 +70,12 @@ void draw_help_control_icon(overlay_batch& batch,
     case help_control_icon::mouse:
         draw_key_cap(batch, text, text_controls_mouse, center, wide_half);
         break;
-    case help_control_icon::key_e:
-        draw_key_cap(batch, text, text_controls_key_e, center, key_half);
+    case help_control_icon::key_f:
+        draw_key_cap(batch, text, text_controls_key_f, center, key_half);
         break;
     case help_control_icon::swing:
-        draw_key_cap(batch, text, text_controls_key_a, center - side * 0.5f, cluster_half);
-        draw_key_cap(batch, text, text_controls_key_d, center + side * 0.5f, cluster_half);
+        draw_key_cap(batch, text, text_controls_key_q, center - side * 0.5f, cluster_half);
+        draw_key_cap(batch, text, text_controls_key_e, center + side * 0.5f, cluster_half);
         break;
     case help_control_icon::space:
         draw_key_button(batch, center, wide_half);
@@ -95,13 +94,8 @@ void draw_help_control_icon(overlay_batch& batch,
     case help_control_icon::caps_lock:
         draw_key_cap(batch, text, text_controls_key_caps_lock, center, small_half);
         break;
-    case help_control_icon::backspace:
-        draw_key_button(batch, center, small_half);
-        draw_backspace_icon(batch, center, small_half);
-        break;
-    case help_control_icon::retee:
-        draw_key_button(batch, center, small_half);
-        draw_retee_icon(batch, center, small_half);
+    case help_control_icon::escape:
+        draw_key_cap(batch, text, text_controls_key_escape, center, small_half);
         break;
     case help_control_icon::key_1:
         draw_key_cap(batch, text, text_controls_key_1, center, key_half);
@@ -144,7 +138,7 @@ void draw_startup_help_screen(overlay_batch& batch, const text_assets& text) {
             {help_control_icon::wasd, glm::vec2(-0.66f, 0.43f), 0.51f, text_help_wasd},
             {help_control_icon::arrows, glm::vec2(-0.66f, 0.12f), 0.20f, text_help_arrows},
             {help_control_icon::mouse, glm::vec2(-0.66f, -0.08f), -0.03f, text_help_mouse},
-            {help_control_icon::key_e, glm::vec2(-0.66f, -0.26f), -0.21f, text_help_key_e},
+            {help_control_icon::key_f, glm::vec2(-0.66f, -0.26f), -0.21f, text_help_key_f},
             {help_control_icon::swing, glm::vec2(-0.66f, -0.45f), -0.40f, text_help_swing},
             {help_control_icon::space, glm::vec2(-0.66f, -0.59f), -0.54f, text_help_space},
             {help_control_icon::shift, glm::vec2(-0.66f, -0.73f), -0.68f, text_help_shift},
@@ -153,8 +147,7 @@ void draw_startup_help_screen(overlay_batch& batch, const text_assets& text) {
             {help_control_icon::key_m, glm::vec2(0.30f, 0.46f), 0.51f, text_help_key_m},
             {help_control_icon::tab, glm::vec2(0.30f, 0.32f), 0.37f, text_help_tab},
             {help_control_icon::caps_lock, glm::vec2(0.30f, 0.18f), 0.23f, text_help_caps_lock},
-            {help_control_icon::backspace, glm::vec2(0.30f, 0.04f), 0.09f, text_help_backspace},
-            {help_control_icon::retee, glm::vec2(0.30f, -0.26f), -0.21f, text_help_retee},
+            {help_control_icon::escape, glm::vec2(0.30f, 0.04f), 0.09f, text_help_escape},
             {help_control_icon::key_1, glm::vec2(0.30f, -0.40f), -0.35f, text_help_key_1},
             {help_control_icon::key_2, glm::vec2(0.30f, -0.54f), -0.49f, text_help_key_2},
             {help_control_icon::key_g, glm::vec2(0.30f, -0.68f), -0.63f, text_help_key_g},
@@ -401,10 +394,23 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
             draw_hole_thumbnail(batch, *tile.preview, thumbnail.center, thumbnail.half_size, ground);
             draw_label(batch, text.font, find_text_style(text, style_tile_label_small), tile.title, slice_y(inner, 0.50f, 0.82f));
             draw_label(batch, text.font, find_text_style(text, style_tile_hint_small), tile.subtitle, slice_y(inner, 0.82f, 1.0f));
+        } else if (tile.subtitle.empty()) {
+            draw_label(batch, text.font, find_text_style(text, style_tile_label), tile.title, inner);
         } else {
             draw_label(batch, text.font, find_text_style(text, style_tile_label), tile.title, slice_y(inner, 0.0f, 0.64f));
             draw_label(batch, text.font, find_text_style(text, style_tile_hint), tile.subtitle, slice_y(inner, 0.64f, 1.0f));
         }
+    }
+
+    const glm::vec2 arrow_half(0.04f, 0.04f);
+    const float arrow_x = tile_half.x + 0.07f;
+    if (menu.more_above) {
+        const glm::vec2 at(arrow_x, startup_tile_center(menu.screen, 0, tile_count).y);
+        draw_arrow_icon(batch, at, glm::vec2(0.0f, 1.0f), arrow_half);
+    }
+    if (menu.more_below && tile_count >= 2) {
+        const glm::vec2 at(arrow_x, startup_tile_center(menu.screen, tile_count - 2, tile_count).y);
+        draw_arrow_icon(batch, at, glm::vec2(0.0f, -1.0f), arrow_half);
     }
 
     draw_label(batch, text.font, find_text_style(text, style_footer), menu.footer, ui_rect{glm::vec2(0.0f, -0.86f), glm::vec2(0.78f, 0.05f)});

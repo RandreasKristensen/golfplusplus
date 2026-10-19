@@ -18,14 +18,15 @@
 inline constexpr int picker_columns = 3;
 
 // Moves `selection` by arrow keys (left/right by one, up/down by a row of
-// `columns`) or onto a clicked tile; queues a move sound when it changed.
+// `columns`) or onto the tile the mouse moved over or clicked; queues a move
+// sound when it changed.
 // Returns the clicked tile, or -1.
 int select_with_input(startup_menu_screen screen,
                       int columns,
                       int& selection,
                       int count,
                       const input_state& input,
-                      std::optional<glm::vec2> click,
+                      const menu_pointer& pointer,
                       std::vector<ui_sound>& sounds);
 
 void add_tile(render_startup_menu& menu, std::string title, std::string subtitle, bool selected);

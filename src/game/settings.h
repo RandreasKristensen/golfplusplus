@@ -24,6 +24,7 @@ inline constexpr const char* setting_mouse_sensitivity = "mouse_sensitivity";  /
 inline constexpr const char* setting_fullscreen = "fullscreen";  // 0 windowed, 1 borderless fullscreen
 inline constexpr const char* setting_tape_wear = "tape_wear";    // from a fresh tape (min) to a worn one (max)
 inline constexpr const char* setting_datestamp = "datestamp";    // 0 off, 1 the camcorder's date and time in the corner
+inline constexpr const char* setting_interact_prompt = "interact_prompt";  // 0 off, 1 the F key shown when F would act
 
 struct setting_definition {
     std::string id;
@@ -58,6 +59,8 @@ int setting_step_index(const settings_values& values, const setting_definition& 
 float setting_fraction(const settings_values& values, const setting_definition& definition);
 // Moves the value by `steps` steps, clamped to the range.
 settings_values adjust_setting(const settings_values& values, const setting_definition& definition, int steps);
+// Moves the value by `steps` steps, past either end round to the other.
+settings_values cycle_setting(const settings_values& values, const setting_definition& definition, int steps);
 
 // Values for the known settings in the text, clamped to their ranges;
 // unknown ids are dropped. nullopt when the text is not a settings file.

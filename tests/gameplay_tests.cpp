@@ -297,42 +297,6 @@ TEST_CASE("the putter meter runs at its own timing speed") {
     CHECK(putter.swing.power < wedge.swing.power);
 }
 
-TEST_CASE("retee puts the ball back without a penalty stroke") {
-    game_state state = started_hole();
-    const glm::vec3 tee_ball = state.ball.position;
-    hit_selected_club(state);
-    for (int i = 0; i < 2000 && state.shot; ++i) {
-        update_game(state, game_input{}, 0.05f);
-    }
-    REQUIRE(!state.shot.has_value());
-    REQUIRE(state.hole->index == 0U);
-    REQUIRE(state.ball.position != tee_ball);
-
-    game_input retee;
-    retee.retee = true;
-    update_game(state, retee, 0.016f);
-
-    CHECK(state.ball.position == tee_ball);
-    CHECK(state.swing.phase == swing_phase::idle);
-    CHECK(state.mode == game_mode::walking);
-    CHECK(state.stroke_count == 1);
-}
-
-TEST_CASE("retee waits for a playing shot, which may hole") {
-    game_state state = started_hole();
-    hit_selected_club(state);
-    update_game(state, game_input{}, 0.016f);
-    REQUIRE(state.shot.has_value());
-    const glm::vec3 in_flight = state.ball.position;
-
-    game_input retee;
-    retee.retee = true;
-    update_game(state, retee, 0.016f);
-
-    CHECK(state.shot.has_value());
-    CHECK(state.ball.position != in_flight);  // still playing
-}
-
 TEST_CASE("overlays show only while held, and the rangefinder only on foot") {
     game_state state = started_hole();
 

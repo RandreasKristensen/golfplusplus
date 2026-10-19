@@ -74,7 +74,7 @@
     "ball_stand_off_distance": 2.0,
     "address_back_distance": 0.4,
     "emote_seconds": 2.0,
-    "jump_speed": 3.5,
+    "jump_speed": 4.0,
     "jump_gravity": 14.0
   },
   "cart": {

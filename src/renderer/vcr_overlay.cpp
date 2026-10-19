@@ -44,6 +44,11 @@ void draw_datestamp(overlay_batch& batch, const text_assets& text, const render_
     draw_burned_in(batch, text, find_text_style(text, style_datestamp), lines, datestamp_box());
 }
 
+void draw_interact_prompt(overlay_batch& batch, const text_assets& text) {
+    const text_style& style = with_align(find_text_style(text, style_datestamp), text_align::center);
+    draw_burned_in(batch, text, style, lookup_text(text, text_controls_key_f), ui_rect{glm::vec2(0.0f, -0.32f), glm::vec2(0.10f, 0.05f)});
+}
+
 void draw_vcr_tag(overlay_batch& batch, const text_assets& text, const render_vcr& vcr) {
     if (vcr.tag == vcr_tag::none) {
         return;

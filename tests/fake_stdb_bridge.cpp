@@ -179,10 +179,6 @@ void stdb_return_to_hub(stdb_client*) {
     record("stdb_return_to_hub");
 }
 
-void stdb_retee(stdb_client*) {
-    record("stdb_retee");
-}
-
 void stdb_pick_up_ball(stdb_client*) {
     record("stdb_pick_up_ball");
 }

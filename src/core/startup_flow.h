@@ -5,7 +5,7 @@
 // the round?" menu, which also opens settings. Turns input
 // into state changes plus actions, online requests and UI sounds for app to
 // carry out, and builds the menu render data. No SDL and no network: app
-// converts mouse clicks to overlay clip space first, and tells the flow how
+// converts the mouse to overlay clip space first, and tells the flow how
 // the connection is (online_menu_status). New screens go here.
 
 #include "core/input.h"
@@ -26,6 +26,23 @@
 
 #include <glm/vec2.hpp>
 
+// The mouse over a menu this frame, in overlay clip space: where the cursor
+// moved to (it selects the tile under it, as hovering), and where the left
+// button was pressed.
+struct menu_pointer {
+    std::optional<glm::vec2> hover;
+    std::optional<glm::vec2> click;
+};
+
+// The settings screen's place: the selected setting (an index into the
+// ones the search matches, BACK after them), the first one shown, and
+// what was typed to search.
+struct settings_view {
+    int selection = 0;
+    int scroll = 0;
+    std::string search;
+};
+
 enum class startup_flow {
     main,
     help,
@@ -37,6 +54,7 @@ enum class startup_flow {
     link_code_show,        // LINK ANOTHER LOGIN: the code to enter on the other login
     online_course_picker,
     joining,               // join_course sent, waiting for the room
+    exit_prompt,           // Escape on the main menu: quit the game? Opens on NO
     playing
 };
 
@@ -66,6 +84,7 @@ struct startup_catalog {
     std::string name_chars;
     std::size_t name_max_length = 0;
     std::vector<setting_definition> settings;  // the settings screen's entries
+    std::vector<std::string> setting_labels;   // and their names, as shown
 };
 
 // How online play is going, as the menus need it. app fills it each frame
@@ -97,9 +116,10 @@ struct startup_flow_state {
     // 0 = YES, 1 = NO, 2 = SETTINGS. Opens on NO so a stray key press never
     // quits a round.
     int confirm_selection = 1;
-    // The in-round menu shows settings instead, with this selection.
+    // The in-round menu shows settings instead.
     bool confirm_settings = false;
-    int settings_selection = 0;
+    // The settings screen's, from the main menu or the in-round menu.
+    settings_view settings_view;
     // The player's settings: app loads them, applies them when a menu
     // reports settings_changed, and saves them. Kept across every screen.
     settings_values settings;
@@ -169,24 +189,25 @@ struct confirm_menu_result {
 // settings screen's entries.
 startup_catalog load_startup_catalog(const game_content& content, const text_assets& text);
 
-// `click` is this frame's left click in overlay clip space.
+// `pointer` is this frame's mouse over the menu.
 startup_menu_result update_startup_menu(startup_flow_state& state,
                                         const input_state& input,
-                                        std::optional<glm::vec2> click,
+                                        const menu_pointer& pointer,
                                         const startup_catalog& catalog,
                                         const online_menu_status& online = {});
 void enter_playing(startup_flow_state& state);
 void return_to_main_menu(startup_flow_state& state);
 // Back to the online sign-in screen, which shows how the connection is.
 void open_online_login(startup_flow_state& state);
-// Whether the screen has a text field, so app turns typing on.
+// Whether the screen takes typing (a text field, or the settings' search),
+// so app turns typing on.
 bool wants_text_input(const startup_flow_state& state);
 
 void open_confirm_menu(startup_flow_state& state);
 confirm_menu_result update_confirm_menu(startup_flow_state& state,
                                         const input_state& input,
-                                        std::optional<glm::vec2> click,
-                                        const std::vector<setting_definition>& settings);
+                                        const menu_pointer& pointer,
+                                        const startup_catalog& catalog);
 
 render_startup_menu make_startup_menu_render_data(const startup_flow_state& state,
                                                   const startup_catalog& catalog,

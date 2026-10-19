@@ -18,7 +18,7 @@ stdb_string view(const std::string& text) {
 // The reducers net_commands call: the game answers their refusals.
 bool gameplay_reducer(const std::string& reducer) {
     for (const char* name : {reducer_update_motion, reducer_take_shot, reducer_enter_hole, reducer_claim_collectible,
-                             reducer_emote, reducer_retee, reducer_pick_up_ball, reducer_return_to_hub,
+                             reducer_emote, reducer_pick_up_ball, reducer_return_to_hub,
                              reducer_create_group, reducer_join_group, reducer_leave_group, reducer_board_cart,
                              reducer_leave_cart}) {
         if (reducer == name) {
@@ -270,9 +270,6 @@ void net_client::send_commands(game_state& state) {
             stdb_emote(client, name.data(), name.size());
             break;
         }
-        case net_command_type::retee:
-            stdb_retee(client);
-            break;
         case net_command_type::pick_up_ball:
             stdb_pick_up_ball(client);
             break;

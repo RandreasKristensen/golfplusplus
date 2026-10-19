@@ -195,6 +195,17 @@ void jump(game_state& state, const game_input& input, const float dt, frame_prof
     }
 }
 
+// Round the bag either way, one club a step.
+void change_club(game_state& state, const int steps) {
+    if (state.clubs.empty() || steps == 0) {
+        return;
+    }
+    const int count = static_cast<int>(state.clubs.size());
+    const int index = (static_cast<int>(state.selected_club) + steps % count + count) % count;
+    state.selected_club = static_cast<std::size_t>(index);
+    push_audio_event(state, audio_event_type::club_change);
+}
+
 void update_walking(game_state& state, const game_input& input, const float dt, frame_profile* profile) {
     look_around(state, input, dt);
     if (state.ride) {
@@ -205,6 +216,7 @@ void update_walking(game_state& state, const game_input& input, const float dt, 
     const glm::vec3 before = state.player.position;
     walk(state, input, dt);
     jump(state, input, dt, profile);
+    change_club(state, input.wheel_club_steps);
 
     const float meters = horizontal_distance(state.player.position, before) * state.tuning.scale.meters_per_world_unit;
     record_movement(state, state.rewards.walking, state.walk_meters_pending, meters);
@@ -221,27 +233,16 @@ void update_walking(game_state& state, const game_input& input, const float dt, 
     }
 }
 
-// Round the bag either way, one club a step.
-void change_club(game_state& state, const game_input& input) {
-    if (state.clubs.empty() || input.club_steps == 0) {
-        return;
-    }
-    const int count = static_cast<int>(state.clubs.size());
-    const int index = (static_cast<int>(state.selected_club) + input.club_steps % count + count) % count;
-    state.selected_club = static_cast<std::size_t>(index);
-    push_audio_event(state, audio_event_type::club_change);
-}
-
-// The arrow keys, A and D and the mouse all turn the aim; E steps up to the
-// ball.
+// The arrow keys, A and D and the mouse all turn the aim; F or a click steps
+// up to the ball.
 void update_aiming(game_state& state, const game_input& input, const float dt, frame_profile* profile) {
     const float turn = std::clamp(turn_direction(input) + strafe_direction(input), -1.0f, 1.0f);
     state.player.turn_rate = state.tuning.player.aim_turn_rate * turn;
     state.aim_angle = wrap_angle(state.aim_angle + state.player.turn_rate * dt + input.look_yaw);
     state.player.yaw = state.aim_angle;
-    change_club(state, input);
+    change_club(state, input.club_steps);
 
-    if (input.interact) {
+    if (input.interact || input.click) {
         state.player.position =
             address_stance_position(state.area, state.ball.position, state.aim_angle, state.tuning.player, profile);
         state.player.turn_rate = 0.0f;
@@ -278,7 +279,7 @@ void launch_shot(game_state& state) {
 }
 
 void update_addressing(game_state& state, const game_input& input, const float dt) {
-    change_club(state, input);
+    change_club(state, input.club_steps);
 
     if (state.swing.phase == swing_phase::timing) {
         state.swing.elapsed += dt;
@@ -391,11 +392,7 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
         request_group(state);
     }
 
-    // A retee waits for a playing shot to finish: it may already have holed.
-    if (input.retee && state.hole && !shot_playing(state)) {
-        retee_ball(state);
-        record_retee(state);
-    } else if (input.cancel && (state.mode == game_mode::aiming || state.mode == game_mode::addressing)) {
+    if (input.cancel && (state.mode == game_mode::aiming || state.mode == game_mode::addressing)) {
         state.mode = game_mode::walking;
         state.swing = swing_state{};
     } else {
@@ -472,6 +469,19 @@ bool can_interact_with_ball(const game_state& state) {
     return state.hole &&
         horizontal_distance(state.player.position, state.ball.position) <= state.tuning.player.ball_interact_radius &&
         !shot_playing(state);
+}
+
+bool interact_available(const game_state& state) {
+    if (state.mode != game_mode::walking || !on_foot(state)) {
+        return false;
+    }
+    if (nearest_seat(state)) {
+        return true;
+    }
+    if (in_hub(state)) {
+        return cup_ball_in_reach(state) || nearby_collectible(state) || nearby_hole_start(state);
+    }
+    return can_interact_with_ball(state);
 }
 
 std::optional<std::size_t> nearby_hole_start(const game_state& state) {

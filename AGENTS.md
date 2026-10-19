@@ -82,7 +82,7 @@ Everything is unlocked today: no money, shop, quests or unlock gating.
 | The ground's static meshes on the GPU (terrain, drawn zone shapes) | `src/renderer/terrain_renderer.h` |
 | The sky: gradient, horizon glow, clouds lit by the low sun, sun, moon, stars (one home, with the course's panoramas) | `src/renderer/backdrop_pass.h` and `assets/shaders/backdrop.frag`; its numbers in the `sky` section of `assets/visuals/lighting.json` |
 | Course backdrops, ground textures | `tooling/art/make_art.py`, drawn by `src/renderer/backdrop_pass.h` and `assets/shaders/terrain.frag` |
-| What players download: the installer, the zip, `THIRD_PARTY.txt` | `tooling/release/build_release.ps1` (`tooling/README.md`); what it stages is the `install` rules in `CMakeLists.txt` |
+| What players download: the installer, the zip, the server package, `THIRD_PARTY.txt` | `tooling/release/build_release.ps1` (`tooling/README.md`); what it stages is the `install` rules in `CMakeLists.txt` |
 
 Reuse these instead of writing your own: `src/physics/vector_math.h` (yaw,
 horizontal distance, safe normalize, `clamp01`; use `glm::radians` and
@@ -125,7 +125,9 @@ tooling\net\check_determinism.ps1 -Emsdk <emsdk>         # golden shots, native 
 ```
 
 Running a server, configuring who may sign in and pointing the game at it is
-`server/README.md` (written for players who self-host). For local multiplayer,
+`server/hosting.md`, the README of the server package every release ships
+(written for owners who run their own server; they get the built module,
+never its source). For local multiplayer,
 `.\tooling\gb -m` does all of that (starting the server
 only for the session, publishing only a changed module, anonymous logins on)
 and launches two anonymous clients; `.\tooling\gb -x` stops them and the
@@ -311,8 +313,8 @@ libraries in `CMakeLists.txt` are SDL- and GL-free so tests link them; only the
 
 **Offline always works.** Offline must never need a server, an account or
 Steam (the "Stop Killing Games" idea: the game keeps working if the official
-server shuts down, and the server stays self-hostable, no Maincloud-only
-features). No Steam DRM, no forced relaunch through Steam. Offline and online
+server shuts down, and every release ships its server as a package owners can
+run themselves, so no Maincloud-only features). No Steam DRM, no forced relaunch through Steam. Offline and online
 progress never mix: the local save is offline only, and nothing imports,
 exports or merges between the two. Accounts are not logins: progress is keyed
 by an account id, and one account can have several logins. An anonymous login

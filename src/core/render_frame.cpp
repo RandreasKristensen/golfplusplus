@@ -210,6 +210,7 @@ render_data make_render_data(const game_state& game,
                              const std::vector<skill_definition>& skills,
                              const render_meshes& meshes,
                              const float fov_degrees,
+                             const bool interact_prompt,
                              frame_profile* profile) {
     render_data data;
     const camera_view view = live_camera_view(game, fov_degrees);
@@ -279,6 +280,7 @@ render_data make_render_data(const game_state& game,
 
     data.mode_label = mode_label(game, text);
     data.show_swing_clock = game.mode == game_mode::addressing;
+    data.show_interact_prompt = interact_prompt && interact_available(game);
     data.swing_running = game.swing.phase == swing_phase::timing;
     data.stroke_count = game.stroke_count;
     if (game.selected_club < game.clubs.size()) {

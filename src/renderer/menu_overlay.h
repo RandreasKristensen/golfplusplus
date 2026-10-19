@@ -59,6 +59,10 @@ struct render_startup_menu {
     std::string code;
     float cursor_time = 0.0f;  // the field's cursor blinks with it
     std::vector<render_startup_tile> tiles;
+    // A list that scrolls: more of it above the first tile, or below the
+    // last but one (the last is BACK), shown by arrows beside them.
+    bool more_above = false;
+    bool more_below = false;
 };
 
 // Tile layout in overlay clip space for `count` tiles: a single column on

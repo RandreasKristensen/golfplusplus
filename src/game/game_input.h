@@ -23,17 +23,21 @@ struct game_input {
     // Clubs up (positive) or down the bag this frame (clubs are in bag order,
     // shortest first): a key press or a notch of the wheel is one club.
     int club_steps = 0;
+    // The wheel's share of club_steps: walking on foot only the wheel
+    // changes club, as W and S walk.
+    int wheel_club_steps = 0;
     // With what is in reach: start a hole, take up my ball, pick up the one in
     // the cup, claim a collectible, step into or out of a cart; aiming, step
     // up to the ball.
     bool interact = false;
+    // The mouse's left button: aiming, it steps up to the ball as interact does.
+    bool click = false;
     // Over the ball: start the backswing (the power meter), then time the
     // downswing, which hits at the meter's power.
     bool backswing = false;
     bool downswing = false;
     bool jump = false;  // on foot
     bool cancel = false;  // leave shot setup
-    bool retee = false;
     bool smoke = false;
     bool drink = false;
     bool rangefinder_held = false;

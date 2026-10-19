@@ -12,6 +12,9 @@
 namespace {
 constexpr int confirm_item_count = 3;
 constexpr int confirm_settings_item = 2;
+// The exit prompt's YES and NO.
+constexpr int exit_yes = 0;
+constexpr int exit_no = 1;
 
 render_hole_preview make_hole_preview(const hole_data& hole) {
     render_hole_preview preview;
@@ -55,6 +58,8 @@ startup_menu_screen screen_for_flow(const startup_flow flow) {
     case startup_flow::link_code_show:
     case startup_flow::joining:
         return startup_menu_screen::form;
+    case startup_flow::exit_prompt:
+        return startup_menu_screen::confirm;
     case startup_flow::playing:
         return startup_menu_screen::none;
     }
@@ -102,6 +107,8 @@ int item_count(const startup_flow flow, const startup_catalog& catalog, const on
         return static_cast<int>(main_menu_items(online).size());
     case startup_flow::course_picker:
         return static_cast<int>(catalog.courses.size());
+    case startup_flow::exit_prompt:
+        return 2;
     default:
         return 0;
     }
@@ -126,6 +133,7 @@ void accept_main_menu(startup_flow_state& state, const online_menu_status& onlin
         break;
     case main_menu_item::settings:
         open_screen(state, startup_flow::settings);
+        state.settings_view = settings_view{};
         break;
     case main_menu_item::quit:
         result.action = startup_action::quit;
@@ -146,23 +154,27 @@ startup_catalog load_startup_catalog(const game_content& content, const text_ass
     catalog.name_chars = font_charset(text.font);
     catalog.name_max_length = static_cast<std::size_t>(content.tuning.server.name_max_length);
     catalog.settings = content.settings;
+    for (const setting_definition& definition : content.settings) {
+        catalog.setting_labels.push_back(lookup_text(text, definition.label_key.c_str()));
+    }
     return catalog;
 }
 
 startup_menu_result update_startup_menu(startup_flow_state& state,
                                         const input_state& input,
-                                        const std::optional<glm::vec2> click,
+                                        const menu_pointer& pointer,
                                         const startup_catalog& catalog,
                                         const online_menu_status& online) {
     startup_menu_result result;
     state.clock_seconds = online.clock_seconds;
     if (is_online_flow(state.flow)) {
-        update_online_menu(state, input, click, catalog, online, result);
+        update_online_menu(state, input, pointer, catalog, online, result);
         return result;
     }
     if (state.flow == startup_flow::settings) {
         const settings_menu_result settings =
-            update_settings_menu(state.selection, state.settings, catalog.settings, input, click, result.sounds);
+            update_settings_menu(state.settings_view, state.settings, catalog.settings, catalog.setting_labels, input, pointer,
+                                 result.sounds);
         result.settings_changed = settings.changed;
         if (settings.back) {
             return_to_main_menu(state);
@@ -173,12 +185,13 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
     const int count = item_count(state.flow, catalog, online);
     const bool picker = state.flow == startup_flow::course_picker;
     const int hit = select_with_input(screen_for_flow(state.flow), picker ? picker_columns : 1, state.selection, count, input,
-                                      click, result.sounds);
+                                      pointer, result.sounds);
 
-    if (input.backspace.pressed || input.escape.pressed) {
+    if (input.escape.pressed) {
         result.sounds.push_back(ui_sound::back);
         if (state.flow == startup_flow::main) {
-            result.action = startup_action::quit;
+            open_screen(state, startup_flow::exit_prompt);
+            state.selection = exit_no;
         } else {
             return_to_main_menu(state);
         }
@@ -197,6 +210,13 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
     case startup_flow::course_picker:
         result.action = startup_action::start_course;
         result.course = catalog.courses[selected].course;
+        break;
+    case startup_flow::exit_prompt:
+        if (state.selection == exit_yes) {
+            result.action = startup_action::quit;
+        } else {
+            return_to_main_menu(state);
+        }
         break;
     default:
         break;
@@ -219,7 +239,8 @@ void open_online_login(startup_flow_state& state) {
 }
 
 bool wants_text_input(const startup_flow_state& state) {
-    return state.flow == startup_flow::name_entry || state.flow == startup_flow::link_code_entry;
+    return state.flow == startup_flow::name_entry || state.flow == startup_flow::link_code_entry ||
+        state.flow == startup_flow::settings || (state.confirm_active && state.confirm_settings);
 }
 
 void open_confirm_menu(startup_flow_state& state) {
@@ -230,29 +251,30 @@ void open_confirm_menu(startup_flow_state& state) {
 
 confirm_menu_result update_confirm_menu(startup_flow_state& state,
                                         const input_state& input,
-                                        const std::optional<glm::vec2> click,
-                                        const std::vector<setting_definition>& settings) {
+                                        const menu_pointer& pointer,
+                                        const startup_catalog& catalog) {
     confirm_menu_result result;
     if (state.confirm_settings) {
         const settings_menu_result outcome =
-            update_settings_menu(state.settings_selection, state.settings, settings, input, click, result.sounds);
+            update_settings_menu(state.settings_view, state.settings, catalog.settings, catalog.setting_labels, input, pointer,
+                                 result.sounds);
         result.settings_changed = outcome.changed;
         state.confirm_settings = !outcome.back;
         return result;
     }
     const int hit = select_with_input(startup_menu_screen::confirm, 1, state.confirm_selection, confirm_item_count,
-                                      input, click, result.sounds);
+                                      input, pointer, result.sounds);
 
     if (input.enter.pressed || input.space.pressed || hit >= 0) {
         result.sounds.push_back(ui_sound::select);
         if (state.confirm_selection == confirm_settings_item) {
             state.confirm_settings = true;
-            state.settings_selection = 0;
+            state.settings_view = settings_view{};
             return result;
         }
         state.confirm_active = false;
         result.leave_round = state.confirm_selection == 0;
-    } else if (input.escape.pressed || input.backspace.pressed) {
+    } else if (input.escape.pressed) {
         result.sounds.push_back(ui_sound::back);
         state.confirm_active = false;
     }
@@ -293,7 +315,12 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
         break;
     }
     case startup_flow::settings:
-        return make_settings_menu_render_data(state.selection, state.settings, catalog.settings, text);
+        return make_settings_menu_render_data(state.settings_view, state.settings, catalog.settings, text);
+    case startup_flow::exit_prompt:
+        menu.title = lookup_text(text, text_menu_exit_title);
+        add_tile(menu, lookup_text(text, text_menu_confirm_yes), "", selected(exit_yes));
+        add_tile(menu, lookup_text(text, text_menu_confirm_no), "", selected(exit_no));
+        break;
     case startup_flow::help:
         menu.title = lookup_text(text, text_menu_help_title);
         menu.subtitle = lookup_text(text, text_menu_help_subtitle);
@@ -315,7 +342,7 @@ render_startup_menu make_confirm_menu_render_data(const startup_flow_state& stat
                                                   const text_assets& text,
                                                   const std::vector<setting_definition>& settings) {
     if (state.confirm_settings) {
-        return make_settings_menu_render_data(state.settings_selection, state.settings, settings, text);
+        return make_settings_menu_render_data(state.settings_view, state.settings, settings, text);
     }
     render_startup_menu menu;
     menu.screen = startup_menu_screen::confirm;

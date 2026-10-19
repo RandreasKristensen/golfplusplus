@@ -17,7 +17,7 @@ int select_with_input(const startup_menu_screen screen,
                       int& selection,
                       const int count,
                       const input_state& input,
-                      const std::optional<glm::vec2> click,
+                      const menu_pointer& pointer,
                       std::vector<ui_sound>& sounds) {
     if (count <= 0) {
         selection = 0;
@@ -26,7 +26,11 @@ int select_with_input(const startup_menu_screen screen,
     // The tiles can change under the selection (signing out drops two).
     selection = std::min(selection, count - 1);
     const int previous = selection;
-    const int hit = click ? startup_tile_at(screen, count, *click) : -1;
+    const int hovered = pointer.hover ? startup_tile_at(screen, count, *pointer.hover) : -1;
+    if (hovered >= 0) {
+        selection = hovered;
+    }
+    const int hit = pointer.click ? startup_tile_at(screen, count, *pointer.click) : -1;
     if (hit >= 0) {
         selection = hit;
     }

@@ -68,10 +68,17 @@ TEST_CASE("the wheel changes club a notch a club, away from me longer like W and
     w_and_wheel.wheel_steps = -1;
     CHECK(game_input_from_keys(w_and_wheel, 0.0f).club_steps == 0);
 
-    // Wherever W and S change club: aiming and over the ball.
+    // Walking on foot only the wheel changes club, as W and S walk.
     game_state state = started_hole();
     input_state notch;
     notch.wheel_steps = 1;
+    update_game(state, game_input_from_keys(notch, 0.0f), 0.016f);
+    CHECK(state.selected_club == 1);
+    update_game(state, game_input_from_keys(held(&input_state::key_w), 0.0f), 0.016f);
+    CHECK(state.selected_club == 1);
+    state.selected_club = 0;
+
+    // And wherever W and S change club: aiming and over the ball.
     enter_aiming(state);
     update_game(state, game_input_from_keys(notch, 0.0f), 0.016f);
     CHECK(state.selected_club == 1);
@@ -81,64 +88,74 @@ TEST_CASE("the wheel changes club a notch a club, away from me longer like W and
     CHECK(state.selected_club == 2 % state.clubs.size());
 }
 
-TEST_CASE("E takes up the ball and steps up to it, D starts the backswing and A hits; Space only jumps") {
-    const game_input e = game_input_from_keys(held(&input_state::key_e), 0.0f);
-    CHECK(e.interact);
-    CHECK(!e.backswing);
-    CHECK(!e.jump);
+TEST_CASE("F takes up the ball and steps up to it, E starts the backswing and Q hits; Space only jumps") {
+    const game_input f = game_input_from_keys(held(&input_state::key_f), 0.0f);
+    CHECK(f.interact);
+    CHECK(!f.backswing);
+    CHECK(!f.jump);
     const game_input space = game_input_from_keys(held(&input_state::space), 0.0f);
     CHECK(space.jump);
     CHECK(!space.interact);
     CHECK(!space.backswing);
     CHECK(!space.downswing);
-    const game_input d = game_input_from_keys(held(&input_state::key_d), 0.0f);
-    CHECK(d.backswing);
-    CHECK(!d.downswing);
-    const game_input a = game_input_from_keys(held(&input_state::key_a), 0.0f);
-    CHECK(a.downswing);
-    CHECK(!a.backswing);
+    const game_input e = game_input_from_keys(held(&input_state::key_e), 0.0f);
+    CHECK(e.backswing);
+    CHECK(!e.downswing);
+    const game_input q = game_input_from_keys(held(&input_state::key_q), 0.0f);
+    CHECK(q.downswing);
+    CHECK(!q.backswing);
 
-    // Space beside the ball does not take it up; E does.
+    // Space beside the ball does not take it up; F does.
     game_state state = started_hole();
     update_game(state, game_input_from_keys(held(&input_state::space), 0.0f), 0.016f);
     CHECK(state.mode == game_mode::walking);
-    update_game(state, game_input_from_keys(held(&input_state::key_e), 0.0f), 0.016f);
+    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f), 0.016f);
     REQUIRE(state.mode == game_mode::aiming);
 
-    // Aiming, D turns the aim and Space does nothing; E steps up to the ball.
+    // Aiming, D turns the aim and Space does nothing; F steps up to the ball.
     const float aim = state.aim_angle;
     update_game(state, game_input_from_keys(held(&input_state::key_d), 0.0f), 0.016f);
     CHECK(state.mode == game_mode::aiming);
     CHECK(state.aim_angle != aim);
     update_game(state, game_input_from_keys(held(&input_state::space), 0.0f), 0.016f);
     CHECK(state.mode == game_mode::aiming);
-    update_game(state, game_input_from_keys(held(&input_state::key_e), 0.0f), 0.016f);
+    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f), 0.016f);
     REQUIRE(state.mode == game_mode::addressing);
     CHECK(state.swing.phase == swing_phase::idle);
 
-    // Over the ball, A, E and Space before the backswing do nothing.
-    for (button_state input_state::*key : {&input_state::key_a, &input_state::key_e, &input_state::space}) {
+    // Over the ball, Q, F and Space before the backswing do nothing.
+    for (button_state input_state::*key : {&input_state::key_q, &input_state::key_f, &input_state::space}) {
         update_game(state, game_input_from_keys(held(key), 0.0f), 0.016f);
         CHECK(state.mode == game_mode::addressing);
         CHECK(state.swing.phase == swing_phase::idle);
     }
-    update_game(state, game_input_from_keys(held(&input_state::key_d), 0.0f), 0.016f);
+    update_game(state, game_input_from_keys(held(&input_state::key_e), 0.0f), 0.016f);
     REQUIRE(state.swing.phase == swing_phase::timing);
-    update_game(state, game_input_from_keys(held(&input_state::key_d), 0.0f), 0.016f);
+    update_game(state, game_input_from_keys(held(&input_state::key_e), 0.0f), 0.016f);
     CHECK(state.swing.phase == swing_phase::timing);
     CHECK(state.stroke_count == 0);
-    update_game(state, game_input_from_keys(held(&input_state::key_a), 0.0f), 0.016f);
+    update_game(state, game_input_from_keys(held(&input_state::key_q), 0.0f), 0.016f);
     CHECK(state.stroke_count == 1);
     CHECK(shot_playing(state));
 }
 
-TEST_CASE("Space at the wheel does not jump or step out of the cart; E steps out") {
+TEST_CASE("aiming, a left click steps up to the ball like F; walking, it does nothing") {
+    game_state state = started_hole();
+    update_game(state, game_input_from_keys(held(&input_state::mouse_left), 0.0f), 0.016f);
+    CHECK(state.mode == game_mode::walking);
+    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f), 0.016f);
+    REQUIRE(state.mode == game_mode::aiming);
+    update_game(state, game_input_from_keys(held(&input_state::mouse_left), 0.0f), 0.016f);
+    CHECK(state.mode == game_mode::addressing);
+}
+
+TEST_CASE("Space at the wheel does not jump or step out of the cart; F steps out") {
     game_state state = started_hole();
     sit_in_cart(state);
     update_game(state, game_input_from_keys(held(&input_state::space), 0.0f), 0.016f);
     CHECK(driving_cart(state));
     CHECK(!state.player.hop_elapsed);
-    update_game(state, game_input_from_keys(held(&input_state::key_e), 0.0f), 0.016f);
+    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f), 0.016f);
     CHECK(!driving_cart(state));
 }
 

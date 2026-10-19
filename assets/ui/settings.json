@@ -62,6 +62,15 @@
       "max": 1,
       "step": 1,
       "default": 1
+    },
+    {
+      "id": "interact_prompt",
+      "label": "menu.settings.interact_prompt",
+      "values": ["menu.settings.off", "menu.settings.on"],
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1
     }
   ]
 }

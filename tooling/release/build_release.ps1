@@ -1,22 +1,29 @@
 <#
 Builds what players download: build\dist\golfpp-setup-<version>.exe (the
-installer, tooling\release\golfpp.iss) and build\dist\golfpp-<version>.zip
-(the same files, for anyone who would rather not install).
+installer, tooling\release\golfpp.iss), build\dist\golfpp-<version>.zip
+(the same files, for anyone who would rather not install) and
+build\dist\golfpp-server-<version>.zip (the server module, for owners who
+run their own server; server\hosting.md is its README).
 
-  tooling\release\build_release.ps1
+  tooling\release\build_release.ps1 [-Emsdk C:\path\to\emsdk]
 
 Runs the tests, builds the game without a console window in its own build
 folder (build\installer, the release preset), stages it with
 `cmake --install` (the exe, assets\ and the DLLs it loads), writes
 THIRD_PARTY.txt next to it (third_party.py) and compiles the installer.
-The version is project(VERSION) in CMakeLists.txt.
+Then builds the server module and stages it with the hosting guide, the
+licence and THIRD_PARTY.txt. The version is project(VERSION) in
+CMakeLists.txt.
 
 Needs what the game's build needs (MSYS2's MinGW-w64, CMake, Ninja, Rust),
-Python 3 and Inno Setup 6 (ISCC.exe on the PATH or in its default folder).
+Python 3, Inno Setup 6 (ISCC.exe on the PATH or in its default folder), the
+spacetime CLI and the Emscripten SDK (-Emsdk, else EMSDK, else ~\emsdk).
 Release the module built from the same commit first (server/README.md).
 #>
 [CmdletBinding()]
-param()
+param(
+    [string]$Emsdk = $env:EMSDK
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -56,7 +63,30 @@ function Find-Iscc {
     throw "Inno Setup 6 is not installed (ISCC.exe): https://jrsoftware.org/isdl.php"
 }
 
+# The module builds in a shell of its own, so the Emscripten environment
+# never reaches the game's build. Started from Git Bash, MSYSTEM would make
+# emsdk_env set up a Unix shell instead.
+function Build-Module([string]$module_dir) {
+    $env_script = Join-Path $Emsdk "emsdk_env.ps1"
+    $script = "`$ErrorActionPreference = 'Continue'; `$env:EMSDK_QUIET = '1'; " +
+              "Remove-Item Env:MSYSTEM -ErrorAction SilentlyContinue; " +
+              ". '$env_script' *> `$null; " +
+              "& '$spacetime' build --module-path '$module_dir'; exit `$LASTEXITCODE"
+    Invoke-Checked "building the server module" { powershell -NoProfile -NonInteractive -Command $script }
+}
+
 $iscc = Find-Iscc
+$spacetime_command = Get-Command spacetime -ErrorAction SilentlyContinue
+if (-not $spacetime_command) {
+    throw "The spacetime CLI is not on the PATH."
+}
+$spacetime = $spacetime_command.Source
+if (-not $Emsdk) {
+    $Emsdk = Join-Path $HOME "emsdk"
+}
+if (-not (Test-Path -LiteralPath (Join-Path $Emsdk "emsdk_env.ps1"))) {
+    throw "Emscripten SDK not found at ${Emsdk}: pass -Emsdk or set EMSDK."
+}
 $cmake_lists = Get-Content (Join-Path $repo_root "CMakeLists.txt") -Raw
 if ($cmake_lists -notmatch 'project\(golfpp VERSION (\d+\.\d+\.\d+)') {
     throw "No project(golfpp VERSION x.y.z) in CMakeLists.txt"
@@ -111,7 +141,25 @@ try {
         }
         Start-Sleep -Seconds 3
     }
-    Say "done: $(Join-Path $dist_dir "golfpp-setup-$version.exe") and $zip_path"
+    $module_dir = Join-Path $repo_root "server\golfpp_module"
+    Build-Module $module_dir
+    $server_stage_dir = Join-Path $dist_dir "golfpp-server-$version"
+    if (Test-Path $server_stage_dir) {
+        Remove-Item -Recurse -Force $server_stage_dir
+    }
+    New-Item -ItemType Directory -Path $server_stage_dir | Out-Null
+    Copy-Item (Join-Path $module_dir "build\lib.wasm") (Join-Path $server_stage_dir "golfpp.wasm")
+    Copy-Item (Join-Path $repo_root "server\hosting.md") (Join-Path $server_stage_dir "README.md")
+    Copy-Item (Join-Path $repo_root "LICENSE") (Join-Path $server_stage_dir "LICENSE.txt")
+    Copy-Item (Join-Path $stage_dir "THIRD_PARTY.txt") (Join-Path $server_stage_dir "THIRD_PARTY.txt")
+    $server_zip_path = Join-Path $dist_dir "golfpp-server-$version.zip"
+    if (Test-Path $server_zip_path) {
+        Remove-Item -Force $server_zip_path
+    }
+    Say "zipping $server_zip_path"
+    Compress-Archive -Path $server_stage_dir -DestinationPath $server_zip_path
+
+    Say "done: $(Join-Path $dist_dir "golfpp-setup-$version.exe"), $zip_path and $server_zip_path"
 }
 finally {
     Pop-Location

@@ -54,6 +54,27 @@ more per player.
 - [ ] Terms of sale for the game and membership: what a membership is, refunds, and
   that offline and private servers keep working without one.
 
+### Licence and the repository
+The repo is public through the alpha, all rights reserved (`LICENSE`): the
+source is there to read, not to build. Bought copies carry the rights. Every
+release ships the built server (`server/hosting.md`), never its source.
+- [ ] Before the public beta: make the GitHub repo private, and put up a public
+  showcase for the CV (README, screenshots, trailer, a technical write-up);
+  recruiters get read access on request. What was cloned during the alpha stays
+  under the all-rights-reserved `LICENSE`.
+- [ ] Our own site, where the beta's installer and server package are
+  downloaded.
+- [ ] An end-user licence, shown in the installer (Inno Setup's licence page)
+  and on the store pages: an owner of a bought copy may mod it, share mods (not
+  builds), and run or play on private servers with other owners; no
+  redistribution, selling access or paid servers without permission. The free
+  trial gets its own.
+- [ ] A public fan and modding policy: we don't pursue players for enjoying the
+  game their way, only people who sell, re-upload or charge for it. A statement
+  of intent, not a promise in the licence.
+- [ ] A Danish lawyer reviews the end-user licence, the fan policy and the terms
+  of sale together.
+
 ### Privacy and GDPR (EU developer)
 - [ ] Write a privacy policy (what we store, where, how long), on our site and in Steamworks.
 - [ ] Let players delete their account and data. Lapsed accounts are kept, frozen;
@@ -68,7 +89,8 @@ more per player.
 - [x] "(C) OpenStreetMap contributors" shows on the main menu, and with the ODbL
   in `THIRD_PARTY.txt` next to the game. The font has no "©".
 - [ ] Check the ODbL share-alike terms for our changed course data and decide
-  how to publish it (e.g. a public repo with the course JSON).
+  how to publish it once the game's repo is private (e.g. a public repo with
+  only the course JSON).
 
 ### Elevation attribution
 - [ ] Every shipped course is Danish, so the elevation data is the Danish

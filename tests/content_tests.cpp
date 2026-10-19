@@ -1141,7 +1141,8 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
     const startup_catalog catalog = load_startup_catalog(shipped_content(), text);
     const online_menu_status online = busy_online(catalog.name_max_length);
     for (const overlay_grid& grid : shipped_grids()) {
-        for (const startup_flow flow : {startup_flow::main, startup_flow::help, startup_flow::course_picker, startup_flow::link_code_show,
+        for (const startup_flow flow : {startup_flow::main, startup_flow::help, startup_flow::course_picker, startup_flow::exit_prompt,
+                                        startup_flow::link_code_show,
                                         startup_flow::online_course_picker}) {
             startup_flow_state state;
             state.flow = flow;

@@ -71,7 +71,8 @@ bool has_applied_settings(const std::vector<setting_definition>& definitions) {
         find_setting(definitions, setting_mouse_sensitivity) != nullptr &&
         find_setting(definitions, setting_fullscreen) != nullptr &&
         find_setting(definitions, setting_tape_wear) != nullptr &&
-        find_setting(definitions, setting_datestamp) != nullptr;
+        find_setting(definitions, setting_datestamp) != nullptr &&
+        find_setting(definitions, setting_interact_prompt) != nullptr;
 }
 
 int setting_value(const settings_values& values, const setting_definition& definition) {
@@ -92,6 +93,14 @@ settings_values adjust_setting(const settings_values& values, const setting_defi
     settings_values result = values;
     result[definition.id] =
         std::clamp(setting_value(values, definition) + steps * definition.step, definition.min, definition.max);
+    return result;
+}
+
+settings_values cycle_setting(const settings_values& values, const setting_definition& definition, const int steps) {
+    const int count = (definition.max - definition.min) / definition.step + 1;
+    const int index = ((setting_step_index(values, definition) + steps) % count + count) % count;
+    settings_values result = values;
+    result[definition.id] = definition.min + index * definition.step;
     return result;
 }
 

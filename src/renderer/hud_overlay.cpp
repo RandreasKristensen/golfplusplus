@@ -7,6 +7,7 @@
 #include "renderer/pixel_font.h"
 #include "renderer/scorecard_overlay.h"
 #include "renderer/ui_rect.h"
+#include "renderer/vcr_overlay.h"
 
 #include <algorithm>
 #include <array>
@@ -148,14 +149,14 @@ void draw_swing_clock(overlay_batch& batch, const text_assets& text, const float
     draw_overlay_segment(batch, clock.pivot, clock.point(power, 0.74f), 0.010f, club_color, 0.96f);
     draw_clock_ring(batch, clock, 0.63f, 0.77f, head_from, head_from + head_share, club_color, 0.96f);
 
-    // Beyond the ends of the swing: D towards 12, where the backswing goes,
-    // and A towards 6, where the downswing goes.
+    // Beyond the ends of the swing: E towards 12, where the backswing goes,
+    // and Q towards 6, where the downswing goes.
     const glm::vec2 cap_half(0.048f * x_per_y, 0.048f);
     const float gap = 0.024f;
-    const ui_rect d_cap{glm::vec2(clock.pivot.x - cap_half.x, twelve_end.y + gap + cap_half.y), cap_half};
-    const ui_rect a_cap{glm::vec2(six_end.x - gap * x_per_y - cap_half.x, clock.pivot.y + cap_half.y), cap_half};
-    draw_swing_key(batch, text, text_controls_key_d, d_cap, !swing_running);
-    draw_swing_key(batch, text, text_controls_key_a, a_cap, swing_running);
+    const ui_rect e_cap{glm::vec2(clock.pivot.x - cap_half.x, twelve_end.y + gap + cap_half.y), cap_half};
+    const ui_rect q_cap{glm::vec2(six_end.x - gap * x_per_y - cap_half.x, clock.pivot.y + cap_half.y), cap_half};
+    draw_swing_key(batch, text, text_controls_key_e, e_cap, !swing_running);
+    draw_swing_key(batch, text, text_controls_key_q, q_cap, swing_running);
 }
 
 void draw_cart_hud(overlay_batch& batch, const text_assets& text, const render_data& data) {
@@ -450,6 +451,9 @@ void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& 
     draw_xp_drops(batch, text, data.xp_drops);
     if (data.show_swing_clock) {
         draw_swing_clock(batch, text, data.swing_power, data.swing_running);
+    }
+    if (data.show_interact_prompt) {
+        draw_interact_prompt(batch, text);
     }
     draw_stroke_ticks(batch, data.stroke_count);
     draw_notice(batch, text, data.notice_label);

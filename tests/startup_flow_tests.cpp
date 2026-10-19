@@ -35,27 +35,27 @@ TEST_CASE("main menu opens online, offline, help and settings, and quits from th
     startup_flow_state state;
     input_state input;
     input.enter.pressed = true;
-    update_startup_menu(state, input, std::nullopt, catalog);
+    update_startup_menu(state, input, menu_pointer{}, catalog);
     CHECK(state.flow == startup_flow::online_login);
 
     return_to_main_menu(state);
     state.selection = 1;
-    update_startup_menu(state, input, std::nullopt, catalog);
+    update_startup_menu(state, input, menu_pointer{}, catalog);
     CHECK(state.flow == startup_flow::course_picker);
 
     return_to_main_menu(state);
     state.selection = 2;
-    update_startup_menu(state, input, std::nullopt, catalog);
+    update_startup_menu(state, input, menu_pointer{}, catalog);
     CHECK(state.flow == startup_flow::help);
 
     return_to_main_menu(state);
     state.selection = 3;
-    update_startup_menu(state, input, std::nullopt, catalog);
+    update_startup_menu(state, input, menu_pointer{}, catalog);
     CHECK(state.flow == startup_flow::settings);
 
     return_to_main_menu(state);
     state.selection = 4;
-    const startup_menu_result result = update_startup_menu(state, input, std::nullopt, catalog);
+    const startup_menu_result result = update_startup_menu(state, input, menu_pointer{}, catalog);
     CHECK(result.action == startup_action::quit);
     CHECK(has_sound(result.sounds, ui_sound::select));
 }
@@ -71,14 +71,14 @@ TEST_CASE("signed in, the main menu adds linking and signing out") {
     state.selection = 3;
     input_state input;
     input.enter.pressed = true;
-    startup_menu_result result = update_startup_menu(state, input, std::nullopt, two_courses(), online);
+    startup_menu_result result = update_startup_menu(state, input, menu_pointer{}, two_courses(), online);
     REQUIRE(result.requests.size() == 1U);
     CHECK(result.requests[0].type == online_request_type::sign_out);
 
     // Signed out, the same place is SETTINGS; a selection past the end moves back.
     online = online_menu_status{};
     state.selection = 6;
-    result = update_startup_menu(state, input_state{}, std::nullopt, two_courses(), online);
+    result = update_startup_menu(state, input_state{}, menu_pointer{}, two_courses(), online);
     CHECK(state.selection == 4);
     CHECK(result.requests.empty());
 }
@@ -96,26 +96,52 @@ TEST_CASE("a guest's main menu has signing out but no linking") {
     state.selection = 2;
     input_state input;
     input.enter.pressed = true;
-    const startup_menu_result result = update_startup_menu(state, input, std::nullopt, two_courses(), online);
+    const startup_menu_result result = update_startup_menu(state, input, menu_pointer{}, two_courses(), online);
     REQUIRE(result.requests.size() == 1U);
     CHECK(result.requests[0].type == online_request_type::sign_out);
 }
 
-TEST_CASE("back leaves a sub-menu for the main menu and quits from there") {
+TEST_CASE("Escape leaves a sub-menu for the main menu, and there asks before quitting; backspace never goes back") {
     const startup_catalog catalog = two_courses();
     startup_flow_state state;
     state.flow = startup_flow::course_picker;
     state.selection = 1;
 
+    input_state backspace;
+    backspace.backspace.pressed = true;
+    update_startup_menu(state, backspace, menu_pointer{}, catalog);
+    CHECK(state.flow == startup_flow::course_picker);
+
     input_state input;
     input.escape.pressed = true;
-    startup_menu_result result = update_startup_menu(state, input, std::nullopt, catalog);
+    startup_menu_result result = update_startup_menu(state, input, menu_pointer{}, catalog);
     CHECK(state.flow == startup_flow::main);
     CHECK(state.selection == 0);
     CHECK(result.action == startup_action::none);
     CHECK(has_sound(result.sounds, ui_sound::back));
 
-    result = update_startup_menu(state, input, std::nullopt, catalog);
+    // Escape on the main menu asks, on NO; Escape again closes the question.
+    result = update_startup_menu(state, input, menu_pointer{}, catalog);
+    CHECK(result.action == startup_action::none);
+    REQUIRE(state.flow == startup_flow::exit_prompt);
+    CHECK(state.selection == 1);
+    const render_startup_menu prompt = make_startup_menu_render_data(state, catalog, shipped_text_assets());
+    CHECK(prompt.title == "EXIT THE GAME?");
+    REQUIRE(prompt.tiles.size() == 2U);
+    CHECK(prompt.tiles[1].selected);
+    update_startup_menu(state, input, menu_pointer{}, catalog);
+    CHECK(state.flow == startup_flow::main);
+
+    // NO goes back too; only YES quits.
+    input_state accept;
+    accept.enter.pressed = true;
+    update_startup_menu(state, input, menu_pointer{}, catalog);
+    result = update_startup_menu(state, accept, menu_pointer{}, catalog);
+    CHECK(result.action == startup_action::none);
+    CHECK(state.flow == startup_flow::main);
+    update_startup_menu(state, input, menu_pointer{}, catalog);
+    state.selection = 0;
+    result = update_startup_menu(state, accept, menu_pointer{}, catalog);
     CHECK(result.action == startup_action::quit);
 }
 
@@ -126,14 +152,14 @@ TEST_CASE("course picker asks app to start the selected course without leaving t
 
     input_state input;
     input.right.pressed = true;
-    startup_menu_result result = update_startup_menu(state, input, std::nullopt, catalog);
+    startup_menu_result result = update_startup_menu(state, input, menu_pointer{}, catalog);
     CHECK(state.selection == 1);
     CHECK(has_sound(result.sounds, ui_sound::move));
     CHECK(result.action == startup_action::none);
 
     input = input_state{};
     input.enter.pressed = true;
-    result = update_startup_menu(state, input, std::nullopt, catalog);
+    result = update_startup_menu(state, input, menu_pointer{}, catalog);
     CHECK(result.action == startup_action::start_course);
     CHECK(result.course.id == "second");
     CHECK(result.play == play_mode::offline);
@@ -147,7 +173,7 @@ TEST_CASE("clicking a tile selects and accepts it") {
     const startup_catalog catalog = two_courses();
     startup_flow_state state;
     const glm::vec2 help_tile = startup_tile_center(startup_menu_screen::main, 2, 5);
-    const startup_menu_result result = update_startup_menu(state, input_state{}, help_tile, catalog);
+    const startup_menu_result result = update_startup_menu(state, input_state{}, menu_pointer{std::nullopt, help_tile}, catalog);
     CHECK(state.flow == startup_flow::help);
     CHECK(has_sound(result.sounds, ui_sound::move));
 
@@ -171,7 +197,7 @@ TEST_CASE("a long single column closes up so every tile stays above the footer")
 }
 
 TEST_CASE("confirm menu opens on NO and only YES leaves the round") {
-    const std::vector<setting_definition> settings;
+    const startup_catalog catalog;
     startup_flow_state state;
     enter_playing(state);
     open_confirm_menu(state);
@@ -180,22 +206,22 @@ TEST_CASE("confirm menu opens on NO and only YES leaves the round") {
 
     input_state accept;
     accept.enter.pressed = true;
-    confirm_menu_result result = update_confirm_menu(state, accept, std::nullopt, settings);
+    confirm_menu_result result = update_confirm_menu(state, accept, menu_pointer{}, catalog);
     CHECK(!result.leave_round);
     CHECK(!state.confirm_active);
 
     open_confirm_menu(state);
     input_state up;
     up.up.pressed = true;
-    update_confirm_menu(state, up, std::nullopt, settings);
+    update_confirm_menu(state, up, menu_pointer{}, catalog);
     CHECK(state.confirm_selection == 0);
-    result = update_confirm_menu(state, accept, std::nullopt, settings);
+    result = update_confirm_menu(state, accept, menu_pointer{}, catalog);
     CHECK(result.leave_round);
 
     open_confirm_menu(state);
     input_state cancel;
-    cancel.backspace.pressed = true;
-    result = update_confirm_menu(state, cancel, std::nullopt, settings);
+    cancel.escape.pressed = true;
+    result = update_confirm_menu(state, cancel, menu_pointer{}, catalog);
     CHECK(!result.leave_round);
     CHECK(!state.confirm_active);
     CHECK(has_sound(result.sounds, ui_sound::back));

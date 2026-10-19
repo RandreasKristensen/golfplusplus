@@ -57,17 +57,24 @@ std::string sdl_path(char* path) {
     return result;
 }
 
-// This frame's left click in overlay clip space (-1..1, y up), if any.
-std::optional<glm::vec2> mouse_click_position(const input_state& input, SDL_Window* window) {
-    if (!input.mouse_left.pressed || window == nullptr) {
-        return std::nullopt;
+// The mouse this frame in overlay clip space (-1..1, y up).
+menu_pointer mouse_menu_pointer(const input_state& input, SDL_Window* window) {
+    if (window == nullptr) {
+        return {};
     }
     int width = 1;
     int height = 1;
     SDL_GetWindowSize(window, &width, &height);
     const float x = static_cast<float>(input.mouse_x) / static_cast<float>(std::max(1, width)) * 2.0f - 1.0f;
     const float y = 1.0f - static_cast<float>(input.mouse_y) / static_cast<float>(std::max(1, height)) * 2.0f;
-    return glm::vec2(x, y);
+    menu_pointer pointer;
+    if (input.mouse_dx != 0 || input.mouse_dy != 0) {
+        pointer.hover = glm::vec2(x, y);
+    }
+    if (input.mouse_left.pressed) {
+        pointer.click = glm::vec2(x, y);
+    }
+    return pointer;
 }
 
 void play_ui_sounds(audio_engine& audio, const std::vector<ui_sound>& sounds) {
@@ -263,7 +270,7 @@ void app::run() {
             if (next && is_online(game_)) {
                 audio_.play(sound_ui_select);
                 start_next_round(game_);
-            } else if (next || input_.escape.pressed || input_.backspace.pressed) {
+            } else if (next || input_.escape.pressed) {
                 audio_.play(sound_ui_select);
                 return_to_menu();
             }
@@ -342,7 +349,7 @@ void app::update_menu(frame_profile* profile) {
     set_mouse_captured(false);
     const online_menu_status online = online_status();
     const startup_menu_result result =
-        update_startup_menu(menu_, input_, mouse_click_position(input_, window_.sdl_window()), catalog_, online);
+        update_startup_menu(menu_, input_, mouse_menu_pointer(input_, window_.sdl_window()), catalog_, online);
     play_ui_sounds(audio_, result.sounds);
     if (result.settings_changed) {
         apply_settings(true);
@@ -421,7 +428,7 @@ void app::update_confirm_menu(frame_profile* profile) {
         open_confirm_menu(menu_);
     } else {
         const confirm_menu_result result =
-            ::update_confirm_menu(menu_, input_, mouse_click_position(input_, window_.sdl_window()), content_.settings);
+            ::update_confirm_menu(menu_, input_, mouse_menu_pointer(input_, window_.sdl_window()), catalog_);
         play_ui_sounds(audio_, result.sounds);
         if (result.settings_changed) {
             apply_settings(true);
@@ -430,6 +437,7 @@ void app::update_confirm_menu(frame_profile* profile) {
             return_to_menu();
         }
     }
+    set_text_input_enabled(wants_text_input(menu_));
 
     const bool in_menu = menu_.flow != startup_flow::playing;
     render_data data = make_frame(0.0f, in_menu, profile);
@@ -460,6 +468,7 @@ void app::update_round(const float dt, frame_profile* profile) {
         update_game(game_, game_input_from_keys(input_, mouse_look_radians()), dt, profile);
     }
     set_mouse_captured(true);
+    set_text_input_enabled(false);
     if (game_.save_requested) {
         save_progress();
     }
@@ -515,9 +524,10 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
     // load_game_content refuses settings without the field of view.
     const float fov_degrees =
         static_cast<float>(setting_value(menu_.settings, *find_setting(content_.settings, setting_field_of_view)));
+    const bool interact_prompt = setting_value(menu_.settings, *find_setting(content_.settings, setting_interact_prompt)) != 0;
     render_data data = make_render_data(game_, text_, content_.skills,
                                         render_meshes{&terrain_render_mesh_, &material_overlay_render_mesh_, &hole_signs_, &fences_, &water_, &floodlights_},
-                                        fov_degrees, profile);
+                                        fov_degrees, interact_prompt, profile);
 
     const camera_view desired{data.camera_position, data.camera_target, data.camera_fov_degrees};
     const camera_rig rig = active_camera_rig(game_);

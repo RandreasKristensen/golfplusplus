@@ -211,7 +211,6 @@ reducer!(stdb_leave_room, "leave_room", |conn, done| conn.reducers.leave_room_th
 reducer!(stdb_create_group, "create_group", |conn, done| conn.reducers.create_group_then(done));
 reducer!(stdb_leave_group, "leave_group", |conn, done| conn.reducers.leave_group_then(done));
 reducer!(stdb_return_to_hub, "return_to_hub", |conn, done| conn.reducers.return_to_hub_then(done));
-reducer!(stdb_retee, "retee", |conn, done| conn.reducers.retee_then(done));
 reducer!(stdb_pick_up_ball, "pick_up_ball", |conn, done| conn.reducers.pick_up_ball_then(done));
 reducer!(stdb_leave_cart, "leave_cart", |conn, done| conn.reducers.leave_cart_then(done));
 reducer!(stdb_create_link_code, "create_link_code", |conn, done| conn.reducers.create_link_code_then(done));

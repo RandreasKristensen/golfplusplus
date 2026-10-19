@@ -101,7 +101,6 @@ enum class net_command_type {
     enter_hole,
     claim_collectible,
     emote,
-    retee,
     pick_up_ball,
     create_group,
     join_group,
@@ -118,7 +117,6 @@ inline constexpr const char* reducer_take_shot = "take_shot";
 inline constexpr const char* reducer_enter_hole = "enter_hole";
 inline constexpr const char* reducer_claim_collectible = "claim_collectible";
 inline constexpr const char* reducer_emote = "emote";
-inline constexpr const char* reducer_retee = "retee";
 inline constexpr const char* reducer_pick_up_ball = "pick_up_ball";
 inline constexpr const char* reducer_return_to_hub = "return_to_hub";
 inline constexpr const char* reducer_create_group = "create_group";

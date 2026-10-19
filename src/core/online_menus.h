@@ -25,7 +25,7 @@ void open_link_code_show(startup_flow_state& state, const online_menu_status& on
 
 void update_online_menu(startup_flow_state& state,
                         const input_state& input,
-                        std::optional<glm::vec2> click,
+                        const menu_pointer& pointer,
                         const startup_catalog& catalog,
                         const online_menu_status& online,
                         startup_menu_result& result);

@@ -20,5 +20,3 @@ void draw_key_button(overlay_batch& batch, glm::vec2 center, glm::vec2 half_size
 void draw_arrow_icon(overlay_batch& batch, glm::vec2 center, glm::vec2 direction, glm::vec2 half_size);
 void draw_space_icon(overlay_batch& batch, glm::vec2 center, glm::vec2 half_size);
 void draw_shift_icon(overlay_batch& batch, glm::vec2 center, glm::vec2 half_size);
-void draw_backspace_icon(overlay_batch& batch, glm::vec2 center, glm::vec2 half_size);
-void draw_retee_icon(overlay_batch& batch, glm::vec2 center, glm::vec2 half_size);

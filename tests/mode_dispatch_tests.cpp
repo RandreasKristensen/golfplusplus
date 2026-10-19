@@ -202,17 +202,6 @@ TEST_CASE("starting a hub hole sends enter_hole online") {
     CHECK(pair.online.hole.has_value());
 }
 
-TEST_CASE("a retee is sent online only") {
-    const mode_pair pair = run_both(started_hole(), [](game_state& state) {
-        game_input retee;
-        retee.retee = true;
-        update_game(state, retee, 0.016f);
-    });
-    const std::vector<net_command> sent = gameplay_commands(pair.online);
-    REQUIRE(sent.size() == 1U);
-    CHECK(sent[0].type == net_command_type::retee);
-}
-
 TEST_CASE("completing a hole and the course is saved offline only") {
     const mode_pair pair = run_both(single_hole_course(), [](game_state& state) {
         state.stroke_count = 2;
