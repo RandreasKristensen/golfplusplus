@@ -5,6 +5,7 @@
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
 #include "game/online_play.h"
+#include "game/player_jump.h"
 #include "game/progress_rules.h"
 #include "game/remote_players.h"
 #include "game/shot_simulation.h"
@@ -52,16 +53,6 @@ void append_flight_path_point(game_state& state, const glm::vec3& position) {
     }
 }
 
-// +1 turning left (towards +X), -1 right, 0 for neither or both.
-float turn_direction(const game_input& input) {
-    return static_cast<float>(input.turn_left_held) - static_cast<float>(input.turn_right_held);
-}
-
-// +1 forward, -1 back, 0 for neither or both.
-float walk_direction(const game_input& input) {
-    return static_cast<float>(input.forward_held) - static_cast<float>(input.back_held);
-}
-
 // An emote does not restart while it plays, online or off (the server
 // refuses it too), so smoking earns its XP at most once per animation.
 void update_emotes(game_state& state, const game_input& input, const float dt) {
@@ -100,7 +91,7 @@ std::optional<glm::vec3> rangefinder_target(const game_state& state) {
 void update_overlays(game_state& state, const game_input& input) {
     const bool walking = state.mode == game_mode::walking;
     const std::optional<glm::vec3> target = rangefinder_target(state);
-    state.rangefinder_active = walking && input.rangefinder_held && !input.cart_held && target.has_value();
+    state.rangefinder_active = walking && on_foot(state) && input.rangefinder_held && target.has_value();
     state.rangefinder_distance_meters = target
         ? horizontal_distance(state.player.position, *target) * state.tuning.scale.meters_per_world_unit
         : 0.0f;
@@ -109,66 +100,23 @@ void update_overlays(game_state& state, const game_input& input) {
     state.skills_panel_active = input.skills_panel_held;
 }
 
-void exit_cart(game_state& state) {
-    state.cart = cart_state{false, 0.0f, state.player.yaw, 0.0f};
-}
-
-void update_cart(game_state& state, const game_input& input, const float dt, frame_profile* profile) {
-    if (!input.cart_held) {
-        exit_cart(state);
-        return;
-    }
-
-    const cart_tuning& tuning = state.tuning.cart;
-    if (!state.cart.active) {
-        state.cart = cart_state{true, 0.0f, state.player.yaw, 0.0f};
-        push_audio_event(state, audio_event_type::cart_start);
-    }
-
-    if (input.action) {
-        state.cart.drift_timer = tuning.drift_duration;
-        state.cart.velocity = std::max(state.cart.velocity, tuning.speed * tuning.drift_speed_boost);
-        push_audio_event(state, audio_event_type::cart_drift);
-    }
-    state.cart.drift_timer = std::max(0.0f, state.cart.drift_timer - dt);
-
-    const bool drifting = state.cart.drift_timer > 0.0f;
-    const bool on_road = cart_on_road(state);
-    const bool hub = in_hub(state);
-    const float control = !hub ? 1.0f : (on_road ? tuning.road_control_scale : tuning.off_road_control_scale);
-    const float road_speed = !hub ? 1.0f : (on_road ? tuning.road_speed_scale : tuning.off_road_speed_scale);
-
-    const float turn_rate = (drifting ? tuning.drift_turn_rate : tuning.turn_rate) * control;
-    state.player.turn_rate = turn_rate * turn_direction(input);
-    state.cart.yaw = wrap_angle(state.cart.yaw + state.player.turn_rate * dt);
-
-    const float target_speed = tuning.speed * (drifting ? tuning.drift_speed_boost : 1.0f) * road_speed;
-    const float damping = (drifting ? tuning.drift_damping : tuning.normal_damping) * control;
-    state.cart.velocity += (target_speed - state.cart.velocity) * (1.0f - std::exp(-std::max(0.0f, damping) * dt));
-
-    const glm::vec3 before = state.player.position;
-    state.player.position += yaw_direction(state.cart.yaw) * state.cart.velocity * dt;
-    state.player.position.y = terrain_height(state.area, state.player.position, profile);
-    state.player.yaw = state.cart.yaw;
-    state.player.speed = state.cart.velocity;
-
-    if (on_road && std::abs(state.cart.velocity) > still_speed) {
-        const float meters = horizontal_distance(state.player.position, before) * state.tuning.scale.meters_per_world_unit;
-        record_movement(state, state.rewards.cart_on_road, state.cart_meters_pending, meters);
-        if (drifting) {
-            record_movement(state, state.rewards.drift_on_road, state.drift_meters_pending, meters);
-        }
-    }
-}
-
 // A hole start is its tee: the press that starts the hole also takes up the
 // ball teed there, like any press beside the ball. A ball left in its cup is
-// picked up first: no hole starts before then.
+// picked up first: no hole starts before then. A cart's seat in reach is
+// stepped into unless the hole start or the ball is nearer.
 void interact(game_state& state) {
+    const std::optional<reachable_seat> seat = nearest_seat(state);
+    const auto seat_nearer_than = [&seat](const float distance) { return seat && seat->distance < distance; };
     if (in_hub(state)) {
         const bool cup_ball = cup_ball_in_reach(state);
         const std::optional<std::size_t> collectible = nearby_collectible(state);
         const std::optional<std::size_t> start = nearby_hole_start(state);
+        const bool to_seat = seat && !cup_ball && !collectible &&
+            (!start || seat_nearer_than(horizontal_distance(state.player.position, state.hub->world.hole_starts[*start].position)));
+        if (to_seat) {
+            step_into_seat(state, *seat);
+            return;
+        }
         if (cup_ball || collectible || start) {
             send_motion_now(state);
         }
@@ -183,6 +131,10 @@ void interact(game_state& state) {
         if (!start || !start_hub_hole(state, *start)) {
             return;
         }
+    } else if (seat && (!can_interact_with_ball(state) ||
+                        seat_nearer_than(horizontal_distance(state.player.position, state.ball.position)))) {
+        step_into_seat(state, *seat);
+        return;
     }
     if (can_interact_with_ball(state)) {
         state.mode = game_mode::aiming;
@@ -191,45 +143,105 @@ void interact(game_state& state) {
     }
 }
 
+// The arrow keys and the mouse: on foot they turn me, in a cart my head.
+void look_around(game_state& state, const game_input& input, const float dt) {
+    const player_tuning& tuning = state.tuning.player;
+    const float turn = tuning.turn_rate * turn_direction(input);
+    if (state.ride) {
+        state.look.head_yaw = wrap_angle(state.look.head_yaw + turn * dt + input.look_yaw);
+    } else {
+        state.player.turn_rate = turn;
+        state.player.yaw = wrap_angle(state.player.yaw + turn * dt + input.look_yaw);
+    }
+    const float pitch = state.look.pitch + tuning.look_pitch_rate * look_pitch_direction(input) * dt + input.look_pitch;
+    state.look.pitch = std::clamp(pitch, -tuning.max_look_pitch, tuning.max_look_pitch);
+}
+
+// W and S walk where I look, A and D step sideways, at walking speed in any
+// direction. Moving backwards I keep facing forward: the speed is negative
+// and the move angle within a quarter turn of my yaw.
+void walk(game_state& state, const game_input& input, const float dt) {
+    const float forward = walk_direction(input);
+    const float side = strafe_direction(input);
+    state.player.move_angle = 0.0f;
+    if (forward == 0.0f && side == 0.0f) {
+        return;
+    }
+    const float sign = forward < 0.0f ? -1.0f : 1.0f;
+    state.player.move_angle = std::atan2(side * sign, forward * sign);
+    state.player.speed = state.tuning.player.walk_speed * sign;
+    state.player.position += yaw_direction(state.player.yaw + state.player.move_angle) * (state.player.speed * dt);
+}
+
+// Space hops from the ground, and I walk on in the air as on the ground.
+// Online, the frame I rise past airborne_height tells others I hopped.
+void jump(game_state& state, const game_input& input, const float dt, frame_profile* profile) {
+    const player_tuning& tuning = state.tuning.player;
+    std::optional<float>& seconds = state.player.hop_elapsed;
+    const float before = hop_height(seconds.value_or(0.0f), tuning);
+    if (!seconds && input.jump) {
+        seconds = 0.0f;
+    }
+    if (seconds) {
+        *seconds += dt;
+        if (*seconds >= hop_seconds(tuning)) {
+            seconds.reset();
+        }
+    }
+    const float height = hop_height(seconds.value_or(0.0f), tuning);
+    state.player.position.y = terrain_height(state.area, state.player.position, profile) + height;
+    if (before <= airborne_height && height > airborne_height && !state.ball_correction) {
+        send_motion_now(state);
+    }
+}
+
 void update_walking(game_state& state, const game_input& input, const float dt, frame_profile* profile) {
-    if (input.cart_held || state.cart.active) {
+    look_around(state, input, dt);
+    if (state.ride) {
         update_cart(state, input, dt, profile);
         return;
     }
 
-    const player_tuning& tuning = state.tuning.player;
-    state.player.turn_rate = tuning.turn_rate * turn_direction(input);
-    state.player.yaw = wrap_angle(state.player.yaw + state.player.turn_rate * dt);
-
     const glm::vec3 before = state.player.position;
-    state.player.speed = tuning.walk_speed * walk_direction(input);
-    state.player.position += yaw_direction(state.player.yaw) * (state.player.speed * dt);
-    state.player.position.y = terrain_height(state.area, state.player.position, profile);
+    walk(state, input, dt);
+    jump(state, input, dt, profile);
 
     const float meters = horizontal_distance(state.player.position, before) * state.tuning.scale.meters_per_world_unit;
     record_movement(state, state.rewards.walking, state.walk_meters_pending, meters);
 
-    if (input.action) {
+    if (input.interact) {
         interact(state);
+    }
+    // Taking up the ball or a seat puts me back on my feet.
+    if (state.player.hop_elapsed && (state.mode != game_mode::walking || state.ride)) {
+        state.player.hop_elapsed.reset();
+        if (!state.ride) {
+            state.player.position.y = terrain_height(state.area, state.player.position, profile);
+        }
     }
 }
 
+// Round the bag either way, one club a step.
 void change_club(game_state& state, const game_input& input) {
-    if (state.clubs.empty() || (!input.longer_club && !input.shorter_club)) {
+    if (state.clubs.empty() || input.club_steps == 0) {
         return;
     }
-    const std::size_t count = state.clubs.size();
-    state.selected_club = input.shorter_club ? (state.selected_club + count - 1) % count : (state.selected_club + 1) % count;
+    const int count = static_cast<int>(state.clubs.size());
+    const int index = (static_cast<int>(state.selected_club) + input.club_steps % count + count) % count;
+    state.selected_club = static_cast<std::size_t>(index);
     push_audio_event(state, audio_event_type::club_change);
 }
 
+// The arrow keys, A and D and the mouse all turn the aim; E steps up to the
+// ball.
 void update_aiming(game_state& state, const game_input& input, const float dt, frame_profile* profile) {
-    state.player.turn_rate = state.tuning.player.aim_turn_rate * turn_direction(input);
-    state.aim_angle = wrap_angle(state.aim_angle + state.player.turn_rate * dt);
+    const float turn = std::clamp(turn_direction(input) + strafe_direction(input), -1.0f, 1.0f);
+    state.player.turn_rate = state.tuning.player.aim_turn_rate * turn;
+    state.aim_angle = wrap_angle(state.aim_angle + state.player.turn_rate * dt + input.look_yaw);
     state.player.yaw = state.aim_angle;
     change_club(state, input);
 
-    if (input.action) {
+    if (input.interact) {
         state.player.position =
             address_stance_position(state.area, state.ball.position, state.aim_angle, state.tuning.player, profile);
         state.player.turn_rate = 0.0f;
@@ -273,17 +285,19 @@ void update_addressing(game_state& state, const game_input& input, const float d
         state.swing.power =
             swing_meter_power(state.swing.elapsed, effective_club_stats(state).timing_speed, state.tuning.swing.meter_cycle_seconds);
     }
-    if (!input.action) {
-        return;
-    }
     if (state.swing.phase == swing_phase::idle) {
+        if (!input.backswing) {
+            return;
+        }
         state.swing = swing_state{swing_phase::timing, 0.0f, 0.0f};
         push_audio_event(state, audio_event_type::swing_start);
         // Online others raise their club with mine from when the server hears it.
         send_motion_now(state);
         return;
     }
-    launch_shot(state);
+    if (input.downswing) {
+        launch_shot(state);
+    }
 }
 
 void play_shot_events(game_state& state, shot_playback& shot) {
@@ -324,6 +338,8 @@ void update_shot_playback(game_state& state, const float dt) {
     state.mode = game_mode::walking;
     state.flight_path_points.clear();
     if (holed) {
+        // The shot camera was watching the ball drop: walk on looking at the cup.
+        state.player.yaw = yaw_towards(state.player.position, state.ball.position);
         push_audio_event(state, audio_event_type::ball_cup);
     }
     // Online the hole is over when the server says so (game/online_play.h).
@@ -351,9 +367,10 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
         if (waiting_for_group(state)) {
             state.player.speed = 0.0f;
             state.player.turn_rate = 0.0f;
+            state.player.move_angle = 0.0f;
             update_emotes(state, input, dt);
             game_input moving = input;
-            moving.action = false;
+            moving.interact = false;
             update_walking(state, moving, dt, profile);
             watch_room(state, dt);
             update_remote_players(state, dt);
@@ -366,6 +383,7 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
     state.hole_time += dt;
     state.player.speed = 0.0f;
     state.player.turn_rate = 0.0f;
+    state.player.move_angle = 0.0f;
     update_emotes(state, input, dt);
     if (input.leave_group) {
         request_leave_group(state);
@@ -394,8 +412,8 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
         case game_mode::following_shot:
             break;
         }
-        if (state.mode != game_mode::walking && state.cart.active) {
-            exit_cart(state);
+        if (state.mode != game_mode::walking) {
+            leave_cart_at_once(state);
         }
         update_shot_playback(state, dt);
     }
@@ -414,6 +432,10 @@ void update_xp_drops(game_state& state, const float dt) {
     state.xp_drops.erase(std::remove_if(state.xp_drops.begin(), state.xp_drops.end(),
                                         [lifetime](const xp_drop& drop) { return drop.age >= lifetime; }),
                          state.xp_drops.end());
+}
+
+float view_yaw(const game_state& state) {
+    return wrap_angle(state.player.yaw + (state.ride ? state.look.head_yaw : 0.0f));
 }
 
 bool in_hub(const game_state& state) {

@@ -16,6 +16,7 @@
     X(PFNGLATTACHSHADERPROC, glAttachShader)                        \
     X(PFNGLBEGINQUERYPROC, glBeginQuery)                            \
     X(PFNGLBINDBUFFERPROC, glBindBuffer)                            \
+    X(PFNGLBINDBUFFERBASEPROC, glBindBufferBase)                    \
     X(PFNGLBINDFRAMEBUFFERPROC, glBindFramebuffer)                  \
     X(PFNGLBINDRENDERBUFFERPROC, glBindRenderbuffer)                \
     X(PFNGLBINDVERTEXARRAYPROC, glBindVertexArray)                  \
@@ -49,6 +50,7 @@
     X(PFNGLGETQUERYOBJECTUIVPROC, glGetQueryObjectuiv)              \
     X(PFNGLGETSHADERINFOLOGPROC, glGetShaderInfoLog)                \
     X(PFNGLGETSHADERIVPROC, glGetShaderiv)                          \
+    X(PFNGLGETUNIFORMBLOCKINDEXPROC, glGetUniformBlockIndex)        \
     X(PFNGLGETUNIFORMLOCATIONPROC, glGetUniformLocation)            \
     X(PFNGLLINKPROGRAMPROC, glLinkProgram)                          \
     X(PFNGLRENDERBUFFERSTORAGEPROC, glRenderbufferStorage)          \
@@ -57,8 +59,11 @@
     X(PFNGLUNIFORM1IPROC, glUniform1i)                              \
     X(PFNGLUNIFORM2FVPROC, glUniform2fv)                            \
     X(PFNGLUNIFORM3FVPROC, glUniform3fv)                            \
+    X(PFNGLUNIFORM4FVPROC, glUniform4fv)                            \
+    X(PFNGLUNIFORMBLOCKBINDINGPROC, glUniformBlockBinding)          \
     X(PFNGLUNIFORMMATRIX4FVPROC, glUniformMatrix4fv)                \
     X(PFNGLUSEPROGRAMPROC, glUseProgram)                            \
+    X(PFNGLVERTEXATTRIB3FPROC, glVertexAttrib3f)                    \
     X(PFNGLVERTEXATTRIBDIVISORPROC, glVertexAttribDivisor)          \
     X(PFNGLVERTEXATTRIBPOINTERPROC, glVertexAttribPointer)
 
@@ -73,6 +78,7 @@ bool load_gl_functions();
 #define glAttachShader golfpp_glAttachShader
 #define glBeginQuery golfpp_glBeginQuery
 #define glBindBuffer golfpp_glBindBuffer
+#define glBindBufferBase golfpp_glBindBufferBase
 #define glBindFramebuffer golfpp_glBindFramebuffer
 #define glBindRenderbuffer golfpp_glBindRenderbuffer
 #define glBindVertexArray golfpp_glBindVertexArray
@@ -106,6 +112,7 @@ bool load_gl_functions();
 #define glGetQueryObjectuiv golfpp_glGetQueryObjectuiv
 #define glGetShaderInfoLog golfpp_glGetShaderInfoLog
 #define glGetShaderiv golfpp_glGetShaderiv
+#define glGetUniformBlockIndex golfpp_glGetUniformBlockIndex
 #define glGetUniformLocation golfpp_glGetUniformLocation
 #define glLinkProgram golfpp_glLinkProgram
 #define glRenderbufferStorage golfpp_glRenderbufferStorage
@@ -114,7 +121,10 @@ bool load_gl_functions();
 #define glUniform1i golfpp_glUniform1i
 #define glUniform2fv golfpp_glUniform2fv
 #define glUniform3fv golfpp_glUniform3fv
+#define glUniform4fv golfpp_glUniform4fv
+#define glUniformBlockBinding golfpp_glUniformBlockBinding
 #define glUniformMatrix4fv golfpp_glUniformMatrix4fv
 #define glUseProgram golfpp_glUseProgram
+#define glVertexAttrib3f golfpp_glVertexAttrib3f
 #define glVertexAttribDivisor golfpp_glVertexAttribDivisor
 #define glVertexAttribPointer golfpp_glVertexAttribPointer

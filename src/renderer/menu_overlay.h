@@ -12,6 +12,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "game/lighting_loader.h"
 #include "game/text_assets.h"
 #include "physics/material_zone.h"
 #include "renderer/overlay_batch.h"
@@ -68,6 +69,8 @@ glm::vec2 startup_tile_half_size(startup_menu_screen screen, int count);
 // Index of the tile under `point` (overlay clip space), or -1.
 int startup_tile_at(startup_menu_screen screen, int count, glm::vec2 point);
 
-void draw_startup_menu(overlay_batch& batch, const text_assets& text, const render_startup_menu& menu);
+// Hole thumbnails are drawn in the `ground` colours.
+void draw_startup_menu(overlay_batch& batch, const text_assets& text, const render_startup_menu& menu,
+                       const ground_colors& ground);
 // The title card shown while the game loads, before there is a course to draw.
 void draw_loading_screen(overlay_batch& batch, const text_assets& text);

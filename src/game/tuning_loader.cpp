@@ -1,8 +1,11 @@
 #include "game/tuning_loader.h"
 
 #include "game/json_util.h"
+#include "game/sky_clock.h"
 
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,6 +30,16 @@ struct section_reader {
             missing->push_back(name + "." + key);
         }
         return value.value_or(0);
+    }
+
+    // Days since 1970-01-01 of a "YYYY-MM-DD" date.
+    std::int64_t date(const char* key) const {
+        const std::optional<std::string> text = section != nullptr ? json_string(*section, key) : std::nullopt;
+        const std::optional<std::int64_t> days = text ? parse_civil_date(*text) : std::nullopt;
+        if (!days) {
+            missing->push_back(name + "." + key);
+        }
+        return days.value_or(0);
     }
 
     glm::vec3 vec3(const char* key) const {
@@ -71,6 +84,9 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.terrain.zones.water_max_depth = terrain.number("water_max_depth");
     tuning.terrain.fairway_cell_size = terrain.number("fairway_cell_size");
     tuning.terrain.zone_cell_size = terrain.number("zone_cell_size");
+    tuning.terrain.relief.scale = terrain.number("relief_scale");
+    tuning.terrain.relief.green_scale = terrain.number("green_relief_scale");
+    tuning.terrain.relief.green_blend_distance = terrain.number("green_relief_blend_distance");
     tuning.terrain.material_overlay_spacing = terrain.number("material_overlay_spacing");
 
     const section_reader physics = section("physics");
@@ -119,19 +135,30 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.player.walk_speed = player.number("walk_speed");
     tuning.player.turn_rate = player.number("turn_rate");
     tuning.player.aim_turn_rate = player.number("aim_turn_rate");
+    tuning.player.look_pitch_rate = player.number("look_pitch_rate");
+    tuning.player.max_look_pitch = player.number("max_look_pitch");
+    tuning.player.mouse_look_radians = player.number("mouse_look_radians");
     tuning.player.ball_interact_radius = player.number("ball_interact_radius");
     tuning.player.ball_stand_off_distance = player.number("ball_stand_off_distance");
     tuning.player.address_back_distance = player.number("address_back_distance");
     tuning.player.emote_seconds = player.number("emote_seconds");
+    tuning.player.jump_speed = player.number("jump_speed");
+    tuning.player.jump_gravity = player.number("jump_gravity");
 
     const section_reader cart = section("cart");
     tuning.cart.speed = cart.number("speed");
     tuning.cart.turn_rate = cart.number("turn_rate");
-    tuning.cart.drift_turn_rate = cart.number("drift_turn_rate");
-    tuning.cart.normal_damping = cart.number("normal_damping");
-    tuning.cart.drift_damping = cart.number("drift_damping");
-    tuning.cart.drift_duration = cart.number("drift_duration");
-    tuning.cart.drift_speed_boost = cart.number("drift_speed_boost");
+    tuning.cart.damping = cart.number("damping");
+    tuning.cart.reverse_speed_scale = cart.number("reverse_speed_scale");
+    tuning.cart.full_steer_speed = cart.number("full_steer_speed");
+    tuning.cart.steering_wheel_rate = cart.number("steering_wheel_rate");
+    tuning.cart.seat_offset = cart.number("seat_offset");
+    tuning.cart.board_reach = cart.number("board_reach");
+    tuning.cart.step_out_distance = cart.number("step_out_distance");
+    tuning.cart.step_seconds = cart.number("step_seconds");
+    tuning.cart.park_ahead_distance = cart.number("park_ahead_distance");
+    tuning.cart.park_side_distance = cart.number("park_side_distance");
+    tuning.cart.park_spacing = cart.number("park_spacing");
     tuning.cart.road_reach_margin = cart.number("road_reach_margin");
     tuning.cart.min_road_reach = cart.number("min_road_reach");
     tuning.cart.road_speed_scale = cart.number("road_speed_scale");
@@ -175,6 +202,7 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.net.motion_heartbeat_seconds = net.number("motion_heartbeat_seconds");
     tuning.net.motion_min_interval_seconds = net.number("motion_min_interval_seconds");
     tuning.net.motion_correction_distance = net.number("motion_correction_distance");
+    tuning.net.motion_correction_yaw = net.number("motion_correction_yaw");
     tuning.net.remote_extrapolation_seconds = net.number("remote_extrapolation_seconds");
     tuning.net.remote_correction_seconds = net.number("remote_correction_seconds");
     tuning.net.shot_correction_distance = net.number("shot_correction_distance");
@@ -218,6 +246,27 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.fence.pole_radius = fence.number("pole_radius");
     tuning.fence.net_restitution = fence.number("net_restitution");
     tuning.fence.net_friction = fence.number("net_friction");
+
+    const section_reader floodlights = section("floodlights");
+    tuning.floodlights.spacing = floodlights.number("spacing");
+    tuning.floodlights.tee_clearance = floodlights.number("tee_clearance");
+    tuning.floodlights.green_clearance = floodlights.number("green_clearance");
+    tuning.floodlights.fairway_offset = floodlights.number("fairway_offset");
+    tuning.floodlights.tee_offset = floodlights.number("tee_offset");
+    tuning.floodlights.green_offset = floodlights.number("green_offset");
+    tuning.floodlights.pole_height = floodlights.number("pole_height");
+    tuning.floodlights.pole_radius = floodlights.number("pole_radius");
+    tuning.floodlights.arm_length = floodlights.number("arm_length");
+    tuning.floodlights.obstacle_clearance = floodlights.number("obstacle_clearance");
+    tuning.floodlights.nudge_step = floodlights.number("nudge_step");
+    tuning.floodlights.nudge_tries = floodlights.integer("nudge_tries");
+
+    const section_reader sky_clock = section("sky_clock");
+    tuning.sky_clock.anchor_unix_ms =
+        sky_clock.date("anchor_real_date") * static_cast<std::int64_t>(milliseconds_per_day);
+    tuning.sky_clock.anchor_game_day = sky_clock.number("anchor_game_hour") / 24.0;
+    tuning.sky_clock.game_days_per_real_day = sky_clock.number("game_days_per_real_day");
+    tuning.sky_clock.year = sky_clock.integer("year");
 
     // One entry per lie, named as ball_lie lists them.
     const json* lies = json_object(*root, "lies");

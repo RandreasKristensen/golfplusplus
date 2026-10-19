@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -16,6 +18,15 @@
 //   GOLFPP_COURSE=id  boot straight into the course with this id (for example
 //                     `marienlyst_golfklub`) instead of the main menu. An id
 //                     that does not exist is ignored and the menu is shown.
+//   GOLFPP_WINDOW=WxH the window's starting size in pixels (3440x1440), to
+//                     check the picture at other aspects and sizes.
+//   GOLFPP_SCREENSHOT=path.bmp
+//                     after loading, run a few frames, save the window's
+//                     picture (after the TV pass) as a BMP and quit.
+//   GOLFPP_GAME_TIME=hour or YYYY-MM-DDThour
+//                     pin the sky at this hour on the course's clock (0 to
+//                     24, e.g. 19.5) on the course's date or the given one
+//                     (1989-12-21T23), for screenshots.
 //   GOLFPP_SERVER=uri, GOLFPP_DB=name
 //                     connect online play to another server or database
 //                     than assets/online.json says (a local or self-hosted
@@ -29,6 +40,13 @@ struct startup_options {
     std::string online_server;    // empty: assets/online.json's
     std::string online_database;  // empty: assets/online.json's
     bool online_anonymous = false;
+    int window_width = 0;  // 0: the default size
+    int window_height = 0;
+    std::string screenshot_path;  // empty: no screenshot
+    std::optional<float> game_hour;  // none: the sky's clock runs
+    // With game_hour: days since 1970-01-01 of the game date; none: the
+    // sky timeline's anchor date.
+    std::optional<std::int64_t> game_date;
 };
 
 // Pure: no environment access, no I/O, no globals. `vsync_value` and
@@ -39,6 +57,18 @@ struct startup_options {
 // Recognised on values are accepted for symmetry but are just the default.
 // course: surrounding whitespace is trimmed; whitespace-only becomes empty.
 startup_options parse_startup_options(const char* vsync_value, const char* course_value);
+
+// Adds the review switches. Pure, like parse_startup_options: the raw
+// environment strings or null. The window is "WxH" with positive whole
+// numbers ('x' or 'X', surrounding whitespace trimmed); anything else keeps
+// the default size. The screenshot path is trimmed.
+startup_options with_review_options(startup_options options, const char* window_value, const char* screenshot_value);
+
+// Adds the pinned time of day. Pure, like parse_startup_options: the raw
+// environment string or null. A number from 0 to 24, optionally after a
+// "YYYY-MM-DDT" date (surrounding whitespace trimmed); anything else leaves
+// the clock running.
+startup_options with_game_time(startup_options options, const char* game_time_value);
 
 // Adds the online options. Pure, like parse_startup_options: `server_value`
 // and `database_value` are the raw environment strings or null, `arguments`

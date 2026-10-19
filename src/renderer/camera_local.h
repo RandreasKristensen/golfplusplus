@@ -1,7 +1,9 @@
 #pragma once
 
-// Placement in the camera's yaw-only frame (right, up, forward), for things
-// held in front of the camera: the golf cart and the emote props. GL-free.
+// Placement in a yaw-only frame (right, up, forward) at a point facing a
+// target, a thing's own, for golf carts, figures and the emote props they
+// hold; and the camera's whole frame, pitch included, for the props pinned
+// to my view. GL-free.
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -9,6 +11,10 @@
 
 // `local` (x right, y up, z forward) in world space.
 glm::vec3 camera_local_point(const glm::vec3& camera_position, const glm::vec3& camera_target, const glm::vec3& local);
+
+// The camera's whole frame at its position, pitched with its look (x right,
+// y up, z forward, as the yaw-only frame at no pitch): what is pinned to the view.
+glm::mat4 camera_view_frame(const glm::vec3& camera_position, const glm::vec3& camera_target);
 
 // The camera frame at `local`, then yaw (rotation.y), pitch (x), roll (z), then scale.
 glm::mat4 camera_local_model(const glm::vec3& camera_position,

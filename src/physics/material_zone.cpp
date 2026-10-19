@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include <glm/geometric.hpp>
 
@@ -42,6 +43,20 @@ std::optional<float> zone_normalized_distance(const material_zone& zone, const g
         return std::nullopt;
     }
     return clamp01(std::sqrt(stretched) / radii.x);
+}
+
+float zone_distance_outside(const material_zone& zone, const glm::vec3& position) {
+    const glm::vec2 radii = zone.radii;
+    if (radii.x < min_zone_radius || radii.y < min_zone_radius) {
+        return std::numeric_limits<float>::max();
+    }
+    const glm::vec3 local = rotate_about_y(horizontal(position - zone.center), -zone.rotation);
+    const float stretched = std::sqrt(local.x * local.x + local.z * (radii.x / radii.y) * local.z * (radii.x / radii.y));
+    if (stretched <= radii.x) {
+        return 0.0f;
+    }
+    // The edge is radii.x / stretched of the way out along the line.
+    return glm::length(local) * (1.0f - radii.x / stretched);
 }
 
 glm::vec3 zone_world_point(const material_zone& zone, const glm::vec2& local) {

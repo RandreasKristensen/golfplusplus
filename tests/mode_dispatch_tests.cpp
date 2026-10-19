@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
 
 namespace {
@@ -85,6 +86,7 @@ net_tuning test_net_tuning() {
     tuning.motion_heartbeat_seconds = 2.0f;
     tuning.motion_min_interval_seconds = 0.25f;
     tuning.motion_correction_distance = 1.0f;
+    tuning.motion_correction_yaw = 0.35f;
     return tuning;
 }
 }
@@ -135,18 +137,17 @@ TEST_CASE("driving on a road earns cart xp offline only") {
     const std::vector<glm::vec3>& road = start.hub->world.cart_roads.front().polyline;
     start.player.position = road.front();
     start.player.yaw = yaw_towards(road[0], road[1]);
+    sit_in_cart(start);
     game_input drive;
-    drive.cart_held = true;
+    drive.forward_held = true;
 
     const mode_pair pair = run_both(start, [&drive](game_state& state) {
         for (int i = 0; i < 80; ++i) {
-            drive.action = i % 6 == 0;
             update_game(state, drive, 0.05f);
         }
     });
 
     CHECK(skill_xp(pair.offline.save.skills, pair.offline.rewards.cart_on_road.skill_id) > 0);
-    CHECK(skill_xp(pair.offline.save.skills, pair.offline.rewards.drift_on_road.skill_id) > 0);
     CHECK(gameplay_commands(pair.online).empty());
 }
 
@@ -155,7 +156,7 @@ TEST_CASE("a collectible is claimed on the save offline and sent online") {
     const course_world_collectible lost_ball = start.hub->world.collectibles[1];
     start.player.position = lost_ball.position;
 
-    const mode_pair pair = run_both(start, [](game_state& state) { update_game(state, action_input(), 0.016f); });
+    const mode_pair pair = run_both(start, [](game_state& state) { update_game(state, interact_input(), 0.016f); });
 
     CHECK(pair.offline.save.collected_ids == std::vector<std::string>{lost_ball.id});
     const std::vector<net_command> sent = gameplay_commands(pair.online);
@@ -169,15 +170,15 @@ TEST_CASE("an online claim is not sent again until the server answers") {
     const course_world_collectible lost_ball = state.hub->world.collectibles[1];
     state.player.position = lost_ball.position;
 
-    update_game(state, action_input(), 0.016f);
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
     CHECK(gameplay_commands(state).size() == 1U);
     CHECK(state.online.pending_claims == std::vector<std::string>{lost_ball.id});
 
     // Other progress (movement XP, say) is not the claim's answer.
     receive_online_progress(state, state.online.progress);
     CHECK(state.online.pending_claims == std::vector<std::string>{lost_ball.id});
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
     CHECK(gameplay_commands(state).size() == 1U);
 
     // Its answer is the collectible showing up claimed.
@@ -191,7 +192,7 @@ TEST_CASE("starting a hub hole sends enter_hole online") {
     game_state start = started_game(fixture_hub_course());
     start.player.position = start.hub->world.hole_starts[1].position;
 
-    const mode_pair pair = run_both(start, [](game_state& state) { update_game(state, action_input(), 0.016f); });
+    const mode_pair pair = run_both(start, [](game_state& state) { update_game(state, interact_input(), 0.016f); });
 
     CHECK(pair.offline.hole.has_value());
     const std::vector<net_command> sent = gameplay_commands(pair.online);
@@ -414,7 +415,7 @@ TEST_CASE("online, the server hears where the player stands right before enterin
     const glm::vec3 start = state.hub->world.hole_starts[1].position;
     state.player.position = start;
     state.net_commands.clear();
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
 
     REQUIRE(state.net_commands.size() >= 2U);
     CHECK(state.net_commands[0].type == net_command_type::motion);
@@ -466,4 +467,46 @@ TEST_CASE("a cart getting onto a road is an intent change") {
     net_motion still_on_road = on_road;
     still_on_road.position = extrapolate_motion(on_road, 0.5f);
     CHECK(!should_send_motion(motion_sync_state{on_road, 0.5f}, still_on_road, tuning));
+}
+
+TEST_CASE("online stepping sideways is sent along the way I go, so others carry me on that way") {
+    game_state state = started_hole();
+    state.play = play_mode::online;
+    state.player.yaw = 0.4f;
+    for (int i = 0; i < 10; ++i) {
+        update_game(state, game_input{}, 0.05f);
+    }
+    const std::size_t before = state.net_commands.size();
+
+    game_input strafe;
+    strafe.strafe_right_held = true;
+    update_game(state, strafe, 0.05f);
+    REQUIRE(state.net_commands.size() == before + 1);
+    const net_motion sent = state.net_commands.back().motion;
+    CHECK(sent.mode == motion_mode::walk);
+    CHECK(near(sent.yaw, 0.4f - glm::half_pi<float>(), 0.0001f));
+    CHECK(near(sent.speed, state.tuning.player.walk_speed));
+
+    for (int i = 0; i < 10; ++i) {
+        update_game(state, strafe, 0.05f);
+    }
+    CHECK(near(horizontal(extrapolate_motion(sent, 0.5f)), horizontal(state.player.position), 0.001f));
+    CHECK(near(state.player.yaw, 0.4f));
+}
+
+TEST_CASE("online turning with the mouse while standing still is sent once it is off far enough") {
+    game_state state = started_hole();
+    state.play = play_mode::online;
+    for (int i = 0; i < 10; ++i) {
+        update_game(state, game_input{}, 0.05f);
+    }
+    const std::size_t before = state.net_commands.size();
+
+    game_input nudge;
+    nudge.look_yaw = state.tuning.net.motion_correction_yaw * 0.6f;
+    update_game(state, nudge, 0.05f);
+    CHECK(state.net_commands.size() == before);
+    update_game(state, nudge, 0.05f);
+    REQUIRE(state.net_commands.size() == before + 1);
+    CHECK(near(state.net_commands.back().motion.yaw, state.player.yaw, 0.0001f));
 }

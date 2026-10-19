@@ -15,7 +15,6 @@
 #include "profiling/profiling.h"
 #include "renderer/dynamic_buffer.h"
 #include "renderer/fence_batch.h"
-#include "renderer/scene_haze.h"
 #include "renderer/shader.h"
 #include "renderer/texture.h"
 
@@ -26,16 +25,13 @@ public:
     void shutdown();
 
     // The posts; draw with the solid scene. Nothing for null or no fences.
-    void draw_posts(const render_fences* fences, const glm::mat4& view_proj, const glm::vec3& light_direction,
-                    const scene_haze& haze, frame_profile* profile);
+    void draw_posts(const render_fences* fences, const glm::mat4& view_proj, frame_profile* profile);
     // The nets; draw after everything solid. Leaves blending off and depth
     // writes on.
-    void draw_nets(const render_fences* fences, const glm::mat4& view_proj, const glm::vec3& light_direction,
-                   const scene_haze& haze, frame_profile* profile);
+    void draw_nets(const render_fences* fences, const glm::mat4& view_proj, frame_profile* profile);
 
 private:
-    bool begin(const render_fences* fences, const glm::mat4& view_proj, const glm::vec3& light_direction,
-               const scene_haze& haze, frame_profile* profile);
+    bool begin(const render_fences* fences, const glm::mat4& view_proj, frame_profile* profile);
 
     shader_program shader_;
     unsigned int vao_ = 0;

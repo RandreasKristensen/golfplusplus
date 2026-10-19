@@ -4,7 +4,7 @@
 
 #include "renderer/gl_loader.h"
 
-bool framebuffer::init(int width, int height) {
+bool framebuffer::init(const int width, const int height, const framebuffer_format& format) {
     shutdown();
 
     width_ = width;
@@ -15,20 +15,37 @@ bool framebuffer::init(int width, int height) {
 
     glGenTextures(1, &color_tex_);
     glBindTexture(GL_TEXTURE_2D, color_tex_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width_, height_, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    switch (format.color) {
+    case framebuffer_color::rgb8:
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width_, height_, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+        break;
+    case framebuffer_color::hdr:
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F, width_, height_, 0, GL_RGB, GL_FLOAT, nullptr);
+        break;
+    case framebuffer_color::signed_hdr:
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width_, height_, 0, GL_RGBA, GL_FLOAT, nullptr);
+        break;
+    }
+    const bool mipmaps = format.linear && format.mipmaps;
+    if (mipmaps) {
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                    mipmaps ? GL_LINEAR_MIPMAP_NEAREST : format.linear ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, format.linear ? GL_LINEAR : GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_tex_, 0);
 
-    glGenRenderbuffers(1, &depth_rbo_);
-    glBindRenderbuffer(GL_RENDERBUFFER, depth_rbo_);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width_, height_);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depth_rbo_);
+    if (format.depth) {
+        glGenRenderbuffers(1, &depth_rbo_);
+        glBindRenderbuffer(GL_RENDERBUFFER, depth_rbo_);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width_, height_);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depth_rbo_);
+    }
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        SDL_Log("Scene framebuffer incomplete.");
+        SDL_Log("A %dx%d framebuffer is incomplete.", width_, height_);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         shutdown();
         return false;

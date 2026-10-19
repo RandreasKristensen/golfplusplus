@@ -1,8 +1,8 @@
 #pragma once
 
 // Other players in the world marker batch: a chunky low-poly figure, on foot
-// or sat at the wheel of the whole golf cart (append_outside_cart_model in
-// cart_batch.h) when driving, and their balls. Each player
+// or sat in a cart's seat (the cart is drawn on its own, cart_batch.h), its
+// hands on the wheel when driving, and their balls. Each player
 // has a shirt tint; a group shares the colour of its members' caps. While they address their ball, their club is drawn at
 // it as mine is, their hands on its grip; their emote props are held at
 // their mouth (emote_props.h). GL-free.
@@ -26,7 +26,8 @@ struct render_remote_swing {
 struct render_remote_avatar {
     glm::vec3 position{0.0f};  // feet, on the ground
     float yaw = 0.0f;          // see yaw_direction in physics/vector_math.h
-    bool in_cart = false;
+    bool seated = false;    // in a cart's seat, `position` under it
+    bool at_wheel = false;  // seated in the driver's seat
     std::uint64_t player_id = 0;  // picks the tint
     std::uint64_t group_id = 0;   // 0: none
     // How far into each emote they are (none: not playing).
@@ -40,14 +41,17 @@ struct render_remote_ball {
     std::uint64_t player_id = 0;
 };
 
-glm::vec3 remote_tint(std::uint64_t player_id);
-glm::vec3 group_highlight(std::uint64_t group_id);
+glm::vec3 remote_tint(const figure_colors& colors, std::uint64_t player_id);
+glm::vec3 group_highlight(const figure_colors& colors, std::uint64_t group_id);
 
 // `eye_height` is the walking eye height: the figure stands a little taller,
-// and a cart sits where it would around a driver's eyes. `ball_radius` is the
+// and sits on a cart's seat where my eyes are at its wheel. `ball_radius` is the
 // ball's drawn radius, which places a swinging club.
-void append_remote_avatar(world_marker_batch& batch, const render_remote_avatar& avatar, float eye_height, float ball_radius);
-void append_remote_ball(world_marker_batch& batch, const render_remote_ball& ball, float radius);
+void append_remote_avatar(world_marker_batch& batch, const render_remote_avatar& avatar, float eye_height, float ball_radius,
+                          const scene_colors& colors);
+// `glow` is the ball's glow floor (glow_floors::ball).
+void append_remote_ball(world_marker_batch& batch, const render_remote_ball& ball, float radius, const figure_colors& colors,
+                        float glow);
 
 // Where a figure stands to address a ball, its hands on the club's grip
 // (swing_club_grip), and which way it faces: at the ball, side on to the aim.
@@ -60,7 +64,6 @@ figure_stance figure_address_stance(const glm::vec3& ball_position, float ball_r
 // Their emote props, held at their figure's mouth; none when no emote plays.
 std::optional<emote_holder> remote_emote_holder(const render_remote_avatar& avatar, float eye_height);
 
-// Vertices of a figure on foot, and of one sat in a cart (the cart not
-// counted).
+// Vertices of a figure on foot, and of one sat in a cart.
 std::size_t remote_figure_vertex_count();
-std::size_t remote_driver_vertex_count();
+std::size_t remote_seated_vertex_count();

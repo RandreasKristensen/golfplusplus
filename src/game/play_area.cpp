@@ -1,6 +1,7 @@
 #include "game/play_area.h"
 
 #include "physics/ground_mesh.h"
+#include "physics/land_relief.h"
 #include "physics/vector_math.h"
 
 #include <algorithm>
@@ -76,6 +77,9 @@ ground_settings ground_settings_for(const float margin, const game_tuning& tunin
     return ground_settings{tuning.terrain.ground_cell_size, margin, tuning.terrain.ground_blend_distance,
                            tuning.terrain.fairway_cell_size, tuning.terrain.zone_cell_size, tuning.terrain.zones};
 }
+
+// Metres per cell of the floodlight poles' grid: any size hits the same poles.
+constexpr float floodlight_grid_cell_size = 32.0f;
 
 // Points around a pond's edge where its water level is found.
 constexpr int water_rim_samples = 48;
@@ -188,6 +192,16 @@ play_area with_fences(play_area area, const std::vector<course_world_fence>& fen
     return area;
 }
 
+// The area with floodlights along `holes`, standing on its finished ground
+// clear of its signs and fences.
+play_area with_floodlights(play_area area, const std::vector<hole_data>& holes,
+                           const std::vector<course_world_cart_road>& roads, const game_tuning& tuning) {
+    area.floodlights = place_floodlights(area, holes, roads, tuning);
+    area.floodlight_poles = floodlight_poles(area.floodlights);
+    area.floodlight_grid = build_tree_grid(area.floodlight_poles, floodlight_grid_cell_size);
+    return area;
+}
+
 // The hole's ribbon in hole space.
 terrain_mesh build_hole_mesh(const hole_data& hole, const game_tuning& tuning) {
     terrain_spline spline;
@@ -235,29 +249,43 @@ hole_data place_hole(const hole_data& hole, const course_world_hole_start& start
     return placed;
 }
 
-play_area build_course_area(const std::vector<hole_data>& holes,
-                            const course_world_definition& world,
-                            const game_tuning& tuning) {
+play_area place_course_holes(const std::vector<hole_data>& holes,
+                             const course_world_definition& world,
+                             const game_tuning& tuning) {
     play_area course;
-    std::vector<hole_data> placed_holes;
-    float margin = 0.0f;
-    const height_grid* land = world.ground.heights.empty() ? nullptr : &world.ground;
+    const bool on_land = !world.ground.heights.empty();
     for (std::size_t i = 0; i < holes.size() && i < world.hole_starts.size(); ++i) {
         const hole_data placed = place_hole(holes[i], world.hole_starts[i]);
         terrain_mesh mesh = place_mesh(build_hole_mesh(holes[i], tuning), holes[i], world.hole_starts[i]);
-        course.holes.push_back(land != nullptr ? lift_over_land(std::move(mesh), placed.tee_position.y, holes[i].spline.width)
-                                               : std::move(mesh));
+        course.holes.push_back(on_land ? lift_over_land(std::move(mesh), placed.tee_position.y, holes[i].spline.width)
+                                       : std::move(mesh));
         course.zones.insert(course.zones.end(), placed.material_zones.begin(), placed.material_zones.end());
         course.trees.insert(course.trees.end(), placed.trees.begin(), placed.trees.end());
+        if (i == 0) {
+            course.ground_y = placed.tee_position.y;
+        }
+    }
+    return course;
+}
+
+play_area build_course_area(const std::vector<hole_data>& holes,
+                            const course_world_definition& world,
+                            const game_tuning& tuning) {
+    play_area course = place_course_holes(holes, world, tuning);
+    std::vector<hole_data> placed_holes;
+    float margin = 0.0f;
+    for (std::size_t i = 0; i < course.holes.size(); ++i) {
+        placed_holes.push_back(place_hole(holes[i], world.hole_starts[i]));
         margin = std::max(margin, ribbon_width(holes[i]));
-        placed_holes.push_back(placed);
     }
-    if (!placed_holes.empty()) {
-        course.ground_y = placed_holes.front().tee_position.y;
-    }
+    // The holes' own heights (hole-editor touch-ups) lift the relieved land
+    // as authored; only the land's relief is scaled.
+    const height_grid relieved = relieved_land(world.ground, course.zones, tuning.terrain.relief);
+    const height_grid* land = world.ground.heights.empty() ? nullptr : &relieved;
     play_area grounded = with_tee_boxes(with_bounds(with_ground(std::move(course), land, margin, tuning)),
                                         placed_holes, tuning);
-    return with_fences(with_signs(std::move(grounded), placed_holes, tuning), world.fences, tuning.fence);
+    return with_floodlights(with_fences(with_signs(std::move(grounded), placed_holes, tuning), world.fences, tuning.fence),
+                            placed_holes, world.cart_roads, tuning);
 }
 
 bool under_water(const play_area& area, const glm::vec3& position) {

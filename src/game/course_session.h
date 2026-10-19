@@ -11,7 +11,7 @@
 #include <glm/vec3.hpp>
 
 // Loads every hole of `course` and its world, then enters the hub at hole 1's
-// start. Clears the round. False, with `state` unchanged, when a hole or the
+// start, my cart parked beside it (park_cart). Clears the round. False, with `state` unchanged, when a hole or the
 // world cannot be loaded.
 bool start_course(game_state& state, const course_definition& course);
 

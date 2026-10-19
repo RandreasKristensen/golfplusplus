@@ -9,7 +9,8 @@
 
 // nullopt when "holes" is missing, empty or holds anything but non-empty
 // strings, or "backdrop" lacks either image or a haze field (amount below
-// zero, distance not above it).
+// zero, distance not above it), or "sky" lacks a "MM-DD" "date" or a
+// "utc_offset_hours" within -12..14, or has a "lowest_sun_deg" outside -90..30.
 std::optional<course_definition> parse_course_from_text(const std::string& text);
 // Hole `hole_index`'s file relative to the asset root: holes/<id>.json for a
 // bare id, else the reference as written. Empty when out of range.

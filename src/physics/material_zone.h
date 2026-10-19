@@ -35,6 +35,10 @@ struct material_zone {
 // they keep their shape however the zone is stretched. nullopt outside.
 std::optional<float> zone_normalized_distance(const material_zone& zone, const glm::vec3& position);
 
+// How far `position` is beyond the zone's edge, ignoring height, along the
+// line from its centre: 0 inside, the largest float for a zone of no size.
+float zone_distance_outside(const material_zone& zone, const glm::vec3& position);
+
 inline bool zone_contains(const material_zone& zone, const glm::vec3& position) {
     return zone_normalized_distance(zone, position).has_value();
 }

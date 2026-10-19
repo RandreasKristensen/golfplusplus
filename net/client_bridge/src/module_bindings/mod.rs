@@ -12,6 +12,7 @@ pub mod avatar_motion_row_type;
 pub mod avatar_motion_table;
 pub mod ball_row_type;
 pub mod ball_table;
+pub mod board_cart_reducer;
 pub mod claim_collectible_reducer_reducer;
 pub mod claim_name_reducer;
 pub mod collected_row_type;
@@ -25,12 +26,15 @@ pub mod emote_event_row_type;
 pub mod emote_event_table;
 pub mod emote_reducer;
 pub mod enter_hole_reducer;
+pub mod golf_cart_row_type;
+pub mod golf_cart_table;
 pub mod golf_group_row_type;
 pub mod golf_group_table;
 pub mod hole_score_row_type;
 pub mod hole_score_table;
 pub mod join_course_reducer;
 pub mod join_group_reducer;
+pub mod leave_cart_reducer;
 pub mod leave_group_reducer;
 pub mod leave_room_reducer;
 pub mod link_attempt_row_type;
@@ -72,6 +76,7 @@ pub use avatar_motion_row_type::AvatarMotionRow;
 pub use avatar_motion_table::*;
 pub use ball_row_type::BallRow;
 pub use ball_table::*;
+pub use board_cart_reducer::board_cart;
 pub use claim_collectible_reducer_reducer::claim_collectible_reducer;
 pub use claim_name_reducer::claim_name;
 pub use collected_row_type::CollectedRow;
@@ -85,12 +90,15 @@ pub use emote_event_row_type::EmoteEventRow;
 pub use emote_event_table::*;
 pub use emote_reducer::emote;
 pub use enter_hole_reducer::enter_hole;
+pub use golf_cart_row_type::GolfCartRow;
+pub use golf_cart_table::*;
 pub use golf_group_row_type::GolfGroupRow;
 pub use golf_group_table::*;
 pub use hole_score_row_type::HoleScoreRow;
 pub use hole_score_table::*;
 pub use join_course_reducer::join_course;
 pub use join_group_reducer::join_group;
+pub use leave_cart_reducer::leave_cart;
 pub use leave_group_reducer::leave_group;
 pub use leave_room_reducer::leave_room;
 pub use link_attempt_row_type::LinkAttemptRow;
@@ -140,6 +148,9 @@ pub enum Reducer {
         allow_anonymous: bool,
         link_secret: String,
     },
+    BoardCart {
+        owner: u64,
+    },
     ClaimCollectibleReducer {
         collectible_id: String,
     },
@@ -160,6 +171,7 @@ pub enum Reducer {
     JoinGroup {
         group_id: u64,
     },
+    LeaveCart,
     LeaveGroup,
     LeaveRoom,
     PickUpBall,
@@ -197,6 +209,7 @@ impl __sdk::Reducer for Reducer {
     fn reducer_name(&self) -> &'static str {
         match self {
             Reducer::AdminSetConfig { .. } => "admin_set_config",
+            Reducer::BoardCart { .. } => "board_cart",
             Reducer::ClaimCollectibleReducer { .. } => "claim_collectible",
             Reducer::ClaimName { .. } => "claim_name",
             Reducer::CreateGroup => "create_group",
@@ -205,6 +218,7 @@ impl __sdk::Reducer for Reducer {
             Reducer::EnterHole { .. } => "enter_hole",
             Reducer::JoinCourse { .. } => "join_course",
             Reducer::JoinGroup { .. } => "join_group",
+            Reducer::LeaveCart => "leave_cart",
             Reducer::LeaveGroup => "leave_group",
             Reducer::LeaveRoom => "leave_room",
             Reducer::PickUpBall => "pick_up_ball",
@@ -230,6 +244,11 @@ impl __sdk::Reducer for Reducer {
                 allow_anonymous: allow_anonymous.clone(),
                 link_secret: link_secret.clone(),
             }),
+            Reducer::BoardCart { owner } => {
+                __sats::bsatn::to_vec(&board_cart_reducer::BoardCartArgs {
+                    owner: owner.clone(),
+                })
+            }
             Reducer::ClaimCollectibleReducer { collectible_id } => __sats::bsatn::to_vec(
                 &claim_collectible_reducer_reducer::ClaimCollectibleReducerArgs {
                     collectible_id: collectible_id.clone(),
@@ -262,6 +281,7 @@ impl __sdk::Reducer for Reducer {
                     group_id: group_id.clone(),
                 })
             }
+            Reducer::LeaveCart => __sats::bsatn::to_vec(&leave_cart_reducer::LeaveCartArgs {}),
             Reducer::LeaveGroup => __sats::bsatn::to_vec(&leave_group_reducer::LeaveGroupArgs {}),
             Reducer::LeaveRoom => __sats::bsatn::to_vec(&leave_room_reducer::LeaveRoomArgs {}),
             Reducer::PickUpBall => __sats::bsatn::to_vec(&pick_up_ball_reducer::PickUpBallArgs {}),
@@ -324,6 +344,7 @@ pub struct DbUpdate {
     collected: __sdk::TableUpdate<CollectedRow>,
     completed_course: __sdk::TableUpdate<CompletedCourseRow>,
     emote_event: __sdk::TableUpdate<EmoteEventRow>,
+    golf_cart: __sdk::TableUpdate<GolfCartRow>,
     golf_group: __sdk::TableUpdate<GolfGroupRow>,
     hole_score: __sdk::TableUpdate<HoleScoreRow>,
     my_account: __sdk::TableUpdate<PlayerRow>,
@@ -359,6 +380,9 @@ impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
                 "emote_event" => db_update
                     .emote_event
                     .append(emote_event_table::parse_table_update(table_update)?),
+                "golf_cart" => db_update
+                    .golf_cart
+                    .append(golf_cart_table::parse_table_update(table_update)?),
                 "golf_group" => db_update
                     .golf_group
                     .append(golf_group_table::parse_table_update(table_update)?),
@@ -434,6 +458,9 @@ impl __sdk::DbUpdate for DbUpdate {
             .apply_diff_to_table::<CompletedCourseRow>("completed_course", &self.completed_course)
             .with_updates_by_pk(|row| &row.id);
         diff.emote_event = self.emote_event.into_event_diff();
+        diff.golf_cart = cache
+            .apply_diff_to_table::<GolfCartRow>("golf_cart", &self.golf_cart)
+            .with_updates_by_pk(|row| &row.owner);
         diff.golf_group = cache
             .apply_diff_to_table::<GolfGroupRow>("golf_group", &self.golf_group)
             .with_updates_by_pk(|row| &row.group_id);
@@ -484,6 +511,9 @@ impl __sdk::DbUpdate for DbUpdate {
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "emote_event" => db_update
                     .emote_event
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "golf_cart" => db_update
+                    .golf_cart
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "golf_group" => db_update
                     .golf_group
@@ -549,6 +579,9 @@ impl __sdk::DbUpdate for DbUpdate {
                 "emote_event" => db_update
                     .emote_event
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "golf_cart" => db_update
+                    .golf_cart
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "golf_group" => db_update
                     .golf_group
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
@@ -605,6 +638,7 @@ pub struct AppliedDiff<'r> {
     collected: __sdk::TableAppliedDiff<'r, CollectedRow>,
     completed_course: __sdk::TableAppliedDiff<'r, CompletedCourseRow>,
     emote_event: __sdk::TableAppliedDiff<'r, EmoteEventRow>,
+    golf_cart: __sdk::TableAppliedDiff<'r, GolfCartRow>,
     golf_group: __sdk::TableAppliedDiff<'r, GolfGroupRow>,
     hole_score: __sdk::TableAppliedDiff<'r, HoleScoreRow>,
     my_account: __sdk::TableAppliedDiff<'r, PlayerRow>,
@@ -647,6 +681,7 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
             &self.emote_event,
             event,
         );
+        callbacks.invoke_table_row_callbacks::<GolfCartRow>("golf_cart", &self.golf_cart, event);
         callbacks.invoke_table_row_callbacks::<GolfGroupRow>("golf_group", &self.golf_group, event);
         callbacks.invoke_table_row_callbacks::<HoleScoreRow>("hole_score", &self.hole_score, event);
         callbacks.invoke_table_row_callbacks::<PlayerRow>("my_account", &self.my_account, event);
@@ -1344,6 +1379,7 @@ impl __sdk::SpacetimeModule for RemoteModule {
         collected_table::register_table(client_cache);
         completed_course_table::register_table(client_cache);
         emote_event_table::register_table(client_cache);
+        golf_cart_table::register_table(client_cache);
         golf_group_table::register_table(client_cache);
         hole_score_table::register_table(client_cache);
         my_account_table::register_table(client_cache);
@@ -1363,6 +1399,7 @@ impl __sdk::SpacetimeModule for RemoteModule {
         "collected",
         "completed_course",
         "emote_event",
+        "golf_cart",
         "golf_group",
         "hole_score",
         "my_account",

@@ -89,8 +89,6 @@ void hole_sign_renderer::upload(const render_hole_signs& signs, frame_profile* p
 
 void hole_sign_renderer::draw(const render_hole_signs* signs,
                               const glm::mat4& view_proj,
-                              const glm::vec3& light_direction,
-                              const scene_haze& haze,
                               frame_profile* profile) {
     if (signs == nullptr || signs->signs.empty() || shader_.id() == 0 || vao_ == 0) {
         return;
@@ -102,8 +100,6 @@ void hole_sign_renderer::draw(const render_hole_signs* signs,
     shader_.set_profile(profile);
     shader_.use();
     shader_.set_mat4("u_view_proj", view_proj);
-    shader_.set_vec3("u_light_dir", light_direction);
-    set_scene_haze_uniforms(shader_, haze);
     glBindVertexArray(vao_);
     for (std::size_t i = 0; i < signs->signs.size() && i < faces_.size(); ++i) {
         const render_hole_sign& sign = signs->signs[i];

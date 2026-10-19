@@ -10,6 +10,7 @@
 #include "game/game_content.h"
 #include "game/game_input.h"
 #include "game/game_tuning.h"
+#include "game/golf_cart.h"
 #include "game/hole_data.h"
 #include "game/motion_sync.h"
 #include "game/net_types.h"
@@ -42,17 +43,21 @@ enum class game_mode {
 
 struct player_state {
     glm::vec3 position{0.0f};
-    float yaw = 0.0f;  // see yaw_direction in physics/vector_math.h
-    // How the player moved this frame, on foot or in the cart.
-    float speed = 0.0f;      // m/s along yaw, negative backwards
+    float yaw = 0.0f;  // where I face and look; see yaw_direction in physics/vector_math.h
+    // How the player moved this frame, on foot or in a cart.
+    float speed = 0.0f;      // m/s along yaw + move_angle, negative backwards
     float turn_rate = 0.0f;  // rad/s, positive turns towards +X like yaw
+    // Off yaw while stepping sideways, in [-pi/2, pi/2]: positive left.
+    float move_angle = 0.0f;
+    // Seconds since taking off, while hopping on foot (game/player_jump.h).
+    std::optional<float> hop_elapsed;
 };
 
-struct cart_state {
-    bool active = false;
-    float velocity = 0.0f;
-    float yaw = 0.0f;
-    float drift_timer = 0.0f;
+// Where I look beyond my yaw, first person. Presentation, but set from
+// game_input like the yaw it adds to.
+struct look_state {
+    float pitch = 0.0f;     // radians, positive up
+    float head_yaw = 0.0f;  // sat in a cart: turned from its heading, radians
 };
 
 // A short emote animation (presentation only).
@@ -131,11 +136,13 @@ struct remote_avatar {
     motion_mode mode = motion_mode::idle;
     std::int64_t motion_at = 0;      // the motion followed (server time)
     glm::vec3 correction{0.0f};      // shown minus followed when that motion arrived
+    float correction_seconds = 0.0f;  // the blend's length: longer stepping into or out of a cart
     float correction_left = 0.0f;    // seconds of the blend still to run
     emote_state smoke_emote;         // from the server's emote events
     emote_state drink_emote;
     // The motion (server time) their last shot was hit from: its swing is over.
     std::int64_t hit_motion_at = 0;
+    std::optional<float> hop_elapsed;  // seconds into a hop of theirs (game/player_jump.h)
 };
 
 // Another player's shot playing back here, from the server's event: the
@@ -169,7 +176,6 @@ enum class audio_event_type {
     ball_cup,
     club_change,
     cart_start,
-    cart_drift,
     emote_smoke,
     emote_beer
 };
@@ -246,6 +252,8 @@ struct game_state {
     std::optional<shot_playback> shot;  // while following_shot
     player_state player;
     cart_state cart;
+    std::optional<cart_ride> ride;  // sat in a cart, or stepping into or out of one
+    look_state look;
     emote_state smoke_emote;
     emote_state beer_emote;
     float cigarette_seconds_left = 0.0f;
@@ -266,7 +274,6 @@ struct game_state {
     // Meters travelled that have not earned movement XP yet.
     float walk_meters_pending = 0.0f;
     float cart_meters_pending = 0.0f;
-    float drift_meters_pending = 0.0f;
 
     std::vector<xp_drop> xp_drops;
     // XP gains too small to show yet, per skill (see xp_drop_tuning).
@@ -289,6 +296,9 @@ game_state make_game_state(const game_content& content, const save_data& save);
 void update_game(game_state& state, const game_input& input, float dt, frame_profile* profile = nullptr);
 
 void update_xp_drops(game_state& state, float dt);
+
+// Where I look, walking or in a cart: my yaw, turned by my head in a cart.
+float view_yaw(const game_state& state);
 
 bool in_hub(const game_state& state);
 // The zone I play in (net_motion::zone): hub_zone, or the hole's index.

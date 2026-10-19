@@ -9,8 +9,7 @@ namespace {
 constexpr GLuint position_location = 0;
 // How much of what is under a pond's surface shows through it.
 constexpr float surface_alpha = 0.62f;
-// The scene from under the water: murky blue, most of the way.
-const glm::vec3 underwater_color(0.06f, 0.18f, 0.32f);
+// How much the scene from under the water is tinted murky.
 constexpr float underwater_alpha = 0.68f;
 }
 
@@ -56,7 +55,7 @@ void water_renderer::shutdown() {
     uploaded_ = false;
 }
 
-void water_renderer::draw_surfaces(const render_water* water, const glm::mat4& view_proj, const scene_haze& haze,
+void water_renderer::draw_surfaces(const render_water* water, const glm::mat4& view_proj, const ground_colors& ground,
                                    frame_profile* profile) {
     if (water == nullptr || water->triangles.empty() || surface_shader_.id() == 0 || vao_ == 0) {
         return;
@@ -71,9 +70,8 @@ void water_renderer::draw_surfaces(const render_water* water, const glm::mat4& v
     surface_shader_.set_profile(profile);
     surface_shader_.use();
     surface_shader_.set_mat4("u_view_proj", view_proj);
-    surface_shader_.set_vec3("u_color", terrain_material_color(terrain_material::water));
+    surface_shader_.set_vec3("u_color", terrain_material_color(ground, terrain_material::water));
     surface_shader_.set_float("u_alpha", surface_alpha);
-    set_scene_haze_uniforms(surface_shader_, haze);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDepthMask(GL_FALSE);
@@ -85,13 +83,13 @@ void water_renderer::draw_surfaces(const render_water* water, const glm::mat4& v
     glDisable(GL_BLEND);
 }
 
-void water_renderer::draw_underwater(frame_profile* profile) {
+void water_renderer::draw_underwater(const ground_colors& ground, frame_profile* profile) {
     if (tint_shader_.id() == 0 || screen_vao_ == 0) {
         return;
     }
     tint_shader_.set_profile(profile);
     tint_shader_.use();
-    tint_shader_.set_vec3("u_color", underwater_color);
+    tint_shader_.set_vec3("u_color", ground.underwater);
     tint_shader_.set_float("u_alpha", underwater_alpha);
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);

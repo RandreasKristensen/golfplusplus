@@ -38,6 +38,7 @@ set(sources
   src/game/course_loader.cpp
   src/game/course_world_loader.cpp
   src/game/hole_loader.cpp
+  src/game/floodlights.cpp
   src/game/hole_sign.cpp
   src/game/json_util.cpp
   src/game/pixel_font_data.cpp
@@ -45,6 +46,7 @@ set(sources
   src/game/reward_rules.cpp
   src/game/shot_simulation.cpp
   src/game/tee_box.cpp
+  src/game/sky_clock.cpp
   src/game/tuning_loader.cpp
   src/game/utf8.cpp
 )

@@ -4,6 +4,7 @@
 #include "game/json_util.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <utility>
 
 namespace {
@@ -13,15 +14,30 @@ std::optional<setting_definition> setting_from_json(const json& value) {
     const std::optional<std::string> id = json_string(value, "id");
     const std::optional<std::string> label = json_string(value, "label");
     const std::optional<std::string> value_text = json_string(value, "value");
+    const json* value_texts = json_array(value, "values");
     const std::optional<int> min = json_int(value, "min");
     const std::optional<int> max = json_int(value, "max");
     const std::optional<int> step = json_int(value, "step");
     const std::optional<int> default_value = json_int(value, "default");
-    if (!id || id->empty() || !label || label->empty() || !value_text || value_text->empty() || !min || !max ||
-        !step || !default_value || *min >= *max || *step <= 0 || *default_value < *min || *default_value > *max) {
+    if (!id || id->empty() || !label || label->empty() || (value_text.has_value() == (value_texts != nullptr)) ||
+        (value_text && value_text->empty()) || !min || !max || !step || !default_value || *min >= *max ||
+        *step <= 0 || *default_value < *min || *default_value > *max) {
         return std::nullopt;
     }
-    return setting_definition{*id, *label, *value_text, *min, *max, *step, *default_value};
+    setting_definition definition{*id, *label, value_text.value_or(""), {}, *min, *max, *step, *default_value};
+    if (value_texts != nullptr) {
+        const int range = *max - *min;
+        if (range % *step != 0 || value_texts->size() != static_cast<std::size_t>(range / *step + 1)) {
+            return std::nullopt;
+        }
+        for (const json& key : *value_texts) {
+            if (!key.is_string() || key.get<std::string>().empty()) {
+                return std::nullopt;
+            }
+            definition.value_keys.push_back(key.get<std::string>());
+        }
+    }
+    return definition;
 }
 }
 
@@ -51,12 +67,20 @@ const setting_definition* find_setting(const std::vector<setting_definition>& de
 bool has_applied_settings(const std::vector<setting_definition>& definitions) {
     return find_setting(definitions, setting_master_volume) != nullptr &&
         find_setting(definitions, setting_music_volume) != nullptr &&
-        find_setting(definitions, setting_field_of_view) != nullptr;
+        find_setting(definitions, setting_field_of_view) != nullptr &&
+        find_setting(definitions, setting_mouse_sensitivity) != nullptr &&
+        find_setting(definitions, setting_fullscreen) != nullptr &&
+        find_setting(definitions, setting_tape_wear) != nullptr &&
+        find_setting(definitions, setting_datestamp) != nullptr;
 }
 
 int setting_value(const settings_values& values, const setting_definition& definition) {
     const auto it = values.find(definition.id);
     return std::clamp(it != values.end() ? it->second : definition.default_value, definition.min, definition.max);
+}
+
+int setting_step_index(const settings_values& values, const setting_definition& definition) {
+    return (setting_value(values, definition) - definition.min) / definition.step;
 }
 
 float setting_fraction(const settings_values& values, const setting_definition& definition) {

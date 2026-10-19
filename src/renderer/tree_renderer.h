@@ -8,14 +8,15 @@
 
 #include <glm/mat4x4.hpp>
 
+#include "game/lighting_loader.h"
 #include "profiling/profiling.h"
 #include "renderer/frustum.h"
 #include "renderer/render_mesh.h"
 #include "renderer/render_tree.h"
-#include "renderer/scene_haze.h"
 #include "renderer/shader.h"
 
-// Draws every course tree with two instanced draw calls: all trunks (unit
+// Draws every course tree with two instanced draw calls (and the same two
+// into the shadow map, renderer/shadow_map_pass.h): all trunks (unit
 // cylinder) and all leaves (unit cone). Per-tree instance data is re-uploaded
 // only when the tree revision or tree count changes; trees are static per
 // course, so normal frames upload nothing.
@@ -33,7 +34,7 @@
 class tree_renderer {
 public:
     struct mesh_source {
-        unsigned int vbo = 0;  // interleaved vec3 position, vec3 normal (normal unused)
+        unsigned int vbo = 0;  // interleaved vec3 position, vec3 normal
         int vertex_count = 0;
     };
 
@@ -43,17 +44,21 @@ public:
               mesh_source leaf_mesh);
     void shutdown();
 
-    // Uploads instance data if `revision`/tree count changed, then draws,
-    // fading far trees into `haze`.
+    // Uploads instance data if `revision`/tree count changed, then draws in
+    // `colors`, lit and hazed by the frame_lighting block.
     // No draw calls are issued when there are no trees, or when the whole batch
     // is outside `frustum`. Returns true when the batch was drawn.
     bool draw(const std::vector<tree_body>& trees,
               std::uint64_t revision,
               const glm::mat4& view,
               const glm::mat4& proj,
-              const scene_haze& haze,
               const view_frustum& frustum,
+              const tree_colors& colors,
               frame_profile* profile);
+    // The same batch with `depth_shader` (already in use, instanced like
+    // tree_instanced.vert) seen through `view_proj`: the shadow map's casters.
+    void draw_casters(const std::vector<tree_body>& trees, std::uint64_t revision, const shader_program& depth_shader,
+                      const glm::mat4& view_proj, frame_profile* profile);
 
 private:
     struct instanced_part {
@@ -63,6 +68,8 @@ private:
         std::size_t instance_count = 0;
     };
 
+    // False when there is nothing to draw.
+    bool prepare(const std::vector<tree_body>& trees, std::uint64_t revision, frame_profile* profile);
     bool init_part(instanced_part& part, mesh_source mesh);
     void shutdown_part(instanced_part& part);
     void upload_part(instanced_part& part, const std::vector<render_tree_instance>& instances, frame_profile* profile);

@@ -148,6 +148,11 @@ DEFAULT_CONFIG = {
         "flat_cell_size": 20.0,
         "margin": 120.0,
     },
+    # The course file's sky (src/game/course_loader.cpp): the "MM-DD" day the
+    # course is always played on and the clock it shows, Danish midsummer and
+    # summer time by default, and optionally "lowest_sun_deg", how far its sun
+    # may sink.
+    "sky": {"date": "06-21", "utc_offset_hours": 2},
     "courses": {},
 }
 
@@ -3032,6 +3037,7 @@ Examples:
                 "haze_amount": 1.0,
                 "haze_distance": 800,
             },
+            "sky": dict(config["sky"]),
             "holes": hole_paths
         }
         if not args.no_world:

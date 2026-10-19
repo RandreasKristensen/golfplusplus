@@ -31,8 +31,8 @@ inline constexpr int hub_zone = -1;
 enum class motion_mode {
     idle,
     walk,
-    cart,
-    drift,
+    cart,     // at the wheel of their own cart
+    ride,     // in the passenger seat of another player's cart
     aim,      // lining up a shot at their ball
     address,  // stood at the ball, club down
     swing     // the swing meter running: since this motion's server time
@@ -43,9 +43,9 @@ inline bool at_ball(const motion_mode mode) {
     return mode == motion_mode::aim || mode == motion_mode::address || mode == motion_mode::swing;
 }
 
-// Whether a player in `mode` is driving a cart, drifting or not.
+// Whether a player in `mode` is sat in a cart, driving it or riding along.
 inline bool in_cart(const motion_mode mode) {
-    return mode == motion_mode::cart || mode == motion_mode::drift;
+    return mode == motion_mode::cart || mode == motion_mode::ride;
 }
 
 // Where a player is and how they are moving: enough for others to carry the
@@ -106,7 +106,9 @@ enum class net_command_type {
     create_group,
     join_group,
     leave_group,
-    return_to_hub
+    return_to_hub,
+    board_cart,
+    leave_cart
 };
 
 // The server's reducers that net_commands call, by name: a refusal
@@ -122,6 +124,8 @@ inline constexpr const char* reducer_return_to_hub = "return_to_hub";
 inline constexpr const char* reducer_create_group = "create_group";
 inline constexpr const char* reducer_join_group = "join_group";
 inline constexpr const char* reducer_leave_group = "leave_group";
+inline constexpr const char* reducer_board_cart = "board_cart";
+inline constexpr const char* reducer_leave_cart = "leave_cart";
 
 // One outbound intent. Only the fields named for its type are meaningful.
 struct net_command {
@@ -133,6 +137,7 @@ struct net_command {
     std::string collectible_id;  // claim_collectible
     emote_id emote = emote_id::smoke;  // emote
     std::uint64_t group_id = 0;  // join_group
+    std::uint64_t cart_owner = 0;  // board_cart: whose cart's passenger seat
 };
 
 // Where the connection to the server is.
@@ -150,7 +155,7 @@ enum class net_status {
 // only on a server with the same, else asks for an update
 // (net_failure_outdated_game). Bump it with every change to the module's
 // tables, views or reducers; the server_protocol view itself never changes.
-inline constexpr std::uint32_t protocol_version = 1;
+inline constexpr std::uint32_t protocol_version = 2;
 
 // The failure ids the bridge and the client give (src/net/stdb_bridge.h,
 // net_client), besides the server's (server_errors.h). One per line: a test
@@ -242,6 +247,15 @@ struct room_shot {
     bool holed = false;
 };
 
+// A player's golf cart in my room (a golf_cart row), mine included: where
+// it was parked or last driven (game/golf_cart.h cart_pose), and who rides
+// in its passenger seat.
+struct room_cart {
+    glm::vec3 position{0.0f};
+    float yaw = 0.0f;
+    std::uint64_t passenger = 0;  // 0: nobody
+};
+
 // Another player's emote the server accepted (an emote_event row).
 struct room_emote {
     std::uint64_t account_id = 0;
@@ -256,10 +270,11 @@ struct online_view {
     std::string display_name;      // empty until claimed
     std::optional<online_room> room;
     // Everyone in my room by account id, me included; their balls; how many
-    // players each group has.
+    // players each group has; their carts.
     std::map<std::uint64_t, room_player> players;
     std::map<std::uint64_t, room_ball> balls;
     std::map<std::uint64_t, int> group_sizes;
+    std::map<std::uint64_t, room_cart> carts;  // by owner
     // Shots, others' emotes and refused gameplay reducers that arrived and
     // the game has not taken yet, oldest first.
     std::vector<room_shot> shots;

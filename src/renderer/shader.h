@@ -8,6 +8,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include "profiling/profiling.h"
 
@@ -23,7 +24,7 @@
 // Kept free of GL so it can be unit tested; the actual query is passed in.
 class uniform_location_cache {
 public:
-    static constexpr std::size_t capacity = 16;
+    static constexpr std::size_t capacity = 32;
     static constexpr std::size_t max_name_length = 31;
 
     // Returns the cached location for `name`, calling `query(name)` (which
@@ -85,6 +86,7 @@ public:
     void set_mat4(const char* name, const glm::mat4& value) const;
     void set_vec3(const char* name, const glm::vec3& value) const;
     void set_vec2(const char* name, const glm::vec2& value) const;
+    void set_vec4(const char* name, const glm::vec4& value) const;
     void set_float(const char* name, float value) const;
     void set_int(const char* name, int value) const;
 

@@ -24,6 +24,21 @@ struct course_backdrop {
     float haze_distance = 0.0f;
 };
 
+// The sky a course is played under (game/sky_clock.h): the day of the year
+// it always is there, in the sky clock's year, while the time of day runs on
+// the course's own clock.
+struct course_sky {
+    int month = 1;  // 1..12
+    int day = 1;    // 1..31
+    // The clock the datestamp shows there: hours ahead of UTC (Danish summer
+    // time is 2; longitude / 15 is local solar time).
+    float utc_offset_hours = 0.0f;
+    // Degrees: the sun never sinks below this, so a course can have the
+    // white nights of a place further north. -90 leaves it where the
+    // latitude and date put it.
+    float lowest_sun_deg = -90.0f;
+};
+
 // A course manifest (assets/courses/*.json).
 struct course_definition {
     std::string id;
@@ -34,4 +49,5 @@ struct course_definition {
     // The course world, relative to the asset root.
     std::string world;
     course_backdrop backdrop;
+    course_sky sky;
 };

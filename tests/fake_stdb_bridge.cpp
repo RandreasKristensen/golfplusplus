@@ -187,6 +187,14 @@ void stdb_pick_up_ball(stdb_client*) {
     record("stdb_pick_up_ball");
 }
 
+void stdb_board_cart(stdb_client*, const uint64_t owner) {
+    record("stdb_board_cart", {}, static_cast<std::int64_t>(owner));
+}
+
+void stdb_leave_cart(stdb_client*) {
+    record("stdb_leave_cart");
+}
+
 void stdb_take_shot(stdb_client*, const stdb_shot* shot) {
     record("stdb_take_shot");
     fake_bridge().calls.back().shot = *shot;

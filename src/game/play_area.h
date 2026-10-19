@@ -5,6 +5,7 @@
 // saved.
 
 #include "game/course_world_definition.h"
+#include "game/floodlights.h"
 #include "game/game_tuning.h"
 #include "game/hole_data.h"
 #include "game/hole_sign.h"
@@ -52,6 +53,10 @@ struct play_area {
     std::vector<course_world_fence> fences;
     std::vector<tree_body> fence_poles;
     std::vector<fence_panel> fence_panels;
+    // The floodlights along every hole, and their poles as shots hit them.
+    std::vector<floodlight> floodlights;
+    std::vector<tree_body> floodlight_poles;
+    tree_grid floodlight_grid;
 };
 
 // Hole-space position -> course position for a hole placed at `start`
@@ -59,8 +64,15 @@ struct play_area {
 glm::vec3 place_hole_point(const hole_data& hole, const course_world_hole_start& start, const glm::vec3& point);
 hole_data place_hole(const hole_data& hole, const course_world_hole_start& start);
 
+// Only the course's holes, placed as build_course_area places them: their
+// ribbons, zones and trees, without the ground or anything standing on it.
+play_area place_course_holes(const std::vector<hole_data>& holes,
+                             const course_world_definition& world,
+                             const game_tuning& tuning);
+
 // The whole course: every hole placed by its hole start (`holes[i]` belongs to
-// `world.hole_starts[i]`), on the world's land (none when its grid is empty:
+// `world.hole_starts[i]`), on the world's land with its relief scaled
+// (physics/land_relief.h; none when its grid is empty:
 // the holes keep their own heights). Each hole's terrain is built in hole
 // space before placing, so turned zones shape it the same way.
 play_area build_course_area(const std::vector<hole_data>& holes,

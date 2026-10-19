@@ -55,11 +55,10 @@ std::optional<reward_rules> parse_rewards_from_text(const std::string& text) {
     const std::optional<xp_reward> smoke = xp_reward_from_json(*root, "smoke_xp");
     const std::optional<movement_xp_rate> walking = movement_rate_from_json(*movement, "walking");
     const std::optional<movement_xp_rate> cart = movement_rate_from_json(*movement, "cart_on_road");
-    const std::optional<movement_xp_rate> drift = movement_rate_from_json(*movement, "drift_on_road");
     const std::optional<float> duration = json_float(*cigarette, "duration_seconds");
     const std::optional<float> backspin = json_float(*cigarette, "backspin_scale");
     const std::optional<float> timing = json_float(*cigarette, "timing_speed_scale");
-    if (!shot || !smoke || !walking || !cart || !drift || !duration || !backspin || !timing) {
+    if (!shot || !smoke || !walking || !cart || !duration || !backspin || !timing) {
         return std::nullopt;
     }
 
@@ -68,7 +67,6 @@ std::optional<reward_rules> parse_rewards_from_text(const std::string& text) {
     rules.smoke = *smoke;
     rules.walking = *walking;
     rules.cart_on_road = *cart;
-    rules.drift_on_road = *drift;
     rules.cigarette = cigarette_rules{*duration, *backspin, *timing};
     return rules;
 }

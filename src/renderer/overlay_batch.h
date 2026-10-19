@@ -72,6 +72,16 @@ void draw_overlay_rotated_quad(overlay_batch& batch,
                                glm::vec3 color,
                                float alpha);
 
+// Any convex quad, corners `a` to `d` in order around it (two coincident
+// corners make a triangle): ring slices and pie wedges.
+void draw_overlay_corner_quad(overlay_batch& batch,
+                              glm::vec2 a,
+                              glm::vec2 b,
+                              glm::vec2 c,
+                              glm::vec2 d,
+                              glm::vec3 color,
+                              float alpha);
+
 // Thick line as a rotated quad; zero-length segments append nothing.
 void draw_overlay_segment(overlay_batch& batch,
                           glm::vec2 start,

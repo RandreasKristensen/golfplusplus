@@ -14,10 +14,16 @@
 
 namespace {
 enum class help_control_icon {
+    wasd,
     arrows,
+    mouse,
+    key_e,
+    swing,
     space,
     shift,
-    enter,
+    key_m,
+    tab,
+    caps_lock,
     backspace,
     retee,
     key_1,
@@ -26,7 +32,7 @@ enum class help_control_icon {
 };
 
 void draw_key_cap(overlay_batch& batch, const text_assets& text, const char* key, const glm::vec2 center, const glm::vec2 half_size) {
-    draw_control_button_base(batch, center, half_size, false);
+    draw_key_button(batch, center, half_size);
     draw_label(batch, text.font, find_text_style(text, style_control_key), lookup_text(text, key), ui_rect{center, half_size});
 }
 
@@ -34,44 +40,68 @@ void draw_help_control_icon(overlay_batch& batch,
                             const text_assets& text,
                             const help_control_icon icon,
                             const glm::vec2 center) {
-    const bool is_down = false;
     const glm::vec2 small_half(0.066f, 0.052f);
     const glm::vec2 wide_half(0.138f, 0.052f);
     const glm::vec2 key_half(0.052f, 0.046f);
 
+    // WASD and the arrows as on the keyboard: one key over three.
+    const glm::vec2 cluster_half(0.040f, 0.040f);
+    const float column = 0.088f;
+    const glm::vec2 top = center + glm::vec2(0.0f, 0.047f);
+    const glm::vec2 bottom = center - glm::vec2(0.0f, 0.047f);
+    const glm::vec2 side(column, 0.0f);
+    const auto arrow_key = [&](const glm::vec2 at, const glm::vec2 direction) {
+        draw_key_button(batch, at, cluster_half);
+        draw_arrow_icon(batch, at, direction, cluster_half);
+    };
+
     switch (icon) {
-    case help_control_icon::arrows: {
-        const glm::vec2 dpad_half(0.043f, 0.043f);
-        const float offset = 0.052f;
-        draw_control_button_base(batch, center + glm::vec2(0.0f, offset), dpad_half, is_down);
-        draw_arrow_icon(batch, center + glm::vec2(0.0f, offset), glm::vec2(0.0f, 1.0f), dpad_half, is_down);
-        draw_control_button_base(batch, center + glm::vec2(-offset, 0.0f), dpad_half, is_down);
-        draw_arrow_icon(batch, center + glm::vec2(-offset, 0.0f), glm::vec2(-1.0f, 0.0f), dpad_half, is_down);
-        draw_control_button_base(batch, center + glm::vec2(offset, 0.0f), dpad_half, is_down);
-        draw_arrow_icon(batch, center + glm::vec2(offset, 0.0f), glm::vec2(1.0f, 0.0f), dpad_half, is_down);
-        draw_control_button_base(batch, center + glm::vec2(0.0f, -offset), dpad_half, is_down);
-        draw_arrow_icon(batch, center + glm::vec2(0.0f, -offset), glm::vec2(0.0f, -1.0f), dpad_half, is_down);
+    case help_control_icon::wasd:
+        draw_key_cap(batch, text, text_controls_key_w, top, cluster_half);
+        draw_key_cap(batch, text, text_controls_key_a, bottom - side, cluster_half);
+        draw_key_cap(batch, text, text_controls_key_s, bottom, cluster_half);
+        draw_key_cap(batch, text, text_controls_key_d, bottom + side, cluster_half);
         break;
-    }
+    case help_control_icon::arrows:
+        arrow_key(top, glm::vec2(0.0f, 1.0f));
+        arrow_key(bottom - side, glm::vec2(-1.0f, 0.0f));
+        arrow_key(bottom, glm::vec2(0.0f, -1.0f));
+        arrow_key(bottom + side, glm::vec2(1.0f, 0.0f));
+        break;
+    case help_control_icon::mouse:
+        draw_key_cap(batch, text, text_controls_mouse, center, wide_half);
+        break;
+    case help_control_icon::key_e:
+        draw_key_cap(batch, text, text_controls_key_e, center, key_half);
+        break;
+    case help_control_icon::swing:
+        draw_key_cap(batch, text, text_controls_key_a, center - side * 0.5f, cluster_half);
+        draw_key_cap(batch, text, text_controls_key_d, center + side * 0.5f, cluster_half);
+        break;
     case help_control_icon::space:
-        draw_control_button_base(batch, center, wide_half, is_down);
-        draw_space_icon(batch, center, wide_half, is_down);
+        draw_key_button(batch, center, wide_half);
+        draw_space_icon(batch, center, wide_half);
         break;
     case help_control_icon::shift:
-        draw_control_button_base(batch, center, small_half, is_down);
-        draw_shift_icon(batch, center, small_half, is_down);
+        draw_key_button(batch, center, small_half);
+        draw_shift_icon(batch, center, small_half);
         break;
-    case help_control_icon::enter:
-        draw_control_button_base(batch, center, small_half, is_down);
-        draw_enter_icon(batch, center, small_half, is_down);
+    case help_control_icon::key_m:
+        draw_key_cap(batch, text, text_controls_key_m, center, small_half);
+        break;
+    case help_control_icon::tab:
+        draw_key_cap(batch, text, text_controls_key_tab, center, small_half);
+        break;
+    case help_control_icon::caps_lock:
+        draw_key_cap(batch, text, text_controls_key_caps_lock, center, small_half);
         break;
     case help_control_icon::backspace:
-        draw_control_button_base(batch, center, small_half, is_down);
-        draw_backspace_icon(batch, center, small_half, is_down);
+        draw_key_button(batch, center, small_half);
+        draw_backspace_icon(batch, center, small_half);
         break;
     case help_control_icon::retee:
-        draw_control_button_base(batch, center, small_half, is_down);
-        draw_retee_icon(batch, center, small_half, is_down);
+        draw_key_button(batch, center, small_half);
+        draw_retee_icon(batch, center, small_half);
         break;
     case help_control_icon::key_1:
         draw_key_cap(batch, text, text_controls_key_1, center, key_half);
@@ -111,18 +141,23 @@ ui_rect help_label_box(const help_column& column, const std::size_t row) {
 void draw_startup_help_screen(overlay_batch& batch, const text_assets& text) {
     const std::vector<help_column> columns{
         {-0.46f, 0.14f, {
-            {help_control_icon::arrows, glm::vec2(-0.66f, 0.42f), 0.51f, text_help_arrows},
-            {help_control_icon::space, glm::vec2(-0.66f, 0.15f), 0.22f, text_help_space},
-            {help_control_icon::shift, glm::vec2(-0.66f, -0.22f), -0.18f, text_help_left_shift},
-            {help_control_icon::shift, glm::vec2(-0.66f, -0.43f), -0.39f, text_help_shift},
+            {help_control_icon::wasd, glm::vec2(-0.66f, 0.43f), 0.51f, text_help_wasd},
+            {help_control_icon::arrows, glm::vec2(-0.66f, 0.12f), 0.20f, text_help_arrows},
+            {help_control_icon::mouse, glm::vec2(-0.66f, -0.08f), -0.03f, text_help_mouse},
+            {help_control_icon::key_e, glm::vec2(-0.66f, -0.26f), -0.21f, text_help_key_e},
+            {help_control_icon::swing, glm::vec2(-0.66f, -0.45f), -0.40f, text_help_swing},
+            {help_control_icon::space, glm::vec2(-0.66f, -0.59f), -0.54f, text_help_space},
+            {help_control_icon::shift, glm::vec2(-0.66f, -0.73f), -0.68f, text_help_shift},
         }},
         {0.45f, 0.84f, {
-            {help_control_icon::enter, glm::vec2(0.30f, 0.43f), 0.50f, text_help_enter},
-            {help_control_icon::backspace, glm::vec2(0.30f, 0.22f), 0.25f, text_help_backspace},
-            {help_control_icon::retee, glm::vec2(0.30f, -0.12f), -0.12f, text_help_retee},
-            {help_control_icon::key_1, glm::vec2(0.30f, -0.32f), -0.30f, text_help_key_1},
-            {help_control_icon::key_2, glm::vec2(0.30f, -0.48f), -0.46f, text_help_key_2},
-            {help_control_icon::key_g, glm::vec2(0.30f, -0.66f), -0.62f, text_help_key_g},
+            {help_control_icon::key_m, glm::vec2(0.30f, 0.46f), 0.51f, text_help_key_m},
+            {help_control_icon::tab, glm::vec2(0.30f, 0.32f), 0.37f, text_help_tab},
+            {help_control_icon::caps_lock, glm::vec2(0.30f, 0.18f), 0.23f, text_help_caps_lock},
+            {help_control_icon::backspace, glm::vec2(0.30f, 0.04f), 0.09f, text_help_backspace},
+            {help_control_icon::retee, glm::vec2(0.30f, -0.26f), -0.21f, text_help_retee},
+            {help_control_icon::key_1, glm::vec2(0.30f, -0.40f), -0.35f, text_help_key_1},
+            {help_control_icon::key_2, glm::vec2(0.30f, -0.54f), -0.49f, text_help_key_2},
+            {help_control_icon::key_g, glm::vec2(0.30f, -0.68f), -0.63f, text_help_key_g},
         }},
     };
 
@@ -149,18 +184,18 @@ void draw_startup_help_screen(overlay_batch& batch, const text_assets& text) {
     }
 }
 
-glm::vec3 thumbnail_zone_color(const material_zone_type type) {
+glm::vec3 thumbnail_zone_color(const ground_colors& ground, const material_zone_type type) {
     switch (type) {
     case material_zone_type::green:
-        return terrain_material_color(terrain_material::green);
+        return terrain_material_color(ground, terrain_material::green);
     case material_zone_type::bunker:
-        return terrain_material_color(terrain_material::bunker);
+        return terrain_material_color(ground, terrain_material::bunker);
     case material_zone_type::water:
-        return terrain_material_color(terrain_material::water);
+        return terrain_material_color(ground, terrain_material::water);
     case material_zone_type::unknown:
         break;
     }
-    return terrain_material_color(terrain_material::rough);
+    return terrain_material_color(ground, terrain_material::rough);
 }
 
 glm::vec2 thumbnail_world_point(const glm::vec3& point, const bool rotate_long_axis) {
@@ -191,7 +226,8 @@ glm::vec2 preview_point(const glm::vec3& point,
 void draw_hole_thumbnail(overlay_batch& batch,
                          const render_hole_preview& preview,
                          const glm::vec2 center,
-                         const glm::vec2 half_size) {
+                         const glm::vec2 half_size,
+                         const ground_colors& ground) {
     draw_overlay_quad(batch, center, half_size, glm::vec3(0.028f, 0.034f, 0.030f), 0.96f);
     draw_button_outline(batch, center, half_size, glm::vec3(0.42f, 0.44f, 0.40f), 0.42f);
 
@@ -231,14 +267,14 @@ void draw_hole_thumbnail(overlay_batch& batch,
         for (std::size_t i = 1; i < preview.control_points.size(); ++i) {
             const glm::vec2 a = preview_point(preview.control_points[i - 1], center, inset_half, padded_min, scale, rotate_long_axis);
             const glm::vec2 b = preview_point(preview.control_points[i], center, inset_half, padded_min, scale, rotate_long_axis);
-            draw_overlay_segment(batch, a, b, fairway_width, terrain_material_color(terrain_material::fairway), 0.82f);
+            draw_overlay_segment(batch, a, b, fairway_width, terrain_material_color(ground, terrain_material::fairway), 0.82f);
             draw_overlay_segment(batch, a, b, 0.006f, glm::vec3(0.62f, 0.78f, 0.38f), 0.55f);
         }
     }
 
     for (const material_zone& zone : preview.material_zones) {
         // Each zone as the rectangle around it, at least a dot across.
-        const glm::vec3 color = thumbnail_zone_color(zone.type);
+        const glm::vec3 color = thumbnail_zone_color(ground, zone.type);
         const glm::vec2 extent = zone_half_extent(zone);
         const glm::vec2 drawn = rotate_long_axis ? glm::vec2(extent.y, extent.x) : extent;
         const glm::vec2 p = preview_point(zone.center, center, inset_half, padded_min, scale, rotate_long_axis);
@@ -319,7 +355,8 @@ int startup_tile_at(const startup_menu_screen screen, const int count, const glm
     return -1;
 }
 
-void draw_startup_menu(overlay_batch& batch, const text_assets& text, const render_startup_menu& menu) {
+void draw_startup_menu(overlay_batch& batch, const text_assets& text, const render_startup_menu& menu,
+                       const ground_colors& ground) {
     if (menu.screen == startup_menu_screen::none) {
         return;
     }
@@ -360,9 +397,9 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
 
         const ui_rect inner = inset_rect(tile_box, tile_half * glm::vec2(0.08f, 0.10f));
         if (tile.preview) {
-            const ui_rect thumbnail = slice_y(inner, 0.0f, 0.52f);
-            draw_hole_thumbnail(batch, *tile.preview, thumbnail.center, thumbnail.half_size);
-            draw_label(batch, text.font, find_text_style(text, style_tile_label_small), tile.title, slice_y(inner, 0.54f, 0.82f));
+            const ui_rect thumbnail = slice_y(inner, 0.0f, 0.48f);
+            draw_hole_thumbnail(batch, *tile.preview, thumbnail.center, thumbnail.half_size, ground);
+            draw_label(batch, text.font, find_text_style(text, style_tile_label_small), tile.title, slice_y(inner, 0.50f, 0.82f));
             draw_label(batch, text.font, find_text_style(text, style_tile_hint_small), tile.subtitle, slice_y(inner, 0.82f, 1.0f));
         } else {
             draw_label(batch, text.font, find_text_style(text, style_tile_label), tile.title, slice_y(inner, 0.0f, 0.64f));
@@ -373,7 +410,7 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
     draw_label(batch, text.font, find_text_style(text, style_footer), menu.footer, ui_rect{glm::vec2(0.0f, -0.86f), glm::vec2(0.78f, 0.05f)});
     // Beside the main menu's column of tiles, above the footer.
     const text_style& note_style = find_text_style(text, style_corner_note);
-    draw_label(batch, text.font, note_style, menu.credits, ui_rect{glm::vec2(-0.645f, -0.60f), glm::vec2(0.20f, 0.18f)});
+    draw_label(batch, text.font, note_style, menu.credits, ui_rect{glm::vec2(-0.64f, -0.60f), glm::vec2(0.215f, 0.21f)});
     draw_label(batch, text.font, with_align(note_style, text_align::right), menu.version,
                ui_rect{glm::vec2(0.645f, -0.74f), glm::vec2(0.20f, 0.04f)});
 }

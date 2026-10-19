@@ -56,9 +56,11 @@ render_startup_menu make_settings_menu_render_data(const int selection,
     menu.footer = lookup_text(text, text_menu_settings_footer);
     for (std::size_t i = 0; i < definitions.size(); ++i) {
         const setting_definition& definition = definitions[i];
-        add_tile(menu, lookup_text(text, definition.label_key.c_str()),
-                 format_text(text, definition.value_key.c_str(), {{"value", std::to_string(setting_value(values, definition))}}),
-                 static_cast<int>(i) == selection);
+        const std::string value =
+            definition.value_keys.empty()
+                ? format_text(text, definition.value_key.c_str(), {{"value", std::to_string(setting_value(values, definition))}})
+                : lookup_text(text, definition.value_keys[static_cast<std::size_t>(setting_step_index(values, definition))].c_str());
+        add_tile(menu, lookup_text(text, definition.label_key.c_str()), value, static_cast<int>(i) == selection);
     }
     add_tile(menu, lookup_text(text, text_menu_settings_back), lookup_text(text, text_menu_settings_back_hint),
              selection == static_cast<int>(definitions.size()));

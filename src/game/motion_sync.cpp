@@ -34,8 +34,8 @@ motion_mode current_motion_mode(const game_state& state) {
     case game_mode::walking:
         break;
     }
-    if (state.cart.active) {
-        return state.cart.drift_timer > 0.0f ? motion_mode::drift : motion_mode::cart;
+    if (state.ride && !state.ride->step) {
+        return state.ride->owner == 0 ? motion_mode::cart : motion_mode::ride;
     }
     const bool walking = direction(state.player.speed, still_speed) != 0 ||
         direction(state.player.turn_rate, still_turn_rate) != 0;
@@ -57,7 +57,9 @@ bool should_send_motion(const motion_sync_state& sync, const net_motion& now, co
     if (moving(now) && sync.since_sent >= tuning.motion_heartbeat_seconds) {
         return true;
     }
-    return horizontal_distance(extrapolate_motion(last, sync.since_sent), now.position) > tuning.motion_correction_distance;
+    const float yaw_off = wrap_angle(now.yaw - (last.yaw + last.turn_rate * sync.since_sent));
+    return horizontal_distance(extrapolate_motion(last, sync.since_sent), now.position) > tuning.motion_correction_distance ||
+        std::abs(yaw_off) > tuning.motion_correction_yaw;
 }
 
 net_motion current_motion(const game_state& state) {
@@ -65,10 +67,11 @@ net_motion current_motion(const game_state& state) {
     motion.zone = local_zone(state);
     motion.mode = current_motion_mode(state);
     motion.position = state.player.position;
-    motion.yaw = state.player.yaw;
+    // Along the way I go, so others see me walk the way I step.
+    motion.yaw = wrap_angle(state.player.yaw + state.player.move_angle);
     motion.speed = state.player.speed;
     motion.turn_rate = state.player.turn_rate;
-    motion.on_road = state.cart.active && cart_on_road(state);
+    motion.on_road = driving_cart(state) && cart_on_road(state);
     return motion;
 }
 

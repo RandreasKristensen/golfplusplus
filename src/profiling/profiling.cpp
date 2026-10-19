@@ -161,10 +161,24 @@ const char* profile_stage_label(const profile_stage stage) {
 
 const char* gpu_profile_stage_label(const gpu_profile_stage stage) {
     switch (stage) {
+    case gpu_profile_stage::shadow_map:
+        return "SMAP";
     case gpu_profile_stage::terrain:
         return "TER";
+    case gpu_profile_stage::shadows:
+        return "SHD";
     case gpu_profile_stage::trees:
         return "TRE";
+    case gpu_profile_stage::sky:
+        return "SKY";
+    case gpu_profile_stage::bloom:
+        return "BLM";
+    case gpu_profile_stage::smear:
+        return "SMR";
+    case gpu_profile_stage::camcorder:
+        return "CAM";
+    case gpu_profile_stage::tape:
+        return "TAPE";
     case gpu_profile_stage::overlay:
         return "OVL";
     case gpu_profile_stage::crt:
@@ -196,7 +210,7 @@ std::vector<std::string> format_profile_overlay_lines(const frame_profile& profi
     };
 
     std::vector<std::string> lines;
-    lines.reserve(10);
+    lines.reserve(12);
     lines.push_back(cpu(profile_stage::update_game) + " " + cpu(profile_stage::refresh_render_mesh_cache));
     lines.push_back(cpu(profile_stage::make_render_data) + " " + cpu(profile_stage::window_swap));
     lines.push_back(cpu(profile_stage::render) + " " + cpu(profile_stage::render_crt));
@@ -219,8 +233,13 @@ std::vector<std::string> format_profile_overlay_lines(const frame_profile& profi
                     " TREE " + std::string(profile.trees_visible ? "ON" : "OFF"));
 
     if (profile.gpu_timers_available) {
-        lines.push_back("GPU " + gpu(gpu_profile_stage::terrain) + " " + gpu(gpu_profile_stage::trees));
-        lines.push_back("GPU " + gpu(gpu_profile_stage::overlay) + " " + gpu(gpu_profile_stage::crt));
+        lines.push_back("GPU " + gpu(gpu_profile_stage::shadow_map) + " " + gpu(gpu_profile_stage::terrain) + " " +
+                        gpu(gpu_profile_stage::shadows));
+        lines.push_back("GPU " + gpu(gpu_profile_stage::trees) + " " + gpu(gpu_profile_stage::sky));
+        lines.push_back("GPU " + gpu(gpu_profile_stage::bloom) + " " + gpu(gpu_profile_stage::smear) + " " +
+                        gpu(gpu_profile_stage::camcorder));
+        lines.push_back("GPU " + gpu(gpu_profile_stage::tape) + " " + gpu(gpu_profile_stage::overlay) + " " +
+                        gpu(gpu_profile_stage::crt));
     }
 
     return lines;

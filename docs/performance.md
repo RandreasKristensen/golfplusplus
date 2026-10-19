@@ -4,7 +4,7 @@ Profile the **release** build; debug is not representative.
 
 ## Startup switches
 
-Both are environment variables, read once at startup in `src/core/main.cpp` and
+They are environment variables, read once at startup in `src/core/main.cpp` and
 parsed by `src/core/startup_options.cpp`. Nothing in game, physics or renderer
 code reads them.
 
@@ -12,17 +12,26 @@ code reads them.
 |---|---|
 | `GOLFPP_COURSE=<course id>` | Skip the menu and boot straight into that course (the `id` in `assets/courses/*.json`). Unknown ids fall back to the menu. |
 | `GOLFPP_VSYNC=0` | Present without vsync so FPS shows real headroom. Also accepts `off`, `no`, `false`, `disable(d)`; anything else keeps vsync on. |
+| `GOLFPP_WINDOW=<W>x<H>` | Open the window at this size in pixels (e.g. `3440x1440`) instead of 1280x720. Anything else keeps the default. The fullscreen setting still wins. |
+| `GOLFPP_SCREENSHOT=<path.bmp>` | 120 frames after loading (into `GOLFPP_COURSE`, or the menu), save the window's picture after the TV pass as a 24-bit BMP and quit. Runs with default settings and never writes the save. For reviewing the picture. |
+| `GOLFPP_GAME_TIME=<hour>` or `<YYYY-MM-DD>T<hour>` | Pin the sky at this hour on the course's clock (`0` to `24`, e.g. `19.5`; the course file's `sky.utc_offset_hours`) on the course's date (its `sky.date`), or on the given date (`1989-12-21T23`: the Danish courses' midsummer night never gets darker than about −10.5°, so a winter date shows a true night), so screenshots show the same light every time. Anything else leaves the clock running. |
 
 ```pwrshl
 $env:GOLFPP_VSYNC = "0"; $env:GOLFPP_COURSE = "marienlyst_golfklub"
 .\build\release\golf++.exe
 Remove-Item Env:GOLFPP_VSYNC, Env:GOLFPP_COURSE
+
+$env:GOLFPP_COURSE = "marienlyst_golfklub"; $env:GOLFPP_WINDOW = "3440x1440"; $env:GOLFPP_SCREENSHOT = "wide.bmp"
+.\build\release\golf++.exe
+Remove-Item Env:GOLFPP_COURSE, Env:GOLFPP_WINDOW, Env:GOLFPP_SCREENSHOT
 ```
 
 ## Overlay
 
 Press `Ctrl` in game to toggle FPS + the profiling overlay. The profiler records
-nothing while the overlay is off. Values are averaged over 0.25 s; timings are
+nothing while the overlay is off. While it shows, hold `T` to run the sky
+forward (two game hours a second); the offset lasts until the game quits and
+only this player sees it. Values are averaged over 0.25 s; timings are
 whole microseconds to keep the lines short.
 
 | Counter | Meaning |
@@ -31,14 +40,14 @@ whole microseconds to keep the lines short.
 | `MESH` | Refreshing static anchors and render meshes. Should be ~0 except on the frame an area loads |
 | `MRD` | Building the frame's render data. Should stay well under 1 ms |
 | `SWP` | `SDL_GL_SwapWindow`. With vsync on this is the vblank wait, so large = headroom |
-| `REN` / `SCN` / `OVL` / `CRT` | Whole render call / 3D scene / 2D overlay / CRT pass |
+| `REN` / `SCN` / `OVL` / `CRT` | Whole render call / 3D scene / 2D overlay / TV pass |
 | `DRAW` | Draw calls, excluding the overlay's own (`DBGUI`) |
 | `UNI` / `ULOC` | Uniform sets / uniform location lookups. `ULOC` must be 0 after warmup |
 | `BUF` | Streaming buffer writes / reallocations / bytes. Reallocations must settle to 0 |
 | `TSAMP` / `TTRI` | Terrain sample calls / triangles tested across them |
 | `CHUNK v/c R IDX` | Terrain chunks visible / culled, merged draw ranges, indices drawn |
 | `TREE` | `ON` when the instanced tree batch passed frustum culling |
-| `GPU ...` | GPU pass timings from timer queries, reported 2 frames late |
+| `GPU SMAP` / `TER` / `SHD` / `TRE` / `SKY` / `BLM` / `SMR` / `CAM` / `TAPE` / `OVL` / `CRT` | GPU timings from timer queries, reported 2 frames late: the trees' and floodlights' shadow map (`shadow_map_pass`, 0 with the sun down) / terrain / blob shadows (`blob_shadow_renderer`) / trees, signs, fence posts and floodlights / the sky and land panorama behind them (`backdrop_pass`) / the camcorder's quarter-size copy, metering and bloom / its column smear / its recording of the picture (`camcorder_pass`) / tape pass / overlay / TV pass. While paused only the tape, overlay and TV run |
 
 The overlay text comes from `format_profile_overlay_lines` in
 `src/profiling/profiling.cpp`.

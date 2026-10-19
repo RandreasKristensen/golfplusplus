@@ -4,7 +4,8 @@
 // is sparse: others carry it on with extrapolate_motion (game/net_types.h), so it is sent when
 // the intent changes (zone, mode, starting, stopping or reversing a move or a
 // turn, a cart getting on or off a road), as a heartbeat while moving, and as a correction when that
-// extrapolation drifts too far from where the player really is. Never more
+// extrapolation drifts too far from where the player really is or which way
+// they face (the mouse turns without a turn rate). Never more
 // often than net.motion_min_interval_seconds.
 
 #include "game/game_tuning.h"

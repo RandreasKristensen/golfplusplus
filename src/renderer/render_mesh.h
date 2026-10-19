@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -14,6 +15,10 @@ struct render_terrain_vertex {
     glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
     glm::vec3 color = glm::vec3(1.0f);
     float rough = 0.0f;  // 1 where the rough's grass texture shows, 0 where not
+    float ao = 1.0f;     // how much of the sky it sees (renderer/sky_visibility.h)
+    // The sine of the horizon's elevation each of the 8 horizon ways
+    // (sky_visibility.h), 0..255 for 0..1: where the sun is hidden behind the land.
+    std::array<std::uint8_t, 8> horizon{};
 };
 
 // Axis-aligned bounds over every vertex position. `valid` is false for an

@@ -1,7 +1,7 @@
 {
   "id": "sand_wedge",
   "name": "Sand Wedge",
-  "label": "SWDG",
+  "label": "SW",
   "hit_sound": "club_hit_wedge",
   "bag_order": 1,
   "stats": {

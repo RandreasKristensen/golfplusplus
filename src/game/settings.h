@@ -20,11 +20,16 @@ inline constexpr const char* setting_definitions_path = "ui/settings.json";
 inline constexpr const char* setting_master_volume = "master_volume";  // every sound, music included
 inline constexpr const char* setting_music_volume = "music_volume";
 inline constexpr const char* setting_field_of_view = "field_of_view";  // the gameplay camera's, in degrees
+inline constexpr const char* setting_mouse_sensitivity = "mouse_sensitivity";  // percent of the tuning's mouse look
+inline constexpr const char* setting_fullscreen = "fullscreen";  // 0 windowed, 1 borderless fullscreen
+inline constexpr const char* setting_tape_wear = "tape_wear";    // from a fresh tape (min) to a worn one (max)
+inline constexpr const char* setting_datestamp = "datestamp";    // 0 off, 1 the camcorder's date and time in the corner
 
 struct setting_definition {
     std::string id;
     std::string label_key;  // string table keys: the tile's title...
-    std::string value_key;  // ...and its value, formatted with {value}
+    std::string value_key;  // ...and its value, formatted with {value}...
+    std::vector<std::string> value_keys;  // ...or one key per step from min to max instead
     int min = 0;
     int max = 0;
     int step = 0;
@@ -35,8 +40,9 @@ struct setting_definition {
 using settings_values = std::map<std::string, int>;
 
 // nullopt when the text is not a valid definitions file: every setting
-// needs an id, its text keys, min < max, a positive step and a default in
-// range, and ids are unique.
+// needs an id, a label, either "value" or "values" (one key per step, the
+// range a whole number of steps), min < max, a positive step and a default
+// in range, and ids are unique.
 std::optional<std::vector<setting_definition>> parse_setting_definitions_from_text(const std::string& text);
 
 // Whether `definitions` has every setting the code applies.
@@ -46,6 +52,8 @@ const setting_definition* find_setting(const std::vector<setting_definition>& de
 
 // The value of `definition`, its default when unset, always in range.
 int setting_value(const settings_values& values, const setting_definition& definition);
+// Which step from min the value is on (0 at min).
+int setting_step_index(const settings_values& values, const setting_definition& definition);
 // Where the value sits between min (0) and max (1).
 float setting_fraction(const settings_values& values, const setting_definition& definition);
 // Moves the value by `steps` steps, clamped to the range.

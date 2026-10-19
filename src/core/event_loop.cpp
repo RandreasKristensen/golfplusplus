@@ -33,6 +33,18 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
         return &input.backspace;
     case SDL_SCANCODE_ESCAPE:
         return &input.escape;
+    case SDL_SCANCODE_W:
+        return &input.key_w;
+    case SDL_SCANCODE_A:
+        return &input.key_a;
+    case SDL_SCANCODE_S:
+        return &input.key_s;
+    case SDL_SCANCODE_D:
+        return &input.key_d;
+    case SDL_SCANCODE_E:
+        return &input.key_e;
+    case SDL_SCANCODE_M:
+        return &input.key_m;
     case SDL_SCANCODE_R:
         return &input.key_r;
     case SDL_SCANCODE_1:
@@ -41,6 +53,8 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
         return &input.key_2;
     case SDL_SCANCODE_G:
         return &input.key_g;
+    case SDL_SCANCODE_T:
+        return &input.key_t;
     default:
         return nullptr;
     }
@@ -71,6 +85,11 @@ input_state poll_events(const input_state& previous) {
         case SDL_MOUSEMOTION:
             input.mouse_x = event.motion.x;
             input.mouse_y = event.motion.y;
+            input.mouse_dx += event.motion.xrel;
+            input.mouse_dy += event.motion.yrel;
+            break;
+        case SDL_MOUSEWHEEL:
+            input.wheel_steps += event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y;
             break;
         case SDL_MOUSEBUTTONDOWN:
         case SDL_MOUSEBUTTONUP:
@@ -93,6 +112,15 @@ input_state poll_events(const input_state& previous) {
         }
     }
     return input;
+}
+
+void set_mouse_captured(const bool captured) {
+    if ((SDL_GetRelativeMouseMode() == SDL_TRUE) == captured) {
+        return;
+    }
+    if (SDL_SetRelativeMouseMode(captured ? SDL_TRUE : SDL_FALSE) != 0) {
+        SDL_Log("SDL_SetRelativeMouseMode failed: %s", SDL_GetError());
+    }
 }
 
 void set_text_input_enabled(const bool enabled) {

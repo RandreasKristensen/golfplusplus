@@ -8,6 +8,10 @@
     "haze_amount": 1.0,
     "haze_distance": 800
   },
+  "sky": {
+    "date": "06-21",
+    "utc_offset_hours": 2
+  },
   "holes": [
     "holes/mollerup_golf_club_h01.json",
     "holes/mollerup_golf_club_h02.json",

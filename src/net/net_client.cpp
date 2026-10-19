@@ -19,7 +19,8 @@ stdb_string view(const std::string& text) {
 bool gameplay_reducer(const std::string& reducer) {
     for (const char* name : {reducer_update_motion, reducer_take_shot, reducer_enter_hole, reducer_claim_collectible,
                              reducer_emote, reducer_retee, reducer_pick_up_ball, reducer_return_to_hub,
-                             reducer_create_group, reducer_join_group, reducer_leave_group}) {
+                             reducer_create_group, reducer_join_group, reducer_leave_group, reducer_board_cart,
+                             reducer_leave_cart}) {
         if (reducer == name) {
             return true;
         }
@@ -89,6 +90,10 @@ std::vector<std::size_t> stdb_header_layout() {
     describe(sizeof(stdb_ball), {offsetof(stdb_ball, account_id), offsetof(stdb_ball, room_id), offsetof(stdb_ball, zone),
                                  offsetof(stdb_ball, x), offsetof(stdb_ball, y), offsetof(stdb_ball, z),
                                  offsetof(stdb_ball, stroke_count), offsetof(stdb_ball, last_wind_time)});
+    describe(sizeof(stdb_golf_cart),
+             {offsetof(stdb_golf_cart, owner), offsetof(stdb_golf_cart, room_id), offsetof(stdb_golf_cart, x),
+              offsetof(stdb_golf_cart, y), offsetof(stdb_golf_cart, z), offsetof(stdb_golf_cart, yaw),
+              offsetof(stdb_golf_cart, passenger)});
     describe(sizeof(stdb_shot), {offsetof(stdb_shot, stroke), offsetof(stdb_shot, aim_angle), offsetof(stdb_shot, club_id),
                                  offsetof(stdb_shot, power), offsetof(stdb_shot, cigarette_active),
                                  offsetof(stdb_shot, wind_time)});
@@ -282,6 +287,12 @@ void net_client::send_commands(game_state& state) {
             break;
         case net_command_type::return_to_hub:
             stdb_return_to_hub(client);
+            break;
+        case net_command_type::board_cart:
+            stdb_board_cart(client, command.cart_owner);
+            break;
+        case net_command_type::leave_cart:
+            stdb_leave_cart(client);
             break;
         }
     }
@@ -488,6 +499,7 @@ void net_client::subscribe_room(const std::uint64_t room_id) {
             "SELECT * FROM golf_group WHERE room_id = " + id,
             "SELECT * FROM avatar_motion WHERE room_id = " + id,
             "SELECT * FROM ball WHERE room_id = " + id,
+            "SELECT * FROM golf_cart WHERE room_id = " + id,
             "SELECT * FROM shot_event WHERE room_id = " + id,
             "SELECT * FROM emote_event WHERE room_id = " + id,
             // Room members' names.

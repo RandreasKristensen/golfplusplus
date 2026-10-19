@@ -6,6 +6,8 @@
 #include <array>
 #include <cmath>
 
+#include <glm/common.hpp>
+
 namespace {
 void add_triangle_scan_intersection(const glm::vec2 a,
                                     const glm::vec2 b,
@@ -28,8 +30,12 @@ glm::vec3 course_map_ink(const glm::vec3 ground_color) {
     return ground_color * 0.72f + glm::vec3(0.10f, 0.08f, 0.04f);
 }
 
-glm::vec3 course_map_material_ink(const terrain_material material) {
-    return course_map_ink(terrain_material_color(material));
+glm::vec3 course_map_material_ink(const ground_colors& colors, const terrain_material material) {
+    return course_map_ink(terrain_material_color(colors, material));
+}
+
+glm::vec3 course_map_other_hole_ink(const glm::vec3 ink) {
+    return glm::mix(ink, course_map_paper, course_map_other_hole_fade);
 }
 
 bool course_map_layouts_match(const course_map_layout& a, const course_map_layout& b) {

@@ -283,6 +283,24 @@ SPACETIMEDB_TABLE(ball_row, ball, Public)
 FIELD_PrimaryKey(ball, account_id)
 FIELD_Index(ball, room_id)
 
+// A player's golf cart (game/golf_cart.h), there while they are in the
+// room: parked beside hole 1 when they join (free_parking_slot), then where
+// their last motion at its wheel left it (x, y, z the ground under the
+// middle of its seat). `passenger` rides in its other seat (board_cart).
+struct golf_cart_row {
+    std::uint64_t owner;
+    std::uint64_t room_id;
+    float x;
+    float y;
+    float z;
+    float yaw;
+    std::uint64_t passenger;  // 0: nobody
+};
+SPACETIMEDB_STRUCT(golf_cart_row, owner, room_id, x, y, z, yaw, passenger)
+SPACETIMEDB_TABLE(golf_cart_row, golf_cart, Public)
+FIELD_PrimaryKey(golf_cart, owner)
+FIELD_Index(golf_cart, room_id)
+
 // The server's view of a player's movement: the last accepted position and
 // mode, the motion slack left (check_motion), the movement XP meters not yet
 // earned, and when they last smoked and drank. Like offline play state, the
@@ -300,6 +318,8 @@ struct motion_budget_row {
     Timestamp drink_at;
     float walk_meters_pending;
     float cart_meters_pending;
+    // Always 0, never read: SpacetimeDB cannot drop a column without starting
+    // the database over, so it stays until the next --delete-data publish.
     float drift_meters_pending;
 };
 SPACETIMEDB_STRUCT(motion_budget_row, account_id, x, y, z, mode, server_time, slack_left, smoke_at, drink_at,
@@ -432,6 +452,23 @@ bool has_progress(ReducerContext& ctx, const player_row& player) {
 
 glm::vec3 position_of(const motion_budget_row& budget) {
     return glm::vec3(budget.x, budget.y, budget.z);
+}
+
+cart_pose pose_of(const golf_cart_row& cart) {
+    return cart_pose{glm::vec3(cart.x, cart.y, cart.z), cart.yaw};
+}
+
+// Takes `account` out of any passenger seat in `room_id`. False when they had none.
+bool leave_passenger_seat(ReducerContext& ctx, const std::uint64_t room_id, const std::uint64_t account) {
+    bool left = false;
+    for (golf_cart_row cart : ctx.db[golf_cart_room_id].filter(room_id)) {
+        if (cart.passenger == account) {
+            cart.passenger = 0;
+            ctx.db[golf_cart_owner].update(cart);
+            left = true;
+        }
+    }
+    return left;
 }
 
 float seconds_between(const Timestamp& earlier, const Timestamp& later) {
@@ -579,6 +616,8 @@ void leave_room_state(ReducerContext& ctx, const std::uint64_t account_id) {
         return;
     }
     leave_group_state(ctx, *member);
+    leave_passenger_seat(ctx, member->room_id, account_id);
+    ctx.db[golf_cart_owner].delete_by_key(account_id);
     ctx.db[avatar_motion_account_id].delete_by_key(account_id);
     ctx.db[ball_account_id].delete_by_key(account_id);
     ctx.db[cup_ball_account_id].delete_by_key(account_id);
@@ -596,8 +635,10 @@ void leave_room_state(ReducerContext& ctx, const std::uint64_t account_id) {
 
 // Puts the player at `position` (course coordinates) in member.zone, as the
 // server's last accepted position and the avatar others see, and ends the
-// play state that offline ends there too (reset_play_state).
+// play state that offline ends there too (reset_play_state): out of any
+// cart, which stays where it is.
 void place_player(ReducerContext& ctx, const room_member_row& member, const glm::vec3& position) {
+    leave_passenger_seat(ctx, member.room_id, member.account_id);
     if (std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(member.account_id)) {
         *budget = motion_budget_row{member.account_id, position.x, position.y, position.z,
                                     static_cast<std::uint8_t>(motion_mode::idle), ctx.timestamp,
@@ -1095,6 +1136,18 @@ SPACETIMEDB_REDUCER(join_course, ReducerContext ctx, std::string course_id) {
     ctx.db[avatar_motion].insert(avatar_motion_row{account, joined->room_id, hub_zone,
                                                    static_cast<std::uint8_t>(motion_mode::idle), spawn.x, spawn.y, spawn.z,
                                                    0.0f, 0.0f, 0.0f, 0.0, ctx.timestamp});
+
+    // A cart of their own, parked beside hole 1 next to the others in the room.
+    const cart_tuning& carts = cached_content()->tuning.cart;
+    std::vector<glm::vec3> parked;
+    for (const golf_cart_row& other : ctx.db[golf_cart_room_id].filter(joined->room_id)) {
+        parked.push_back(glm::vec3(other.x, other.y, other.z));
+    }
+    const glm::vec3 start = course->world.hole_starts.front().position;
+    const glm::vec3 pin = course->holes.front().pin_position;
+    cart_pose cart = parked_cart_pose(start, pin, free_parking_slot(parked, start, pin, carts), carts);
+    cart.position = anchor_on_terrain(course->area, cart.position);
+    ctx.db[golf_cart].insert(golf_cart_row{account, joined->room_id, cart.position.x, cart.position.y, cart.position.z, cart.yaw, 0});
     return Ok();
 }
 
@@ -1222,6 +1275,27 @@ SPACETIMEDB_REDUCER(update_motion,
     if (!move.allowed) {
         return Err(error_too_fast);
     }
+    // Into the driver's seat from beside it; into the passenger's only by
+    // board_cart.
+    const bool driving = mode == static_cast<std::uint8_t>(motion_mode::cart);
+    std::optional<golf_cart_row> own_cart = ctx.db[golf_cart_owner].find(me.member->account_id);
+    if (driving && budget->mode != mode) {
+        if (!own_cart) {
+            return Err(error_unknown_cart);
+        }
+        if (!within_seat_reach(pose_of(*own_cart), cart_seat::driver, to, content.tuning)) {
+            return Err(error_too_far);
+        }
+    }
+    if (mode == static_cast<std::uint8_t>(motion_mode::ride)) {
+        bool riding = false;
+        for (const golf_cart_row& cart : ctx.db[golf_cart_room_id].filter(me.member->room_id)) {
+            riding = riding || cart.passenger == me.member->account_id;
+        }
+        if (!riding) {
+            return Err(error_not_in_cart);
+        }
+    }
 
     // Movement XP as offline, for the stretch since the last update in the
     // mode it was covered in (an update is sent when the mode changes, so
@@ -1237,8 +1311,7 @@ SPACETIMEDB_REDUCER(update_motion,
         float* pending;
     };
     const earning earnings[] = {{earns.walking, &rewards.walking, &budget->walk_meters_pending},
-                                {earns.cart, &rewards.cart_on_road, &budget->cart_meters_pending},
-                                {earns.drift, &rewards.drift_on_road, &budget->drift_meters_pending}};
+                                {earns.cart, &rewards.cart_on_road, &budget->cart_meters_pending}};
     const bool xp_due = std::any_of(std::begin(earnings), std::end(earnings), [meters](const earning& e) {
         return e.earns && *e.pending + meters >= e.rate->meters_per_xp;
     });
@@ -1273,6 +1346,54 @@ SPACETIMEDB_REDUCER(update_motion,
     const float shown_turn_rate = clamp_turn_rate(turn_rate, content.tuning);
     ctx.db[avatar_motion_account_id].update(avatar_motion_row{me.member->account_id, me.member->room_id, zone, mode, x, y, z,
                                                               yaw, shown_speed, shown_turn_rate, client_time, ctx.timestamp});
+    // The cart goes where its driver takes it.
+    if (driving && own_cart) {
+        const cart_pose cart = cart_around_seat(to, yaw, cart_seat::driver, content.tuning.cart);
+        own_cart->x = cart.position.x;
+        own_cart->y = cart.position.y;
+        own_cart->z = cart.position.z;
+        own_cart->yaw = cart.yaw;
+        ctx.db[golf_cart_owner].update(*own_cart);
+    }
+    return Ok();
+}
+
+// Into the passenger seat of `owner`'s cart in my room, from beside it, when
+// nobody sits there.
+SPACETIMEDB_REDUCER(board_cart, ReducerContext ctx, std::uint64_t owner) {
+    const member_result me = caller_member(ctx);
+    if (!me.member) {
+        return refused(me);
+    }
+    std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(owner);
+    if (!cart || cart->room_id != me.member->room_id || owner == me.member->account_id) {
+        return Err(error_unknown_cart);
+    }
+    if (cart->passenger != 0) {
+        return Err(error_seat_taken);
+    }
+    const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(me.member->account_id);
+    if (!budget) {
+        return Err(error_not_in_room);
+    }
+    if (!within_seat_reach(pose_of(*cart), cart_seat::passenger, position_of(*budget), cached_content()->tuning)) {
+        return Err(error_too_far);
+    }
+    leave_passenger_seat(ctx, me.member->room_id, me.member->account_id);
+    cart->passenger = me.member->account_id;
+    ctx.db[golf_cart_owner].update(*cart);
+    return Ok();
+}
+
+// Out of the passenger seat I sit in.
+SPACETIMEDB_REDUCER(leave_cart, ReducerContext ctx) {
+    const member_result me = caller_member(ctx);
+    if (!me.member) {
+        return refused(me);
+    }
+    if (!leave_passenger_seat(ctx, me.member->room_id, me.member->account_id)) {
+        return Err(error_not_in_cart);
+    }
     return Ok();
 }
 

@@ -129,6 +129,7 @@ TEST_CASE("subscriptions go from the protocol to my views to my rows to my room,
     REQUIRE(subscriptions.size() == 4U);
     CHECK(any_query_contains(subscriptions[3], "FROM avatar_motion WHERE room_id = 7"));
     CHECK(any_query_contains(subscriptions[3], "FROM shot_event WHERE room_id = 7"));
+    CHECK(any_query_contains(subscriptions[3], "FROM golf_cart WHERE room_id = 7"));
     CHECK(any_query_contains(subscriptions[3], "room_member.room_id = 7"));
 
     // Someone else's row changes nothing; my move to another room swaps the subscription.
@@ -485,7 +486,7 @@ TEST_CASE("linking this login to another account never mixes their progress") {
     CHECK(state.xp_drops.empty());
 }
 
-TEST_CASE("my room's rows become its players, balls, groups, shots and emotes") {
+TEST_CASE("my room's rows become its players, balls, carts, groups, shots and emotes") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
     queue_event(member_row(42, 7, STDB_ROW_INSERT));
@@ -515,6 +516,9 @@ TEST_CASE("my room's rows become its players, balls, groups, shots and emotes") 
     row = stdb_row{};
     row.ball = stdb_ball{43, 7, 1, 4.0f, 5.0f, 6.0f, 2, 1.5f};
     queue_event(row_event(STDB_TABLE_BALL, STDB_ROW_INSERT, row));
+    row = stdb_row{};
+    row.golf_cart = stdb_golf_cart{43, 7, 10.0f, 1.0f, -3.0f, 0.75f, 42};
+    queue_event(row_event(STDB_TABLE_GOLF_CART, STDB_ROW_INSERT, row));
     row = stdb_row{};
     row.golf_group = stdb_golf_group{9, 7, 43, 1};
     queue_event(row_event(STDB_TABLE_GOLF_GROUP, STDB_ROW_INSERT, row));
@@ -549,6 +553,10 @@ TEST_CASE("my room's rows become its players, balls, groups, shots and emotes") 
 
     REQUIRE(state.online.balls.count(43) == 1U);
     CHECK(state.online.balls.at(43).stroke_count == 2);
+    REQUIRE(state.online.carts.count(43) == 1U);
+    CHECK(near(state.online.carts.at(43).position, glm::vec3(10.0f, 1.0f, -3.0f)));
+    CHECK(near(state.online.carts.at(43).yaw, 0.75f));
+    CHECK(state.online.carts.at(43).passenger == 42U);
     CHECK(state.online.group_sizes.at(9) == 1);
     REQUIRE(state.online.shots.size() == 1U);
     const room_shot& shot = state.online.shots.front();
@@ -568,6 +576,7 @@ TEST_CASE("my room's rows become its players, balls, groups, shots and emotes") 
     client.update(state);
     CHECK(state.online.players.empty());
     CHECK(state.online.balls.empty());
+    CHECK(state.online.carts.empty());
     CHECK(state.online.group_sizes.empty());
 }
 
@@ -591,6 +600,34 @@ TEST_CASE("refused gameplay goes to the game, refused menu actions to the menus"
     REQUIRE(menu.has_value());
     CHECK(menu->reducer == "join_course");
     CHECK(!client.take_reducer_failure().has_value());
+}
+
+TEST_CASE("stepping into and out of another's cart reaches its reducers, whose refusals go to the game") {
+    game_state state = started_hole();
+    net_client client = connected_client(state, 42);
+    net_command board;
+    board.type = net_command_type::board_cart;
+    board.cart_owner = 43;
+    state.net_commands.push_back(board);
+    net_command leave;
+    leave.type = net_command_type::leave_cart;
+    state.net_commands.push_back(leave);
+    fake_bridge().calls.clear();
+    client.update(state);
+    REQUIRE(fake_bridge().calls.size() == 2U);
+    CHECK(fake_bridge().calls[0].name == "stdb_board_cart");
+    CHECK(fake_bridge().calls[0].number == 43);
+    CHECK(fake_bridge().calls[1].name == "stdb_leave_cart");
+
+    const std::string board_cart = reducer_board_cart;
+    const std::string seat_taken = "seat_taken";
+    stdb_event refused = fake_event(STDB_EVENT_REDUCER_FAILED);
+    refused.reducer = fake_text(board_cart);
+    refused.text = fake_text(seat_taken);
+    queue_event(refused);
+    client.update(state);
+    REQUIRE(state.online.refusals.size() == 1U);
+    CHECK(state.online.refusals[0].reducer == reducer_board_cart);
 }
 
 TEST_CASE("group and give-up commands reach their reducers") {

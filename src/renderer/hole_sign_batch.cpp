@@ -11,8 +11,6 @@
 #include <glm/geometric.hpp>
 
 namespace {
-const glm::vec3 post_wood(0.24f, 0.15f, 0.08f);
-
 // One rectangle facing `normal`: centre +/- `u` +/- `v`, counter-clockwise
 // seen from the front, with uv (0, 0) at centre - u - v.
 void append_rect(std::vector<hole_sign_vertex>& vertices,
@@ -81,28 +79,31 @@ bool refresh_render_hole_signs(render_hole_signs& signs,
                                const play_area& area,
                                const std::vector<hole_sign_text>& texts,
                                const text_assets& text,
+                               const scene_colors& colors,
                                const std::uint64_t revision) {
     const std::vector<hole_sign_source> sources = hole_sign_sources(area, texts);
     if (std::equal(sources.begin(), sources.end(), signs.sources.begin(), signs.sources.end(), same_source)) {
         return false;
     }
-    signs = build_render_hole_signs(area, texts, text, revision);
+    signs = build_render_hole_signs(area, texts, text, colors, revision);
     return true;
 }
 
-void append_hole_sign_model(std::vector<hole_sign_vertex>& vertices, const hole_sign& sign) {
+void append_hole_sign_model(std::vector<hole_sign_vertex>& vertices, const hole_sign& sign, const fixture_colors& colors) {
     append_box(vertices, sign.board_center, sign.down_hole, sign.face_normal,
-               glm::vec3(sign.board_half_width, sign.board_half_height, sign.board_thickness * 0.5f), hole_sign_wood, true, true);
+               glm::vec3(sign.board_half_width, sign.board_half_height, sign.board_thickness * 0.5f), colors.sign_board, true,
+               true);
     for (const glm::vec3& foot : sign.post_feet) {
         const float height = hole_sign_top(sign) - foot.y;
         append_box(vertices, foot + world_up * (height * 0.5f), sign.down_hole, sign.face_normal,
-                   glm::vec3(sign.post_radius, height * 0.5f, sign.post_radius), post_wood, false, false);
+                   glm::vec3(sign.post_radius, height * 0.5f, sign.post_radius), colors.sign_post, false, false);
     }
 }
 
 render_hole_signs build_render_hole_signs(const play_area& area,
                                           const std::vector<hole_sign_text>& texts,
                                           const text_assets& text,
+                                          const scene_colors& colors,
                                           const std::uint64_t revision) {
     render_hole_signs signs;
     signs.revision = revision;
@@ -112,13 +113,13 @@ render_hole_signs build_render_hole_signs(const play_area& area,
         const hole_sign& sign = area.signs[i];
         const hole_sign_labels labels = make_hole_sign_labels(text, texts[i].number, texts[i].par, texts[i].meters);
         clear_overlay_batch(batch);
-        draw_hole_sign_face(batch, text, labels, area, sign);
+        draw_hole_sign_face(batch, text, labels, area, sign, colors.ground);
         signs.truncated_text_count += batch.truncated_text_count;
 
         render_hole_sign drawn;
-        drawn.face = rasterize_overlay_batch(batch, hole_sign_wood);
+        drawn.face = rasterize_overlay_batch(batch, colors.fixtures.sign_board);
         drawn.first_vertex = signs.vertices.size();
-        append_hole_sign_model(signs.vertices, sign);
+        append_hole_sign_model(signs.vertices, sign, colors.fixtures);
         drawn.vertex_count = signs.vertices.size() - drawn.first_vertex;
         signs.signs.push_back(std::move(drawn));
     }

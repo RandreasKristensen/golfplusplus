@@ -94,3 +94,9 @@ void window::swap() {
         SDL_GL_SwapWindow(window_);
     }
 }
+
+void window::set_fullscreen(const bool fullscreen) {
+    if (window_ && SDL_SetWindowFullscreen(window_, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0) != 0) {
+        SDL_Log("SDL_SetWindowFullscreen failed: %s", SDL_GetError());
+    }
+}

@@ -4,7 +4,9 @@
 // only, never results): each carried on along their last motion with the
 // game's own movement (extrapolate_motion), at most
 // net.remote_extrapolation_seconds, on the ground, with a new motion blending
-// in, turning as they turn (aiming too); their emotes, with the local
+// in (over cart.step_seconds stepping into or out of a cart), turning as they
+// turn (aiming too); riding in a cart, sat in its passenger seat as the cart
+// is shown (game/golf_cart.h); their emotes, with the local
 // player's timings; addressing their ball, their club as their own game
 // shows it; their shots played back from the server's events; their balls.
 // While the connection is down everything stands still.

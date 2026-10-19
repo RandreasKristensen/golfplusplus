@@ -1,7 +1,7 @@
 #pragma once
 
 // The online parts of a frame (core/render_frame.h): other players, their
-// balls, shot trails and name tags, the group's scorecard rows, the
+// balls, shot trails and name tags, the
 // server's notices and "waiting for group". Nothing is added offline. GL-free.
 
 #include "game/game_state.h"

@@ -172,34 +172,36 @@ TEST_CASE("a hole sign's face shows the hole in map inks and its labels fit") {
     const text_assets& text = shipped_text_assets();
 
     overlay_batch batch;
-    draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 18, 5, 999), area, area.signs.front());
+    draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 18, 5, 999), area, area.signs.front(),
+                        test_scene_colors().ground);
     CHECK(batch.truncated_text_count == 0U);
-    const rgba_image face = rasterize_overlay_batch(batch, hole_sign_wood);
+    const rgba_image face = rasterize_overlay_batch(batch, test_scene_colors().fixtures.sign_board);
     CHECK(face.width == hole_sign_face_width);
     CHECK(face.height == hole_sign_face_height);
-    CHECK(count_texels(face, course_map_ink(terrain_material_color(terrain_material::fairway))) > 20U);
-    CHECK(count_texels(face, course_map_ink(terrain_material_color(terrain_material::green))) > 4U);
+    CHECK(count_texels(face, course_map_ink(terrain_material_color(test_scene_colors().ground, terrain_material::fairway))) > 20U);
+    CHECK(count_texels(face, course_map_ink(terrain_material_color(test_scene_colors().ground, terrain_material::green))) > 4U);
 }
 
 TEST_CASE("render hole signs are rebuilt only when the signs change") {
     game_state state = started_game(fixture_hub_course());
     const text_assets& text = shipped_text_assets();
     render_hole_signs signs;
-    CHECK(refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, 1));
+    CHECK(refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, test_scene_colors(), 1));
     CHECK(signs.revision == 1U);
     REQUIRE(start_hub_hole(state, 1));
-    CHECK(!refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, 2));
+    CHECK(!refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, test_scene_colors(), 2));
     CHECK(signs.revision == 1U);
 
     std::vector<hole_sign_text> renumbered = hole_sign_texts(state);
     renumbered.front().par += 1;
-    CHECK(refresh_render_hole_signs(signs, state.area, renumbered, text, 3));
+    CHECK(refresh_render_hole_signs(signs, state.area, renumbered, text, test_scene_colors(), 3));
     CHECK(signs.revision == 3U);
 }
 
 TEST_CASE("render hole signs carry a face and a model per sign, numbered by course hole") {
     game_state state = started_game(fixture_hub_course());
-    const render_hole_signs signs = build_render_hole_signs(state.area, hole_sign_texts(state), shipped_text_assets(), 7);
+    const render_hole_signs signs =
+        build_render_hole_signs(state.area, hole_sign_texts(state), shipped_text_assets(), test_scene_colors(), 7);
     CHECK(signs.revision == 7U);
     REQUIRE(signs.signs.size() == state.area.signs.size());
     CHECK(signs.truncated_text_count == 0U);
@@ -256,21 +258,22 @@ TEST_CASE("a hole sign's map runs the hole across the face, tee on the right and
     CHECK((high.x - low.x >= hole_sign_map_width - 6 || high.y - low.y >= hole_sign_map_height - 6));
 }
 
-TEST_CASE("a hole sign's map shows only its own hole") {
+TEST_CASE("a hole sign's map is framed on its hole alone and shows the whole course in that frame") {
     hole_data hole = wide_hole(20.0f, 40.0f);
-    const glm::vec3 pond(0.0f, 0.0f, 60.0f);
-    hole.material_zones = {circle_zone(material_zone_type::green, hole.pin_position, 12.0f),
-                           circle_zone(material_zone_type::water, pond, 8.0f)};
+    hole.material_zones = {circle_zone(material_zone_type::green, hole.pin_position, 12.0f)};
+    const hole_sign_map_frame plain = make_hole_sign_map_frame(area_for(hole), area_for(hole).signs.front());
+
+    // Its own bunker and pond far off the hole stretch nothing.
+    hole.material_zones.push_back(circle_zone(material_zone_type::bunker, glm::vec3(150.0f, 0.0f, 60.0f), 10.0f));
+    hole.material_zones.push_back(circle_zone(material_zone_type::water, glm::vec3(-400.0f, 0.0f, 60.0f), 60.0f));
     const play_area area = area_for(hole);
     const hole_sign& sign = area.signs.front();
-    const text_assets& text = shipped_text_assets();
-    const hole_sign_labels labels = make_hole_sign_labels(text, 1, 4, 120);
-    overlay_batch batch;
-    draw_hole_sign_face(batch, text, labels, area, sign);
-    const rgba_image own = rasterize_overlay_batch(batch, hole_sign_wood);
-    CHECK(count_texels(own, course_map_material_ink(terrain_material::water)) > 4U);
+    const hole_sign_map_frame frame = make_hole_sign_map_frame(area, sign);
+    CHECK(near(frame.origin, plain.origin));
+    CHECK(near(frame.texels_per_unit, plain.texels_per_unit));
 
-    // Another hole crossing it, and that hole's bunker on this one's fairway.
+    // Another hole crossing it with its green, and that hole's bunker on this
+    // one's fairway.
     play_area crowded = area;
     terrain_mesh other = area.holes.front();
     for (terrain_vertex& vertex : other.vertices) {
@@ -278,11 +281,36 @@ TEST_CASE("a hole sign's map shows only its own hole") {
     }
     crowded.holes.push_back(build_terrain_mesh_index(std::move(other)));
     crowded.zones.push_back(circle_zone(material_zone_type::bunker, glm::vec3(0.0f, 0.0f, 90.0f), 6.0f));
-    clear_overlay_batch(batch);
-    draw_hole_sign_face(batch, text, labels, crowded, sign);
-    const rgba_image drawn = rasterize_overlay_batch(batch, hole_sign_wood);
-    CHECK(drawn.pixels == own.pixels);
-    CHECK(count_texels(drawn, course_map_material_ink(terrain_material::bunker)) == 0U);
-    CHECK(!hole_sign_map_material(crowded, sign, glm::vec3(-60.0f, 0.0f, 30.0f)).has_value());
-    CHECK(hole_sign_map_material(crowded, sign, pond) == terrain_material::water);
+    crowded.zones.push_back(circle_zone(material_zone_type::green, glm::vec3(-28.0f, 0.0f, 30.0f), 4.0f));
+    crowded.trees.push_back(tree_instance{glm::vec3(5.0f, 0.0f, 40.0f), tree_shape{}});
+    CHECK(near(make_hole_sign_map_frame(crowded, sign).origin, frame.origin));
+    const auto spot = [&](const glm::vec3& point) { return hole_sign_map_spot_at(crowded, sign, point); };
+    CHECK(!spot(glm::vec3(0.0f, 0.0f, -200.0f)).has_value());
+    REQUIRE(spot(glm::vec3(0.0f, 0.0f, 90.0f)).has_value());
+    CHECK(spot(glm::vec3(0.0f, 0.0f, 90.0f))->material == terrain_material::bunker);
+
+    // Only the sign's own hole is in full ink: the other's fairway and green
+    // are faded, on its own and on the map.
+    const ground_colors& ground = test_scene_colors().ground;
+    const std::optional<hole_sign_map_spot> own_fairway = spot(glm::vec3(0.0f, 0.0f, 60.0f));
+    const std::optional<hole_sign_map_spot> other_fairway = spot(glm::vec3(-28.0f, 0.0f, 38.0f));
+    const std::optional<hole_sign_map_spot> own_green = spot(hole.pin_position);
+    const std::optional<hole_sign_map_spot> other_green = spot(glm::vec3(-28.0f, 0.0f, 30.0f));
+    REQUIRE((own_fairway && other_fairway && own_green && other_green));
+    CHECK((own_fairway->material == terrain_material::fairway && other_fairway->material == terrain_material::fairway));
+    CHECK((own_green->material == terrain_material::green && other_green->material == terrain_material::green));
+    CHECK((own_fairway->own_hole && own_green->own_hole));
+    CHECK((!other_fairway->own_hole && !other_green->own_hole));
+    CHECK(hole_sign_map_ink(ground, *own_fairway) != hole_sign_map_ink(ground, *other_fairway));
+    CHECK(hole_sign_map_ink(ground, *own_green) != hole_sign_map_ink(ground, *other_green));
+
+    const text_assets& text = shipped_text_assets();
+    overlay_batch batch;
+    draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 4, 120), crowded, sign, test_scene_colors().ground);
+    const rgba_image drawn = rasterize_overlay_batch(batch, test_scene_colors().fixtures.sign_board);
+    CHECK(count_texels(drawn, course_map_material_ink(test_scene_colors().ground, terrain_material::bunker)) > 0U);
+    CHECK(count_texels(drawn, course_map_tree_ink) == 1U);
+    CHECK(count_texels(drawn, hole_sign_map_ink(ground, *own_fairway)) > 20U);
+    CHECK(count_texels(drawn, hole_sign_map_ink(ground, *other_fairway)) > 20U);
+    CHECK(count_texels(drawn, hole_sign_map_ink(ground, *other_green)) > 0U);
 }

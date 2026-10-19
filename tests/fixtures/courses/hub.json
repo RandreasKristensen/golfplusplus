@@ -8,6 +8,10 @@
     "haze_amount": 1.0,
     "haze_distance": 500
   },
+  "sky": {
+    "date": "06-21",
+    "utc_offset_hours": 2
+  },
   "holes": ["test", "test2", "test3"],
   "world": "course_worlds/hub.json"
 }

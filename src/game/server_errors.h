@@ -46,3 +46,6 @@ inline constexpr const char* error_unknown_collectible = "unknown_collectible";
 inline constexpr const char* error_not_available = "not_available";
 inline constexpr const char* error_unknown_emote = "unknown_emote";
 inline constexpr const char* error_too_soon = "too_soon";
+inline constexpr const char* error_unknown_cart = "unknown_cart";
+inline constexpr const char* error_seat_taken = "seat_taken";
+inline constexpr const char* error_not_in_cart = "not_in_cart";

@@ -162,9 +162,16 @@ TEST_CASE("settings open from the main menu and the in-round menu, and are kept 
 TEST_CASE("the shipped settings have their text and include the ones the game applies") {
     const game_content& content = shipped_content();
     REQUIRE(has_applied_settings(content.settings));
+    // The camcorder's datestamp shows unless the player turns it off.
+    CHECK(setting_value({}, *find_setting(content.settings, setting_datestamp)) == 1);
     for (const setting_definition& definition : content.settings) {
         CHECK(shipped_text_assets().strings.entries.count(definition.label_key) == 1U);
-        CHECK(shipped_text_assets().strings.entries.count(definition.value_key) == 1U);
+        if (definition.value_keys.empty()) {
+            CHECK(shipped_text_assets().strings.entries.count(definition.value_key) == 1U);
+        }
+        for (const std::string& key : definition.value_keys) {
+            CHECK(shipped_text_assets().strings.entries.count(key) == 1U);
+        }
     }
 }
 
@@ -201,4 +208,35 @@ TEST_CASE("master volume is the first shipped setting") {
         make_settings_menu_render_data(0, {}, content.settings, shipped_text_assets());
     CHECK(menu.tiles[0].title == "MASTER VOLUME");
     CHECK(menu.tiles[0].subtitle == "< 100% >");
+}
+
+TEST_CASE("a setting can name each of its values instead of formatting the number") {
+    const std::optional<std::vector<setting_definition>> named = parse_setting_definitions_from_text(R"({"settings": [
+        {"id": "a", "label": "menu.settings.fullscreen", "values": ["menu.settings.off", "menu.settings.on"],
+         "min": 0, "max": 1, "step": 1, "default": 0}]})");
+    REQUIRE(named.has_value());
+    REQUIRE(named->size() == 1U);
+    CHECK((named->at(0).value_keys == std::vector<std::string>{"menu.settings.off", "menu.settings.on"}));
+
+    settings_values values;
+    render_startup_menu menu = make_settings_menu_render_data(0, values, *named, shipped_text_assets());
+    CHECK(menu.tiles[0].subtitle == "< OFF >");
+    values = adjust_setting(values, named->at(0), 1);
+    CHECK(setting_step_index(values, named->at(0)) == 1);
+    menu = make_settings_menu_render_data(0, values, *named, shipped_text_assets());
+    CHECK(menu.tiles[0].subtitle == "< ON >");
+
+    // One key per step, the range a whole number of steps, and not both kinds of text.
+    CHECK(!parse_setting_definitions_from_text(R"({"settings": [{"id": "a", "label": "l", "values": ["off"],
+        "min": 0, "max": 1, "step": 1, "default": 0}]})"));
+    CHECK(!parse_setting_definitions_from_text(R"({"settings": [{"id": "a", "label": "l", "values": ["a", "b", "c"],
+        "min": 0, "max": 1, "step": 1, "default": 0}]})"));
+    CHECK(!parse_setting_definitions_from_text(R"({"settings": [{"id": "a", "label": "l", "values": ["a", "b"],
+        "min": 0, "max": 5, "step": 3, "default": 0}]})"));
+    CHECK(!parse_setting_definitions_from_text(R"({"settings": [{"id": "a", "label": "l", "values": ["a", 3],
+        "min": 0, "max": 1, "step": 1, "default": 0}]})"));
+    CHECK(!parse_setting_definitions_from_text(R"({"settings": [{"id": "a", "label": "l", "value": "v", "values": ["a", "b"],
+        "min": 0, "max": 1, "step": 1, "default": 0}]})"));
+    CHECK(!parse_setting_definitions_from_text(R"({"settings": [{"id": "a", "label": "l",
+        "min": 0, "max": 1, "step": 1, "default": 0}]})"));
 }

@@ -77,6 +77,11 @@ bool room_rows::apply(const stdb_event& event,
         apply_change(balls_, b.account_id, change, room_ball{b.zone, glm::vec3(b.x, b.y, b.z), b.stroke_count});
         break;
     }
+    case STDB_TABLE_GOLF_CART: {
+        const stdb_golf_cart& c = row.golf_cart;
+        apply_change(carts_, c.owner, change, room_cart{glm::vec3(c.x, c.y, c.z), c.yaw, c.passenger});
+        break;
+    }
     case STDB_TABLE_SHOT_EVENT:
         // Events only ever arrive as inserts.
         if (change != STDB_ROW_DELETE) {
@@ -128,6 +133,7 @@ void room_rows::publish(game_state& state) {
         players.emplace(account, std::move(player));
     }
     state.online.balls = balls_;
+    state.online.carts = carts_;
     state.online.group_sizes = group_sizes_;
 }
 
@@ -136,9 +142,11 @@ void room_rows::clear(game_state& state) {
     names_.clear();
     motions_.clear();
     balls_.clear();
+    carts_.clear();
     group_sizes_.clear();
     changed_ = false;
     state.online.players.clear();
     state.online.balls.clear();
+    state.online.carts.clear();
     state.online.group_sizes.clear();
 }

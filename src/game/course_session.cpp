@@ -14,7 +14,8 @@ void reset_play_state(game_state& state) {
     state.ball = ball_state{};
     state.ball.radius = state.tuning.scale.ball_physics_radius_meters;
     state.shot.reset();
-    state.cart = cart_state{};
+    // The cart stays where it is; whoever sat in it stands up.
+    leave_cart_at_once(state);
     state.smoke_emote = emote_state{};
     state.beer_emote = emote_state{};
     state.cigarette_seconds_left = 0.0f;
@@ -24,7 +25,6 @@ void reset_play_state(game_state& state) {
     state.hole_time = 0.0f;
     state.walk_meters_pending = 0.0f;
     state.cart_meters_pending = 0.0f;
-    state.drift_meters_pending = 0.0f;
     state.flight_path_points.clear();
     state.shot_start_position = glm::vec3(0.0f);
     state.online_hole = online_hole_state{};
@@ -33,8 +33,8 @@ void reset_play_state(game_state& state) {
 
 void face(game_state& state, const float yaw) {
     state.player.yaw = yaw;
-    state.cart.yaw = yaw;
     state.aim_angle = yaw;
+    state.look.pitch = 0.0f;
 }
 
 // Ball resting on the tee, player standing behind it facing the pin.
@@ -55,24 +55,13 @@ void enter_hole(game_state& state, const std::size_t index, const hole_data& pla
     record_hole_started(state, index);
 }
 
-// Faces the start of the next hole to play, or down that hole when already
-// standing at its start.
-float hub_facing_yaw(const game_state& state) {
-    const std::size_t next = state.round.current_hole_index;
-    const course_world_hole_start& start = state.hub->world.hole_starts[next];
-    if (horizontal_distance(state.player.position, start.position) <= start.interaction_radius) {
-        return yaw_towards(state.player.position, state.hub->markers[next].pin_position);
-    }
-    return yaw_towards(state.player.position, start.position);
-}
-
+// The view stays where it was: after holing out, on the cup.
 void enter_hub(game_state& state, const glm::vec3& position) {
     state.hole.reset();
     mark_terrain_render_dirty(state);
     reset_play_state(state);
     state.player.position = anchor_on_terrain(state.area, position);
     state.ball.position = state.player.position;
-    face(state, hub_facing_yaw(state));
 }
 
 std::optional<std::vector<hole_data>> load_course_holes(const std::string& asset_root, const course_definition& course) {
@@ -121,6 +110,8 @@ bool start_course(game_state& state, const course_definition& course) {
     state.cup_ball.reset();
     state.picked_cup_ball.reset();
     enter_hub(state, state.hub->world.hole_starts.front().position);
+    face(state, yaw_towards(state.player.position, state.hub->markers.front().pin_position));
+    park_cart(state);
     return true;
 }
 

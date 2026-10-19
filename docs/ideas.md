@@ -1,17 +1,16 @@
-# **scratchpad**
+# **scratchpad
 
 ## **Test feedback**
 
-- Browser based?
+- Browser based? at least linux and mac support
 - see each other on map
 - final scorecard says 10 hole 10
 - when setting up its kinda bugged where you stand; It should always be the same for people viewing other people, as it is for them
 - grouping is a little bugged? Maybe mostly when youve already played
+- See everything on scorecard
 
 ## **bugs**
 
-- power physics are wonky.
-- performance is down again with the new course
 - hole 8, 17 and 18 bugged himmerland new course map
 - (recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
 
@@ -73,6 +72,8 @@ Move the Course chooser to the hub - busses, planes ships whatever.
 Also a driving range / simulator to get a view of how fair your clubs can go.
 Quests give exp in skills, unlock skills, give money, or gear(like clubs, cart, rangefinder - but many of these are basically unlocking skills, like e.g. the cart and a driver.)
 Money, to be earned somehow - maybe just some repeatable quests called "tournaments" in itis simplest form
+Cosmetics in the golf cart rear view mirror
+flirting with the cart girl
 
  6. **To be planned**
 

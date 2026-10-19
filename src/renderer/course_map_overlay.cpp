@@ -1,5 +1,6 @@
 #include "renderer/course_map_overlay.h"
 
+#include "game/hole_sign.h"
 #include "game/text_ids.h"
 #include "renderer/pixel_font.h"
 
@@ -21,15 +22,26 @@ const glm::vec3 map_cup_ink(0.94f, 0.78f, 0.22f);
 
 // Clip units between the paper's edge and the course on it.
 constexpr float map_margin = 0.06f;
-// A hole number's box: this share of the paper's height, twice as wide as tall.
-constexpr float number_box_share = 1.0f / 14.0f;
+// The marks' sizes, in clip units.
+constexpr float player_mark_radius = 0.024f;
+constexpr float tee_mark_radius = 0.023f;
+constexpr float ball_mark_radius = 0.020f;
+constexpr float cup_mark_radius = 0.018f;
+const glm::vec2 flagstick_offset(0.0f, 0.028f);
+const glm::vec2 flagstick_half(0.004f, 0.042f);
+const glm::vec2 flag_offset(0.022f, 0.055f);
+const glm::vec2 flag_half(0.028f, 0.018f);
+// A hole number's box is twice as wide as tall, and as tall as the first of
+// these shares of the paper's height at which no two numbers overlap.
+constexpr std::array<float, 4> number_box_shares{1.0f / 14.0f, 1.0f / 18.0f, 1.0f / 22.0f, 1.0f / 26.0f};
 constexpr float number_box_aspect = 2.0f;
 constexpr float number_backing_alpha = 0.85f;
-// Space kept between two numbers' boxes, as a share of a box's half size,
-// trying this many rings of places around the tee before taking the
-// clearest one.
+// Where along its hole's line of play a number may sit, as shares of its
+// length: the middle, then further out to either side while that is taken.
+constexpr std::array<float, 7> number_places{0.5f, 0.42f, 0.58f, 0.34f, 0.66f, 0.26f, 0.74f};
+// Space wanted between a number's box and the other numbers and marks, as a
+// share of the box's half size.
 constexpr float number_spacing = 0.25f;
-constexpr int number_rings = 3;
 
 // Target pixels per clip unit (a square grid when there is none).
 glm::vec2 pixels_per_clip(const overlay_grid grid) {
@@ -54,6 +66,70 @@ void draw_hole_number(overlay_batch& batch, const text_assets& text, const ui_re
     const text_layout number = layout_text(text.font, style, hole.number, box, batch.grid);
     draw_overlay_quad(batch, number.bounds.center, number.bounds.half_size + number.cell, course_map_paper, number_backing_alpha);
     draw_text_layout(batch, text.font, number, style.color);
+}
+
+// What the numbers keep clear of: the player and, on a hole, its tee, ball,
+// pin and flag.
+std::vector<ui_rect> marks_kept_clear(const course_map_layout& layout, const render_data& data) {
+    std::vector<ui_rect> marks{{map_point(layout, data.player_position), glm::vec2(player_mark_radius)}};
+    if (data.show_hole) {
+        const glm::vec2 pin = map_point(layout, data.pin_position);
+        marks.push_back({map_point(layout, data.tee_position), glm::vec2(tee_mark_radius)});
+        marks.push_back({map_point(layout, data.ball_position), glm::vec2(ball_mark_radius)});
+        marks.push_back({pin, glm::vec2(cup_mark_radius)});
+        marks.push_back({pin + flagstick_offset, flagstick_half});
+        marks.push_back({pin + flag_offset, flag_half});
+    }
+    return marks;
+}
+
+struct number_placement {
+    std::vector<ui_rect> boxes;
+    bool overlapping = false;  // two numbers' boxes overlap
+};
+
+// Each hole's number in a box of `half` size at the first place along its
+// line of play that clears what is placed before it and the paper's edge,
+// else the clearest.
+number_placement place_numbers(const course_map_layout& layout,
+                               const render_data& data,
+                               const std::vector<ui_rect>& marks,
+                               const glm::vec2 half) {
+    const glm::vec2 low = layout.center - layout.half_size + half;
+    const glm::vec2 high = layout.center + layout.half_size - half;
+    number_placement placement;
+    placement.boxes.reserve(data.map_holes.size());
+    // How far `box` is from the nearest of `others`, in box half sizes.
+    const auto clearance = [&](const ui_rect& box, const std::vector<ui_rect>& others) {
+        float nearest = std::numeric_limits<float>::max();
+        for (const ui_rect& other : others) {
+            const glm::vec2 gap = (glm::abs(box.center - other.center) - (box.half_size + other.half_size)) / half;
+            nearest = std::min(nearest, std::max(gap.x, gap.y));
+        }
+        return nearest;
+    };
+    for (const render_map_hole& hole : data.map_holes) {
+        const float length = polyline_length(hole.line_of_play);
+        ui_rect chosen;
+        float chosen_clearance = std::numeric_limits<float>::lowest();
+        for (const float place : number_places) {
+            const glm::vec2 point = map_point(layout, point_along(hole.line_of_play, length * place));
+            const ui_rect box{glm::clamp(point, low, high), half};
+            // Pushed in off its hole by the paper's edge: only if no place is clear.
+            const float edge = box.center == point ? std::numeric_limits<float>::max() : 0.0f;
+            const float box_clearance = std::min({clearance(box, placement.boxes), clearance(box, marks), edge});
+            if (box_clearance > chosen_clearance) {
+                chosen = box;
+                chosen_clearance = box_clearance;
+            }
+            if (chosen_clearance >= number_spacing) {
+                break;
+            }
+        }
+        placement.overlapping = placement.overlapping || clearance(chosen, placement.boxes) < 0.0f;
+        placement.boxes.push_back(chosen);
+    }
+    return placement;
 }
 }
 
@@ -95,48 +171,19 @@ void draw_course_map_paper(overlay_batch& batch, const course_map_layout& layout
 
 std::vector<ui_rect> course_map_number_boxes(const course_map_layout& layout,
                                              const overlay_grid grid,
-                                             const std::vector<render_map_hole>& holes) {
+                                             const render_data& data) {
     const glm::vec2 per_clip = pixels_per_clip(grid);
-    const float height = layout.half_size.y * 2.0f * number_box_share;
-    const glm::vec2 half(height * number_box_aspect * per_clip.y / per_clip.x * 0.5f, height * 0.5f);
-    const glm::vec2 low = layout.center - layout.half_size + half;
-    const glm::vec2 high = layout.center + layout.half_size - half;
-    // Beside the tee, so its mark stays visible: above, below, right, left,
-    // then the diagonals, then the same each a half box further out.
-    const std::array<glm::vec2, 8> directions{glm::vec2(0.0f, 1.0f),  glm::vec2(0.0f, -1.0f), glm::vec2(1.0f, 0.0f),
-                                              glm::vec2(-1.0f, 0.0f), glm::vec2(1.0f, 1.0f),  glm::vec2(-1.0f, 1.0f),
-                                              glm::vec2(1.0f, -1.0f), glm::vec2(-1.0f, -1.0f)};
-    std::vector<ui_rect> boxes;
-    boxes.reserve(holes.size());
-    for (const render_map_hole& hole : holes) {
-        const glm::vec2 tee = map_point(layout, hole.tee);
-        // How far `box` is from the nearest number already placed, in box half sizes.
-        const auto clearance = [&](const ui_rect& box) {
-            float nearest = std::numeric_limits<float>::max();
-            for (const ui_rect& placed : boxes) {
-                const glm::vec2 gap = (glm::abs(box.center - placed.center) - (box.half_size + placed.half_size)) / half;
-                nearest = std::min(nearest, std::max(gap.x, gap.y));
-            }
-            return nearest;
-        };
-        ui_rect chosen{glm::clamp(tee + glm::vec2(0.0f, half.y), low, high), half};
-        float chosen_clearance = clearance(chosen);
-        for (int ring = 1; ring <= number_rings && chosen_clearance < number_spacing; ++ring) {
-            for (const glm::vec2 direction : directions) {
-                const ui_rect box{glm::clamp(tee + direction * half * static_cast<float>(ring), low, high), half};
-                const float box_clearance = clearance(box);
-                if (box_clearance > chosen_clearance) {
-                    chosen = box;
-                    chosen_clearance = box_clearance;
-                }
-                if (chosen_clearance >= number_spacing) {
-                    break;
-                }
-            }
+    const std::vector<ui_rect> marks = marks_kept_clear(layout, data);
+    number_placement placement;
+    for (const float share : number_box_shares) {
+        const float height = layout.half_size.y * 2.0f * share;
+        const glm::vec2 half(height * number_box_aspect * per_clip.y / per_clip.x * 0.5f, height * 0.5f);
+        placement = place_numbers(layout, data, marks, half);
+        if (!placement.overlapping) {
+            break;
         }
-        boxes.push_back(chosen);
     }
-    return boxes;
+    return placement.boxes;
 }
 
 void draw_course_map_marks(overlay_batch& batch,
@@ -150,17 +197,17 @@ void draw_course_map_marks(overlay_batch& batch,
         }
     }
     if (data.show_hole) {
-        draw_marker(batch, map_point(layout, data.tee_position), course_map_tee_ink, 0.023f);
-        draw_marker(batch, map_point(layout, data.ball_position), map_ball_ink, 0.020f);
+        draw_marker(batch, map_point(layout, data.tee_position), course_map_tee_ink, tee_mark_radius);
+        draw_marker(batch, map_point(layout, data.ball_position), map_ball_ink, ball_mark_radius);
     }
-    draw_marker(batch, map_point(layout, data.player_position), map_player_ink, 0.024f);
+    draw_marker(batch, map_point(layout, data.player_position), map_player_ink, player_mark_radius);
     if (data.show_hole) {
         const glm::vec2 pin = map_point(layout, data.pin_position);
-        draw_overlay_quad(batch, pin + glm::vec2(0.0f, 0.028f), glm::vec2(0.004f, 0.042f), course_map_flagstick_ink, 0.92f);
-        draw_overlay_quad(batch, pin + glm::vec2(0.022f, 0.055f), glm::vec2(0.028f, 0.018f), course_map_flag_ink, 0.96f);
-        draw_marker(batch, pin, map_cup_ink, 0.018f);
+        draw_overlay_quad(batch, pin + flagstick_offset, flagstick_half, course_map_flagstick_ink, 0.92f);
+        draw_overlay_quad(batch, pin + flag_offset, flag_half, course_map_flag_ink, 0.96f);
+        draw_marker(batch, pin, map_cup_ink, cup_mark_radius);
     }
-    const std::vector<ui_rect> boxes = course_map_number_boxes(layout, batch.grid, data.map_holes);
+    const std::vector<ui_rect> boxes = course_map_number_boxes(layout, batch.grid, data);
     for (std::size_t i = 0; i < boxes.size(); ++i) {
         draw_hole_number(batch, text, boxes[i], data.map_holes[i]);
     }

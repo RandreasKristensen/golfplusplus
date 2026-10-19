@@ -24,6 +24,7 @@ pub enum Row {
     MyLinkCode(LinkCodeView),
     MyLinkStatus(LinkStatus),
     ServerProtocol(ServerProtocolInfo),
+    GolfCart(GolfCartRow),
 }
 
 pub enum Event {
@@ -241,6 +242,20 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
             StdbRow { link_status: StdbLinkStatus { result: arena.text(&r.result), at_micros: r.at.to_micros_since_unix_epoch() } },
         ),
         Row::ServerProtocol(r) => (StdbTable::ServerProtocol, StdbRow { server_protocol: StdbServerProtocol { version: r.version } }),
+        Row::GolfCart(r) => (
+            StdbTable::GolfCart,
+            StdbRow {
+                golf_cart: StdbGolfCart {
+                    owner: r.owner,
+                    room_id: r.room_id,
+                    x: r.x,
+                    y: r.y,
+                    z: r.z,
+                    yaw: r.yaw,
+                    passenger: r.passenger,
+                },
+            },
+        ),
     }
 }
 

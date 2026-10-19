@@ -31,4 +31,5 @@ struct render_fences {
     std::uint64_t revision = 0;
 };
 
-render_fences build_render_fences(const play_area& area, std::uint64_t revision);
+// Posts in `post_color`.
+render_fences build_render_fences(const play_area& area, std::uint64_t revision, const glm::vec3& post_color);

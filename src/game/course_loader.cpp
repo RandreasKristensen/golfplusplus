@@ -1,8 +1,39 @@
 #include "game/course_loader.h"
 
 #include "game/json_util.h"
+#include "game/sky_clock.h"
 
 namespace {
+// Without "lowest_sun_deg" the sun sinks as far as the latitude and date say;
+// a floor is within these degrees.
+constexpr float no_sun_floor_deg = -90.0f;
+constexpr float highest_sun_floor_deg = 30.0f;
+// The world's clocks run from 12 hours behind UTC to 14 ahead.
+constexpr float earliest_utc_offset_hours = -12.0f;
+constexpr float latest_utc_offset_hours = 14.0f;
+
+std::optional<course_sky> parse_sky(const json& root) {
+    const json* object = json_object(root, "sky");
+    if (object == nullptr) {
+        return std::nullopt;
+    }
+    const std::optional<std::string> date_text = json_string(*object, "date");
+    const std::optional<civil_date> date = date_text ? parse_month_day(*date_text) : std::nullopt;
+    const std::optional<float> utc_offset = json_float(*object, "utc_offset_hours");
+    const bool has_floor = object->contains("lowest_sun_deg");
+    const std::optional<float> floor = has_floor ? json_float(*object, "lowest_sun_deg") : std::optional<float>(no_sun_floor_deg);
+    if (!date || !utc_offset || *utc_offset < earliest_utc_offset_hours || *utc_offset > latest_utc_offset_hours || !floor ||
+        *floor < no_sun_floor_deg || *floor > highest_sun_floor_deg) {
+        return std::nullopt;
+    }
+    course_sky sky;
+    sky.month = date->month;
+    sky.day = date->day;
+    sky.utc_offset_hours = *utc_offset;
+    sky.lowest_sun_deg = *floor;
+    return sky;
+}
+
 std::optional<course_backdrop> parse_backdrop(const json& root) {
     const json* object = json_object(root, "backdrop");
     if (object == nullptr) {
@@ -33,7 +64,8 @@ std::optional<course_definition> parse_course_from_text(const std::string& text)
 
     const json* holes = json_array(*root, "holes");
     const std::optional<course_backdrop> backdrop = parse_backdrop(*root);
-    if (holes == nullptr || holes->empty() || !backdrop) {
+    const std::optional<course_sky> sky = parse_sky(*root);
+    if (holes == nullptr || holes->empty() || !backdrop || !sky) {
         return std::nullopt;
     }
 
@@ -48,6 +80,7 @@ std::optional<course_definition> parse_course_from_text(const std::string& text)
     course.name = *name;
     course.world = *world;
     course.backdrop = *backdrop;
+    course.sky = *sky;
     for (const json& hole : *holes) {
         if (!hole.is_string() || hole.get<std::string>().empty()) {
             return std::nullopt;

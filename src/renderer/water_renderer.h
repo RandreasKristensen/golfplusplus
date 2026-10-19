@@ -12,9 +12,9 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+#include "game/lighting_loader.h"
 #include "profiling/profiling.h"
 #include "renderer/dynamic_buffer.h"
-#include "renderer/scene_haze.h"
 #include "renderer/shader.h"
 #include "renderer/water_batch.h"
 
@@ -25,11 +25,12 @@ public:
               const std::string& tint_fragment, unsigned int screen_vao);
     void shutdown();
 
-    // The surfaces; draw after everything solid. Leaves blending off and depth writes on.
-    void draw_surfaces(const render_water* water, const glm::mat4& view_proj, const scene_haze& haze,
+    // The surfaces in the water colour; draw after everything solid. Leaves
+    // blending off and depth writes on.
+    void draw_surfaces(const render_water* water, const glm::mat4& view_proj, const ground_colors& ground,
                        frame_profile* profile);
     // The underwater tint over the whole scene; draw last, before the HUD.
-    void draw_underwater(frame_profile* profile);
+    void draw_underwater(const ground_colors& ground, frame_profile* profile);
 
 private:
     shader_program surface_shader_;

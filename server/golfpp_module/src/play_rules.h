@@ -7,6 +7,7 @@
 // is only checked against what the game allows. Errors are the ids in
 // server_errors.h.
 
+#include "game/cart_seats.h"
 #include "game/game_tuning.h"
 #include "game/net_types.h"
 #include "game/shot_simulation.h"
@@ -71,17 +72,27 @@ motion_check check_motion(const net_motion& previous,
 float clamp_motion_speed(std::uint8_t mode, float speed, const game_tuning& tuning);
 float clamp_turn_rate(float turn_rate, const game_tuning& tuning);
 
-// Which movement XP a move earns, as offline: walking on foot, the cart and
-// drift rates only in a cart on a road.
+// Which movement XP a move earns, as offline: walking on foot, the cart
+// rate only at a cart's wheel on a road (riding along earns nothing).
 struct movement_earnings {
     bool walking = false;
     bool cart = false;
-    bool drift = false;
 };
 movement_earnings movement_earns(std::uint8_t mode, bool on_road);
 
 // Within an interaction `radius` of `target` (XZ), plus server.interact_slack.
 bool within_interact_reach(const glm::vec3& position, const glm::vec3& target, float radius, const server_tuning& tuning);
+
+// --- Carts ---------------------------------------------------------------------
+
+// Close enough to `seat` of `cart` to step into it: cart.board_reach, plus
+// server.interact_slack.
+bool within_seat_reach(const cart_pose& cart, cart_seat seat, const glm::vec3& position, const game_tuning& tuning);
+
+// The first parking slot beside hole 1 (parked_cart_pose) with no cart of
+// the room parked within half a park_spacing of it.
+std::size_t free_parking_slot(const std::vector<glm::vec3>& carts, const glm::vec3& start, const glm::vec3& pin,
+                              const cart_tuning& tuning);
 
 // --- Shots ---------------------------------------------------------------------
 

@@ -4,6 +4,7 @@
 #include "physics/ball_physics.h"
 #include "physics/collision.h"
 #include "physics/ground_mesh.h"
+#include "physics/land_relief.h"
 #include "physics/terrain.h"
 #include "physics/tree_collision.h"
 #include "physics/wind.h"
@@ -14,6 +15,7 @@
 #include <cstdint>
 #include <iostream>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -437,6 +439,61 @@ TEST_CASE("terrain mesh end caps extend beyond first and last control points") {
     CHECK(last_center.position.z >= 49.9f);
     CHECK(first_center.material == terrain_material::fairway);
     CHECK(first_edge.material == terrain_material::rough);
+}
+
+TEST_CASE("land relief scales heights about the land's mean, and a green's about its own") {
+    height_grid land;
+    land.cell_size = 1.0f;
+    land.columns = 41;
+    land.rows = 41;
+    for (int row = 0; row < land.rows; ++row) {
+        for (int column = 0; column < land.columns; ++column) {
+            land.heights.push_back(std::sin(static_cast<float>(column) * 0.7f) * 2.0f + static_cast<float>(row) * 0.1f);
+        }
+    }
+    const material_zone green = circle_zone(material_zone_type::green, glm::vec3(30.0f, 0.0f, 30.0f), 5.0f);
+    const std::vector<material_zone> zones{green, circle_zone(material_zone_type::bunker, glm::vec3(10.0f, 0.0f, 10.0f), 5.0f)};
+
+    // Unit scales leave every height exactly as it was.
+    CHECK(relieved_land(land, zones, land_relief{1.0f, 1.0f, 3.0f}).heights == land.heights);
+
+    const land_relief relief{1.25f, 0.5f, 3.0f};
+    const height_grid relieved = relieved_land(land, zones, relief);
+    double sum = 0.0;
+    for (const float height : land.heights) {
+        sum += height;
+    }
+    const float mean = static_cast<float>(sum / static_cast<double>(land.heights.size()));
+    const auto at = [](const height_grid& grid, const int row, const int column) {
+        return grid.heights[static_cast<std::size_t>(row * grid.columns + column)];
+    };
+    // Away from the green (the bunker changes nothing), mean + scale * (h - mean).
+    for (const auto& [row, column] : std::vector<std::pair<int, int>>{{0, 0}, {10, 10}, {40, 3}, {30, 15}}) {
+        CHECK(near(at(relieved, row, column), mean + 1.25f * (at(land, row, column) - mean), 0.0001f));
+    }
+    // On the green, its scaled mean plus half its own relief.
+    double green_sum = 0.0;
+    int inside = 0;
+    for (int row = 25; row <= 35; ++row) {
+        for (int column = 25; column <= 35; ++column) {
+            if (zone_contains(green, glm::vec3(static_cast<float>(column), 0.0f, static_cast<float>(row)))) {
+                green_sum += at(land, row, column);
+                ++inside;
+            }
+        }
+    }
+    const float green_mean = static_cast<float>(green_sum / inside);
+    for (const auto& [row, column] : std::vector<std::pair<int, int>>{{30, 30}, {28, 33}, {30, 25}}) {
+        CHECK(near(at(relieved, row, column),
+                   mean + 1.25f * (green_mean - mean) + 0.5f * (at(land, row, column) - green_mean), 0.0001f));
+    }
+    // Part way between in the blend past its edge.
+    const float blended = at(relieved, 30, 23);
+    const float scaled = mean + 1.25f * (at(land, 30, 23) - mean);
+    const float flattened = mean + 1.25f * (green_mean - mean) + 0.5f * (at(land, 30, 23) - green_mean);
+    CHECK(std::abs(blended - scaled) > 0.001f);
+    CHECK(std::abs(blended - flattened) > 0.001f);
+    CHECK(std::abs(blended - scaled) + std::abs(blended - flattened) < std::abs(scaled - flattened) + 0.0001f);
 }
 
 TEST_CASE("the ground around a lone hole follows the hole, on it and past its edge") {

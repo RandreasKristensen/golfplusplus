@@ -3,6 +3,7 @@
 #include "game/json_util.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace {
 std::optional<course_world_hole_start> hole_start_from_json(const json& value, const course_definition& course) {
@@ -171,6 +172,15 @@ std::optional<course_world_definition> parse_course_world_from_text(const std::s
             return std::nullopt;
         }
     }
+
+    const json* projection = json_object(*root, "projection");
+    const std::optional<float> latitude = projection != nullptr ? json_float(*projection, "origin_lat") : std::nullopt;
+    const std::optional<float> longitude = projection != nullptr ? json_float(*projection, "origin_lon") : std::nullopt;
+    if (!latitude || !longitude || std::abs(*latitude) > 90.0f || std::abs(*longitude) > 180.0f) {
+        return std::nullopt;
+    }
+    world.latitude_deg = *latitude;
+    world.longitude_deg = *longitude;
 
     std::optional<height_grid> ground = ground_from_json(*root);
     if (!ground) {

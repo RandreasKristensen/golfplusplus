@@ -12,6 +12,8 @@ public:
     bool init(const char* title, int width, int height, bool vsync, const std::string& icon_path);
     void shutdown();
     void swap();
+    // Borderless at the desktop's resolution, or back to the window.
+    void set_fullscreen(bool fullscreen);
 
     SDL_Window* sdl_window() const { return window_; }
 

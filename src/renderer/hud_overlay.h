@@ -1,7 +1,7 @@
 #pragma once
 
-// The in-round HUD drawn into the overlay batch: club, power meter, cart,
-// rangefinder, XP drops, skills panel, key icons, the mode and room line, the
+// The in-round HUD drawn into the overlay batch: club, swing clock, cart,
+// rangefinder, XP drops, skills panel, the mode and room line, the
 // compact scorecard (renderer/scorecard_overlay.h) and the online HUD
 // (renderer/online_overlay.h). GL-free.
 

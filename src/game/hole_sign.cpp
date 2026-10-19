@@ -66,7 +66,6 @@ hole_sign place_hole_sign(const play_area& area,
     sign.line_of_play = line_of_play(hole);
     sign.length = polyline_length(sign.line_of_play);
     sign.half_width = std::max(hole.spline.width, hole.spline.rough_width) * 0.5f;
-    sign.zones = hole.material_zones;
 
     const glm::vec3 tee = hole.tee_position;
     sign.down_hole = down_hole_at_tee(hole, tuning.look_ahead);

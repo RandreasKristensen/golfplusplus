@@ -136,6 +136,20 @@ void record_hole_given_up(game_state& state) {
     push_online_command(state, net_command_type::return_to_hub);
 }
 
+void record_cart_boarded(game_state& state, const std::uint64_t owner) {
+    if (!is_online(state)) {
+        return;
+    }
+    net_command command;
+    command.type = net_command_type::board_cart;
+    command.cart_owner = owner;
+    push_command(state, std::move(command));
+}
+
+void record_cart_left(game_state& state) {
+    push_online_command(state, net_command_type::leave_cart);
+}
+
 void request_group(game_state& state) {
     if (!is_online(state)) {
         return;
@@ -155,6 +169,12 @@ void request_group(game_state& state) {
 
 void request_leave_group(game_state& state) {
     push_online_command(state, net_command_type::leave_group);
+}
+
+std::int64_t shared_unix_ms(const game_state& state, const std::int64_t local_unix_ms) {
+    constexpr std::int64_t microseconds_per_millisecond = 1000;
+    return is_online(state) && state.online.server_now != 0 ? state.online.server_now / microseconds_per_millisecond
+                                                            : local_unix_ms;
 }
 
 const room_player* my_room_player(const game_state& state) {

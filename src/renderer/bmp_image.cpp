@@ -2,6 +2,7 @@
 
 #include "game/content_files.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 
@@ -28,6 +29,17 @@ std::uint32_t read_u32(const std::string& bytes, const std::size_t offset) {
         value |= static_cast<std::uint32_t>(static_cast<unsigned char>(bytes[offset + i])) << (8U * i);
     }
     return value;
+}
+
+void append_u32(std::string& bytes, const std::uint32_t value) {
+    for (std::size_t i = 0; i < 4; ++i) {
+        bytes.push_back(static_cast<char>((value >> (8U * i)) & 0xFFU));
+    }
+}
+
+void append_u16(std::string& bytes, const std::uint16_t value) {
+    bytes.push_back(static_cast<char>(value & 0xFFU));
+    bytes.push_back(static_cast<char>((value >> 8U) & 0xFFU));
 }
 
 std::uint16_t read_u16(const std::string& bytes, const std::size_t offset) {
@@ -96,4 +108,38 @@ std::optional<rgba_image> parse_bmp(const std::string& bytes) {
 std::optional<rgba_image> load_bmp_file(const std::filesystem::path& path) {
     const std::optional<std::string> bytes = read_text_file(path);
     return bytes ? parse_bmp(*bytes) : std::nullopt;
+}
+
+std::string encode_bmp(const rgba_image& image) {
+    const std::size_t width = static_cast<std::size_t>(std::max(0, image.width));
+    const std::size_t height = static_cast<std::size_t>(std::max(0, image.height));
+    const std::size_t stride = (width * 3U + 3U) & ~std::size_t{3};
+    const std::size_t data_offset = file_header_size + info_header_size;
+    std::string bytes;
+    bytes.reserve(data_offset + stride * height);
+    bytes += "BM";
+    append_u32(bytes, static_cast<std::uint32_t>(data_offset + stride * height));
+    append_u32(bytes, 0);
+    append_u32(bytes, static_cast<std::uint32_t>(data_offset));
+    append_u32(bytes, static_cast<std::uint32_t>(info_header_size));
+    append_u32(bytes, static_cast<std::uint32_t>(width));
+    append_u32(bytes, static_cast<std::uint32_t>(height));
+    append_u16(bytes, 1);   // planes
+    append_u16(bytes, 24);  // bits per pixel
+    append_u32(bytes, bmp_uncompressed);
+    append_u32(bytes, static_cast<std::uint32_t>(stride * height));
+    append_u32(bytes, 0);  // pixels per metre, both ways
+    append_u32(bytes, 0);
+    append_u32(bytes, 0);  // palette size
+    append_u32(bytes, 0);
+    for (std::size_t row = 0; row < height; ++row) {
+        for (std::size_t column = 0; column < width; ++column) {
+            const std::size_t from = (row * width + column) * 4U;
+            bytes.push_back(static_cast<char>(image.pixels[from + 2]));
+            bytes.push_back(static_cast<char>(image.pixels[from + 1]));
+            bytes.push_back(static_cast<char>(image.pixels[from]));
+        }
+        bytes.append(stride - width * 3U, '\0');
+    }
+    return bytes;
 }

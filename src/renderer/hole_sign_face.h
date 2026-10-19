@@ -2,8 +2,10 @@
 
 // What is painted on a hole sign's face (game/hole_sign.h): the hole number,
 // a top-down map of the hole in the course map's inks (course_map_fill.h),
-// its par and its length. The map shows only the hole's own ribbon and zones,
-// turned so the hole runs across the landscape face: tee on the right and
+// its par and its length. The map is framed on the hole alone and shows
+// everything of the course inside that frame (every hole's fairway, rough,
+// greens, bunkers, water and trees, other holes faded), turned so the hole runs across the
+// landscape face: tee on the right and
 // pin on the left, the way the hole lies past the sign for someone reading
 // it from the tee. Laid out with the overlay primitives and the pixel font on
 // the face's own texel grid, then painted into a small texture once per
@@ -14,6 +16,7 @@
 #include <string>
 
 #include "game/hole_sign.h"
+#include "game/lighting_loader.h"
 #include "game/play_area.h"
 #include "game/text_assets.h"
 #include "renderer/overlay_batch.h"
@@ -32,9 +35,6 @@ inline constexpr int hole_sign_map_top = 16;
 inline constexpr int hole_sign_map_width = 86;
 inline constexpr int hole_sign_map_height = 34;
 
-// The board's wood, behind the painted panel and on its back, ends and posts.
-inline const glm::vec3 hole_sign_wood(0.30f, 0.19f, 0.10f);
-
 struct hole_sign_labels {
     std::string number;  // "HOLE 3"
     std::string par;     // "PAR 4"
@@ -48,9 +48,10 @@ hole_sign_labels make_hole_sign_labels(const text_assets& text, int hole_number,
 ui_rect hole_sign_texels(int left, int top, int width, int height);
 
 // How the hole lies in the map box: its tee-to-pin line across it, the tee
-// on the right, fitted by the hole's own extent (its ribbon, greens and
-// bunkers; water may run off the edge) with a margin. Map texel (column,
-// row) counts from the box's top-left corner.
+// on the right, fitted with a margin to the hole's ribbon (its line of play
+// and the fairway and rough around it) and the green its pin is on, so
+// nothing else stretches it. Map texel (column, row) counts from the box's
+// top-left corner.
 struct hole_sign_map_frame {
     glm::vec3 origin{0.0f};                   // the world point at the box centre
     glm::vec3 to_pin{0.0f, 0.0f, 1.0f};       // towards the map's left
@@ -63,15 +64,27 @@ struct hole_sign_map_frame {
 
 hole_sign_map_frame make_hole_sign_map_frame(const play_area& area, const hole_sign& sign);
 
-// What the map shows at `point`: the hole's own zone there, else its
-// ribbon's fairway or rough, nothing off the hole.
-std::optional<terrain_material> hole_sign_map_material(const play_area& area, const hole_sign& sign, const glm::vec3& point);
+// What the map shows at a point: the course's surface there (any hole's zone,
+// else any hole's fairway or rough), and whether it is `sign`'s own hole's
+// (inside its ribbon, or the green its pin is on).
+struct hole_sign_map_spot {
+    terrain_material material = terrain_material::rough;
+    bool own_hole = false;
+};
 
-// Sets `batch`'s grid to the face and appends the face over the wood: the
-// painted panel, the labels and the map of `sign`'s hole (its ribbon in
-// `area`, its zones).
+// Nothing off every hole.
+std::optional<hole_sign_map_spot> hole_sign_map_spot_at(const play_area& area, const hole_sign& sign, const glm::vec3& point);
+
+// The spot's ink: other holes' fairway, rough and green faded
+// (course_map_other_hole_ink), bunkers and water as they are.
+glm::vec3 hole_sign_map_ink(const ground_colors& ground, const hole_sign_map_spot& spot);
+
+// Sets `batch`'s grid to the face and appends the face over the board's
+// wood: the painted panel, the labels and the map of `sign`'s hole (the
+// course in `area` around it) in the inks of `ground`.
 void draw_hole_sign_face(overlay_batch& batch,
                          const text_assets& text,
                          const hole_sign_labels& labels,
                          const play_area& area,
-                         const hole_sign& sign);
+                         const hole_sign& sign,
+                         const ground_colors& ground);

@@ -8,6 +8,10 @@
     "haze_amount": 1.0,
     "haze_distance": 600
   },
+  "sky": {
+    "date": "06-21",
+    "utc_offset_hours": 2
+  },
   "holes": [
     "holes/kalo_par_3_h01.json",
     "holes/kalo_par_3_h02.json",

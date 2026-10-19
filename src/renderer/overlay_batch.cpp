@@ -1,6 +1,7 @@
 #include "renderer/overlay_batch.h"
 
 #include <cmath>
+#include <initializer_list>
 
 #include <glm/geometric.hpp>
 
@@ -57,6 +58,19 @@ void draw_overlay_rotated_quad(overlay_batch& batch,
                             glm::vec2(c, s) * half_size.x,
                             glm::vec2(-s, c) * half_size.y,
                             glm::vec4(color, alpha));
+}
+
+void draw_overlay_corner_quad(overlay_batch& batch,
+                              const glm::vec2 a,
+                              const glm::vec2 b,
+                              const glm::vec2 c,
+                              const glm::vec2 d,
+                              const glm::vec3 color,
+                              const float alpha) {
+    const glm::vec4 rgba(color, alpha);
+    for (const glm::vec2 corner : {a, b, c, a, c, d}) {
+        batch.vertices.push_back(overlay_vertex{corner, rgba});
+    }
 }
 
 void draw_overlay_segment(overlay_batch& batch,

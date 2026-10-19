@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "game/lighting_loader.h"
 #include "physics/terrain.h"
 #include "renderer/overlay_batch.h"
 #include "renderer/render_mesh.h"
@@ -31,11 +32,17 @@ inline const glm::vec3 course_map_tee_ink(0.34f, 0.21f, 0.12f);
 inline const glm::vec3 course_map_flagstick_ink(0.06f, 0.04f, 0.025f);
 inline const glm::vec3 course_map_flag_ink(0.76f, 0.17f, 0.12f);
 
+// How far another hole's fairway, rough and green on a hole sign's map fade
+// towards the paper, so the hole the sign is for stands out.
+inline constexpr float course_map_other_hole_fade = 0.55f;
+
 // The ink a patch of ground of this colour (terrain_palette.h) is printed in.
 glm::vec3 course_map_ink(glm::vec3 ground_color);
 // The ink of a surface: every map prints fairway, rough, green, bunker and
 // water this way, so they agree with each other and with the 3D ground.
-glm::vec3 course_map_material_ink(terrain_material material);
+glm::vec3 course_map_material_ink(const ground_colors& colors, terrain_material material);
+// `ink` faded by course_map_other_hole_fade.
+glm::vec3 course_map_other_hole_ink(glm::vec3 ink);
 
 struct course_map_layout {
     glm::vec2 center{0.0f, 0.02f};

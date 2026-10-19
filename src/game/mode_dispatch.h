@@ -14,6 +14,7 @@
 #include "game/shot_simulation.h"
 
 #include <cstddef>
+#include <cstdint>
 
 bool is_online(const game_state& state);
 
@@ -51,6 +52,12 @@ void record_hole_started(game_state& state, std::size_t hole_index);
 // return_to_hub gives it up there too (no score). Offline needs nothing.
 void record_hole_given_up(game_state& state);
 
+// Stepping into the passenger seat of `owner`'s cart, and out of it again.
+// Online: board_cart and leave_cart, which the server checks (reach, a free
+// seat). Offline there is only my own cart: nothing.
+void record_cart_boarded(game_state& state, std::uint64_t owner);
+void record_cart_left(game_state& state);
+
 // G: join the group of the nearest player (net.group_join_distance, same
 // zone) when it has space, else start a group. Shift+G leaves. Online only.
 void request_group(game_state& state);
@@ -64,6 +71,11 @@ float shot_wind_time(const game_state& state);
 // online since the server accepted it, by the server's clock (a refused one
 // lights nothing).
 bool cigarette_lit(const game_state& state);
+
+// UTC now in milliseconds, as every player in the room has it: offline the
+// local clock (`local_unix_ms`), online the server's clock once known. The
+// sky is drawn from it (game/sky_clock.h).
+std::int64_t shared_unix_ms(const game_state& state, std::int64_t local_unix_ms);
 
 // My row among the room's players, if the server sent it.
 const room_player* my_room_player(const game_state& state);

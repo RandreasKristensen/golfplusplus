@@ -11,7 +11,9 @@
 #include "game/game_content.h"
 #include "game/game_input.h"
 #include "game/game_state.h"
+#include "game/golf_cart.h"
 #include "game/hole_data.h"
+#include "game/lighting_loader.h"
 #include "game/play_area.h"
 #include "game/round_state.h"
 #include "game/text_assets.h"
@@ -58,6 +60,12 @@ inline const text_assets& shipped_text_assets() {
 }
 
 // Shipped tuning, clubs and rewards; courses and holes from tests/fixtures.
+// The scene colours render tests draw with (tests/fixtures/visuals/lighting.json).
+inline const scene_colors& test_scene_colors() {
+    static const scene_colors colors = load_lighting(fixture_root())->colors;
+    return colors;
+}
+
 inline game_content fixture_content() {
     game_content content = shipped_content();
     content.asset_root = fixture_root();
@@ -106,26 +114,49 @@ inline void pick_up_from_cup(game_state& state) {
     state.player.position = standing;
 }
 
-inline game_input action_input() {
+// Sat at my cart's wheel where I stand, facing my way: the cart brought
+// round me, standing still.
+inline void sit_in_cart(game_state& state) {
+    state.cart.pose = cart_around_seat(state.player.position, state.player.yaw, cart_seat::driver, state.tuning.cart);
+    state.cart.velocity = 0.0f;
+    state.ride = cart_ride{0, cart_seat::driver, std::nullopt, false};
+}
+
+// E: interact with what is in reach; aiming, step up to the ball.
+inline game_input interact_input() {
     game_input input;
-    input.action = true;
+    input.interact = true;
+    return input;
+}
+
+// D: over the ball, start the backswing (the meter).
+inline game_input backswing_input() {
+    game_input input;
+    input.backswing = true;
+    return input;
+}
+
+// A: the downswing, hitting at the meter's power.
+inline game_input downswing_input() {
+    game_input input;
+    input.downswing = true;
     return input;
 }
 
 inline void enter_aiming(game_state& state) {
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
 }
 
 inline void enter_addressing(game_state& state) {
     enter_aiming(state);
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
 }
 
 // Starts the swing meter and hits on the next frame.
 inline void hit_selected_club(game_state& state) {
     enter_addressing(state);
-    update_game(state, action_input(), 0.016f);
-    update_game(state, action_input(), 0.016f);
+    update_game(state, backswing_input(), 0.016f);
+    update_game(state, downswing_input(), 0.016f);
 }
 
 // A straight hole from `tee` to `pin` on a ribbon of the given width.

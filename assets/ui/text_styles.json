@@ -15,17 +15,15 @@
     "tile_hint_small": { "fill": 0.80, "color": [0.68, 0.69, 0.62], "align": "left" },
 
     "control_key": { "fill": 0.85, "color": [0.70, 0.72, 0.70], "align": "center" },
-    "control_key_down": { "fill": 0.85, "color": [0.08, 0.085, 0.08], "align": "center" },
 
-    "hud_label": { "fill": 0.87, "color": [0.88, 0.86, 0.72], "align": "left" },
     "hud_mode": { "fill": 0.80, "color": [0.70, 0.72, 0.64], "align": "center" },
     "name_tag": { "fill": 0.85, "max_scale": 1, "color": [0.94, 0.94, 0.92], "align": "center" },
     "name_tag_group": { "fill": 0.85, "max_scale": 1, "color": [0.36, 0.62, 0.98], "align": "center" },
     "hud_scale": { "fill": 0.75, "color": [0.88, 0.86, 0.72], "align": "center" },
-    "hud_club": { "fill": 0.60, "max_scale": 3, "wrap": true, "color": [0.90, 0.88, 0.76], "align": "center" },
+    "hud_club": { "fill": 0.90, "max_scale": 3, "color": [0.95, 0.78, 0.28], "align": "center" },
+    "hud_club_name": { "fill": 0.80, "max_scale": 1, "color": [0.70, 0.72, 0.66], "align": "center" },
     "cart_label": { "fill": 0.90, "color": [0.94, 0.86, 0.52], "align": "left" },
     "cart_drive": { "fill": 0.90, "color": [0.72, 0.80, 0.36], "align": "left" },
-    "cart_drift": { "fill": 0.90, "color": [0.96, 0.56, 0.22], "align": "left" },
     "xp_drop": { "fill": 1.0, "color": [0.96, 0.86, 0.38], "align": "left" },
     "rangefinder": { "fill": 0.90, "color": [0.76, 1.0, 0.72], "align": "center" },
 
@@ -36,17 +34,18 @@
     "panel_title": { "fill": 0.92, "color": [0.95, 0.78, 0.28], "align": "center" },
     "panel_header": { "fill": 0.70, "color": [0.58, 0.60, 0.56], "align": "left" },
     "panel_value": { "fill": 0.78, "color": [0.88, 0.86, 0.72], "align": "left" },
-    "panel_hint": { "fill": 0.45, "color": [0.58, 0.60, 0.56], "align": "center" },
 
     "scorecard_title": { "fill": 0.90, "color": [0.20, 0.12, 0.06], "align": "center" },
     "scorecard_subtitle": { "fill": 0.80, "color": [0.35, 0.30, 0.20], "align": "center" },
     "scorecard_header": { "fill": 0.75, "color": [0.35, 0.30, 0.20], "align": "center" },
     "scorecard_row": { "fill": 0.75, "color": [0.16, 0.12, 0.08], "align": "center" },
     "scorecard_row_current": { "fill": 0.75, "color": [0.46, 0.16, 0.11], "align": "center" },
-    "scorecard_row_pending": { "fill": 0.75, "color": [0.40, 0.35, 0.25], "align": "center" },
-    "scorecard_total": { "fill": 0.60, "color": [0.12, 0.09, 0.06], "align": "center" },
+    "scorecard_total": { "fill": 0.75, "color": [0.12, 0.09, 0.06], "align": "center" },
     "scorecard_hint": { "fill": 0.70, "color": [0.35, 0.30, 0.20], "align": "center" },
 
+    "datestamp": { "fill": 1.0, "max_scale": 2, "color": [1.0, 0.80, 0.42], "align": "left", "valign": "bottom" },
+    "vcr_tag": { "fill": 1.0, "max_scale": 2, "color": [0.88, 0.96, 0.88], "align": "right", "valign": "top" },
+    "burn_in_shadow": { "fill": 1.0, "color": [0.04, 0.035, 0.03], "align": "left" },
     "debug_fps": { "fill": 0.65, "color": [0.96, 0.78, 0.18], "align": "left", "valign": "top" },
     "debug_profile": { "fill": 1.0, "max_scale": 1, "color": [0.62, 0.90, 0.72], "align": "left", "valign": "top" }
   }

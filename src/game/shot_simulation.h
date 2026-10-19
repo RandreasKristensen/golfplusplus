@@ -44,7 +44,7 @@ struct shot_hole {
 
 // What a shot plays on, borrowed for one simulation.
 struct shot_course {
-    const play_area& area;  // its hole signs' posts and its fences are hit too
+    const play_area& area;  // its hole signs' posts, fences and floodlight poles are hit too
     const std::vector<tree_body>& trees;  // standing on `area` (static_anchor_cache::trees)
     shot_hole hole;
 };

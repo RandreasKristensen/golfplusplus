@@ -2,6 +2,7 @@
 
 #include "game/mode_dispatch.h"
 #include "game/play_area.h"
+#include "game/player_jump.h"
 #include "game/shot_simulation.h"
 #include "game/swing.h"
 #include "physics/vector_math.h"
@@ -20,27 +21,55 @@ bool connected(const game_state& state) {
     return state.online.status == net_status::connected;
 }
 
-void follow(game_state& state, remote_avatar& avatar, const room_player& player, const bool known, const float dt) {
+void follow(game_state& state, remote_avatar& avatar, const std::uint64_t account, const room_player& player, const bool known,
+            const float dt) {
     const net_tuning& tuning = state.tuning.net;
     const net_motion& motion = *player.motion;
     const float since = state.online.server_now != 0
         ? std::clamp(server_seconds_between(player.motion_at, state.online.server_now), 0.0f, tuning.remote_extrapolation_seconds)
         : 0.0f;
     glm::vec3 target = extrapolate_motion(motion, since);
+    float yaw = wrap_angle(motion.yaw + motion.turn_rate * since);
+    // Riding along: in the seat of the cart as it is shown.
+    const std::optional<std::uint64_t> ridden = motion.mode == motion_mode::ride ? cart_ridden_by(state, account) : std::nullopt;
+    const std::optional<cart_pose> cart = ridden ? shown_cart(state, *ridden) : std::nullopt;
+    if (cart) {
+        target = seat_position(*cart, cart_seat::passenger, state.tuning.cart);
+        yaw = cart->yaw;
+    }
     target.y = terrain_height(state.area, target);
+    // A motion sent from the air: they hopped. Half the height, as the ground
+    // sampled again may differ by a hair.
+    const player_tuning& player_moves = state.tuning.player;
+    const bool on_foot = motion.mode == motion_mode::walk || motion.mode == motion_mode::idle;
+    if ((!known || avatar.motion_at != player.motion_at) && on_foot && !avatar.hop_elapsed &&
+        motion.position.y - terrain_height(state.area, motion.position) > 0.5f * airborne_height) {
+        avatar.hop_elapsed = 0.0f;
+    }
+    const glm::vec3 lift(0.0f, hop_height(avatar.hop_elapsed.value_or(0.0f), player_moves), 0.0f);
 
     if (!known) {
         avatar.position = target;
         avatar.motion_at = player.motion_at;
     } else if (avatar.motion_at != player.motion_at) {
-        avatar.correction = avatar.position - target;
-        avatar.correction_left = tuning.remote_correction_seconds;
+        // Stepping into or out of a cart blends over the step.
+        const bool steps = in_cart(avatar.mode) != in_cart(motion.mode);
+        avatar.correction = avatar.position - lift - target;
+        avatar.correction_seconds = steps ? state.tuning.cart.step_seconds : tuning.remote_correction_seconds;
+        avatar.correction_left = avatar.correction_seconds;
         avatar.motion_at = player.motion_at;
     }
     avatar.correction_left = std::max(0.0f, avatar.correction_left - dt);
-    const float blend = tuning.remote_correction_seconds > 0.0f ? avatar.correction_left / tuning.remote_correction_seconds : 0.0f;
-    avatar.position = target + avatar.correction * blend;
-    avatar.yaw = wrap_angle(motion.yaw + motion.turn_rate * since);
+    const float blend = avatar.correction_seconds > 0.0f ? avatar.correction_left / avatar.correction_seconds : 0.0f;
+    if (avatar.hop_elapsed) {
+        *avatar.hop_elapsed += dt;
+        if (*avatar.hop_elapsed >= hop_seconds(player_moves)) {
+            avatar.hop_elapsed.reset();
+        }
+    }
+    avatar.position = target + avatar.correction * blend +
+        glm::vec3(0.0f, hop_height(avatar.hop_elapsed.value_or(0.0f), player_moves), 0.0f);
+    avatar.yaw = yaw;
     avatar.mode = motion.mode;
     tick_emote(avatar.smoke_emote, state.tuning.player.emote_seconds, dt);
     tick_emote(avatar.drink_emote, state.tuning.player.emote_seconds, dt);
@@ -62,7 +91,7 @@ void update_remote_players(game_state& state, const float dt) {
             continue;
         }
         const bool known = state.remote_avatars.count(account) != 0;
-        follow(state, state.remote_avatars[account], player, known, dt);
+        follow(state, state.remote_avatars[account], account, player, known, dt);
     }
     for (auto it = state.remote_avatars.begin(); it != state.remote_avatars.end();) {
         const auto player = state.online.players.find(it->first);

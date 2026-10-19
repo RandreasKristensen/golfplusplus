@@ -2,20 +2,18 @@
 
 #include "renderer/gl_loader.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <filesystem>
 #include <optional>
 
 #include <glm/mat3x3.hpp>
+#include <glm/trigonometric.hpp>
 #include <glm/matrix.hpp>
 
 namespace {
 constexpr int sky_unit = 0;
 constexpr int land_unit = 2;
 constexpr GLsizei screen_quad_vertices = 6;
-// Keeps the haze ramp from collapsing on a tiny play area.
-constexpr float min_haze_distance = 1.0f;
 
 // How hazy the land panorama's bottom row is: its alpha is how much of the
 // land shows through the haze.
@@ -29,12 +27,23 @@ float bottom_row_haze(const rgba_image& land) {
     }
     return 1.0f - visibility / static_cast<float>(land.width);
 }
+
+// The mean brightness of `image`, as backdrop.frag measures it.
+float mean_brightness(const rgba_image& image) {
+    double total = 0.0;
+    const std::size_t count = image.pixels.size() / 4U;
+    for (std::size_t i = 0; i < count; ++i) {
+        total += (0.2126 * image.pixels[i * 4U] + 0.7152 * image.pixels[i * 4U + 1U] + 0.0722 * image.pixels[i * 4U + 2U]) / 255.0;
+    }
+    return count > 0 ? static_cast<float>(total / static_cast<double>(count)) : 0.0f;
+}
 }
 
 bool backdrop_pass::init(const std::string& asset_root,
                          const std::string& vertex_path,
                          const std::string& fragment_path,
-                         const unsigned int screen_vao) {
+                         const unsigned int screen_vao,
+                         const sky_style& sky) {
     asset_root_ = asset_root;
     screen_vao_ = screen_vao;
     if (!shader_.load_from_files(vertex_path, fragment_path)) {
@@ -43,6 +52,27 @@ bool backdrop_pass::init(const std::string& asset_root,
     shader_.use();
     shader_.set_int("u_sky", sky_unit);
     shader_.set_int("u_land", land_unit);
+    shader_.set_float("u_sun_radius", glm::radians(sky.sun_radius_deg));
+    shader_.set_float("u_sun_brightness", sky.sun_brightness);
+    shader_.set_float("u_sun_halo_radius", glm::radians(sky.sun_halo_radius_deg));
+    shader_.set_float("u_sun_halo_strength", sky.sun_halo_strength);
+    shader_.set_float("u_moon_radius", glm::radians(sky.moon_radius_deg));
+    shader_.set_vec3("u_moon_color", sky.moon_color);
+    shader_.set_float("u_moon_earthshine", sky.moon_earthshine);
+    shader_.set_float("u_glow_width", glm::radians(sky.glow_width_deg));
+    shader_.set_float("u_glow_height", glm::radians(sky.glow_height_deg));
+    shader_.set_float("u_star_spacing", glm::radians(sky.star_spacing_deg));
+    shader_.set_float("u_star_density", sky.star_density);
+    shader_.set_float("u_star_radius", glm::radians(sky.star_radius_deg));
+    shader_.set_float("u_star_brightness", sky.star_brightness);
+    shader_.set_float("u_star_twinkle", sky.star_twinkle);
+    shader_.set_float("u_star_twinkle_hz", sky.star_twinkle_hz);
+    shader_.set_float("u_star_horizon_fade", glm::radians(sky.star_horizon_fade_deg));
+    shader_.set_float("u_cloud_threshold", sky.cloud_threshold);
+    shader_.set_float("u_cloud_softness", sky.cloud_softness);
+    shader_.set_float("u_cloud_sun_gain", sky.cloud_sun_gain);
+    shader_.set_float("u_cloud_sun_width", glm::radians(sky.cloud_sun_width_deg));
+    shader_.set_vec3("u_cloud_shade", sky.cloud_shade);
     return true;
 }
 
@@ -60,6 +90,7 @@ void backdrop_pass::load(const course_backdrop& backdrop) {
     sky_.shutdown();
     land_.shutdown();
     far_ground_haze_ = 0.0f;
+    sky_brightness_ = 0.0f;
     if (backdrop.sky.empty() || backdrop.land.empty()) {
         return;
     }
@@ -73,35 +104,33 @@ void backdrop_pass::load(const course_backdrop& backdrop) {
         return;
     }
     far_ground_haze_ = bottom_row_haze(*land);
+    sky_brightness_ = mean_brightness(*sky);
 }
 
-scene_haze backdrop_pass::draw(const course_backdrop* backdrop, const glm::vec3& eye, const float area_extent,
-                               const glm::mat4& view, const glm::mat4& proj) {
+scene_haze backdrop_pass::prepare(const course_backdrop* backdrop, const glm::vec3& eye, const float area_extent,
+                                  const glm::vec3& haze_tint) {
     const course_backdrop none;
     const course_backdrop& shown = backdrop != nullptr ? *backdrop : none;
     if (shown.sky != sky_image_ || shown.land != land_image_) {
         load(shown);
     }
+    haze_amount_ = shown.haze_amount;
+    return sky_.loaded() && land_.loaded() ? make_scene_haze(shown, far_ground_haze_, eye, area_extent, haze_tint) : scene_haze{};
+}
+
+void backdrop_pass::draw(const glm::mat4& view, const glm::mat4& proj, const float seconds) {
     if (!sky_.loaded() || !land_.loaded()) {
-        return scene_haze{};
+        return;
     }
-
-    scene_haze haze;
-    haze.color = shown.haze_color;
-    haze.far_amount = std::clamp(far_ground_haze_ * shown.haze_amount, 0.0f, 1.0f);
-    // The drawn ground ends at least area_extent from anywhere in the play
-    // area, so the haze is full by its edge. No play area (menus) keeps the
-    // course's distance.
-    const float distance = area_extent > 0.0f ? std::min(shown.haze_distance, area_extent) : shown.haze_distance;
-    haze.full_distance = std::max(min_haze_distance, distance);
-    haze.eye = eye;
-
-    glDisable(GL_DEPTH_TEST);
+    // The quad sits on the far plane: it passes only where the depth buffer
+    // is still clear.
+    glDepthFunc(GL_LEQUAL);
     glDepthMask(GL_FALSE);
     shader_.use();
     shader_.set_mat4("u_inverse_view_proj", glm::inverse(proj * glm::mat4(glm::mat3(view))));
-    shader_.set_vec3("u_haze_color", haze.color);
-    shader_.set_float("u_haze_amount", shown.haze_amount);
+    shader_.set_float("u_haze_amount", haze_amount_);
+    shader_.set_float("u_sky_brightness", sky_brightness_);
+    shader_.set_float("u_seconds", seconds);
     sky_.bind(sky_unit);
     land_.bind(land_unit);
     glBindVertexArray(screen_vao_);
@@ -109,6 +138,5 @@ scene_haze backdrop_pass::draw(const course_backdrop* backdrop, const glm::vec3&
     record_draw_call(shader_.profile());
     glBindVertexArray(0);
     glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
-    return haze;
+    glDepthFunc(GL_LESS);
 }

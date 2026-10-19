@@ -11,8 +11,8 @@
 namespace {
 // A tag's box around the projected point; the style sets how much it fills.
 const glm::vec2 name_tag_half(0.20f, 0.026f);
-// Bottom centre, between the power meter and the key icons.
-const ui_rect notice_box = rect_from_edges(-0.26f, -0.86f, 0.60f, -0.70f);
+// Bottom centre, left of the swing clock.
+const ui_rect notice_box = rect_from_edges(-0.34f, -0.86f, 0.42f, -0.70f);
 
 const char* name_tag_style(const player_relationship relationship) {
     switch (relationship) {

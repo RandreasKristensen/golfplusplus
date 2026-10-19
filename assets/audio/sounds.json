@@ -151,15 +151,6 @@
       "volume_multiplier": 1.0
     },
     {
-      "id": "cart_drift",
-      "file": "sfx/cart_drift.mp3",
-      "type": "sfx",
-      "category": "gameplay",
-      "description": "Silly tire skid on grass.",
-      "target_length_seconds": 0.5,
-      "volume_multiplier": 1.0
-    },
-    {
       "id": "emote_smoke",
       "file": "sfx/emote_smoke.mp3",
       "type": "sfx",

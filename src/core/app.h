@@ -5,16 +5,22 @@
 
 #include "audio/audio_engine.h"
 #include "core/input.h"
+#include "core/light_frame.h"
+#include "core/sky_frame.h"
 #include "core/startup_flow.h"
 #include "core/startup_options.h"
+#include "core/tape_tracking.h"
 #include "core/window.h"
 #include "game/game_content.h"
 #include "game/game_state.h"
+#include "game/lighting_loader.h"
+#include "game/picture_loader.h"
 #include "game/text_assets.h"
 #include "profiling/profiling.h"
 #include "renderer/camera_transition.h"
 #include "renderer/fence_batch.h"
 #include "renderer/hole_sign_batch.h"
+#include "renderer/floodlight_batch.h"
 #include "renderer/water_batch.h"
 #include "renderer/render_data.h"
 #include "renderer/render_mesh.h"
@@ -48,6 +54,8 @@ private:
     void update_menu(frame_profile* profile);
     void update_confirm_menu(frame_profile* profile);
     void update_round(float dt, frame_profile* profile);
+    // How far a count of mouse movement turns the look this frame.
+    float mouse_look_radians() const;
     // How online play is going for the menus; offline only without it.
     online_menu_status online_status() const;
     void carry_out(const std::vector<online_request>& requests);
@@ -82,8 +90,15 @@ private:
     render_static_mesh material_overlay_render_mesh_;
     render_hole_signs hole_signs_;
     render_fences fences_;
+    render_floodlights floodlights_;
     render_water water_;
+    tree_shadow_cache tree_shadows_;
     bool cart_loop_playing_ = false;
+    tape_style tape_style_;
+    lighting_palette lighting_;
+    sky_controls sky_;  // GOLFPP_GAME_TIME and the developer's scrub
+    tape_tracking_state tape_tracking_;
+    std::uint64_t last_present_ticks_ = 0;  // SDL ticks of the last frame shown
 
 #if GOLFPP_NET
     // Online play; updated every frame, menus included, so signing in runs
@@ -95,4 +110,7 @@ private:
     // while it is shown.
     profiler profiler_;
     bool running_ = false;
+    // GOLFPP_SCREENSHOT: where to save the picture, empty when off.
+    std::filesystem::path screenshot_path_;
+    int frames_presented_ = 0;
 };

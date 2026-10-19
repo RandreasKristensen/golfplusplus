@@ -1,7 +1,7 @@
 #pragma once
 
-// Timing swing: the first press starts the power meter, which rises and falls
-// continuously; the second press hits at the current power.
+// Timing swing: the backswing starts the power meter, which rises and falls
+// continuously; the downswing hits at the current power.
 
 enum class swing_phase {
     idle,

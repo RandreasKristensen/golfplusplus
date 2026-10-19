@@ -143,15 +143,17 @@ TEST_CASE("movement xp counts the path the last motion traced, turns included") 
     CHECK(near(strayed.earned_distance, 1.0f, 0.001f));
 }
 
-TEST_CASE("movement earns walking on foot and cart xp only in a cart on a road") {
+TEST_CASE("movement earns walking on foot and cart xp only at a cart's wheel on a road") {
     CHECK(movement_earns(mode_number(motion_mode::walk), false).walking);
     CHECK(!movement_earns(mode_number(motion_mode::walk), true).cart);
     CHECK(!movement_earns(mode_number(motion_mode::cart), false).cart);
-    const movement_earnings drift = movement_earns(mode_number(motion_mode::drift), true);
-    CHECK(drift.cart);
-    CHECK(drift.drift);
-    CHECK(!drift.walking);
-    CHECK(!movement_earns(mode_number(motion_mode::cart), true).drift);
+    const movement_earnings driving = movement_earns(mode_number(motion_mode::cart), true);
+    CHECK(driving.cart);
+    CHECK(!driving.walking);
+    // Riding along earns nothing.
+    const movement_earnings riding = movement_earns(mode_number(motion_mode::ride), true);
+    CHECK(!riding.cart);
+    CHECK(!riding.walking);
     for (const motion_mode at : {motion_mode::aim, motion_mode::address, motion_mode::swing}) {
         const movement_earnings earnings = movement_earns(mode_number(at), true);
         CHECK(!earnings.walking);
@@ -165,6 +167,32 @@ TEST_CASE("interaction reach is the radius plus slack, horizontally") {
     const glm::vec3 target(10.0f, 0.0f, 0.0f);
     CHECK(within_interact_reach(glm::vec3(10.0f + 3.0f + tuning.interact_slack, 40.0f, 0.0f), target, 3.0f, tuning));
     CHECK(!within_interact_reach(glm::vec3(10.0f + 3.0f + tuning.interact_slack + 0.01f, 0.0f, 0.0f), target, 3.0f, tuning));
+}
+
+TEST_CASE("a seat is in reach within the cart's board reach plus slack") {
+    const game_tuning& tuning = shipped_content().tuning;
+    const cart_pose cart{glm::vec3(10.0f, 0.0f, 0.0f), 0.0f};
+    const glm::vec3 seat = seat_position(cart, cart_seat::passenger, tuning.cart);
+    const glm::vec3 away = -yaw_left(yaw_direction(cart.yaw));
+    const float reach = tuning.cart.board_reach + tuning.server.interact_slack;
+    CHECK(within_seat_reach(cart, cart_seat::passenger, seat + away * (reach - 0.01f), tuning));
+    CHECK(!within_seat_reach(cart, cart_seat::passenger, seat + away * (reach + 0.01f), tuning));
+}
+
+TEST_CASE("a joining player's cart parks in the first free slot beside hole 1") {
+    const cart_tuning& tuning = shipped_content().tuning.cart;
+    const glm::vec3 start(0.0f, 0.0f, 0.0f);
+    const glm::vec3 pin(0.0f, 0.0f, 100.0f);
+    const auto spot = [&](const std::size_t slot) { return parked_cart_pose(start, pin, slot, tuning).position; };
+    CHECK(free_parking_slot({}, start, pin, tuning) == 0U);
+    CHECK(free_parking_slot({spot(0)}, start, pin, tuning) == 1U);
+    CHECK(free_parking_slot({spot(0), spot(2)}, start, pin, tuning) == 1U);
+    CHECK(free_parking_slot({spot(1), spot(0)}, start, pin, tuning) == 2U);
+    // A cart driven away frees its slot.
+    CHECK(free_parking_slot({spot(1) + glm::vec3(40.0f, 0.0f, 0.0f)}, start, pin, tuning) == 0U);
+    // Slots stand side by side, a park_spacing apart, to the right of the hole.
+    CHECK(near(horizontal_distance(spot(0), spot(1)), tuning.park_spacing, 0.0001f));
+    CHECK(glm::dot(spot(0) - start, yaw_left(glm::vec3(0.0f, 0.0f, 1.0f))) < 0.0f);
 }
 
 TEST_CASE("a valid shot starts from the server's ball, with power clamped") {

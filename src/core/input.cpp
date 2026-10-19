@@ -23,10 +23,17 @@ input_state next_frame_input(const input_state& input) {
     next.caps_lock = held_only(input.caps_lock);
     next.backspace = held_only(input.backspace);
     next.escape = held_only(input.escape);
+    next.key_w = held_only(input.key_w);
+    next.key_a = held_only(input.key_a);
+    next.key_s = held_only(input.key_s);
+    next.key_d = held_only(input.key_d);
+    next.key_e = held_only(input.key_e);
+    next.key_m = held_only(input.key_m);
     next.key_r = held_only(input.key_r);
     next.key_1 = held_only(input.key_1);
     next.key_2 = held_only(input.key_2);
     next.key_g = held_only(input.key_g);
+    next.key_t = held_only(input.key_t);
     next.mouse_left = held_only(input.mouse_left);
     return next;
 }

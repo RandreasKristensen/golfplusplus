@@ -3,12 +3,15 @@
 #include "game/course_session.h"
 #include "game/group_round.h"
 #include "game/game_state.h"
+#include "game/golf_cart.h"
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
 #include "game/net_types.h"
+#include "game/player_jump.h"
 #include "game/remote_players.h"
 #include "game/round_state.h"
 #include "game/scorecard.h"
+#include "game/server_errors.h"
 #include "game/text_ids.h"
 #include "physics/vector_math.h"
 
@@ -87,6 +90,25 @@ bool has_command(const game_state& state, const net_command_type type) {
 void refuse(game_state& state, const std::string& reducer, const std::string& error) {
     state.online.refusals.push_back(reducer_failure{reducer, error});
     update_game(state, game_input{}, 0.0f);
+}
+
+// Another player's cart parked `offset` from me, nobody in it.
+void park_other_cart(game_state& state, const glm::vec3& offset) {
+    state.online.carts[other] = room_cart{state.player.position + offset, 0.0f, 0};
+}
+
+// Stood beside the passenger seat of the other player's cart.
+void beside_other_seat(game_state& state) {
+    const cart_pose cart = *shown_cart(state, other);
+    state.player.position =
+        anchor_on_terrain(state.area, step_out_position(cart, cart_seat::passenger, state.tuning.cart));
+}
+
+void play_cart_step(game_state& state) {
+    const int frames = static_cast<int>(state.tuning.cart.step_seconds / 0.02f) + 2;
+    for (int i = 0; i < frames; ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
 }
 
 // Another player standing `offset` from me, in my zone.
@@ -208,6 +230,28 @@ TEST_CASE("online the hole ends when the server says: scored when it holed my ba
     REQUIRE(hole_played(state.round, 0));
     CHECK(*state.round.strokes[0] == 2);
     CHECK(near(horizontal(state.player.position), horizontal(stance), 0.001f));
+}
+
+TEST_CASE("online holing out keeps the view on the cup, and where I turned before the server answered") {
+    game_state state = online_hub();
+    on_hole(state);
+    const glm::vec3 cup = pin_anchor_position(state);
+    const glm::vec3 stance = state.player.position;
+    state.player.yaw = wrap_angle(state.player.yaw + 1.0f);
+    state.stroke_count = 1;
+    play_shot(state, shot_result{cup, true, 0.05f, {state.ball.position, cup}, {}});
+    play_out_shot(state);
+    CHECK(near(state.player.yaw, yaw_towards(state.player.position, cup), 0.0001f));
+
+    state.player.yaw = wrap_angle(state.player.yaw + 0.3f);
+    const float yaw = state.player.yaw;
+    state.online.shots.push_back(room_shot{me, 0, 1, shot_input{}, cup, true});
+    room_player& self = state.online.players[me];
+    self.zone = hub_zone;
+    self.motion->position = stance;
+    update_game(state, game_input{}, 0.016f);
+    REQUIRE(hole_played(state.round, 0));
+    CHECK(near(state.player.yaw, yaw, 0.0001f));
 }
 
 TEST_CASE("online a hole the server ends without holing my ball is given up") {
@@ -375,6 +419,41 @@ TEST_CASE("others are carried on along their motion, capped, on the ground, with
     CHECK(near(horizontal_distance(state.remote_avatars.at(other).position, player.motion->position), 0.0f, 0.001f));
 }
 
+TEST_CASE("my jump goes out as I rise, and others see it as the same hop") {
+    game_state state = online_hub();
+    update_game(state, game_input{}, 0.02f);
+    state.net_commands.clear();
+    game_input jump;
+    jump.jump = true;
+    update_game(state, jump, 0.02f);
+    REQUIRE(state.net_commands.size() == 1U);
+    const net_motion sent = state.net_commands.back().motion;
+    CHECK(sent.position.y - terrain_height(state.area, sent.position) > airborne_height);
+    // Once in the air, not again for the rest of the hop.
+    state.net_commands.clear();
+    update_game(state, game_input{}, 0.02f);
+    CHECK(state.net_commands.empty());
+
+    game_state seen = online_hub();
+    add_other(seen, glm::vec3(0.0f), 0);
+    room_player& player = seen.online.players[other];
+    seen.online.server_now += server_micros(1.0);
+    player.motion = sent;
+    player.motion_at = seen.online.server_now;
+    const player_tuning& tuning = seen.tuning.player;
+    const auto lift = [&] {
+        const glm::vec3 shown = seen.remote_avatars.at(other).position;
+        return shown.y - terrain_height(seen.area, shown);
+    };
+    update_remote_players(seen, 0.0f);
+    CHECK(near(lift(), 0.0f, 0.001f));
+    update_remote_players(seen, 0.5f * hop_seconds(tuning));
+    CHECK(near(lift(), tuning.jump_speed * tuning.jump_speed / (2.0f * tuning.jump_gravity), 0.001f));
+    update_remote_players(seen, 0.5f * hop_seconds(tuning));
+    CHECK(near(lift(), 0.0f, 0.001f));
+    CHECK(!seen.remote_avatars.at(other).hop_elapsed);
+}
+
 TEST_CASE("while reconnecting others stand still, and players who left disappear") {
     game_state state = online_hub();
     add_other(state, glm::vec3(0.0f), 0);
@@ -512,14 +591,14 @@ TEST_CASE("my swing tells the server it started, and the shot where I stand") {
     CHECK(current_motion(state).turn_rate == 0.0f);
 
     state.net_commands.clear();
-    update_game(state, action_input(), 0.0f);
+    update_game(state, backswing_input(), 0.0f);
     REQUIRE(state.swing.phase == swing_phase::timing);
     REQUIRE(!state.net_commands.empty());
     CHECK(state.net_commands.back().type == net_command_type::motion);
     CHECK(state.net_commands.back().motion.mode == motion_mode::swing);
 }
 
-TEST_CASE("the group's scorecard has a row per member from the server") {
+TEST_CASE("the scorecard has a row per member of my group from the server") {
     game_state state = online_hub();
     state.online.players[me].group_id = 3;
     state.round = complete_hole(state.round, 0, state.course_holes[0].par + 1);
@@ -529,17 +608,22 @@ TEST_CASE("the group's scorecard has a row per member from the server") {
     stranger.group_id = 0;
     state.online.players[9] = stranger;
 
-    const std::vector<group_scorecard_row> rows = build_group_scorecard(state, shipped_text_assets().strings);
+    const std::vector<scorecard_player> rows = build_scorecard_data(state, shipped_text_assets().strings).players;
     REQUIRE(rows.size() == 2U);
     CHECK(rows[0].me);
     CHECK(rows[0].name == "ME");
-    CHECK(rows[0].holes_played == 1);
+    CHECK(rows[0].strokes[0] == state.course_holes[0].par + 1);
     CHECK(rows[0].relative_label == "+1");
     CHECK(rows[1].name == "OTHER");
-    CHECK(rows[1].holes_played == 0);
+    CHECK(!rows[1].me);
+    CHECK(rows[1].total_strokes == 0);
 
+    // Outside a group, only mine.
     state.online.players[me].group_id = 0;
-    CHECK(build_group_scorecard(state, shipped_text_assets().strings).empty());
+    const std::vector<scorecard_player> alone = build_scorecard_data(state, shipped_text_assets().strings).players;
+    REQUIRE(alone.size() == 1U);
+    CHECK(!alone[0].me);
+    CHECK(alone[0].total_strokes == state.course_holes[0].par + 1);
 }
 
 TEST_CASE("a finished round goes on to the next where the player stands") {
@@ -610,12 +694,12 @@ TEST_CASE("a finished round's results wait while my group still plays the hole")
     CHECK(round_results_shown(state));
 
     // Everyone's scores, their last hole included.
-    const std::vector<group_scorecard_row> rows = build_group_scorecard(state, shipped_text_assets().strings);
+    const std::vector<scorecard_player> rows = build_scorecard_data(state, shipped_text_assets().strings).players;
     REQUIRE(rows.size() == 2U);
-    CHECK(rows[0].holes_played == static_cast<int>(state.course_holes.size()));
-    CHECK(rows[0].strokes == 3 * static_cast<int>(state.course_holes.size()));
-    CHECK(rows[1].holes_played == 2);
-    CHECK(rows[1].strokes == 9);
+    CHECK(rows[0].strokes == std::vector<int>(state.course_holes.size(), 3));
+    CHECK(rows[0].total_strokes == 3 * static_cast<int>(state.course_holes.size()));
+    CHECK(std::count_if(rows[1].strokes.begin(), rows[1].strokes.end(), [](const int strokes) { return strokes > 0; }) == 2);
+    CHECK(rows[1].total_strokes == 9);
 
     start_next_round(state);
     CHECK(state.group_strokes.empty());
@@ -630,7 +714,9 @@ TEST_CASE("waiting for the group I can walk, seen in the hub, but play nothing")
 
     game_input walk;
     walk.forward_held = true;
-    walk.action = true;
+    walk.interact = true;
+    walk.backswing = true;
+    walk.downswing = true;
     for (int i = 0; i < 30; ++i) {
         update_game(state, walk, 0.05f);
     }
@@ -706,7 +792,7 @@ bool sent(const game_state& state, const net_command_type type) {
 TEST_CASE("online the ball is picked out of its cup with the server, and goes back when refused") {
     game_state state = online_hub();
     holed_at_cup(state);
-    update_game(state, action_input(), 0.0f);
+    update_game(state, interact_input(), 0.0f);
     CHECK(!state.cup_ball.has_value());
     CHECK(sent(state, net_command_type::pick_up_ball));
 
@@ -720,7 +806,7 @@ TEST_CASE("online the ball is picked out of its cup with the server, and goes ba
 TEST_CASE("online a hole refused for the ball in the cup puts it back there") {
     game_state state = online_hub();
     holed_at_cup(state);
-    update_game(state, action_input(), 0.0f);
+    update_game(state, interact_input(), 0.0f);
     REQUIRE(!state.cup_ball.has_value());
 
     REQUIRE(start_hub_hole(state, 1));
@@ -730,4 +816,147 @@ TEST_CASE("online a hole refused for the ball in the cup puts it back there") {
     CHECK(state.cup_ball.has_value());
     REQUIRE(state.notice.has_value());
     CHECK(state.notice->text_key == text_ball_in_cup);
+}
+
+TEST_CASE("online my cart moves to where the server parks it, once") {
+    game_state state = online_hub();
+    const glm::vec3 parked = state.player.position + glm::vec3(20.0f, 0.0f, 4.0f);
+    state.online.carts[me] = room_cart{parked, 1.0f, 0};
+    update_game(state, game_input{}, 0.02f);
+    CHECK(near(horizontal(state.cart.pose.position), horizontal(parked), 0.0001f));
+    CHECK(near(state.cart.pose.yaw, 1.0f));
+    CHECK(state.cart.placed_by_server);
+
+    // From then on my cart is where I leave it, whatever my row says.
+    state.online.carts[me].position = parked + glm::vec3(5.0f, 0.0f, 0.0f);
+    update_game(state, game_input{}, 0.02f);
+    CHECK(near(horizontal(state.cart.pose.position), horizontal(parked), 0.0001f));
+}
+
+TEST_CASE("online I ride in another's free passenger seat with the server, sat where their cart is shown, and step out") {
+    game_state state = online_hub();
+    add_other(state, glm::vec3(30.0f, 0.0f, 0.0f), 0);
+    park_other_cart(state, glm::vec3(30.0f, 0.0f, 0.0f));
+    beside_other_seat(state);
+    state.net_commands.clear();
+
+    const std::optional<reachable_seat> seat = nearest_seat(state);
+    REQUIRE(seat.has_value());
+    CHECK(seat->owner == other);
+    CHECK(seat->seat == cart_seat::passenger);
+
+    update_game(state, interact_input(), 0.02f);
+    REQUIRE(state.ride.has_value());
+    CHECK(state.ride->owner == other);
+    // Where I stand first, then the seat: the server checks the reach.
+    REQUIRE(state.net_commands.size() >= 2U);
+    CHECK(state.net_commands[0].type == net_command_type::motion);
+    const net_command* board = find_command(state, net_command_type::board_cart);
+    REQUIRE(board != nullptr);
+    CHECK(board->cart_owner == other);
+
+    state.online.carts[other].passenger = me;
+    play_cart_step(state);
+    CHECK(state.ride->confirmed);
+    CHECK(!state.ride->step.has_value());
+    const cart_pose cart = *shown_cart(state, other);
+    CHECK(near(horizontal(state.player.position), horizontal(seat_position(cart, cart_seat::passenger, state.tuning.cart)),
+               0.0001f));
+    CHECK(current_motion(state).mode == motion_mode::ride);
+    CHECK(!driving_cart(state));
+
+    // Its driver takes the wheel and drives it on: I go with it.
+    room_player& driver = state.online.players[other];
+    driver.motion->mode = motion_mode::cart;
+    driver.motion->position = seat_position(cart, cart_seat::driver, state.tuning.cart) + glm::vec3(0.0f, 0.0f, 6.0f);
+    driver.motion_at = state.online.server_now + 1;
+    for (int i = 0; i < 30; ++i) {
+        update_game(state, game_input{}, 0.05f);
+    }
+    const cart_pose moved = *shown_cart(state, other);
+    CHECK(horizontal_distance(moved.position, cart.position) > 5.0f);
+    CHECK(near(horizontal(state.player.position), horizontal(seat_position(moved, cart_seat::passenger, state.tuning.cart)),
+               0.001f));
+
+    state.net_commands.clear();
+    update_game(state, interact_input(), 0.02f);
+    CHECK(has_command(state, net_command_type::leave_cart));
+    state.online.carts[other].passenger = 0;
+    play_cart_step(state);
+    CHECK(on_foot(state));
+}
+
+TEST_CASE("online a taken passenger seat is not offered, nor my own cart's") {
+    game_state state = online_hub();
+    park_other_cart(state, glm::vec3(30.0f, 0.0f, 0.0f));
+    beside_other_seat(state);
+    REQUIRE(nearest_seat(state).has_value());
+    state.online.carts[other].passenger = 3;
+    CHECK(!nearest_seat(state).has_value());
+
+    // My own cart in my room: only its wheel, never its passenger seat.
+    state.online.carts[me] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
+    state.player.position = anchor_on_terrain(state.area, step_out_position(state.cart.pose, cart_seat::passenger, state.tuning.cart));
+    const std::optional<reachable_seat> mine = nearest_seat(state);
+    REQUIRE(mine.has_value());
+    CHECK(mine->owner == 0U);
+    CHECK(mine->seat == cart_seat::driver);
+}
+
+TEST_CASE("online a refused seat stands me up and says why") {
+    game_state state = online_hub();
+    park_other_cart(state, glm::vec3(30.0f, 0.0f, 0.0f));
+    beside_other_seat(state);
+    update_game(state, interact_input(), 0.02f);
+    REQUIRE(state.ride.has_value());
+
+    refuse(state, reducer_board_cart, error_seat_taken);
+    CHECK(on_foot(state));
+    REQUIRE(state.notice.has_value());
+    CHECK(state.notice->text_key == online_error_text_key(error_seat_taken));
+}
+
+TEST_CASE("online I am out of another's cart once the server no longer seats me there") {
+    game_state state = online_hub();
+    park_other_cart(state, glm::vec3(30.0f, 0.0f, 0.0f));
+    beside_other_seat(state);
+    update_game(state, interact_input(), 0.02f);
+    state.online.carts[other].passenger = me;
+    play_cart_step(state);
+    REQUIRE(state.ride.has_value());
+    REQUIRE(state.ride->confirmed);
+
+    // Its driver left the room, and the cart with them.
+    state.net_commands.clear();
+    state.online.carts.erase(other);
+    update_game(state, game_input{}, 0.02f);
+    CHECK(on_foot(state));
+    CHECK(!has_command(state, net_command_type::leave_cart));
+}
+
+TEST_CASE("online the server refusing my wheel stands me up beside my cart") {
+    game_state state = online_hub();
+    sit_in_cart(state);
+    refuse(state, reducer_update_motion, error_too_far);
+    CHECK(on_foot(state));
+}
+
+TEST_CASE("another player riding in my cart sits in its passenger seat as I drive it") {
+    game_state state = online_hub();
+    add_other(state, glm::vec3(3.0f, 0.0f, 0.0f), 0);
+    sit_in_cart(state);
+    state.online.carts[me] = room_cart{state.cart.pose.position, state.cart.pose.yaw, other};
+    room_player& rider = state.online.players[other];
+    rider.motion->mode = motion_mode::ride;
+    rider.motion_at = state.online.server_now + 1;
+    game_input drive;
+    drive.forward_held = true;
+    for (int i = 0; i < 20; ++i) {
+        update_game(state, drive, 0.05f);
+    }
+    // After the step's blend, glued to the seat.
+    const remote_avatar& shown = state.remote_avatars.at(other);
+    CHECK(near(horizontal(shown.position), horizontal(seat_position(state.cart.pose, cart_seat::passenger, state.tuning.cart)),
+               0.001f));
+    CHECK(near(shown.yaw, state.cart.pose.yaw, 0.0001f));
 }

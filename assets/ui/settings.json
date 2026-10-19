@@ -26,6 +26,42 @@
       "max": 90,
       "step": 5,
       "default": 60
+    },
+    {
+      "id": "mouse_sensitivity",
+      "label": "menu.settings.mouse_sensitivity",
+      "value": "menu.settings.percent",
+      "min": 25,
+      "max": 300,
+      "step": 25,
+      "default": 100
+    },
+    {
+      "id": "fullscreen",
+      "label": "menu.settings.fullscreen",
+      "values": ["menu.settings.off", "menu.settings.on"],
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0
+    },
+    {
+      "id": "tape_wear",
+      "label": "menu.settings.tape_wear",
+      "value": "menu.settings.percent",
+      "min": 0,
+      "max": 100,
+      "step": 10,
+      "default": 50
+    },
+    {
+      "id": "datestamp",
+      "label": "menu.settings.datestamp",
+      "values": ["menu.settings.off", "menu.settings.on"],
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1
     }
   ]
 }

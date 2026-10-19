@@ -65,8 +65,7 @@ motion_check check_motion(const net_motion& previous,
 movement_earnings movement_earns(const std::uint8_t mode, const bool on_road) {
     movement_earnings earnings;
     earnings.walking = is_mode(mode, motion_mode::walk);
-    earnings.cart = in_cart(static_cast<motion_mode>(mode)) && on_road;
-    earnings.drift = is_mode(mode, motion_mode::drift) && on_road;
+    earnings.cart = is_mode(mode, motion_mode::cart) && on_road;
     return earnings;
 }
 
@@ -77,14 +76,30 @@ float clamp_motion_speed(const std::uint8_t mode, const float speed, const game_
 
 float clamp_turn_rate(const float turn_rate, const game_tuning& tuning) {
     const float control = std::max({1.0f, tuning.cart.road_control_scale, tuning.cart.off_road_control_scale});
-    const float limit = std::max({tuning.player.turn_rate, tuning.player.aim_turn_rate, tuning.cart.turn_rate * control,
-                                  tuning.cart.drift_turn_rate * control});
+    const float limit = std::max({tuning.player.turn_rate, tuning.player.aim_turn_rate, tuning.cart.turn_rate * control});
     return std::clamp(turn_rate, -limit, limit);
 }
 
 bool within_interact_reach(const glm::vec3& position, const glm::vec3& target, const float radius,
                            const server_tuning& tuning) {
     return horizontal_distance(position, target) <= radius + tuning.interact_slack;
+}
+
+bool within_seat_reach(const cart_pose& cart, const cart_seat seat, const glm::vec3& position, const game_tuning& tuning) {
+    return within_interact_reach(position, seat_position(cart, seat, tuning.cart), tuning.cart.board_reach, tuning.server);
+}
+
+std::size_t free_parking_slot(const std::vector<glm::vec3>& carts, const glm::vec3& start, const glm::vec3& pin,
+                              const cart_tuning& tuning) {
+    const float clear = tuning.park_spacing * 0.5f;
+    for (std::size_t slot = 0;; ++slot) {
+        const glm::vec3 spot = parked_cart_pose(start, pin, slot, tuning).position;
+        const bool taken = std::any_of(carts.begin(), carts.end(),
+                                       [&](const glm::vec3& cart) { return horizontal_distance(cart, spot) < clear; });
+        if (!taken) {
+            return slot;
+        }
+    }
 }
 
 shot_check check_shot(const shot_request& request,

@@ -197,6 +197,7 @@ impl StdbClient {
         watch_keyed!(golf_group, GolfGroup);
         watch_keyed!(avatar_motion, AvatarMotion);
         watch_keyed!(ball, Ball);
+        watch_keyed!(golf_cart, GolfCart);
         watch_events!(shot_event, ShotEvent);
         watch_events!(emote_event, EmoteEvent);
         watch!(my_account, MyAccount);

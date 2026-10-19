@@ -22,6 +22,18 @@ glm::vec3 camera_local_point(const glm::vec3& camera_position, const glm::vec3& 
     return camera_position + camera_right(forward) * local.x + world_up * local.y + forward * local.z;
 }
 
+glm::mat4 camera_view_frame(const glm::vec3& camera_position, const glm::vec3& camera_target) {
+    const glm::vec3 level = camera_forward(camera_position, camera_target);
+    const glm::vec3 forward = safe_normalize(camera_target - camera_position, level);
+    const glm::vec3 right = safe_normalize(glm::cross(world_up, forward), camera_right(level));
+    glm::mat4 frame(1.0f);
+    frame[0] = glm::vec4(right, 0.0f);
+    frame[1] = glm::vec4(glm::cross(forward, right), 0.0f);
+    frame[2] = glm::vec4(forward, 0.0f);
+    frame[3] = glm::vec4(camera_position, 1.0f);
+    return frame;
+}
+
 glm::mat4 camera_local_model(const glm::vec3& camera_position,
                              const glm::vec3& camera_target,
                              const glm::vec3& local,

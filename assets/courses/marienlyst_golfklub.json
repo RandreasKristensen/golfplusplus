@@ -8,6 +8,10 @@
     "haze_amount": 1.0,
     "haze_distance": 800
   },
+  "sky": {
+    "date": "06-21",
+    "utc_offset_hours": 2
+  },
   "holes": [
     "holes/marienlyst_golfklub_h01.json",
     "holes/marienlyst_golfklub_h02.json",

@@ -79,15 +79,18 @@ set(GOLFPP_SHARED_SOURCES
   src/physics/flight_model.cpp
   src/physics/ground_contact.cpp
   src/physics/ground_mesh.cpp
+  src/physics/land_relief.cpp
   src/physics/material_zone.cpp
   src/physics/terrain.cpp
   src/physics/fence_collision.cpp
   src/physics/tree_collision.cpp
   src/physics/wind.cpp
+  src/game/cart_seats.cpp
   src/game/club_loader.cpp
   src/game/course_loader.cpp
   src/game/course_world_loader.cpp
   src/game/hole_loader.cpp
+  src/game/floodlights.cpp
   src/game/hole_sign.cpp
   src/game/tee_box.cpp
   src/game/json_util.cpp
@@ -98,6 +101,7 @@ set(GOLFPP_SHARED_SOURCES
   src/game/reward_rules.cpp
   src/game/round_state.cpp
   src/game/shot_simulation.cpp
+  src/game/sky_clock.cpp
   src/game/tuning_loader.cpp
   src/game/utf8.cpp
 )

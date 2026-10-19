@@ -6,6 +6,7 @@
 // meters, times in seconds, angles in radians unless named otherwise.
 
 #include "physics/physics_tuning.h"
+#include "physics/land_relief.h"
 #include "physics/terrain.h"
 
 #include <array>
@@ -30,6 +31,7 @@ struct terrain_build_tuning {
     // How far from a hole's edge the ground takes to ease into the course's land.
     float ground_blend_distance = 0.0f;
     terrain_zone_tuning zones;      // bunker and water carve depths
+    land_relief relief;             // the land's and greens' relief, before the ground is built on it
     float fairway_cell_size = 0.0f;  // the ground's spacing over fairways and greens, on land
     float zone_cell_size = 0.0f;     // the ground's spacing over bunkers and ponds
     // Longest side of a drawn zone shape's outline (build_material_overlay_mesh).
@@ -85,22 +87,43 @@ struct player_tuning {
     float walk_speed = 0.0f;
     float turn_rate = 0.0f;
     float aim_turn_rate = 0.0f;
+    // Looking around, first person: the arrow keys look up and down at
+    // look_pitch_rate (rad/s) as far as max_look_pitch (rad) either way; the
+    // mouse turns mouse_look_radians per count at 100% mouse sensitivity.
+    float look_pitch_rate = 0.0f;
+    float max_look_pitch = 0.0f;
+    float mouse_look_radians = 0.0f;
     float ball_interact_radius = 0.0f;
     // How far the player stands from the ball: behind it when teeing up, to
     // its side (and address_back_distance behind) when addressing it.
     float ball_stand_off_distance = 0.0f;
     float address_back_distance = 0.0f;
     float emote_seconds = 0.0f;
+    // A hop on foot (game/player_jump.h): up at jump_speed (world units/s),
+    // pulled down at jump_gravity (world units/s^2).
+    float jump_speed = 0.0f;
+    float jump_gravity = 0.0f;
 };
 
+// The golf cart (game/golf_cart.h), in world units and seconds.
 struct cart_tuning {
     float speed = 0.0f;
     float turn_rate = 0.0f;
-    float drift_turn_rate = 0.0f;
-    float normal_damping = 0.0f;
-    float drift_damping = 0.0f;
-    float drift_duration = 0.0f;
-    float drift_speed_boost = 0.0f;
+    float damping = 0.0f;  // how quickly the cart takes up its speed (1/s)
+    float reverse_speed_scale = 0.0f;  // of speed, backing up
+    float full_steer_speed = 0.0f;     // steering turns it fully from this speed, less below
+    float steering_wheel_rate = 0.0f;  // how quickly its steering wheel follows the steering (1/s), looks only
+    // Its two seats, each this far to the side of its middle: the driver's
+    // on the left, the passenger's on the right.
+    float seat_offset = 0.0f;
+    float board_reach = 0.0f;        // from a seat, to step into it
+    float step_out_distance = 0.0f;  // from a seat, out to the side, where stepping out stands
+    float step_seconds = 0.0f;       // stepping in or out
+    // Where a course's carts are parked: beside hole 1's start, this far down
+    // the hole and to its right, side by side park_spacing apart.
+    float park_ahead_distance = 0.0f;
+    float park_side_distance = 0.0f;
+    float park_spacing = 0.0f;
     // A road counts as under the cart within half its width plus this margin
     // (and never less than min_road_reach).
     float road_reach_margin = 0.0f;
@@ -130,9 +153,8 @@ struct camera_tuning {
     float follow_look_height = 0.0f;
     float transition_seconds = 0.0f;        // blend time on rig changes and teleports
     float transition_jump_distance = 0.0f;  // eye movement per frame that counts as a teleport
-    // What is held before my eyes (my cart from the driver's seat, my emote
-    // props) is drawn at this field of view, the one it was posed for,
-    // whatever the player's setting.
+    // What is held before my eyes (my emote props) is drawn at this field
+    // of view, the one it was posed for, whatever the player's setting.
     float viewmodel_fov_degrees = 0.0f;
 };
 
@@ -162,6 +184,7 @@ struct net_tuning {
     float motion_heartbeat_seconds = 0.0f;     // resend at least this often while moving
     float motion_min_interval_seconds = 0.0f;  // never send motion more often than this
     float motion_correction_distance = 0.0f;   // resend when others' extrapolation is this far off (world units)
+    float motion_correction_yaw = 0.0f;        // ...or turned this far off (radians)
     // Others are carried on along their last motion for at most this long,
     // then stand still; a new motion blends in over remote_correction_seconds.
     float remote_extrapolation_seconds = 0.0f;
@@ -222,9 +245,9 @@ struct tee_box_tuning {
     float sample_spacing = 0.0f;  // between the ground samples that find that height
 };
 
-// The fastest a cart goes: drifting on a road.
+// The fastest a cart goes: on a road.
 inline float fastest_cart_speed(const cart_tuning& cart) {
-    return cart.speed * cart.drift_speed_boost * (cart.road_speed_scale > 1.0f ? cart.road_speed_scale : 1.0f);
+    return cart.speed * (cart.road_speed_scale > 1.0f ? cart.road_speed_scale : 1.0f);
 }
 
 // Fences (course worlds): their poles stop shots like tree trunks, their nets
@@ -233,6 +256,35 @@ struct fence_tuning {
     float pole_radius = 0.0f;
     float net_restitution = 0.0f;
     float net_friction = 0.0f;
+};
+
+// The floodlight poles along every hole (game/floodlights.h), in world
+// units: alternating sides down the fairway, one beside the tee, one each
+// side of the green. Their poles stop shots like tree trunks.
+struct floodlight_tuning {
+    float spacing = 0.0f;           // the most between fairway poles, along the hole
+    float tee_clearance = 0.0f;     // no fairway pole nearer the tee than this, along the hole
+    float green_clearance = 0.0f;   // nor nearer the pin
+    float fairway_offset = 0.0f;    // a fairway pole's foot, out past the fairway's edge
+    float tee_offset = 0.0f;        // the tee pole's, out past the tee box's left edge
+    float green_offset = 0.0f;      // a green pole's, out past the green's edge
+    float pole_height = 0.0f;       // its lamp head's middle over its foot
+    float pole_radius = 0.0f;
+    float arm_length = 0.0f;        // the lamp head, out from the pole towards what it lights
+    float obstacle_clearance = 0.0f;  // from a trunk, post or another pole, past its radius
+    float nudge_step = 0.0f;        // a blocked spot is tried again this much further out or along
+    int nudge_tries = 0;
+};
+
+// Where the sky's clock stands (game/sky_clock.h): the same for every
+// player, so the sky is the same for everyone at the same moment. The clock
+// counts game days, its fraction the time of day in UTC; the date is each
+// course's own (course_sky), in `year`. Visual only.
+struct sky_timeline {
+    std::int64_t anchor_unix_ms = 0;  // the real time at which...
+    double anchor_game_day = 0.0;     // ...the game clock read this
+    double game_days_per_real_day = 0.0;  // 0: frozen at the anchor
+    int year = 0;  // every course's date is in it
 };
 
 // What the ball lies on when it is hit: a tee box, else the material under it.
@@ -272,5 +324,7 @@ struct game_tuning {
     hole_sign_tuning hole_sign;
     tee_box_tuning tee_box;
     fence_tuning fence;
+    floodlight_tuning floodlights;
+    sky_timeline sky_clock;
     std::array<lie_tuning, ball_lie_count> lies{};  // by ball_lie
 };

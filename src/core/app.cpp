@@ -5,15 +5,23 @@
 #include "core/event_loop.h"
 #include "core/key_bindings.h"
 #include "core/render_frame.h"
+#include "core/screenshot.h"
+#include "core/sky_frame.h"
+#include "core/tape_tracking.h"
+#include "core/vcr_frame.h"
 #include "game/asset_resolver.h"
 #include "game/content_files.h"
 #include "game/course_session.h"
+#include "game/golf_cart.h"
 #include "game/group_round.h"
+#include "game/lighting_loader.h"
 #include "game/mode_dispatch.h"
 #include "game/net_types.h"
+#include "game/picture_loader.h"
 #include "game/save_manager.h"
 #include "game/settings.h"
 #include "game/text_ids.h"
+#include "renderer/sky_visibility.h"
 #include "renderer/terrain_render_mesh.h"
 
 #include <SDL.h>
@@ -33,6 +41,15 @@ constexpr int window_width = 1280;
 constexpr int window_height = 720;
 // Below this speed the cart is parked and its engine loop stops.
 constexpr float cart_engine_idle_speed = 0.05f;
+// GOLFPP_SCREENSHOT is taken on this frame after loading, once the camera and
+// streaming have settled.
+constexpr int screenshot_frame = 120;
+// render_data::clock_seconds wraps at this, so a float keeps sub-millisecond steps.
+constexpr double clock_wrap_seconds = 3600.0;
+
+std::int64_t unix_now_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
 
 std::string sdl_path(char* path) {
     const std::string result = path != nullptr ? path : "";
@@ -88,8 +105,6 @@ std::string sound_for_event(const audio_event& event) {
         return sound_club_change;
     case audio_event_type::cart_start:
         return sound_cart_start;
-    case audio_event_type::cart_drift:
-        return sound_cart_drift;
     case audio_event_type::emote_smoke:
         return sound_emote_smoke;
     case audio_event_type::emote_beer:
@@ -107,10 +122,27 @@ const course_definition* find_course(const game_content& content, const std::str
 
 bool app::init(const startup_options& options) {
     const std::string asset_root = resolve_asset_root(sdl_path(SDL_GetBasePath()));
-    if (!window_.init("golf++", window_width, window_height, options.vsync, asset_root + "/icons/golfpp-icon.bmp")) {
+    const bool sized = options.window_width > 0 && options.window_height > 0;
+    if (!window_.init("golf++", sized ? options.window_width : window_width, sized ? options.window_height : window_height,
+                      options.vsync, asset_root + "/icons/golfpp-icon.bmp")) {
         return false;
     }
-    if (!renderer_.init(window_.sdl_window(), asset_root)) {
+    const std::optional<picture_style> picture = load_picture_style(asset_root);
+    if (!picture) {
+        SDL_Log("Failed to load %s from %s", picture_style_path, asset_root.c_str());
+        return false;
+    }
+    std::optional<lighting_palette> lighting = load_lighting(asset_root);
+    if (!lighting) {
+        SDL_Log("Failed to load %s from %s", lighting_path, asset_root.c_str());
+        return false;
+    }
+    lighting_ = std::move(*lighting);
+    sky_.pinned_hour = options.game_hour;
+    sky_.pinned_date = options.game_date;
+    screenshot_path_ = options.screenshot_path;
+    tape_style_ = picture->tape;
+    if (!renderer_.init(window_.sdl_window(), asset_root, *picture, lighting_)) {
         SDL_Log("Renderer init failed (shaders in %s/shaders)", asset_root.c_str());
         return false;
     }
@@ -159,8 +191,12 @@ bool app::init(const startup_options& options) {
         pref_path.empty() ? std::filesystem::path(asset_root) / "saves" : std::filesystem::path(pref_path);
     save_path_ = save_file_path(save_root);
     settings_path_ = settings_file_path(save_root);
-    menu_.settings = load_settings(settings_path_, content_.settings);
+    // A GOLFPP_SCREENSHOT run is reproducible and leaves the player's files
+    // alone: default settings, and the save is read but never written.
+    const bool review_run = !screenshot_path_.empty();
+    menu_.settings = review_run ? settings_values{} : load_settings(settings_path_, content_.settings);
     const save_load_result save = load_save(save_path_);
+    saving_enabled_ = !review_run;
     if (save.existing_was_unreadable) {
         if (save.unreadable_backup.empty()) {
             saving_enabled_ = false;
@@ -212,6 +248,7 @@ void app::run() {
         if (input_.ctrl.pressed) {
             profiler_.enabled = !profiler_.enabled;
         }
+        sky_ = scrub_sky(sky_, profiler_.enabled && input_.key_t.is_down, dt);
         profiler_end_frame(profiler_, dt);
         profiler_begin_frame(profiler_);
         frame_profile* profile = profiler_frame(profiler_);
@@ -219,6 +256,7 @@ void app::run() {
         if (menu_.flow != startup_flow::playing) {
             update_menu(profile);
         } else if (round_results_shown(game_)) {
+            set_mouse_captured(false);
             // Online the server has started the next round already; offline
             // the round ends at the menu.
             const bool next = input_.enter.pressed || input_.space.pressed;
@@ -292,12 +330,16 @@ void app::save_progress() {
 
 void app::apply_settings(const bool write) {
     audio_.set_levels(audio_levels_from_settings(menu_.settings, content_.settings));
+    // load_game_content refuses settings without fullscreen.
+    window_.set_fullscreen(setting_value(menu_.settings, *find_setting(content_.settings, setting_fullscreen)) != 0);
+    renderer_.set_tape_wear(setting_fraction(menu_.settings, *find_setting(content_.settings, setting_tape_wear)));
     if (write && !write_settings(settings_path_, menu_.settings)) {
         SDL_Log("Failed to write settings %s", settings_path_.string().c_str());
     }
 }
 
 void app::update_menu(frame_profile* profile) {
+    set_mouse_captured(false);
     const online_menu_status online = online_status();
     const startup_menu_result result =
         update_startup_menu(menu_, input_, mouse_click_position(input_, window_.sdl_window()), catalog_, online);
@@ -373,6 +415,7 @@ void app::watch_online_round() {
 }
 
 void app::update_confirm_menu(frame_profile* profile) {
+    set_mouse_captured(false);
     if (!menu_.confirm_active) {
         // Opened this frame; the same key press must not also answer it.
         open_confirm_menu(menu_);
@@ -398,11 +441,25 @@ void app::update_confirm_menu(frame_profile* profile) {
     present_frame(data, profile);
 }
 
+// While a round plays the mouse looks around; the menus, the pause menu and
+// the results give the cursor back.
+float app::mouse_look_radians() const {
+    // Counts from before the capture moved a cursor, not the look.
+    if (SDL_GetRelativeMouseMode() != SDL_TRUE) {
+        return 0.0f;
+    }
+    // load_game_content refuses settings without the mouse sensitivity.
+    const float percent =
+        static_cast<float>(setting_value(menu_.settings, *find_setting(content_.settings, setting_mouse_sensitivity)));
+    return game_.tuning.player.mouse_look_radians * percent / 100.0f;
+}
+
 void app::update_round(const float dt, frame_profile* profile) {
     {
         const profile_scope timer(profile, profile_stage::update_game);
-        update_game(game_, game_input_from_keys(input_), dt, profile);
+        update_game(game_, game_input_from_keys(input_, mouse_look_radians()), dt, profile);
     }
+    set_mouse_captured(true);
     if (game_.save_requested) {
         save_progress();
     }
@@ -418,7 +475,7 @@ void app::play_game_audio() {
     }
     game_.audio_events.clear();
 
-    const bool cart_moving = game_.cart.active && std::abs(game_.cart.velocity) > cart_engine_idle_speed;
+    const bool cart_moving = driving_cart(game_) && std::abs(game_.cart.velocity) > cart_engine_idle_speed;
     if (cart_moving != cart_loop_playing_) {
         if (cart_moving) {
             audio_.play_loop(sound_cart_drive_loop);
@@ -434,11 +491,15 @@ void app::refresh_render_meshes() {
         return;
     }
     const std::uint64_t revision = game_.terrain_render_revision;
-    terrain_render_mesh_ = make_terrain_render_mesh({&game_.area.ground}, revision);
-    material_overlay_render_mesh_ = make_terrain_render_mesh({&game_.area.material_overlay}, revision);
-    refresh_render_hole_signs(hole_signs_, game_.area, hole_sign_texts(game_), text_, revision);
-    fences_ = build_render_fences(game_.area, revision);
+    const scene_colors& colors = lighting_.colors;
+    const ground_light_bake light = bake_ground_light(game_.area.ground);
+    terrain_render_mesh_ = make_terrain_render_mesh({&game_.area.ground}, revision, colors.ground, light);
+    material_overlay_render_mesh_ =
+        make_terrain_render_mesh({&game_.area.material_overlay}, revision, colors.ground, light);
+    refresh_render_hole_signs(hole_signs_, game_.area, hole_sign_texts(game_), text_, colors, revision);
+    fences_ = build_render_fences(game_.area, revision, colors.fixtures.fence_post);
     water_ = build_render_water(game_.area, revision);
+    floodlights_ = build_render_floodlights(game_.area, revision, colors.fixtures);
     render_meshes_revision_ = revision;
 }
 
@@ -447,14 +508,15 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
         const profile_scope timer(profile, profile_stage::refresh_render_mesh_cache);
         refresh_static_anchor_cache(game_, profile);
         refresh_render_meshes();
+        refresh_tree_shadows(tree_shadows_, game_, lighting_.shadows);
     }
 
     const profile_scope timer(profile, profile_stage::make_render_data);
     // load_game_content refuses settings without the field of view.
     const float fov_degrees =
         static_cast<float>(setting_value(menu_.settings, *find_setting(content_.settings, setting_field_of_view)));
-    render_data data = make_render_data(game_, input_, text_, content_.skills,
-                                        render_meshes{&terrain_render_mesh_, &material_overlay_render_mesh_, &hole_signs_, &fences_, &water_},
+    render_data data = make_render_data(game_, text_, content_.skills,
+                                        render_meshes{&terrain_render_mesh_, &material_overlay_render_mesh_, &hole_signs_, &fences_, &water_, &floodlights_},
                                         fov_degrees, profile);
 
     const camera_view desired{data.camera_position, data.camera_target, data.camera_fov_degrees};
@@ -466,6 +528,8 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
     data.camera_target = camera_transition_.shown.target;
     data.camera_fov_degrees = camera_transition_.shown.fov_degrees;
     data.camera_underwater = under_water(game_.area, data.camera_position);
+    data.lighting = make_render_lighting(game_, lighting_, sky_, unix_now_ms());
+    add_frame_lights(data, game_, lighting_, tree_shadows_);
     return data;
 }
 
@@ -479,6 +543,17 @@ void app::present_frame(render_data& data, frame_profile* profile) {
         data.profile_summary = profiler_.published;
     }
 
+    const std::uint64_t ticks = SDL_GetTicks64();
+    const float dt = last_present_ticks_ != 0 ? static_cast<float>(ticks - last_present_ticks_) / 1000.0f : 0.0f;
+    last_present_ticks_ = ticks;
+    const bool paused = menu_.flow == startup_flow::playing && (menu_.confirm_active || round_results_shown(game_));
+    tape_tracking_ = update_tape_tracking(tape_tracking_, tape_tracking_signals_for(game_, paused), dt, tape_style_);
+    const vcr_signals vcr{menu_.flow != startup_flow::playing, paused,
+                          setting_value(menu_.settings, *find_setting(content_.settings, setting_datestamp)) != 0};
+    data.vcr = make_render_vcr(text_, game_, sky_, unix_now_ms(), vcr);
+    data.clock_seconds = static_cast<float>(std::fmod(static_cast<double>(ticks) / 1000.0, clock_wrap_seconds));
+    data.tape_tracking = tape_tracking_.level;
+
     renderer_.render(data, text_, profile);
     if (profile != nullptr) {
         const renderer_cull_stats& cull = renderer_.cull_stats();
@@ -488,6 +563,12 @@ void app::present_frame(render_data& data, frame_profile* profile) {
         profile->chunk_indices_drawn = cull.terrain.indices_drawn + cull.material_overlay.indices_drawn;
         profile->chunk_indices_total = cull.terrain.indices_total + cull.material_overlay.indices_total;
         profile->trees_visible = cull.trees_visible;
+    }
+    if (!screenshot_path_.empty() && ++frames_presented_ == screenshot_frame) {
+        if (!save_screenshot(window_.sdl_window(), screenshot_path_)) {
+            SDL_Log("GOLFPP_SCREENSHOT: cannot write %s", screenshot_path_.string().c_str());
+        }
+        running_ = false;
     }
     const profile_scope timer(profile, profile_stage::window_swap);
     window_.swap();

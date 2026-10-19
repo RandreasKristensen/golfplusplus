@@ -21,7 +21,8 @@ std::vector<float> make_cylinder_vertices(int segments);
 // Unit sphere: radius 1, poles on +/-y.
 std::vector<float> make_sphere_vertices(int latitude_segments, int longitude_segments);
 
-// Unit cone: radius 1 base in XZ at y = 0, tip at y = 1, plus a base disc.
+// Unit cone: radius 1 base in XZ at y = 0, tip at y = 1, plus a base disc;
+// each side facet carries its outward normal.
 std::vector<float> make_cone_vertices(int segments);
 
 // Two triangles covering [-1, 1] in XY at z = 0, facing +Z.

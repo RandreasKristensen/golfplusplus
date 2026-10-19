@@ -2,13 +2,14 @@
 
 #include "core/render_online.h"
 
-#include "game/course_session.h"
 #include "game/mode_dispatch.h"
 #include "game/net_types.h"
 #include "game/progress_rules.h"
+#include "game/golf_cart.h"
 #include "game/group_round.h"
 #include "game/scorecard.h"
 #include "game/shot_simulation.h"
+#include "game/swing.h"
 #include "game/text_ids.h"
 #include "physics/flight_model.h"
 #include "physics/vector_math.h"
@@ -58,23 +59,6 @@ std::vector<glm::vec3> aim_preview_points(const game_state& game, frame_profile*
     return points;
 }
 
-controls_overlay_state controls_from_keys(const input_state& keys) {
-    controls_overlay_state controls;
-    controls.key_1_down = keys.key_1.is_down;
-    controls.key_2_down = keys.key_2.is_down;
-    controls.left_down = keys.left.is_down;
-    controls.right_down = keys.right.is_down;
-    controls.up_down = keys.up.is_down;
-    controls.down_down = keys.down.is_down;
-    controls.space_down = keys.space.is_down;
-    controls.shift_down = keys.left_shift.is_down;
-    controls.enter_down = keys.enter.is_down;
-    controls.backspace_down = keys.backspace.is_down;
-    controls.retee_down = keys.key_r.is_down;
-    controls.group_down = keys.key_g.is_down;
-    return controls;
-}
-
 std::vector<render_skill_progress> skill_rows(const save_data& save,
                                               const std::vector<skill_definition>& skills,
                                               const text_assets& text) {
@@ -117,7 +101,7 @@ std::vector<glm::vec3> other_pin_markers(const game_state& game) {
     return pins;
 }
 
-// What the course map shows: the course's holes, each numbered at its tee.
+// What the course map shows: the course's holes, each numbered along its line of play.
 void add_course_map(render_data& data, const game_state& game, const text_assets& text) {
     data.course_map_low = game.area.holes_low;
     data.course_map_high = game.area.holes_high;
@@ -127,7 +111,7 @@ void add_course_map(render_data& data, const game_state& game, const text_assets
         }
         const std::size_t number = sign.area_hole + 1;
         data.map_holes.push_back(render_map_hole{
-            format_text(text, text_course_map_hole_number, {{"hole", std::to_string(number)}}), sign.line_of_play.front()});
+            format_text(text, text_course_map_hole_number, {{"hole", std::to_string(number)}}), sign.line_of_play});
     }
 }
 
@@ -162,7 +146,9 @@ camera_view live_camera_view(const game_state& game, const float fov_degrees) {
     case camera_rig::walking: {
         camera_view view;
         view.position = game.player.position + world_up * camera.walking_eye_height;
-        view.target = view.position + yaw_direction(game.player.yaw) * camera.walking_look_distance;
+        const float pitch = game.look.pitch;
+        const glm::vec3 look = yaw_direction(view_yaw(game)) * std::cos(pitch) + world_up * std::sin(pitch);
+        view.target = view.position + look * camera.walking_look_distance;
         view.fov_degrees = fov_degrees;
         return view;
     }
@@ -186,11 +172,12 @@ camera_view live_camera_view(const game_state& game, const float fov_degrees) {
 }
 
 namespace {
-// "OFFLINE", or the room online, so the two progress stores are never
-// confused. Without a connection or a room, it says the game is reconnecting.
+// The room online, so the two progress stores are never confused (offline
+// says so with the datestamp, core/vcr_frame.h). Without a connection or a
+// room, it says the game is reconnecting.
 std::string mode_label(const game_state& game, const text_assets& text) {
     if (!is_online(game)) {
-        return lookup_text(text, text_hud_mode_offline);
+        return "";
     }
     const std::optional<online_room>& room = game.online.room;
     if (game.online.status != net_status::connected || !room) {
@@ -219,7 +206,6 @@ std::vector<hole_sign_text> hole_sign_texts(const game_state& game) {
 }
 
 render_data make_render_data(const game_state& game,
-                             const input_state& keys,
                              const text_assets& text,
                              const std::vector<skill_definition>& skills,
                              const render_meshes& meshes,
@@ -236,6 +222,7 @@ render_data make_render_data(const game_state& game,
     data.material_overlay_mesh = meshes.material_overlay;
     data.hole_signs = meshes.hole_signs;
     data.fences = meshes.fences;
+    data.floodlights = meshes.floodlights;
     data.water = meshes.water;
     data.backdrop = &game.course.backdrop;
     data.trees = &game.static_anchors.trees;
@@ -279,22 +266,24 @@ render_data make_render_data(const game_state& game,
     data.flight_path_alpha = game.tuning.flight_path.alpha;
     data.flight_path_width = game.tuning.flight_path.line_width;
 
-    data.cart_active = game.cart.active;
-    data.cart_drifting = game.cart.drift_timer > 0.0f;
+    data.driving_cart = driving_cart(game);
     data.cart_speed_fraction = std::abs(game.cart.velocity) / std::max(0.001f, fastest_cart_speed(game.tuning.cart));
+    for (const cart_in_world& cart : carts_in_world(game)) {
+        data.carts.push_back(render_cart{cart.pose.position, cart.pose.yaw, cart.driven, cart.steer});
+    }
+    data.cart_seat_offset = game.tuning.cart.seat_offset;
     data.smoke_emote_active = game.smoke_emote.active;
     data.smoke_emote_elapsed = game.smoke_emote.elapsed;
     data.beer_emote_active = game.beer_emote.active;
     data.beer_emote_elapsed = game.beer_emote.elapsed;
 
     data.mode_label = mode_label(game, text);
-    data.show_interact_prompt = game.mode == game_mode::walking &&
-        (can_interact_with_ball(game) || cup_ball_in_reach(game) || nearby_hole_start(game) ||
-         nearby_collectible(game));
-    data.show_power_meter = shot_setup;
+    data.show_swing_clock = game.mode == game_mode::addressing;
+    data.swing_running = game.swing.phase == swing_phase::timing;
     data.stroke_count = game.stroke_count;
     if (game.selected_club < game.clubs.size()) {
         data.selected_club_label = game.clubs[game.selected_club].label;
+        data.selected_club_name = game.clubs[game.selected_club].name;
     }
     data.show_rangefinder = game.rangefinder_active;
     if (data.show_rangefinder) {
@@ -318,7 +307,6 @@ render_data make_render_data(const game_state& game,
     if (!data.show_course_results) {
         data.xp_drops = xp_drop_rows(game, skills);
     }
-    data.controls = controls_from_keys(keys);
     add_online_render_data(data, game, text);
     return data;
 }

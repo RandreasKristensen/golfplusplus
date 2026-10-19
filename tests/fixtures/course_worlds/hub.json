@@ -1,6 +1,12 @@
 {
   "id": "fixture_hub",
   "name": "Fixture Hub",
+  "projection": {
+    "type": "equirectangular",
+    "origin_lat": 56.18,
+    "origin_lon": 10.16,
+    "units": "meters"
+  },
   "hole_starts": [
     {
       "hole_index": 0,

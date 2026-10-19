@@ -15,6 +15,12 @@ struct input_state {
     bool quit_requested = false;
     int mouse_x = 0;
     int mouse_y = 0;
+    // How far the mouse moved this frame, in its counts (right and down
+    // positive); captured while a round plays (set_mouse_captured).
+    int mouse_dx = 0;
+    int mouse_dy = 0;
+    // Notches the wheel turned this frame: positive away from the player.
+    int wheel_steps = 0;
     // UTF-8 text typed this frame (SDL_TEXTINPUT). Only filled while a text
     // field has enabled text input, see set_text_input_enabled.
     std::string text_typed;
@@ -31,13 +37,20 @@ struct input_state {
     button_state caps_lock;
     button_state backspace;
     button_state escape;
+    button_state key_w;
+    button_state key_a;
+    button_state key_s;
+    button_state key_d;
+    button_state key_e;
+    button_state key_m;
     button_state key_r;
     button_state key_1;
     button_state key_2;
     button_state key_g;
+    button_state key_t;  // developer: scrubs the sky (core/sky_frame.h)
     button_state mouse_left;
 };
 
-// Clears the per-frame flags (pressed, released, typed text, quit) and keeps
+// Clears the per-frame flags (pressed, released, typed text, quit, mouse movement and wheel) and keeps
 // which buttons are held.
 input_state next_frame_input(const input_state& input);

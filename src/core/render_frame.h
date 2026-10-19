@@ -3,7 +3,6 @@
 // Builds the renderer's frame from game state: camera rigs, HUD state and
 // marker lists. GL-free, so it is unit tested.
 
-#include "core/input.h"
 #include "game/game_state.h"
 #include "game/reward_rules.h"
 #include "game/text_assets.h"
@@ -37,12 +36,12 @@ struct render_meshes {
     const render_hole_signs* hole_signs = nullptr;
     const render_fences* fences = nullptr;
     const render_water* water = nullptr;
+    const render_floodlights* floodlights = nullptr;
 };
 
-// The in-round frame (no menus, no debug text). `keys` only drive the
-// on-screen key icons; `fov_degrees` is the player's field of view setting.
+// The in-round frame (no menus, no debug text); `fov_degrees` is the
+// player's field of view setting.
 render_data make_render_data(const game_state& game,
-                             const input_state& keys,
                              const text_assets& text,
                              const std::vector<skill_definition>& skills,
                              const render_meshes& meshes,

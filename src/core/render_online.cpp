@@ -5,7 +5,6 @@
 #include "game/group_round.h"
 #include "game/mode_dispatch.h"
 #include "game/remote_players.h"
-#include "game/scorecard.h"
 #include "game/text_ids.h"
 #include "physics/vector_math.h"
 #include "renderer/remote_avatar_batch.h"
@@ -18,7 +17,7 @@ namespace {
 // How far above the feet a name tag floats: over the head on foot, over
 // the canopy in a cart (in eye heights).
 constexpr float tag_height_on_foot = 1.30f;
-constexpr float tag_height_in_cart = 1.55f;
+constexpr float tag_height_seated = 1.55f;
 
 float trail_alpha(const remote_shot& shot, const game_tuning& tuning) {
     const float after = shot.elapsed - shot.result.duration;
@@ -40,12 +39,13 @@ render_remote_avatar shown_avatar(const game_state& game, const std::uint64_t ac
     render_remote_avatar shown;
     shown.position = avatar.position;
     shown.yaw = avatar.yaw;
-    shown.in_cart = in_cart(avatar.mode);
+    shown.seated = in_cart(avatar.mode);
+    shown.at_wheel = avatar.mode == motion_mode::cart;
     shown.player_id = account;
     shown.group_id = player.group_id;
     shown.smoke_elapsed = emote_elapsed(avatar.smoke_emote);
     shown.drink_elapsed = emote_elapsed(avatar.drink_emote);
-    const std::optional<remote_address> address = shown.in_cart ? std::nullopt : remote_address_pose(game, account);
+    const std::optional<remote_address> address = shown.seated ? std::nullopt : remote_address_pose(game, account);
     if (address) {
         const glm::vec3 ball = drawn_ball_center(address->ball_position, game.tuning.scale);
         shown.swing = render_remote_swing{ball, address->aim_angle, address->club_power};
@@ -72,7 +72,7 @@ void add_online_render_data(render_data& data, const game_state& game, const tex
             continue;
         }
         data.remote_avatars.push_back(shown_avatar(game, account, avatar, player->second));
-        const float tag_height = (data.remote_avatars.back().in_cart ? tag_height_in_cart : tag_height_on_foot) * eye_height;
+        const float tag_height = (data.remote_avatars.back().seated ? tag_height_seated : tag_height_on_foot) * eye_height;
         data.name_tags.push_back(render_name_tag{data.remote_avatars.back().position + world_up * tag_height, player->second.name,
                                                  relationship_to(game, player->second)});
     }
@@ -84,11 +84,7 @@ void add_online_render_data(render_data& data, const game_state& game, const tex
             data.remote_trails.push_back(render_trail{shot.trail, trail_alpha(shot, game.tuning)});
         }
     }
-    data.controls.show_group_key = true;
     if (waiting_for_group(game) && data.notice_label.empty()) {
         data.notice_label = lookup_text(text, text_scorecard_waiting_for_group);
-    }
-    if (data.show_scorecard || data.show_course_results) {
-        data.group_scorecard = build_group_scorecard(game, text.strings);
     }
 }

@@ -10,7 +10,6 @@
 
 #include "game/game_tuning.h"
 #include "game/hole_data.h"
-#include "physics/material_zone.h"
 #include "physics/tree_collision.h"
 
 #include <array>
@@ -27,9 +26,6 @@ struct hole_sign {
     std::vector<glm::vec3> line_of_play;
     float length = 0.0f;      // along line_of_play, horizontal, world units
     float half_width = 0.0f;  // the hole's fairway plus rough, halved
-    // The hole's own greens, bunkers and water, in area coordinates: what its
-    // face's map shows with the hole's ribbon, and nothing of other holes.
-    std::vector<material_zone> zones;
     // Horizontal unit vectors: the hole's direction at the tee, and the way
     // the face looks (to the left of down_hole, across the tee).
     glm::vec3 down_hole{0.0f, 0.0f, 1.0f};

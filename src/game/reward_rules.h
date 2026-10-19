@@ -36,7 +36,6 @@ struct reward_rules {
     xp_reward smoke;  // per cigarette
     movement_xp_rate walking;
     movement_xp_rate cart_on_road;
-    movement_xp_rate drift_on_road;
     cigarette_rules cigarette;
 };
 

@@ -16,7 +16,16 @@ namespace {
 void snap_to(game_state& state, const net_motion& motion) {
     state.player.position = motion.position;
     state.player.yaw = motion.yaw;
-    state.cart.yaw = motion.yaw;
+    if (driving_cart(state)) {
+        state.cart.pose = cart_around_seat(motion.position, motion.yaw, cart_seat::driver, state.tuning.cart);
+    }
+}
+
+// A refused seat, or a cart move the server would not take: on foot again.
+bool cart_refused(const reducer_failure& refusal) {
+    return refusal.reducer == reducer_board_cart || refusal.reducer == reducer_leave_cart ||
+        refusal.error == error_unknown_cart || refusal.error == error_seat_taken || refusal.error == error_not_in_cart ||
+        (refusal.reducer == reducer_update_motion && refusal.error == error_too_far);
 }
 
 // Puts this client where the server has the player: their zone (leaving a
@@ -69,6 +78,9 @@ void put_cup_ball_back(game_state& state) {
 
 void take_refusals(game_state& state) {
     for (const reducer_failure& refusal : state.online.refusals) {
+        if (cart_refused(refusal)) {
+            leave_cart_at_once(state);
+        }
         if (refusal.reducer == reducer_pick_up_ball || refusal.error == error_ball_in_cup) {
             put_cup_ball_back(state);
         }
@@ -177,6 +189,7 @@ void update_online_play(game_state& state, const float dt) {
         return;
     }
     take_refusals(state);
+    follow_server_carts(state);
     take_room_events(state);
     update_ball_correction(state, dt);
     follow_server_hole(state);
@@ -188,5 +201,6 @@ void watch_room(game_state& state, const float dt) {
         return;
     }
     take_refusals(state);  // a refused move puts me back
+    follow_server_carts(state);
     take_room_events(state);
 }

@@ -1,6 +1,7 @@
 #include "renderer/hole_sign_face.h"
 
 #include "game/text_ids.h"
+#include "physics/ground_mesh.h"
 #include "physics/terrain.h"
 #include "physics/vector_math.h"
 #include "renderer/course_map_fill.h"
@@ -10,6 +11,7 @@
 #include <cmath>
 #include <limits>
 #include <optional>
+#include <vector>
 
 #include <glm/common.hpp>
 #include <glm/gtc/constants.hpp>
@@ -29,8 +31,8 @@ constexpr int detail_top = 52;
 constexpr int detail_height = 9;
 // Empty texels between the hole's extent and the map box's edges.
 constexpr float map_margin_texels = 2.0f;
-// Points around each zone's outline when fitting the map to it.
-constexpr int zone_outline_points = 16;
+// Points around the pin's green's outline when fitting the map to it.
+constexpr int green_outline_points = 16;
 
 // A whole-texel rectangle on the face: columns from the left, rows from the
 // top (as hole_sign_texels), clipped to `clip`.
@@ -50,10 +52,55 @@ const terrain_mesh* own_ribbon(const play_area& area, const hole_sign& sign) {
     return sign.area_hole < area.holes.size() ? &area.holes[sign.area_hole] : nullptr;
 }
 
+std::optional<hole_sign_map_spot> spot_among(const std::vector<material_zone>& zones,
+                                             const play_area& area,
+                                             const hole_sign& sign,
+                                             const glm::vec3& point) {
+    if (const std::optional<terrain_material> zone = zone_material_at(zones, point)) {
+        if (*zone != terrain_material::green) {
+            return hole_sign_map_spot{*zone, true};
+        }
+        const bool on_pin_green = !sign.line_of_play.empty() &&
+            std::any_of(zones.begin(), zones.end(), [&](const material_zone& green) {
+                return green.type == material_zone_type::green && zone_contains(green, sign.line_of_play.back()) &&
+                       zone_contains(green, point);
+            });
+        return hole_sign_map_spot{*zone, on_pin_green};
+    }
+    const std::optional<terrain_sample> on_hole = sample_holes(area.holes, point);
+    if (!on_hole) {
+        return std::nullopt;
+    }
+    const terrain_mesh* ribbon = own_ribbon(area, sign);
+    return hole_sign_map_spot{on_hole->material, ribbon != nullptr && sample_terrain_inside(*ribbon, point).has_value()};
+}
+
+// The zones reaching into the map box: all that can win anywhere on it.
+std::vector<material_zone> zones_on_map(const play_area& area, const hole_sign_map_frame& frame) {
+    glm::vec3 low(std::numeric_limits<float>::max());
+    glm::vec3 high(std::numeric_limits<float>::lowest());
+    for (const glm::vec2 corner : {glm::vec2(0.0f), glm::vec2(hole_sign_map_width, 0.0f), glm::vec2(0.0f, hole_sign_map_height),
+                                   glm::vec2(hole_sign_map_width, hole_sign_map_height)}) {
+        const glm::vec3 point = frame.world(corner.x, corner.y);
+        low = glm::min(low, point);
+        high = glm::max(high, point);
+    }
+    std::vector<material_zone> zones;
+    for (const material_zone& zone : area.zones) {
+        const glm::vec2 reach = zone_half_extent(zone);
+        if (zone.center.x + reach.x >= low.x && zone.center.x - reach.x <= high.x && zone.center.z + reach.y >= low.z &&
+            zone.center.z - reach.y <= high.z) {
+            zones.push_back(zone);
+        }
+    }
+    return zones;
+}
+
 // Each map row as runs of equal ink, one quad per run; the paper shows off
-// the hole.
+// every hole.
 void draw_hole_map_ground(overlay_batch& batch, const play_area& area, const hole_sign& sign, const hole_sign_map_frame& frame,
-                          const ui_rect& clip) {
+                          const ui_rect& clip, const ground_colors& ground) {
+    const std::vector<material_zone> zones = zones_on_map(area, frame);
     for (int row = 0; row < hole_sign_map_height; ++row) {
         int run_start = 0;
         glm::vec3 run_ink = course_map_paper;
@@ -61,8 +108,8 @@ void draw_hole_map_ground(overlay_batch& batch, const play_area& area, const hol
             glm::vec3 ink = run_ink;
             if (column < hole_sign_map_width) {
                 const glm::vec3 point = frame.world(static_cast<float>(column) + 0.5f, static_cast<float>(row) + 0.5f);
-                const std::optional<terrain_material> material = hole_sign_map_material(area, sign, point);
-                ink = material ? course_map_material_ink(*material) : course_map_paper;
+                const std::optional<hole_sign_map_spot> spot = spot_among(zones, area, sign, point);
+                ink = spot ? hole_sign_map_ink(ground, *spot) : course_map_paper;
             }
             if (column == hole_sign_map_width || (column > run_start && ink != run_ink)) {
                 if (run_ink != course_map_paper) {
@@ -71,6 +118,16 @@ void draw_hole_map_ground(overlay_batch& batch, const play_area& area, const hol
                 run_start = column;
             }
             run_ink = ink;
+        }
+    }
+}
+
+// A texel of tree ink at every tree's foot in the box.
+void draw_hole_map_trees(overlay_batch& batch, const play_area& area, const hole_sign_map_frame& frame, const ui_rect& clip) {
+    for (const tree_instance& tree : area.trees) {
+        const glm::ivec2 texel = frame.texel(tree.position);
+        if (texel.x >= 0 && texel.y >= 0 && texel.x < hole_sign_map_width && texel.y < hole_sign_map_height) {
+            fill_texels(batch, hole_sign_map_left + texel.x, hole_sign_map_top + texel.y, 1, 1, clip, course_map_tree_ink);
         }
     }
 }
@@ -131,12 +188,13 @@ hole_sign_map_frame make_hole_sign_map_frame(const play_area& area, const hole_s
             cover(point - frame.far_side * sign.half_width);
         }
     }
-    for (const material_zone& zone : sign.zones) {
-        if (zone.type != material_zone_type::green && zone.type != material_zone_type::bunker) {
+    const glm::vec3 pin = sign.line_of_play.back();
+    for (const material_zone& zone : area.zones) {
+        if (zone.type != material_zone_type::green || !zone_contains(zone, pin)) {
             continue;
         }
-        for (int i = 0; i < zone_outline_points; ++i) {
-            const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(zone_outline_points);
+        for (int i = 0; i < green_outline_points; ++i) {
+            const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(green_outline_points);
             cover(zone_world_point(zone, glm::vec2(std::cos(angle), std::sin(angle)) * zone.radii));
         }
     }
@@ -149,19 +207,13 @@ hole_sign_map_frame make_hole_sign_map_frame(const play_area& area, const hole_s
     return frame;
 }
 
-std::optional<terrain_material> hole_sign_map_material(const play_area& area, const hole_sign& sign, const glm::vec3& point) {
-    if (const std::optional<terrain_material> zone = zone_material_at(sign.zones, point)) {
-        return zone;
-    }
-    const terrain_mesh* ribbon = own_ribbon(area, sign);
-    if (ribbon == nullptr) {
-        return std::nullopt;
-    }
-    const std::optional<terrain_sample> on_ribbon = sample_terrain_inside(*ribbon, point);
-    if (!on_ribbon) {
-        return std::nullopt;
-    }
-    return on_ribbon->material;
+std::optional<hole_sign_map_spot> hole_sign_map_spot_at(const play_area& area, const hole_sign& sign, const glm::vec3& point) {
+    return spot_among(area.zones, area, sign, point);
+}
+
+glm::vec3 hole_sign_map_ink(const ground_colors& ground, const hole_sign_map_spot& spot) {
+    const glm::vec3 ink = course_map_material_ink(ground, spot.material);
+    return spot.own_hole ? ink : course_map_other_hole_ink(ink);
 }
 
 hole_sign_labels make_hole_sign_labels(const text_assets& text, const int hole_number, const int par, const int meters) {
@@ -185,7 +237,8 @@ void draw_hole_sign_face(overlay_batch& batch,
                          const text_assets& text,
                          const hole_sign_labels& labels,
                          const play_area& area,
-                         const hole_sign& sign) {
+                         const hole_sign& sign,
+                         const ground_colors& ground) {
     batch.grid = overlay_grid{hole_sign_face_width, hole_sign_face_height};
     const ui_rect panel = hole_sign_texels(frame_texels, frame_texels, hole_sign_face_width - frame_texels * 2,
                                            hole_sign_face_height - frame_texels * 2);
@@ -196,7 +249,8 @@ void draw_hole_sign_face(overlay_batch& batch,
     draw_overlay_quad(batch, paper.center, paper.half_size, course_map_paper);
     const ui_rect map = hole_sign_texels(hole_sign_map_left, hole_sign_map_top, hole_sign_map_width, hole_sign_map_height);
     const hole_sign_map_frame frame = make_hole_sign_map_frame(area, sign);
-    draw_hole_map_ground(batch, area, sign, frame, map);
+    draw_hole_map_ground(batch, area, sign, frame, map, ground);
+    draw_hole_map_trees(batch, area, frame, map);
     draw_hole_map_marks(batch, sign, frame, map);
 
     const int label_width = hole_sign_face_width - frame_texels * 2;

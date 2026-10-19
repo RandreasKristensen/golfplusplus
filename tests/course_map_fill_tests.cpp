@@ -155,8 +155,8 @@ TEST_CASE("map fill prints triangles smaller than a strip") {
 }
 
 TEST_CASE("the map prints water in its own ink, never the bunkers'") {
-    const glm::vec3 water = course_map_material_ink(terrain_material::water);
-    const glm::vec3 bunker = course_map_material_ink(terrain_material::bunker);
+    const glm::vec3 water = course_map_material_ink(test_scene_colors().ground, terrain_material::water);
+    const glm::vec3 bunker = course_map_material_ink(test_scene_colors().ground, terrain_material::bunker);
     CHECK(glm::length(water - bunker) > 0.3f);
     CHECK(water.b > water.r);
     CHECK(water.b > water.g);
@@ -188,22 +188,33 @@ TEST_CASE("the course map fits the course's holes to its paper, square on screen
     }
 }
 
-TEST_CASE("every hole gets its number on the course map, inside the paper and clear of the others") {
+TEST_CASE("every hole's number sits in the middle of its hole on the course map, inside the paper and clear of the others") {
     render_data data;
     data.course_map_low = glm::vec3(0.0f);
-    data.course_map_high = glm::vec3(600.0f, 0.0f, 600.0f);
+    data.course_map_high = glm::vec3(600.0f, 0.0f, 750.0f);
+    const auto straight = [](const glm::vec3 tee, const glm::vec3 pin) {
+        return std::vector<glm::vec3>{tee, (tee + pin) * 0.5f, pin};
+    };
     for (int i = 0; i < 18; ++i) {
-        data.map_holes.push_back(render_map_hole{std::to_string(i + 1), glm::vec3(static_cast<float>(i % 6) * 100.0f, 0.0f,
-                                                                                    static_cast<float>(i / 6) * 250.0f)});
+        const glm::vec3 tee(static_cast<float>(i % 6) * 100.0f, 0.0f, static_cast<float>(i / 6) * 250.0f);
+        data.map_holes.push_back(render_map_hole{std::to_string(i + 1), straight(tee, tee + glm::vec3(0.0f, 0.0f, 200.0f))});
     }
-    // Two tees side by side, as at a clubhouse.
-    data.map_holes.push_back(render_map_hole{"19", data.map_holes.front().tee + glm::vec3(2.0f, 0.0f, 0.0f)});
+    // Played back down the first hole, as two holes sharing a fairway.
+    data.map_holes.push_back(render_map_hole{"19", straight(glm::vec3(2.0f, 0.0f, 200.0f), glm::vec3(2.0f, 0.0f, 0.0f))});
     const text_assets& text = shipped_text_assets();
     for (const overlay_grid grid : {overlay_grid{554, 416}, overlay_grid{640, 360}, overlay_grid{733, 314}}) {
         const course_map_layout layout = make_course_map_layout(data, grid);
-        const std::vector<ui_rect> boxes = course_map_number_boxes(layout, grid, data.map_holes);
+        const std::vector<ui_rect> boxes = course_map_number_boxes(layout, grid, data);
         REQUIRE(boxes.size() == data.map_holes.size());
+        CHECK(glm::length(boxes[0].center - map_point(layout, glm::vec3(0.0f, 0.0f, 100.0f))) < 0.001f);
         for (std::size_t i = 0; i < boxes.size(); ++i) {
+            const std::vector<glm::vec3>& line = data.map_holes[i].line_of_play;
+            const glm::vec2 tee = map_point(layout, line.front());
+            const glm::vec2 pin = map_point(layout, line.back());
+            CHECK(std::abs(boxes[i].center.x - tee.x) < 0.001f);
+            const float along = (boxes[i].center.y - tee.y) / (pin.y - tee.y);
+            CHECK(along >= 0.25f);
+            CHECK(along <= 0.75f);
             CHECK(rect_left(boxes[i]) >= layout.center.x - layout.half_size.x - 0.0001f);
             CHECK(rect_right(boxes[i]) <= layout.center.x + layout.half_size.x + 0.0001f);
             CHECK(rect_bottom(boxes[i]) >= layout.center.y - layout.half_size.y - 0.0001f);

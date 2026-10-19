@@ -67,8 +67,15 @@ enum class profile_stage : std::size_t {
 inline constexpr std::size_t profile_stage_count = static_cast<std::size_t>(profile_stage::count);
 
 enum class gpu_profile_stage : std::size_t {
-    terrain = 0,
+    shadow_map = 0,
+    terrain,
+    shadows,
     trees,
+    sky,
+    bloom,
+    smear,
+    camcorder,
+    tape,
     overlay,
     crt,
     count

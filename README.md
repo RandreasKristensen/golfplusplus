@@ -2,7 +2,7 @@
 
 A lo-fi 3D golf game in C++ that looks like it was taped on a 1989 camcorder.
 Play real-world courses imported from OpenStreetMap, walk or drive between
-holes, and level up skills like golfing, fitness, drifting and smoking.
+holes, and level up skills like golfing, fitness, cart driving and smoking.
 
 Play online with up to 40 players on a course, in groups of up to 4 sharing a
 scorecard, or offline on your own. Offline never needs a server or an account,

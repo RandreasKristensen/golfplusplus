@@ -11,11 +11,9 @@
 
 namespace {
 constexpr GLuint position_location = 0;
+constexpr GLuint normal_location = 1;
 constexpr GLuint instance_offset_location = 3;
 constexpr GLuint instance_scale_location = 4;
-
-const glm::vec3 trunk_color(0.31f, 0.20f, 0.11f);
-const glm::vec3 leaf_color(0.06f, 0.24f, 0.11f);
 }
 
 // The instance buffer is uploaded as raw floats: offset.xyz then scale.xyz.
@@ -67,10 +65,12 @@ bool tree_renderer::init_part(instanced_part& part, const mesh_source mesh) {
 
     glBindVertexArray(part.vao);
 
-    // Shared unit mesh: interleaved position + normal; only the position is read.
+    // Shared unit mesh: interleaved position + normal.
     glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
     glEnableVertexAttribArray(position_location);
     glVertexAttribPointer(position_location, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(normal_location);
+    glVertexAttribPointer(normal_location, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
 
     glBindBuffer(GL_ARRAY_BUFFER, part.instance_vbo);
     glEnableVertexAttribArray(instance_offset_location);
@@ -135,17 +135,10 @@ void tree_renderer::draw_part(const instanced_part& part, frame_profile* profile
     record_draw_call(profile);
 }
 
-bool tree_renderer::draw(const std::vector<tree_body>& trees,
-                         const std::uint64_t revision,
-                         const glm::mat4& view,
-                         const glm::mat4& proj,
-                         const scene_haze& haze,
-                         const view_frustum& frustum,
-                         frame_profile* profile) {
+bool tree_renderer::prepare(const std::vector<tree_body>& trees, const std::uint64_t revision, frame_profile* profile) {
     if (shader_.id() == 0) {
         return false;
     }
-
     if (!uploaded_ || uploaded_revision_ != revision || uploaded_tree_count_ != trees.size()) {
         const render_tree_instance_batch batch = build_tree_instances(trees);
         upload_part(trunks_, batch.trunks, profile);
@@ -155,26 +148,43 @@ bool tree_renderer::draw(const std::vector<tree_body>& trees,
         uploaded_tree_count_ = trees.size();
         uploaded_ = true;
     }
+    return trunks_.instance_count != 0 || leaves_.instance_count != 0;
+}
 
-    if (trunks_.instance_count == 0 && leaves_.instance_count == 0) {
-        return false;
+void tree_renderer::draw_casters(const std::vector<tree_body>& trees, const std::uint64_t revision,
+                                 const shader_program& depth_shader, const glm::mat4& view_proj, frame_profile* profile) {
+    if (!prepare(trees, revision, profile) ||
+        (instance_bounds_.valid &&
+         !frustum_intersects_aabb(make_view_frustum(view_proj), instance_bounds_.min, instance_bounds_.max))) {
+        return;
     }
+    depth_shader.set_mat4("u_view_proj", view_proj);
+    draw_part(trunks_, profile);
+    draw_part(leaves_, profile);
+    glBindVertexArray(0);
+}
 
+bool tree_renderer::draw(const std::vector<tree_body>& trees,
+                         const std::uint64_t revision,
+                         const glm::mat4& view,
+                         const glm::mat4& proj,
+                         const view_frustum& frustum,
+                         const tree_colors& colors,
+                         frame_profile* profile) {
     // Whole-batch cull: skips both instanced draws when no tree is on screen.
-    if (instance_bounds_.valid &&
-        !frustum_intersects_aabb(frustum, instance_bounds_.min, instance_bounds_.max)) {
+    if (!prepare(trees, revision, profile) ||
+        (instance_bounds_.valid && !frustum_intersects_aabb(frustum, instance_bounds_.min, instance_bounds_.max))) {
         return false;
     }
 
     shader_.set_profile(profile);
     shader_.use();
     shader_.set_mat4("u_view_proj", proj * view);
-    set_scene_haze_uniforms(shader_, haze);
 
-    shader_.set_vec3("u_color", trunk_color);
+    shader_.set_vec3("u_color", colors.trunk);
     draw_part(trunks_, profile);
 
-    shader_.set_vec3("u_color", leaf_color);
+    shader_.set_vec3("u_color", colors.leaves);
     draw_part(leaves_, profile);
 
     glBindVertexArray(0);

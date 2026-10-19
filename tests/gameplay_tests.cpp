@@ -46,52 +46,62 @@ TEST_CASE("walking follows the terrain height") {
     CHECK(near(state.player.position.y, 3.0f));
 }
 
-TEST_CASE("holding the cart key drives the cart and releasing it parks") {
+TEST_CASE("at the wheel forward drives the cart, the player in its seat, and letting go slows it") {
     game_state state = started_hole();
-    const glm::vec3 start = state.player.position;
+    sit_in_cart(state);
+    const glm::vec3 start = state.cart.pose.position;
 
     game_input input;
-    input.cart_held = true;
+    input.forward_held = true;
     update_game(state, input, 0.05f);
     update_game(state, input, 0.05f);
 
     CHECK(state.mode == game_mode::walking);
-    CHECK(state.cart.active);
+    CHECK(driving_cart(state));
     CHECK(state.cart.velocity > 0.0f);
-    CHECK(glm::length(state.player.position - start) > 0.0f);
+    CHECK(glm::length(state.cart.pose.position - start) > 0.0f);
+    CHECK(near(horizontal(state.player.position), horizontal(seat_position(state.cart.pose, cart_seat::driver, state.tuning.cart)),
+               0.0001f));
 
-    update_game(state, game_input{}, 0.016f);
-    CHECK(!state.cart.active);
-    CHECK(state.cart.velocity == 0.0f);
+    const float moving = state.cart.velocity;
+    update_game(state, game_input{}, 0.05f);
+    CHECK(state.cart.velocity < moving);
+    CHECK(driving_cart(state));
 }
 
-TEST_CASE("action in the cart drifts instead of starting a shot") {
+TEST_CASE("interacting at the wheel steps out instead of starting a shot, the cart left where it stands") {
     game_state state = started_hole();
-    const float start_yaw = state.player.yaw;
+    sit_in_cart(state);
+    const cart_pose parked = state.cart.pose;
 
-    game_input input;
-    input.cart_held = true;
-    input.turn_left_held = true;
-    input.action = true;
-    update_game(state, input, 0.05f);
+    update_game(state, interact_input(), 0.016f);
+    CHECK(state.ride.has_value());
+    CHECK(!driving_cart(state));
+    for (int i = 0; i < 60 && state.ride; ++i) {
+        update_game(state, game_input{}, 0.05f);
+    }
 
-    CHECK(state.cart.active);
-    CHECK(state.cart.drift_timer > 0.0f);
-    CHECK(state.player.yaw > start_yaw);
+    CHECK(on_foot(state));
     CHECK(state.mode == game_mode::walking);
     CHECK(state.stroke_count == 0);
+    CHECK(near(state.cart.pose.position, parked.position));
+    CHECK(near(horizontal(state.player.position),
+               horizontal(step_out_position(parked, cart_seat::driver, state.tuning.cart)), 0.0001f));
 }
 
-TEST_CASE("leaving walking mode parks the cart") {
+TEST_CASE("leaving walking mode stands the player up, the cart left where it is") {
     game_state state = started_hole();
+    sit_in_cart(state);
+    state.cart.velocity = 9.0f;
+    const glm::vec3 parked = state.cart.pose.position;
     state.mode = game_mode::aiming;
-    state.cart = cart_state{true, 9.0f, 0.0f, 0.2f};
 
     update_game(state, game_input{}, 0.016f);
 
     CHECK(state.mode == game_mode::aiming);
-    CHECK(!state.cart.active);
+    CHECK(on_foot(state));
     CHECK(state.cart.velocity == 0.0f);
+    CHECK(near(state.cart.pose.position, parked));
 }
 
 TEST_CASE("walking earns fitness xp but driving the cart does not") {
@@ -104,12 +114,13 @@ TEST_CASE("walking earns fitness xp but driving the cart does not") {
     CHECK(xp_of(walker, walker.rewards.walking.skill_id) > 0);
 
     game_state driver = started_hole();
+    sit_in_cart(driver);
     game_input drive;
-    drive.cart_held = true;
+    drive.forward_held = true;
     for (int i = 0; i < 40; ++i) {
         update_game(driver, drive, 0.05f);
     }
-    CHECK(driver.cart.active);
+    CHECK(driving_cart(driver));
     CHECK(xp_of(driver, driver.rewards.walking.skill_id) == 0);
 }
 
@@ -157,7 +168,7 @@ TEST_CASE("a cigarette slows the swing meter for a while") {
 
     for (game_state* state : {&normal, &smoking}) {
         enter_addressing(*state);
-        update_game(*state, action_input(), 0.016f);
+        update_game(*state, backswing_input(), 0.016f);
         update_game(*state, game_input{}, 0.05f);
     }
 
@@ -165,27 +176,27 @@ TEST_CASE("a cigarette slows the swing meter for a while") {
     CHECK(smoking.swing.power < normal.swing.power);
 }
 
-TEST_CASE("action far from the ball does nothing") {
+TEST_CASE("interacting far from the ball does nothing") {
     game_state state = started_hole();
     state.player.position += glm::vec3(20.0f, 0.0f, 0.0f);
 
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
 
     CHECK(state.mode == game_mode::walking);
 }
 
-TEST_CASE("action near the ball aims, then addresses, then starts the meter") {
+TEST_CASE("interacting near the ball aims, again steps up to it, and the backswing starts the meter") {
     game_state state = started_hole();
 
     enter_aiming(state);
     CHECK(state.mode == game_mode::aiming);
     CHECK(state.swing.phase == swing_phase::idle);
 
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
     CHECK(state.mode == game_mode::addressing);
     CHECK(state.swing.phase == swing_phase::idle);
 
-    update_game(state, action_input(), 0.016f);
+    update_game(state, backswing_input(), 0.016f);
     CHECK(state.swing.phase == swing_phase::timing);
     CHECK(state.stroke_count == 0);
     CHECK(!state.shot.has_value());
@@ -217,21 +228,31 @@ TEST_CASE("aiming turns slower than walking") {
     CHECK(std::abs(aiming.aim_angle - aiming_before) < std::abs(walking.player.yaw - walking_before));
 }
 
-TEST_CASE("club selection wraps in both directions") {
+TEST_CASE("club selection wraps in both directions, a club a step") {
     game_state state = started_hole();
     enter_aiming(state);
 
     game_input shorter;
-    shorter.shorter_club = true;
+    shorter.club_steps = -1;
     update_game(state, shorter, 0.016f);
     CHECK(state.selected_club == state.clubs.size() - 1);
 
     game_input longer;
-    longer.longer_club = true;
+    longer.club_steps = 1;
     update_game(state, longer, 0.016f);
     CHECK(state.selected_club == 0);
     update_game(state, longer, 0.016f);
     CHECK(state.selected_club == 1);
+
+    // A fast flick of the wheel steps as many clubs, round the bag.
+    const int count = static_cast<int>(state.clubs.size());
+    game_input flick;
+    flick.club_steps = -(count + 2);
+    update_game(state, flick, 0.016f);
+    CHECK(state.selected_club == static_cast<std::size_t>(count - 1));
+    flick.club_steps = 3;
+    update_game(state, flick, 0.016f);
+    CHECK(state.selected_club == 2 % state.clubs.size());
 }
 
 TEST_CASE("cancel returns shot setup to walking") {
@@ -268,7 +289,7 @@ TEST_CASE("the putter meter runs at its own timing speed") {
     wedge.selected_club = 1;
     for (game_state* state : {&putter, &wedge}) {
         enter_addressing(*state);
-        update_game(*state, action_input(), 0.016f);
+        update_game(*state, backswing_input(), 0.016f);
         update_game(*state, game_input{}, 0.05f);
     }
 
@@ -333,7 +354,7 @@ TEST_CASE("overlays show only while held, and the rangefinder only on foot") {
     CHECK(!state.scorecard_active);
     CHECK(!state.skills_panel_active);
 
-    input.cart_held = true;
+    sit_in_cart(state);
     update_game(state, input, 0.016f);
     CHECK(!state.rangefinder_active);
 

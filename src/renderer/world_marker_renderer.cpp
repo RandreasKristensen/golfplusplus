@@ -10,16 +10,18 @@
 namespace {
 constexpr GLuint position_location = 0;
 constexpr GLuint color_location = 1;
+constexpr GLuint glow_location = 2;
 
 // Covers an 18-hole course's tee boxes (~280 vertices each), its cups and
-// flagsticks, aim dots and club without growing on early frames, plus the
-// 1956-vertex golf cart on top.
+// flagsticks, aim dots and club without growing on early frames; a room's
+// carts and players grow it.
 constexpr std::size_t initial_vertex_capacity = 12288;
 }
 
-// The vertex buffer is uploaded as raw floats: position.xyz then color.rgba.
+// The vertex buffer is uploaded as raw floats: position.xyz, color.rgb, glow.
 static_assert(sizeof(world_marker_vertex) == 7 * sizeof(float), "world_marker_vertex must be seven packed floats");
 static_assert(offsetof(world_marker_vertex, color) == 3 * sizeof(float), "world_marker_vertex::color must follow position");
+static_assert(offsetof(world_marker_vertex, glow) == 6 * sizeof(float), "world_marker_vertex::glow must follow color");
 static_assert(std::is_standard_layout<world_marker_vertex>::value, "world_marker_vertex must be standard layout");
 
 bool world_marker_renderer::init(const std::string& vertex_path, const std::string& fragment_path) {
@@ -54,11 +56,18 @@ bool world_marker_renderer::init(const std::string& vertex_path, const std::stri
                           reinterpret_cast<void*>(offsetof(world_marker_vertex, position)));
     glEnableVertexAttribArray(color_location);
     glVertexAttribPointer(color_location,
-                          4,
+                          3,
                           GL_FLOAT,
                           GL_FALSE,
                           sizeof(world_marker_vertex),
                           reinterpret_cast<void*>(offsetof(world_marker_vertex, color)));
+    glEnableVertexAttribArray(glow_location);
+    glVertexAttribPointer(glow_location,
+                          1,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(world_marker_vertex),
+                          reinterpret_cast<void*>(offsetof(world_marker_vertex, glow)));
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     return true;

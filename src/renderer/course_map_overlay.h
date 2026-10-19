@@ -3,7 +3,7 @@
 // The paper course map held up while walking (render_data::show_course_map):
 // the layout that fits the course's holes onto the paper, the paper itself,
 // and what is marked over the ground (trees, tee, ball, player, pin, and
-// every hole's number by its tee). The ground under the marks is
+// every hole's number in the middle of the hole). The ground under the marks is
 // course_map_fill.h, kept in its own retained buffer by the renderer, which
 // draws it between the paper and the marks. GL-free.
 
@@ -22,13 +22,13 @@ course_map_layout make_course_map_layout(const render_data& data, overlay_grid g
 
 void draw_course_map_paper(overlay_batch& batch, const course_map_layout& layout);
 
-// The boxes the holes' numbers are drawn in, one per hole in order: each
-// beside its tee (above it, else below, right or left, then the same a box
-// further out: whichever first clears the numbers before it), inside the
-// paper.
+// The boxes data.map_holes' numbers are drawn in, one per hole in order:
+// each centred on its hole's line of play, halfway along it, or further
+// towards either end while that place is taken by the numbers before it or
+// the marks, inside the paper; all as large as lets no two overlap.
 std::vector<ui_rect> course_map_number_boxes(const course_map_layout& layout,
                                              overlay_grid grid,
-                                             const std::vector<render_map_hole>& holes);
+                                             const render_data& data);
 
 // The marks over the ground, every hole's number last so none is covered.
 void draw_course_map_marks(overlay_batch& batch,

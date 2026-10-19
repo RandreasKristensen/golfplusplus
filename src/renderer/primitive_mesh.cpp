@@ -95,7 +95,7 @@ std::vector<float> make_cone_vertices(const int segments) {
         const float a1 = 2.0f * glm::pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
         const glm::vec3 p0(std::cos(a0), 0.0f, std::sin(a0));
         const glm::vec3 p1(std::cos(a1), 0.0f, std::sin(a1));
-        const glm::vec3 face_normal = glm::normalize(glm::cross(p1 - p0, tip - p0));
+        const glm::vec3 face_normal = glm::normalize(glm::cross(tip - p0, p1 - p0));
 
         append_mesh_vertex(vertices, p0, face_normal);
         append_mesh_vertex(vertices, p1, face_normal);

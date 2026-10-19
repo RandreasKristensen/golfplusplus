@@ -73,8 +73,7 @@ void fence_renderer::shutdown() {
     uploaded_ = false;
 }
 
-bool fence_renderer::begin(const render_fences* fences, const glm::mat4& view_proj, const glm::vec3& light_direction,
-                           const scene_haze& haze, frame_profile* profile) {
+bool fence_renderer::begin(const render_fences* fences, const glm::mat4& view_proj, frame_profile* profile) {
     if (fences == nullptr || (fences->posts.empty() && fences->nets.empty()) || shader_.id() == 0 || vao_ == 0) {
         return false;
     }
@@ -92,16 +91,13 @@ bool fence_renderer::begin(const render_fences* fences, const glm::mat4& view_pr
     shader_.set_profile(profile);
     shader_.use();
     shader_.set_mat4("u_view_proj", view_proj);
-    shader_.set_vec3("u_light_dir", light_direction);
-    set_scene_haze_uniforms(shader_, haze);
     net_.bind(net_texture_unit);
     glBindVertexArray(vao_);
     return true;
 }
 
-void fence_renderer::draw_posts(const render_fences* fences, const glm::mat4& view_proj, const glm::vec3& light_direction,
-                                const scene_haze& haze, frame_profile* profile) {
-    if (!begin(fences, view_proj, light_direction, haze, profile) || post_vertex_count_ == 0) {
+void fence_renderer::draw_posts(const render_fences* fences, const glm::mat4& view_proj, frame_profile* profile) {
+    if (!begin(fences, view_proj, profile) || post_vertex_count_ == 0) {
         glBindVertexArray(0);
         return;
     }
@@ -111,9 +107,8 @@ void fence_renderer::draw_posts(const render_fences* fences, const glm::mat4& vi
     glBindVertexArray(0);
 }
 
-void fence_renderer::draw_nets(const render_fences* fences, const glm::mat4& view_proj, const glm::vec3& light_direction,
-                               const scene_haze& haze, frame_profile* profile) {
-    if (!begin(fences, view_proj, light_direction, haze, profile) || net_vertex_count_ == 0) {
+void fence_renderer::draw_nets(const render_fences* fences, const glm::mat4& view_proj, frame_profile* profile) {
+    if (!begin(fences, view_proj, profile) || net_vertex_count_ == 0) {
         glBindVertexArray(0);
         return;
     }

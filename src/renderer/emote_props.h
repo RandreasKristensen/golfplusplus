@@ -6,6 +6,8 @@
 // so they read from afar. The renderer draws the opaque pieces, then the
 // smoke blended. GL-free.
 
+#include "game/lighting_loader.h"
+
 #include <optional>
 #include <vector>
 
@@ -23,6 +25,7 @@ struct emote_prop {
     glm::mat4 model{1.0f};
     glm::vec3 color{1.0f};
     float alpha = 1.0f;  // below 1: blended
+    float glow = 0.0f;   // the least light it shows (lighting.glsl's flat_light)
 };
 
 // Where the props are held in the holder's frame (x right, y up, z
@@ -39,16 +42,23 @@ struct emote_grip {
 // Held in front of my camera, at the bottom of the view.
 emote_grip camera_emote_grip();
 
-// Who holds the props: the origin of their frame and a point it faces (only
-// its yaw counts), how they hold them, how large the props are, and how far
-// into each emote they are (none: not playing).
+// Who holds the props: their frame in the world (x right, y up, z forward
+// from their eye: my camera's whole frame, so the props turn and tilt with
+// my view; another's yaw-only), how they hold them, how large the props are,
+// and how far into each emote they are (none: not playing). The smoke rises
+// up the world from the tip, whichever way the frame tilts.
 struct emote_holder {
-    glm::vec3 eye{0.0f};
-    glm::vec3 target{0.0f, 0.0f, 1.0f};
+    glm::mat4 frame{1.0f};
     emote_grip grip = camera_emote_grip();
     float scale = 1.0f;
     std::optional<float> smoke_elapsed;
     std::optional<float> drink_elapsed;
 };
 
-void append_emote_props(std::vector<emote_prop>& props, const emote_holder& holder);
+// Mine, held in my camera's whole frame: the same on screen wherever I look.
+emote_holder camera_emote_holder(const glm::vec3& camera_position,
+                                 const glm::vec3& camera_target,
+                                 std::optional<float> smoke_elapsed,
+                                 std::optional<float> drink_elapsed);
+
+void append_emote_props(std::vector<emote_prop>& props, const emote_holder& holder, const scene_colors& colors);

@@ -1,6 +1,6 @@
 #version 330 core
 
-// Flat, unlit colour: world markers and trees.
+// A flat colour, its light already worked out per vertex: world markers and trees.
 
 flat in vec4 v_color;
 

@@ -17,7 +17,6 @@ inline constexpr const char* sound_ball_cup = "ball_cup";
 inline constexpr const char* sound_club_change = "club_change";
 inline constexpr const char* sound_cart_start = "cart_start";
 inline constexpr const char* sound_cart_drive_loop = "cart_drive_loop";
-inline constexpr const char* sound_cart_drift = "cart_drift";
 inline constexpr const char* sound_emote_smoke = "emote_smoke";
 inline constexpr const char* sound_emote_beer = "emote_beer";
 inline constexpr const char* sound_ambience_course_day = "ambience_course_day";

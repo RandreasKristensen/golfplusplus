@@ -1,7 +1,7 @@
 {
   "id": "driver",
   "name": "Driver",
-  "label": "DRVR",
+  "label": "DR",
   "hit_sound": "club_hit_driver",
   "bag_order": 8,
   "stats": {

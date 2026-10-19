@@ -1,8 +1,9 @@
 #pragma once
 
 // Reads the uncompressed 24- and 32-bit BMP files in assets/ (course
-// backdrops, ground textures) into RGBA pixels. GL-free, so tests check every
-// shipped image decodes; the renderer uploads the result as a texture.
+// backdrops, ground textures) into RGBA pixels, and writes 24-bit BMPs
+// (GOLFPP_SCREENSHOT). GL-free, so tests check every shipped image decodes;
+// the renderer uploads the result as a texture.
 
 #include <cstdint>
 #include <filesystem>
@@ -25,3 +26,6 @@ struct rgba_image {
 // pixel is opaque.
 std::optional<rgba_image> parse_bmp(const std::string& bytes);
 std::optional<rgba_image> load_bmp_file(const std::filesystem::path& path);
+
+// A 24-bit uncompressed BMP of `image` (alpha dropped); parse_bmp reads it back.
+std::string encode_bmp(const rgba_image& image);

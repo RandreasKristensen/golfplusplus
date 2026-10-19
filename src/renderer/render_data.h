@@ -4,11 +4,13 @@
 // game state. Plain data; the renderer never reads game state itself.
 
 #include "game/course_definition.h"
+#include "game/lighting_loader.h"
 #include "game/remote_players.h"
 #include "game/scorecard.h"
 #include "game/tee_box.h"
 #include "physics/tree_collision.h"
 #include "profiling/profiling.h"
+#include "renderer/cart_batch.h"
 #include "renderer/menu_overlay.h"
 #include "renderer/remote_avatar_batch.h"
 #include "renderer/render_mesh.h"
@@ -20,25 +22,9 @@
 #include <glm/vec3.hpp>
 
 struct render_fences;  // renderer/fence_batch.h
+struct render_floodlights;  // renderer/floodlight_batch.h
 struct render_water;   // renderer/water_batch.h
 struct render_hole_signs;  // renderer/hole_sign_batch.h
-
-// Which keys are held, for the on-screen key icons.
-struct controls_overlay_state {
-    bool key_1_down = false;
-    bool key_2_down = false;
-    bool left_down = false;
-    bool right_down = false;
-    bool up_down = false;
-    bool down_down = false;
-    bool space_down = false;
-    bool shift_down = false;
-    bool enter_down = false;
-    bool backspace_down = false;
-    bool retee_down = false;
-    bool show_group_key = false;  // online only
-    bool group_down = false;
-};
 
 struct render_skill_progress {
     std::string label;
@@ -77,20 +63,113 @@ struct render_trail {
     float alpha = 0.0f;
 };
 
-// A hole's number on the course map, by its tee.
+// A hole's number on the course map, along its line of play (tee, the
+// hole's interior control points, pin).
 struct render_map_hole {
     std::string number;
-    glm::vec3 tee{0.0f};
+    std::vector<glm::vec3> line_of_play;
+};
+
+// How the frame's shadows fall (lighting.glsl's `shadow`): blob shadows
+// (blob_shadow.vert) and the land's shadow at low sun (sun_shadow).
+struct render_shadows {
+    float sun_share = 0.0f;    // how much of their shadow the sun casts, 0..1 (sun_shadow_share)
+    float night_share = 0.0f;  // a blob's strength with no sun
+    float max_stretch = 1.0f;  // the longest a blob is cast, in its widths
+    float horizon_softness = 0.0f;  // the land's shadow edge, as a sine of the sun's elevation
+};
+
+// A light after dark (lighting.glsl's local_light): its light at `position`,
+// falling off to nothing at `radius` metres, in a cone along `direction`
+// whose edge is at cos `cone_edge_cos` and that is full inside cos
+// `cone_full_cos`. A point light has no direction and cosines -2 and -1.
+struct render_light {
+    glm::vec3 position{0.0f};
+    glm::vec3 color{0.0f};  // times its intensity: past 1 it blooms
+    float radius = 0.0f;
+    glm::vec3 direction{0.0f};
+    float cone_edge_cos = -2.0f;
+    float cone_full_cos = -1.0f;
+};
+
+// A soft dark ellipse on the ground under something (blob_shadow.vert):
+// cast along the sun onto the ground at `base`, which faces `normal`, from
+// `lift` metres over it, `radius` wide and `strength` dark at its middle.
+// Uploaded as nine packed floats.
+struct render_blob_shadow {
+    glm::vec3 base{0.0f};
+    glm::vec3 normal{0.0f, 1.0f, 0.0f};
+    float lift = 0.0f;
+    float radius = 0.0f;
+    float strength = 0.0f;
+};
+
+// The scene's light this frame, from the sky clock and the lighting palette
+// (core/sky_frame.h). The renderer never sees the clock.
+// The colours are the palette's (game/lighting_loader.h, lighting_key).
+struct render_lighting {
+    glm::vec3 sun_direction{0.0f, 1.0f, 0.0f};  // world space, towards the sun
+    glm::vec3 sun_color{0.0f};
+    glm::vec3 ambient_sky{0.0f};
+    glm::vec3 ambient_ground{0.0f};
+    glm::vec3 sky_zenith{0.0f};
+    float sky_blend = 0.0f;
+    glm::vec3 haze_tint{0.0f};
+    glm::vec3 horizon_glow{0.0f};
+    float horizon_glow_strength = 0.0f;
+    glm::vec3 moon_direction{0.0f, -1.0f, 0.0f};  // world space, towards the moon
+    float moon_phase = 0.0f;                      // how much of it is lit: 0 new .. 1 full
+    float star_visibility = 0.0f;                 // 0..1 (star_visibility in game/lighting_loader.h)
+    render_shadows shadows;
+    float night_lights = 0.0f;  // how far the night lights are on, 0..1 (night_light_share)
+    glm::vec3 lamp_glow{0.0f};  // a floodlight lamp's face: past 1 when on, none by day
+    // The camcorder's (renderer/camcorder_pass.h).
+    float exposure = 0.0f;
+    glm::vec3 white_balance{0.0f};
+    float gain_noise = 0.0f;
+    float saturation = 0.0f;
+};
+
+// The camcorder's burn-in, two lines in the corner (core/vcr_frame.h).
+struct render_datestamp {
+    std::string time;
+    std::string date;
+};
+
+// What the VCR's on-screen display says in its corner.
+enum class vcr_tag { none, play, pause };
+
+// The camera and the VCR this frame (core/vcr_frame.h).
+struct render_vcr {
+    vcr_tag tag = vcr_tag::none;
+    // Paused: the scene stays the last frame recorded; the tape keeps playing over it.
+    bool still_frame = false;
+    bool show_datestamp = false;
+    render_datestamp datestamp;
+    // Offline play, whatever the datestamp setting: which progress the round is for.
+    bool show_offline = false;
 };
 
 struct render_data {
     glm::vec3 camera_position{0.0f};
     glm::vec3 camera_target{0.0f, 0.0f, 1.0f};
     float camera_fov_degrees = 0.0f;
-    // My cart and emote props, pinned to the camera, are drawn at this field
-    // of view in a pass of their own, so the player's setting never changes
-    // how they sit in the frame.
+    // My emote props, pinned to the camera, are drawn at this field of view
+    // in a pass of their own, so the player's setting never changes how they
+    // sit in the frame.
     float viewmodel_fov_degrees = 0.0f;
+
+    render_lighting lighting;
+    // This frame's glow floors: the palette's, the ball's and ember's risen at night.
+    glow_floors glow;
+    // Every light this frame (core/light_frame.h); the renderer keeps the
+    // nearest few (renderer/scene_lights.h).
+    std::vector<render_light> lights;
+    // Blobs under the ball, players and carts, cast on the ground this frame.
+    std::vector<render_blob_shadow> blob_shadows;
+    // The trees' blobs, re-uploaded only when the revision changes.
+    const std::vector<render_blob_shadow>* tree_shadows = nullptr;
+    std::uint64_t tree_shadows_revision = 0;
 
     // Scene. Pointers borrow caches owned by app or game_state that outlive
     // the render call; null means "none this frame".
@@ -103,6 +182,7 @@ struct render_data {
     std::uint64_t trees_revision = 0;
     const render_hole_signs* hole_signs = nullptr;  // one at every tee of the area
     const render_fences* fences = nullptr;          // the course world's fences
+    const render_floodlights* floodlights = nullptr;  // along every hole of the area
     const render_water* water = nullptr;            // the ponds' surfaces
     bool camera_underwater = false;                 // the scene is seen from under a pond's surface
     glm::vec3 area_center{0.0f};
@@ -139,9 +219,13 @@ struct render_data {
     float flight_path_alpha = 0.0f;
     float flight_path_width = 0.0f;
 
-    bool cart_active = false;
-    bool cart_drifting = false;
+    // Sat at my cart's wheel: the cart HUD shows.
+    bool driving_cart = false;
     float cart_speed_fraction = 0.0f;  // of the cart's top speed
+    // Every cart drawn whole in the world, mine too while I sit in it; the
+    // driver's seat is cart_seat_offset to a cart's left.
+    std::vector<render_cart> carts;
+    float cart_seat_offset = 0.0f;
     bool smoke_emote_active = false;
     float smoke_emote_elapsed = 0.0f;
     bool beer_emote_active = false;
@@ -157,10 +241,13 @@ struct render_data {
     // HUD.
     // Which progress this round plays for: offline, or the online room.
     std::string mode_label;
-    bool show_interact_prompt = false;
-    bool show_power_meter = false;
+    // Over the ball: the swing clock shows, its hand at swing_power; D
+    // starts the backswing, then A hits.
+    bool show_swing_clock = false;
+    bool swing_running = false;
     int stroke_count = 0;
-    std::string selected_club_label;
+    std::string selected_club_label;  // short, e.g. "7I"
+    std::string selected_club_name;
     bool show_rangefinder = false;
     glm::vec3 rangefinder_target{0.0f};
     std::string rangefinder_label;
@@ -173,13 +260,16 @@ struct render_data {
     bool show_scorecard = false;
     bool show_course_results = false;
     scorecard_data scorecard;
-    std::vector<group_scorecard_row> group_scorecard;  // beside the scorecard, when grouped online
     std::string notice_label;  // a refusal from the server, for a moment
     bool show_skills_panel = false;
     std::vector<render_skill_progress> skills;
     std::vector<render_xp_drop> xp_drops;
-    controls_overlay_state controls;
     render_startup_menu startup_menu;
+
+    // The tape (renderer/tape_pass.h); looks only, never read by gameplay.
+    float clock_seconds = 0.0f;  // since start, wrapped so it keeps its precision
+    float tape_tracking = 0.0f;  // 0..1 tracking noise (core/tape_tracking.h)
+    render_vcr vcr;
 
     // Developer overlay (Ctrl).
     bool show_fps = false;

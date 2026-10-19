@@ -67,6 +67,17 @@ TEST_CASE("a turned ellipse zone lies along its turned axis") {
     CHECK(near(diagonal.y, std::sqrt(20.0f), 0.0001f));
 }
 
+TEST_CASE("a point's distance past a zone's edge is along the line from its centre") {
+    const material_zone zone = long_green(glm::vec3(0.0f), 90.0f);
+    const glm::vec3 own_x = rotate_about_y(glm::vec3(1.0f, 0.0f, 0.0f), zone.rotation);
+    const glm::vec3 own_z = rotate_about_y(glm::vec3(0.0f, 0.0f, 1.0f), zone.rotation);
+    CHECK(zone_distance_outside(zone, own_x * 5.0f) == 0.0f);
+    CHECK(near(zone_distance_outside(zone, own_x * 9.0f + glm::vec3(0.0f, 20.0f, 0.0f)), 3.0f, 0.0001f));
+    CHECK(near(zone_distance_outside(zone, own_z * 3.5f), 1.5f, 0.0001f));
+    CHECK(near(zone_distance_outside(circle_zone(material_zone_type::green, glm::vec3(1.0f, 0.0f, 1.0f), 2.0f),
+                                     glm::vec3(4.0f, 0.0f, 5.0f)), 3.0f, 0.0001f));
+}
+
 TEST_CASE("a placed hole turns its zones with it") {
     hole_data hole = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 40.0f), 12.0f);
     hole.material_zones = {long_green(glm::vec3(0.0f, 0.0f, 20.0f), 30.0f)};

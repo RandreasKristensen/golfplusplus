@@ -175,6 +175,8 @@ shot_step step_shot(const ball_state& ball,
         : resolve_tree_collisions(step.ball, course.trees, rules.tree_restitution, rules.tree_friction);
     step.ball = resolve_tree_collisions(step.ball, course.area.sign_posts, rules.tree_restitution, rules.tree_friction);
     step.ball = resolve_tree_collisions(step.ball, course.area.fence_poles, rules.tree_restitution, rules.tree_friction);
+    step.ball = resolve_tree_collisions(step.ball, course.area.floodlight_poles, course.area.floodlight_grid,
+                                        rules.tree_restitution, rules.tree_friction);
     step.hit_tree = glm::length(step.ball.velocity - before_trees.velocity) > 0.01f ||
         glm::length(step.ball.position - before_trees.position) > 0.001f;
     // Swept from where the step began, so a fast ball cannot pass through.

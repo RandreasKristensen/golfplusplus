@@ -1,6 +1,10 @@
 #include "doctest.h"
 
 #include "core/startup_options.h"
+#include "game/sky_clock.h"
+
+#include <cstdint>
+#include <optional>
 
 // `parse_startup_options` is the whole startup-option surface: main() only
 // feeds it the two environment strings. These cases pin the shipping default
@@ -98,4 +102,51 @@ TEST_CASE("online options come from the environment, and the command line wins")
 
     // A flag missing its value is ignored.
     CHECK(with_online_options(startup_options{}, "http://env", nullptr, {"--server"}).online_server == "http://env");
+}
+
+TEST_CASE("GOLFPP_GAME_TIME pins the time of day to an hour from 0 to 24") {
+    CHECK(!with_game_time(startup_options{}, nullptr).game_hour.has_value());
+    CHECK(!with_game_time(startup_options{}, "  ").game_hour.has_value());
+    REQUIRE(with_game_time(startup_options{}, " 19.5 ").game_hour.has_value());
+    CHECK(*with_game_time(startup_options{}, " 19.5 ").game_hour == 19.5f);
+    CHECK(*with_game_time(startup_options{}, "0").game_hour == 0.0f);
+    CHECK(*with_game_time(startup_options{}, "24").game_hour == 24.0f);
+    for (const char* bad : {"25", "-1", "noon", "12h", "1 2"}) {
+        CHECK(!with_game_time(startup_options{}, bad).game_hour.has_value());
+    }
+    CHECK(!with_game_time(startup_options{}, "19.5").game_date.has_value());
+}
+
+TEST_CASE("GOLFPP_GAME_TIME can pin the hour on a game date of its own") {
+    const startup_options winter = with_game_time(startup_options{}, " 1989-12-21T23.5 ");
+    REQUIRE(winter.game_hour.has_value());
+    CHECK(*winter.game_hour == 23.5f);
+    CHECK(winter.game_date == std::optional<std::int64_t>(days_from_civil(1989, 12, 21)));
+    for (const char* bad : {"1989-12-21T", "1989-12-21T25", "1989-13-21T12", "1989-12-21 12", "1989-12-21T 12", "89-12-21T12",
+                            "1989-12-21Tnoon"}) {
+        const startup_options options = with_game_time(startup_options{}, bad);
+        CHECK(!options.game_hour.has_value());
+        CHECK(!options.game_date.has_value());
+    }
+}
+
+TEST_CASE("GOLFPP_WINDOW sets the window size and GOLFPP_SCREENSHOT the picture's path") {
+    const startup_options none = with_review_options(startup_options{}, nullptr, nullptr);
+    CHECK(none.window_width == 0);
+    CHECK(none.window_height == 0);
+    CHECK(none.screenshot_path.empty());
+
+    const startup_options sized = with_review_options(startup_options{}, " 3440x1440 ", " shots/wide.bmp\n");
+    CHECK(sized.window_width == 3440);
+    CHECK(sized.window_height == 1440);
+    CHECK(sized.screenshot_path == "shots/wide.bmp");
+    CHECK(with_review_options(startup_options{}, "1024X768", nullptr).window_width == 1024);
+
+    // Anything but two positive whole numbers keeps the default size.
+    for (const char* bad : {"", "1920", "1920x", "x1080", "0x1080", "1920x0", "-5x10", "19.5x10", "1920 x 1080", "axb",
+                            "999999x10"}) {
+        const startup_options options = with_review_options(startup_options{}, bad, nullptr);
+        CHECK(options.window_width == 0);
+        CHECK(options.window_height == 0);
+    }
 }

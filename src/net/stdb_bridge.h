@@ -71,7 +71,8 @@ typedef enum stdb_table {
     STDB_TABLE_MY_ACCOUNT = 13,
     STDB_TABLE_MY_LINK_CODE = 14,
     STDB_TABLE_MY_LINK_STATUS = 15,
-    STDB_TABLE_SERVER_PROTOCOL = 16
+    STDB_TABLE_SERVER_PROTOCOL = 16,
+    STDB_TABLE_GOLF_CART = 17
 } stdb_table;
 
 typedef enum stdb_row_change {
@@ -177,6 +178,16 @@ typedef struct stdb_ball {
     float last_wind_time;
 } stdb_ball;
 
+typedef struct stdb_golf_cart {
+    uint64_t owner;
+    uint64_t room_id;
+    float x;
+    float y;
+    float z;
+    float yaw;
+    uint64_t passenger;  // 0: nobody
+} stdb_golf_cart;
+
 typedef struct stdb_shot {
     int32_t stroke;
     float aim_angle;
@@ -237,6 +248,7 @@ typedef union stdb_row {
     stdb_link_code link_code;
     stdb_link_status link_status;
     stdb_server_protocol server_protocol;
+    stdb_golf_cart golf_cart;
 } stdb_row;
 
 // One thing that happened. Only the fields named for its kind are set.
@@ -303,6 +315,8 @@ void stdb_enter_hole(stdb_client* client, int32_t hole_index);
 void stdb_return_to_hub(stdb_client* client);
 void stdb_retee(stdb_client* client);
 void stdb_pick_up_ball(stdb_client* client);
+void stdb_board_cart(stdb_client* client, uint64_t owner);
+void stdb_leave_cart(stdb_client* client);
 void stdb_take_shot(stdb_client* client, const stdb_shot* shot);
 void stdb_emote(stdb_client* client, const char* emote_id, size_t len);
 void stdb_claim_collectible(stdb_client* client, const char* collectible_id, size_t len);

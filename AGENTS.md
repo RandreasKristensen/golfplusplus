@@ -25,7 +25,8 @@ RuneScape-style skills. A course is one continuous area on its real land
 a separate scene, so other groups stay visible and a stray shot lands on the
 next hole or the ground between. There is exactly one surface
 (`build_ground` in `src/physics/ground_mesh.h`): the land decides the height
-everywhere, holes included, and a hole only lifts it by its own heights (0 for
+everywhere (its relief scaled, greens kept flatter, by
+`src/physics/land_relief.h`), holes included, and a hole only lifts it by its own heights (0 for
 an imported hole, so hole-editor touch-ups are lifts), finer on fairways and
 greens so the land's detail is where the ball rolls; every height and normal
 comes from that one grid, except on a tee box
@@ -56,21 +57,30 @@ Everything is unlocked today: no money, shop, quests or unlock gating.
 | An online round: the server's answers to my shots and actions | `src/game/online_play.h` |
 | Other players and their shots, as shown | `src/game/remote_players.h`; drawn by `src/renderer/remote_avatar_batch.h`, `src/renderer/online_overlay.h`, `src/core/render_online.h` |
 | Starting courses and holes, the hub | `src/game/course_session.h`, `src/game/play_area.h` |
+| The golf cart (parked beside hole 1, stepped into and out of, driven; online, anyone can ride in another's passenger seat) | `src/game/golf_cart.h`, its seats and parking spots `src/game/cart_seats.h` (shared with the server); the server's `golf_cart` table and `board_cart` / `leave_cart` in `server/golfpp_module/src/lib.cpp`; drawn by `src/renderer/cart_batch.h` |
 | The sign at every tee (placed at runtime, posts stop shots) | `src/game/hole_sign.h`; its face `src/renderer/hole_sign_face.h`, drawn by `src/renderer/hole_sign_renderer.h` |
-| The course map held up with Enter (fitted to the holes, numbered) | `src/renderer/course_map_overlay.h`; its ground `src/renderer/course_map_fill.h` (the one home of map inks) |
+| The course map held up with M (fitted to the holes, numbered) | `src/renderer/course_map_overlay.h`; its ground `src/renderer/course_map_fill.h` (the one home of map inks) |
 | The tee box at every tee (flat, placed at runtime, the surface on it) | `src/game/tee_box.h`; drawn by `src/renderer/world_marker_batch.h` |
 | Fences in course worlds (shots stop at their nets) | `src/physics/fence_collision.h`; drawn by `src/renderer/fence_renderer.h` |
-| Player settings (volumes, field of view): the screen, the file next to the save | `src/core/settings_menu.h`, `src/game/settings.h`; entries in `assets/ui/settings.json` |
+| The floodlight poles along every hole (placed at runtime, alternating down the fairway, at each tee and green; poles stop shots like trunks) | `src/game/floodlights.h`; their light after dark in `src/core/light_frame.h`; drawn (and into the shadow map) by `src/renderer/floodlight_renderer.h` from `src/renderer/floodlight_batch.h` and `assets/shaders/floodlight.vert` |
+| Player settings (volumes, field of view, fullscreen): the screen, the file next to the save | `src/core/settings_menu.h`, `src/game/settings.h`; entries in `assets/ui/settings.json` |
 | XP, collectibles, completion rules | `src/game/progress_rules.h` (pure functions over `save_data`) |
 | Feel numbers | `assets/tuning/game_tuning.json` (struct: `src/game/game_tuning.h`) |
 | Rewards and skills | `assets/progression/*.json` (`src/game/reward_rules.h`) |
 | Ball flight, contact, terrain | `src/physics/` |
 | HUD | `src/renderer/hud_overlay.cpp` (scorecards in `scorecard_overlay.cpp`); the GL side is `src/renderer/renderer.cpp` |
+| The picture's look: line count, camcorder, tape and TV | `assets/visuals/picture.json` (`src/game/picture_loader.h`), sized by `src/renderer/picture_size.h`; the camcorder is `src/renderer/camcorder_pass.h` and `assets/shaders/camcorder*.frag` (exposure, white, gain and saturation by time of day are keys of `assets/visuals/lighting.json`); the tape is `src/renderer/tape_pass.h` and `assets/shaders/tape.frag` (tracking noise from `src/core/tape_tracking.h`), the TV `src/renderer/tv_pass.h` and `assets/shaders/crt.frag` |
+| The camcorder's datestamp and the VCR's PLAY / PAUSE tag and still frame | `src/core/vcr_frame.h` (the `datestamp` setting), drawn by `src/renderer/vcr_overlay.h` |
 | Text size and layout | `src/renderer/pixel_font.h`, styles in `assets/ui/text_styles.json` |
 | Content format | the loader next to it (`src/game/*_loader.cpp`), each with `parse_*_from_text` |
 | The online server (SpacetimeDB module): tables, views, reducers | `server/golfpp_module/src/lib.cpp`; its rules next to it in `account_rules.h`, `play_rules.h`, `server_content.h` |
 | Shots natively vs in the server's WASM | `tooling/net/check_determinism.ps1` |
 | Tooling | `tooling/README.md` (OSM importer, hole editor, art generator) |
+| The time of day: the sky's clock, the sun and moon over a course | `src/game/sky_clock.h` (its timeline is the `sky_clock` section of the tuning; each course's fixed date, clock and lowest sun are the `sky` of its course file); each frame's sky in `src/core/sky_frame.h` |
+| Scene colours and light: what each thing is coloured, the light, sky and haze by sun elevation, glow floors | `assets/visuals/lighting.json` (`src/game/lighting_loader.h`, its fields and ranges in `src/game/lighting_fields.h`), evaluated at a sun elevation by `src/game/sun_lighting.h`; the shaders' light and haze in `assets/shaders/lighting.glsl`, uploaded by `src/renderer/lighting_uniforms.h` (the haze from `src/renderer/scene_haze.h`); the ground's baked sky visibility and horizons in `src/renderer/sky_visibility.h` |
+| Shadows and night lights: blobs under the ball, players and carts (and faintly at trees' feet), the trees' shadow map, the land's shadow at low sun, the lights after dark (ball, headlights, floodlights) and the glow floors and lamp faces they raise | `src/core/light_frame.h` (what casts and what lights, from the frame and the game's ground); the trees' shadows are `src/renderer/shadow_map_pass.h` (fitted by `src/renderer/shadow_map_fit.h`, sampled in `assets/shaders/terrain.frag`); the land's shadow is `sun_shadow` in `assets/shaders/lighting.glsl` over the horizons `src/renderer/sky_visibility.h` bakes; the nearest lights picked by `src/renderer/scene_lights.h`; blobs drawn by `src/renderer/blob_shadow_renderer.h` and `assets/shaders/blob_shadow.vert`; their numbers in the `shadows` and `night_lights` sections of `assets/visuals/lighting.json` |
+| The ground's static meshes on the GPU (terrain, drawn zone shapes) | `src/renderer/terrain_renderer.h` |
+| The sky: gradient, horizon glow, clouds lit by the low sun, sun, moon, stars (one home, with the course's panoramas) | `src/renderer/backdrop_pass.h` and `assets/shaders/backdrop.frag`; its numbers in the `sky` section of `assets/visuals/lighting.json` |
 | Course backdrops, ground textures | `tooling/art/make_art.py`, drawn by `src/renderer/backdrop_pass.h` and `assets/shaders/terrain.frag` |
 | What players download: the installer, the zip, `THIRD_PARTY.txt` | `tooling/release/build_release.ps1` (`tooling/README.md`); what it stages is the `install` rules in `CMakeLists.txt` |
 
@@ -143,8 +153,10 @@ Tests use `vendor/doctest.h`, a small runner with `TEST_CASE`, `CHECK` and
 content edits don't break them; tests of shipped content live in
 `tests/content_tests.cpp`. Golden shots (`tests/fixtures/golden_shots/`) run
 on frozen copies of the tuning, clubs and rewards, so feel edits don't move
-them; a new tuning field must be added to that copy too. `GOLFPP_COURSE` and
-`GOLFPP_VSYNC` are in `docs/performance.md`.
+them; a new tuning field must be added to that copy too. `GOLFPP_COURSE`,
+`GOLFPP_VSYNC`, `GOLFPP_WINDOW`, `GOLFPP_SCREENSHOT` (a BMP of the picture
+at any window size, for reviewing visuals) and `GOLFPP_GAME_TIME` (the time
+of day pinned) are in `docs/performance.md`.
 
 The version is `project(VERSION)` in `CMakeLists.txt`; the main menu and the
 installer show it. Players' builds (`build_release.ps1`) set
@@ -203,8 +215,43 @@ module first, then the installer built from the same commit
 
 **Content is data.** No gameplay numbers, rewards, item stats, sound choices or
 text in C++. Feel numbers go in `game_tuning.json`, rewards in `rewards.json`,
-skills in `skills.json`, club sounds in the club files. Loaders don't invent
-fallback content: missing content fails loudly at startup.
+skills in `skills.json`, club sounds in the club files, scene colours and
+their light in `assets/visuals/lighting.json`. Loaders don't invent fallback
+content: missing content fails loudly at startup.
+
+**Time of day is visual only.** It never changes physics, scoring or rewards
+(until a `progress_rules` change explicitly says otherwise). The time of day
+is the tuning's `sky_clock` timeline at UTC now, the same for every player:
+online "now" is the server clock estimate (`shared_unix_ms` in
+`src/game/mode_dispatch.h`). Only the time runs: each course is always on
+the date of its course file's `sky` (shown on its own clock, its sun
+optionally never sinking below a floor), so the seasons never change. No
+save field, no server row; changing the cycle needs a game update. A gameplay rule that ever depends on the time of day
+uses `game_day_at` (plain arithmetic the server can replay), never the sun's
+trigonometry. All scene light and haze come from `assets/shaders/lighting.glsl`
+and its `frame_lighting` block, uploaded once per frame; no shader has a light
+or haze uniform of its own (the trees' shadow map is a texture the terrain
+samples, drawn while the sun is up), and the clock moving changes uniforms
+only, never a mesh. Everything drawn in the scene goes through it, lit or at least as
+bright as the light there is, so nothing glows at night unless the palette
+gives it a glow floor, it is a lit lamp's face (`lamp_glow`) or a night light
+reaches it. Light after dark comes from something the player can see holding
+it: the ball (it has a light in it), a cart's headlights, a floodlight's lamp;
+never from a point in the air. Lighting that depends on
+the terrain but not the time (the ground's sky visibility and horizons) is
+baked when the area's render meshes are built, never per frame; the sun's
+place against it is a uniform. The lights after dark are picked on the CPU
+each frame (at most `max_scene_lights`, nearest the camera) and evaluated per
+pixel in `lighting.glsl`; a new light source is a candidate in
+`src/core/light_frame.h` with its numbers in `lighting.json`, never a shader
+of its own.
+
+**The ball, cup and flag stay readable at every time of day.** They keep a
+glow floor from `lighting.json`; after dark the ball glows past white and the
+green's floodlights lift the cup off its green. Tests in `tests/content_tests.cpp`
+check ball-against-fairway and flag-against-sky contrast at every palette
+key, and the ball's glow and the cup against its floodlit green at night:
+when one fails, fix the palette, not the check.
 
 **Text is data.** On-screen strings live in `assets/text/en.json`, styles in
 `assets/ui/text_styles.json`, both referenced through `src/game/text_ids.h`;
@@ -224,10 +271,37 @@ in `tests/content_tests.cpp` draws every shipped screen at 4:3, 16:9 and
 21:9 and fails if any label is cut off: when it fails, make the box bigger or
 the string shorter, don't lower the check.
 
-**The CRT pass is never optional.** Scene → low-res FBO → nearest-neighbour
-upscale → `assets/shaders/crt.frag` (scanlines and vignette). Never make it
-toggleable or skip it. For every rendering decision, ask whether it looks more
-like a consumer camcorder tape from 1989 or less.
+**The camcorder, tape and TV passes are never optional.** Scene (low-res HDR
+FBO, where the sun and anything glowing may go past white) → camcorder pass
+(`camcorder.frag`, scene resolution: iris, white balance, tone curve, bloom,
+CCD smear, gain noise, into an 8-bit target) → tape pass (`tape.frag`, scene
+resolution, its own target) → overlay (HUD, menus, datestamp) drawn onto the
+tape target, so text is never bloomed, smeared or noisy → TV pass (`crt.frag`,
+window resolution, last). The camcorder doesn't repeat what the tape owns
+(colour bleed, the tape's colour loss and grain). While paused the scene and
+camcorder hold their last frame and the tape plays on over it. The TV upscale is nearest vertically
+and soft horizontally. The line count is art direction (`target_lines` in
+`assets/visuals/picture.json`), never a setting: each scene line is a whole
+number of window rows (`src/renderer/picture_size.h`), so wider windows get
+more width. Tape effects are sized as fractions of the picture height, never
+in pixels, so the look doesn't change with the window size; the tape wear
+setting blends the whole tape look between picture.json's fresh (next to
+no tape) and worn. Tracking noise, and anything else that flashes
+the whole screen, stays out of play (never while aiming or during a shot);
+no full-frame brightness pulses. The renderer's clock (`clock_seconds`) is for
+looks only and never reaches gameplay. Never make a pass toggleable or skip
+it. For every rendering decision, ask whether it looks more like a consumer
+camcorder tape from 1989 or less.
+
+**Drawing stays cheap.** Every effect runs at scene resolution or smaller;
+only the TV pass runs at window resolution. Static geometry (terrain, trees)
+is uploaded when its revision changes, never rebuilt per frame. Every pass
+has its own `gpu_profile_stage`, shown by the `Ctrl` overlay
+(`docs/performance.md`). Pick a shader path with separate programs or
+`#define` variants, not a branch on a uniform (terrain.frag's flat draws are
+the one left). The lighting, sky, camcorder, shadows and night lights
+together cost at most 1.0 ms of GPU at 1080p on the owner's machine (release
+build, `GOLFPP_VSYNC=0`, `marienlyst_golfklub`).
 
 **Layering.** `physics` depends on nothing; `game` on physics; the GL-free
 renderer pieces and `core` on game. Game code reads `game_input` (intents),

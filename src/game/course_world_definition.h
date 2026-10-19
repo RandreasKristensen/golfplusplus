@@ -3,9 +3,9 @@
 // A course's world (assets/course_worlds/*.json), in shared course
 // coordinates: where every hole sits, the land under and between them, and
 // what is placed around them. The course is one continuous area; holes are
-// played where they sit. The tooling also writes metadata (OSM refs,
-// projection, spawn, walking_shortcuts, spawn_zones, interactables) that the
-// game does not read.
+// played where they sit. The tooling also writes metadata (OSM refs, the
+// rest of the projection, spawn, walking_shortcuts, spawn_zones,
+// interactables) that the game does not read.
 
 #include "physics/ground_mesh.h"
 
@@ -65,6 +65,10 @@ struct course_world_collectible {
 struct course_world_definition {
     std::string id;
     std::string name;
+    // Where the course is on Earth (projection.origin_lat/lon): the sky over
+    // it, holes and hub alike (game/sky_clock.h).
+    float latitude_deg = 0.0f;
+    float longitude_deg = 0.0f;
     // One per hole, in hole order (hole_starts[i].hole_index == i). A course
     // begins at hole 1's start.
     std::vector<course_world_hole_start> hole_starts;

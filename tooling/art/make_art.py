@@ -19,7 +19,7 @@ colours; its alpha is how much of each shows through the haze (0 where the sky
 shows), so the game can change the haze colour, and the sky, with the time of
 day. The further back something sits the hazier it is: the ground towards the
 horizon, then each treeline band, then the hills. Below the horizon the land
-fades into the backdrop ground colour in src/renderer/renderer.cpp at
+fades into the backdrop ground colour (assets/visuals/lighting.json) at
 FAR_GROUND_HAZE, which the renderer reads back from the bottom row and fades
 the drawn ground to, so the far edge of the drawn ground meets it without a
 seam.
@@ -42,8 +42,8 @@ BACKDROP_WIDTH = 1024
 BACKDROP_HEIGHT = 256
 BACKDROP_BOTTOM_DEG = -30.0
 BACKDROP_TOP_DEG = 60.0
-# renderer.cpp backdrop_ground_color.
-BACKDROP_GROUND = (0.10, 0.26, 0.13)
+# The plain the game draws under and around the course.
+BACKDROP_GROUND = tuple(json.loads((REPO / "assets/visuals/lighting.json").read_text(encoding="utf-8"))["ground"]["backdrop"])
 # Land never shows less than this through the haze, so the shader can tell
 # hazy land from sky.
 MIN_LAND_VISIBILITY = 0.15

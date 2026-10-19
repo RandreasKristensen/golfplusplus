@@ -14,9 +14,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <optional>
+#include <vector>
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 
 namespace {
 string_table shipped_strings() {
@@ -121,19 +124,32 @@ height_grid land_grid(const float cell, const height_function& height) {
     return land;
 }
 
-// Two parallel holes `spacing` m apart, a flat one and one whose start is
-// `second_height` up and which climbs `second_rise`, on `land`.
-play_area two_hole_course(const height_grid& land,
-                          const float spacing = 80.0f,
-                          const float second_height = 10.0f,
-                          const float second_rise = 15.0f) {
+// The shipped tuning with the land's relief as it is.
+game_tuning unscaled_relief() {
+    game_tuning tuning = shipped_content().tuning;
+    tuning.terrain.relief.scale = 1.0f;
+    tuning.terrain.relief.green_scale = 1.0f;
+    return tuning;
+}
+
+course_world_definition two_hole_world(const height_grid& land, const float spacing, const float second_height) {
     course_world_definition world;
     world.hole_starts.resize(2);
     world.hole_starts[0].hole_index = 0;
     world.hole_starts[1].hole_index = 1;
     world.hole_starts[1].position = glm::vec3(spacing, second_height, 0.0f);
     world.ground = land;
-    return build_course_area({rising_hole(0.0f), rising_hole(second_rise)}, world, shipped_content().tuning);
+    return world;
+}
+
+// Two parallel holes `spacing` m apart, a flat one and one whose start is
+// `second_height` up and which climbs `second_rise`, on `land` as it is.
+play_area two_hole_course(const height_grid& land,
+                          const float spacing = 80.0f,
+                          const float second_height = 10.0f,
+                          const float second_rise = 15.0f) {
+    return build_course_area({rising_hole(0.0f), rising_hole(second_rise)}, two_hole_world(land, spacing, second_height),
+                             unscaled_relief());
 }
 
 play_area two_hole_course(const float land_height,
@@ -155,6 +171,59 @@ TEST_CASE("on land a hole lies on the land, lifted by its own heights") {
             CHECK(near(sample_area(course, glm::vec3(80.0f + x, 0.0f, z)).point.y, second, 0.3f));
         }
     }
+}
+
+TEST_CASE("the land's relief is scaled about its mean, greens flatter, and what stands on it stays on it") {
+    const auto slope = [](const float x, const float z) { return 30.0f + 0.05f * x + 0.02f * z; };
+    const height_grid land = land_grid(2.0f, slope);
+    hole_data with_green = rising_hole(0.0f);
+    const material_zone green = circle_zone(material_zone_type::green, glm::vec3(0.0f, 0.0f, 190.0f), 12.0f);
+    const material_zone pond = circle_zone(material_zone_type::water, glm::vec3(-60.0f, 0.0f, 60.0f), 10.0f);
+    with_green.material_zones = {green, pond};
+    const game_tuning tuning = shipped_content().tuning;
+    const land_relief relief = tuning.terrain.relief;
+    REQUIRE(relief.scale > 1.0f);
+    REQUIRE(relief.green_scale < 1.0f);
+    const play_area course = build_course_area({with_green, rising_hole(0.0f)}, two_hole_world(land, 80.0f, 0.0f), tuning);
+
+    // Off the greens, the slope is steeper by the scale about the land's mean
+    // height (the middle of the grid, for a plane).
+    const float mean = slope(0.0f, 30.0f);
+    for (const glm::vec3 point : {glm::vec3(150.0f, 0.0f, -150.0f), glm::vec3(-150.0f, 0.0f, 200.0f), glm::vec3(40.0f, 0.0f, 100.0f)}) {
+        CHECK(near(sample_area(course, point).point.y, mean + relief.scale * (slope(point.x, point.z) - mean), 0.05f));
+    }
+    // On the green, its slope is the land's times green_scale, about the
+    // green's scaled mean height; past its edge the land's own slope returns.
+    const float green_mean = mean + relief.scale * (slope(green.center.x, green.center.z) - mean);
+    const auto green_height = [&](const float x) { return sample_area(course, glm::vec3(x, 0.0f, green.center.z)).point.y; };
+    CHECK(near(green_height(0.0f), green_mean, 0.05f));
+    CHECK(near((green_height(6.0f) - green_height(-6.0f)) / 12.0f, 0.05f * relief.green_scale, 0.002f));
+    const float beyond = green.radii.x + relief.green_blend_distance + 4.0f;
+    CHECK(near((green_height(beyond + 2.0f) - green_height(beyond)) / 2.0f, 0.05f * relief.scale, 0.002f));
+    float previous = green_height(-40.0f);
+    for (float x = -39.8f; x <= 40.0f; x += 0.2f) {
+        CHECK(std::abs(green_height(x) - previous) < 0.05f);
+        previous = green_height(x);
+    }
+
+    // The pin is anchored on the scaled green, the tee box sits on the scaled
+    // ground and the pond fills its scaled bowl to its lowest rim.
+    REQUIRE(course.tee_boxes.size() == 2);
+    const tee_box& box = course.tee_boxes.front();
+    CHECK(box.center.y > box.bottom);
+    CHECK(box.center.y - sample_terrain_mesh(course.ground, box.center, course.ground_y).point.y < 1.0f);
+    const glm::vec3 pin = with_green.pin_position;
+    CHECK(near(anchor_on_terrain(course, pin).y,
+               green_mean + relief.green_scale * (slope(pin.x, pin.z) - slope(green.center.x, green.center.z)), 0.02f));
+    float rim = std::numeric_limits<float>::max();
+    for (int k = 0; k < 48; ++k) {
+        const float angle = glm::two_pi<float>() * static_cast<float>(k) / 48.0f;
+        rim = std::min(rim, sample_area(course, pond.center + glm::vec3(std::cos(angle), 0.0f, std::sin(angle)) * pond.radii.x).point.y);
+    }
+    REQUIRE(course.water_levels.size() == 2);
+    CHECK(near(course.water_levels[1], rim, 0.001f));
+    const glm::vec3 past = pond.center - glm::normalize(glm::vec3(0.05f, 0.0f, 0.02f)) * (pond.radii.x + 3.0f);
+    CHECK(near(sample_area(course, past).point.y, mean + relief.scale * (slope(past.x, past.z) - mean), 0.02f));
 }
 
 TEST_CASE("off the holes the ball lands on the ground, which follows the land far away") {
@@ -237,12 +306,12 @@ TEST_CASE("a hub hole is played on the whole course") {
     CHECK(state.hole->wind_seed == state.course_holes[0].wind_seed);
 }
 
-TEST_CASE("action at a hole start plays that hole where the hub shows it") {
+TEST_CASE("interacting at a hole start plays that hole where the hub shows it") {
     game_state state = started_game(fixture_hub_course());
     const hub_hole_marker marker = state.hub->markers[2];
     walk_to(state, state.hub->world.hole_starts[2].position);
 
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
 
     REQUIRE(state.hole.has_value());
     CHECK(state.hole->index == 2);
@@ -253,17 +322,17 @@ TEST_CASE("action at a hole start plays that hole where the hub shows it") {
     CHECK(sample_area(state.area, marker.pin_position).inside_surface);
 }
 
-TEST_CASE("the action that starts a hole takes up its tee ball, so the tee shot needs no extra press") {
+TEST_CASE("interacting at a hole start takes up its tee ball, so interacting again addresses it") {
     game_state state = started_game(fixture_hub_course());
     walk_to(state, state.hub->world.hole_starts[0].position);
 
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
     REQUIRE(state.hole.has_value());
     CHECK(state.mode == game_mode::aiming);
 
     // Address, start the meter, hit: as from anywhere beside the ball.
-    for (int press = 0; press < 3; ++press) {
-        update_game(state, action_input(), 0.016f);
+    for (const game_input& press : {interact_input(), backswing_input(), downswing_input()}) {
+        update_game(state, press, 0.016f);
     }
     CHECK(state.stroke_count == 1);
     CHECK(shot_playing(state));
@@ -287,6 +356,24 @@ TEST_CASE("holing out on a hub hole leaves the player where they stand") {
     CHECK(state.round.current_hole_index == 2);
     CHECK(near(horizontal(state.player.position), horizontal(stance), 0.001f));
     CHECK(state.save_requested);
+}
+
+TEST_CASE("holing out keeps the view on the cup, not the next tee") {
+    game_state state = started_game(fixture_hub_course());
+    REQUIRE(start_hub_hole(state, 1));
+    const glm::vec3 cup = pin_anchor_position(state);
+    state.player.yaw = wrap_angle(state.player.yaw + 1.0f);
+    state.look.pitch = -0.2f;
+
+    state.stroke_count = 1;
+    play_shot(state, shot_result{cup, true, 0.05f, {state.ball.position, cup}, {}});
+    for (int i = 0; i < 20 && state.hole; ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
+
+    REQUIRE(in_hub(state));
+    CHECK(near(state.player.yaw, yaw_towards(state.player.position, cup), 0.0001f));
+    CHECK(near(state.look.pitch, -0.2f, 0.0001f));
 }
 
 TEST_CASE("hub holes can be played in any order and the round ends after all of them") {
@@ -330,7 +417,7 @@ TEST_CASE("the holed ball waits in its cup until it is picked up, and no hole st
 
     walk_to(state, cup + glm::vec3(reach * 0.5f, 0.0f, 0.0f));
     CHECK(cup_ball_in_reach(state));
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
     CHECK(in_hub(state));
     CHECK(!state.cup_ball.has_value());
     CHECK(start_hub_hole(state, 1));
@@ -381,7 +468,7 @@ TEST_CASE("claiming a hub collectible gives its xp as an xp drop") {
     const course_world_collectible& lost_ball = state.hub->world.collectibles[1];
     walk_to(state, lost_ball.position);
 
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
 
     CHECK(state.save.collected_ids == std::vector<std::string>{"lost_ball"});
     CHECK(state.save.world_flags == std::vector<std::string>{"found_lost_ball"});
@@ -401,22 +488,21 @@ TEST_CASE("the cart is faster on a road and earns road xp only there") {
     CHECK(cart_on_road(on_road));
     CHECK(!cart_on_road(off_road));
 
+    sit_in_cart(on_road);
+    sit_in_cart(off_road);
     game_input drive;
-    drive.cart_held = true;
+    drive.forward_held = true;
     update_game(on_road, drive, 0.05f);
     update_game(off_road, drive, 0.05f);
     CHECK(on_road.cart.velocity > off_road.cart.velocity);
 
     for (game_state* state : {&on_road, &off_road}) {
         for (int i = 0; i < 80; ++i) {
-            drive.action = i % 6 == 0;
             update_game(*state, drive, 0.05f);
         }
     }
     CHECK(skill_xp(on_road.save.skills, on_road.rewards.cart_on_road.skill_id) > 0);
-    CHECK(skill_xp(on_road.save.skills, on_road.rewards.drift_on_road.skill_id) > 0);
     CHECK(skill_xp(off_road.save.skills, off_road.rewards.cart_on_road.skill_id) == 0);
-    CHECK(skill_xp(off_road.save.skills, off_road.rewards.drift_on_road.skill_id) == 0);
 }
 
 TEST_CASE("road reach uses each road's own width") {
@@ -448,7 +534,7 @@ TEST_CASE("static anchors stay fresh through hub, hole and course changes") {
 
     revision = state.terrain_render_revision;
     walk_to(state, state.hub->world.hole_starts[1].position);
-    update_game(state, action_input(), 0.016f);
+    update_game(state, interact_input(), 0.016f);
     REQUIRE(state.hole.has_value());
     CHECK(state.terrain_render_revision > revision);
     check_anchors_are_fresh(state);
@@ -484,25 +570,23 @@ TEST_CASE("the scorecard lists every hole and totals the played ones") {
 
     play_hub_hole(state, 0, 4);
     scorecard_data card = build_scorecard_data(state, strings);
-    REQUIRE(card.rows.size() == 3U);
+    REQUIRE(card.pars.size() == 3U);
+    REQUIRE(card.players.size() == 1U);
     CHECK(card.course_name == "Fixture Hub");
     CHECK(card.current_hole_index == 1U);
-    CHECK(card.rows[0].hole_name == "New Hole");
-    CHECK(card.rows[0].played);
-    CHECK(card.rows[0].strokes == 4);
-    CHECK(card.rows[0].relative_label == "+1");
-    CHECK(card.rows[1].hole_name == "The Ditch");
-    CHECK(!card.rows[1].played);
-    CHECK(card.total_par == 3);
-    CHECK(card.total_strokes == 4);
+    CHECK(card.pars[0] == 3);
+    CHECK(card.players[0].name == "SCORE");
+    CHECK(!card.players[0].me);
+    CHECK((card.players[0].strokes == std::vector<int>{4, 0, 0}));
+    CHECK(card.players[0].total_strokes == 4);
+    CHECK(card.players[0].relative_label == "+1");
 
     play_hub_hole(state, 1, 2);
     play_hub_hole(state, 2, 3);
     card = build_scorecard_data(state, strings);
     CHECK(card.finished);
-    CHECK(card.total_par == 9);
-    CHECK(card.total_strokes == 9);
-    CHECK(card.total_relative_label == "EVEN");
+    CHECK(card.players[0].total_strokes == 9);
+    CHECK(card.players[0].relative_label == "EVEN");
 }
 
 TEST_CASE("a new course starts with a clean scorecard") {
@@ -512,9 +596,9 @@ TEST_CASE("a new course starts with a clean scorecard") {
     REQUIRE(start_course(state, fixture_hub_course()));
     const scorecard_data card = build_scorecard_data(state, shipped_strings());
 
-    REQUIRE(card.rows.size() == 3U);
-    CHECK(!card.rows[0].played);
-    CHECK(card.total_strokes == 0);
+    REQUIRE(card.players.size() == 1U);
+    CHECK(card.players[0].strokes == std::vector<int>(3, 0));
+    CHECK(card.players[0].total_strokes == 0);
 }
 
 TEST_CASE("relative scores read over, under and even") {

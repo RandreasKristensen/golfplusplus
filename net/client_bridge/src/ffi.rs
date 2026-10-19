@@ -87,6 +87,7 @@ pub enum StdbTable {
     MyLinkCode = 14,
     MyLinkStatus = 15,
     ServerProtocol = 16,
+    GolfCart = 17,
 }
 
 #[repr(C)]
@@ -223,6 +224,19 @@ pub struct StdbBall {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct StdbGolfCart {
+    pub owner: u64,
+    pub room_id: u64,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub yaw: f32,
+    /// 0: nobody.
+    pub passenger: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct StdbShot {
     pub stroke: i32,
     pub aim_angle: f32,
@@ -296,6 +310,7 @@ pub union StdbRow {
     pub link_code: StdbLinkCode,
     pub link_status: StdbLinkStatus,
     pub server_protocol: StdbServerProtocol,
+    pub golf_cart: StdbGolfCart,
 }
 
 /// One thing that happened. Only the fields named for its kind are set.
@@ -347,6 +362,7 @@ pub fn layout() -> Vec<usize> {
     describe!(out, StdbMotion, zone, mode, x, y, z, yaw, speed, turn_rate, client_time);
     describe!(out, StdbAvatarMotion, account_id, room_id, motion, server_time_micros);
     describe!(out, StdbBall, account_id, room_id, zone, x, y, z, stroke_count, last_wind_time);
+    describe!(out, StdbGolfCart, owner, room_id, x, y, z, yaw, passenger);
     describe!(out, StdbShot, stroke, aim_angle, club_id, power, cigarette_active, wind_time);
     describe!(out, StdbShotEvent, room_id, account_id, zone, shot, start_x, start_y, start_z, rest_x, rest_y, rest_z, holed);
     describe!(out, StdbEmoteEvent, room_id, account_id, emote_id);

@@ -15,7 +15,6 @@
 #include "profiling/profiling.h"
 #include "renderer/dynamic_buffer.h"
 #include "renderer/hole_sign_batch.h"
-#include "renderer/scene_haze.h"
 #include "renderer/shader.h"
 #include "renderer/texture.h"
 
@@ -27,8 +26,6 @@ public:
     // Draws nothing for null or no signs. Leaves no VAO bound on return.
     void draw(const render_hole_signs* signs,
               const glm::mat4& view_proj,
-              const glm::vec3& light_direction,
-              const scene_haze& haze,
               frame_profile* profile);
 
 private:

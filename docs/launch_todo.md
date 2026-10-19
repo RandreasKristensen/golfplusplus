@@ -196,12 +196,12 @@ more per player.
   hero/logo) in Steam's exact sizes. They should read clearly at thumbnail size.
 
 ### Screenshots
-- [ ] At least 5 real in-game screenshots, with the CRT pass on (it always is).
+- [ ] At least 5 real in-game screenshots, with the tape and TV passes on (they always are).
   No concept art or mockups; Valve rejects those.
 
 ### Trailer
 - [ ] A 30–60 s trailer that shows golf in the first 5 seconds: swing, ball
-  flight, the VHS look, the hub, cart drifting, skill level-ups, other players.
+  flight, the VHS look, the hub, the golf carts, skill level-ups, other players.
 
 ### Description and tags
 - [ ] Short description (one hook sentence) and long description, saying plainly
