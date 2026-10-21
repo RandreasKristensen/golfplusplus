@@ -85,7 +85,7 @@ club_stats shot_club_stats(const club_stats& club, const bool cigarette_active, 
     return stats;
 }
 
-club_stats lie_club_stats(const club_stats& club, const ball_lie lie, const game_tuning& tuning) {
+club_stats lie_club_stats(const club_stats& club, const ball_lie lie, const float wetness, const game_tuning& tuning) {
     club_stats stats = club;
     const lie_tuning& from = tuning.lies[static_cast<std::size_t>(lie)];
     stats.power *= std::max(0.0f, from.power);
@@ -93,6 +93,9 @@ club_stats lie_club_stats(const club_stats& club, const ball_lie lie, const game
     // Sand takes most of the club's speed; wedges are made to get through it.
     if (lie == ball_lie::bunker) {
         stats.power *= clamp01(stats.bunker_power);
+    }
+    if (lie == ball_lie::fairway || lie == ball_lie::rough) {
+        stats.backspin *= std::max(0.0f, 1.0f - tuning.weather.wet_spin_loss * clamp01(wetness));
     }
     return stats;
 }
@@ -135,6 +138,18 @@ float roll_deceleration(const ball_tuning& rules, const terrain_material materia
     }
     return 0.0f;  // water: the ball sinks instead (apply_rolling_friction)
 }
+
+bool is_grass(const terrain_material material) {
+    return material == terrain_material::fairway || material == terrain_material::rough ||
+        material == terrain_material::green;
+}
+
+// How high the ball flies over what is under it: over a pond, its surface.
+float height_over_ground(const ball_state& ball, const terrain_sample& ground) {
+    const float surface = ground.material == terrain_material::water ? std::max(ground.point.y, ground.water_level)
+                                                                     : ground.point.y;
+    return ball.position.y - surface;
+}
 }
 
 shot_step step_shot(const ball_state& ball,
@@ -142,15 +157,16 @@ shot_step step_shot(const ball_state& ball,
                     const shot_course& course,
                     const club_stats& stats,
                     const game_tuning& tuning,
-                    const float wind_time,
                     const float dt,
                     const tree_grid* trees_near) {
     const ball_tuning& rules = tuning.ball;
     const bool was_airborne = !ball_is_grounded(ball, ground);
-    const physics_tuning physics = ball_in_water(ball, ground)
+    const weather_state& weather = course.weather;
+    physics_tuning physics = ball_in_water(ball, ground)
         ? with_water_drag(tuning.physics)
         : tuning.physics;
-    const wind_state wind = sample_wind(course.hole.wind_seed, wind_time, tuning.wind);
+    physics.drag_coeff += tuning.weather.rain_drag_coeff * clamp01(weather.rain);
+    const wind_state wind = wind_at_height(weather.wind, height_over_ground(ball, ground), tuning.wind.profile);
 
     shot_step step;
     step.ball = step_ball_flight(ball, wind, dt, physics);
@@ -158,14 +174,22 @@ shot_step step_shot(const ball_state& ball,
     const bool in_water = after.material == terrain_material::water;
     const bool in_sand = after.material == terrain_material::bunker;
     const float roll_scale = after.material == terrain_material::green ? std::max(0.0f, stats.roll_friction_scale) : 1.0f;
+    // Wet grass is soft: it takes the bounce and grips the ball; a green's
+    // short grass far less, so a wet putt still rolls.
+    const float wet = is_grass(after.material) ? clamp01(weather.wetness) : 0.0f;
+    const bool on_green = after.material == terrain_material::green;
+    const float wet_friction_gain = on_green ? tuning.weather.wet_green_friction_gain : tuning.weather.wet_friction_gain;
+    const float wet_roll_gain = on_green ? tuning.weather.wet_green_roll_gain : tuning.weather.wet_roll_gain;
+    const float grass_restitution = rules.ground_restitution * std::max(0.0f, 1.0f - tuning.weather.wet_bounce_loss * wet);
+    const float grass_friction = std::min(1.0f, rules.ground_friction * roll_scale * (1.0f + wet_friction_gain * wet));
     step.ball = resolve_terrain_collision(step.ball,
                                           after,
                                           in_water ? rules.water_restitution
                                               : in_sand ? rules.bunker_restitution
-                                              : rules.ground_restitution,
+                                              : grass_restitution,
                                           in_water ? rules.water_friction
                                               : in_sand ? rules.bunker_friction
-                                              : rules.ground_friction * roll_scale,
+                                              : grass_friction,
                                           dt);
     step.landed = was_airborne && ball_is_grounded(step.ball, after);
 
@@ -184,7 +208,8 @@ shot_step step_shot(const ball_state& ball,
                                          tuning.fence.net_restitution, tuning.fence.net_friction);
 
     step.ball = apply_rolling_friction(step.ball, after,
-                                       roll_deceleration(rules, after.material) * roll_scale,
+                                       roll_deceleration(rules, after.material) * roll_scale *
+                                           (1.0f + wet_roll_gain * wet),
                                        rules.settle_speed, dt);
     step.ground = sample_area(course.area, step.ball.position);
     return step;
@@ -197,8 +222,7 @@ bool ball_at_rest(const ball_state& ball, const terrain_sample& ground, const ba
 shot_result simulate_ball(const ball_state& launched,
                           const club_stats& stats,
                           const shot_course& course,
-                          const game_tuning& tuning,
-                          const float wind_time) {
+                          const game_tuning& tuning) {
     shot_result result;
     ball_state ball = launched;
     terrain_sample ground = sample_area(course.area, ball.position);
@@ -211,9 +235,7 @@ shot_result simulate_ball(const ball_state& launched,
     int steps = 0;
     while (steps < shot_max_steps) {
         const ball_state before = ball;
-        const float step_wind_time = wind_time + static_cast<float>(steps) * shot_step_seconds;
-        const shot_step step =
-            step_shot(ball, ground, course, stats, tuning, step_wind_time, shot_step_seconds, &trees_near);
+        const shot_step step = step_shot(ball, ground, course, stats, tuning, shot_step_seconds, &trees_near);
         ++steps;
         ball = step.ball;
         ground = step.ground;
@@ -271,9 +293,9 @@ shot_result simulate_shot(const shot_input& input,
         return still;
     }
     const club_stats stats = lie_club_stats(shot_club_stats(club->stats, input.cigarette_active, rewards),
-                                            lie_at(course.area, input.ball_start), tuning);
+                                            lie_at(course.area, input.ball_start), course.weather.wetness, tuning);
     const ball_state launched = launch_ball(input.ball_start, input.aim_angle, stats, input.power, tuning);
-    return simulate_ball(launched, stats, course, tuning, input.wind_time);
+    return simulate_ball(launched, stats, course, tuning);
 }
 
 glm::vec3 shot_position_at(const shot_result& result, const float time) {

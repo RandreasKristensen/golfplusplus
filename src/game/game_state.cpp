@@ -1,5 +1,7 @@
 #include "game/game_state.h"
 
+#include "game/body_contact.h"
+
 #include "game/course_session.h"
 #include "game/group_round.h"
 #include "game/mode_dispatch.h"
@@ -7,6 +9,7 @@
 #include "game/online_play.h"
 #include "game/player_jump.h"
 #include "game/progress_rules.h"
+#include "game/rangefinder.h"
 #include "game/remote_players.h"
 #include "game/shot_simulation.h"
 #include "game/text_ids.h"
@@ -23,12 +26,6 @@ namespace {
 // Longer frames are played as this long, so a hitch does not jump the player
 // or a playing shot far ahead.
 constexpr float max_update_seconds = 0.05f;
-
-void push_audio_event(game_state& state, const audio_event_type type) {
-    audio_event event;
-    event.type = type;
-    state.audio_events.push_back(event);
-}
 
 const club_definition* selected_club(const game_state& state) {
     return state.selected_club < state.clubs.size() ? &state.clubs[state.selected_club] : nullptr;
@@ -75,26 +72,9 @@ void update_emotes(game_state& state, const game_input& input, const float dt) {
     state.cigarette_seconds_left = std::max(0.0f, state.cigarette_seconds_left - dt);
 }
 
-// Where the rangefinder points: this hole's pin, or in the hub the pin of the
-// next hole to play.
-std::optional<glm::vec3> rangefinder_target(const game_state& state) {
-    if (state.hole) {
-        return pin_anchor_position(state);
-    }
-    const std::vector<glm::vec3>& pins = state.static_anchors.hub_pin_markers;
-    if (state.round.current_hole_index < pins.size()) {
-        return pins[state.round.current_hole_index];
-    }
-    return std::nullopt;
-}
-
-void update_overlays(game_state& state, const game_input& input) {
+void update_overlays(game_state& state, const game_input& input, const float dt) {
     const bool walking = state.mode == game_mode::walking;
-    const std::optional<glm::vec3> target = rangefinder_target(state);
-    state.rangefinder_active = walking && on_foot(state) && input.rangefinder_held && target.has_value();
-    state.rangefinder_distance_meters = target
-        ? horizontal_distance(state.player.position, *target) * state.tuning.scale.meters_per_world_unit
-        : 0.0f;
+    update_rangefinder(state, input, dt);
     state.course_map_active = walking && input.course_map_held;
     state.scorecard_active = walking && input.scorecard_held;
     state.skills_panel_active = input.skills_panel_held;
@@ -143,17 +123,21 @@ void interact(game_state& state) {
     }
 }
 
-// The arrow keys and the mouse: on foot they turn me, in a cart my head.
+// The arrow keys and the mouse: on foot they turn me, in a cart my head,
+// slower through the rangefinder's zoom.
 void look_around(game_state& state, const game_input& input, const float dt) {
     const player_tuning& tuning = state.tuning.player;
-    const float turn = tuning.turn_rate * turn_direction(input);
+    const float slow = 1.0f / rangefinder_magnification(state);
+    const float turn = tuning.turn_rate * turn_direction(input) * slow;
+    const float look_yaw = input.look_yaw * slow;
     if (state.ride) {
-        state.look.head_yaw = wrap_angle(state.look.head_yaw + turn * dt + input.look_yaw);
+        state.look.head_yaw = wrap_angle(state.look.head_yaw + turn * dt + look_yaw);
     } else {
         state.player.turn_rate = turn;
-        state.player.yaw = wrap_angle(state.player.yaw + turn * dt + input.look_yaw);
+        state.player.yaw = wrap_angle(state.player.yaw + turn * dt + look_yaw);
     }
-    const float pitch = state.look.pitch + tuning.look_pitch_rate * look_pitch_direction(input) * dt + input.look_pitch;
+    const float pitch =
+        state.look.pitch + (tuning.look_pitch_rate * look_pitch_direction(input) * dt + input.look_pitch) * slow;
     state.look.pitch = std::clamp(pitch, -tuning.max_look_pitch, tuning.max_look_pitch);
 }
 
@@ -177,19 +161,22 @@ void walk(game_state& state, const game_input& input, const float dt) {
 // Online, the frame I rise past airborne_height tells others I hopped.
 void jump(game_state& state, const game_input& input, const float dt, frame_profile* profile) {
     const player_tuning& tuning = state.tuning.player;
-    std::optional<float>& seconds = state.player.hop_elapsed;
-    const float before = hop_height(seconds.value_or(0.0f), tuning);
+    player_state& player = state.player;
+    std::optional<float>& seconds = player.hop_elapsed;
+    const float before = seconds ? hop_rise(*seconds, tuning) : 0.0f;
     if (!seconds && input.jump) {
         seconds = 0.0f;
+        player.hop_takeoff_y = player.position.y;
     }
+    const float ground = terrain_height(state.area, player.position, profile);
     if (seconds) {
         *seconds += dt;
-        if (*seconds >= hop_seconds(tuning)) {
+        if (hop_landed(player.hop_takeoff_y, *seconds, ground, tuning)) {
             seconds.reset();
         }
     }
-    const float height = hop_height(seconds.value_or(0.0f), tuning);
-    state.player.position.y = terrain_height(state.area, state.player.position, profile) + height;
+    const float height = seconds ? hop_rise(*seconds, tuning) : 0.0f;
+    player.position.y = seconds ? player.hop_takeoff_y + height : ground;
     if (before <= airborne_height && height > airborne_height && !state.ball_correction) {
         send_motion_now(state);
     }
@@ -215,6 +202,7 @@ void update_walking(game_state& state, const game_input& input, const float dt, 
 
     const glm::vec3 before = state.player.position;
     walk(state, input, dt);
+    keep_walker_clear(state, before);
     jump(state, input, dt, profile);
     change_club(state, input.wheel_club_steps);
 
@@ -263,11 +251,13 @@ void launch_shot(game_state& state) {
     input.club_id = club->id;
     input.power = state.swing.power;
     input.cigarette_active = cigarette_lit(state);
-    input.wind_time = shot_wind_time(state);
+    input.shot_at = shot_unix_ms(state);
+    shot_course course = current_shot_course(state);
+    course.weather = course_weather_at(state, input.shot_at);
     // Online the server checks the shot is hit from beside the ball: it
     // hears where the player stands first.
     send_motion_now(state);
-    play_shot(state, simulate_shot(input, current_shot_course(state), state.tuning, state.clubs, state.rewards));
+    play_shot(state, simulate_shot(input, course, state.tuning, state.clubs, state.rewards));
     state.swing = swing_state{};
     ++state.stroke_count;
     record_shot(state, input);
@@ -350,6 +340,12 @@ void update_shot_playback(game_state& state, const float dt) {
 }
 }
 
+void push_audio_event(game_state& state, const audio_event_type type) {
+    audio_event event;
+    event.type = type;
+    state.audio_events.push_back(event);
+}
+
 game_state make_game_state(const game_content& content, const save_data& save) {
     game_state state;
     state.asset_root = content.asset_root;
@@ -381,7 +377,7 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
     }
     refresh_static_anchor_cache(state, profile);
     update_xp_drops(state, dt);
-    state.hole_time += dt;
+    state.weather = course_weather_at(state, shot_unix_ms(state));
     state.player.speed = 0.0f;
     state.player.turn_rate = 0.0f;
     state.player.move_angle = 0.0f;
@@ -415,7 +411,7 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
         update_shot_playback(state, dt);
     }
 
-    update_overlays(state, input);
+    update_overlays(state, input, dt);
     update_online_play(state, dt);
     update_remote_players(state, dt);
     sync_motion(state, dt);
@@ -450,8 +446,7 @@ bool shot_playing(const game_state& state) {
 }
 
 shot_course current_shot_course(const game_state& state) {
-    const std::uint32_t wind_seed = state.hole ? state.hole->wind_seed : 0;
-    return shot_course{state.area, state.static_anchors.trees, shot_hole{pin_anchor_position(state), wind_seed}};
+    return shot_course{state.area, state.static_anchors.trees, shot_hole{pin_anchor_position(state)}, state.weather};
 }
 
 void play_shot(game_state& state, shot_result result) {
@@ -523,10 +518,6 @@ std::optional<std::size_t> nearby_collectible(const game_state& state) {
 
 bool cart_on_road(const game_state& state) {
     return in_hub(state) && on_cart_road(state.hub->world.cart_roads, state.player.position, state.tuning.cart);
-}
-
-int rounded_rangefinder_meters(const float distance_meters) {
-    return static_cast<int>(std::floor(std::max(0.0f, distance_meters) + 0.5f));
 }
 
 static_anchor_cache build_static_anchor_cache(const game_state& state, frame_profile* profile) {

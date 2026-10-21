@@ -49,6 +49,10 @@ movement_xp_update award_movement_xp(const save_data& progress,
     return result;
 }
 
+bool owns_rangefinder(const save_data&) {
+    return true;
+}
+
 bool collectible_available(const save_data& progress, const course_world_collectible& collectible) {
     if (!requirement_met(progress, collectible.requirement)) {
         return false;

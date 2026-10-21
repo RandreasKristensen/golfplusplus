@@ -31,7 +31,7 @@ void instance_attribute(const GLuint location, const std::size_t offset) {
 
 static_assert(sizeof(render_blob_shadow) == 9 * sizeof(float), "render_blob_shadow must be nine packed floats");
 static_assert(offsetof(render_blob_shadow, normal) == 3 * sizeof(float), "render_blob_shadow::normal must follow base");
-static_assert(offsetof(render_blob_shadow, lift) == 6 * sizeof(float), "render_blob_shadow's shape must follow normal");
+static_assert(offsetof(render_blob_shadow, stretch) == 6 * sizeof(float), "render_blob_shadow's shape must follow normal");
 static_assert(std::is_standard_layout<render_blob_shadow>::value, "render_blob_shadow must be standard layout");
 
 bool blob_shadow_renderer::init(const std::string& vertex_path, const std::string& fragment_path) {
@@ -57,7 +57,7 @@ bool blob_shadow_renderer::init(const std::string& vertex_path, const std::strin
     glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(capacity_ * sizeof(render_blob_shadow)), nullptr, GL_DYNAMIC_DRAW);
     instance_attribute(base_location, offsetof(render_blob_shadow, base));
     instance_attribute(normal_location, offsetof(render_blob_shadow, normal));
-    instance_attribute(shape_location, offsetof(render_blob_shadow, lift));
+    instance_attribute(shape_location, offsetof(render_blob_shadow, stretch));
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     return true;

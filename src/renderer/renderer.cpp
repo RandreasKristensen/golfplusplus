@@ -8,6 +8,7 @@
 #include "renderer/primitive_mesh.h"
 #include "renderer/remote_avatar_batch.h"
 #include "renderer/scorecard_overlay.h"
+#include "renderer/shadow_casters.h"
 #include "renderer/vcr_overlay.h"
 
 #include <algorithm>
@@ -81,6 +82,7 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
         ball_shader_.load_from_files(path("ball.vert"), path("ball.frag")) &&
         init_geometry() && terrain_renderer_.init() &&
         camcorder_pass_.init(path(""), screen_vao_, picture.camcorder, picture.tape.fields_per_second) &&
+        eyepiece_pass_.init(path("crt.vert"), path("eyepiece.frag"), screen_vao_) &&
         tape_pass_.init(path("crt.vert"), path("tape.frag"), screen_vao_, picture.tape) &&
         tv_pass_.init(path("crt.vert"), path("crt.frag"), screen_vao_, picture.tv) &&
         tree_renderer_.init(path("tree_instanced.vert"),
@@ -88,6 +90,7 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
                             tree_renderer::mesh_source{cylinder_.vbo, cylinder_.vertex_count},
                             tree_renderer::mesh_source{cone_.vbo, cone_.vertex_count}) &&
         world_marker_renderer_.init(path("world_marker.vert"), path("world_marker.frag")) &&
+        tee_box_renderer_.init(path("tee_box.vert"), path("tee_box.frag")) &&
         blob_shadow_renderer_.init(path("blob_shadow.vert"), path("blob_shadow.frag")) &&
         shadow_map_pass_.init(path("shadow_map.vert"), path("shadow_map.frag"), palette.shadows) &&
         hole_sign_renderer_.init(path("hole_sign.vert"), path("hole_sign.frag")) &&
@@ -96,6 +99,8 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
         floodlight_renderer_.init(path("floodlight.vert"), path("world_marker.frag")) &&
         water_renderer_.init(path("water.vert"), path("water.frag"), path("underwater.vert"), path("underwater.frag"),
                              screen_vao_) &&
+        weather_renderer_.init(path("weather_streak.vert"), path("weather_streak.frag"),
+                               std::max(palette.rain.max_drops, palette.wind.max_specks)) &&
         overlay_pass_.init(path("overlay.vert"), path("overlay.frag")) &&
         backdrop_pass_.init(asset_root, path("backdrop.vert"), path("backdrop.frag"), screen_vao_, palette.sky);
     if (!ok) {
@@ -110,6 +115,8 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
     terrain_shader_.use();
     terrain_shader_.set_int("u_grass", grass_texture_unit);
     terrain_shader_.set_int("u_shadow_map", shadow_map_unit);
+    tee_box_renderer_.shader().use();
+    tee_box_renderer_.shader().set_int("u_shadow_map", shadow_map_unit);
 
     gpu_timers_.init();
     return true;
@@ -120,18 +127,21 @@ void renderer::shutdown() {
     lighting_uniforms_.shutdown();
     tree_renderer_.shutdown();
     world_marker_renderer_.shutdown();
+    tee_box_renderer_.shutdown();
     blob_shadow_renderer_.shutdown();
     shadow_map_pass_.shutdown();
     hole_sign_renderer_.shutdown();
     fence_renderer_.shutdown();
     floodlight_renderer_.shutdown();
     water_renderer_.shutdown();
+    weather_renderer_.shutdown();
     overlay_pass_.shutdown();
     backdrop_pass_.shutdown();
     grass_texture_.shutdown();
     terrain_shader_.shutdown();
     ball_shader_.shutdown();
     camcorder_pass_.shutdown();
+    eyepiece_pass_.shutdown();
     tape_pass_.shutdown();
     tv_pass_.shutdown();
     flight_path_buffer_.shutdown();
@@ -159,6 +169,7 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
     terrain_shader_.set_profile(profile);
     ball_shader_.set_profile(profile);
     camcorder_pass_.set_profile(profile);
+    eyepiece_pass_.set_profile(profile);
     tape_pass_.set_profile(profile);
     tv_pass_.set_profile(profile);
     backdrop_pass_.set_profile(profile);
@@ -178,14 +189,22 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
     if (!data.vcr.still_frame || !camcorder_pass_.has_frame()) {
         const profile_scope scene_timer(profile, profile_stage::render_scene);
         const std::vector<tree_body> no_trees;
+        build_shadow_casters(shadow_casters_, data, colors_);
         shadow_map_pass_.draw(tree_renderer_, data.trees != nullptr ? *data.trees : no_trees, data.trees_revision,
-                              floodlight_renderer_, data.floodlights,
+                              floodlight_renderer_, data.floodlights, shadow_casters_,
                               data.lighting.sun_direction, data.lighting.shadows.sun_share, data.camera_position,
                               data.camera_target - data.camera_position, gpu_timers_, profile);
         glEnable(GL_DEPTH_TEST);
+        const glm::vec3 sky = data.lighting.sky_zenith;
+        if (data.show_rangefinder) {
+            gpu_timers_.begin(gpu_profile_stage::zoom);
+            eyepiece_pass_.begin_zoom(sky);
+            render_scene(view, zoomed_projection(proj, data.rangefinder_eyepiece.magnification), data, profile);
+            eyepiece_pass_.end_zoom();
+            gpu_timers_.end();
+        }
         scene_fbo_.bind();
         glViewport(0, 0, picture_.width, picture_.height);
-        const glm::vec3 sky = data.lighting.sky_zenith;
         glClearColor(sky.r, sky.g, sky.b, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         render_scene(view, proj, data, profile);
@@ -193,7 +212,10 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
         if (data.camera_underwater) {
             water_renderer_.draw_underwater(colors_.ground, profile);
         }
-        camcorder_pass_.draw(scene_fbo_.color_texture(), data.lighting, data.clock_seconds, gpu_timers_);
+        const unsigned int scene = data.show_rangefinder
+            ? eyepiece_pass_.draw(scene_fbo_.color_texture(), data.rangefinder_eyepiece, gpu_timers_)
+            : scene_fbo_.color_texture();
+        camcorder_pass_.draw(scene, data.lighting, data.clock_seconds, gpu_timers_);
     }
     render_tape(camcorder_pass_.color_texture(), data.clock_seconds, data.tape_tracking);
     {
@@ -304,6 +326,7 @@ bool renderer::ensure_framebuffer_size(const int screen_width, const int screen_
     const bool scene_ok = (scene_fbo_.width() == picture_.width && scene_fbo_.height() == picture_.height) ||
         scene_fbo_.init(picture_.width, picture_.height, framebuffer_format{framebuffer_color::hdr, true, false, false});
     return scene_ok && camcorder_pass_.ensure_size(picture_.width, picture_.height) &&
+        eyepiece_pass_.ensure_size(picture_.width, picture_.height) &&
         tape_pass_.ensure_size(picture_.width, picture_.height);
 }
 
@@ -311,8 +334,10 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     const glm::mat4 view_proj = proj * view;
 
     gpu_timers_.begin(gpu_profile_stage::terrain);
+    const render_sky_weather& weather = data.lighting.weather;
+    const scene_haze haze = backdrop_pass_.prepare(data.backdrop, data.camera_position, data.area_extent, data.lighting.haze_tint);
     lighting_uniforms_.upload(data.lighting,
-                              backdrop_pass_.prepare(data.backdrop, data.camera_position, data.area_extent, data.lighting.haze_tint),
+                              weathered_haze(haze, weather_haze{weather.haze_gain, weather.haze_distance_share, weather.haze_grey}),
                               data.lights, profile);
     colors_.glow = data.glow;
     terrain_shader_.use();
@@ -335,6 +360,11 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     const terrain_cull_stats terrain_stats =
         terrain_renderer_.draw(terrain_shader_, data.terrain_mesh, data.material_overlay_mesh, view_proj, frustum, profile);
     cull_stats_ = renderer_cull_stats{terrain_stats.terrain, terrain_stats.material_overlay, false};
+    // Under the blobs, which lie on them as on the ground.
+    build_tee_box_batch(tee_box_batch_, data.tee_boxes, colors_.markers);
+    tee_box_renderer_.shader().use();
+    shadow_map_pass_.bind(tee_box_renderer_.shader(), shadow_map_unit);
+    tee_box_renderer_.draw(tee_box_batch_, view_proj, profile);
     gpu_timers_.end();
 
     gpu_timers_.begin(gpu_profile_stage::shadows);
@@ -352,11 +382,11 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     world_marker_scene markers;
     markers.show_hole = data.show_hole;
     markers.pin_position = data.pin_position;
-    markers.tee_boxes = data.tee_boxes;
     markers.pin_markers = &data.pin_markers;
     markers.collectible_markers = &data.collectible_markers;
     markers.cup_radius_meters = data.cup_radius_meters;
     markers.pin_visual_height_meters = data.pin_visual_height_meters;
+    markers.flag = flag_pose{data.weather.flag_wind, data.weather.flag_lift, data.weather.flag_phase, data.weather.flag_flap};
     markers.show_aim_indicator = data.show_aim_indicator;
     markers.aim_arc_points = &data.aim_arc_points;
     markers.show_swing_club = data.show_swing_club;
@@ -374,7 +404,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
 
     // Behind everything solid, before anything blends over it.
     gpu_timers_.begin(gpu_profile_stage::sky);
-    backdrop_pass_.draw(view, proj, data.clock_seconds);
+    backdrop_pass_.draw(view, proj, data.clock_seconds, data.weather.lightning);
     gpu_timers_.end();
 
     // Other players' emote props blend (smoke puffs), so they go after the
@@ -403,6 +433,9 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     // Water and nets blend over everything solid, the ball included.
     water_renderer_.draw_surfaces(data.water, view_proj, colors_.ground, profile);
     fence_renderer_.draw_nets(data.fences, view_proj, profile);
+    gpu_timers_.begin(gpu_profile_stage::weather);
+    weather_renderer_.draw(data.weather, view_proj, profile);
+    gpu_timers_.end();
 }
 
 // What is pinned to the camera, my emote props, drawn over the scene at the
@@ -523,6 +556,9 @@ void renderer::render_overlay(const glm::mat4& view_proj, const render_data& dat
             render_course_map(data, text);
         }
         draw_hud(overlay_pass_.batch(), text, data, view_proj);
+        if (data.god_menu) {
+            draw_god_menu(overlay_pass_.batch(), text, *data.god_menu);
+        }
         draw_datestamp(overlay_pass_.batch(), text, data.vcr);
         draw_startup_menu(overlay_pass_.batch(), text, data.startup_menu, colors_.ground);
     }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "game/weather.h"
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -27,13 +29,22 @@
 //                     pin the sky at this hour on the course's clock (0 to
 //                     24, e.g. 19.5) on the course's date or the given one
 //                     (1989-12-21T23), for screenshots.
+//   GOLFPP_WEATHER=kind[,wind[,wetness]]
+//                     hold the weather offline (core/god_menu.h): a
+//                     weather_kind name (clear, cloudy, light_fog, fog,
+//                     light_rain, rain, heavy_rain, thunderstorm,
+//                     sun_shower), the wind in
+//                     m/s blowing north
+//                     and the ground's wetness (0 to 1), for screenshots.
+//   GOLFPP_GOD=1      the god menu (F1) can be opened, as with --god.
 //   GOLFPP_SERVER=uri, GOLFPP_DB=name
 //                     connect online play to another server or database
 //                     than assets/online.json says (a local or self-hosted
 //                     server). The command line wins.
 //
 // Command line: --server <uri>, --db <name>, and --anonymous to connect
-// without signing in (servers with allow_anonymous only).
+// without signing in (servers with allow_anonymous only); --god for the god
+// menu.
 struct startup_options {
     bool vsync = true;
     std::string boot_course_id;
@@ -47,6 +58,11 @@ struct startup_options {
     // With game_hour: days since 1970-01-01 of the game date; none: the
     // sky timeline's anchor date.
     std::optional<std::int64_t> game_date;
+    // GOLFPP_WEATHER: the weather held from the start.
+    std::optional<weather_kind> weather;
+    std::optional<float> wind_speed;  // m/s
+    std::optional<float> wetness;     // 0..1
+    bool god_menu = false;
 };
 
 // Pure: no environment access, no I/O, no globals. `vsync_value` and
@@ -70,9 +86,16 @@ startup_options with_review_options(startup_options options, const char* window_
 // the clock running.
 startup_options with_game_time(startup_options options, const char* game_time_value);
 
+// Adds the held weather and the god menu. Pure, like parse_startup_options:
+// the raw environment strings or null. The weather is a kind's name, then
+// optionally ",wind" (a number, 0 or more) and ",wetness" (0 to 1); anything
+// else holds nothing. The god menu is on for "1", "on", "yes" or "true".
+startup_options with_weather_options(startup_options options, const char* weather_value, const char* god_value);
+
 // Adds the online options. Pure, like parse_startup_options: `server_value`
 // and `database_value` are the raw environment strings or null, `arguments`
-// the command line without the program name. Unknown arguments are ignored.
+// the command line without the program name. --god turns the god menu on.
+// Unknown arguments are ignored.
 startup_options with_online_options(startup_options options,
                                     const char* server_value,
                                     const char* database_value,

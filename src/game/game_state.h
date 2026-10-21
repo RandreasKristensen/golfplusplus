@@ -15,10 +15,12 @@
 #include "game/motion_sync.h"
 #include "game/net_types.h"
 #include "game/play_area.h"
+#include "game/rangefinder.h"
 #include "game/reward_rules.h"
 #include "game/round_state.h"
 #include "game/save_data.h"
 #include "game/shot_simulation.h"
+#include "game/weather.h"
 #include "game/swing.h"
 #include "physics/ball_state.h"
 #include "physics/terrain.h"
@@ -51,6 +53,9 @@ struct player_state {
     float move_angle = 0.0f;
     // Seconds since taking off, while hopping on foot (game/player_jump.h).
     std::optional<float> hop_elapsed;
+    float hop_takeoff_y = 0.0f;  // the height it took off from
+    // On foot, pressed against something standing (game/body_contact.h).
+    bool against_obstacle = false;
 };
 
 // Where I look beyond my yaw, first person. Presentation, but set from
@@ -87,14 +92,12 @@ struct active_hole {
     std::size_t index = 0;
     glm::vec3 tee_position{0.0f};
     glm::vec3 pin_position{0.0f};
-    std::uint32_t wind_seed = 0;
 };
 
 // Where each hole sits in the hub (course coordinates, authored heights).
 struct hub_hole_marker {
     glm::vec3 tee_position{0.0f};
     glm::vec3 pin_position{0.0f};
-    std::uint32_t wind_seed = 0;  // the placed hole's, for other players' shots on it
 };
 
 // The course's world and where each hole sits in it. The whole course is
@@ -143,6 +146,7 @@ struct remote_avatar {
     // The motion (server time) their last shot was hit from: its swing is over.
     std::int64_t hit_motion_at = 0;
     std::optional<float> hop_elapsed;  // seconds into a hop of theirs (game/player_jump.h)
+    float hop_takeoff_y = 0.0f;        // the height it took off from
 };
 
 // Another player's shot playing back here, from the server's event: the
@@ -176,6 +180,8 @@ enum class audio_event_type {
     ball_cup,
     club_change,
     cart_start,
+    cart_crash,
+    player_bump,
     emote_smoke,
     emote_beer
 };
@@ -262,11 +268,22 @@ struct game_state {
     std::size_t selected_club = 0;
     swing_state swing;
     int stroke_count = 0;
-    float hole_time = 0.0f;  // a shot's wind_time when it is hit
+
+    // This machine's UTC clock in milliseconds, which app sets every frame.
+    std::int64_t local_unix_ms = 0;
+    // The weather over the course now (course_weather_at in
+    // game/mode_dispatch.h), refreshed every update. Offline the god menu
+    // (core/god_menu.h) may hold one in its place.
+    weather_state weather;
+    std::optional<weather_state> weather_override;
 
     // Hold-to-view overlays, refreshed every update.
     bool rangefinder_active = false;
-    float rangefinder_distance_meters = 0.0f;
+    float rangefinder_zoom = 0.0f;  // 0 at the eye .. 1 fully zoomed (game/rangefinder.h)
+    rangefinder_reading rangefinder;
+    float rangefinder_locked_seconds = 0.0f;  // on the flag this long
+    std::uint32_t rangefinder_ping = 0;       // its readings so far, each its own roll of the weather's
+    float rangefinder_ping_left = 0.0f;       // until its next
     bool course_map_active = false;
     bool scorecard_active = false;
     bool skills_panel_active = false;
@@ -293,6 +310,9 @@ struct game_state {
 // start_course (game/course_session.h).
 game_state make_game_state(const game_content& content, const save_data& save);
 
+// A sound for app to play this frame.
+void push_audio_event(game_state& state, audio_event_type type);
+
 void update_game(game_state& state, const game_input& input, float dt, frame_profile* profile = nullptr);
 
 void update_xp_drops(game_state& state, float dt);
@@ -318,8 +338,6 @@ std::optional<std::size_t> nearby_hole_start(const game_state& state);
 // Index into hub->world.collectibles of the nearest available one in reach.
 std::optional<std::size_t> nearby_collectible(const game_state& state);
 bool cart_on_road(const game_state& state);
-// Whole meters shown on the rangefinder.
-int rounded_rangefinder_meters(float distance_meters);
 
 // Static anchors: see static_anchor_cache.
 static_anchor_cache build_static_anchor_cache(const game_state& state, frame_profile* profile = nullptr);

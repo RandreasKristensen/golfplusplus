@@ -30,11 +30,13 @@
 #include "renderer/hole_sign_renderer.h"
 #include "renderer/lighting_uniforms.h"
 #include "renderer/water_renderer.h"
+#include "renderer/weather_renderer.h"
 #include "renderer/overlay_pass.h"
 #include "renderer/picture_size.h"
 #include "renderer/render_data.h"
 #include "renderer/shader.h"
 #include "renderer/shadow_map_pass.h"
+#include "renderer/eyepiece_pass.h"
 #include "renderer/tape_pass.h"
 #include "renderer/terrain_renderer.h"
 #include "renderer/texture.h"
@@ -54,7 +56,7 @@ class renderer {
 public:
     // `asset_root` is where shaders/, textures/ and course backdrops are read
     // from; `palette` says what the scene's things are, what the sky shows
-    // and how the trees' shadow map is drawn (lighting.json).
+    // and how the shadow map is drawn (lighting.json).
     bool init(SDL_Window* window, const std::string& asset_root, const picture_style& picture,
               const lighting_palette& palette);
     void shutdown();
@@ -94,6 +96,7 @@ private:
     texture grass_texture_;  // on the rough (terrain.frag)
     framebuffer scene_fbo_;
     camcorder_pass camcorder_pass_;
+    eyepiece_pass eyepiece_pass_;
     tape_pass tape_pass_;
     tv_pass tv_pass_;
     gl_timer_pool gpu_timers_;
@@ -105,11 +108,15 @@ private:
     fence_renderer fence_renderer_;
     floodlight_renderer floodlight_renderer_;
     water_renderer water_renderer_;
+    weather_renderer weather_renderer_;
     world_marker_renderer world_marker_renderer_;
+    world_marker_renderer tee_box_renderer_;
     blob_shadow_renderer blob_shadow_renderer_;
     shadow_map_pass shadow_map_pass_;
     // Rebuilt every frame; members so their vectors keep their capacity.
     world_marker_batch world_marker_batch_;
+    world_marker_batch shadow_casters_;
+    world_marker_batch tee_box_batch_;
     std::vector<emote_prop> emote_props_;  // this frame's, kept for their capacity
     std::vector<render_terrain_vertex> flight_path_vertices_;
     // Course map terrain fill: rebuilt only when the map layout or terrain changes.

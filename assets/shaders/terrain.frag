@@ -1,6 +1,7 @@
 #version 330 core
 
 #include "lighting.glsl"
+#include "shadow_map_light.glsl"
 
 in vec3 v_normal;
 in vec3 v_color;
@@ -23,29 +24,11 @@ uniform int u_use_vertex_color;
 // Blades of grass laid over the rough. A tint around mid grey: 128 leaves the
 // colour as it is, darker and lighter strokes shade it.
 uniform sampler2D u_grass;
-// The trees' shadow map (renderer/shadow_map_pass.h). x: how much sun their
-// shadow takes away, 0 with no map; y: its taps' spread, in map widths; z:
-// its depth bias; w: the share of the map's half-width its edge fades over.
-uniform sampler2DShadow u_shadow_map;
-uniform vec4 u_shadow;
 
 // Metres of ground one copy of the grass texture covers.
 const float grass_tile_meters = 2.0;
-
-// How much sun the trees let through to here, 0..1: four soft taps on a
-// turned square, each already a 2x2 filtered test.
-float tree_light() {
-    vec2 from_middle = abs(v_shadow.xy * 2.0 - 1.0);
-    float inside = (1.0 - smoothstep(1.0 - u_shadow.w, 1.0, max(from_middle.x, from_middle.y))) *
-        step(0.0, v_shadow.z) * step(v_shadow.z, 1.0);
-    float depth = v_shadow.z - u_shadow.z;
-    float spread = u_shadow.y;
-    float lit = 0.25 * (texture(u_shadow_map, vec3(v_shadow.xy + vec2(-0.4, -1.0) * spread, depth)) +
-                        texture(u_shadow_map, vec3(v_shadow.xy + vec2(1.0, -0.4) * spread, depth)) +
-                        texture(u_shadow_map, vec3(v_shadow.xy + vec2(-1.0, 0.4) * spread, depth)) +
-                        texture(u_shadow_map, vec3(v_shadow.xy + vec2(0.4, 1.0) * spread, depth)));
-    return 1.0 - u_shadow.x * inside * (1.0 - lit);
-}
+// How much of mown grass's wet shine the rough has.
+const float rough_gloss_share = 0.4;
 
 void main() {
     // Sampled before any branch so the mipmap choice stays well defined.
@@ -55,7 +38,10 @@ void main() {
         return;
     }
 
-    vec3 base_color = v_color * mix(vec3(1.0), grass, clamp(v_rough, 0.0, 1.0));
-    vec3 light = surface_light(v_normal, v_ao, sun_shadow(v_horizon_a, v_horizon_b) * tree_light()) + local_light(v_world, v_normal);
-    frag_color = vec4(hazed(base_color * light, v_world), u_alpha);
+    float rough = clamp(v_rough, 0.0, 1.0);
+    vec3 base_color = v_color * mix(vec3(1.0), grass, rough) * wet.x;
+    float sun = sun_shadow(v_horizon_a, v_horizon_b) * shadow_map_light(v_shadow);
+    vec3 light = surface_light(v_normal, v_ao, sun) + local_light(v_world, v_normal);
+    vec3 shine = wet_gloss(v_world, v_normal, sun) * mix(1.0, rough_gloss_share, rough) * v_ao;
+    frag_color = vec4(hazed(base_color * light + shine, v_world), u_alpha);
 }

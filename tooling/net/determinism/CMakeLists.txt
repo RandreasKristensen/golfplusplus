@@ -24,6 +24,8 @@ set(sources
   tooling/net/determinism/golden_shots_main.cpp
   server/golfpp_module/src/server_content.cpp
   src/physics/ball_physics.cpp
+  src/physics/body_collision.cpp
+  src/physics/land_relief.cpp
   src/physics/collision.cpp
   src/physics/flight_model.cpp
   src/physics/ground_contact.cpp
@@ -33,6 +35,7 @@ set(sources
   src/physics/fence_collision.cpp
   src/physics/tree_collision.cpp
   src/physics/wind.cpp
+  src/game/area_obstacles.cpp
   src/game/club_loader.cpp
   src/game/content_files.cpp
   src/game/course_loader.cpp
@@ -47,6 +50,7 @@ set(sources
   src/game/shot_simulation.cpp
   src/game/tee_box.cpp
   src/game/sky_clock.cpp
+  src/game/weather.cpp
   src/game/tuning_loader.cpp
   src/game/utf8.cpp
 )

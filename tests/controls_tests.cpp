@@ -5,6 +5,7 @@
 #include "game/game_state.h"
 #include "game/golf_cart.h"
 #include "game/player_jump.h"
+#include "game/tee_box.h"
 #include "physics/vector_math.h"
 
 #include "test_support.h"
@@ -204,7 +205,7 @@ TEST_CASE("a jump is as high at a moment at any frame rate") {
     update_game(coarse, jump, 0.05f);
     update_game(coarse, game_input{}, 0.05f);
     CHECK(near(fine.player.position.y, coarse.player.position.y, 0.0001f));
-    CHECK(near(fine.player.position.y - terrain_height(fine.area, fine.player.position), hop_height(0.1f, fine.tuning.player),
+    CHECK(near(fine.player.position.y - terrain_height(fine.area, fine.player.position), hop_rise(0.1f, fine.tuning.player),
                0.0001f));
 }
 
@@ -334,4 +335,39 @@ TEST_CASE("aiming turns with the arrow keys, A and D and the mouse, and pitch st
     CHECK(near(state.aim_angle, start + state.tuning.player.aim_turn_rate * 0.1f - 0.05f, 0.0001f));
     CHECK(state.look.pitch == 0.0f);
     CHECK(state.mode == game_mode::aiming);
+}
+
+TEST_CASE("jumping onto a tee box the hop keeps its arc over the box's edge and lands on its top") {
+    game_state state = started_hole();
+    state.area.obstacles = upright_obstacles{};
+    state.area.tee_boxes.clear();
+    const player_tuning& tuning = state.tuning.player;
+    const glm::vec3 ahead = yaw_direction(state.player.yaw);
+    tee_box box;
+    box.center = state.player.position + ahead * 3.5f + glm::vec3(0.0f, 0.3f, 0.0f);
+    box.down_hole = ahead;
+    box.half_length = 1.5f;
+    box.half_width = 2.0f;
+    box.bottom = state.player.position.y - 1.0f;
+    state.area.tee_boxes.push_back(box);
+    const float takeoff = state.player.position.y;
+
+    game_input jump;
+    jump.jump = true;
+    jump.forward_held = true;
+    update_game(state, jump, 0.02f);
+    float elapsed = 0.02f;
+    bool crossed = false;
+    for (; state.player.hop_elapsed && elapsed < 5.0f; elapsed += 0.02f) {
+        CHECK(near(state.player.position.y, takeoff + hop_rise(*state.player.hop_elapsed, tuning), 0.0001f));
+        crossed = crossed || on_tee_box(box, state.player.position);
+        game_input walk;
+        walk.forward_held = true;
+        update_game(state, walk, 0.02f);
+    }
+    CHECK(crossed);
+    CHECK(on_tee_box(box, state.player.position));
+    CHECK(near(state.player.position.y, box.center.y, 0.0001f));
+    // It came down on the box before it would have on the ground.
+    CHECK(elapsed < hop_seconds(tuning));
 }

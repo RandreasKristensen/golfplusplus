@@ -19,6 +19,7 @@ uniform vec4 u_white_balance;  // the time of day's white (rgb), how much of the
 uniform vec4 u_tone;           // shoulder, toe, saturation, bloom strength
 uniform vec3 u_shadow_tint;
 uniform vec4 u_gain;           // gain (0..1), grain, colour noise, smear strength
+uniform float u_smear_fade;    // how much of a column's smear is lost per picture height from its light
 uniform float u_field;
 
 uvec3 pcg3d(uvec3 v) {
@@ -42,11 +43,13 @@ void main() {
     ivec2 pixel = ivec2(gl_FragCoord.xy);
     vec3 color = texelFetch(u_scene, pixel, 0).rgb * camera_exposure();
     color += texture(u_bloom, v_uv).rgb * u_tone.w;
-    int last_column = textureSize(u_smear, 0).x - 1;
-    vec3 smear = 0.5 * texelFetch(u_smear, ivec2(pixel.x, 0), 0).rgb +
-                 0.25 * texelFetch(u_smear, ivec2(max(pixel.x - 1, 0), 0), 0).rgb +
-                 0.25 * texelFetch(u_smear, ivec2(min(pixel.x + 1, last_column), 0), 0).rgb;
-    color += smear * u_gain.w;
+    // Away from its light the smear fades, its fainter edge columns first, so
+    // it thins as it goes.
+    vec4 column = texelFetch(u_smear, ivec2(pixel.x, 0), 0);
+    float smear = dot(column.rgb, luma_weights);
+    float away = abs((float(pixel.y) + 0.5) / float(textureSize(u_scene, 0).y) - column.a);
+    float left = max(smear - u_smear_fade * away, 0.0);
+    color += column.rgb * (left / max(smear, 0.0001)) * u_gain.w;
 
     vec3 light = max(texelFetch(u_adapt, ivec2(0), 0).rgb, vec3(0.001));
     vec3 balance = mix(vec3(1.0), vec3(dot(light, luma_weights)) / light, u_white_balance.w) * u_white_balance.rgb;

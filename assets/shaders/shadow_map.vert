@@ -1,8 +1,8 @@
 #version 330 core
 
-// The trees' and floodlights' depth seen from the sun
+// The trees', floodlights', figures' and carts' depth seen from the sun
 // (renderer/shadow_map_pass.h), instanced like tree_instanced.vert; the
-// floodlights' mesh is one unscaled instance at the origin.
+// floodlights' and figures' meshes are one unscaled instance at the origin.
 
 layout(location = 0) in vec3 a_pos;
 layout(location = 3) in vec3 a_instance_offset;

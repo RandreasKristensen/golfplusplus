@@ -45,8 +45,8 @@ void follow(game_state& state, remote_avatar& avatar, const std::uint64_t accoun
     if ((!known || avatar.motion_at != player.motion_at) && on_foot && !avatar.hop_elapsed &&
         motion.position.y - terrain_height(state.area, motion.position) > 0.5f * airborne_height) {
         avatar.hop_elapsed = 0.0f;
+        avatar.hop_takeoff_y = target.y;
     }
-    const glm::vec3 lift(0.0f, hop_height(avatar.hop_elapsed.value_or(0.0f), player_moves), 0.0f);
 
     if (!known) {
         avatar.position = target;
@@ -54,21 +54,26 @@ void follow(game_state& state, remote_avatar& avatar, const std::uint64_t accoun
     } else if (avatar.motion_at != player.motion_at) {
         // Stepping into or out of a cart blends over the step.
         const bool steps = in_cart(avatar.mode) != in_cart(motion.mode);
-        avatar.correction = avatar.position - lift - target;
+        avatar.correction = avatar.position - target;
+        // In the air the hop's arc is their height.
+        if (avatar.hop_elapsed) {
+            avatar.correction.y = 0.0f;
+        }
         avatar.correction_seconds = steps ? state.tuning.cart.step_seconds : tuning.remote_correction_seconds;
         avatar.correction_left = avatar.correction_seconds;
         avatar.motion_at = player.motion_at;
     }
     avatar.correction_left = std::max(0.0f, avatar.correction_left - dt);
     const float blend = avatar.correction_seconds > 0.0f ? avatar.correction_left / avatar.correction_seconds : 0.0f;
+    avatar.position = target + avatar.correction * blend;
     if (avatar.hop_elapsed) {
         *avatar.hop_elapsed += dt;
-        if (*avatar.hop_elapsed >= hop_seconds(player_moves)) {
+        if (hop_landed(avatar.hop_takeoff_y, *avatar.hop_elapsed, avatar.position.y, player_moves)) {
             avatar.hop_elapsed.reset();
+        } else {
+            avatar.position.y = avatar.hop_takeoff_y + hop_rise(*avatar.hop_elapsed, player_moves);
         }
     }
-    avatar.position = target + avatar.correction * blend +
-        glm::vec3(0.0f, hop_height(avatar.hop_elapsed.value_or(0.0f), player_moves), 0.0f);
     avatar.yaw = yaw;
     avatar.mode = motion.mode;
     tick_emote(avatar.smoke_emote, state.tuning.player.emote_seconds, dt);
@@ -121,7 +126,8 @@ void start_remote_shot(game_state& state, const room_shot& shot) {
     }
     const hub_hole_marker& marker = state.hub->markers[static_cast<std::size_t>(shot.zone)];
     const shot_course course{state.area, state.static_anchors.trees,
-                             shot_hole{anchor_on_terrain(state.area, marker.pin_position), marker.wind_seed}};
+                             shot_hole{anchor_on_terrain(state.area, marker.pin_position)},
+                             course_weather_at(state, shot.input.shot_at)};
     remote_shot playing;
     playing.input = shot.input;
     playing.result = simulate_shot(shot.input, course, state.tuning, state.clubs, state.rewards);

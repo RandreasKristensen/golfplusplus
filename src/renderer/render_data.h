@@ -11,11 +11,13 @@
 #include "physics/tree_collision.h"
 #include "profiling/profiling.h"
 #include "renderer/cart_batch.h"
+#include "renderer/god_menu_overlay.h"
 #include "renderer/menu_overlay.h"
 #include "renderer/remote_avatar_batch.h"
 #include "renderer/render_mesh.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -92,16 +94,31 @@ struct render_light {
     float cone_full_cos = -1.0f;
 };
 
-// A soft dark ellipse on the ground under something (blob_shadow.vert):
-// cast along the sun onto the ground at `base`, which faces `normal`, from
-// `lift` metres over it, `radius` wide and `strength` dark at its middle.
-// Uploaded as nine packed floats.
+// A soft dark ellipse on the ground (blob_shadow.vert): its middle at
+// `base` on ground facing `normal`, `radius` wide and `stretch` times that
+// long away from the sun, `strength` dark at its middle. Uploaded as nine
+// packed floats.
 struct render_blob_shadow {
     glm::vec3 base{0.0f};
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
-    float lift = 0.0f;
+    float stretch = 1.0f;
     float radius = 0.0f;
     float strength = 0.0f;
+};
+
+// What the weather does to the frame's sky, haze and ground (lighting.glsl's
+// `weather` and `wet`; game/weather_lighting.h). Clear and dry leaves all as it is.
+struct render_sky_weather {
+    float cover = 0.0f;   // of the sky by cloud, 0..1: hides the sun, moon and stars
+    float mottle = 0.0f;  // overcast_mottle
+    float rainbow = 0.0f;  // a sun shower's rainbow, 0..1
+    // The haze (weather_haze in game/weather_lighting.h).
+    float haze_gain = 0.0f;
+    float haze_distance_share = 1.0f;
+    float haze_grey = 0.0f;
+    float wet_albedo = 1.0f;  // the ground's colour kept
+    float wet_gloss = 0.0f;
+    float wet_gloss_power = 1.0f;
 };
 
 // The scene's light this frame, from the sky clock and the lighting palette
@@ -128,6 +145,63 @@ struct render_lighting {
     glm::vec3 white_balance{0.0f};
     float gain_noise = 0.0f;
     float saturation = 0.0f;
+    render_sky_weather weather;
+};
+
+// Streaks in a box `size` metres across round `center` that wraps as it
+// moves, so it never ends (renderer/weather_renderer.h): `count` of them,
+// each at its own place in the box moved by `offset` (wrapped within the
+// box), drawn from where it is back along `velocity` (m/s) for
+// `streak_seconds`, in `color` lit by the light there is (water drops: the
+// sky's light seen through them, so they never glow at night but near a
+// lamp), `alpha` opaque at most, fading out nearer the camera than `near_fade` metres and towards
+// the box's edge, bobbing `tumble` metres at `tumble_phase` radians.
+struct render_streaks {
+    int count = 0;
+    glm::vec3 center{0.0f};
+    glm::vec3 size{1.0f};
+    glm::vec3 offset{0.0f};
+    glm::vec3 velocity{0.0f};
+    float streak_seconds = 0.0f;
+    glm::vec3 color{0.0f};
+    bool water = false;
+    float alpha = 0.0f;
+    float near_fade = 0.0f;
+    float tumble = 0.0f;
+    float tumble_phase = 0.0f;
+};
+
+// A lightning strike in the sky this frame (core/lightning_frame.h): its
+// bolt (none when `bolt` is false) from `direction` down to the horizon,
+// `bolt_width` wide and wandering up to `bolt_jitter` (radians) by `seed`,
+// `bolt_brightness` bright in `color`, lighting the clouds within
+// `glow_radius` of its top by `glow_strength`, all times `flash` (0: none).
+struct render_lightning {
+    glm::vec3 direction{0.0f, 1.0f, 0.0f};
+    float flash = 0.0f;
+    float seed = 0.0f;
+    bool bolt = false;
+    float bolt_width = 0.0f;
+    float bolt_jitter = 0.0f;
+    float bolt_brightness = 0.0f;
+    float glow_radius = 1.0f;
+    float glow_strength = 0.0f;
+    glm::vec3 color{0.0f};
+};
+
+// The weather's moving things this frame (core/weather_frame.h): rain, the
+// wind's specks and how every flag flies.
+struct render_weather {
+    render_streaks rain;
+    render_streaks specks;
+    // A flag streams along `flag_wind` (level, its length unused), `flag_lift`
+    // of the way from hanging (0) to straight out (1), its waves at
+    // `flag_phase` radians and `flag_flap` of its length.
+    glm::vec3 flag_wind{0.0f};
+    float flag_lift = 0.0f;
+    float flag_phase = 0.0f;
+    float flag_flap = 0.0f;
+    render_lightning lightning;
 };
 
 // The camcorder's burn-in, two lines in the corner (core/vcr_frame.h).
@@ -150,6 +224,14 @@ struct render_vcr {
     bool show_offline = false;
 };
 
+// The rangefinder's eyepiece (renderer/eyepiece_pass.h): the scene drawn
+// again `magnification` times zoomed in a round view, the rest darkened and greyed.
+struct render_eyepiece {
+    float magnification = 1.0f;
+    float surround_brightness = 1.0f;
+    float surround_saturation = 1.0f;
+};
+
 struct render_data {
     glm::vec3 camera_position{0.0f};
     glm::vec3 camera_target{0.0f, 0.0f, 1.0f};
@@ -160,6 +242,7 @@ struct render_data {
     float viewmodel_fov_degrees = 0.0f;
 
     render_lighting lighting;
+    render_weather weather;
     // This frame's glow floors: the palette's, the ball's and ember's risen at night.
     glow_floors glow;
     // Every light this frame (core/light_frame.h); the renderer keeps the
@@ -231,6 +314,9 @@ struct render_data {
     bool beer_emote_active = false;
     float beer_emote_elapsed = 0.0f;
 
+    // My figure on foot as others see it: never drawn (I look out of its
+    // eyes), only into the shadow map (renderer/shadow_casters.h).
+    std::optional<render_remote_avatar> my_figure;
     // Other players in my room (online).
     std::vector<render_remote_avatar> remote_avatars;
     std::vector<render_remote_ball> remote_balls;
@@ -250,9 +336,19 @@ struct render_data {
     int stroke_count = 0;
     std::string selected_club_label;  // short, e.g. "7I"
     std::string selected_club_name;
+    std::optional<render_god_menu> god_menu;  // while open (core/god_menu.h)
+    // The rangefinder held up (game/rangefinder.h): its eyepiece, its
+    // reading and the wind.
     bool show_rangefinder = false;
-    glm::vec3 rangefinder_target{0.0f};
-    std::string rangefinder_label;
+    std::string rangefinder_distance_label;    // "152", or dashes at the sky
+    std::string rangefinder_height_label;      // "+4M", "-7M", "0M"; empty at the sky
+    std::optional<glm::vec3> rangefinder_flag;  // the flagstick's foot, while locked onto it
+    bool rangefinder_lock_lit = false;         // the lock ring round the reticle, flashing at first
+    render_eyepiece rangefinder_eyepiece;
+    std::string rangefinder_wind_label;        // "4.5 M/S"
+    // The way the wind blows, radians off straight ahead of the view,
+    // positive to the left (as yaw); nullopt in still air.
+    std::optional<float> rangefinder_wind_angle;
     bool show_course_map = false;
     // The course map: the XZ box around every hole's ribbon and zones that it
     // fits to its paper, and each hole's number at its tee.

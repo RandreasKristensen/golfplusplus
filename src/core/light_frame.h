@@ -3,8 +3,8 @@
 // The frame's lights and shadows, once its light (data.lighting) is known:
 // the night lights (round the ball, carts' headlights, every floodlight's
 // lamp, game/floodlights.h), the glow floors and lamp faces risen for the
-// night, and blob shadows cast along the sun onto the ground as the game
-// samples it. GL-free.
+// night, and blob shadows on the ground as the game samples it: the ball's
+// cast along the sun, the rest at their feet. GL-free.
 
 #include "game/game_state.h"
 #include "game/lighting_loader.h"

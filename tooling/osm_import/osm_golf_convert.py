@@ -2283,7 +2283,6 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
         "id": f"{course_id}_h{hole_num:02d}",
         "name": name,
         "par": par,
-        "wind_seed": _stable_int_seed(course_id, hole_num, "wind") % 9999 + 1,
         "tee": [0.0, 0.0, 0.0],
         "pin": [_r(pin_x-tee_x), 0.0, _r(pin_z-tee_z)],
         "spline": {

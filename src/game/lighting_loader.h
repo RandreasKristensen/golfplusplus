@@ -75,6 +75,130 @@ struct sky_style {
     float cloud_sun_gain = 0.0f;
     float cloud_sun_width_deg = 0.0f;
     glm::vec3 cloud_shade{0.0f};
+    // The cloud deck the sky's cover (game/weather_lighting.h) draws over the
+    // panorama: noise on a ceiling over the camera, cloud_deck_scale cells
+    // per unit of it across (a unit is as far as the ceiling is high),
+    // drifting cloud_deck_drift units a second. Cloud wherever the noise is
+    // over a threshold from cloud_deck_clear with no cover (none) to
+    // cloud_deck_full under full cover, fully cloud cloud_deck_softness
+    // past it. Its edges are cloud_deck_top times as bright as the sky
+    // overhead, its thick middles cloud_deck_base of that.
+    float cloud_deck_scale = 0.0f;
+    float cloud_deck_drift = 0.0f;
+    float cloud_deck_clear = 0.0f;
+    float cloud_deck_full = 0.0f;
+    float cloud_deck_softness = 0.0f;
+    float cloud_deck_top = 0.0f;
+    float cloud_deck_base = 0.0f;
+    // A sun shower's rainbow, a ring round the point opposite the sun: the
+    // primary rainbow_radius_deg out and rainbow_width_deg wide, red outside;
+    // the secondary further out and wider, its colours reversed,
+    // rainbow_secondary_share as bright. At its brightest it adds
+    // rainbow_brightness of the sun's light; the sky inside the primary is
+    // lighter by rainbow_inner_glow, and between the two darker by
+    // rainbow_band_darkening (Alexander's band).
+    float rainbow_radius_deg = 0.0f;
+    float rainbow_width_deg = 0.0f;
+    float rainbow_secondary_radius_deg = 0.0f;
+    float rainbow_secondary_width_deg = 0.0f;
+    float rainbow_secondary_share = 0.0f;
+    float rainbow_brightness = 0.0f;
+    float rainbow_inner_glow = 0.0f;
+    float rainbow_band_darkening = 0.0f;
+};
+
+// What the weather (game/weather.h) does to the light (game/weather_lighting.h)
+// and the ground. The sky's cover fades in and out over fade_seconds as
+// drawn. Under full cover the sun keeps overcast_sun of its light and
+// overcast_shadows of its shadows, overcast_scatter of the light it loses
+// coming down from the whole sky; the sky's light, the haze and the sky
+// turn overcast_grey of the way to grey, the sky overhead overcast_sky
+// times overcast_sky_brightness times the clear sky's brightness there,
+// in place of at least overcast_sky_blend of the sky panorama, keeping
+// overcast_mottle of the panorama's clouds' contrast; the
+// horizon's glow keeps overcast_glow; the haze adds overcast_haze and is full
+// by overcast_haze_distance of its distance; the camcorder opens up by
+// overcast_exposure and keeps overcast_saturation of its colour. Rain at
+// its heaviest keeps rain_light of the light, darkens the clouds by
+// rain_mottle where the panorama's are bright, adds rain_haze, shortens the haze to rain_haze_distance and
+// adds rain_gain_noise. The thickest fog takes the sun's light like
+// fog_cover of cloud, adds fog_haze (in which the sky fades), shortens the haze to
+// fog_haze_distance and greys it fog_grey of the way. Soaked ground keeps
+// wet_albedo of its colour and shines with wet_gloss, as sharp as
+// wet_gloss_power.
+struct weather_style {
+    float fade_seconds = 0.0f;
+    float overcast_sun = 0.0f;
+    float overcast_shadows = 0.0f;
+    float overcast_scatter = 0.0f;
+    float overcast_grey = 0.0f;
+    glm::vec3 overcast_sky{0.0f};
+    float overcast_sky_brightness = 0.0f;
+    float overcast_sky_blend = 0.0f;
+    float overcast_mottle = 0.0f;
+    float overcast_glow = 0.0f;
+    float overcast_haze = 0.0f;
+    float overcast_haze_distance = 0.0f;
+    float overcast_exposure = 0.0f;
+    float overcast_saturation = 0.0f;
+    float rain_light = 0.0f;
+    float rain_mottle = 0.0f;
+    float rain_haze = 0.0f;
+    float rain_haze_distance = 0.0f;
+    float rain_gain_noise = 0.0f;
+    float fog_cover = 0.0f;
+    float fog_haze = 0.0f;
+    float fog_haze_distance = 0.0f;
+    float fog_grey = 0.0f;
+    float wet_albedo = 0.0f;
+    float wet_gloss = 0.0f;
+    float wet_gloss_power = 0.0f;
+};
+
+// Rain as drawn (renderer/weather_renderer.h): up to max_drops streaks in a
+// volume_size box that wraps round the camera, max_drops of them at rain
+// amount 1 and amount^drop_power of them at less (heavy rain far denser than
+// light), falling from light_fall_speed
+// towards heavy_fall_speed at amount 1 and blown by the wind at wind_height metres. A streak is as long as the
+// drop falls in streak_seconds, light_alpha to heavy_alpha opaque, in
+// `color` lit by the light there is, fading out nearer than near_fade
+// metres and towards the box's edge.
+struct rain_style {
+    int max_drops = 0;
+    float drop_power = 0.0f;
+    float volume_size = 0.0f;
+    float light_fall_speed = 0.0f;
+    float heavy_fall_speed = 0.0f;
+    float wind_height = 0.0f;
+    float streak_seconds = 0.0f;
+    float light_alpha = 0.0f;
+    float heavy_alpha = 0.0f;
+    float near_fade = 0.0f;
+    glm::vec3 color{0.0f};
+};
+
+// The wind as drawn. Every flag hangs at flag_calm_speed (m/s at its height)
+// and below, streams straight out at flag_full_speed and above, flapping
+// from flag_calm_hz to flag_full_hz, its waves flag_flap of its length.
+// Bits of grass and leaf (`speck_color`) blow past in a speck_volume_size
+// box round the camera with the wind at speck_height metres: max_specks of
+// them at speck_full_speed and up, speck_calm_share of that in calm, each a
+// streak as long as it moves in speck_seconds, tumbling speck_tumble metres
+// up and down.
+struct wind_style {
+    float flag_calm_speed = 0.0f;
+    float flag_full_speed = 0.0f;
+    float flag_calm_hz = 0.0f;
+    float flag_full_hz = 0.0f;
+    float flag_flap = 0.0f;
+    int max_specks = 0;
+    float speck_volume_size = 0.0f;
+    float speck_height = 0.0f;
+    float speck_full_speed = 0.0f;
+    float speck_calm_share = 0.0f;
+    float speck_seconds = 0.0f;
+    float speck_tumble = 0.0f;
+    glm::vec3 speck_color{0.0f};
 };
 
 // The ground by surface: the terrain, ponds, and every map of a hole.
@@ -178,9 +302,10 @@ struct scene_colors {
     glow_floors glow;
 };
 
-// Shadows: soft dark blobs on the ground under the ball, players and carts,
-// cast along the sun (core/light_frame.h, blob_shadow.vert), a faint one at
-// every tree's foot, the trees' shadow map (renderer/shadow_map_pass.h) and
+// Shadows: a soft dark blob under the ball cast along the sun
+// (core/light_frame.h, blob_shadow.vert), blobs at the feet of players,
+// carts and trees, the shadow map of trees, floodlights, players and carts
+// (renderer/shadow_map_pass.h) and
 // the land's shadow behind hills at low sun (lighting.glsl's sun_shadow).
 struct shadow_style {
     float blob_strength = 0.0f;  // how dark a blob is at its middle, 0..1
@@ -193,20 +318,18 @@ struct shadow_style {
     float max_stretch = 0.0f;    // a blob is never cast longer than this many times its width, 1..16
     float contact_reach = 0.0f;  // metres: the night blob fades out as a thing rises this far off the ground
     float horizon_softness_deg = 0.0f;  // degrees of sun over which the land's shadow edge fades
-    // What casts: the drawn ball's radius times ball_radius_scale; a player
-    // as a blob of player_radius cast from player_height; a cart likewise. A
-    // tree only darkens the ground at its foot, tree_radius_share of its
-    // crown's radius wide and tree_contact_share of blob_strength dark: its
-    // shadow is the shadow map's.
+    // What casts a blob: the drawn ball, its radius times ball_radius_scale,
+    // cast along the sun. A player (player_radius) and a cart (cart_radius)
+    // only darken the ground at their foot, foot_share of blob_strength dark
+    // by day, their shadow the shadow map's; a tree likewise, always that
+    // faint, tree_radius_share of its crown's radius wide.
     float ball_radius_scale = 0.0f;
     float player_radius = 0.0f;
-    float player_height = 0.0f;
     float cart_radius = 0.0f;
-    float cart_height = 0.0f;
     float tree_radius_share = 0.0f;
-    float tree_contact_share = 0.0f;
+    float foot_share = 0.0f;
     float pole_radius = 0.0f;  // a floodlight pole's blob at its foot
-    // The trees' shadow map: map_resolution texels square over map_extent
+    // The shadow map: map_resolution texels square over map_extent
     // metres of ground, its middle map_ahead of the extent in front of the
     // camera; map_strength of the sun the shadow takes away (faded in like
     // the blobs), its edge blurred over map_softness texels, and faded out
@@ -250,17 +373,51 @@ struct night_light_style {
     float lamp_glow = 0.0f;
 };
 
+// Lightning in a thunderstorm (core/lightning_frame.h): strikes_per_minute
+// at full thunder, at random, each flashing for flash_seconds in a few
+// pulses pulse_seconds long. bolt_share of them are bolts down to the
+// horizon from a top between top_min_deg and top_max_deg up, the rest flash
+// inside the cloud only. A strike is near_meters to far_meters away, its
+// thunder heard after the sound covers that at sound_speed m/s: the close
+// clap within close_meters, the far rumble beyond. As drawn
+// (assets/shaders/backdrop.frag), its bolt is bolt_width_deg wide,
+// wandering up to bolt_jitter_deg either way, bolt_brightness bright in
+// `color`, lighting the clouds within glow_radius_deg of its top by
+// glow_strength.
+struct lightning_style {
+    float strikes_per_minute = 0.0f;
+    float flash_seconds = 0.0f;
+    float pulse_seconds = 0.0f;
+    float bolt_share = 0.0f;
+    float top_min_deg = 0.0f;
+    float top_max_deg = 0.0f;
+    float near_meters = 0.0f;
+    float far_meters = 0.0f;
+    float close_meters = 0.0f;
+    float sound_speed = 0.0f;
+    float bolt_width_deg = 0.0f;
+    float bolt_jitter_deg = 0.0f;
+    float bolt_brightness = 0.0f;
+    float glow_radius_deg = 0.0f;
+    float glow_strength = 0.0f;
+    glm::vec3 color{0.0f};
+};
+
 struct lighting_palette {
     std::vector<lighting_key> keys;  // by rising sun elevation
     sky_style sky;
     scene_colors colors;
     shadow_style shadows;
     night_light_style night_lights;
+    weather_style weather;
+    rain_style rain;
+    wind_style wind;
+    lightning_style lightning;
 };
 
-// nullopt unless every field is present (the sky's clouds, the shadows' and
-// night lights' numbers within the ranges lighting_fields.h gives them,
-// map_resolution a power of two), every colour is three numbers in
+// nullopt unless every field is present (the sky's clouds, the shadows',
+// night lights', weather's, rain's and wind's numbers within the ranges
+// lighting_fields.h gives them, map_resolution a power of two), every colour is three numbers in
 // 0..1, every glow, sky_blend, horizon_glow_strength, gain_noise,
 // saturation and sky share in 0..1, exposure within 0.1..8, the sun's
 // brightness within 1..64,

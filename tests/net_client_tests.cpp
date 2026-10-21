@@ -166,7 +166,7 @@ TEST_CASE("the game's net commands become reducer calls, once") {
     shot.club_id = "putter";
     shot.aim_angle = 1.5f;
     shot.power = 0.6f;
-    shot.wind_time = 2.0f;
+    shot.shot_at = 2000;
     net_command take;
     take.type = net_command_type::take_shot;
     take.shot = shot;
@@ -195,6 +195,7 @@ TEST_CASE("the game's net commands become reducer calls, once") {
     CHECK(calls[1].shot.stroke == 3);
     CHECK(calls[1].club_id == "putter");
     CHECK(calls[1].shot.power == 0.6f);
+    CHECK(calls[1].shot.shot_at == 2000);
     CHECK(calls[2].number == 4);
     CHECK(calls[3].text == "lost_ball");
     CHECK(calls[4].text == "smoke");
@@ -486,7 +487,7 @@ TEST_CASE("my room's rows become its players, balls, carts, groups, shots and em
     const std::string drink = "drink";
     const std::vector<std::int32_t> strokes{4, 0};
     stdb_row row{};
-    row.room_member = stdb_room_member{43, 7, 9, 1, 5000000, strokes.data(), strokes.size()};
+    row.room_member = stdb_room_member{43, 7, 9, 1, strokes.data(), strokes.size()};
     queue_event(row_event(STDB_TABLE_ROOM_MEMBER, STDB_ROW_INSERT, row));
     row = stdb_row{};
     row.player = stdb_player{42, fake_text(me), true, 0};
@@ -501,7 +502,7 @@ TEST_CASE("my room's rows become its players, balls, carts, groups, shots and em
     row.avatar_motion = stdb_avatar_motion{42, 7, stdb_motion{-1, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0}, 9000000000};
     queue_event(row_event(STDB_TABLE_AVATAR_MOTION, STDB_ROW_INSERT, row));
     row = stdb_row{};
-    row.ball = stdb_ball{43, 7, 1, 4.0f, 5.0f, 6.0f, 2, 1.5f};
+    row.ball = stdb_ball{43, 7, 1, 4.0f, 5.0f, 6.0f, 2, 1500};
     queue_event(row_event(STDB_TABLE_BALL, STDB_ROW_INSERT, row));
     row = stdb_row{};
     row.golf_cart = stdb_golf_cart{43, 7, 10.0f, 1.0f, -3.0f, 0.75f, 42};
@@ -510,7 +511,7 @@ TEST_CASE("my room's rows become its players, balls, carts, groups, shots and em
     row.golf_group = stdb_golf_group{9, 7, 43, 1};
     queue_event(row_event(STDB_TABLE_GOLF_GROUP, STDB_ROW_INSERT, row));
     row = stdb_row{};
-    row.shot_event = stdb_shot_event{7, 43, 1, stdb_shot{2, 0.25f, fake_text(club), 0.8f, true, 3.5f},
+    row.shot_event = stdb_shot_event{7, 43, 1, stdb_shot{2, 0.25f, fake_text(club), 0.8f, true, 3500},
                                      1.0f, 2.0f, 3.0f, 7.0f, 8.0f, 9.0f, false};
     queue_event(row_event(STDB_TABLE_SHOT_EVENT, STDB_ROW_INSERT, row));
     row = stdb_row{};
@@ -526,7 +527,6 @@ TEST_CASE("my room's rows become its players, balls, carts, groups, shots and em
     CHECK(them.name == "OTHER");
     CHECK(them.group_id == 9U);
     CHECK(them.zone == 1);
-    CHECK(them.hole_started_at == 5000000);
     CHECK((them.round_strokes == std::vector<int>{4, 0}));
     REQUIRE(them.motion.has_value());
     CHECK(them.motion->mode == motion_mode::walk);

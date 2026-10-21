@@ -562,7 +562,7 @@ TEST_CASE("shadows fade in with the sun, the night lights come on without it, an
     }
     for (const auto& [key, value] : std::initializer_list<std::pair<const char*, double>>{
              {"map_extent", 5.0}, {"map_ahead", 0.6}, {"map_strength", 1.5}, {"map_softness", -1.0}, {"map_edge_fade", 0.0},
-             {"tree_contact_share", 1.1}}) {
+             {"foot_share", 1.1}}) {
         json bad = shipped;
         bad["shadows"][key] = value;
         CHECK(!parses(bad));

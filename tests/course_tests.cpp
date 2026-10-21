@@ -303,7 +303,6 @@ TEST_CASE("a hub hole is played on the whole course") {
     REQUIRE(start_hub_hole(state, 0));
     CHECK(near(state.area.center, course_center));
     CHECK(sample_area(state.area, state.hub->world.hole_starts[2].position).inside_surface);
-    CHECK(state.hole->wind_seed == state.course_holes[0].wind_seed);
 }
 
 TEST_CASE("interacting at a hole start plays that hole where the hub shows it") {

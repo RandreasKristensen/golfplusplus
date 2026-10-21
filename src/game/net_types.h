@@ -153,7 +153,7 @@ enum class net_status {
 // only on a server with the same, else asks for an update
 // (net_failure_outdated_game). Bump it with every change to the module's
 // tables, views or reducers; the server_protocol view itself never changes.
-inline constexpr std::uint32_t protocol_version = 2;
+inline constexpr std::uint32_t protocol_version = 3;
 
 // The failure ids the bridge and the client give (src/net/stdb_bridge.h,
 // net_client), besides the server's (server_errors.h). One per line: a test
@@ -208,7 +208,6 @@ struct room_player {
     std::string name;
     std::uint64_t group_id = 0;  // 0: none
     int zone = hub_zone;
-    std::int64_t hole_started_at = 0;  // when the hole was entered or reteed: wind time starts here
     std::vector<int> round_strokes;    // per hole this round, 0: not played
     // Where the server last accepted them, and when (server time).
     std::optional<net_motion> motion;

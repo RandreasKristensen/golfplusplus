@@ -145,12 +145,57 @@ inline constexpr const char* text_hud_swing_nine = "hud.swing.nine";
 inline constexpr const char* text_hud_swing_twelve = "hud.swing.twelve";
 inline constexpr const char* text_hud_cart = "hud.cart";
 inline constexpr const char* text_hud_cart_drive = "hud.cart.drive";
+// The rangefinder: its reading and unit, the reading at the sky, its flag lock and the wind.
 inline constexpr const char* text_hud_rangefinder = "hud.rangefinder";
+inline constexpr const char* text_hud_rangefinder_unit = "hud.rangefinder.unit";
+inline constexpr const char* text_hud_rangefinder_none = "hud.rangefinder.none";
+inline constexpr const char* text_hud_rangefinder_flag = "hud.rangefinder.flag";
+inline constexpr const char* text_hud_rangefinder_wind = "hud.rangefinder.wind";
+// The height of what it reads over the ground under me, signed up or down hill.
+inline constexpr const char* text_hud_rangefinder_height = "hud.rangefinder.height";
+inline constexpr const char* text_hud_rangefinder_uphill = "hud.rangefinder.uphill";
+inline constexpr const char* text_hud_rangefinder_downhill = "hud.rangefinder.downhill";
 inline constexpr const char* text_hud_xp_drop = "hud.xp_drop";
 // A shot lost in water, as the ball goes back
 inline constexpr const char* text_hud_water_penalty = "hud.water_penalty";
 inline constexpr const char* text_hud_mode_online = "hud.mode.online";
 inline constexpr const char* text_hud_mode_reconnecting = "hud.mode.reconnecting";
+
+// The weather's kinds (game/weather.h) and the compass points the wind comes from
+inline constexpr const char* text_weather_clear = "weather.clear";
+inline constexpr const char* text_weather_cloudy = "weather.cloudy";
+inline constexpr const char* text_weather_light_fog = "weather.light_fog";
+inline constexpr const char* text_weather_fog = "weather.fog";
+inline constexpr const char* text_weather_light_rain = "weather.light_rain";
+inline constexpr const char* text_weather_rain = "weather.rain";
+inline constexpr const char* text_weather_heavy_rain = "weather.heavy_rain";
+inline constexpr const char* text_weather_thunderstorm = "weather.thunderstorm";
+inline constexpr const char* text_weather_sun_shower = "weather.sun_shower";
+inline constexpr const char* text_compass_n = "compass.n";
+inline constexpr const char* text_compass_ne = "compass.ne";
+inline constexpr const char* text_compass_e = "compass.e";
+inline constexpr const char* text_compass_se = "compass.se";
+inline constexpr const char* text_compass_s = "compass.s";
+inline constexpr const char* text_compass_sw = "compass.sw";
+inline constexpr const char* text_compass_w = "compass.w";
+inline constexpr const char* text_compass_nw = "compass.nw";
+
+// The god menu (core/god_menu.h)
+inline constexpr const char* text_god_title = "god.title";
+inline constexpr const char* text_god_time = "god.time";
+inline constexpr const char* text_god_weather = "god.weather";
+inline constexpr const char* text_god_cloud = "god.cloud";
+inline constexpr const char* text_god_rain = "god.rain";
+inline constexpr const char* text_god_fog = "god.fog";
+inline constexpr const char* text_god_thunder = "god.thunder";
+inline constexpr const char* text_god_wind = "god.wind";
+inline constexpr const char* text_god_wind_direction = "god.wind_direction";
+inline constexpr const char* text_god_wetness = "god.wetness";
+inline constexpr const char* text_god_hours = "god.hours";
+inline constexpr const char* text_god_speed = "god.speed";
+inline constexpr const char* text_god_percent = "god.percent";
+inline constexpr const char* text_god_keys = "god.keys";
+inline constexpr const char* text_god_online = "god.online";
 
 // The camcorder's datestamp and the VCR's on-screen display (core/vcr_frame.h)
 inline constexpr const char* text_camcorder_datestamp_time = "camcorder.datestamp.time";
@@ -225,10 +270,19 @@ inline constexpr const char* style_name_tag_group = "name_tag_group";
 inline constexpr const char* style_hud_scale = "hud_scale";
 inline constexpr const char* style_hud_club = "hud_club";
 inline constexpr const char* style_hud_club_name = "hud_club_name";
+inline constexpr const char* style_god_title = "god_title";
+inline constexpr const char* style_god_label = "god_label";
+inline constexpr const char* style_god_live = "god_live";
+inline constexpr const char* style_god_held = "god_held";
+inline constexpr const char* style_god_note = "god_note";
 inline constexpr const char* style_cart_label = "cart_label";
 inline constexpr const char* style_cart_drive = "cart_drive";
 inline constexpr const char* style_xp_drop = "xp_drop";
 inline constexpr const char* style_rangefinder = "rangefinder";
+inline constexpr const char* style_rangefinder_unit = "rangefinder_unit";
+inline constexpr const char* style_rangefinder_tag = "rangefinder_tag";
+inline constexpr const char* style_rangefinder_wind = "rangefinder_wind";
+inline constexpr const char* style_rangefinder_height = "rangefinder_height";
 inline constexpr const char* style_hole_sign_number = "hole_sign_number";
 inline constexpr const char* style_hole_sign_detail = "hole_sign_detail";
 inline constexpr const char* style_course_map_hole_number = "course_map_hole_number";

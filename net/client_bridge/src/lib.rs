@@ -261,6 +261,6 @@ pub unsafe extern "C" fn stdb_take_shot(client: *mut StdbClient, shot: *const St
     let s = *s;
     let club = s.club_id.to_string();
     c.call("take_shot", |conn, done| {
-        conn.reducers.take_shot_then(s.stroke, s.aim_angle, club, s.power, s.cigarette_active, s.wind_time, done)
+        conn.reducers.take_shot_then(s.stroke, s.aim_angle, club, s.power, s.cigarette_active, s.shot_at, done)
     });
 }

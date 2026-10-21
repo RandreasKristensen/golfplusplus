@@ -10,7 +10,7 @@ layout(location = 6) in vec4 a_horizon_b;
 
 uniform mat4 u_mvp;
 uniform mat4 u_model;
-// World to the trees' shadow map (renderer/shadow_map_pass.h).
+// World to the shadow map (renderer/shadow_map_pass.h).
 uniform mat4 u_shadow_view_proj;
 
 out vec3 v_normal;

@@ -8,6 +8,7 @@
 
 #include "game/game_state.h"
 #include "game/lighting_loader.h"
+#include "game/weather_lighting.h"
 #include "renderer/render_data.h"
 
 #include <cstdint>
@@ -34,5 +35,9 @@ double frame_game_day(const sky_timeline& timeline, const course_sky& sky, const
 // machine's UTC clock.
 double course_game_day(const game_state& game, const sky_controls& controls, std::int64_t local_unix_ms);
 
+// The hour (0..24) on the course's clock this frame, as course_game_day has it.
+float course_hour(const game_state& game, const sky_controls& controls, std::int64_t local_unix_ms);
+
+// The frame's light under the weather as drawn (core/weather_frame.h).
 render_lighting make_render_lighting(const game_state& game, const lighting_palette& palette, const sky_controls& controls,
-                                     std::int64_t local_unix_ms);
+                                     std::int64_t local_unix_ms, const shown_weather& weather = shown_weather{});

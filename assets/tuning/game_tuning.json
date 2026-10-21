@@ -4,7 +4,8 @@
     "ball_physics_radius_meters": 0.021335,
     "ball_visual_radius_meters": 0.10,
     "cup_radius_meters": 0.25,
-    "pin_visual_height_meters": 2.10
+    "pin_visual_height_meters": 2.10,
+    "flagstick_radius_meters": 0.05
   },
   "terrain": {
     "min_sections": 128,
@@ -29,13 +30,53 @@
     "water_spin_decay": 2.8
   },
   "wind": {
-    "seed_phase_scale": 0.01,
-    "base_speed": 2.0,
-    "speed_variation": 1.5,
-    "speed_time_scale": 0.2,
-    "angle_variation": 0.7,
-    "angle_time_scale": 0.11,
-    "phase_angle_scale": 1.3
+    "height_profile": [[0.03, 0.0], [0.1, 0.21], [0.25, 0.36], [0.5, 0.48], [1.0, 0.6], [2.0, 0.72], [5.0, 0.88], [10.0, 1.0], [20.0, 1.12], [40.0, 1.24]],
+    "hours": 4.0,
+    "calm_speed": 0.4,
+    "max_speed": 9.0,
+    "storm_speed": 5.0,
+    "direction_hours": 10.0,
+    "direction_swing": 2.5
+  },
+  "weather": {
+    "regime_hours": 96.0,
+    "regime_weight": 0.5,
+    "spell_hours": 12.0,
+    "detail_hours": 3.0,
+    "detail_weight": 0.15,
+    "cloud_start": 0.35,
+    "cloud_full": 0.63,
+    "cloud_trend": 2.5,
+    "rain_start": 0.61,
+    "rain_full": 0.85,
+    "rain_lag_hours": 3.5,
+    "sun_shower_keep": 0.35,
+    "sun_shower_cloud": 0.5,
+    "light_rain": 0.3,
+    "rain": 0.6,
+    "heavy_rain": 1.0,
+    "thunder_start": 0.81,
+    "thunder_full": 0.88,
+    "fog_hours": 48.0,
+    "fog_regime_weight": 0.4,
+    "fog_start": 0.72,
+    "fog_full": 0.8,
+    "fog_rain_clear": 0.5,
+    "fog_calm_wind": 3.0,
+    "fog_wind_clear": 12.0,
+    "light_fog": 0.75,
+    "fog": 1.0,
+    "wetting_per_hour": 0.35,
+    "drying_per_hour": 0.12,
+    "history_hours": 48.0,
+    "step_hours": 0.25,
+    "rain_drag_coeff": 0.0004,
+    "wet_spin_loss": 0.35,
+    "wet_bounce_loss": 0.45,
+    "wet_friction_gain": 0.6,
+    "wet_roll_gain": 0.8,
+    "wet_green_friction_gain": 0.05,
+    "wet_green_roll_gain": 0.2
   },
   "ball": {
     "stop_speed": 0.08,
@@ -75,7 +116,8 @@
     "address_back_distance": 0.4,
     "emote_seconds": 2.0,
     "jump_speed": 4.0,
-    "jump_gravity": 14.0
+    "jump_gravity": 14.0,
+    "body_radius": 0.3
   },
   "cart": {
     "speed": 17.0,
@@ -96,7 +138,13 @@
     "road_speed_scale": 1.32,
     "road_control_scale": 1.12,
     "off_road_speed_scale": 0.72,
-    "off_road_control_scale": 0.78
+    "off_road_control_scale": 0.78,
+    "body_radius": 0.72,
+    "body_ahead": 0.66,
+    "body_behind": 0.3,
+    "crash_bounce": 0.25,
+    "crash_sound_speed": 3.0,
+    "scrape_friction": 0.9
   },
   "camera": {
     "walking_eye_height": 1.65,
@@ -114,6 +162,25 @@
     "transition_seconds": 0.55,
     "transition_jump_distance": 1.5,
     "viewmodel_fov_degrees": 60.0
+  },
+  "rangefinder": {
+    "magnification": 3.0,
+    "raise_seconds": 0.15,
+    "max_range_meters": 600.0,
+    "march_step_meters": 2.0,
+    "refine_steps": 10,
+    "flag_lock_degrees": 1.5,
+    "jolt_seconds": 0.6,
+    "jolt_flashes": 3,
+    "surround_brightness": 0.35,
+    "surround_saturation": 0.15,
+    "person_height": 1.8,
+    "cart_height": 2.0,
+    "ping_seconds": 0.4,
+    "light_rain_error": 0.1,
+    "light_fog_error": 0.2,
+    "blank_share": 0.35,
+    "nonsense_slope": 0.15
   },
   "aim_preview": {
     "step_seconds": 0.18,
@@ -155,7 +222,7 @@
     "motion_distance_slack": 2.0,
     "max_motion_gap_seconds": 3.5,
     "interact_slack": 2.0,
-    "wind_time_slack_seconds": 2.0,
+    "shot_time_slack_seconds": 2.0,
     "timing_slack_seconds": 0.25
   },
   "hole_sign": {
@@ -196,7 +263,7 @@
   "sky_clock": {
     "anchor_real_date": "2026-10-01",
     "anchor_game_hour": 6,
-    "game_days_per_real_day": 30,
+    "game_days_per_real_day": 6,
     "year": 1989
   },
   "lies": {

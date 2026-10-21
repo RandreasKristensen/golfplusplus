@@ -20,6 +20,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <vector>
 
 namespace {
@@ -231,9 +232,25 @@ std::size_t check_flagstick(const world_marker_batch& batch,
                         glow.pin_pole);
     index = check_piece(batch, index, quad, expected_panel_model(pin_base, 90.0f, glm::vec3(0.045f, pin_height * 0.5f, 1.0f)), pole_color,
                         glow.pin_pole);
-    const glm::vec3 flag_center = position + glm::vec3(0.34f, pin_height * 0.86f, 0.0f);
-    index = check_piece(batch, index, quad, expected_panel_model(flag_center, 0.0f, glm::vec3(0.36f, 0.24f, 1.0f)), flag_color, glow.flag);
-    index = check_piece(batch, index, quad, expected_panel_model(flag_center, 90.0f, glm::vec3(0.36f, 0.24f, 1.0f)), flag_color, glow.flag);
+    // In calm the flag hangs from just under the pole's top, its fly end
+    // 0.72 m out along +x and 0.35 rad from straight down.
+    const glm::vec3 hoist_top = position + glm::vec3(0.0f, pin_height * 0.86f + 0.24f, 0.0f);
+    const glm::vec3 hoist_bottom = hoist_top - glm::vec3(0.0f, 0.48f, 0.0f);
+    const glm::vec3 fly = glm::vec3(std::sin(0.35f), -std::cos(0.35f), 0.0f) * 0.72f;
+    const std::vector<glm::vec3> flag = {hoist_top,         hoist_bottom,           hoist_bottom + fly * 0.5f,
+                                         hoist_top,         hoist_bottom + fly * 0.5f, hoist_top + fly * 0.5f,
+                                         hoist_top + fly * 0.5f, hoist_bottom + fly * 0.5f, hoist_bottom + fly,
+                                         hoist_top + fly * 0.5f, hoist_bottom + fly,  hoist_top + fly};
+    for (const glm::vec3& corner : flag) {
+        if (index >= batch.vertices().size()) {
+            CHECK(index < batch.vertices().size());
+            return index;
+        }
+        check_near(batch.vertices()[index].position, corner);
+        CHECK(batch.vertices()[index].color == flag_color);
+        CHECK(batch.vertices()[index].glow == glow.flag);
+        ++index;
+    }
     return index;
 }
 
@@ -289,8 +306,6 @@ TEST_CASE("world marker batch builds hole markers, aim dots and club in order") 
 
     world_marker_scene scene;
     scene.show_hole = true;
-    const std::vector<tee_box> boxes = {make_tee_box(glm::vec3(3.0f, 1.25f, -8.0f), glm::vec3(0.0f, 0.0f, 1.0f))};
-    scene.tee_boxes = &boxes;
     scene.pin_position = glm::vec3(-12.0f, 4.5f, 140.0f);
     scene.cup_radius_meters = 0.65f;
     scene.pin_visual_height_meters = 2.1f;
@@ -309,7 +324,6 @@ TEST_CASE("world marker batch builds hole markers, aim dots and club in order") 
     const std::vector<glm::vec3> quad = expected_quad_positions();
 
     std::size_t index = 0;
-    index = check_tee_box(batch, index, boxes[0]);
     const std::size_t cup_first = index;
     index = check_piece(batch, index, disc, expected_cup_model(scene.pin_position, 0.65f), test_scene_colors().markers.cup,
                         test_scene_colors().glow.cup);
@@ -324,11 +338,10 @@ TEST_CASE("world marker batch builds hole markers, aim dots and club in order") 
     }
     CHECK(index == batch.vertices().size());
 
-    // Tee (depth on) | cup (depth off) | flagstick + dots + club (depth on).
-    REQUIRE(batch.runs().size() == 3U);
-    check_run(batch.runs()[0], true, 0, tee_box_vertex_count());
-    check_run(batch.runs()[1], false, cup_first, disc_vertex_count);
-    check_run(batch.runs()[2],
+    // Cup (depth off) | flagstick + dots + club (depth on).
+    REQUIRE(batch.runs().size() == 2U);
+    check_run(batch.runs()[0], false, cup_first, disc_vertex_count);
+    check_run(batch.runs()[1],
               true,
               flagstick_first,
               flagstick_vertex_count + arc.size() * disc_vertex_count + club_vertex_count);
@@ -374,7 +387,7 @@ TEST_CASE("a tee box is a flat top of grey tiles under a green mat, its sides do
     }
 }
 
-TEST_CASE("world marker pin cross pole and flag are the 90 degree yaw copies") {
+TEST_CASE("world marker pin cross pole is the 90 degree yaw copy, the flag hung from its top") {
     world_marker_batch batch;
     const glm::vec3 pin(10.0f, 2.0f, -5.0f);
     append_pin_flagstick(batch, pin, 2.0f, test_scene_colors().markers, test_scene_colors().glow);
@@ -386,11 +399,7 @@ TEST_CASE("world marker pin cross pole and flag are the 90 degree yaw copies") {
     const glm::vec3 cross_corner = batch.vertices()[quad_vertex_count + 2].position;
     check_near(pole_corner, glm::vec3(10.045f, 4.0f, -5.0f));
     check_near(cross_corner, glm::vec3(10.0f, 4.0f, -5.045f));
-
-    const glm::vec3 flag_corner = batch.vertices()[2 * quad_vertex_count + 2].position;
-    const glm::vec3 flag_cross_corner = batch.vertices()[3 * quad_vertex_count + 2].position;
-    check_near(flag_corner, glm::vec3(10.0f + 0.34f + 0.36f, 2.0f + 1.72f + 0.24f, -5.0f));
-    check_near(flag_cross_corner, glm::vec3(10.34f, 2.0f + 1.72f + 0.24f, -5.36f));
+    check_flagstick(batch, 0, pin, 2.0f);
 
     // A too-short pin is clamped to 0.1 m.
     world_marker_batch short_batch;
@@ -398,16 +407,50 @@ TEST_CASE("world marker pin cross pole and flag are the 90 degree yaw copies") {
     check_flagstick(short_batch, 0, pin, 0.0f);
 }
 
-TEST_CASE("world marker batch groups a hub into three runs in submission order") {
+TEST_CASE("a flag streams downwind, straight out in a strong wind and waving across it") {
+    const glm::vec3 pin(0.0f, 0.0f, 0.0f);
+    const auto fly_end = [&pin](const flag_pose& pose) {
+        world_marker_batch batch;
+        append_pin_flagstick(batch, pin, 2.0f, test_scene_colors().markers, test_scene_colors().glow, pose);
+        CHECK(batch.vertices().size() == flagstick_vertex_count);
+        // The fly end's top corner, less the hoist's.
+        return batch.vertices().back().position - batch.vertices()[2 * quad_vertex_count].position;
+    };
+    const glm::vec3 south(0.0f, 0.0f, 1.0f);
+    const glm::vec3 limp = fly_end(flag_pose{south * 0.5f, 0.0f, 0.0f, 0.0f});
+    const glm::vec3 out = fly_end(flag_pose{south * 12.0f, 1.0f, 0.0f, 0.0f});
+    CHECK(limp.z > 0.0f);
+    CHECK(limp.y < -0.6f);
+    check_near(out, glm::vec3(0.0f, 0.0f, 0.72f));
+    // Its waves move the fly end across the wind, never along it.
+    const glm::vec3 waving = fly_end(flag_pose{south * 12.0f, 1.0f, 1.0f, 0.1f});
+    CHECK(std::abs(waving.x) > 0.01f);
+    CHECK(near(waving.z, 0.72f));
+}
+
+TEST_CASE("the tee box batch holds every tee box in order, one run") {
+    const std::vector<tee_box> boxes = {make_tee_box(glm::vec3(2.0f, 0.6f, 3.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+                                        make_tee_box(glm::vec3(42.0f, 1.1f, 13.0f), glm::vec3(0.6f, 0.0f, 0.8f))};
+    world_marker_batch batch;
+    build_tee_box_batch(batch, &boxes, test_scene_colors().markers);
+    std::size_t index = 0;
+    for (const tee_box& box : boxes) {
+        index = check_tee_box(batch, index, box);
+    }
+    CHECK(index == batch.vertices().size());
+    REQUIRE(batch.runs().size() == 1U);
+    check_run(batch.runs()[0], true, 0, 2 * tee_box_vertex_count());
+
+    build_tee_box_batch(batch, nullptr, test_scene_colors().markers);
+    CHECK(batch.empty());
+}
+
+TEST_CASE("world marker batch groups a hub into two runs in submission order") {
     const std::vector<glm::vec3> pins = {
         glm::vec3(5.0f, 3.0f, 120.0f), glm::vec3(45.0f, -1.0f, 150.0f), glm::vec3(85.0f, 6.0f, 90.0f)};
 
     world_marker_scene scene;
     scene.show_hole = false;
-    const std::vector<tee_box> boxes = {make_tee_box(glm::vec3(2.0f, 0.6f, 3.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
-                                        make_tee_box(glm::vec3(42.0f, 1.1f, 13.0f), glm::vec3(0.6f, 0.0f, 0.8f)),
-                                        make_tee_box(glm::vec3(82.0f, 2.1f, -27.0f), glm::vec3(-1.0f, 0.0f, 0.0f))};
-    scene.tee_boxes = &boxes;
     scene.pin_markers = &pins;
     scene.cup_radius_meters = 0.75f;
     scene.pin_visual_height_meters = 2.4f;
@@ -417,9 +460,6 @@ TEST_CASE("world marker batch groups a hub into three runs in submission order")
 
     const std::vector<glm::vec3> disc = expected_disc_positions();
     std::size_t index = 0;
-    for (const tee_box& box : boxes) {
-        index = check_tee_box(batch, index, box);
-    }
     const std::size_t cups_first = index;
     for (const glm::vec3& pin : pins) {
         index = check_piece(batch, index, disc, expected_cup_model(pin, 0.75f), test_scene_colors().markers.cup,
@@ -431,10 +471,9 @@ TEST_CASE("world marker batch groups a hub into three runs in submission order")
     }
     CHECK(index == batch.vertices().size());
 
-    REQUIRE(batch.runs().size() == 3U);
-    check_run(batch.runs()[0], true, 0, 3 * tee_box_vertex_count());
-    check_run(batch.runs()[1], false, cups_first, 3 * disc_vertex_count);
-    check_run(batch.runs()[2], true, flagsticks_first, 3 * flagstick_vertex_count);
+    REQUIRE(batch.runs().size() == 2U);
+    check_run(batch.runs()[0], false, cups_first, 3 * disc_vertex_count);
+    check_run(batch.runs()[1], true, flagsticks_first, 3 * flagstick_vertex_count);
 }
 
 TEST_CASE("world marker batch keeps every cup ahead of its own flagstick") {
@@ -442,17 +481,15 @@ TEST_CASE("world marker batch keeps every cup ahead of its own flagstick") {
 
     world_marker_scene scene;
     scene.show_hole = true;
-    const std::vector<tee_box> boxes = {make_tee_box(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f))};
-    scene.tee_boxes = &boxes;
     scene.pin_position = glm::vec3(-20.0f, 0.0f, 50.0f);
     scene.pin_markers = &pins;
 
     world_marker_batch batch;
     build_world_marker_batch(batch, scene, test_scene_colors());
 
-    // Tee box | primary cup | primary flagstick | hub cups | hub flagsticks.
-    REQUIRE(batch.runs().size() == 5U);
-    const std::vector<bool> depth_writes = {true, false, true, false, true};
+    // Primary cup | primary flagstick | hub cups | hub flagsticks.
+    REQUIRE(batch.runs().size() == 4U);
+    const std::vector<bool> depth_writes = {false, true, false, true};
     for (std::size_t i = 0; i < depth_writes.size(); ++i) {
         CHECK(batch.runs()[i].depth_write == depth_writes[i]);
     }
@@ -807,4 +844,49 @@ TEST_CASE("the marker batch draws the remote players and balls it is given") {
     build_world_marker_batch(batch, scene, test_scene_colors());
     const std::size_t sphere = make_sphere_positions(primitive_sphere_latitude_segments, primitive_sphere_longitude_segments).size();
     CHECK(batch.vertices().size() == 2U * remote_figure_vertex_count() + 3U * sphere);
+}
+
+TEST_CASE("a cart tilts with the ground under its wheels, its tyres standing a little clear of it") {
+    const auto lowest_gap = [](const render_cart& cart, const std::function<float(const glm::vec3&)>& ground) {
+        world_marker_batch batch;
+        append_cart_model(batch, cart, 0.3f, test_scene_colors().cart);
+        float gap = 1000.0f;
+        for (const world_marker_vertex& vertex : batch.vertices()) {
+            gap = std::min(gap, vertex.position.y - ground(vertex.position));
+        }
+        return gap;
+    };
+
+    const auto flat = [](const glm::vec3&) { return 2.0f; };
+    const render_cart level = cart_on_ground(glm::vec3(10.0f, 0.0f, -4.0f), 0.7f, flat);
+    CHECK(near(level.up, glm::vec3(0.0f, 1.0f, 0.0f)));
+    CHECK(level.position.y > 2.0f);
+    CHECK(level.position.y < 2.06f);
+    CHECK(lowest_gap(level, flat) > 0.0f);
+
+    // Up a slope rising ahead of it and to its left, it leans back and right.
+    const auto slope = [](const glm::vec3& point) { return 0.3f * point.z + 0.15f * point.x; };
+    const render_cart climbing = cart_on_ground(glm::vec3(0.0f), 0.0f, slope);
+    const glm::vec3 slope_normal = glm::normalize(glm::vec3(-0.15f, 1.0f, -0.3f));
+    CHECK(glm::dot(climbing.up, slope_normal) > 0.999f);
+    const float gap = lowest_gap(climbing, slope);
+    CHECK(gap > 0.0f);
+    CHECK(gap < 0.08f);
+
+    // A bump under one wheel lifts the cart over it rather than through it.
+    const auto bump = [](const glm::vec3& point) {
+        return 0.25f * std::max(0.0f, 1.0f - glm::length(glm::vec2(point.x - 0.66f, point.z - 1.0f)) / 0.5f);
+    };
+    for (const float yaw : {0.0f, 1.2f, -2.5f}) {
+        CHECK(lowest_gap(cart_on_ground(glm::vec3(0.0f), yaw, bump), bump) > 0.0f);
+    }
+
+    // A small sharp lump under a wheel hardly tips it: it rests on the
+    // ground smoothed round its wheels.
+    const auto lump = [](const glm::vec3& point) {
+        return 0.1f * std::max(0.0f, 1.0f - glm::length(glm::vec2(point.x, point.z) - glm::vec2(0.66f, 1.0f)) / 0.15f);
+    };
+    const render_cart lumped = cart_on_ground(glm::vec3(0.0f), 0.0f, lump);
+    CHECK(lumped.up.y > std::cos(glm::radians(0.5f)));
+    CHECK(lowest_gap(lumped, lump) > 0.0f);
 }

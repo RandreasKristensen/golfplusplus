@@ -91,6 +91,7 @@ constexpr float_field<camcorder_style> camcorder_fields[] = {
     {"bloom_height", &camcorder_style::bloom_height, 0.0f, 0.2f},
     {"smear_threshold", &camcorder_style::smear_threshold, 0.0f, 64.0f},
     {"smear_strength", &camcorder_style::smear_strength, 0.0f, 4.0f},
+    {"smear_fade", &camcorder_style::smear_fade, 0.0f, 4.0f},
     {"gain_grain", &camcorder_style::gain_grain, 0.0f, 1.0f},
     {"gain_chroma", &camcorder_style::gain_chroma, 0.0f, 1.0f},
 };

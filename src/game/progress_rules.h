@@ -36,6 +36,9 @@ movement_xp_update award_movement_xp(const save_data& progress,
 
 bool collectible_available(const save_data& progress, const course_world_collectible& collectible);
 
+// The rangefinder is an item (game/rangefinder.h); everything is unlocked today.
+bool owns_rangefinder(const save_data& progress);
+
 struct claim_update {
     bool claimed = false;  // false when the collectible is not available
     progress_update update;

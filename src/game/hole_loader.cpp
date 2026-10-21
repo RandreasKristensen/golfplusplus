@@ -136,7 +136,6 @@ std::optional<hole_data> parse_hole_from_text(const std::string& text) {
     hole.id = json_string(*root, "id").value_or("");
     hole.name = json_string(*root, "name").value_or(hole.id);
     hole.par = json_int(*root, "par").value_or(default_hole_par);
-    hole.wind_seed = json_uint32(*root, "wind_seed").value_or(default_wind_seed);
     hole.tee_position = *tee;
     hole.pin_position = *pin;
     hole.spline.width = *width;

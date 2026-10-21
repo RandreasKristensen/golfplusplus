@@ -1,5 +1,6 @@
 #include "doctest.h"
 
+#include "game/mode_dispatch.h"
 #include "game/club_loader.h"
 #include "game/content_files.h"
 #include "game/course_session.h"
@@ -61,13 +62,16 @@ shot_input tee_shot(const game_state& state, const std::string& club, const floa
     return input;
 }
 
+// In the course's weather at the shot's time, as launch_shot plays it.
 shot_result simulate(const game_state& state, const shot_input& input) {
-    return simulate_shot(input, current_shot_course(state), state.tuning, state.clubs, state.rewards);
+    shot_course course = current_shot_course(state);
+    course.weather = course_weather_at(state, input.shot_at);
+    return simulate_shot(input, course, state.tuning, state.clubs, state.rewards);
 }
 
 shot_step step_once(const game_state& state, const ball_state& ball, const float dt, const std::size_t club = 0) {
     return step_shot(ball, sample_area(state.area, ball.position), current_shot_course(state), state.clubs[club].stats,
-                     state.tuning, 0.0f, dt);
+                     state.tuning, dt);
 }
 
 // No rolling deceleration on any surface but sand.
@@ -139,7 +143,7 @@ int count_audio(const std::vector<audio_event>& events, const audio_event_type t
 TEST_CASE("the same shot twice gives bit-identical results") {
     const game_state state = hub_hole(golden_content(), 0);
     shot_input input = tee_shot(state, "driver", 0.9f);
-    input.wind_time = 4.0f;
+    input.shot_at = 4000;
     const shot_result first = simulate(state, input);
 
     // A second state, built separately and played in before the shot.
@@ -206,7 +210,7 @@ TEST_CASE("golden shots land where they always have") {
             input.aim_angle = yaw_towards(input.ball_start, pin);
         }
         input.aim_angle += glm::radians(*json_float(shot, "aim_offset_degrees"));
-        input.wind_time = *json_float(shot, "wind_time");
+        input.shot_at = shot.value("shot_at", std::int64_t{0});
         input.cigarette_active = *json_bool(shot, "cigarette");
 
         const shot_result result = simulate(state, input);
@@ -243,7 +247,7 @@ TEST_CASE("a ball that goes under water sinks to the floor, lies there, and goes
     ball_state ball = state.ball;
     ball.position = glm::vec3(0.0f, pond.water_level + 3.0f, 40.0f);
     ball.velocity = glm::vec3(0.0f, -4.0f, 1.0f);
-    const shot_result result = simulate_ball(ball, state.clubs[0].stats, course, state.tuning, 0.0f);
+    const shot_result result = simulate_ball(ball, state.clubs[0].stats, course, state.tuning);
 
     CHECK(result.penalty_strokes == 1);
     CHECK(!result.holed);
@@ -264,7 +268,7 @@ TEST_CASE("a ball that goes under water sinks to the floor, lies there, and goes
 
     // A ball on dry ground is not lost.
     ball.position = glm::vec3(0.0f, 2.0f, 90.0f);
-    CHECK(simulate_ball(ball, state.clubs[0].stats, course, state.tuning, 0.0f).penalty_strokes == 0);
+    CHECK(simulate_ball(ball, state.clubs[0].stats, course, state.tuning).penalty_strokes == 0);
 }
 
 TEST_CASE("from a bunker only a wedge gets the ball out properly") {
@@ -338,14 +342,81 @@ TEST_CASE("an unknown club leaves the ball where it is") {
     CHECK(!result.holed);
 }
 
-TEST_CASE("wind is sampled from the shot's wind time") {
+TEST_CASE("a headwind shortens a drive, a tailwind lengthens it, and a crosswind moves it sideways") {
     const game_state state = hub_hole(golden_content(), 0);
-    REQUIRE(state.tuning.wind.base_speed + state.tuning.wind.speed_variation > 0.0f);
-    shot_input calm = tee_shot(state, "driver", 1.0f);
-    shot_input later = calm;
-    later.wind_time = 37.0f;
+    const shot_input drive = tee_shot(state, "driver", 1.0f);
+    const glm::vec3 forward = yaw_direction(drive.aim_angle);
+    const auto carry_in = [&](const glm::vec3& wind) {
+        shot_course course = current_shot_course(state);
+        course.weather.wind = wind;
+        return simulate_shot(drive, course, state.tuning, state.clubs, state.rewards);
+    };
+    const shot_result calm = carry_in(glm::vec3(0.0f));
+    const float still = glm::dot(calm.rest_position - drive.ball_start, forward);
+    const float into = glm::dot(carry_in(-forward * 8.0f).rest_position - drive.ball_start, forward);
+    const float with = glm::dot(carry_in(forward * 8.0f).rest_position - drive.ball_start, forward);
+    CHECK(into < still);
+    CHECK(with > still);
 
-    CHECK(simulate(state, calm).rest_position != simulate(state, later).rest_position);
+    const glm::vec3 left = yaw_left(forward);
+    const shot_result across = carry_in(left * 8.0f);
+    CHECK(glm::dot(across.rest_position - calm.rest_position, left) > 1.0f);
+}
+
+TEST_CASE("a putt barely feels the wind a drive flies in") {
+    const game_state state = hub_hole(golden_content(), 2);
+    shot_input putt = tee_shot(state, "putter", 0.4f);
+    const glm::vec3 left = yaw_left(yaw_direction(putt.aim_angle));
+    shot_course course = current_shot_course(state);
+    const shot_result calm = simulate_shot(putt, course, state.tuning, state.clubs, state.rewards);
+    course.weather.wind = left * 8.0f;
+    const shot_result windy = simulate_shot(putt, course, state.tuning, state.clubs, state.rewards);
+    CHECK(horizontal_distance(calm.rest_position, windy.rest_position) < 0.05f);
+}
+
+TEST_CASE("wet ground stops a drive sooner, and rain shortens it in the air") {
+    const game_state state = hub_hole(golden_content(), 0);
+    const shot_input drive = tee_shot(state, "driver", 1.0f);
+    const auto travel = [&](const float rain, const float wetness) {
+        shot_course course = current_shot_course(state);
+        course.weather.rain = rain;
+        course.weather.wetness = wetness;
+        const shot_result result = simulate_shot(drive, course, state.tuning, state.clubs, state.rewards);
+        return horizontal_distance(result.rest_position, drive.ball_start);
+    };
+    const float dry = travel(0.0f, 0.0f);
+    CHECK(travel(0.0f, 1.0f) < dry - 5.0f);
+    CHECK(travel(1.0f, 0.0f) < dry);
+}
+
+TEST_CASE("a soaked green costs a putt at most a fifth of its roll") {
+    game_state state = started_hole();
+    still_air(state);
+    state.tuning.weather = shipped_content().tuning.weather;
+    ball_state ball = resting_ball(state, state.hole->pin_position + glm::vec3(1.0f, 0.0f, 0.0f));
+    REQUIRE(sample_area(state.area, ball.position).material == terrain_material::green);
+    ball.velocity = glm::vec3(1.2f, 0.0f, 0.0f);
+    const auto roll = [&](const float wetness) {
+        shot_course course = current_shot_course(state);
+        course.weather.wetness = wetness;
+        const shot_result putt = simulate_ball(ball, state.clubs[0].stats, course, state.tuning);
+        return horizontal_distance(putt.rest_position, ball.position);
+    };
+    const float dry = roll(0.0f);
+    const float soaked = roll(1.0f);
+    REQUIRE(dry > 0.2f);
+    CHECK(soaked < dry);
+    CHECK(soaked >= 0.8f * dry);
+}
+
+TEST_CASE("a wet fairway takes backspin off the club") {
+    const game_state state = started_hole();
+    const club_stats& club = state.clubs.front().stats;
+    REQUIRE(state.tuning.weather.wet_spin_loss > 0.0f);
+    CHECK(lie_club_stats(club, ball_lie::fairway, 1.0f, state.tuning).backspin <
+          lie_club_stats(club, ball_lie::fairway, 0.0f, state.tuning).backspin);
+    CHECK(lie_club_stats(club, ball_lie::tee, 1.0f, state.tuning).backspin ==
+          lie_club_stats(club, ball_lie::tee, 0.0f, state.tuning).backspin);
 }
 
 TEST_CASE("a shot flies the same whichever way it is aimed") {
@@ -423,7 +494,7 @@ TEST_CASE("a putt that rolls off the green is caught by the rough") {
     ball_state ball = resting_ball(state, start);
     ball.velocity = glm::vec3(3.0f, 0.0f, 0.0f);
 
-    const shot_result putt = simulate_ball(ball, state.clubs[0].stats, current_shot_course(state), state.tuning, 0.0f);
+    const shot_result putt = simulate_ball(ball, state.clubs[0].stats, current_shot_course(state), state.tuning);
     // v^2 / 2a: under a metre at the rough's deceleration, which the putter
     // does not soften off the green.
     CHECK(horizontal_distance(putt.rest_position, ball.position) < 1.5f);
@@ -577,12 +648,12 @@ TEST_CASE("a ball stopping within the cup's horizontal radius is holed") {
     const float radius = state.tuning.scale.cup_radius_meters;
 
     const shot_result inside = simulate_ball(resting_ball(state, course.hole.pin + glm::vec3(radius - 0.01f, 0.0f, 0.0f)),
-                                             stats, course, state.tuning, 0.0f);
+                                             stats, course, state.tuning);
     CHECK(inside.holed);
     CHECK(inside.rest_position.y < course.hole.pin.y);
 
     const shot_result outside = simulate_ball(resting_ball(state, course.hole.pin + glm::vec3(radius + 0.05f, 0.0f, 0.0f)),
-                                              stats, course, state.tuning, 0.0f);
+                                              stats, course, state.tuning);
     CHECK(!outside.holed);
 }
 
@@ -599,7 +670,7 @@ shot_result roll_past_cup(const float speed, const float offset) {
     ball_state ball = state.ball;
     ball.position = course.hole.pin + glm::vec3(-(state.tuning.scale.cup_radius_meters + 0.25f), ball.radius, offset);
     ball.velocity = glm::vec3(speed, 0.0f, 0.0f);
-    return simulate_ball(ball, state.clubs[0].stats, course, state.tuning, 0.0f);
+    return simulate_ball(ball, state.clubs[0].stats, course, state.tuning);
 }
 }
 
@@ -624,7 +695,7 @@ TEST_CASE("a ball on the lip, just outside the cup, stays out") {
     const float lip = state.tuning.scale.cup_radius_meters + 0.01f;
 
     const shot_result resting = simulate_ball(resting_ball(state, course.hole.pin + glm::vec3(lip, 0.0f, 0.0f)),
-                                              state.clubs[0].stats, course, state.tuning, 0.0f);
+                                              state.clubs[0].stats, course, state.tuning);
     CHECK(!resting.holed);
     CHECK(horizontal_distance(resting.rest_position, course.hole.pin) > state.tuning.scale.cup_radius_meters);
 
@@ -657,7 +728,7 @@ shot_result fall_into_cup(const float forward, const float down) {
     ball.position = course.hole.pin + glm::vec3(-forward * fall_seconds, ball.radius + height, 0.0f);
     ball.velocity = glm::vec3(forward, -down, 0.0f);
     ball.spin = glm::vec3(0.0f);
-    return simulate_ball(ball, state.clubs[0].stats, course, state.tuning, 0.0f);
+    return simulate_ball(ball, state.clubs[0].stats, course, state.tuning);
 }
 }
 
@@ -768,7 +839,7 @@ TEST_CASE("a stopped shot outside the cup returns to walking without completing"
     state.stroke_count = 2;
     const shot_course course = current_shot_course(state);
     const glm::vec3 beside = course.hole.pin + glm::vec3(state.tuning.scale.cup_radius_meters + 2.0f, 0.0f, 0.0f);
-    play_shot(state, simulate_ball(resting_ball(state, beside), state.clubs[0].stats, course, state.tuning, 0.0f));
+    play_shot(state, simulate_ball(resting_ball(state, beside), state.clubs[0].stats, course, state.tuning));
 
     play_out(state, 0.016f);
 
@@ -781,7 +852,7 @@ TEST_CASE("a holed shot completes the hole once it has played") {
     game_state state = started_hole();
     state.stroke_count = 2;
     const shot_course course = current_shot_course(state);
-    play_shot(state, simulate_ball(resting_ball(state, course.hole.pin), state.clubs[0].stats, course, state.tuning, 0.0f));
+    play_shot(state, simulate_ball(resting_ball(state, course.hole.pin), state.clubs[0].stats, course, state.tuning));
 
     const std::vector<audio_event> played = play_out(state, 0.016f);
 
@@ -801,7 +872,7 @@ TEST_CASE("holing the last hole finishes the round and completes the course") {
     state.stroke_count = 3;
     const shot_course course = current_shot_course(state);
     const glm::vec3 pin = course.hole.pin;
-    play_shot(state, simulate_ball(resting_ball(state, pin), state.clubs[0].stats, course, state.tuning, 0.0f));
+    play_shot(state, simulate_ball(resting_ball(state, pin), state.clubs[0].stats, course, state.tuning));
 
     play_out(state, 0.016f);
 
@@ -884,7 +955,7 @@ TEST_CASE("a ball landing in a shipped bunker plugs where it lands") {
         ball.radius = state.ball.radius;
         ball.position = course.sand + glm::vec3(-0.5f, 0.5f, 0.0f);
         ball.velocity = glm::vec3(speed, -speed, 0.0f);
-        const shot_result result = simulate_ball(ball, state.clubs[0].stats, current_shot_course(state), state.tuning, 0.0f);
+        const shot_result result = simulate_ball(ball, state.clubs[0].stats, current_shot_course(state), state.tuning);
         REQUIRE(!result.events.empty());
         const glm::vec3 landed = shot_position_at(result, result.events.front().time);
         // No bounce: once down (past the trajectory point it lands between), it never rises off the sand.

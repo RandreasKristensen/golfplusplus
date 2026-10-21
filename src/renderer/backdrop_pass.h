@@ -12,6 +12,7 @@
 
 #include "game/course_definition.h"
 #include "game/lighting_loader.h"
+#include "renderer/render_data.h"
 #include "renderer/scene_haze.h"
 #include "renderer/shader.h"
 #include "renderer/texture.h"
@@ -36,7 +37,7 @@ public:
     // Draws the prepared backdrop in this frame's light (the frame_lighting
     // block must hold the prepared haze) wherever the depth buffer is still
     // clear; `seconds` runs the stars' twinkle. Leaves depth testing on.
-    void draw(const glm::mat4& view, const glm::mat4& proj, float seconds);
+    void draw(const glm::mat4& view, const glm::mat4& proj, float seconds, const render_lightning& lightning);
     void set_profile(frame_profile* profile) { shader_.set_profile(profile); }
 
 private:

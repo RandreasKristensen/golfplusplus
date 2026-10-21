@@ -16,6 +16,8 @@
 #include "game/shot_simulation.h"
 #include "physics/tree_collision.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -52,6 +54,11 @@ struct server_course {
     std::vector<tree_body> trees;
     std::vector<shot_hole> shot_holes;  // one per hole
 };
+
+// Hole `hole` of `course` as a shot hit at `shot_at` plays on it: in the
+// course's weather then (game/weather.h), as every client replays it.
+shot_course server_shot_course(const server_course& course, std::size_t hole, std::int64_t shot_at,
+                               const server_content& content);
 
 const course_definition* find_server_course(const server_content& content, const std::string& course_id);
 

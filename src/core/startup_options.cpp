@@ -105,6 +105,48 @@ startup_options with_game_time(startup_options options, const char* game_time_va
     return options;
 }
 
+namespace {
+// A whole number or decimal, nothing else; nullopt otherwise.
+std::optional<float> number_of(const std::string& text) {
+    char* end = nullptr;
+    const float value = std::strtof(text.c_str(), &end);
+    if (text.empty() || is_space(text.front()) || end != text.c_str() + text.size()) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+std::vector<std::string> comma_parts(const std::string& text) {
+    std::vector<std::string> parts(1);
+    for (const char c : text) {
+        if (c == ',') {
+            parts.emplace_back();
+        } else {
+            parts.back() += c;
+        }
+    }
+    return parts;
+}
+}
+
+startup_options with_weather_options(startup_options options, const char* weather_value, const char* god_value) {
+    const std::string god = trimmed(god_value);
+    options.god_menu = options.god_menu || god == "1" || god == "on" || god == "yes" || god == "true";
+
+    const std::vector<std::string> parts = comma_parts(trimmed(weather_value));
+    const std::optional<weather_kind> kind = weather_kind_from_name(parts[0]);
+    const std::optional<float> wind = parts.size() > 1 ? number_of(parts[1]) : std::nullopt;
+    const std::optional<float> wetness = parts.size() > 2 ? number_of(parts[2]) : std::nullopt;
+    const bool valid = kind && parts.size() <= 3 && (parts.size() < 2 || (wind && *wind >= 0.0f)) &&
+        (parts.size() < 3 || (wetness && *wetness >= 0.0f && *wetness <= 1.0f));
+    if (valid) {
+        options.weather = kind;
+        options.wind_speed = wind;
+        options.wetness = wetness;
+    }
+    return options;
+}
+
 startup_options with_online_options(startup_options options,
                                     const char* server_value,
                                     const char* database_value,
@@ -120,6 +162,8 @@ startup_options with_online_options(startup_options options,
             options.online_database = trimmed(arguments[++i].c_str());
         } else if (argument == "--anonymous") {
             options.online_anonymous = true;
+        } else if (argument == "--god") {
+            options.god_menu = true;
         }
     }
     return options;

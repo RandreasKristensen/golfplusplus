@@ -4,7 +4,9 @@
 
 #include "game/text_ids.h"
 #include "renderer/control_icons.h"
+#include "renderer/hud_panel.h"
 #include "renderer/pixel_font.h"
+#include "renderer/rangefinder_overlay.h"
 #include "renderer/scorecard_overlay.h"
 #include "renderer/ui_rect.h"
 #include "renderer/vcr_overlay.h"
@@ -32,17 +34,6 @@ void draw_profile_overlay(overlay_batch& batch, const text_assets& text, const f
         lines += lines.empty() ? line : "\n" + line;
     }
     draw_label(batch, text.font, find_text_style(text, style_debug_profile), lines, rect_from_edges(-0.97f, -0.95f, 0.95f, 0.85f));
-}
-
-const glm::vec3 hud_panel_color(0.055f, 0.060f, 0.065f);
-const glm::vec3 hud_outline_color(0.62f, 0.64f, 0.60f);
-const glm::vec3 hud_amber(0.92f, 0.70f, 0.18f);
-
-// A HUD panel: its drop shadow, face and outline.
-void draw_hud_panel(overlay_batch& batch, const ui_rect& panel) {
-    draw_overlay_quad(batch, panel.center + glm::vec2(0.012f, -0.014f), panel.half_size, glm::vec3(0.0f), 0.22f);
-    draw_overlay_quad(batch, panel.center, panel.half_size, hud_panel_color, 0.80f);
-    draw_button_outline(batch, panel.center, panel.half_size, hud_outline_color, 0.54f);
 }
 
 // Top right, under the VCR tag: the club's short name over its full name.
@@ -357,42 +348,6 @@ void draw_xp_drops(overlay_batch& batch, const text_assets& text, const std::vec
     }
 }
 
-void draw_rangefinder_view(overlay_batch& batch,
-                           const text_assets& text,
-                           const glm::mat4& view_proj,
-                           const render_data& data) {
-    draw_overlay_quad(batch, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.16f, 0.34f, 0.24f), 0.18f);
-    draw_overlay_quad(batch, glm::vec2(-0.91f, 0.0f), glm::vec2(0.18f, 1.0f), glm::vec3(0.01f, 0.018f, 0.014f), 0.52f);
-    draw_overlay_quad(batch, glm::vec2(0.91f, 0.0f), glm::vec2(0.18f, 1.0f), glm::vec3(0.01f, 0.018f, 0.014f), 0.52f);
-    draw_overlay_quad(batch, glm::vec2(0.0f, 0.89f), glm::vec2(1.0f, 0.22f), glm::vec3(0.01f, 0.018f, 0.014f), 0.45f);
-    draw_overlay_quad(batch, glm::vec2(0.0f, -0.89f), glm::vec2(1.0f, 0.22f), glm::vec3(0.01f, 0.018f, 0.014f), 0.45f);
-
-    const glm::vec3 reticle_color(0.62f, 0.96f, 0.64f);
-    draw_overlay_quad(batch, glm::vec2(0.0f, 0.0f), glm::vec2(0.006f, 0.11f), reticle_color, 0.72f);
-    draw_overlay_quad(batch, glm::vec2(0.0f, 0.0f), glm::vec2(0.11f, 0.006f), reticle_color, 0.72f);
-    draw_overlay_quad(batch, glm::vec2(-0.18f, 0.0f), glm::vec2(0.055f, 0.006f), reticle_color, 0.56f);
-    draw_overlay_quad(batch, glm::vec2(0.18f, 0.0f), glm::vec2(0.055f, 0.006f), reticle_color, 0.56f);
-    draw_overlay_quad(batch, glm::vec2(0.0f, -0.18f), glm::vec2(0.006f, 0.055f), reticle_color, 0.56f);
-    draw_overlay_quad(batch, glm::vec2(0.0f, 0.18f), glm::vec2(0.006f, 0.055f), reticle_color, 0.56f);
-
-    const glm::vec3 label_anchor = data.rangefinder_target + glm::vec3(0.0f, data.pin_visual_height_meters + 0.36f, 0.0f);
-    const std::optional<glm::vec2> projected = project_to_screen(view_proj, label_anchor);
-    if (!projected) {
-        return;
-    }
-
-    glm::vec2 pin_screen = *projected;
-    pin_screen.x = std::max(-0.78f, std::min(0.78f, pin_screen.x));
-    pin_screen.y = std::max(-0.68f, std::min(0.82f, pin_screen.y));
-    // The panel is sized to the laid-out label, so lay it out first.
-    const text_style& style = find_text_style(text, style_rangefinder);
-    const ui_rect label_box{pin_screen + glm::vec2(0.0f, 0.015f), glm::vec2(0.22f, 0.065f)};
-    const text_layout label = layout_text(text.font, style, data.rangefinder_label, label_box, batch.grid);
-    const glm::vec2 panel_half(std::max(0.12f, label.bounds.half_size.x + 0.035f), 0.070f);
-    draw_overlay_quad(batch, label_box.center, panel_half, glm::vec3(0.015f, 0.032f, 0.024f), 0.78f);
-    draw_text_layout(batch, text.font, label, style.color);
-}
-
 void draw_stroke_ticks(overlay_batch& batch, const int stroke_count) {
     const int strokes = std::max(stroke_count, 0);
     const int ten_marks = std::min(strokes / 10, 8);
@@ -443,7 +398,7 @@ void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& 
         draw_skills_panel(batch, text, data.skills);
     }
     if (data.show_rangefinder) {
-        draw_rangefinder_view(batch, text, view_proj, data);
+        draw_rangefinder(batch, text, data, view_proj);
     }
     draw_mode_label(batch, text, data.mode_label);
     draw_cart_hud(batch, text, data);

@@ -4,12 +4,14 @@
 // main loop: poll input -> update menus or the game -> render.
 
 #include "audio/audio_engine.h"
+#include "core/god_menu.h"
 #include "core/input.h"
 #include "core/light_frame.h"
 #include "core/sky_frame.h"
 #include "core/startup_flow.h"
 #include "core/startup_options.h"
 #include "core/tape_tracking.h"
+#include "core/weather_frame.h"
 #include "core/window.h"
 #include "game/game_content.h"
 #include "game/game_state.h"
@@ -96,8 +98,10 @@ private:
     bool cart_loop_playing_ = false;
     tape_style tape_style_;
     lighting_palette lighting_;
-    sky_controls sky_;  // GOLFPP_GAME_TIME and the developer's scrub
+    sky_controls sky_;  // GOLFPP_GAME_TIME, the developer's scrub and the god menu's hour
+    god_menu_state god_;
     tape_tracking_state tape_tracking_;
+    weather_presentation weather_shown_;  // the weather as drawn, faded in and out
     std::uint64_t last_present_ticks_ = 0;  // SDL ticks of the last frame shown
 
 #if GOLFPP_NET

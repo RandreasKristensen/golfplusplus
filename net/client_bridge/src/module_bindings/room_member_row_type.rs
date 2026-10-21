@@ -11,7 +11,6 @@ pub struct RoomMemberRow {
     pub room_id: u64,
     pub group_id: u64,
     pub zone: i32,
-    pub hole_started_at: __sdk::Timestamp,
     pub round_strokes: Vec<i32>,
 }
 
@@ -27,7 +26,6 @@ pub struct RoomMemberRowCols {
     pub room_id: __sdk::__query_builder::Col<RoomMemberRow, u64>,
     pub group_id: __sdk::__query_builder::Col<RoomMemberRow, u64>,
     pub zone: __sdk::__query_builder::Col<RoomMemberRow, i32>,
-    pub hole_started_at: __sdk::__query_builder::Col<RoomMemberRow, __sdk::Timestamp>,
     pub round_strokes: __sdk::__query_builder::Col<RoomMemberRow, Vec<i32>>,
 }
 
@@ -39,7 +37,6 @@ impl __sdk::__query_builder::HasCols for RoomMemberRow {
             room_id: __sdk::__query_builder::Col::new(table_name, "room_id"),
             group_id: __sdk::__query_builder::Col::new(table_name, "group_id"),
             zone: __sdk::__query_builder::Col::new(table_name, "zone"),
-            hole_started_at: __sdk::__query_builder::Col::new(table_name, "hole_started_at"),
             round_strokes: __sdk::__query_builder::Col::new(table_name, "round_strokes"),
         }
     }

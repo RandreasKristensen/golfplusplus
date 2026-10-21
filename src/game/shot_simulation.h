@@ -9,6 +9,7 @@
 #include "game/game_tuning.h"
 #include "game/play_area.h"
 #include "game/reward_rules.h"
+#include "game/weather.h"
 #include "physics/ball_state.h"
 #include "physics/terrain.h"
 #include "physics/tree_collision.h"
@@ -33,13 +34,14 @@ struct shot_input {
     std::string club_id;
     float power = 0.0f;  // swing meter power, clamped to [swing.min_power, 1]
     bool cigarette_active = false;
-    float wind_time = 0.0f;  // seconds since the hole started, at launch
+    // UTC milliseconds when it was hit, which pick the weather it flies in
+    // (shot_course::weather); online the server's clock as I estimate it.
+    std::int64_t shot_at = 0;
 };
 
 // The hole a shot is played on, in play-area coordinates.
 struct shot_hole {
     glm::vec3 pin{0.0f};  // the cup centre, on the terrain
-    std::uint32_t wind_seed = 0;
 };
 
 // What a shot plays on, borrowed for one simulation.
@@ -47,6 +49,7 @@ struct shot_course {
     const play_area& area;  // its hole signs' posts, fences and floodlight poles are hit too
     const std::vector<tree_body>& trees;  // standing on `area` (static_anchor_cache::trees)
     shot_hole hole;
+    weather_state weather;  // the course's at the shot's shot_at, for the whole flight
 };
 
 enum class shot_event_kind {
@@ -94,15 +97,18 @@ ball_lie lie_at(const play_area& area, const glm::vec3& position);
 club_stats shot_club_stats(const club_stats& club, bool cigarette_active, const reward_rules& rewards);
 
 // The club as it plays from `lie`: the lie's power and spin (tuning.lies),
-// and from a bunker the club's own bunker_power too.
-club_stats lie_club_stats(const club_stats& club, ball_lie lie, const game_tuning& tuning);
+// from a bunker the club's own bunker_power too, and from wet fairway or
+// rough less backspin (water between club and ball: a flyer).
+club_stats lie_club_stats(const club_stats& club, ball_lie lie, float wetness, const game_tuning& tuning);
 
 // The ball leaving `position` along `aim_angle`, at the club's loft and
 // `power` (clamped to [swing.min_power, 1]) on the tuning's power curve.
 ball_state launch_ball(const glm::vec3& position, float aim_angle, const club_stats& stats, float power, const game_tuning& tuning);
 
-// Flight, ground contact, trees and rolling friction over `dt`. `ground` is
-// the terrain under `ball` (the previous step's `ground`).
+// Flight in the course's wind at the ball's height over `ground` and its
+// rain, ground contact (softer and slower on wet grass), trees and rolling
+// friction over `dt`. `ground` is the terrain under `ball` (the previous
+// step's `ground`).
 // `trees_near` (built from course.trees) makes the tree test cheap; without it
 // every tree is tested, with the same result.
 shot_step step_shot(const ball_state& ball,
@@ -110,7 +116,6 @@ shot_step step_shot(const ball_state& ball,
                     const shot_course& course,
                     const club_stats& stats,
                     const game_tuning& tuning,
-                    float wind_time,
                     float dt,
                     const tree_grid* trees_near = nullptr);
 
@@ -121,8 +126,7 @@ bool ball_at_rest(const ball_state& ball, const terrain_sample& ground, const ba
 shot_result simulate_ball(const ball_state& launched,
                           const club_stats& stats,
                           const shot_course& course,
-                          const game_tuning& tuning,
-                          float wind_time);
+                          const game_tuning& tuning);
 
 // The whole shot. An unknown club leaves the ball where it is.
 shot_result simulate_shot(const shot_input& input,

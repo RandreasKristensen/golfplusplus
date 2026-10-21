@@ -90,7 +90,10 @@ struct camcorder_style {
     float bloom_width = 0.0f;       // how far it spills sideways
     float bloom_height = 0.0f;      // and up and down
     float smear_threshold = 0.0f;   // exposed brightness that smears its column
-    float smear_strength = 0.0f;
+    float smear_strength = 0.0f;    // of the light past it, summed down the column in picture heights
+    // How much of that sum the smear loses per picture height away from its
+    // light: bright columns reach further, so it thins as it fades.
+    float smear_fade = 0.0f;
     // Gain-up noise at full gain (the palette's gain_noise): per pixel,
     // brightness and, stronger, colour.
     float gain_grain = 0.0f;

@@ -151,6 +151,24 @@
       "volume_multiplier": 1.0
     },
     {
+      "id": "cart_crash",
+      "file": "sfx/cart_crash.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (empty file): golf cart thumping into a tree, pole, fence or tee box.",
+      "target_length_seconds": 0.6,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "player_bump",
+      "file": "sfx/player_bump.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (empty file): walking into a tree, pole, sign or flagstick, a soft dull bump.",
+      "target_length_seconds": 0.25,
+      "volume_multiplier": 1.0
+    },
+    {
       "id": "emote_smoke",
       "file": "sfx/emote_smoke.mp3",
       "type": "sfx",
@@ -166,6 +184,24 @@
       "category": "gameplay",
       "description": "Can open plus sip or glug.",
       "target_length_seconds": 1.4,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "thunder_close",
+      "file": "sfx/thunder_close.wav",
+      "type": "sfx",
+      "category": "ambience",
+      "description": "Close thunder: a crack, then a rolling rumble. Made by tooling/audio/make_thunder.py.",
+      "target_length_seconds": 6.0,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "thunder_far",
+      "file": "sfx/thunder_far.wav",
+      "type": "sfx",
+      "category": "ambience",
+      "description": "Distant thunder: a low rumble. Made by tooling/audio/make_thunder.py.",
+      "target_length_seconds": 7.0,
       "volume_multiplier": 1.0
     },
     {

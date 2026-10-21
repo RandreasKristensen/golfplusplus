@@ -9,6 +9,7 @@
 #include "physics/vector_math.h"
 #include "renderer/emote_props.h"
 #include "renderer/remote_avatar_batch.h"
+#include "renderer/shadow_casters.h"
 
 #include "test_support.h"
 
@@ -163,7 +164,9 @@ TEST_CASE("the cart I drive is drawn whole where it stands, the camera at my sea
         const render_data data = frame_for(state);
         CHECK(data.driving_cart);
         REQUIRE(data.carts.size() == 1U);
-        CHECK(near(data.carts[0].position, state.cart.pose.position));
+        // Set on its wheels, a little over the ground under its seat.
+        CHECK(near(horizontal(data.carts[0].position), horizontal(state.cart.pose.position)));
+        CHECK(near(data.carts[0].position.y, state.cart.pose.position.y, 0.1f));
         CHECK(near(data.carts[0].yaw, state.cart.pose.yaw, 0.0001f));
         CHECK(data.carts[0].driven);
         CHECK(near(data.camera_position, state.player.position + world_up * state.tuning.camera.walking_eye_height));
@@ -173,6 +176,30 @@ TEST_CASE("the cart I drive is drawn whole where it stands, the camera at my sea
         const glm::vec3 look = horizontal(data.camera_target - data.camera_position);
         CHECK(glm::dot(glm::normalize(look), yaw_direction(state.cart.pose.yaw + head)) > 0.999f);
     }
+}
+
+TEST_CASE("my figure casts the sun's shadow where I stand, at my ball while I address it, and none from a cart's seat") {
+    game_state state = started_hole();
+    render_data data = frame_for(state);
+    REQUIRE(data.my_figure.has_value());
+    CHECK(near(data.my_figure->position, state.player.position));
+    CHECK(data.my_figure->yaw == state.player.yaw);
+    CHECK(!data.my_figure->swing.has_value());
+    CHECK(data.avatar_eye_height == state.tuning.camera.walking_eye_height);
+    world_marker_batch casters;
+    build_shadow_casters(casters, data, test_scene_colors());
+    CHECK(casters.vertices().size() == remote_figure_vertex_count() + data.carts.size() * cart_vertex_count());
+
+    state.mode = game_mode::addressing;
+    data = frame_for(state);
+    REQUIRE(data.my_figure.has_value());
+    REQUIRE(data.my_figure->swing.has_value());
+    const figure_stance stance = figure_address_stance(data.ball_position, data.ball_visual_radius_meters, data.aim_angle);
+    CHECK(near(data.my_figure->position, stance.position));
+
+    state.mode = game_mode::walking;
+    state.ride = cart_ride{};
+    CHECK(!frame_for(state).my_figure.has_value());
 }
 
 TEST_CASE("online frames show other players, their tags, balls and trails; offline ones none") {

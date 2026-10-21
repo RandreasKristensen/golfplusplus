@@ -2,21 +2,29 @@
 
 Todo
 - new hitting system with curves, lefthanded/righthanded, natural fade/draw, pitching/hitting speed, 
+make a full bag, with the driver going ~300 to make 18 hole courses more fun. Make claude research real golf physics and review EVERYTHING in this repo - the way its coded, what the tests expect - whats not realistic, and how do we improve it both now and on an engine level to make further development better?
+- accelleration and decelleration more accurate on the cart, slower uphill but never stopping.
+- see each other on map? Or maybe not see yourself or ball on map at all - forcing people to drop if they dont find ball type shit
+- linux and mac 
+- 
+- tee times, instead of room caps. Makes par 3s have less people naturally, and improves "group finding" - naturally getting paired with others on the same teetime.
 
 
 
 ## **Test feedback**
 
-- Browser based? at least linux and mac support
-- see each other on map
-- final scorecard says 10 hole 10
-- when setting up its kinda bugged where you stand; It should always be the same for people viewing other people, as it is for them
-- grouping is a little bugged? Maybe mostly when youve already played
 
 ## **bugs**
 
-- hole 8, 17 and 18 bugged himmerland new course map
+- LAG after and "entering" every hole on 18 hole courses - i suspect everything loads every time you go in/out of the "overworld/underworld"
 - (recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
+- fairways are always the same width, and always fairways - you cant have like driver over rough then the fairway starts type beat. Bunkers also consist of many small circles - which is fine - but it would be cool if they "merged" into one big bunker instead of having grass in the middle of most of them
+- putting is REALLY hard with the wetness ground. Its just affecting the putts way too much
+- some of the lights are colliding with trees.
+- rainbows at night lmao
+- grouping is a little bugged? Maybe mostly when youve already played
+- when setting up its kinda bugged where you stand; It should always be the same for people viewing other people, as it is for them
+- final scorecard says 10 hole 10
 
 ## **alpha roadmap**
 
@@ -83,6 +91,7 @@ flirting with the cart girl
 - lil better fidelity?
 - Tournaments, some only enterable with a caddy, which should be a real person. Live and longer timed events (i.e. one entry before thursday.)
 - browser and mac ports?
+- player owned clubs with player made courses - endgame and expensive, revenue from players playing and making tounaments
 
 ## **story**
 
@@ -97,6 +106,7 @@ You start with only 7 iron, 9 iron, 56 and a putter, all of some fucked up brand
 ## **paid tier**
 
 Game open up more
+Youll probably want to hit just above 200 with your driver when you enter here, and hit it pretty consistently, scaling up to like probably a good bit north of 300 with gear - but I imagine accuracy will be more sought after in lategame that distance. Having great distance means more distance between clubs
 Like runescape it unlocks some abilities like driving, 18 hole real courses, etc.
 You can play tournaments, which are a type of quest to unlock specific cooler courses where exp is enhanced.
 You also get more exp from playing in a group.

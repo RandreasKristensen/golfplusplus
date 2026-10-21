@@ -104,14 +104,14 @@ struct shot_request {
     std::string club_id;
     float power = 0.0f;
     bool cigarette_active = false;
-    float wind_time = 0.0f;
+    std::int64_t shot_at = 0;  // UTC milliseconds, by the client's estimate of my clock
 };
 
 // The server's ball on the hole being played.
 struct server_ball {
     glm::vec3 position{0.0f};
     int stroke_count = 0;
-    float last_wind_time = 0.0f;
+    std::int64_t last_shot_at = 0;  // the last shot's shot_at; 0 before the first
 };
 
 struct shot_check {
@@ -121,12 +121,13 @@ struct shot_check {
 
 // The next stroke, hit from beside the ball (player.ball_interact_radius,
 // plus slack), with a known club, an aim wrapped into [-pi, pi]
-// (wrap_angle), finite power (clamped to [swing.min_power, 1]), and a wind
-// time within server.wind_time_slack_seconds of the time on the hole and no
-// earlier than the last shot's. A cigarette must be lit if the shot says so.
+// (wrap_angle), finite power (clamped to [swing.min_power, 1]), and a shot
+// time within server.shot_time_slack_seconds of `now_unix_ms` and no earlier
+// than the last shot's, so a player cannot pick a calm moment. A cigarette
+// must be lit if the shot says so.
 shot_check check_shot(const shot_request& request,
                       const server_ball& ball,
                       const glm::vec3& player_position,
-                      float seconds_on_hole,
+                      std::int64_t now_unix_ms,
                       bool cigarette_lit,
                       const server_content& content);

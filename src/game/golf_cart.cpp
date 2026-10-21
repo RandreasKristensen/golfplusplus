@@ -1,5 +1,6 @@
 #include "game/golf_cart.h"
 
+#include "game/body_contact.h"
 #include "game/game_state.h"
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
@@ -40,12 +41,6 @@ void end_ride(game_state& state) {
     state.ride.reset();
 }
 
-void push_cart_start(game_state& state) {
-    audio_event event;
-    event.type = audio_event_type::cart_start;
-    state.audio_events.push_back(event);
-}
-
 void play_step(game_state& state, const cart_pose& cart, const float dt, frame_profile* profile) {
     cart_ride& ride = *state.ride;
     cart_step& step = *ride.step;
@@ -69,7 +64,7 @@ void play_step(game_state& state, const cart_pose& cart, const float dt, frame_p
     }
     ride.step.reset();
     if (ride.owner == 0) {
-        push_cart_start(state);
+        push_audio_event(state, audio_event_type::cart_start);
     }
 }
 
@@ -109,7 +104,9 @@ void drive(game_state& state, const game_input& input, const float dt, frame_pro
     cart.velocity += (target_speed - cart.velocity) * (1.0f - std::exp(-damping * dt));
 
     const glm::vec3 before = state.player.position;
+    const glm::vec3 from = cart.pose.position;
     cart.pose.position += yaw_direction(cart.pose.yaw) * cart.velocity * dt;
+    keep_cart_clear(state, from);
     cart.pose.position.y = terrain_height(state.area, cart.pose.position, profile);
     place_player(state, seat_position(cart.pose, cart_seat::driver, tuning), cart.pose.yaw, profile);
     state.player.speed = cart.velocity;

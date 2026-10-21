@@ -42,7 +42,6 @@ private:
     struct member {
         std::uint64_t group_id = 0;
         int zone = hub_zone;
-        std::int64_t hole_started_at = 0;
         std::vector<int> round_strokes;
     };
     struct motion {

@@ -139,7 +139,7 @@ TEST_CASE("a ball bounces off a hole sign's post") {
     ball.position = post.base + glm::vec3(0.0f, 0.5f, -0.12f);
     ball.velocity = glm::vec3(0.0f, 0.0f, 3.0f);
     const shot_step step = step_shot(ball, sample_area(state.area, ball.position), current_shot_course(state),
-                                     state.clubs.front().stats, state.tuning, 0.0f, 0.016f);
+                                     state.clubs.front().stats, state.tuning, 0.016f);
     CHECK(step.hit_tree);
     CHECK(step.ball.velocity.z < 0.0f);
 }

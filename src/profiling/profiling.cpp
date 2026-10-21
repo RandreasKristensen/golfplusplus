@@ -171,6 +171,12 @@ const char* gpu_profile_stage_label(const gpu_profile_stage stage) {
         return "TRE";
     case gpu_profile_stage::sky:
         return "SKY";
+    case gpu_profile_stage::weather:
+        return "WTR";
+    case gpu_profile_stage::eyepiece:
+        return "EYE";
+    case gpu_profile_stage::zoom:
+        return "ZOOM";
     case gpu_profile_stage::bloom:
         return "BLM";
     case gpu_profile_stage::smear:
@@ -235,11 +241,13 @@ std::vector<std::string> format_profile_overlay_lines(const frame_profile& profi
     if (profile.gpu_timers_available) {
         lines.push_back("GPU " + gpu(gpu_profile_stage::shadow_map) + " " + gpu(gpu_profile_stage::terrain) + " " +
                         gpu(gpu_profile_stage::shadows));
-        lines.push_back("GPU " + gpu(gpu_profile_stage::trees) + " " + gpu(gpu_profile_stage::sky));
+        lines.push_back("GPU " + gpu(gpu_profile_stage::trees) + " " + gpu(gpu_profile_stage::sky) + " " +
+                        gpu(gpu_profile_stage::weather));
         lines.push_back("GPU " + gpu(gpu_profile_stage::bloom) + " " + gpu(gpu_profile_stage::smear) + " " +
-                        gpu(gpu_profile_stage::camcorder));
+                        gpu(gpu_profile_stage::camcorder) + " " +
+                        gpu(gpu_profile_stage::eyepiece));
         lines.push_back("GPU " + gpu(gpu_profile_stage::tape) + " " + gpu(gpu_profile_stage::overlay) + " " +
-                        gpu(gpu_profile_stage::crt));
+                        gpu(gpu_profile_stage::crt) + " " + gpu(gpu_profile_stage::zoom));
     }
 
     return lines;

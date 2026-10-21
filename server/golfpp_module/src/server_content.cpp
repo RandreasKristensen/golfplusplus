@@ -6,6 +6,7 @@
 #include "game/hole_loader.h"
 #include "game/text_assets.h"
 #include "game/tuning_loader.h"
+#include "game/weather.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -83,6 +84,13 @@ server_content_load_result parse_server_content(const content_files& files) {
     return result;
 }
 
+shot_course server_shot_course(const server_course& course, const std::size_t hole, const std::int64_t shot_at,
+                               const server_content& content) {
+    const game_tuning& tuning = content.tuning;
+    return shot_course{course.area, course.trees, course.shot_holes[hole],
+                       weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course_weather_seed(course.course.id), shot_at)};
+}
+
 const course_definition* find_server_course(const server_content& content, const std::string& course_id) {
     const auto found = std::find_if(content.courses.begin(), content.courses.end(),
                                     [&course_id](const course_definition& course) { return course.id == course_id; });
@@ -119,7 +127,7 @@ std::optional<server_course> build_server_course(const content_files& files,
     built.trees = standing_trees(built.area);
     for (std::size_t i = 0; i < holes.size(); ++i) {
         hole_data placed = place_hole(holes[i], world->hole_starts[i]);
-        built.shot_holes.push_back(shot_hole{anchor_on_terrain(built.area, placed.pin_position), placed.wind_seed});
+        built.shot_holes.push_back(shot_hole{anchor_on_terrain(built.area, placed.pin_position)});
         built.holes.push_back(std::move(placed));
     }
     built.world = std::move(*world);

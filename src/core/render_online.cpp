@@ -65,7 +65,6 @@ void add_online_render_data(render_data& data, const game_state& game, const tex
         return;
     }
     const float eye_height = game.tuning.camera.walking_eye_height;
-    data.avatar_eye_height = eye_height;
     for (const auto& [account, avatar] : game.remote_avatars) {
         const auto player = game.online.players.find(account);
         if (player == game.online.players.end()) {

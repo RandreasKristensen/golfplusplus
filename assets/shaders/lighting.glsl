@@ -22,10 +22,17 @@ layout(std140) uniform frame_lighting {
     vec4 sun_horizon_a;  // how much horizon ways 0..3 count towards the sun (renderer/sky_visibility.h)
     vec4 sun_horizon_b;  // and ways 4..7
     // x: how much of their shadow the sun casts; y: a blob shadow's strength
-    // with no sun; z: the longest a blob is cast, in its widths; w: the
-    // softness of the land's shadow edge, as a sine of the sun's elevation.
+    // with no sun; z: unused; w: the softness of the land's shadow edge, as
+    // a sine of the sun's elevation.
     vec4 shadow;
     vec4 lamp_glow;  // rgb: a floodlight lamp's face, past 1 when on, none by day
+    // x: how much of the sky panorama's cloud contrast the overcast keeps
+    // (negative: rain's dark patches where its clouds are bright); y: a sun
+    // shower's rainbow, 0..1; z: the sky's cover by cloud, 0..1; w: how far
+    // the weather thickens the haze, 0..1.
+    vec4 weather;
+    // x: the ground's colour kept wet; y: its wet shine; z: how sharp the shine is.
+    vec4 wet;
     vec4 light_position[max_lights];  // xyz: world space; w: how far it reaches, 0 for no light
     vec4 light_color[max_lights];     // rgb: its light, past 1 near it; w: cos of where its cone is full
     vec4 light_cone[max_lights];      // xyz: the way it shines, 0 for every way; w: cos of its cone's edge
@@ -99,11 +106,31 @@ vec3 local_light(vec3 world) {
     return sum;
 }
 
-// What lights an unlit thing: all the light there is, never less than its
-// `glow`, so the ball and flag stay readable in the dark; past 1 it glows of
-// itself and blooms.
+// What lights an unlit thing that sees `sun` (0..1) of the sun: all the
+// light there is, never less than its `glow`, so the ball and flag stay
+// readable in the dark; past 1 it glows of itself and blooms.
+vec3 flat_light(float glow, float sun) {
+    return max(min(sky_light.rgb + sun_color.rgb * sun, vec3(1.0)), vec3(glow));
+}
+
 vec3 flat_light(float glow) {
-    return max(min(sky_light.rgb + sun_color.rgb, vec3(1.0)), vec3(glow));
+    return flat_light(glow, 1.0);
+}
+
+// The shine of wet ground at `world` facing `normal`: the sky's light at a
+// glancing angle, and the sun's and the night lights' glints off it.
+vec3 wet_gloss(vec3 world, vec3 normal, float sun) {
+    vec3 n = normalize(normal);
+    vec3 view = normalize(haze_eye.xyz - world);
+    float facing = max(dot(n, view), 0.0);
+    float fresnel = 0.04 + 0.96 * pow(1.0 - facing, 5.0);
+    vec3 glints = sun_color.rgb * sun * pow(max(dot(reflect(-sun_direction.xyz, n), view), 0.0), wet.z);
+    for (int i = 0; i < max_lights; ++i) {
+        vec3 towards;
+        vec3 light = light_reaching(i, world, towards);
+        glints += light * pow(max(dot(reflect(-towards, n), view), 0.0), wet.z);
+    }
+    return wet.y * (sky_light.rgb * fresnel + glints);
 }
 
 float haze_at(vec3 world) {

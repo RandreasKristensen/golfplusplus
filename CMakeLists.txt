@@ -73,6 +73,7 @@ golfpp_library(golfpp-physics
     src/physics/land_relief.cpp
     src/physics/material_zone.cpp
     src/physics/terrain.cpp
+    src/physics/body_collision.cpp
     src/physics/fence_collision.cpp
     src/physics/tree_collision.cpp
     src/physics/wind.cpp
@@ -92,6 +93,7 @@ golfpp_library(golfpp-game
     src/game/course_world_loader.cpp
     src/game/game_content.cpp
     src/game/game_state.cpp
+    src/game/body_contact.cpp
     src/game/golf_cart.cpp
     src/game/group_round.cpp
     src/game/hole_loader.cpp
@@ -106,9 +108,12 @@ golfpp_library(golfpp-game
     src/game/motion_sync.cpp
     src/game/picture_loader.cpp
     src/game/pixel_font_data.cpp
+    src/game/area_obstacles.cpp
     src/game/play_area.cpp
     src/game/progress_rules.cpp
     src/game/progression.cpp
+    src/game/rangefinder.cpp
+    src/game/sight_line.cpp
     src/game/remote_players.cpp
     src/game/reward_rules.cpp
     src/game/round_state.cpp
@@ -118,6 +123,8 @@ golfpp_library(golfpp-game
     src/game/scorecard.cpp
     src/game/shot_simulation.cpp
     src/game/sky_clock.cpp
+    src/game/weather.cpp
+    src/game/weather_lighting.cpp
     src/game/string_table.cpp
     src/game/swing.cpp
     src/game/text_assets.cpp
@@ -145,7 +152,9 @@ golfpp_library(golfpp-render-data
     src/renderer/hole_sign_batch.cpp
     src/renderer/water_batch.cpp
     src/renderer/hole_sign_face.cpp
+    src/renderer/god_menu_overlay.cpp
     src/renderer/hud_overlay.cpp
+    src/renderer/hud_panel.cpp
     src/renderer/menu_overlay.cpp
     src/renderer/online_overlay.cpp
     src/renderer/overlay_batch.cpp
@@ -153,11 +162,13 @@ golfpp_library(golfpp-render-data
     src/renderer/picture_size.cpp
     src/renderer/pixel_font.cpp
     src/renderer/primitive_mesh.cpp
+    src/renderer/rangefinder_overlay.cpp
     src/renderer/render_mesh_chunks.cpp
     src/renderer/remote_avatar_batch.cpp
     src/renderer/render_tree.cpp
     src/renderer/scene_lights.cpp
     src/renderer/scorecard_overlay.cpp
+    src/renderer/shadow_casters.cpp
     src/renderer/shadow_map_fit.cpp
     src/renderer/shader_source.cpp
     src/renderer/sky_visibility.cpp
@@ -218,6 +229,7 @@ endif()
 # SDL-free app logic: startup options, menu flow, audio manifest.
 golfpp_library(golfpp-app-logic
     src/audio/audio_manifest.cpp
+    src/core/god_menu.cpp
     src/core/input.cpp
     src/core/key_bindings.cpp
     src/core/light_frame.cpp
@@ -231,6 +243,8 @@ golfpp_library(golfpp-app-logic
     src/core/startup_options.cpp
     src/core/tape_tracking.cpp
     src/core/vcr_frame.cpp
+    src/core/lightning_frame.cpp
+    src/core/weather_frame.cpp
 )
 target_link_libraries(golfpp-app-logic PUBLIC golfpp-render-data)
 # The version the main menu shows: major.minor, and the patch when there is one.
@@ -265,6 +279,7 @@ add_executable(golfpp
     src/renderer/hole_sign_renderer.cpp
     src/renderer/lighting_uniforms.cpp
     src/renderer/water_renderer.cpp
+    src/renderer/eyepiece_pass.cpp
     src/renderer/overlay_pass.cpp
     src/renderer/renderer.cpp
     src/renderer/shader.cpp
@@ -274,6 +289,7 @@ add_executable(golfpp
     src/renderer/texture.cpp
     src/renderer/tree_renderer.cpp
     src/renderer/tv_pass.cpp
+    src/renderer/weather_renderer.cpp
     src/renderer/world_marker_renderer.cpp
 )
 set_target_properties(golfpp PROPERTIES OUTPUT_NAME "golf++")
@@ -337,6 +353,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/fence_tests.cpp
         tests/floodlight_tests.cpp
         tests/gameplay_tests.cpp
+        tests/god_menu_tests.cpp
         tests/hazard_tests.cpp
         tests/hole_sign_tests.cpp
         tests/tee_box_tests.cpp
@@ -353,6 +370,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/physics_tests.cpp
         tests/profiling_tests.cpp
         tests/progression_tests.cpp
+        tests/rangefinder_tests.cpp
         tests/render_culling_tests.cpp
         tests/render_frame_tests.cpp
         tests/server_content_tests.cpp
@@ -360,6 +378,8 @@ if (GOLFPP_BUILD_TESTS)
         tests/shadow_map_tests.cpp
         tests/shot_simulation_tests.cpp
         tests/sky_clock_tests.cpp
+        tests/weather_tests.cpp
+        tests/weather_frame_tests.cpp
         tests/sky_visibility_tests.cpp
         tests/settings_tests.cpp
         tests/startup_flow_tests.cpp

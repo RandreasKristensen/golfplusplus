@@ -12,6 +12,9 @@
 #include <algorithm>
 #include <string>
 
+#include <glm/geometric.hpp>
+#include <glm/trigonometric.hpp>
+
 namespace {
 // Stood beside my cart's wheel, where stepping out of it leaves me.
 void stand_beside_my_cart(game_state& state) {
@@ -191,6 +194,9 @@ TEST_CASE("the cart stays where I left it when a hole starts and when I come bac
 
 TEST_CASE("backing up is slower than driving forward, and the cart only turns while it moves") {
     game_state state = started_hole();
+    // Sat on the tee, backing into open ground.
+    state.area.obstacles = upright_obstacles{};
+    state.area.cart_obstacles = upright_obstacles{};
     sit_in_cart(state);
     const float yaw = state.cart.pose.yaw;
     game_input turn;
@@ -267,4 +273,137 @@ TEST_CASE("stepping out of the cart I go on facing where my head was turned") {
     REQUIRE(on_foot(state));
     CHECK(near(state.player.yaw, looking, 0.0001f));
     CHECK(state.look.head_yaw == 0.0f);
+}
+
+TEST_CASE("trees, poles, signs, nets and flagsticks stand in the way of players and carts, tee boxes of carts only") {
+    const game_state state = started_game(fixture_hub_course());
+    const play_area& area = state.area;
+    CHECK(area.obstacles.posts.size() ==
+          area.trees.size() + area.sign_posts.size() + area.fence_poles.size() + area.floodlight_poles.size() + area.holes.size());
+    CHECK(area.obstacles.walls.size() == area.signs.size() + area.fence_panels.size());
+    CHECK(area.obstacles.blocks.empty());
+    CHECK(area.cart_obstacles.blocks.size() == area.tee_boxes.size());
+    CHECK(area.cart_obstacles.posts.empty());
+}
+
+TEST_CASE("walking into a tree stops me at its trunk, with one bump heard") {
+    game_state state = started_game(fixture_hub_course());
+    state.area.obstacles = upright_obstacles{};
+    state.area.cart_obstacles = upright_obstacles{};
+    const glm::vec3 ahead = yaw_direction(state.player.yaw);
+    const glm::vec3 trunk = state.player.position + ahead * 2.0f;
+    state.area.obstacles.posts.push_back(upright_post{glm::vec2(trunk.x, trunk.z), 0.4f});
+    game_input forward;
+    forward.forward_held = true;
+    for (int i = 0; i < 50; ++i) {
+        update_game(state, forward, 0.02f);
+    }
+    CHECK(near(horizontal_distance(state.player.position, trunk), 0.4f + state.tuning.player.body_radius, 0.01f));
+    CHECK(std::count_if(state.audio_events.begin(), state.audio_events.end(), [](const audio_event& event) {
+              return event.type == audio_event_type::player_bump;
+          }) == 1);
+    CHECK(!has_audio(state, audio_event_type::cart_crash));
+}
+
+TEST_CASE("driving into a tee box crashes the cart: it stops at it, bounces back and is heard") {
+    game_state state = started_game(fixture_hub_course());
+    state.area.obstacles = upright_obstacles{};
+    state.area.cart_obstacles = upright_obstacles{};
+    sit_in_cart(state);
+    const cart_tuning& tuning = state.tuning.cart;
+    const glm::vec3 ahead = yaw_direction(state.cart.pose.yaw);
+    const glm::vec3 box = state.cart.pose.position + ahead * 12.0f;
+    state.area.cart_obstacles.blocks.push_back(
+        upright_block{glm::vec2(box.x, box.z), glm::vec2(ahead.x, ahead.z), 3.0f, 2.0f});
+    game_input forward;
+    forward.forward_held = true;
+    bool crashed = false;
+    for (int i = 0; i < 60 && !crashed; ++i) {
+        const float speed = state.cart.velocity;
+        update_game(state, forward, 0.02f);
+        crashed = has_audio(state, audio_event_type::cart_crash);
+        if (crashed) {
+            CHECK(speed >= tuning.crash_sound_speed);
+            CHECK(state.cart.velocity <= 0.0f);
+        }
+    }
+    CHECK(crashed);
+    const float front = glm::dot(state.cart.pose.position - box, ahead) + tuning.body_ahead + tuning.body_radius;
+    CHECK(front <= -3.0f + 0.01f);
+    CHECK(!has_audio(state, audio_event_type::player_bump));
+
+    // On foot the tee box is no wall.
+    game_state walker = started_game(fixture_hub_course());
+    walker.area.obstacles = upright_obstacles{};
+    walker.area.cart_obstacles = upright_obstacles{};
+    const glm::vec3 start = walker.player.position;
+    const glm::vec3 path = yaw_direction(walker.player.yaw);
+    const glm::vec3 tee = start + path * 3.0f;
+    walker.area.cart_obstacles.blocks.push_back(
+        upright_block{glm::vec2(tee.x, tee.z), glm::vec2(path.x, path.z), 3.0f, 2.0f});
+    game_input walk;
+    walk.forward_held = true;
+    for (int i = 0; i < 20; ++i) {
+        update_game(walker, walk, 0.02f);
+    }
+    CHECK(horizontal_distance(walker.player.position, start) > 0.9f * walker.tuning.player.walk_speed * 0.4f);
+}
+
+TEST_CASE("driving along a fence the cart scrapes nearly to a stop instead of gliding along it") {
+    game_state state = started_game(fixture_hub_course());
+    state.area.obstacles = upright_obstacles{};
+    state.area.cart_obstacles = upright_obstacles{};
+    sit_in_cart(state);
+    // A net ahead, slanting across the way at 30 degrees.
+    const glm::vec3 ahead = yaw_direction(state.cart.pose.yaw);
+    const glm::vec3 slant = yaw_direction(state.cart.pose.yaw + glm::radians(60.0f));
+    const glm::vec3 mid = state.cart.pose.position + ahead * 6.0f;
+    state.area.obstacles.walls.push_back(upright_wall{glm::vec2(mid.x, mid.z) - glm::vec2(slant.x, slant.z) * 40.0f,
+                                                      glm::vec2(mid.x, mid.z) + glm::vec2(slant.x, slant.z) * 40.0f, 0.05f});
+    game_input forward;
+    forward.forward_held = true;
+    for (int i = 0; i < 50; ++i) {
+        update_game(state, forward, 0.02f);
+    }
+    REQUIRE(state.cart.against_obstacle);
+    // Throttle held, it barely creeps along the net.
+    const glm::vec3 pressed = state.cart.pose.position;
+    for (int i = 0; i < 50; ++i) {
+        update_game(state, forward, 0.02f);
+    }
+    CHECK(horizontal_distance(state.cart.pose.position, pressed) < 0.15f * state.tuning.cart.speed);
+}
+
+TEST_CASE("on foot I stop at a cart, and my cart stops at someone on foot") {
+    game_state state = started_game(fixture_hub_course());
+    state.area.obstacles = upright_obstacles{};
+    state.area.cart_obstacles = upright_obstacles{};
+    // Walking at my parked cart's side.
+    const glm::vec3 side = yaw_left(yaw_direction(state.cart.pose.yaw));
+    state.player.position = anchor_on_terrain(state.area, state.cart.pose.position + side * 4.0f);
+    state.player.yaw = yaw_towards(state.player.position, state.cart.pose.position);
+    game_input forward;
+    forward.forward_held = true;
+    for (int i = 0; i < 50; ++i) {
+        update_game(state, forward, 0.02f);
+    }
+    CHECK(glm::dot(state.player.position - state.cart.pose.position, side) >=
+          state.tuning.cart.body_radius + state.tuning.player.body_radius - 0.01f);
+    CHECK(has_audio(state, audio_event_type::player_bump));
+
+    // Someone standing in front of my cart as I drive.
+    game_state driving = started_game(fixture_hub_course());
+    driving.area.obstacles = upright_obstacles{};
+    driving.area.cart_obstacles = upright_obstacles{};
+    sit_in_cart(driving);
+    const glm::vec3 ahead = yaw_direction(driving.cart.pose.yaw);
+    remote_avatar someone;
+    someone.position = driving.cart.pose.position + ahead * 8.0f;
+    someone.mode = motion_mode::idle;
+    driving.remote_avatars[7] = someone;
+    for (int i = 0; i < 60; ++i) {
+        update_game(driving, forward, 0.02f);
+    }
+    CHECK(glm::dot(someone.position - driving.cart.pose.position, ahead) >=
+          driving.tuning.cart.body_ahead + driving.tuning.cart.body_radius + driving.tuning.player.body_radius - 0.01f);
 }

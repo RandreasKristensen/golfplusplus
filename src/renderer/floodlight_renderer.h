@@ -2,7 +2,7 @@
 
 // Draws the floodlights (renderer/floodlight_batch.h) into the scene in one
 // draw, lit and hazed like the trees, their lamps' faces glowing in
-// lighting.glsl's lamp_glow; and the same mesh into the trees' shadow map.
+// lighting.glsl's lamp_glow; and the same mesh into the shadow map.
 // Uploads only when the floodlights are rebuilt.
 
 #include <cstddef>

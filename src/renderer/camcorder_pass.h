@@ -6,8 +6,9 @@
 // size copy's smallest mip, eased in a 1x1 ping-pong texture: no readback)
 // and the white balance the light's colour, both lagging; bright light
 // blooms (from the quarter-size copy, wider sideways) and smears its whole
-// column (a Wx1 pass of each column's brightest); then the tone curve, the
-// colour it keeps and gain-up noise. Never off. Strengths are picture.json's
+// column, fading and thinning away from it (a Wx1 pass summing each
+// column's light past the threshold and finding where it is); then the tone
+// curve, the colour it keeps and gain-up noise. Never off. Strengths are picture.json's
 // `camcorder` section; exposure, white, gain and saturation by time of day
 // are the lighting palette's (render_lighting).
 

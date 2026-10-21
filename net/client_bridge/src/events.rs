@@ -88,7 +88,7 @@ fn empty_event(kind: StdbEventKind) -> StdbEvent {
         retrying: false,
         table: StdbTable::Player,
         change: StdbRowChange::Insert,
-        row: StdbRow { ball: StdbBall { account_id: 0, room_id: 0, zone: 0, x: 0.0, y: 0.0, z: 0.0, stroke_count: 0, last_wind_time: 0.0 } },
+        row: StdbRow { ball: StdbBall { account_id: 0, room_id: 0, zone: 0, x: 0.0, y: 0.0, z: 0.0, stroke_count: 0, last_shot_at: 0 } },
     }
 }
 
@@ -157,7 +157,6 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                         room_id: r.room_id,
                         group_id: r.group_id,
                         zone: r.zone,
-                        hole_started_at_micros: r.hole_started_at.to_micros_since_unix_epoch(),
                         round_strokes: strokes,
                         round_strokes_count: count,
                     },
@@ -200,7 +199,7 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                     y: r.y,
                     z: r.z,
                     stroke_count: r.stroke_count,
-                    last_wind_time: r.last_wind_time,
+                    last_shot_at: r.last_shot_at,
                 },
             },
         ),
@@ -217,7 +216,7 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                         club_id: arena.text(&r.club_id),
                         power: r.power,
                         cigarette_active: r.cigarette_active,
-                        wind_time: r.wind_time,
+                        shot_at: r.shot_at,
                     },
                     start_x: r.start_x,
                     start_y: r.start_y,

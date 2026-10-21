@@ -14,8 +14,9 @@
     "bloom_strength": 0.35,
     "bloom_width": 0.02,
     "bloom_height": 0.01,
-    "smear_threshold": 4.5,
-    "smear_strength": 0.015,
+    "smear_threshold": 5.5,
+    "smear_strength": 0.7,
+    "smear_fade": 0.08,
     "gain_grain": 0.04,
     "gain_chroma": 0.09
   },

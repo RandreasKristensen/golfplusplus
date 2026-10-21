@@ -150,3 +150,22 @@ TEST_CASE("GOLFPP_WINDOW sets the window size and GOLFPP_SCREENSHOT the picture'
         CHECK(options.window_height == 0);
     }
 }
+
+TEST_CASE("GOLFPP_WEATHER holds a weather kind, optionally with wind and wetness, and GOLFPP_GOD or --god opens the god menu") {
+    CHECK(!with_weather_options(startup_options{}, nullptr, nullptr).weather.has_value());
+    CHECK(!with_weather_options(startup_options{}, nullptr, nullptr).god_menu);
+    const startup_options rain = with_weather_options(startup_options{}, " heavy_rain,8,1 ", "1");
+    REQUIRE(rain.weather.has_value());
+    CHECK(*rain.weather == weather_kind::heavy_rain);
+    CHECK(rain.wind_speed == std::optional<float>(8.0f));
+    CHECK(rain.wetness == std::optional<float>(1.0f));
+    CHECK(rain.god_menu);
+    const startup_options shower = with_weather_options(startup_options{}, "sun_shower", "0");
+    CHECK(shower.weather == std::optional<weather_kind>(weather_kind::sun_shower));
+    CHECK(!shower.wind_speed.has_value());
+    CHECK(!shower.god_menu);
+    for (const char* bad : {"snow", "rain,", "rain,-1", "rain,3,2", "rain,3,0.5,1", "rain, 3"}) {
+        CHECK(!with_weather_options(startup_options{}, bad, nullptr).weather.has_value());
+    }
+    CHECK(with_online_options(startup_options{}, nullptr, nullptr, {"--god"}).god_menu);
+}

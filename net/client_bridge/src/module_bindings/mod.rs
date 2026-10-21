@@ -186,7 +186,7 @@ pub enum Reducer {
         club_id: String,
         power: f32,
         cigarette_active: bool,
-        wind_time: f32,
+        shot_at: i64,
     },
     UpdateMotion {
         zone: i32,
@@ -300,14 +300,14 @@ impl __sdk::Reducer for Reducer {
                 club_id,
                 power,
                 cigarette_active,
-                wind_time,
+                shot_at,
             } => __sats::bsatn::to_vec(&take_shot_reducer::TakeShotArgs {
                 stroke: stroke.clone(),
                 aim_angle: aim_angle.clone(),
                 club_id: club_id.clone(),
                 power: power.clone(),
                 cigarette_active: cigarette_active.clone(),
-                wind_time: wind_time.clone(),
+                shot_at: shot_at.clone(),
             }),
             Reducer::UpdateMotion {
                 zone,

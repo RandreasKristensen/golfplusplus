@@ -72,6 +72,9 @@ enum class gpu_profile_stage : std::size_t {
     shadows,
     trees,
     sky,
+    weather,
+    eyepiece,
+    zoom,  // the eyepiece's view, the scene drawn again at its zoom
     bloom,
     smear,
     camcorder,

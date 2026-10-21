@@ -7,7 +7,6 @@
 
 // Missing optional fields get these values.
 inline constexpr int default_hole_par = 3;
-inline constexpr std::uint32_t default_wind_seed = 42U;
 inline constexpr tree_shape default_tree_shape{0.35f, 2.4f, 1.6f, 3.2f};
 
 // nullopt when the tee, pin or spline (two or more control points, positive

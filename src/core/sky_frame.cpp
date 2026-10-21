@@ -1,5 +1,6 @@
 #include "core/sky_frame.h"
 
+#include "core/weather_frame.h"
 #include "game/mode_dispatch.h"
 #include "game/sky_clock.h"
 #include "game/sun_lighting.h"
@@ -35,14 +36,19 @@ double course_game_day(const game_state& game, const sky_controls& controls, con
     return frame_game_day(game.tuning.sky_clock, game.course.sky, controls, shared_unix_ms(game, local_unix_ms));
 }
 
+float course_hour(const game_state& game, const sky_controls& controls, const std::int64_t local_unix_ms) {
+    const double local_day = course_game_day(game, controls, local_unix_ms) + static_cast<double>(game.course.sky.utc_offset_hours) / 24.0;
+    return static_cast<float>((local_day - std::floor(local_day)) * 24.0);
+}
+
 render_lighting make_render_lighting(const game_state& game, const lighting_palette& palette, const sky_controls& controls,
-                                     const std::int64_t local_unix_ms) {
+                                     const std::int64_t local_unix_ms, const shown_weather& weather) {
     const double latitude = game.hub ? static_cast<double>(game.hub->world.latitude_deg) : 0.0;
     const double longitude = game.hub ? static_cast<double>(game.hub->world.longitude_deg) : 0.0;
     const double game_day = course_game_day(game, controls, local_unix_ms);
     const sky_state sky = with_lowest_sun(compute_sky_state(game_day, latitude, longitude), game.course.sky.lowest_sun_deg);
     const float sun_elevation_deg = glm::degrees(sky.sun_elevation);
-    const lighting_key light = lighting_at(palette, sun_elevation_deg);
+    const lighting_key light = weathered_lighting(lighting_at(palette, sun_elevation_deg), palette.weather, weather);
 
     render_lighting lighting;
     lighting.sun_direction = sky.sun_direction;
@@ -57,7 +63,8 @@ render_lighting make_render_lighting(const game_state& game, const lighting_pale
     lighting.moon_direction = sky.moon_direction;
     lighting.moon_phase = sky.moon_phase;
     lighting.star_visibility = star_visibility(palette.sky, sun_elevation_deg);
-    lighting.shadows.sun_share = sun_shadow_share(palette.shadows, sun_elevation_deg);
+    lighting.shadows.sun_share =
+        weathered_sun_shadow_share(sun_shadow_share(palette.shadows, sun_elevation_deg), palette.weather, weather);
     lighting.shadows.night_share = palette.shadows.night_share;
     lighting.shadows.max_stretch = palette.shadows.max_stretch;
     lighting.shadows.horizon_softness = std::sin(glm::radians(palette.shadows.horizon_softness_deg));
@@ -66,5 +73,6 @@ render_lighting make_render_lighting(const game_state& game, const lighting_pale
     lighting.white_balance = light.white_balance;
     lighting.gain_noise = light.gain_noise;
     lighting.saturation = light.saturation;
+    lighting.weather = make_render_sky_weather(weather, palette.weather);
     return lighting;
 }

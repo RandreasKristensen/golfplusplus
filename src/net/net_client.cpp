@@ -75,7 +75,7 @@ std::vector<std::size_t> stdb_header_layout() {
     describe(sizeof(stdb_room), {offsetof(stdb_room, room_id), offsetof(stdb_room, course_id), offsetof(stdb_room, player_count)});
     describe(sizeof(stdb_room_member),
              {offsetof(stdb_room_member, account_id), offsetof(stdb_room_member, room_id), offsetof(stdb_room_member, group_id),
-              offsetof(stdb_room_member, zone), offsetof(stdb_room_member, hole_started_at_micros),
+              offsetof(stdb_room_member, zone),
               offsetof(stdb_room_member, round_strokes),
               offsetof(stdb_room_member, round_strokes_count)});
     describe(sizeof(stdb_golf_group), {offsetof(stdb_golf_group, group_id), offsetof(stdb_golf_group, room_id),
@@ -89,14 +89,14 @@ std::vector<std::size_t> stdb_header_layout() {
               offsetof(stdb_avatar_motion, motion), offsetof(stdb_avatar_motion, server_time_micros)});
     describe(sizeof(stdb_ball), {offsetof(stdb_ball, account_id), offsetof(stdb_ball, room_id), offsetof(stdb_ball, zone),
                                  offsetof(stdb_ball, x), offsetof(stdb_ball, y), offsetof(stdb_ball, z),
-                                 offsetof(stdb_ball, stroke_count), offsetof(stdb_ball, last_wind_time)});
+                                 offsetof(stdb_ball, stroke_count), offsetof(stdb_ball, last_shot_at)});
     describe(sizeof(stdb_golf_cart),
              {offsetof(stdb_golf_cart, owner), offsetof(stdb_golf_cart, room_id), offsetof(stdb_golf_cart, x),
               offsetof(stdb_golf_cart, y), offsetof(stdb_golf_cart, z), offsetof(stdb_golf_cart, yaw),
               offsetof(stdb_golf_cart, passenger)});
     describe(sizeof(stdb_shot), {offsetof(stdb_shot, stroke), offsetof(stdb_shot, aim_angle), offsetof(stdb_shot, club_id),
                                  offsetof(stdb_shot, power), offsetof(stdb_shot, cigarette_active),
-                                 offsetof(stdb_shot, wind_time)});
+                                 offsetof(stdb_shot, shot_at)});
     describe(sizeof(stdb_shot_event),
              {offsetof(stdb_shot_event, room_id), offsetof(stdb_shot_event, account_id), offsetof(stdb_shot_event, zone),
               offsetof(stdb_shot_event, shot), offsetof(stdb_shot_event, start_x), offsetof(stdb_shot_event, start_y),
@@ -255,7 +255,7 @@ void net_client::send_commands(game_state& state) {
         }
         case net_command_type::take_shot: {
             const shot_input& s = command.shot;
-            const stdb_shot shot{command.stroke, s.aim_angle, view(s.club_id), s.power, s.cigarette_active, s.wind_time};
+            const stdb_shot shot{command.stroke, s.aim_angle, view(s.club_id), s.power, s.cigarette_active, s.shot_at};
             stdb_take_shot(client, &shot);
             break;
         }

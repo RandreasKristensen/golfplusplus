@@ -1,5 +1,7 @@
 #include "game/play_area.h"
 
+#include "game/area_obstacles.h"
+
 #include "physics/ground_mesh.h"
 #include "physics/land_relief.h"
 #include "physics/vector_math.h"
@@ -284,8 +286,12 @@ play_area build_course_area(const std::vector<hole_data>& holes,
     const height_grid* land = world.ground.heights.empty() ? nullptr : &relieved;
     play_area grounded = with_tee_boxes(with_bounds(with_ground(std::move(course), land, margin, tuning)),
                                         placed_holes, tuning);
-    return with_floodlights(with_fences(with_signs(std::move(grounded), placed_holes, tuning), world.fences, tuning.fence),
-                            placed_holes, world.cart_roads, tuning);
+    play_area standing = with_floodlights(
+        with_fences(with_signs(std::move(grounded), placed_holes, tuning), world.fences, tuning.fence), placed_holes,
+        world.cart_roads, tuning);
+    standing.obstacles = standing_obstacles(standing, placed_holes, tuning);
+    standing.cart_obstacles = cart_only_obstacles(standing);
+    return standing;
 }
 
 bool under_water(const play_area& area, const glm::vec3& position) {

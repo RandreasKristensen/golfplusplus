@@ -42,7 +42,7 @@ shot_request putt(const int stroke) {
     request.stroke = stroke;
     request.club_id = "putter";
     request.power = 0.5f;
-    request.wind_time = 3.0f;
+    request.shot_at = 3000;
     return request;
 }
 }
@@ -197,41 +197,42 @@ TEST_CASE("a joining player's cart parks in the first free slot beside hole 1") 
 
 TEST_CASE("a valid shot starts from the server's ball, with power clamped") {
     const server_content content = fixture_server_content();
-    const server_ball ball{glm::vec3(1.0f, 2.0f, 3.0f), 2, 1.0f};
+    const server_ball ball{glm::vec3(1.0f, 2.0f, 3.0f), 2, 1000};
     shot_request request = putt(3);
     request.power = 7.0f;
     request.cigarette_active = true;
 
-    const shot_check lit = check_shot(request, ball, beside(ball), 5.0f, true, content);
+    const shot_check lit = check_shot(request, ball, beside(ball), 5000, true, content);
     REQUIRE(lit.input.has_value());
     CHECK(lit.error.empty());
     CHECK(lit.input->ball_start == ball.position);
     CHECK(lit.input->power == 1.0f);
     CHECK(lit.input->cigarette_active);
     CHECK(lit.input->club_id == "putter");
+    CHECK(lit.input->shot_at == request.shot_at);
 
     request.power = 0.0f;
     request.cigarette_active = false;
-    const shot_check plain = check_shot(request, ball, beside(ball), 5.0f, false, content);
+    const shot_check plain = check_shot(request, ball, beside(ball), 5000, false, content);
     REQUIRE(plain.input.has_value());
     CHECK(plain.input->power == content.tuning.swing.min_power);
     CHECK(!plain.input->cigarette_active);
 
     // A shot the client simulated with a cigarette the server says is out.
     request.cigarette_active = true;
-    CHECK(check_shot(request, ball, beside(ball), 5.0f, false, content).error == error_cigarette_out);
+    CHECK(check_shot(request, ball, beside(ball), 5000, false, content).error == error_cigarette_out);
 }
 
 TEST_CASE("aim must come wrapped into one turn") {
     const server_content content = fixture_server_content();
-    const server_ball ball{glm::vec3(0.0f), 0, 0.0f};
+    const server_ball ball{glm::vec3(0.0f), 0, 0};
     shot_request request = putt(1);
     for (const float aim : {-3.14159f, 0.0f, 3.14159f}) {
         request.aim_angle = aim;
-        CHECK(check_shot(request, ball, beside(ball), 3.0f, false, content).input.has_value());
+        CHECK(check_shot(request, ball, beside(ball), 3000, false, content).input.has_value());
     }
     request.aim_angle = 7.0f;
-    CHECK(check_shot(request, ball, beside(ball), 3.0f, false, content).error == error_invalid_shot);
+    CHECK(check_shot(request, ball, beside(ball), 3000, false, content).error == error_invalid_shot);
 
     CHECK(near(wrap_angle(7.0f), 7.0f - 2.0f * glm::pi<float>(), 0.0001f));
     CHECK(near(wrap_angle(-4.0f), -4.0f + 2.0f * glm::pi<float>(), 0.0001f));
@@ -257,32 +258,32 @@ TEST_CASE("speeds and turn rates others see are limited to what the game produce
 
 TEST_CASE("shots out of turn, away from the ball, with unknown clubs, or at impossible times are refused") {
     const server_content content = fixture_server_content();
-    const server_ball ball{glm::vec3(0.0f), 2, 1.0f};
+    const server_ball ball{glm::vec3(0.0f), 2, 1000};
     const glm::vec3 at_ball = beside(ball);
-    const float slack = content.tuning.server.wind_time_slack_seconds;
-    const auto check = [&](const shot_request& request, const float on_hole = 5.0f) {
-        return check_shot(request, ball, at_ball, on_hole, false, content);
+    const std::int64_t slack = static_cast<std::int64_t>(content.tuning.server.shot_time_slack_seconds * 1000.0f);
+    const auto check = [&](const shot_request& request, const std::int64_t now = 5000) {
+        return check_shot(request, ball, at_ball, now, false, content);
     };
 
     CHECK(check(putt(2)).error == error_wrong_stroke);
     CHECK(check(putt(4)).error == error_wrong_stroke);
     const glm::vec3 far_away(content.tuning.player.ball_interact_radius + content.tuning.server.interact_slack + 1.0f, 0.0f, 0.0f);
-    CHECK(check_shot(putt(3), ball, far_away, 5.0f, false, content).error == error_too_far);
+    CHECK(check_shot(putt(3), ball, far_away, 5000, false, content).error == error_too_far);
     shot_request unknown = putt(3);
     unknown.club_id = "banana";
     CHECK(check(unknown).error == error_unknown_club);
 
     shot_request early = putt(3);
-    early.wind_time = 0.5f;  // before the last shot
-    CHECK(check(early).error == error_invalid_shot);
+    early.shot_at = 500;  // before the last shot
+    CHECK(check(early, 1000).error == error_invalid_shot);
     shot_request stale = putt(3);
-    stale.wind_time = 2.0f;  // a calm moment long past
-    CHECK(check(stale, 2.0f + slack + 0.01f).error == error_invalid_shot);
-    CHECK(check(stale, 2.0f + slack).input.has_value());
+    stale.shot_at = 2000;  // a calm moment long past
+    CHECK(check(stale, 2000 + slack + 1).error == error_invalid_shot);
+    CHECK(check(stale, 2000 + slack).input.has_value());
     shot_request late = putt(3);
-    late.wind_time = 5.0f + slack + 0.01f;
+    late.shot_at = 5000 + slack + 1;
     CHECK(check(late).error == error_invalid_shot);
-    late.wind_time = 5.0f + slack;
+    late.shot_at = 5000 + slack;
     CHECK(check(late).input.has_value());
 
     for (const float bad : {std::nanf(""), INFINITY}) {

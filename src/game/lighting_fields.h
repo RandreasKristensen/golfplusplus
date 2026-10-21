@@ -74,6 +74,21 @@ inline constexpr bounded_field<sky_style> sky_fields[] = {
     {"cloud_softness", &sky_style::cloud_softness, 0.01f, 4.0f},
     {"cloud_sun_gain", &sky_style::cloud_sun_gain, 0.0f, 4.0f},
     {"cloud_sun_width_deg", &sky_style::cloud_sun_width_deg, 1.0f, 180.0f},
+    {"cloud_deck_scale", &sky_style::cloud_deck_scale, 0.01f, 64.0f},
+    {"cloud_deck_drift", &sky_style::cloud_deck_drift, 0.0f, 1.0f},
+    {"cloud_deck_clear", &sky_style::cloud_deck_clear, 0.0f, 2.0f},
+    {"cloud_deck_full", &sky_style::cloud_deck_full, 0.0f, 2.0f},
+    {"cloud_deck_softness", &sky_style::cloud_deck_softness, 0.01f, 1.0f},
+    {"cloud_deck_top", &sky_style::cloud_deck_top, 0.0f, 4.0f},
+    {"cloud_deck_base", &sky_style::cloud_deck_base, 0.0f, 1.0f},
+    {"rainbow_radius_deg", &sky_style::rainbow_radius_deg, 1.0f, 89.0f},
+    {"rainbow_width_deg", &sky_style::rainbow_width_deg, 0.1f, 20.0f},
+    {"rainbow_secondary_radius_deg", &sky_style::rainbow_secondary_radius_deg, 1.0f, 89.0f},
+    {"rainbow_secondary_width_deg", &sky_style::rainbow_secondary_width_deg, 0.1f, 20.0f},
+    {"rainbow_secondary_share", &sky_style::rainbow_secondary_share, 0.0f, 1.0f},
+    {"rainbow_brightness", &sky_style::rainbow_brightness, 0.0f, 4.0f},
+    {"rainbow_inner_glow", &sky_style::rainbow_inner_glow, 0.0f, 1.0f},
+    {"rainbow_band_darkening", &sky_style::rainbow_band_darkening, 0.0f, 1.0f},
 };
 
 inline constexpr float max_caster_metres = 10.0f;
@@ -91,11 +106,9 @@ inline constexpr bounded_field<shadow_style> shadow_fields[] = {
     {"horizon_softness_deg", &shadow_style::horizon_softness_deg, 0.01f, 45.0f},
     {"ball_radius_scale", &shadow_style::ball_radius_scale, 0.0f, max_caster_metres},
     {"player_radius", &shadow_style::player_radius, 0.0f, max_caster_metres},
-    {"player_height", &shadow_style::player_height, 0.0f, max_caster_metres},
     {"cart_radius", &shadow_style::cart_radius, 0.0f, max_caster_metres},
-    {"cart_height", &shadow_style::cart_height, 0.0f, max_caster_metres},
     {"tree_radius_share", &shadow_style::tree_radius_share, 0.0f, 4.0f},
-    {"tree_contact_share", &shadow_style::tree_contact_share, 0.0f, 1.0f},
+    {"foot_share", &shadow_style::foot_share, 0.0f, 1.0f},
     {"pole_radius", &shadow_style::pole_radius, 0.0f, max_caster_metres},
     {"map_extent", &shadow_style::map_extent, 10.0f, 2000.0f},
     {"map_ahead", &shadow_style::map_ahead, 0.0f, 0.5f},
@@ -120,6 +133,87 @@ inline constexpr bounded_field<night_light_style> night_light_fields[] = {
     {"floodlight_cone_deg", &night_light_style::floodlight_cone_deg, 1.0f, 89.0f},
     {"floodlight_soft_deg", &night_light_style::floodlight_soft_deg, 0.0f, 89.0f},
     {"lamp_glow", &night_light_style::lamp_glow, 0.0f, max_glow},
+};
+
+inline constexpr float max_fade_seconds = 120.0f;
+inline constexpr float max_gloss_power = 256.0f;
+
+inline constexpr bounded_field<weather_style> weather_fields[] = {
+    {"fade_seconds", &weather_style::fade_seconds, 0.0f, max_fade_seconds},
+    {"overcast_sun", &weather_style::overcast_sun, 0.0f, 1.0f},
+    {"overcast_shadows", &weather_style::overcast_shadows, 0.0f, 1.0f},
+    {"overcast_scatter", &weather_style::overcast_scatter, 0.0f, 1.0f},
+    {"overcast_grey", &weather_style::overcast_grey, 0.0f, 1.0f},
+    {"overcast_sky_brightness", &weather_style::overcast_sky_brightness, 0.0f, 4.0f},
+    {"overcast_sky_blend", &weather_style::overcast_sky_blend, 0.0f, 1.0f},
+    {"overcast_mottle", &weather_style::overcast_mottle, 0.0f, 1.0f},
+    {"overcast_glow", &weather_style::overcast_glow, 0.0f, 1.0f},
+    {"overcast_haze", &weather_style::overcast_haze, 0.0f, 1.0f},
+    {"overcast_haze_distance", &weather_style::overcast_haze_distance, 0.05f, 1.0f},
+    {"overcast_exposure", &weather_style::overcast_exposure, 0.25f, 4.0f},
+    {"overcast_saturation", &weather_style::overcast_saturation, 0.0f, 1.0f},
+    {"rain_light", &weather_style::rain_light, 0.0f, 1.0f},
+    {"rain_mottle", &weather_style::rain_mottle, 0.0f, 1.0f},
+    {"rain_haze", &weather_style::rain_haze, 0.0f, 1.0f},
+    {"rain_haze_distance", &weather_style::rain_haze_distance, 0.05f, 1.0f},
+    {"rain_gain_noise", &weather_style::rain_gain_noise, 0.0f, 1.0f},
+    {"fog_cover", &weather_style::fog_cover, 0.0f, 1.0f},
+    {"fog_haze", &weather_style::fog_haze, 0.0f, 1.0f},
+    {"fog_haze_distance", &weather_style::fog_haze_distance, 0.01f, 1.0f},
+    {"fog_grey", &weather_style::fog_grey, 0.0f, 1.0f},
+    {"wet_albedo", &weather_style::wet_albedo, 0.0f, 1.0f},
+    {"wet_gloss", &weather_style::wet_gloss, 0.0f, 1.0f},
+    {"wet_gloss_power", &weather_style::wet_gloss_power, 1.0f, max_gloss_power},
+};
+
+inline constexpr int max_weather_streaks = 20000;
+inline constexpr float max_volume_size = 200.0f;
+
+inline constexpr bounded_field<lightning_style> lightning_fields[] = {
+    {"strikes_per_minute", &lightning_style::strikes_per_minute, 0.0f, 60.0f},
+    {"flash_seconds", &lightning_style::flash_seconds, 0.05f, 3.0f},
+    {"pulse_seconds", &lightning_style::pulse_seconds, 0.01f, 1.0f},
+    {"bolt_share", &lightning_style::bolt_share, 0.0f, 1.0f},
+    {"top_min_deg", &lightning_style::top_min_deg, 0.0f, 80.0f},
+    {"top_max_deg", &lightning_style::top_max_deg, 0.0f, 80.0f},
+    {"near_meters", &lightning_style::near_meters, 1.0f, 50000.0f},
+    {"far_meters", &lightning_style::far_meters, 1.0f, 50000.0f},
+    {"close_meters", &lightning_style::close_meters, 0.0f, 50000.0f},
+    {"sound_speed", &lightning_style::sound_speed, 1.0f, 1000.0f},
+    {"bolt_width_deg", &lightning_style::bolt_width_deg, 0.01f, 5.0f},
+    {"bolt_jitter_deg", &lightning_style::bolt_jitter_deg, 0.0f, 20.0f},
+    {"bolt_brightness", &lightning_style::bolt_brightness, 0.0f, 32.0f},
+    {"glow_radius_deg", &lightning_style::glow_radius_deg, 0.1f, 180.0f},
+    {"glow_strength", &lightning_style::glow_strength, 0.0f, 8.0f},
+};
+inline constexpr float max_fall_speed = 30.0f;
+
+inline constexpr bounded_field<rain_style> rain_fields[] = {
+    {"drop_power", &rain_style::drop_power, 0.25f, 4.0f},
+    {"volume_size", &rain_style::volume_size, 1.0f, max_volume_size},
+    {"light_fall_speed", &rain_style::light_fall_speed, 0.1f, max_fall_speed},
+    {"heavy_fall_speed", &rain_style::heavy_fall_speed, 0.1f, max_fall_speed},
+    {"wind_height", &rain_style::wind_height, 0.0f, 100.0f},
+    {"streak_seconds", &rain_style::streak_seconds, 0.0f, 1.0f},
+    {"light_alpha", &rain_style::light_alpha, 0.0f, 1.0f},
+    {"heavy_alpha", &rain_style::heavy_alpha, 0.0f, 1.0f},
+    {"near_fade", &rain_style::near_fade, 0.0f, max_volume_size},
+};
+
+inline constexpr float max_wind_speed = 60.0f;
+
+inline constexpr bounded_field<wind_style> wind_fields[] = {
+    {"flag_calm_speed", &wind_style::flag_calm_speed, 0.0f, max_wind_speed},
+    {"flag_full_speed", &wind_style::flag_full_speed, 0.0f, max_wind_speed},
+    {"flag_calm_hz", &wind_style::flag_calm_hz, 0.0f, max_frequency_hz},
+    {"flag_full_hz", &wind_style::flag_full_hz, 0.0f, max_frequency_hz},
+    {"flag_flap", &wind_style::flag_flap, 0.0f, 1.0f},
+    {"speck_volume_size", &wind_style::speck_volume_size, 1.0f, max_volume_size},
+    {"speck_height", &wind_style::speck_height, 0.0f, 100.0f},
+    {"speck_full_speed", &wind_style::speck_full_speed, 0.1f, max_wind_speed},
+    {"speck_calm_share", &wind_style::speck_calm_share, 0.0f, 1.0f},
+    {"speck_seconds", &wind_style::speck_seconds, 0.0f, 1.0f},
+    {"speck_tumble", &wind_style::speck_tumble, 0.0f, max_caster_metres},
 };
 
 inline constexpr bounded_field<night_light> light_fields[] = {

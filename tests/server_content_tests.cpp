@@ -1,5 +1,6 @@
 #include "doctest.h"
 
+#include "game/mode_dispatch.h"
 #include "game/course_session.h"
 #include "game/game_state.h"
 #include "game/shot_simulation.h"
@@ -81,11 +82,15 @@ TEST_CASE("the server builds each hole where the game plays it, and shots land i
     for (std::size_t i = 0; i < course->shot_holes.size(); ++i) {
         game_state game = started_game(fixture_hub_course());
         REQUIRE(start_hub_hole(game, i));
-        const shot_course client = current_shot_course(game);
-        const shot_course server{course->area, course->trees, course->shot_holes[i]};
+        constexpr std::int64_t shot_at = 1800000000000;
+        shot_course client = current_shot_course(game);
+        client.weather = course_weather_at(game, shot_at);
+        const shot_course server = server_shot_course(*course, i, shot_at, content);
 
         CHECK(server.hole.pin == client.hole.pin);
-        CHECK(server.hole.wind_seed == client.hole.wind_seed);
+        CHECK(server.weather.wind == client.weather.wind);
+        CHECK(server.weather.wetness == client.weather.wetness);
+        CHECK(glm::length(server.weather.wind) > 0.0f);
         CHECK(same_trees(server.trees, client.trees));
         CHECK(course->holes[i].tee_position == game.hole->tee_position);
 
@@ -94,7 +99,7 @@ TEST_CASE("the server builds each hole where the game plays it, and shots land i
         input.aim_angle = game.aim_angle + glm::radians(-15.0f);
         input.club_id = "driver";
         input.power = 0.85f;
-        input.wind_time = 3.0f;
+        input.shot_at = shot_at;
         const shot_result on_client = simulate_shot(input, client, game.tuning, game.clubs, game.rewards);
         const shot_result on_server = simulate_shot(input, server, content.tuning, content.clubs, content.rewards);
         CHECK(on_client.duration > 0.0f);

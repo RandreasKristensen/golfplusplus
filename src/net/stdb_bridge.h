@@ -136,7 +136,6 @@ typedef struct stdb_room_member {
     uint64_t room_id;
     uint64_t group_id;  // 0: none
     int32_t zone;       // -1: the hub, else the hole played
-    int64_t hole_started_at_micros;  // when the hole was entered or reteed (server clock): wind time starts here
     const int32_t* round_strokes;  // per hole this round, 0: not played
     size_t round_strokes_count;
 } stdb_room_member;
@@ -175,7 +174,7 @@ typedef struct stdb_ball {
     float y;
     float z;
     int32_t stroke_count;
-    float last_wind_time;
+    int64_t last_shot_at;  // UTC milliseconds
 } stdb_ball;
 
 typedef struct stdb_golf_cart {
@@ -194,7 +193,7 @@ typedef struct stdb_shot {
     stdb_string club_id;
     float power;
     bool cigarette_active;
-    float wind_time;
+    int64_t shot_at;  // UTC milliseconds, on the server's clock as the client estimates it
 } stdb_shot;
 
 typedef struct stdb_shot_event {

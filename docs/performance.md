@@ -15,6 +15,8 @@ code reads them.
 | `GOLFPP_WINDOW=<W>x<H>` | Open the window at this size in pixels (e.g. `3440x1440`) instead of 1280x720. Anything else keeps the default. The fullscreen setting still wins. |
 | `GOLFPP_SCREENSHOT=<path.bmp>` | 120 frames after loading (into `GOLFPP_COURSE`, or the menu), save the window's picture after the TV pass as a 24-bit BMP and quit. Runs with default settings and never writes the save. For reviewing the picture. |
 | `GOLFPP_GAME_TIME=<hour>` or `<YYYY-MM-DD>T<hour>` | Pin the sky at this hour on the course's clock (`0` to `24`, e.g. `19.5`; the course file's `sky.utc_offset_hours`) on the course's date (its `sky.date`), or on the given date (`1989-12-21T23`: the Danish courses' midsummer night never gets darker than about −10.5°, so a winter date shows a true night), so screenshots show the same light every time. Anything else leaves the clock running. |
+| `GOLFPP_WEATHER=<kind>[,<wind>[,<wetness>]]` | Hold the weather offline from the start (the god menu's hold, `src/core/god_menu.h`): `clear`, `cloudy`, `light_fog`, `fog`, `light_rain`, `rain`, `heavy_rain`, `thunderstorm` or `sun_shower`, then optionally the wind in m/s (at 10 m, blowing towards +Z) and the ground's wetness from `0` to `1`, e.g. `heavy_rain,8,1`. Anything else holds nothing. Online play ignores it. |
+| `GOLFPP_GOD=1` | The god menu can be opened with F1 (as `--god` does): hold the time of day, the weather, the wind and the wetness to try them. Arrows change a row, Backspace lets it run live again. |
 
 ```pwrshl
 $env:GOLFPP_VSYNC = "0"; $env:GOLFPP_COURSE = "marienlyst_golfklub"
@@ -47,7 +49,7 @@ whole microseconds to keep the lines short.
 | `TSAMP` / `TTRI` | Terrain sample calls / triangles tested across them |
 | `CHUNK v/c R IDX` | Terrain chunks visible / culled, merged draw ranges, indices drawn |
 | `TREE` | `ON` when the instanced tree batch passed frustum culling |
-| `GPU SMAP` / `TER` / `SHD` / `TRE` / `SKY` / `BLM` / `SMR` / `CAM` / `TAPE` / `OVL` / `CRT` | GPU timings from timer queries, reported 2 frames late: the trees' and floodlights' shadow map (`shadow_map_pass`, 0 with the sun down) / terrain / blob shadows (`blob_shadow_renderer`) / trees, signs, fence posts and floodlights / the sky and land panorama behind them (`backdrop_pass`) / the camcorder's quarter-size copy, metering and bloom / its column smear / its recording of the picture (`camcorder_pass`) / tape pass / overlay / TV pass. While paused only the tape, overlay and TV run |
+| `GPU SMAP` / `TER` / `SHD` / `TRE` / `SKY` / `WTR` / `BLM` / `SMR` / `CAM` / `EYE` / `TAPE` / `OVL` / `CRT` / `ZOOM` | GPU timings from timer queries, reported 2 frames late: the shadow map of trees, floodlights, players and carts (`shadow_map_pass`, 0 with the sun down) / terrain / blob shadows (`blob_shadow_renderer`) / trees, signs, fence posts and floodlights / the sky and land panorama behind them, its rainbow too (`backdrop_pass`) / rain streaks and the wind's specks (`weather_renderer`, two line draws, 0 with neither) / the camcorder's quarter-size copy, metering and bloom / its column smear / its recording of the picture (`camcorder_pass`) / the rangefinder's eyepiece (`eyepiece_pass`, 0 when not held up) / tape pass / overlay / TV pass / the eyepiece's zoomed view, the scene drawn again within the eyepiece at its zoom (0 when not held up). While paused only the tape, overlay and TV run |
 
 The overlay text comes from `format_profile_overlay_lines` in
 `src/profiling/profiling.cpp`.

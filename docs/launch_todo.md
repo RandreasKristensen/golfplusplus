@@ -105,10 +105,15 @@ release ships the built server (`server/hosting.md`), never its source.
   NED and the national DEMs of the countries our courses are in).
 
 ### Audio and asset licences
-- [ ] Record the source and licence of every file in `assets/audio/` and
-  `assets/icons/`. Replace anything that doesn't allow commercial use.
-- [ ] Audit assets for AI-generated content (Steam's content survey asks; AI-written
-  code needs no disclosure). Prefer hand-made assets for anything players see or hear.
+The plan: all art is drawn by code, and all music and sound is original. Art
+drawn by AI-written code needs no AI disclosure on Steam.
+- [ ] Replace every placeholder in `assets/audio/` with original music and
+  sound design (the thunder from `tooling/audio/make_thunder.py` stays).
+- [ ] Redesign the icon (`assets/icons/`), drawn by a script kept in
+  `tooling/art/` like the rest of the art (the code that drew the current one
+  wasn't kept).
+- [ ] Before submitting, check that nothing players see or hear came from a
+  generative AI tool; if anything did, disclose it in Steam's content survey.
 
 ### Library licences
 - [ ] Every library's licence ships in `THIRD_PARTY.txt` (`AGENTS.md`). The

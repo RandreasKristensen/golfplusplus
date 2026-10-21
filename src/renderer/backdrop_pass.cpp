@@ -9,6 +9,7 @@
 #include <glm/mat3x3.hpp>
 #include <glm/trigonometric.hpp>
 #include <glm/matrix.hpp>
+#include <glm/vec4.hpp>
 
 namespace {
 constexpr int sky_unit = 0;
@@ -73,6 +74,13 @@ bool backdrop_pass::init(const std::string& asset_root,
     shader_.set_float("u_cloud_sun_gain", sky.cloud_sun_gain);
     shader_.set_float("u_cloud_sun_width", glm::radians(sky.cloud_sun_width_deg));
     shader_.set_vec3("u_cloud_shade", sky.cloud_shade);
+    shader_.set_vec4("u_cloud_deck", glm::vec4(sky.cloud_deck_scale, sky.cloud_deck_drift, sky.cloud_deck_clear, sky.cloud_deck_full));
+    shader_.set_vec4("u_cloud_deck_look", glm::vec4(sky.cloud_deck_softness, sky.cloud_deck_top, sky.cloud_deck_base, 0.0f));
+    shader_.set_vec4("u_rainbow", glm::vec4(glm::radians(sky.rainbow_radius_deg), glm::radians(sky.rainbow_width_deg),
+                                            glm::radians(sky.rainbow_secondary_radius_deg),
+                                            glm::radians(sky.rainbow_secondary_width_deg)));
+    shader_.set_vec4("u_rainbow_look", glm::vec4(sky.rainbow_secondary_share, sky.rainbow_brightness, sky.rainbow_inner_glow,
+                                                 sky.rainbow_band_darkening));
     return true;
 }
 
@@ -118,7 +126,7 @@ scene_haze backdrop_pass::prepare(const course_backdrop* backdrop, const glm::ve
     return sky_.loaded() && land_.loaded() ? make_scene_haze(shown, far_ground_haze_, eye, area_extent, haze_tint) : scene_haze{};
 }
 
-void backdrop_pass::draw(const glm::mat4& view, const glm::mat4& proj, const float seconds) {
+void backdrop_pass::draw(const glm::mat4& view, const glm::mat4& proj, const float seconds, const render_lightning& lightning) {
     if (!sky_.loaded() || !land_.loaded()) {
         return;
     }
@@ -131,6 +139,11 @@ void backdrop_pass::draw(const glm::mat4& view, const glm::mat4& proj, const flo
     shader_.set_float("u_haze_amount", haze_amount_);
     shader_.set_float("u_sky_brightness", sky_brightness_);
     shader_.set_float("u_seconds", seconds);
+    shader_.set_vec4("u_lightning", glm::vec4(lightning.direction, lightning.flash));
+    shader_.set_vec4("u_lightning_bolt", glm::vec4(lightning.seed, lightning.bolt ? lightning.bolt_brightness : 0.0f,
+                                                   lightning.bolt_width, lightning.bolt_jitter));
+    shader_.set_vec4("u_lightning_glow", glm::vec4(lightning.color, lightning.glow_strength));
+    shader_.set_float("u_lightning_glow_radius", lightning.glow_radius);
     sky_.bind(sky_unit);
     land_.bind(land_unit);
     glBindVertexArray(screen_vao_);

@@ -164,13 +164,13 @@ TEST_CASE("a shot into a floodlight pole is stopped like one into a tree trunk")
     const tree_body& pole_body = area.floodlight_poles[static_cast<std::size_t>(first_fairway - area.floodlights.begin())];
     const club_stats& stats = shipped_content().clubs.front().stats;
     const std::vector<tree_body> no_trees;
-    const shot_course course{area, no_trees, shot_hole{hole.pin_position, hole.wind_seed}};
+    const shot_course course{area, no_trees, shot_hole{hole.pin_position}, weather_state{}};
 
     // Low from the fairway straight at the pole, 10 m off.
     const glm::vec3 from_fairway = safe_normalize(glm::vec3(-pole.foot.x, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
     const glm::vec3 start = pole.foot + from_fairway * 10.0f + world_up * 2.5f;
     const ball_state launched = ball_at(start, -from_fairway * 20.0f);
-    const shot_result hit = simulate_ball(launched, stats, course, tuning(), 0.0f);
+    const shot_result hit = simulate_ball(launched, stats, course, tuning());
     CHECK(std::any_of(hit.events.begin(), hit.events.end(),
                       [](const shot_event& event) { return event.kind == shot_event_kind::tree_hit; }));
     // It never got past the pole.
@@ -183,8 +183,8 @@ TEST_CASE("a shot into a floodlight pole is stopped like one into a tree trunk")
     without.floodlight_poles.clear();
     without.floodlight_grid = tree_grid{};
     const std::vector<tree_body> trunk = {pole_body};
-    const shot_course as_tree{without, trunk, shot_hole{hole.pin_position, hole.wind_seed}};
-    const shot_result tree_hit = simulate_ball(launched, stats, as_tree, tuning(), 0.0f);
+    const shot_course as_tree{without, trunk, shot_hole{hole.pin_position}, weather_state{}};
+    const shot_result tree_hit = simulate_ball(launched, stats, as_tree, tuning());
     CHECK(tree_hit.rest_position == hit.rest_position);
     CHECK(tree_hit.duration == hit.duration);
 }

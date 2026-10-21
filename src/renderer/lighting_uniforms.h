@@ -32,13 +32,15 @@ struct frame_lighting_block {
     glm::vec4 horizon_glow{0.0f};                       // a: horizon_glow_strength
     glm::vec4 sun_horizon_a{0.0f};  // horizon_way_weights, ways 0..3
     glm::vec4 sun_horizon_b{0.0f};  // and 4..7
-    glm::vec4 shadow{0.0f};         // render_shadows: sun_share, night_share, max_stretch, horizon_softness
+    glm::vec4 shadow{0.0f};         // render_shadows: sun_share, night_share, unused, horizon_softness
     glm::vec4 lamp_glow{0.0f};
+    glm::vec4 weather{0.0f};  // render_sky_weather: mottle, rainbow, cover, haze_gain
+    glm::vec4 wet{1.0f, 0.0f, 1.0f, 0.0f};  // wet_albedo, wet_gloss, wet_gloss_power, unused
     std::array<glm::vec4, max_scene_lights> light_position{};  // w: radius, 0 for none
     std::array<glm::vec4, max_scene_lights> light_color{};     // w: cone_full_cos
     std::array<glm::vec4, max_scene_lights> light_cone{};      // xyz: direction; w: cone_edge_cos
 };
-static_assert(sizeof(frame_lighting_block) == (13 + 3 * max_scene_lights) * sizeof(glm::vec4),
+static_assert(sizeof(frame_lighting_block) == (15 + 3 * max_scene_lights) * sizeof(glm::vec4),
               "frame_lighting_block must match std140");
 
 // `lights` are the ones the scene is lit by (nearest_scene_lights); any past
@@ -59,8 +61,11 @@ inline frame_lighting_block make_frame_lighting_block(const render_lighting& lig
     block.sun_horizon_a = glm::vec4(ways[0], ways[1], ways[2], ways[3]);
     block.sun_horizon_b = glm::vec4(ways[4], ways[5], ways[6], ways[7]);
     const render_shadows& shadows = lighting.shadows;
-    block.shadow = glm::vec4(shadows.sun_share, shadows.night_share, shadows.max_stretch, shadows.horizon_softness);
+    block.shadow = glm::vec4(shadows.sun_share, shadows.night_share, 0.0f, shadows.horizon_softness);
     block.lamp_glow = glm::vec4(lighting.lamp_glow, 0.0f);
+    const render_sky_weather& weather = lighting.weather;
+    block.weather = glm::vec4(weather.mottle, weather.rainbow, weather.cover, weather.haze_gain);
+    block.wet = glm::vec4(weather.wet_albedo, weather.wet_gloss, weather.wet_gloss_power, 0.0f);
     for (std::size_t i = 0; i < max_scene_lights; ++i) {
         const render_light light = i < lights.size() ? lights[i] : render_light{};
         block.light_position[i] = glm::vec4(light.position, light.radius);

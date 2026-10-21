@@ -61,6 +61,9 @@ public:
     void append_quad(const glm::mat4& model, const glm::vec3& color, float glow, bool depth_write);
     void append_cylinder(const glm::mat4& model, const glm::vec3& color, float glow, bool depth_write);
     void append_sphere(const glm::mat4& model, const glm::vec3& color, float glow, bool depth_write);
+    // The quad a, b, c, d (in order round it), already in world space.
+    void append_world_quad(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& d,
+                           const glm::vec3& color, float glow, bool depth_write);
 
     const std::vector<world_marker_vertex>& vertices() const { return vertices_; }
     const std::vector<world_marker_run>& runs() const { return runs_; }
@@ -93,11 +96,19 @@ glm::mat4 world_panel_model(const glm::vec3& center,
                             float local_z_rotation,
                             const glm::vec2& half_size);
 
+// How every flag flies this frame (render_weather): along `wind` (level;
+// none: along +x), `lift` of the way from hanging (0) to straight out (1),
+// waving at `phase` radians by `flap` of its length.
+struct flag_pose {
+    glm::vec3 wind{0.0f};
+    float lift = 0.0f;
+    float phase = 0.0f;
+    float flap = 0.0f;
+};
+
 // What the marker pass draws this frame. Vector pointers are non-owning and
 // may be null (treated as empty).
 struct world_marker_scene {
-    // Every tee box of the area, drawn in the hub and on a hole alike.
-    const std::vector<tee_box>* tee_boxes = nullptr;
     // The hole being played: cup and flag.
     bool show_hole = false;
     glm::vec3 pin_position{0.0f};
@@ -107,6 +118,7 @@ struct world_marker_scene {
 
     float cup_radius_meters = 0.0f;
     float pin_visual_height_meters = 0.0f;
+    flag_pose flag;
 
     bool show_aim_indicator = false;
     const std::vector<glm::vec3>* aim_arc_points = nullptr;
@@ -133,8 +145,10 @@ void append_ground_marker(world_marker_batch& batch, const glm::vec3& position, 
 void append_tee_box(world_marker_batch& batch, const tee_box& box, const marker_colors& colors);
 void append_pin_cup(world_marker_batch& batch, const glm::vec3& position, float cup_radius_meters, const marker_colors& colors,
                     const glow_floors& glow);
+// The pole, and its flag flying as `flag` says from the top of it in two
+// panels, hoist to fly.
 void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, float pin_visual_height_meters,
-                          const marker_colors& colors, const glow_floors& glow);
+                          const marker_colors& colors, const glow_floors& glow, const flag_pose& flag = flag_pose{});
 void append_aim_dots(world_marker_batch& batch, const std::vector<glm::vec3>& points, const marker_colors& colors,
                      const glow_floors& glow);
 // Where a golfer holds the club at a ball: it swings about this point, high
@@ -148,8 +162,12 @@ void append_swing_club(world_marker_batch& batch,
                        float swing_power,
                        const marker_colors& colors);
 
-// Clears `batch` and fills it for one frame: tee boxes, hole and hub
-// markers, aim dots, the swing club, carts, and other players and their balls. All hub cups come before all hub
+// Clears `batch` and fills it with every tee box of the area (`boxes` may be
+// null), drawn in the hub and on a hole alike, in a pass of their own that
+// the shadow map falls on (assets/shaders/tee_box.frag).
+void build_tee_box_batch(world_marker_batch& batch, const std::vector<tee_box>* boxes, const marker_colors& colors);
+
+// Clears `batch` and fills it for one frame: hole and hub markers, aim dots, the swing club, carts, and other players and their balls. All hub cups come before all hub
 // flagsticks: cups never write depth and sit above their own terrain, so the
 // order between different holes' cups and flags is never visible, and the
 // hub collapses into a few runs instead of two per hole.

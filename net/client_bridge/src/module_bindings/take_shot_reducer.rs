@@ -12,7 +12,7 @@ pub(super) struct TakeShotArgs {
     pub club_id: String,
     pub power: f32,
     pub cigarette_active: bool,
-    pub wind_time: f32,
+    pub shot_at: i64,
 }
 
 impl From<TakeShotArgs> for super::Reducer {
@@ -23,7 +23,7 @@ impl From<TakeShotArgs> for super::Reducer {
             club_id: args.club_id,
             power: args.power,
             cigarette_active: args.cigarette_active,
-            wind_time: args.wind_time,
+            shot_at: args.shot_at,
         }
     }
 }
@@ -50,7 +50,7 @@ pub trait take_shot {
         club_id: String,
         power: f32,
         cigarette_active: bool,
-        wind_time: f32,
+        shot_at: i64,
     ) -> __sdk::Result<()> {
         self.take_shot_then(
             stroke,
@@ -58,7 +58,7 @@ pub trait take_shot {
             club_id,
             power,
             cigarette_active,
-            wind_time,
+            shot_at,
             |_, _| {},
         )
     }
@@ -76,7 +76,7 @@ pub trait take_shot {
         club_id: String,
         power: f32,
         cigarette_active: bool,
-        wind_time: f32,
+        shot_at: i64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -92,7 +92,7 @@ impl take_shot for super::RemoteReducers {
         club_id: String,
         power: f32,
         cigarette_active: bool,
-        wind_time: f32,
+        shot_at: i64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -105,7 +105,7 @@ impl take_shot for super::RemoteReducers {
                 club_id,
                 power,
                 cigarette_active,
-                wind_time,
+                shot_at,
             },
             callback,
         )

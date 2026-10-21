@@ -10,6 +10,7 @@
 #include "game/hole_data.h"
 #include "game/hole_sign.h"
 #include "game/tee_box.h"
+#include "physics/body_collision.h"
 #include "physics/fence_collision.h"
 #include "physics/terrain.h"
 #include "physics/tree_collision.h"
@@ -57,6 +58,10 @@ struct play_area {
     std::vector<floodlight> floodlights;
     std::vector<tree_body> floodlight_poles;
     tree_grid floodlight_grid;
+    // What stands on the ground as players and carts bump into it, and
+    // what stops carts only (game/area_obstacles.h).
+    upright_obstacles obstacles;
+    upright_obstacles cart_obstacles;
 };
 
 // Hole-space position -> course position for a hole placed at `start`

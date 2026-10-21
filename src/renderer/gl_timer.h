@@ -17,6 +17,8 @@ public:
     // Call once at the start of a frame. record=false (profiling off) issues
     // no queries.
     void begin_frame(bool record);
+    // A stage begun inside another counts towards the outer one: its begin
+    // and end do nothing.
     void begin(gpu_profile_stage stage);
     void end();
     // Writes finished timings into `profile` (safe with null).
@@ -28,6 +30,7 @@ private:
     int write_slot_ = 0;
     int frames_written_ = 0;
     gpu_profile_stage active_stage_ = gpu_profile_stage::count;
+    int nested_ = 0;  // stages begun inside the active one and not yet ended
     bool initialized_ = false;
     bool recording_ = false;
 };

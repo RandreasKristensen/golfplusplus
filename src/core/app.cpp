@@ -3,6 +3,7 @@
 #include "audio/audio_manifest.h"
 #include "audio/sound_ids.h"
 #include "core/event_loop.h"
+#include "core/god_menu.h"
 #include "core/key_bindings.h"
 #include "core/render_frame.h"
 #include "core/screenshot.h"
@@ -112,6 +113,10 @@ std::string sound_for_event(const audio_event& event) {
         return sound_club_change;
     case audio_event_type::cart_start:
         return sound_cart_start;
+    case audio_event_type::cart_crash:
+        return sound_cart_crash;
+    case audio_event_type::player_bump:
+        return sound_player_bump;
     case audio_event_type::emote_smoke:
         return sound_emote_smoke;
     case audio_event_type::emote_beer:
@@ -147,6 +152,11 @@ bool app::init(const startup_options& options) {
     lighting_ = std::move(*lighting);
     sky_.pinned_hour = options.game_hour;
     sky_.pinned_date = options.game_date;
+    god_.enabled = options.god_menu;
+    god_.weather = options.weather;
+    god_.wind_speed = options.wind_speed;
+    god_.wind_heading = options.wind_speed ? std::optional<float>(0.0f) : std::nullopt;
+    god_.wetness = options.wetness;
     screenshot_path_ = options.screenshot_path;
     tape_style_ = picture->tape;
     if (!renderer_.init(window_.sdl_window(), asset_root, *picture, lighting_)) {
@@ -256,6 +266,8 @@ void app::run() {
             profiler_.enabled = !profiler_.enabled;
         }
         sky_ = scrub_sky(sky_, profiler_.enabled && input_.key_t.is_down, dt);
+        game_.local_unix_ms = unix_now_ms();
+        run_god_menu(god_, sky_, game_, god_menu_keys_of(input_));
         profiler_end_frame(profiler_, dt);
         profiler_begin_frame(profiler_);
         frame_profile* profile = profiler_frame(profiler_);
@@ -465,7 +477,8 @@ float app::mouse_look_radians() const {
 void app::update_round(const float dt, frame_profile* profile) {
     {
         const profile_scope timer(profile, profile_stage::update_game);
-        update_game(game_, game_input_from_keys(input_, mouse_look_radians()), dt, profile);
+        update_game(game_, game_input_from_keys(god_.open ? without_god_menu_keys(input_) : input_, mouse_look_radians()), dt,
+                    profile);
     }
     set_mouse_captured(true);
     set_text_input_enabled(false);
@@ -538,8 +551,16 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
     data.camera_target = camera_transition_.shown.target;
     data.camera_fov_degrees = camera_transition_.shown.fov_degrees;
     data.camera_underwater = under_water(game_.area, data.camera_position);
-    data.lighting = make_render_lighting(game_, lighting_, sky_, unix_now_ms());
+    weather_shown_ = update_frame_weather(weather_shown_, game_, lighting_, data, menu_.flow == startup_flow::playing, dt);
+    for (int i = 0; i < weather_shown_.lightning.close_claps + weather_shown_.lightning.far_claps; ++i) {
+        audio_.play(i < weather_shown_.lightning.close_claps ? sound_thunder_close : sound_thunder_far);
+    }
+    data.lighting = make_render_lighting(game_, lighting_, sky_, unix_now_ms(), weather_shown_.shown);
+    data.weather = make_frame_weather(weather_shown_, game_, lighting_, data);
     add_frame_lights(data, game_, lighting_, tree_shadows_);
+    if (god_.open && menu_.flow == startup_flow::playing) {
+        data.god_menu = god_menu_frame_view(god_, sky_, game_, text_);
+    }
     return data;
 }
 

@@ -55,7 +55,6 @@ void on_hole(game_state& state) {
     start_hub_hole(state, 0);
     room_player& self = state.online.players[me];
     self.zone = 0;
-    self.hole_started_at = start_time - server_micros(5.0);
     self.motion = current_motion(state);
     update_game(state, game_input{}, 0.0f);
     state.net_commands.clear();
@@ -127,19 +126,21 @@ void add_other(game_state& state, const glm::vec3& offset, const std::uint64_t g
 }
 }
 
-TEST_CASE("online wind time runs on the server's clock from when it started the hole") {
+TEST_CASE("a shot's time is the server's clock online and mine offline, and the god menu's weather is offline only") {
     game_state state = online_hub();
     on_hole(state);
-    state.hole_time = 0.5f;
-    CHECK(near(shot_wind_time(state), 5.0f, 0.001f));
+    state.local_unix_ms = 5000;
+    CHECK(shot_unix_ms(state) == start_time / 1000);
 
     state.play = play_mode::offline;
-    CHECK(near(shot_wind_time(state), 0.5f));
+    CHECK(shot_unix_ms(state) == 5000);
 
-    // Before the server has me on the hole, the hole's own clock.
+    weather_state held;
+    held.wind = glm::vec3(3.0f, 0.0f, 0.0f);
+    state.weather_override = held;
+    CHECK(course_weather_at(state, 5000).wind == held.wind);
     state.play = play_mode::online;
-    state.online.players[me].zone = hub_zone;
-    CHECK(near(shot_wind_time(state), 0.5f));
+    CHECK(course_weather_at(state, 5000).wind != held.wind);
 }
 
 TEST_CASE("online a cigarette is lit only once the server accepted the smoke") {
@@ -159,7 +160,7 @@ TEST_CASE("online a cigarette is lit only once the server accepted the smoke") {
     CHECK(cigarette_lit(state) == (state.cigarette_seconds_left > 0.0f));
 }
 
-TEST_CASE("an online shot tells the server where the player stands first, with the server's wind time") {
+TEST_CASE("an online shot tells the server where the player stands first, at the server's time") {
     game_state state = online_hub();
     on_hole(state);
     hit_selected_club(state);
@@ -169,7 +170,7 @@ TEST_CASE("an online shot tells the server where the player stands first, with t
         const net_command& command = state.net_commands[i];
         if (command.type == net_command_type::take_shot) {
             shot_at = i;
-            CHECK(near(command.shot.wind_time, 5.0f, 0.001f));
+            CHECK(command.shot.shot_at == start_time / 1000);
         } else if (command.type == net_command_type::motion && at_ball(command.motion.mode)) {
             motion_at = std::min(motion_at, i);
         }

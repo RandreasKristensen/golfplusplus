@@ -29,6 +29,8 @@ struct cart_state {
     float steer = 0.0f;
     // Online: the pose came from the server's row of my cart, where it parked it.
     bool placed_by_server = false;
+    // Pressed against something standing or a tee box (game/body_contact.h).
+    bool against_obstacle = false;
 };
 
 // A step into or out of a seat: where it started, and how far into it.

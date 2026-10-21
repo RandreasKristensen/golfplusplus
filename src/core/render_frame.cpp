@@ -4,18 +4,25 @@
 
 #include "game/mode_dispatch.h"
 #include "game/net_types.h"
+#include "game/play_area.h"
 #include "game/progress_rules.h"
+#include "game/rangefinder.h"
 #include "game/golf_cart.h"
 #include "game/group_round.h"
 #include "game/scorecard.h"
 #include "game/shot_simulation.h"
 #include "game/swing.h"
 #include "game/text_ids.h"
+#include "game/weather.h"
 #include "physics/flight_model.h"
 #include "physics/vector_math.h"
+#include "renderer/cart_batch.h"
+#include "renderer/remote_avatar_batch.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <optional>
 #include <string>
 
@@ -33,6 +40,20 @@ camera_view address_view(const camera_tuning& camera, const glm::vec3& ball, con
     return view;
 }
 
+// My figure as others see me, at my ball holding the club while I address it.
+render_remote_avatar my_figure(const game_state& game, const render_data& data) {
+    render_remote_avatar me;
+    me.position = game.player.position;
+    me.yaw = game.player.yaw;
+    if (data.show_swing_club) {
+        me.swing = render_remote_swing{data.ball_position, data.aim_angle, data.swing_power};
+        const figure_stance stance = figure_address_stance(data.ball_position, data.ball_visual_radius_meters, data.aim_angle);
+        me.position = stance.position;
+        me.yaw = stance.yaw;
+    }
+    return me;
+}
+
 // Where a full-power shot with the selected club would fly, ignoring drag,
 // spin and wind, from the lie the ball is on; ends where it meets the terrain.
 std::vector<glm::vec3> aim_preview_points(const game_state& game, frame_profile* profile) {
@@ -41,7 +62,7 @@ std::vector<glm::vec3> aim_preview_points(const game_state& game, frame_profile*
         return points;
     }
     const club_stats stats =
-        lie_club_stats(game.clubs[game.selected_club].stats, lie_at(game.area, game.ball.position), game.tuning);
+        lie_club_stats(game.clubs[game.selected_club].stats, lie_at(game.area, game.ball.position), game.weather.wetness, game.tuning);
     const glm::vec3 velocity = launch_ball(game.ball.position, game.aim_angle, stats, 1.0f, game.tuning).velocity;
     const aim_preview_tuning& tuning = game.tuning.aim_preview;
 
@@ -115,6 +136,33 @@ void add_course_map(render_data& data, const game_state& game, const text_assets
     }
 }
 
+// The rangefinder's reading, and the wind as it blows across my view.
+void add_rangefinder(render_data& data, const game_state& game, const text_assets& text) {
+    const rangefinder_reading& reading = game.rangefinder;
+    data.rangefinder_distance_label = reading.distance_meters
+        ? format_text(text, text_hud_rangefinder, {{"meters", std::to_string(rounded_rangefinder_meters(*reading.distance_meters))}})
+        : lookup_text(text, text_hud_rangefinder_none);
+    if (reading.height_meters) {
+        const int meters = static_cast<int>(std::lround(*reading.height_meters));
+        const char* sign = meters > 0 ? text_hud_rangefinder_uphill : text_hud_rangefinder_downhill;
+        data.rangefinder_height_label = format_text(text, text_hud_rangefinder_height,
+                                                    {{"sign", meters != 0 ? lookup_text(text, sign) : ""},
+                                                     {"meters", std::to_string(std::abs(meters))}});
+    }
+    data.rangefinder_flag = reading.flag;
+    data.rangefinder_lock_lit = rangefinder_lock_lit(game);
+    const rangefinder_tuning& tuning = game.tuning.rangefinder;
+    data.rangefinder_eyepiece = render_eyepiece{rangefinder_magnification(game), tuning.surround_brightness, tuning.surround_saturation};
+    const float speed = wind_speed(game.weather);
+    char speed_text[16];
+    std::snprintf(speed_text, sizeof(speed_text), "%.1f", static_cast<double>(speed));
+    data.rangefinder_wind_label = format_text(text, text_hud_rangefinder_wind, {{"speed", speed_text}});
+    // Still air is what shows as 0.0.
+    if (speed >= 0.05f) {
+        data.rangefinder_wind_angle = wrap_angle(wind_heading(game.weather) - view_yaw(game));
+    }
+}
+
 void add_hub_markers(render_data& data, const game_state& game) {
     const static_anchor_cache& anchors = game.static_anchors;
     const std::vector<course_world_collectible>& collectibles = game.hub->world.collectibles;
@@ -145,10 +193,8 @@ camera_view live_camera_view(const game_state& game, const float fov_degrees) {
     switch (active_camera_rig(game)) {
     case camera_rig::walking: {
         camera_view view;
-        view.position = game.player.position + world_up * camera.walking_eye_height;
-        const float pitch = game.look.pitch;
-        const glm::vec3 look = yaw_direction(view_yaw(game)) * std::cos(pitch) + world_up * std::sin(pitch);
-        view.target = view.position + look * camera.walking_look_distance;
+        view.position = first_person_eye(game);
+        view.target = view.position + first_person_look(game) * camera.walking_look_distance;
         view.fov_degrees = fov_degrees;
         return view;
     }
@@ -270,9 +316,17 @@ render_data make_render_data(const game_state& game,
     data.driving_cart = driving_cart(game);
     data.cart_speed_fraction = std::abs(game.cart.velocity) / std::max(0.001f, fastest_cart_speed(game.tuning.cart));
     for (const cart_in_world& cart : carts_in_world(game)) {
-        data.carts.push_back(render_cart{cart.pose.position, cart.pose.yaw, cart.driven, cart.steer});
+        render_cart drawn = cart_on_ground(cart.pose.position, cart.pose.yaw,
+                                           [&](const glm::vec3& point) { return terrain_height(game.area, point); });
+        drawn.driven = cart.driven;
+        drawn.steer = cart.steer;
+        data.carts.push_back(drawn);
     }
     data.cart_seat_offset = game.tuning.cart.seat_offset;
+    data.avatar_eye_height = game.tuning.camera.walking_eye_height;
+    if (on_foot(game)) {
+        data.my_figure = my_figure(game, data);
+    }
     data.smoke_emote_active = game.smoke_emote.active;
     data.smoke_emote_elapsed = game.smoke_emote.elapsed;
     data.beer_emote_active = game.beer_emote.active;
@@ -289,9 +343,8 @@ render_data make_render_data(const game_state& game,
     }
     data.show_rangefinder = game.rangefinder_active;
     if (data.show_rangefinder) {
-        data.rangefinder_target = game.hole ? data.pin_position : game.static_anchors.hub_pin_markers[game.round.current_hole_index];
-        data.rangefinder_label = format_text(
-            text, text_hud_rangefinder, {{"meters", std::to_string(rounded_rangefinder_meters(game.rangefinder_distance_meters))}});
+        add_rangefinder(data, game, text);
+        data.show_interact_prompt = false;
     }
     data.show_course_map = game.course_map_active;
     if (data.show_course_map) {

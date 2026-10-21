@@ -2,6 +2,8 @@
 
 // Values come from assets/tuning/game_tuning.json (see game/tuning_loader.h).
 
+#include <vector>
+
 struct physics_tuning {
     float drag_coeff = 0.0f;        // deceleration = drag_coeff * speed^2
     float magnus_coeff = 0.0f;      // acceleration = magnus_coeff * (spin x velocity)
@@ -10,13 +12,13 @@ struct physics_tuning {
     float water_spin_decay = 0.0f;  // added to spin_decay below the water surface
 };
 
-// Wind speed and direction drift slowly with time; see wind.cpp.
-struct wind_tuning {
-    float seed_phase_scale = 0.0f;
-    float base_speed = 0.0f;
-    float speed_variation = 0.0f;
-    float speed_time_scale = 0.0f;
-    float angle_variation = 0.0f;
-    float angle_time_scale = 0.0f;
-    float phase_angle_scale = 0.0f;
+// How the wind slows towards the ground (physics/wind.h): its share of the
+// reference wind at heights over the ground, in rising order.
+struct wind_profile_point {
+    float height = 0.0f;  // meters over the ground
+    float scale = 0.0f;
+};
+
+struct wind_profile {
+    std::vector<wind_profile_point> points;
 };

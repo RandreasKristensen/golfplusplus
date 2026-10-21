@@ -22,7 +22,6 @@ void reset_play_state(game_state& state) {
     state.mode = game_mode::walking;
     state.swing = swing_state{};
     state.stroke_count = 0;
-    state.hole_time = 0.0f;
     state.walk_meters_pending = 0.0f;
     state.cart_meters_pending = 0.0f;
     state.flight_path_points.clear();
@@ -48,7 +47,7 @@ void tee_up(game_state& state) {
 
 // `placed_hole` is in the play area's coordinates.
 void enter_hole(game_state& state, const std::size_t index, const hole_data& placed_hole) {
-    state.hole = active_hole{index, placed_hole.tee_position, placed_hole.pin_position, placed_hole.wind_seed};
+    state.hole = active_hole{index, placed_hole.tee_position, placed_hole.pin_position};
     mark_terrain_render_dirty(state);
     reset_play_state(state);
     tee_up(state);
@@ -82,7 +81,7 @@ course_hub build_hub(const course_world_definition& world, const std::vector<hol
     for (std::size_t i = 0; i < holes.size(); ++i) {
         const course_world_hole_start& start = world.hole_starts[i];
         const hole_data placed = place_hole(holes[i], start);
-        hub.markers.push_back(hub_hole_marker{placed.tee_position, placed.pin_position, placed.wind_seed});
+        hub.markers.push_back(hub_hole_marker{placed.tee_position, placed.pin_position});
     }
     return hub;
 }

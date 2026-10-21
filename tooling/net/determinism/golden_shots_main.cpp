@@ -11,6 +11,7 @@
 #include "physics/vector_math.h"
 #include "server_content.h"
 
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <map>
@@ -81,13 +82,18 @@ int main(int argc, char** argv) {
             input.aim_angle = yaw_towards(input.ball_start, target.pin);
         }
         input.aim_angle += glm::radians(json_float(shot, "aim_offset_degrees").value_or(0.0f));
+        // Online the aim arrives as the client's float; here it comes from
+        // atan2, which may round differently in the WASM, so both builds
+        // take it on the same coarse step.
+        constexpr float aim_steps_per_radian = 4096.0f;
+        input.aim_angle = std::round(input.aim_angle * aim_steps_per_radian) / aim_steps_per_radian;
         input.club_id = json_string(shot, "club").value_or("");
         input.power = json_float(shot, "power").value_or(0.0f);
-        input.wind_time = json_float(shot, "wind_time").value_or(0.0f);
+        input.shot_at = shot.value("shot_at", std::int64_t{0});
         input.cigarette_active = json_bool(shot, "cigarette").value_or(false);
 
         const shot_result result =
-            simulate_shot(input, shot_course{course->area, course->trees, target}, content.tuning, content.clubs, content.rewards);
+            simulate_shot(input, server_shot_course(*course, hole, input.shot_at, content), content.tuning, content.clubs, content.rewards);
         std::printf("%zu %.9g %.9g %.9g %d %.9g %zu\n", i, result.rest_position.x, result.rest_position.y,
                     result.rest_position.z, result.holed ? 1 : 0, result.duration, result.events.size());
     }

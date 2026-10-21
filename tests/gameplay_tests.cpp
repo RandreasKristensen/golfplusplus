@@ -307,7 +307,6 @@ TEST_CASE("overlays show only while held, and the rangefinder only on foot") {
     input.skills_panel_held = true;
     update_game(state, input, 0.016f);
     CHECK(state.rangefinder_active);
-    CHECK(state.rangefinder_distance_meters > 0.0f);
     CHECK(state.course_map_active);
     CHECK(state.scorecard_active);
     CHECK(state.skills_panel_active);
@@ -328,22 +327,6 @@ TEST_CASE("overlays show only while held, and the rangefinder only on foot") {
     CHECK(!aiming.rangefinder_active);
     CHECK(!aiming.course_map_active);
     CHECK(aiming.skills_panel_active);
-}
-
-TEST_CASE("the rangefinder distance shrinks walking towards the pin") {
-    game_state state = started_hole();
-    game_input input;
-    input.rangefinder_held = true;
-    update_game(state, input, 0.016f);
-    const float before = state.rangefinder_distance_meters;
-
-    input.forward_held = true;
-    update_game(state, input, 0.05f);
-
-    CHECK(state.rangefinder_distance_meters < before);
-    CHECK(rounded_rangefinder_meters(124.49f) == 124);
-    CHECK(rounded_rangefinder_meters(124.50f) == 125);
-    CHECK(rounded_rangefinder_meters(-3.0f) == 0);
 }
 
 TEST_CASE("xp drops pool small gains and merge repeats of one skill") {

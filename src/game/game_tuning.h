@@ -23,6 +23,8 @@ struct world_scale_tuning {
     // Sized to the drawn ball as a real cup is to a real ball.
     float cup_radius_meters = 0.0f;
     float pin_visual_height_meters = 0.0f;
+    // What a player or cart bumps into at the pin (game/body_contact.h).
+    float flagstick_radius_meters = 0.0f;
 };
 
 struct terrain_build_tuning {
@@ -103,6 +105,9 @@ struct player_tuning {
     // pulled down at jump_gravity (world units/s^2).
     float jump_speed = 0.0f;
     float jump_gravity = 0.0f;
+    // On foot I bump into what stands on the ground (game/body_contact.h)
+    // as a circle this wide round my feet.
+    float body_radius = 0.0f;
 };
 
 // The golf cart (game/golf_cart.h), in world units and seconds.
@@ -133,6 +138,21 @@ struct cart_tuning {
     float road_control_scale = 0.0f;
     float off_road_speed_scale = 0.0f;
     float off_road_control_scale = 0.0f;
+    // It bumps into what stands on the ground, and into tee boxes, as
+    // circles of body_radius from body_behind its seat's middle to
+    // body_ahead of it; others bump into it as the rectangle round those
+    // (game/body_contact.h); people on foot and other
+    // carts stop it too. Crashing, it bounces
+    // back at crash_bounce of its speed, with a crash heard from
+    // crash_sound_speed.
+    float body_radius = 0.0f;
+    float body_ahead = 0.0f;
+    float body_behind = 0.0f;
+    float crash_bounce = 0.0f;
+    float crash_sound_speed = 0.0f;
+    // Pressed against something, of its motion along it, the share it loses
+    // (0 slides along freely, 1 sticks).
+    float scrape_friction = 0.0f;
 };
 
 // Camera rigs. "back" is against the aim direction, "side" is to the
@@ -171,6 +191,35 @@ struct flight_path_tuning {
     float min_point_spacing = 0.0f;
     int max_points = 0;
     float line_width = 0.0f;
+};
+
+// The rangefinder held up on foot (game/rangefinder.h).
+struct rangefinder_tuning {
+    float magnification = 0.0f;   // the zoom; the look turns this much slower
+    float raise_seconds = 0.0f;   // from the eye to fully zoomed
+    float max_range_meters = 0.0f;
+    float march_step_meters = 0.0f;  // the view ray is marched in these, then bisected
+    int refine_steps = 0;
+    float flag_lock_degrees = 0.0f;  // the reticle this near the flagstick reads the flag
+    // On locking onto the flag its ring flashes this many times over jolt_seconds.
+    float jolt_seconds = 0.0f;
+    int jolt_flashes = 0;
+    // Round the eyepiece the view is unmagnified, darkened and greyed:
+    // its brightness and saturation, 0 .. 1.
+    float surround_brightness = 0.0f;
+    float surround_saturation = 0.0f;
+    // How tall people and carts stand to its laser, in world units.
+    float person_height = 0.0f;
+    float cart_height = 0.0f;
+    // A new reading every ping_seconds. Light rain puts each off by up to
+    // light_rain_error (a share) either way, light fog by light_fog_error;
+    // rain and fog make it nonsense: blank blank_share of the time, else
+    // any distance in range, as far up or down as nonsense_slope of it.
+    float ping_seconds = 0.0f;
+    float light_rain_error = 0.0f;
+    float light_fog_error = 0.0f;
+    float blank_share = 0.0f;
+    float nonsense_slope = 0.0f;
 };
 
 // The "+25 XP" popups.
@@ -217,7 +266,9 @@ struct server_tuning {
     float motion_distance_slack = 0.0f;  // world units
     float max_motion_gap_seconds = 0.0f;
     float interact_slack = 0.0f;      // world units past an interaction radius
-    float wind_time_slack_seconds = 0.0f;
+    // How far from the server's clock a shot's time (shot_input::shot_at)
+    // may be, and still pick its weather.
+    float shot_time_slack_seconds = 0.0f;
     // How much earlier than the server's clock the client may restart an
     // emote, or later still use its cigarette (it times them by frames).
     float timing_slack_seconds = 0.0f;
@@ -287,6 +338,81 @@ struct sky_timeline {
     int year = 0;  // every course's date is in it
 };
 
+// The wind over a course (game/weather.h): its speed at the profile's
+// reference height (10 m, where wind is measured) drifts on its own slow
+// noise between calm_speed and max_speed, the storm adding up to
+// storm_speed in heavy rain; its direction swings about the course's own
+// prevailing one, by at most direction_swing sideways per unit along it
+// (1 is 45 degrees). Speeds in m/s, times in game hours.
+struct wind_tuning {
+    wind_profile profile;
+    float hours = 0.0f;  // between the speed noise's points
+    float calm_speed = 0.0f;  // never less: there is always some wind
+    float max_speed = 0.0f;
+    float storm_speed = 0.0f;
+    float direction_hours = 0.0f;
+    float direction_swing = 0.0f;
+};
+
+// The weather over a course (game/weather.h), in game hours. The storm is
+// the regime, a noise regime_hours apart weighing regime_weight, over
+// passing storms (two octaves, `spell_hours` and `detail_hours` apart). It gathers
+// clouds from cloud_start to full cover at cloud_full, running ahead of it
+// by cloud_trend times how far it moved over rain_lag_hours. Rain follows the
+// storm rain_lag_hours behind, from rain_start to its heaviest (1) at
+// rain_full, thinned to sun_shower_keep of that under a clear sky; rain
+// under less cover than sun_shower_cloud is a sun shower. Thunder grows
+// from rain_lag_hours' storm at thunder_start to its most at thunder_full,
+// under cloud. The air's damp, a noise fog_hours apart and the regime
+// weighing fog_regime_weight, lays fog from fog_start to its thickest at
+// fog_full, cleared by rain of fog_rain_clear and by wind from
+// fog_calm_wind to fog_wind_clear m/s. light_rain, rain, heavy_rain,
+// light_fog and fog are the god menu's presets, and an amount is called the
+// one it is nearest. Wetness (0..1) rises in rain by wetting_per_hour at
+// amount 1 and falls by drying_per_hour in full sun, less under cloud,
+// summed over the last history_hours in steps of step_hours. The rest is
+// what rain and wet ground do to a shot.
+struct weather_tuning {
+    float regime_hours = 0.0f;
+    float regime_weight = 0.0f;
+    float spell_hours = 0.0f;
+    float detail_hours = 0.0f;
+    float detail_weight = 0.0f;
+    float cloud_start = 0.0f;
+    float cloud_full = 0.0f;
+    float cloud_trend = 0.0f;
+    float rain_start = 0.0f;
+    float rain_full = 0.0f;
+    float rain_lag_hours = 0.0f;
+    float sun_shower_keep = 0.0f;
+    float sun_shower_cloud = 0.0f;
+    float light_rain = 0.0f;
+    float rain = 0.0f;
+    float heavy_rain = 0.0f;
+    float thunder_start = 0.0f;
+    float thunder_full = 0.0f;
+    float fog_hours = 0.0f;
+    float fog_regime_weight = 0.0f;
+    float fog_start = 0.0f;
+    float fog_full = 0.0f;
+    float fog_rain_clear = 0.0f;
+    float fog_calm_wind = 0.0f;
+    float fog_wind_clear = 0.0f;
+    float light_fog = 0.0f;
+    float fog = 0.0f;
+    float wetting_per_hour = 0.0f;
+    float drying_per_hour = 0.0f;
+    float history_hours = 0.0f;
+    float step_hours = 0.0f;
+    float rain_drag_coeff = 0.0f;   // added to physics.drag_coeff at rain amount 1
+    float wet_spin_loss = 0.0f;     // backspin lost from a soaked fairway or rough lie
+    float wet_bounce_loss = 0.0f;   // share of the grass's restitution lost when soaked
+    float wet_friction_gain = 0.0f; // share added to the grass's contact friction when soaked
+    float wet_roll_gain = 0.0f;     // share added to the grass's roll deceleration when soaked
+    float wet_green_friction_gain = 0.0f;  // the same two on a green
+    float wet_green_roll_gain = 0.0f;
+};
+
 // What the ball lies on when it is hit: a tee box, else the material under it.
 // Underlying values index game_tuning::lies; keep `ball_lie_count` in sync.
 enum class ball_lie : std::uint8_t {
@@ -311,11 +437,13 @@ struct game_tuning {
     terrain_build_tuning terrain;
     physics_tuning physics;
     wind_tuning wind;
+    weather_tuning weather;
     ball_tuning ball;
     swing_tuning swing;
     player_tuning player;
     cart_tuning cart;
     camera_tuning camera;
+    rangefinder_tuning rangefinder;
     aim_preview_tuning aim_preview;
     flight_path_tuning flight_path;
     xp_drop_tuning xp_drops;

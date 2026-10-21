@@ -63,6 +63,7 @@ bool camcorder_pass::init(const std::string& shader_dir, const unsigned int scre
     record_.set_int("u_smear", 2);
     record_.set_int("u_adapt", adapt_unit);
     record_.set_vec3("u_shadow_tint", style_.shadow_tint);
+    record_.set_float("u_smear_fade", style_.smear_fade);
     return true;
 }
 
@@ -91,8 +92,9 @@ bool camcorder_pass::ensure_size(const int width, const int height) {
     const int quarter_height = std::max(1, (height + quarter - 1) / quarter);
     const framebuffer_format light{framebuffer_color::hdr, false, true, false};
     const framebuffer_format metered{framebuffer_color::hdr, false, true, true};
-    const framebuffer_format column{framebuffer_color::hdr, false, false, false};
     const framebuffer_format lag{framebuffer_color::signed_hdr, false, false, false};
+    // Its alpha is where down the picture each column's light is.
+    const framebuffer_format column = lag;
     return quarter_.init(quarter_width, quarter_height, metered) && bloom_target_.init(quarter_width, quarter_height, light) &&
         smear_target_.init(width, 1, column) && adapt_targets_[0].init(1, 1, lag) && adapt_targets_[1].init(1, 1, lag) &&
         picture_.init(width, height, framebuffer_format{framebuffer_color::rgb8, false, false, false});

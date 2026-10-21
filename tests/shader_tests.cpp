@@ -268,8 +268,8 @@ TEST_CASE("lit scene shaders take their light from lighting.glsl, none from a un
     const std::filesystem::path shaders = std::filesystem::path(asset_root()) / "shaders";
     const shader_include_reader read = [&shaders](const std::string& name) { return read_text_file(shaders / name); };
     for (const char* name : {"terrain.frag", "ball.frag", "hole_sign.frag", "fence.frag", "water.frag", "underwater.frag",
-                             "tree_instanced.vert", "world_marker.vert", "backdrop.frag", "blob_shadow.vert",
-                             "floodlight.vert"}) {
+                             "tree_instanced.vert", "world_marker.vert", "tee_box.vert", "backdrop.frag", "blob_shadow.vert",
+                             "floodlight.vert", "weather_streak.vert"}) {
         const std::optional<std::string> source = read_text_file(shaders / name);
         REQUIRE(source.has_value());
         const std::optional<std::string> expanded = expand_shader_includes(*source, read);
@@ -312,7 +312,19 @@ TEST_CASE("the frame's light and haze pack into the std140 block as lighting.gls
     spot.cone_edge_cos = 0.8f;
     spot.cone_full_cos = 0.9f;
     const frame_lighting_block block = make_frame_lighting_block(lighting, haze, {spot});
-    CHECK(sizeof(frame_lighting_block) == 208U + 48U * max_scene_lights);
+    lighting.weather.mottle = -0.25f;
+    lighting.weather.rainbow = 0.5f;
+    lighting.weather.cover = 0.75f;
+    lighting.weather.haze_gain = 0.2f;
+    lighting.weather.wet_albedo = 0.7f;
+    lighting.weather.wet_gloss = 0.3f;
+    lighting.weather.wet_gloss_power = 24.0f;
+    const frame_lighting_block weathered = make_frame_lighting_block(lighting, haze, {});
+    CHECK(weathered.weather == glm::vec4(-0.25f, 0.5f, 0.75f, 0.2f));
+    CHECK(weathered.wet == glm::vec4(0.7f, 0.3f, 24.0f, 0.0f));
+    CHECK(block.weather == glm::vec4(0.0f));
+    CHECK(block.wet == glm::vec4(1.0f, 0.0f, 1.0f, 0.0f));
+    CHECK(sizeof(frame_lighting_block) == 240U + 48U * max_scene_lights);
     CHECK(offsetof(frame_lighting_block, sun_color) == 16U);
     CHECK(offsetof(frame_lighting_block, sky_light) == 32U);
     CHECK(offsetof(frame_lighting_block, ground_light) == 48U);
@@ -325,9 +337,11 @@ TEST_CASE("the frame's light and haze pack into the std140 block as lighting.gls
     CHECK(offsetof(frame_lighting_block, sun_horizon_b) == 160U);
     CHECK(offsetof(frame_lighting_block, shadow) == 176U);
     CHECK(offsetof(frame_lighting_block, lamp_glow) == 192U);
-    CHECK(offsetof(frame_lighting_block, light_position) == 208U);
-    CHECK(offsetof(frame_lighting_block, light_color) == 208U + 16U * max_scene_lights);
-    CHECK(offsetof(frame_lighting_block, light_cone) == 208U + 32U * max_scene_lights);
+    CHECK(offsetof(frame_lighting_block, weather) == 208U);
+    CHECK(offsetof(frame_lighting_block, wet) == 224U);
+    CHECK(offsetof(frame_lighting_block, light_position) == 240U);
+    CHECK(offsetof(frame_lighting_block, light_color) == 240U + 16U * max_scene_lights);
+    CHECK(offsetof(frame_lighting_block, light_cone) == 240U + 32U * max_scene_lights);
     CHECK(block.sun_direction == glm::vec4(0.0f, 0.6f, 0.8f, 0.5f));
     CHECK(block.sun_color == glm::vec4(1.0f, 0.5f, 0.25f, 0.0f));
     CHECK(block.sky_light == glm::vec4(0.2f, 0.3f, 0.4f, 0.0f));
@@ -337,7 +351,7 @@ TEST_CASE("the frame's light and haze pack into the std140 block as lighting.gls
     CHECK(block.haze_eye == glm::vec4(1.0f, 2.0f, 3.0f, 1.0f / 400.0f));
     CHECK(block.moon_direction == glm::vec4(0.0f, 0.8f, -0.6f, 0.4f));
     CHECK(block.horizon_glow == glm::vec4(0.9f, 0.4f, 0.2f, 0.75f));
-    CHECK(block.shadow == glm::vec4(0.75f, 0.25f, 4.0f, 0.05f));
+    CHECK(block.shadow == glm::vec4(0.75f, 0.25f, 0.0f, 0.05f));
     CHECK(block.lamp_glow == glm::vec4(2.5f, 2.25f, 2.0f, 0.0f));
     // The sun lies along +z: horizon way 2.
     CHECK(block.sun_horizon_a == glm::vec4(0.0f, 0.0f, 1.0f, 0.0f));

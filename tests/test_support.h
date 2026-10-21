@@ -190,8 +190,8 @@ inline void play_hole(game_state& state, const hole_data& hole) {
     state.course_holes = {hole};
     state.round = start_round(1);
     state.area = hole_area(hole, state.tuning);
-    state.hub = course_hub{hole_world(hole), {hub_hole_marker{hole.tee_position, hole.pin_position, hole.wind_seed}}};
-    state.hole = active_hole{0, hole.tee_position, hole.pin_position, hole.wind_seed};
+    state.hub = course_hub{hole_world(hole), {hub_hole_marker{hole.tee_position, hole.pin_position}}};
+    state.hole = active_hole{0, hole.tee_position, hole.pin_position};
     mark_terrain_render_dirty(state);
 }
 
@@ -206,6 +206,7 @@ inline game_state single_hole_course() {
 // No wind, drag or spin, so ball motion depends only on contact.
 inline void still_air(game_state& state) {
     state.tuning.wind = wind_tuning{};
+    state.tuning.weather = weather_tuning{};
     state.tuning.physics.drag_coeff = 0.0f;
     state.tuning.physics.magnus_coeff = 0.0f;
     state.tuning.physics.spin_decay = 0.0f;

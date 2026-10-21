@@ -26,7 +26,6 @@ struct hole_data {
     std::string id;
     std::string name;
     int par = 0;
-    std::uint32_t wind_seed = 0;
     glm::vec3 tee_position{0.0f};
     glm::vec3 pin_position{0.0f};
     hole_spline spline;

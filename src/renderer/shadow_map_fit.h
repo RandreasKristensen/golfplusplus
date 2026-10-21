@@ -1,6 +1,6 @@
 #pragma once
 
-// Where the trees' shadow map looks from (renderer/shadow_map_pass.h): an
+// Where the shadow map looks from (renderer/shadow_map_pass.h): an
 // orthographic view along the sun over a square of ground around the camera.
 // The light's rotation depends only on the sun, and the square's corner is
 // snapped to whole texels of it, so the map's texels stay put on the ground

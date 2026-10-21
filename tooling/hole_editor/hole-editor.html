@@ -309,7 +309,6 @@ body {
         <div class="field"><label>id</label>     <input type="text"   id="f-id"    oninput="hole.id=this.value; markDirty()"></div>
         <div class="field"><label>name</label>   <input type="text"   id="f-name"  oninput="hole.name=this.value; markDirty()"></div>
         <div class="field"><label>par</label>    <input type="number" id="f-par"   min="1" max="6" oninput="hole.par=+this.value; markDirty()"></div>
-        <div class="field"><label>wind seed</label><input type="number" id="f-seed" oninput="hole.wind_seed=+this.value; markDirty()"></div>
         <div class="field"><label>width</label>  <input type="number" id="f-width" step="0.5" min="2" oninput="hole.spline.width=+this.value; markDirty(); render()"></div>
         <div class="field"><label>rough width</label><input type="number" id="f-rough-width" step="0.5" min="2" oninput="setRoughWidth(+this.value)"></div>
       </div>
@@ -403,7 +402,7 @@ const METERS_PER_WORLD_UNIT = 1.0;
 // ── state ────────────────────────────────────────────────────────────────────
 
 let hole = {
-  id: "hole_01", name: "The Ditch", par: 3, wind_seed: 42,
+  id: "hole_01", name: "The Ditch", par: 3,
   tee: [0, 0, 0], pin: [0, 0, 80],
   spline: {
     control_points: [[0,0,0],[2,1,20],[-1,0.5,40],[3,2,60],[0,1,80]],
@@ -2274,7 +2273,6 @@ function updatePanel() {
   setValue('f-id',   hole.id);
   setValue('f-name', hole.name);
   setValue('f-par',  hole.par);
-  setValue('f-seed', hole.wind_seed);
   setValue('f-width',hole.spline.width);
   setValue('f-rough-width',hole.spline.rough_width);
   setValue('tree-default-trunk-radius', treeDefaults.trunk_radius);
@@ -2942,7 +2940,7 @@ function newHole() {
   activeHoleHandle = null;
   activeHoleRef = "";
   hole = {
-    id:'hole_01', name:'New Hole', par:3, wind_seed:Math.floor(Math.random()*9999),
+    id:'hole_01', name:'New Hole', par:3,
     tee:[0,0,0], pin:[0,0,80],
     spline:{ control_points:[[0,0,0],[0,0,20],[0,0,40],[0,0,60],[0,0,80]], width:18, rough_width:28 },
     material_zones:[{ type:'green', center:[0,0,80], radii:[6,6], rotation_degrees:0 }],

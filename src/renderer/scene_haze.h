@@ -8,6 +8,7 @@
 // fades its land into the same colour. GL-free.
 
 #include "game/course_definition.h"
+#include "game/weather_lighting.h"
 
 #include <algorithm>
 
@@ -36,5 +37,13 @@ inline scene_haze make_scene_haze(const course_backdrop& backdrop, const float f
     const float distance = area_extent > 0.0f ? std::min(backdrop.haze_distance, area_extent) : backdrop.haze_distance;
     haze.full_distance = std::max(min_haze_distance, distance);
     haze.eye = eye;
+    return haze;
+}
+
+// `haze` thickened by the weather (weather_haze in game/weather_lighting.h).
+inline scene_haze weathered_haze(scene_haze haze, const weather_haze& weather) {
+    haze.color = greyed(haze.color, weather.grey);
+    haze.far_amount = haze.far_amount + (1.0f - haze.far_amount) * std::clamp(weather.gain, 0.0f, 1.0f);
+    haze.full_distance = std::max(1.0f, haze.full_distance * weather.distance_share);
     return haze;
 }

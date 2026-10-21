@@ -23,6 +23,7 @@ public:
     // Draws (and uploads) nothing for an empty batch. Leaves depth writes
     // enabled and no VAO bound on return.
     void draw(const world_marker_batch& batch, const glm::mat4& view_proj, frame_profile* profile);
+    const shader_program& shader() const { return shader_; }
 
 private:
     shader_program shader_;

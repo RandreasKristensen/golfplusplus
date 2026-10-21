@@ -105,7 +105,7 @@ std::size_t free_parking_slot(const std::vector<glm::vec3>& carts, const glm::ve
 shot_check check_shot(const shot_request& request,
                       const server_ball& ball,
                       const glm::vec3& player_position,
-                      const float seconds_on_hole,
+                      const std::int64_t now_unix_ms,
                       const bool cigarette_lit,
                       const server_content& content) {
     shot_check check;
@@ -124,13 +124,15 @@ shot_check check_shot(const shot_request& request,
         check.error = error_unknown_club;
         return check;
     }
-    const float slack = content.tuning.server.wind_time_slack_seconds;
-    const float earliest_wind_time = std::max(ball.last_wind_time, seconds_on_hole - slack);
+    constexpr float milliseconds_per_second = 1000.0f;
+    const std::int64_t slack =
+        static_cast<std::int64_t>(content.tuning.server.shot_time_slack_seconds * milliseconds_per_second);
+    const std::int64_t earliest_shot_at = std::max(ball.last_shot_at, now_unix_ms - slack);
     // Aim comes wrapped (wrap_angle), so the server and every client take
     // the same sine and cosine of it.
     const bool aim_ok = std::isfinite(request.aim_angle) && std::abs(request.aim_angle) <= glm::pi<float>() + 0.0001f;
-    if (!aim_ok || !std::isfinite(request.power) || !std::isfinite(request.wind_time) ||
-        request.wind_time < earliest_wind_time || request.wind_time > seconds_on_hole + slack) {
+    if (!aim_ok || !std::isfinite(request.power) || request.shot_at < earliest_shot_at ||
+        request.shot_at > now_unix_ms + slack) {
         check.error = error_invalid_shot;
         return check;
     }
@@ -147,7 +149,7 @@ shot_check check_shot(const shot_request& request,
     input.club_id = request.club_id;
     input.power = std::clamp(request.power, content.tuning.swing.min_power, 1.0f);
     input.cigarette_active = request.cigarette_active;
-    input.wind_time = request.wind_time;
+    input.shot_at = request.shot_at;
     check.input = input;
     return check;
 }

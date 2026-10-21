@@ -70,10 +70,15 @@ TEST_CASE("blob shadows fall under the ball and the player, darkest where they t
     const render_blob_shadow& ball = day.blob_shadows[0];
     CHECK(near(ball.radius, 0.1f * style.ball_radius_scale, 0.0001f));
     CHECK(near(ball.strength, style.blob_strength, 0.0001f));
-    CHECK(ball.lift == 0.0f);
+    CHECK(near(ball.stretch, 1.0f / std::sin(glm::radians(50.0f)), 0.05f));
     // Cast away from the sun (+x): the ball's blob lands on its -x side.
     CHECK(ball.base.x < day.ball_position.x - 5.0f);
-    CHECK(near(day.blob_shadows[1].radius, style.player_radius, 0.0001f));
+    // Mine lies at my feet: the sun's shadow of me is the shadow map's.
+    const render_blob_shadow& me = day.blob_shadows[1];
+    CHECK(near(me.radius, style.player_radius, 0.0001f));
+    CHECK(me.stretch == 1.0f);
+    CHECK(near(me.strength, style.blob_strength * style.foot_share, 0.0001f));
+    CHECK(near(horizontal(me.base), horizontal(game.player.position), 0.0001f));
 
     // At night the high ball darkens nothing; the player's feet still do.
     render_data night = lit_frame(sun_at(-20.0f), 0.0f, 1.0f);
@@ -84,6 +89,22 @@ TEST_CASE("blob shadows fall under the ball and the player, darkest where they t
     CHECK(night.blob_shadows[0].strength == 0.0f);
     CHECK(near(night.blob_shadows[0].base.x, night.ball_position.x, 0.0001f));
     CHECK(near(night.blob_shadows[1].strength, style.blob_strength, 0.0001f));
+}
+
+TEST_CASE("a ball on the ground lies in its own shadow however low the sun") {
+    const game_state game = started_game(fixture_hub_course());
+    const float radius = 0.1f;
+    for (const float elevation : {70.0f, 30.0f, 12.0f, 3.0f}) {
+        render_data data = lit_frame(sun_at(elevation, 40.0f), 1.0f, 0.0f);
+        data.show_ball = true;
+        data.ball_position = above_ground(game, game.player.position + glm::vec3(4.0f, 0.0f, 0.0f), radius);
+        add_frame_lights(data, game, fixture_palette(), tree_shadow_cache{});
+        const render_blob_shadow& blob = data.blob_shadows[0];
+        CHECK(blob.stretch >= 1.0f);
+        // Where it touches the ground is well inside the blob, where it is still dark.
+        const glm::vec3 contact = data.ball_position - world_up * radius;
+        CHECK(horizontal_distance(contact, blob.base) < 0.6f * blob.radius * blob.stretch);
+    }
 }
 
 TEST_CASE("a cart casts a cart's blob over whoever sits in it, and players on foot cast theirs") {
@@ -120,9 +141,9 @@ TEST_CASE("trees and floodlight poles darken the ground faintly at their foot, r
     refresh_tree_shadows(cache, game, style);
     REQUIRE(cache.blobs.size() == 2U + poles);
     CHECK(cache.revision == 7U);
-    CHECK(cache.blobs[0].lift == 0.0f);
+    CHECK(cache.blobs[0].stretch == 1.0f);
     CHECK(near(cache.blobs[0].radius, 3.0f * style.tree_radius_share, 0.0001f));
-    CHECK(near(cache.blobs[0].strength, style.blob_strength * style.tree_contact_share, 0.0001f));
+    CHECK(near(cache.blobs[0].strength, style.blob_strength * style.foot_share, 0.0001f));
     CHECK(near(cache.blobs[0].base, tree.base, 0.0001f));
     const render_blob_shadow& pole = cache.blobs[2];
     CHECK(near(pole.base, game.area.floodlight_poles[0].base, 0.0001f));

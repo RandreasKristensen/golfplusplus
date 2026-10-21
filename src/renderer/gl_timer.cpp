@@ -45,7 +45,11 @@ void gl_timer_pool::begin_frame(const bool record) {
 }
 
 void gl_timer_pool::begin(const gpu_profile_stage stage) {
-    if (!initialized_ || !recording_ || stage == gpu_profile_stage::count || active_stage_ != gpu_profile_stage::count) {
+    if (active_stage_ != gpu_profile_stage::count) {
+        ++nested_;
+        return;
+    }
+    if (!initialized_ || !recording_ || stage == gpu_profile_stage::count) {
         return;
     }
     glBeginQuery(GL_TIME_ELAPSED, queries_[write_slot_][static_cast<std::size_t>(stage)]);
@@ -53,6 +57,10 @@ void gl_timer_pool::begin(const gpu_profile_stage stage) {
 }
 
 void gl_timer_pool::end() {
+    if (nested_ > 0) {
+        --nested_;
+        return;
+    }
     if (!initialized_ || active_stage_ == gpu_profile_stage::count) {
         return;
     }

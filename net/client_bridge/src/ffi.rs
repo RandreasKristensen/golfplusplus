@@ -171,8 +171,6 @@ pub struct StdbRoomMember {
     pub room_id: u64,
     pub group_id: u64,
     pub zone: i32,
-    /// When the hole was entered or reteed (the server's clock): wind time starts here.
-    pub hole_started_at_micros: i64,
     pub round_strokes: *const i32,
     pub round_strokes_count: usize,
 }
@@ -219,7 +217,8 @@ pub struct StdbBall {
     pub y: f32,
     pub z: f32,
     pub stroke_count: i32,
-    pub last_wind_time: f32,
+    /// UTC milliseconds.
+    pub last_shot_at: i64,
 }
 
 #[repr(C)]
@@ -243,7 +242,8 @@ pub struct StdbShot {
     pub club_id: StdbString,
     pub power: f32,
     pub cigarette_active: bool,
-    pub wind_time: f32,
+    /// UTC milliseconds, on the server's clock as the client estimates it.
+    pub shot_at: i64,
 }
 
 #[repr(C)]
@@ -357,13 +357,13 @@ pub fn layout() -> Vec<usize> {
     describe!(out, StdbCollected, id, account_id, collectible_id, repeatable, claim_count, claimed_at_holes_completed);
     describe!(out, StdbWorldFlag, id, account_id, flag);
     describe!(out, StdbRoom, room_id, course_id, player_count);
-    describe!(out, StdbRoomMember, account_id, room_id, group_id, zone, hole_started_at_micros, round_strokes, round_strokes_count);
+    describe!(out, StdbRoomMember, account_id, room_id, group_id, zone, round_strokes, round_strokes_count);
     describe!(out, StdbGolfGroup, group_id, room_id, leader, member_count);
     describe!(out, StdbMotion, zone, mode, x, y, z, yaw, speed, turn_rate, client_time);
     describe!(out, StdbAvatarMotion, account_id, room_id, motion, server_time_micros);
-    describe!(out, StdbBall, account_id, room_id, zone, x, y, z, stroke_count, last_wind_time);
+    describe!(out, StdbBall, account_id, room_id, zone, x, y, z, stroke_count, last_shot_at);
     describe!(out, StdbGolfCart, owner, room_id, x, y, z, yaw, passenger);
-    describe!(out, StdbShot, stroke, aim_angle, club_id, power, cigarette_active, wind_time);
+    describe!(out, StdbShot, stroke, aim_angle, club_id, power, cigarette_active, shot_at);
     describe!(out, StdbShotEvent, room_id, account_id, zone, shot, start_x, start_y, start_z, rest_x, rest_y, rest_z, holed);
     describe!(out, StdbEmoteEvent, room_id, account_id, emote_id);
     describe!(out, StdbLinkCode, code, expires_at_micros);

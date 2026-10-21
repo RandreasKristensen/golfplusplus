@@ -178,13 +178,16 @@ const room_player* my_room_player(const game_state& state) {
     return me != state.online.players.end() ? &me->second : nullptr;
 }
 
-float shot_wind_time(const game_state& state) {
-    const room_player* me = my_room_player(state);
-    if (!is_online(state) || me == nullptr || !state.hole || me->zone != static_cast<int>(state.hole->index) ||
-        state.online.server_now == 0) {
-        return state.hole_time;
+std::int64_t shot_unix_ms(const game_state& state) {
+    return shared_unix_ms(state, state.local_unix_ms);
+}
+
+weather_state course_weather_at(const game_state& state, const std::int64_t unix_ms) {
+    if (!is_online(state) && state.weather_override) {
+        return *state.weather_override;
     }
-    return std::max(0.0f, server_seconds_between(me->hole_started_at, state.online.server_now));
+    const game_tuning& tuning = state.tuning;
+    return weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course_weather_seed(state.course.id), unix_ms);
 }
 
 bool cigarette_lit(const game_state& state) {

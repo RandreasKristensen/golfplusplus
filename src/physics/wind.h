@@ -1,10 +1,8 @@
 #pragma once
 
-// Deterministic wind for ball flight.
+// The wind a ball meets: the air's speed at its height over the ground.
 
 #include "physics/physics_tuning.h"
-
-#include <cstdint>
 
 #include <glm/vec3.hpp>
 
@@ -12,6 +10,10 @@ struct wind_state {
     glm::vec3 velocity{0.0f};
 };
 
-// Wind is a pure function of (seed, time): each hole's wind_seed gives it a
-// stable character, and the same time always gives the same wind.
-wind_state sample_wind(std::uint32_t seed, float time, const wind_tuning& tuning);
+// The wind at `height` over the ground, from `reference_wind`, the wind at
+// the height wind is measured at (the profile's scale 1). The profile
+// follows the log law over grass, so a rolling ball barely feels it and a
+// high drive feels it all. Linear between points; held past the last one,
+// none at or below the first. Plain arithmetic, so the server's replay
+// matches.
+wind_state wind_at_height(const glm::vec3& reference_wind, float height, const wind_profile& profile);

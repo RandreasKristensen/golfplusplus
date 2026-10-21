@@ -2,6 +2,7 @@
 
 #include "net/online_config.h"
 
+#include "core/god_menu.h"
 #include "core/startup_flow.h"
 #include "core/vcr_frame.h"
 #include "game/club_loader.h"
@@ -18,6 +19,7 @@
 #include "game/scorecard.h"
 #include "game/sky_clock.h"
 #include "game/sun_lighting.h"
+#include "game/weather_lighting.h"
 #include "game/text_assets.h"
 #include "game/text_ids.h"
 #include "game/tuning_loader.h"
@@ -169,21 +171,29 @@ TEST_CASE("the ball stands out on the fairway and the flag against the sky at ev
     const std::optional<lighting_palette> palette = load_lighting(asset_root());
     REQUIRE(palette.has_value());
     const scene_colors& colors = palette->colors;
-    for (const lighting_key& key : palette->keys) {
-        // The most light on open ground (lighting.glsl): the sky's from above
-        // and the sun's at most. The ball lying there takes the same light,
-        // the flag its share of it, each never below its glow floor.
-        const glm::vec3 light = glm::min(key.ambient_sky + key.sun_color, glm::vec3(1.0f));
-        const glm::vec3 fairway = colors.ground.fairway * light;
-        const glm::vec3 ball = colors.markers.ball * glm::max(light, glm::vec3(colors.glow.ball));
-        CHECK(luminance_contrast(ball, fairway) >= min_readable_contrast);
-        const glm::vec3 flag = colors.markers.flag * glm::max(light, glm::vec3(colors.glow.flag));
-        for (const course_definition& course : shipped_content().courses) {
-            // The sky at the horizon: the course's haze, giving way to the
-            // palette's tint of it as far as the key's sky blend (backdrop.frag).
-            const glm::vec3 haze = course.backdrop.haze_color;
-            const glm::vec3 sky = glm::mix(haze, haze * key.haze_tint, key.sky_blend);
-            CHECK(luminance_contrast(flag, sky) >= min_readable_contrast);
+    // Under a clear sky, a grey one, and the heaviest rain on soaked ground
+    // (game/weather_lighting.h).
+    for (const shown_weather& weather : {shown_weather{}, shown_weather{1.0f, 0.0f, 0.0f, 0.0f, 0.0f}, shown_weather{1.0f, 1.0f, 0.0f, 0.0f, 1.0f}}) {
+        const weather_haze thick = haze_under_weather(palette->weather, weather);
+        const float wet = glm::mix(1.0f, palette->weather.wet_albedo, weather.wetness);
+        for (const lighting_key& clear_key : palette->keys) {
+            const lighting_key key = weathered_lighting(clear_key, palette->weather, weather);
+            // The most light on open ground (lighting.glsl): the sky's from above
+            // and the sun's at most. The ball lying there takes the same light,
+            // the flag its share of it, each never below its glow floor.
+            const glm::vec3 light = glm::min(key.ambient_sky + key.sun_color, glm::vec3(1.0f));
+            const glm::vec3 fairway = colors.ground.fairway * wet * light;
+            const glm::vec3 ball = colors.markers.ball * glm::max(light, glm::vec3(colors.glow.ball));
+            CHECK(luminance_contrast(ball, fairway) >= min_readable_contrast);
+            const glm::vec3 flag = colors.markers.flag * glm::max(light, glm::vec3(colors.glow.flag));
+            for (const course_definition& course : shipped_content().courses) {
+                // The sky at the horizon: the course's haze, giving way to the
+                // palette's tint of it as far as the key's sky blend
+                // (backdrop.frag), greyed by the weather.
+                const glm::vec3 haze = greyed(course.backdrop.haze_color, thick.grey);
+                const glm::vec3 sky = glm::mix(haze, haze * key.haze_tint, key.sky_blend);
+                CHECK(luminance_contrast(flag, sky) >= min_readable_contrast);
+            }
         }
     }
 }
@@ -352,7 +362,6 @@ TEST_CASE("holes parse with tree defaults and reject bad geometry") {
     REQUIRE(hole.has_value());
     CHECK(hole->name == "tree_hole");
     CHECK(hole->par == 4);
-    CHECK(hole->wind_seed == default_wind_seed);
     CHECK(near(hole->spline.rough_width, 24.0f));
     REQUIRE(hole->trees.size() == 1U);
     CHECK(near(hole->trees[0].shape.trunk_radius, default_tree_shape.trunk_radius));
@@ -874,7 +883,13 @@ render_data busy_hud(const text_assets& text, const club_definition& club) {
     }
     data.xp_drops.push_back(render_xp_drop{skill_icon_id::generic, 99999, 0.5f});
     data.show_rangefinder = true;
-    data.rangefinder_label = format_text(text, text_hud_rangefinder, {{"meters", "999"}});
+    data.rangefinder_distance_label = format_text(text, text_hud_rangefinder, {{"meters", "999"}});
+    data.rangefinder_flag = glm::vec3(0.0f);
+    data.rangefinder_lock_lit = true;
+    data.rangefinder_height_label =
+        format_text(text, text_hud_rangefinder_height, {{"sign", lookup_text(text, text_hud_rangefinder_downhill)}, {"meters", "99"}});
+    data.rangefinder_wind_label = format_text(text, text_hud_rangefinder_wind, {{"speed", "19.5"}});
+    data.rangefinder_wind_angle = 0.0f;
 
     // Online: a full group of the longest names, over par everywhere, and
     // their name tags.
@@ -1249,6 +1264,32 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
                 draw_hud(batch, text, busy_hud(text, longest_named_club()), glm::mat4(1.0f));
                 draw_datestamp(batch, text, vcr);
                 draw_vcr_tag(batch, text, vcr);
+                CHECK(batch.truncated_text_count == 0U);
+            }
+        }
+
+        // The god menu with every weather, live and held, offline and online.
+        for (std::size_t kind = 0; kind < weather_kind_count; ++kind) {
+            for (const bool held : {false, true}) {
+                god_menu_state menu;
+                menu.open = true;
+                if (held) {
+                    menu.weather = static_cast<weather_kind>(kind);
+                    menu.wind_speed = 20.0f;
+                    menu.wind_heading = 0.5f;
+                    menu.wetness = 1.0f;
+                    menu.cloud = 1.0f;
+                    menu.thunder = 1.0f;
+                }
+                sky_controls sky;
+                sky.pinned_hour = held ? std::optional<float>(23.5f) : std::nullopt;
+                weather_state shown;
+                shown.kind = static_cast<weather_kind>(kind);
+                shown.wind = glm::vec3(18.8f, 0.0f, 0.0f);
+                shown.wetness = 1.0f;
+                overlay_batch batch;
+                batch.grid = grid;
+                draw_god_menu(batch, text, god_menu_view(menu, sky, shown, 23.5f, !held, text));
                 CHECK(batch.truncated_text_count == 0U);
             }
         }

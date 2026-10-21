@@ -222,10 +222,9 @@ struct room_member_row {
     std::uint64_t room_id;
     std::uint64_t group_id;  // 0: none
     std::int32_t zone;
-    Timestamp hole_started_at;
     std::vector<std::int32_t> round_strokes;
 };
-SPACETIMEDB_STRUCT(room_member_row, account_id, room_id, group_id, zone, hole_started_at, round_strokes)
+SPACETIMEDB_STRUCT(room_member_row, account_id, room_id, group_id, zone, round_strokes)
 SPACETIMEDB_TABLE(room_member_row, room_member, Public)
 FIELD_PrimaryKey(room_member, account_id)
 FIELD_Index(room_member, room_id)
@@ -275,10 +274,10 @@ struct ball_row {
     float y;
     float z;
     std::int32_t stroke_count;
-    float last_wind_time;
+    std::int64_t last_shot_at;  // UTC milliseconds
     Timestamp rests_at;
 };
-SPACETIMEDB_STRUCT(ball_row, account_id, room_id, zone, x, y, z, stroke_count, last_wind_time, rests_at)
+SPACETIMEDB_STRUCT(ball_row, account_id, room_id, zone, x, y, z, stroke_count, last_shot_at, rests_at)
 SPACETIMEDB_TABLE(ball_row, ball, Public)
 FIELD_PrimaryKey(ball, account_id)
 FIELD_Index(ball, room_id)
@@ -355,14 +354,14 @@ struct shot_event_row {
     std::string club_id;
     float power;
     bool cigarette_active;
-    float wind_time;
+    std::int64_t shot_at;  // UTC milliseconds: the weather it was played in
     float rest_x;
     float rest_y;
     float rest_z;
     bool holed;
 };
 SPACETIMEDB_STRUCT(shot_event_row, room_id, account_id, zone, stroke, start_x, start_y, start_z, aim_angle, club_id, power,
-                   cigarette_active, wind_time, rest_x, rest_y, rest_z, holed)
+                   cigarette_active, shot_at, rest_x, rest_y, rest_z, holed)
 SPACETIMEDB_TABLE(shot_event_row, shot_event, Public, true)
 FIELD_Index(shot_event, room_id)
 
@@ -404,6 +403,7 @@ namespace {
 constexpr std::uint32_t config_id = 0;
 constexpr std::int64_t micros_per_second = 1000000;
 constexpr std::int64_t micros_per_hour = 3600 * micros_per_second;
+constexpr std::int64_t micros_per_millisecond = 1000;
 
 std::int64_t minutes_in_micros(const float minutes) {
     return static_cast<std::int64_t>(static_cast<double>(minutes) * 60.0 * static_cast<double>(micros_per_second));
@@ -1128,7 +1128,7 @@ SPACETIMEDB_REDUCER(join_course, ReducerContext ctx, std::string course_id) {
 
     const glm::vec3 spawn = anchor_on_terrain(course->area, course->world.hole_starts.front().position);
     const std::vector<std::int32_t> unplayed(course->holes.size(), 0);
-    ctx.db[room_member].insert(room_member_row{account, joined->room_id, 0, hub_zone, ctx.timestamp, unplayed});
+    ctx.db[room_member].insert(room_member_row{account, joined->room_id, 0, hub_zone, unplayed});
     ctx.db[motion_budget].insert(motion_budget_row{account, spawn.x, spawn.y, spawn.z,
                                                    static_cast<std::uint8_t>(motion_mode::idle), ctx.timestamp,
                                                    cached_content()->tuning.server.motion_distance_slack, Timestamp(),
@@ -1435,13 +1435,12 @@ SPACETIMEDB_REDUCER(enter_hole, ReducerContext ctx, std::int32_t hole_index) {
     }
 
     me.member->zone = hole_index;
-    me.member->hole_started_at = ctx.timestamp;
     ctx.db[room_member_account_id].update(*me.member);
     const server_content& content = *cached_content();
     const float radius = content.tuning.scale.ball_physics_radius_meters;
     const glm::vec3 tee = resting_ball_position(course->area, course->holes[index].tee_position, radius);
     ctx.db[ball].insert(
-        ball_row{me.member->account_id, me.member->room_id, hole_index, tee.x, tee.y, tee.z, 0, 0.0f, ctx.timestamp});
+        ball_row{me.member->account_id, me.member->room_id, hole_index, tee.x, tee.y, tee.z, 0, 0, ctx.timestamp});
     place_player(ctx, *me.member,
                  tee_stance_position(course->area, tee, course->shot_holes[index].pin, content.tuning.player.ball_stand_off_distance));
     return Ok();
@@ -1492,13 +1491,8 @@ SPACETIMEDB_REDUCER(retee, ReducerContext ctx) {
     ball_now->x = tee.x;
     ball_now->y = tee.y;
     ball_now->z = tee.z;
-    ball_now->last_wind_time = 0.0f;
     ctx.db[ball_account_id].update(*ball_now);
-    // Offline a retee restarts the hole's clock (hole_time), so the wind does too.
-    room_member_row member = *me.member;
-    member.hole_started_at = ctx.timestamp;
-    ctx.db[room_member_account_id].update(member);
-    place_player(ctx, member,
+    place_player(ctx, *me.member,
                  tee_stance_position(course->area, tee, course->shot_holes[*on.hole].pin, content.tuning.player.ball_stand_off_distance));
     return Ok();
 }
@@ -1513,7 +1507,7 @@ SPACETIMEDB_REDUCER(take_shot,
                     std::string club_id,
                     float power,
                     bool cigarette_active,
-                    float wind_time) {
+                    std::int64_t shot_at) {
     member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
@@ -1539,15 +1533,15 @@ SPACETIMEDB_REDUCER(take_shot,
         return Err(error_too_soon);
     }
     const shot_check check = check_shot(
-        shot_request{stroke, aim_angle, club_id, power, cigarette_active, wind_time},
-        server_ball{glm::vec3(ball_now->x, ball_now->y, ball_now->z), ball_now->stroke_count, ball_now->last_wind_time},
-        player_position, seconds_between(me.member->hole_started_at, ctx.timestamp), cigarette_lit, content);
+        shot_request{stroke, aim_angle, club_id, power, cigarette_active, shot_at},
+        server_ball{glm::vec3(ball_now->x, ball_now->y, ball_now->z), ball_now->stroke_count, ball_now->last_shot_at},
+        player_position, ctx.timestamp.micros_since_epoch() / micros_per_millisecond, cigarette_lit, content);
     if (!check.input) {
         return Err(check.error);
     }
     const std::size_t hole = *on.hole;
     const shot_input& input = *check.input;
-    const shot_result result = simulate_shot(input, shot_course{course->area, course->trees, course->shot_holes[hole]},
+    const shot_result result = simulate_shot(input, server_shot_course(*course, hole, input.shot_at, content),
                                              content.tuning, content.clubs, content.rewards);
 
     const std::uint64_t account = me.member->account_id;
@@ -1555,7 +1549,7 @@ SPACETIMEDB_REDUCER(take_shot,
     save_data after = award_xp(before, content.rewards.shot).progress;
     ctx.db[shot_event].insert(shot_event_row{me.member->room_id, account, me.member->zone, stroke, input.ball_start.x,
                                              input.ball_start.y, input.ball_start.z, input.aim_angle, input.club_id,
-                                             input.power, input.cigarette_active, input.wind_time, result.rest_position.x,
+                                             input.power, input.cigarette_active, input.shot_at, result.rest_position.x,
                                              result.rest_position.y, result.rest_position.z, result.holed});
 
     if (!result.holed) {
@@ -1563,7 +1557,7 @@ SPACETIMEDB_REDUCER(take_shot,
         ball_now->y = result.rest_position.y;
         ball_now->z = result.rest_position.z;
         ball_now->stroke_count = stroke + result.penalty_strokes;  // lost in water: back, a stroke later
-        ball_now->last_wind_time = input.wind_time;
+        ball_now->last_shot_at = input.shot_at;
         ball_now->rests_at = ctx.timestamp + TimeDuration::from_micros(static_cast<std::int64_t>(
                                                  static_cast<double>(result.duration) * static_cast<double>(micros_per_second)));
         ctx.db[ball_account_id].update(*ball_now);

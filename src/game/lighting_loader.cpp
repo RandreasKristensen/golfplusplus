@@ -128,7 +128,8 @@ std::optional<sky_style> parse_sky(const json& root) {
     }
     const std::optional<glm::vec3> moon_color = read_color(*object, "moon_color");
     const std::optional<glm::vec3> cloud_shade = read_color(*object, "cloud_shade");
-    if (!moon_color || !cloud_shade || !(sky.stars_full_deg < sky.stars_appear_deg)) {
+    if (!moon_color || !cloud_shade || !(sky.stars_full_deg < sky.stars_appear_deg) ||
+        !(sky.rainbow_radius_deg < sky.rainbow_secondary_radius_deg)) {
         return std::nullopt;
     }
     sky.moon_color = *moon_color;
@@ -186,6 +187,73 @@ std::optional<night_light_style> parse_night_lights(const json& root) {
     return lights;
 }
 
+std::optional<weather_style> parse_weather(const json& root) {
+    const json* object = json_object(root, "weather");
+    weather_style weather;
+    if (object == nullptr || !read_bounded(*object, weather_fields, weather)) {
+        return std::nullopt;
+    }
+    const std::optional<glm::vec3> sky = read_color(*object, "overcast_sky");
+    if (!sky) {
+        return std::nullopt;
+    }
+    weather.overcast_sky = *sky;
+    return weather;
+}
+
+// A count of streaks within 1..max_weather_streaks.
+std::optional<int> read_streak_count(const json& object, const char* key) {
+    const std::optional<int> count = json_int(object, key);
+    return count && *count >= 1 && *count <= max_weather_streaks ? count : std::nullopt;
+}
+
+std::optional<rain_style> parse_rain(const json& root) {
+    const json* object = json_object(root, "rain");
+    rain_style rain;
+    if (object == nullptr || !read_bounded(*object, rain_fields, rain)) {
+        return std::nullopt;
+    }
+    const std::optional<int> drops = read_streak_count(*object, "max_drops");
+    const std::optional<glm::vec3> color = read_color(*object, "color");
+    if (!drops || !color) {
+        return std::nullopt;
+    }
+    rain.max_drops = *drops;
+    rain.color = *color;
+    return rain;
+}
+
+std::optional<lightning_style> parse_lightning(const json& root) {
+    const json* object = json_object(root, "lightning");
+    lightning_style lightning;
+    if (object == nullptr || !read_bounded(*object, lightning_fields, lightning) ||
+        lightning.top_min_deg > lightning.top_max_deg || lightning.near_meters > lightning.far_meters) {
+        return std::nullopt;
+    }
+    const std::optional<glm::vec3> color = read_color(*object, "color");
+    if (!color) {
+        return std::nullopt;
+    }
+    lightning.color = *color;
+    return lightning;
+}
+
+std::optional<wind_style> parse_wind(const json& root) {
+    const json* object = json_object(root, "wind");
+    wind_style wind;
+    if (object == nullptr || !read_bounded(*object, wind_fields, wind) || !(wind.flag_calm_speed < wind.flag_full_speed)) {
+        return std::nullopt;
+    }
+    const std::optional<int> specks = read_streak_count(*object, "max_specks");
+    const std::optional<glm::vec3> color = read_color(*object, "speck_color");
+    if (!specks || !color) {
+        return std::nullopt;
+    }
+    wind.max_specks = *specks;
+    wind.speck_color = *color;
+    return wind;
+}
+
 std::optional<figure_colors> parse_figures(const json& root) {
     figure_colors figures;
     const json* object = json_object(root, "figures");
@@ -216,9 +284,14 @@ std::optional<lighting_palette> parse_lighting_from_text(const std::string& text
     const std::optional<sky_style> sky = parse_sky(*root);
     const std::optional<shadow_style> shadows = parse_shadows(*root);
     const std::optional<night_light_style> night_lights = parse_night_lights(*root);
+    const std::optional<weather_style> weather = parse_weather(*root);
+    const std::optional<rain_style> rain = parse_rain(*root);
+    const std::optional<wind_style> wind = parse_wind(*root);
+    const std::optional<lightning_style> lightning = parse_lightning(*root);
     lighting_palette palette;
     scene_colors& colors = palette.colors;
-    if (!keys || !figures || !glow || !sky || !shadows || !night_lights || !read_colors(*root, "ground", ground_fields, colors.ground) ||
+    if (!keys || !figures || !glow || !sky || !shadows || !night_lights || !weather || !rain || !wind || !lightning ||
+        !read_colors(*root, "ground", ground_fields, colors.ground) ||
         !read_colors(*root, "trees", tree_fields, colors.trees) ||
         !read_colors(*root, "markers", marker_fields, colors.markers) ||
         !read_colors(*root, "cart", cart_fields, colors.cart) ||
@@ -230,6 +303,10 @@ std::optional<lighting_palette> parse_lighting_from_text(const std::string& text
     palette.sky = *sky;
     palette.shadows = *shadows;
     palette.night_lights = *night_lights;
+    palette.weather = *weather;
+    palette.rain = *rain;
+    palette.wind = *wind;
+    palette.lightning = *lightning;
     colors.figures = std::move(*figures);
     colors.glow = *glow;
     return palette;

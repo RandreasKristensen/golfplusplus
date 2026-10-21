@@ -12,6 +12,7 @@
 #include "game/reward_rules.h"
 #include "game/save_data.h"
 #include "game/shot_simulation.h"
+#include "game/weather.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -59,9 +60,15 @@ void record_cart_left(game_state& state);
 void request_group(game_state& state);
 void request_leave_group(game_state& state);
 
-// A shot's wind time: offline the hole's own clock (hole_time); online the
-// server's clock since it started the hole, which it checks the shot by.
-float shot_wind_time(const game_state& state);
+// UTC now in milliseconds this frame, as shared_unix_ms has it from the
+// state's local_unix_ms: what a shot hit now records as its shot_at, which
+// the server checks against its own clock.
+std::int64_t shot_unix_ms(const game_state& state);
+
+// The weather on my course at `unix_ms`: offline the god menu's when it holds
+// one (weather_override), else the course's own (game/weather.h), which is
+// what the server plays online shots in.
+weather_state course_weather_at(const game_state& state, std::int64_t unix_ms);
 
 // Whether a cigarette is lit: offline since the smoke emote played here;
 // online since the server accepted it, by the server's clock (a refused one

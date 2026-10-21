@@ -1,20 +1,23 @@
 #pragma once
 
-// The trees' shadow map: while the sun is up, the instanced tree batch and
-// the floodlights' mesh drawn once a frame into a small depth texture looking down the sun over the
-// ground around the camera (shadow_map_fit.h), which terrain.frag samples in
-// a few soft taps and multiplies into the sun the land lets through
-// (lighting.glsl's sun_shadow). Chunky and soft on purpose: a camcorder never
-// saw a crisp shadow edge. With the sun down the pass is skipped and the
-// ground sees no tree shadow.
+// The shadow map: while the sun is up, the instanced tree batch, the
+// floodlights' mesh and the figures and carts (renderer/shadow_casters.h)
+// drawn once a frame into a small depth texture looking down the sun over the
+// ground around the camera (shadow_map_fit.h), which terrain.frag and
+// tee_box.frag sample in a few soft taps (shadow_map_light.glsl) and multiply
+// into the sun the land lets through (lighting.glsl's sun_shadow). Chunky and
+// soft on purpose: a camcorder never saw a crisp shadow edge. With the sun
+// down the pass is skipped and the ground sees no cast shadow.
 
 #include "game/lighting_loader.h"
 #include "physics/tree_collision.h"
 #include "profiling/profiling.h"
+#include "renderer/dynamic_buffer.h"
 #include "renderer/floodlight_renderer.h"
 #include "renderer/gl_timer.h"
 #include "renderer/shader.h"
 #include "renderer/tree_renderer.h"
+#include "renderer/world_marker_batch.h"
 
 #include <cstdint>
 #include <string>
@@ -27,19 +30,23 @@ class shadow_map_pass {
 public:
     bool init(const std::string& vertex_path, const std::string& fragment_path, const shadow_style& style);
     void shutdown();
-    // This frame's map of `trees` and `floodlights`, for the sun `towards_sun` casting
+    // This frame's map of `trees`, `floodlights` and `figures`, for the sun `towards_sun` casting
     // `sun_share` (0..1, render_shadows) of its shadow, around `eye` looking
     // along `forward`. Leaves its framebuffer bound: the caller binds its own.
     void draw(tree_renderer& tree_batch, const std::vector<tree_body>& trees, std::uint64_t trees_revision,
               floodlight_renderer& floodlight_batch, const render_floodlights* floodlights,
-              const glm::vec3& towards_sun, float sun_share, const glm::vec3& eye, const glm::vec3& forward,
+              const world_marker_batch& figures, const glm::vec3& towards_sun, float sun_share, const glm::vec3& eye, const glm::vec3& forward,
               gl_timer_pool& timers, frame_profile* profile);
-    // Binds the map to `unit` and tells `terrain` (the terrain shader, in
-    // use) how to read it; with no map this frame it shades nothing.
-    void bind(const shader_program& terrain, int unit) const;
+    // Binds the map to `unit` and tells `receiver` (the terrain or tee box
+    // shader, in use) how to read it; with no map this frame it shades nothing.
+    void bind(const shader_program& receiver, int unit) const;
 
 private:
+    void draw_figures(const world_marker_batch& figures, frame_profile* profile);
+
     shader_program shader_;
+    unsigned int figures_vao_ = 0;
+    dynamic_vertex_buffer figures_buffer_;
     shadow_style style_;
     unsigned int fbo_ = 0;
     unsigned int depth_texture_ = 0;

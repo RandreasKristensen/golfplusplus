@@ -27,7 +27,7 @@ room_shot shot_of(const stdb_shot_event& event) {
     shot.input.club_id = text_of(event.shot.club_id);
     shot.input.power = event.shot.power;
     shot.input.cigarette_active = event.shot.cigarette_active;
-    shot.input.wind_time = event.shot.wind_time;
+    shot.input.shot_at = event.shot.shot_at;
     shot.rest = glm::vec3(event.rest_x, event.rest_y, event.rest_z);
     shot.holed = event.holed;
     return shot;
@@ -57,7 +57,7 @@ bool room_rows::apply(const stdb_event& event,
     case STDB_TABLE_ROOM_MEMBER: {
         const stdb_room_member& m = row.room_member;
         apply_change(members_, m.account_id, change,
-                     member{m.group_id, m.zone, m.hole_started_at_micros,
+                     member{m.group_id, m.zone,
                             std::vector<int>(m.round_strokes, m.round_strokes + m.round_strokes_count)});
         break;
     }
@@ -123,7 +123,6 @@ void room_rows::publish(game_state& state) {
         }
         player.group_id = m.group_id;
         player.zone = m.zone;
-        player.hole_started_at = m.hole_started_at;
         player.round_strokes = m.round_strokes;
         const auto moved = motions_.find(account);
         if (moved != motions_.end()) {

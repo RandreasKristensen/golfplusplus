@@ -8,6 +8,7 @@ local multiplayer server.
 | `hole_editor/hole-editor.html` | Browser-based editor for holes and course worlds |
 | `osm_import/` | Converts real courses from OpenStreetMap into hole/course/world JSON |
 | `art/make_art.py` | Draws the rough's grass texture and every course's sky and land backdrop panoramas |
+| `audio/make_thunder.py` | Draws the thunder heard after lightning, close and far, from seeded noise |
 | `gb.cmd` / `gb.ps1` | Windows release build helper, and local multiplayer testing (see below) |
 | `release/build_release.ps1` | What players download: the installer and the zip (see below) |
 | `net/dev.ps1` | The local SpacetimeDB server on demand: start, publish, anonymous logins, stop |
@@ -41,6 +42,14 @@ imports) get a default parkland one. Run it after importing a course;
 
 ```
 python tooling/art/make_art.py
+```
+
+## audio/make_thunder.py
+Writes `assets/audio/sfx/thunder_close.wav` and `thunder_far.wav` from
+seeded noise (no recorded audio, nothing to license), the same every run.
+
+```
+py -3 tooling/audio/make_thunder.py
 ```
 
 ## gb (build helper)
@@ -183,7 +192,7 @@ spline.
 
 ### Right panel
 
-**Hole info** — set the hole `id`, `name`, `par` (1–6), `wind_seed`, fairway
+**Hole info** — set the hole `id`, `name`, `par` (1–6), fairway
 `width`, and `rough_width`. Width and rough width are in metres and render live
 on the canvas.
 

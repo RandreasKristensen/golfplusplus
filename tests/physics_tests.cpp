@@ -2,6 +2,7 @@
 #include "doctest.h"
 
 #include "physics/ball_physics.h"
+#include "physics/body_collision.h"
 #include "physics/collision.h"
 #include "physics/ground_mesh.h"
 #include "physics/land_relief.h"
@@ -32,16 +33,8 @@ physics_tuning test_physics() {
     return physics;
 }
 
-wind_tuning test_wind() {
-    wind_tuning wind;
-    wind.seed_phase_scale = 0.01f;
-    wind.base_speed = 2.0f;
-    wind.speed_variation = 1.5f;
-    wind.speed_time_scale = 0.2f;
-    wind.angle_variation = 0.7f;
-    wind.angle_time_scale = 0.11f;
-    wind.phase_angle_scale = 1.3f;
-    return wind;
+wind_profile test_profile() {
+    return wind_profile{{{0.03f, 0.0f}, {1.0f, 0.6f}, {10.0f, 1.0f}, {40.0f, 1.24f}}};
 }
 }
 
@@ -74,20 +67,14 @@ TEST_CASE("step is deterministic") {
     CHECK(near(r1.velocity, r2.velocity));
 }
 
-TEST_CASE("wind is deterministic") {
-    const wind_state w1 = sample_wind(42U, 10.0f, test_wind());
-    const wind_state w2 = sample_wind(42U, 10.0f, test_wind());
-    CHECK(near(w1.velocity, w2.velocity));
-}
-
-TEST_CASE("wind varies with time and seed") {
-    const wind_state w_time_a = sample_wind(42U, 0.0f, test_wind());
-    const wind_state w_time_b = sample_wind(42U, 3.0f, test_wind());
-    CHECK(!near(w_time_a.velocity, w_time_b.velocity));
-
-    const wind_state w_seed_a = sample_wind(1U, 0.0f, test_wind());
-    const wind_state w_seed_b = sample_wind(2U, 0.0f, test_wind());
-    CHECK(!near(w_seed_a.velocity, w_seed_b.velocity));
+TEST_CASE("the wind slows towards the ground and is held above the profile") {
+    const glm::vec3 wind(5.0f, 0.0f, 0.0f);
+    CHECK(wind_at_height(wind, 0.02f, test_profile()).velocity == glm::vec3(0.0f));
+    CHECK(near(wind_at_height(wind, 1.0f, test_profile()).velocity, wind * 0.6f));
+    CHECK(near(wind_at_height(wind, 5.5f, test_profile()).velocity, wind * 0.8f));
+    CHECK(near(wind_at_height(wind, 10.0f, test_profile()).velocity, wind));
+    CHECK(near(wind_at_height(wind, 100.0f, test_profile()).velocity, wind * 1.24f));
+    CHECK(wind_at_height(wind, 3.0f, wind_profile{}).velocity == glm::vec3(0.0f));
 }
 
 TEST_CASE("terrain mesh is a continuous shared ribbon") {
@@ -994,4 +981,55 @@ TEST_CASE("the tree grid hits exactly what testing every tree hits") {
     }
     CHECK(touched > 50);  // the test reaches into canopies, not only empty air
     CHECK(resolve_tree_collisions(ball_state{}, {}, build_tree_grid({}, 16.0f), 0.3f, 0.2f).position == glm::vec3(0.0f));
+}
+
+TEST_CASE("a body moving over the ground stops at posts, slides along walls and is put out of blocks") {
+    upright_obstacles obstacles;
+    obstacles.posts.push_back(upright_post{glm::vec2(0.0f, 5.0f), 0.5f});
+    const ground_body walker{{glm::vec2(0.0f)}, 0.3f};
+
+    // Straight into the post: stopped at its edge, touching it.
+    const body_move stopped = move_body({&obstacles}, walker, glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(0.0f, 3.0f, 10.0f));
+    CHECK(stopped.touched);
+    CHECK(near(stopped.position.z, 4.2f, 0.001f));
+    CHECK(near(stopped.position.y, 3.0f));
+    const body_move clear = move_body({&obstacles}, walker, glm::vec3(2.0f, 0.0f, 0.0f), glm::vec3(2.0f, 0.0f, 10.0f));
+    CHECK(!clear.touched);
+    CHECK(near(clear.position, glm::vec3(2.0f, 0.0f, 10.0f)));
+
+    // Against a thin net at an angle it slides along it, even moving a long
+    // way in one go, never through it.
+    upright_obstacles net;
+    net.walls.push_back(upright_wall{glm::vec2(-10.0f, 3.0f), glm::vec2(10.0f, 3.0f), 0.05f});
+    const body_move slid = move_body({&net}, walker, glm::vec3(0.0f), glm::vec3(4.0f, 0.0f, 8.0f));
+    CHECK(slid.touched);
+    CHECK(slid.position.z < 3.0f - 0.3f);
+    CHECK(slid.position.x > 3.9f);
+
+    // A block stops what comes at it, and pushes out what starts inside it.
+    upright_obstacles block;
+    block.blocks.push_back(upright_block{glm::vec2(0.0f), glm::vec2(0.0f, 1.0f), 3.0f, 1.0f});
+    const body_move blocked = move_body({&block}, walker, glm::vec3(-5.0f, 0.0f, 0.0f), glm::vec3(5.0f, 0.0f, 0.0f));
+    CHECK(blocked.touched);
+    CHECK(near(blocked.position.x, -1.3f, 0.001f));
+    const body_move out = move_body({&block}, walker, glm::vec3(0.6f, 0.0f, 0.0f), glm::vec3(0.6f, 0.0f, 0.0f));
+    CHECK(near(out.position.x, 1.3f, 0.001f));
+
+    // A body of several circles is kept clear by each, in every set.
+    const ground_body cart{{glm::vec2(0.0f, 0.7f), glm::vec2(0.0f, -0.3f)}, 0.7f};
+    const body_move parked = move_body({&net, &obstacles}, cart, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 2.0f));
+    CHECK(parked.position.z + 0.7f <= 3.0f - 0.05f - 0.7f + 0.001f);
+}
+
+TEST_CASE("a body with friction scrapes to a stop along what it presses against; without, it slides") {
+    upright_obstacles net;
+    net.walls.push_back(upright_wall{glm::vec2(-20.0f, 3.0f), glm::vec2(20.0f, 3.0f), 0.05f});
+    const auto along = [&](const float friction) {
+        const ground_body body{{glm::vec2(0.0f)}, 0.5f, friction};
+        return move_body({&net}, body, glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(6.0f, 0.0f, 8.0f)).position.x;
+    };
+    CHECK(along(0.0f) > 5.9f);
+    CHECK(along(0.9f) < 1.0f);
+    CHECK(along(1.0f) < along(0.9f));
+    CHECK(along(1.0f) > 0.0f);
 }

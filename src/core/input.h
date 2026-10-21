@@ -49,6 +49,7 @@ struct input_state {
     button_state key_2;
     button_state key_g;
     button_state key_t;  // developer: scrubs the sky (core/sky_frame.h)
+    button_state key_f1;  // developer: the god menu (core/god_menu.h)
     button_state mouse_left;
 };
 

@@ -82,6 +82,7 @@ set(GOLFPP_SHARED_SOURCES
   src/physics/land_relief.cpp
   src/physics/material_zone.cpp
   src/physics/terrain.cpp
+  src/physics/body_collision.cpp
   src/physics/fence_collision.cpp
   src/physics/tree_collision.cpp
   src/physics/wind.cpp
@@ -95,6 +96,7 @@ set(GOLFPP_SHARED_SOURCES
   src/game/tee_box.cpp
   src/game/json_util.cpp
   src/game/pixel_font_data.cpp
+  src/game/area_obstacles.cpp
   src/game/play_area.cpp
   src/game/progress_rules.cpp
   src/game/progression.cpp
@@ -102,6 +104,7 @@ set(GOLFPP_SHARED_SOURCES
   src/game/round_state.cpp
   src/game/shot_simulation.cpp
   src/game/sky_clock.cpp
+  src/game/weather.cpp
   src/game/tuning_loader.cpp
   src/game/utf8.cpp
 )

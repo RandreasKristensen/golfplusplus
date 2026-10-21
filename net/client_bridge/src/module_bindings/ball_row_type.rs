@@ -14,7 +14,7 @@ pub struct BallRow {
     pub y: f32,
     pub z: f32,
     pub stroke_count: i32,
-    pub last_wind_time: f32,
+    pub last_shot_at: i64,
     pub rests_at: __sdk::Timestamp,
 }
 
@@ -33,7 +33,7 @@ pub struct BallRowCols {
     pub y: __sdk::__query_builder::Col<BallRow, f32>,
     pub z: __sdk::__query_builder::Col<BallRow, f32>,
     pub stroke_count: __sdk::__query_builder::Col<BallRow, i32>,
-    pub last_wind_time: __sdk::__query_builder::Col<BallRow, f32>,
+    pub last_shot_at: __sdk::__query_builder::Col<BallRow, i64>,
     pub rests_at: __sdk::__query_builder::Col<BallRow, __sdk::Timestamp>,
 }
 
@@ -48,7 +48,7 @@ impl __sdk::__query_builder::HasCols for BallRow {
             y: __sdk::__query_builder::Col::new(table_name, "y"),
             z: __sdk::__query_builder::Col::new(table_name, "z"),
             stroke_count: __sdk::__query_builder::Col::new(table_name, "stroke_count"),
-            last_wind_time: __sdk::__query_builder::Col::new(table_name, "last_wind_time"),
+            last_shot_at: __sdk::__query_builder::Col::new(table_name, "last_shot_at"),
             rests_at: __sdk::__query_builder::Col::new(table_name, "rests_at"),
         }
     }
