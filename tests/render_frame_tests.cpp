@@ -187,8 +187,8 @@ TEST_CASE("my figure casts the sun's shadow where I stand, at my ball while I ad
     CHECK(!data.my_figure->swing.has_value());
     CHECK(data.avatar_eye_height == state.tuning.camera.walking_eye_height);
     world_marker_batch casters;
-    build_shadow_casters(casters, data, test_scene_colors());
-    CHECK(casters.vertices().size() == remote_figure_vertex_count() + data.carts.size() * cart_vertex_count());
+    build_shadow_casters(casters, data, test_scene_colors(), test_props());
+    CHECK(casters.vertices().size() == remote_figure_vertex_count() + data.carts.size() * cart_vertex_count(test_props().golf_cart));
 
     state.mode = game_mode::addressing;
     data = frame_for(state);
@@ -368,29 +368,54 @@ TEST_CASE("what is pinned to the camera keeps its tuned field of view whatever t
     }
 }
 
-TEST_CASE("my emote props follow the camera: the same on screen wherever I look, the smoke rising up the world") {
+TEST_CASE("my emote props follow the camera: the same on screen wherever I look, the smoke rising up the world and the beer falling down it") {
     game_state state = started_game(fixture_hub_course());
     const float max_pitch = state.tuning.player.max_look_pitch;
     REQUIRE(max_pitch > 0.5f);
     const auto props_seen = [&state](std::vector<emote_prop>& props) {
         const render_data data = frame_for(state);
-        const emote_holder mine = camera_emote_holder(data.camera_position, data.camera_target, 0.7f, 0.3f);
+        const emote_holder mine = camera_emote_holder(data.camera_position, data.camera_target, 0.7f, 1.0f);
         props.clear();
-        append_emote_props(props, mine, test_scene_colors());
+        append_emote_props(props, mine, test_props(), test_scene_colors().glow);
         return glm::lookAt(data.camera_position, data.camera_target, world_up);
     };
 
     std::vector<emote_prop> level;
     const glm::mat4 level_view = props_seen(level);
-    REQUIRE(level.size() > 2U);
+    // The cigarette's lit tip is its last part, just before its smoke.
+    const auto first_puff = std::find_if(level.begin(), level.end(), [](const emote_prop& prop) { return prop.alpha < 1.0f; });
+    REQUIRE(first_puff != level.end());
+    REQUIRE(first_puff != level.begin());
+    const std::size_t tip_index = static_cast<std::size_t>(first_puff - level.begin()) - 1U;
+    // The can's first drop of beer, after the can's own parts.
+    const glm::vec3 beer = test_props().beer_can.color("beer");
+    const glm::vec3 foam = test_props().beer_can.color("foam");
+    const auto is_beer = [&](const emote_prop& prop) { return prop.alpha < 1.0f && (prop.color == beer || prop.color == foam); };
+    const auto first_drop = std::find_if(level.begin(), level.end(), is_beer);
+    REQUIRE(first_drop != level.end());
+    const std::size_t drop_index = static_cast<std::size_t>(first_drop - level.begin());
+    for (const emote_prop& prop : level) {
+        if (prop.alpha >= 1.0f) {
+            // Poured: the stream runs below the props held in view.
+            CHECK(std::any_of(level.begin(), level.end(), [&](const emote_prop& drop) {
+                return is_beer(drop) && drop.model[3].y < prop.model[3].y;
+            }));
+        }
+    }
     const auto check_same_on_screen = [&](const glm::mat4& view, const std::vector<emote_prop>& props) {
         REQUIRE(props.size() == level.size());
         for (std::size_t i = 0; i < props.size(); ++i) {
-            const glm::vec3 tip(props[1].model[3]);
+            const glm::vec3 tip(props[tip_index].model[3]);
             const glm::vec3 at(props[i].model[3]);
+            if (is_beer(props[i])) {
+                // A drop of beer: as far down the stream in the world as when looking level.
+                const float level_fall = level[i].model[3].y - level[drop_index].model[3].y;
+                CHECK(near(at.y - props[drop_index].model[3].y, level_fall, 0.0001f));
+                continue;
+            }
             if (props[i].alpha < 1.0f) {
                 // A puff of smoke: over the tip in the world, as high as when looking level.
-                const glm::vec3 level_rise = glm::vec3(level[i].model[3]) - glm::vec3(level[1].model[3]);
+                const glm::vec3 level_rise = glm::vec3(level[i].model[3]) - glm::vec3(level[tip_index].model[3]);
                 CHECK(near(at.y - tip.y, level_rise.y, 0.0001f));
                 CHECK(at.y > tip.y);
                 continue;
@@ -421,6 +446,35 @@ TEST_CASE("my emote props follow the camera: the same on screen wherever I look,
     state.look.head_yaw = 1.6f;
     state.look.pitch = 0.4f;
     check_same_on_screen(props_seen(props), props);
+}
+
+TEST_CASE("my beer can tips towards me to pour, its opening facing me and the beer in view") {
+    game_state state = started_game(fixture_hub_course());
+    const render_data data = frame_for(state);
+    const glm::mat4 view = glm::lookAt(data.camera_position, data.camera_target, world_up);
+    // The narrowest picture (wider windows only add width).
+    const glm::mat4 projection = glm::perspective(glm::radians(data.viewmodel_fov_degrees), 4.0f / 3.0f, 0.05f, 100.0f);
+    const auto in_view = [&](const glm::vec3& world) {
+        const glm::vec4 clip = projection * view * glm::vec4(world, 1.0f);
+        return clip.w > 0.0f && std::abs(clip.x / clip.w) < 0.95f && std::abs(clip.y / clip.w) < 0.95f;
+    };
+    const glm::vec3 ahead = glm::normalize(data.camera_target - data.camera_position);
+
+    const emote_holder pouring = camera_emote_holder(data.camera_position, data.camera_target, std::nullopt, 1.0f);
+    const glm::mat4 can = emote_can_frame(pouring, 1.0f);
+    const glm::vec3 opening(can * glm::vec4(test_props().beer_can.point("pour"), 1.0f));
+    const glm::vec3 top = glm::normalize(glm::vec3(can[1]));
+    CHECK(in_view(opening));
+    CHECK(glm::dot(top, data.camera_position - opening) > 0.0f);
+    // Tipped from how it is first held: its top leans towards me.
+    const glm::vec3 held_top = glm::normalize(glm::vec3(emote_can_frame(pouring, 0.0f)[1]));
+    CHECK(glm::dot(top, ahead) < glm::dot(held_top, ahead) - 0.3f);
+
+    std::vector<emote_prop> props;
+    append_emote_props(props, pouring, test_props(), test_scene_colors().glow);
+    const glm::vec3 beer = test_props().beer_can.color("beer");
+    CHECK(std::any_of(props.begin(), props.end(),
+                      [&](const emote_prop& prop) { return prop.color == beer && in_view(glm::vec3(prop.model[3])); }));
 }
 
 TEST_CASE("tracking noise eases in while paused and after a hole changes, never in play") {

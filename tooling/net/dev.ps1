@@ -9,7 +9,7 @@ on port 3000; builds the server module (quick when nothing changed);
 publishes it as `golfpp` when the database is missing or the build changed
 since the last publish here, then regenerates the client bindings; and turns
 on anonymous logins (admin_set_config, as the publisher) keeping the issuer
-and client id from assets/online.json and the database's link secret (a new
+and client id from assets/play/online.json and the database's link secret (a new
 one for a new database). The database lives in SpacetimeDB's own data
 directory, so it survives the server being stopped.
 

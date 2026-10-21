@@ -65,7 +65,7 @@ TEST_CASE("GOLFPP_COURSE selects a course id and is trimmed") {
 }
 
 TEST_CASE("course ids keep their case so lookup stays exact") {
-    // Course ids come from assets/courses/*.json and are matched verbatim;
+    // Course ids come from assets/world/courses/*/course.json and are matched verbatim;
     // lowercasing here would silently match the wrong course.
     CHECK(parse_startup_options(nullptr, "Marienlyst_Golfklub").boot_course_id == "Marienlyst_Golfklub");
 }

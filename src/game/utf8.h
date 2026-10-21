@@ -1,6 +1,6 @@
 #pragma once
 
-// UTF-8 <-> code points for on-screen text. Strings in assets/text and typed
+// UTF-8 <-> code points for on-screen text. Strings in assets/interface/text and typed
 // text (SDL_TEXTINPUT) are UTF-8; the pixel font is keyed by code point.
 
 #include <string>

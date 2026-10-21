@@ -18,7 +18,7 @@ std::optional<std::string> file_text(const content_files& files, const std::stri
     return found != files.end() ? std::optional<std::string>(std::string(found->second)) : std::nullopt;
 }
 
-// Every file directly in `directory` ("clubs"), in path order.
+// Every file directly in `directory` (clubs_path), in path order.
 std::vector<std::string> files_in(const content_files& files, const std::string& directory) {
     std::vector<std::string> texts;
     const std::string prefix = directory + "/";
@@ -35,12 +35,12 @@ server_content_load_result parse_server_content(const content_files& files) {
     server_content_load_result result;
     server_content content;
 
-    const std::optional<std::string> tuning_text = file_text(files, game_tuning_path);
-    if (!tuning_text) {
-        result.error = std::string("missing ") + game_tuning_path;
+    const std::vector<std::string> tuning_texts = files_in(files, tuning_path);
+    if (tuning_texts.empty()) {
+        result.error = std::string("missing ") + tuning_path;
         return result;
     }
-    const game_tuning_parse_result tuning = parse_game_tuning_from_text(*tuning_text);
+    const game_tuning_parse_result tuning = parse_game_tuning_from_texts(tuning_texts);
     if (!tuning.tuning) {
         result.error = tuning.error;
         return result;
@@ -63,20 +63,21 @@ server_content_load_result parse_server_content(const content_files& files) {
     }
     content.font = *font;
 
-    content.clubs = parse_clubs_from_texts(files_in(files, "clubs"));
+    content.clubs = parse_clubs_from_texts(files_in(files, clubs_path));
     if (content.clubs.empty()) {
-        result.error = "no valid clubs in clubs/";
+        result.error = std::string("no valid clubs in ") + clubs_path;
         return result;
     }
 
-    for (const std::string& text : files_in(files, "courses")) {
-        std::optional<course_definition> course = parse_course_from_text(text);
+    for (const auto& [path, text] : files) {
+        const std::optional<std::string> folder = course_folder_of(path);
+        std::optional<course_definition> course = folder ? parse_course_from_text(std::string(text)) : std::nullopt;
         if (course && !course->world.empty()) {
-            content.courses.push_back(std::move(*course));
+            content.courses.push_back(course_in_folder(std::move(*course), *folder));
         }
     }
     if (content.courses.empty()) {
-        result.error = "no valid course with a world in courses/";
+        result.error = std::string("no valid course with a world in ") + courses_path;
         return result;
     }
 

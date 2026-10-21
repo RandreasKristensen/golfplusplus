@@ -14,6 +14,7 @@
 #include <glm/mat4x4.hpp>
 
 #include "game/lighting_loader.h"
+#include "game/prop_loader.h"
 #include "game/picture_loader.h"
 #include "game/text_assets.h"
 #include "profiling/profiling.h"
@@ -58,7 +59,8 @@ public:
     // from; `palette` says what the scene's things are, what the sky shows
     // and how the shadow map is drawn (lighting.json).
     bool init(SDL_Window* window, const std::string& asset_root, const picture_style& picture,
-              const lighting_palette& palette);
+              const lighting_palette& palette,
+              const prop_set& props);
     void shutdown();
     // `profile` may be null (profiling off).
     void render(const render_data& data, const text_assets& text, frame_profile* profile = nullptr);
@@ -135,6 +137,7 @@ private:
     unsigned int screen_vbo_ = 0;
 
     picture_style picture_style_;
+    prop_set props_;
     scene_colors colors_;  // its glow floors this frame's (render_data::glow)
     picture_size picture_;  // the scene target's, for the window's current size
 };

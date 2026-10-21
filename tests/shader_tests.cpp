@@ -265,7 +265,7 @@ TEST_CASE("shader includes pull in a file's text in place of their line") {
 }
 
 TEST_CASE("lit scene shaders take their light from lighting.glsl, none from a uniform of their own") {
-    const std::filesystem::path shaders = std::filesystem::path(asset_root()) / "shaders";
+    const std::filesystem::path shaders = std::filesystem::path(asset_root()) / "picture" / "shaders";
     const shader_include_reader read = [&shaders](const std::string& name) { return read_text_file(shaders / name); };
     for (const char* name : {"terrain.frag", "ball.frag", "hole_sign.frag", "fence.frag", "water.frag", "underwater.frag",
                              "tree_instanced.vert", "world_marker.vert", "tee_box.vert", "backdrop.frag", "blob_shadow.vert",

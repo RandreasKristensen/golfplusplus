@@ -169,7 +169,7 @@ bool tree_renderer::draw(const std::vector<tree_body>& trees,
                          const glm::mat4& view,
                          const glm::mat4& proj,
                          const view_frustum& frustum,
-                         const tree_colors& colors,
+                         const prop_model& tree,
                          frame_profile* profile) {
     // Whole-batch cull: skips both instanced draws when no tree is on screen.
     if (!prepare(trees, revision, profile) ||
@@ -181,10 +181,10 @@ bool tree_renderer::draw(const std::vector<tree_body>& trees,
     shader_.use();
     shader_.set_mat4("u_view_proj", proj * view);
 
-    shader_.set_vec3("u_color", colors.trunk);
+    shader_.set_vec3("u_color", tree.color("trunk"));
     draw_part(trunks_, profile);
 
-    shader_.set_vec3("u_color", colors.leaves);
+    shader_.set_vec3("u_color", tree.color("leaves"));
     draw_part(leaves_, profile);
 
     glBindVertexArray(0);

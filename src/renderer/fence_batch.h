@@ -1,7 +1,7 @@
 #pragma once
 
 // The course's fences as the scene draws them: a square post at every pole
-// and the net between each pair, textured with assets/textures/fence_net.bmp
+// and the net between each pair, textured with assets/world/props/fence_net.bmp
 // so it reads as strands up close and a faint veil far off. Built when the
 // play area changes. GL-free; renderer/fence_renderer draws it.
 

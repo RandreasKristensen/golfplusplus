@@ -1,0 +1,52 @@
+{
+  "terrain": {
+    "min_sections": 128,
+    "ground_cell_size": 4.0,
+    "ground_blend_distance": 40.0,
+    "bunker_depth": 0.9,
+    "water_depth_per_metre": 0.3,
+    "water_min_depth": 0.6,
+    "water_max_depth": 3.5,
+    "fairway_cell_size": 2.0,
+    "zone_cell_size": 0.75,
+    "material_overlay_spacing": 0.75,
+    "relief_scale": 1.2,
+    "green_relief_scale": 0.83,
+    "green_relief_blend_distance": 6.0
+  },
+  "hole_sign": {
+    "edge_inset": 0.6,
+    "forward_offset": 0.0,
+    "look_ahead": 30.0,
+    "board_width": 2.25,
+    "board_height": 1.5,
+    "board_thickness": 0.12,
+    "board_lift": 0.675,
+    "post_radius": 0.09
+  },
+  "tee_box": {
+    "width": 9.6,
+    "length": 6.4,
+    "padding": 0.05,
+    "sample_spacing": 0.5
+  },
+  "fence": {
+    "pole_radius": 0.05,
+    "net_restitution": 0.08,
+    "net_friction": 0.6
+  },
+  "floodlights": {
+    "spacing": 60.0,
+    "tee_clearance": 55.0,
+    "green_clearance": 45.0,
+    "fairway_offset": 7.0,
+    "tee_offset": 4.0,
+    "green_offset": 6.0,
+    "pole_height": 11.0,
+    "pole_radius": 0.16,
+    "arm_length": 0.7,
+    "obstacle_clearance": 2.0,
+    "nudge_step": 3.0,
+    "nudge_tries": 4
+  }
+}

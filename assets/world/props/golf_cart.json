@@ -1,0 +1,27 @@
+{
+  "colors": {
+    "body": [0.36, 0.46, 0.2],
+    "trim": [0.08, 0.09, 0.08],
+    "cream": [0.76, 0.72, 0.56],
+    "canopy": [0.72, 0.68, 0.47],
+    "rubber": [0.025, 0.025, 0.025],
+    "hub_cap": [0.58, 0.56, 0.48],
+    "seat": [0.66, 0.62, 0.5],
+    "bag": [0.46, 0.16, 0.12]
+  },
+  "parts": [
+    {"shape": "box", "at": [0, 0.4, 0.15], "size": [1.24, 0.16, 2.3], "color": "body"},
+    {"shape": "box", "at": [0, 0.62, 1.05], "size": [1.2, 0.32, 0.56], "color": "body"},
+    {"shape": "box", "at": [0, 0.86, 0.8], "size": [1.16, 0.16, 0.12], "color": "cream"},
+    {"shape": "box", "at": [0, 0.36, 1.34], "size": [1.28, 0.12, 0.08], "color": "trim"},
+    {"shape": "box", "at": [0, 0.58, -0.12], "size": [1.16, 0.24, 0.56], "color": "seat"},
+    {"shape": "box", "at": [0, 0.98, -0.4], "size": [1.16, 0.52, 0.1], "color": "seat"},
+    {"shape": "box", "at": [0, 0.62, -0.78], "size": [1.24, 0.28, 0.48], "color": "body"},
+    {"shape": "box", "at": [0, 2.0, 0.05], "size": [1.44, 0.06, 2.0], "color": "canopy"},
+    {"shape": "cylinder", "from": [-0.56, 0.48, -0.62], "to": [-0.56, 1.98, -0.62], "radius": 0.03, "color": "cream"},
+    {"shape": "cylinder", "from": [-0.56, 0.48, 0.72], "to": [-0.56, 1.98, 0.72], "radius": 0.03, "color": "cream"},
+    {"shape": "cylinder", "from": [0.56, 0.48, -0.62], "to": [0.56, 1.98, -0.62], "radius": 0.03, "color": "cream"},
+    {"shape": "cylinder", "from": [0.56, 0.48, 0.72], "to": [0.56, 1.98, 0.72], "radius": 0.03, "color": "cream"},
+    {"shape": "cylinder", "from": [0, 0.6976, -0.6917], "to": [0, 1.4024, -0.9483], "radius": 0.14, "color": "bag"}
+  ]
+}

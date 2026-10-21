@@ -1,7 +1,7 @@
 #pragma once
 
 // The camera that recorded the tape: a cheap 1989 CCD camcorder, at scene
-// resolution between the HDR scene and the tape pass (assets/shaders/
+// resolution between the HDR scene and the tape pass (assets/picture/shaders/
 // camcorder*.frag). The iris meters the scene's mean brightness (a quarter-
 // size copy's smallest mip, eased in a 1x1 ping-pong texture: no readback)
 // and the white balance the light's colour, both lagging; bright light

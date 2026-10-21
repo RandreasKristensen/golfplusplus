@@ -24,7 +24,7 @@
 #include <string_view>
 #include <vector>
 
-// Relative path ("holes/x.json") -> file text.
+// Relative path ("world/courses/x/holes/h01.json") -> file text.
 using content_files = std::map<std::string, std::string_view>;
 
 // Everything but the courses' terrain, which build_server_course makes on

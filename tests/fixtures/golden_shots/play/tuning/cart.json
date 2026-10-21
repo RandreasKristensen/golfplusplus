@@ -1,0 +1,29 @@
+{
+  "cart": {
+    "speed": 14.0,
+    "turn_rate": 2.3,
+    "damping": 13.0,
+    "reverse_speed_scale": 0.35,
+    "full_steer_speed": 3.0,
+    "steering_wheel_rate": 10.0,
+    "seat_offset": 0.3,
+    "board_reach": 2.5,
+    "step_out_distance": 1.1,
+    "step_seconds": 0.6,
+    "park_ahead_distance": 3.0,
+    "park_side_distance": 8.0,
+    "park_spacing": 2.4,
+    "road_reach_margin": 2.5,
+    "min_road_reach": 4.0,
+    "road_speed_scale": 1.32,
+    "road_control_scale": 1.12,
+    "off_road_speed_scale": 0.72,
+    "off_road_control_scale": 0.78,
+    "body_radius": 0.72,
+    "body_ahead": 0.66,
+    "body_behind": 0.3,
+    "crash_bounce": 0.25,
+    "crash_sound_speed": 3.0,
+    "scrape_friction": 0.9
+  }
+}

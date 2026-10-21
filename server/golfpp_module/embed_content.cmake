@@ -1,14 +1,14 @@
-# Writes OUTPUT: a C++ file holding every JSON file of the content directories
-# in DIRECTORIES (relative to ASSET_ROOT) as string literals, keyed by their
-# path relative to ASSET_ROOT. Run in script mode:
-#   cmake -DASSET_ROOT=... -DDIRECTORIES=holes;courses -DOUTPUT=... -P embed_content.cmake
+# Writes OUTPUT: a C++ file holding every file matching the glob PATTERNS
+# (relative to ASSET_ROOT) as string literals, keyed by their path relative
+# to ASSET_ROOT. Run in script mode:
+#   cmake -DASSET_ROOT=... -DPATTERNS=play/tuning/*.json;play/clubs/*.json -DOUTPUT=... -P embed_content.cmake
 
 set(delimiter "golfpp_embed")
 set(entries "")
 set(literals "")
 set(count 0)
-foreach(directory IN LISTS DIRECTORIES)
-    file(GLOB files LIST_DIRECTORIES false "${ASSET_ROOT}/${directory}/*.json")
+foreach(pattern IN LISTS PATTERNS)
+    file(GLOB files LIST_DIRECTORIES false "${ASSET_ROOT}/${pattern}")
     list(SORT files)
     foreach(path IN LISTS files)
         file(RELATIVE_PATH relative "${ASSET_ROOT}" "${path}")

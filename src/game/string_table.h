@@ -1,6 +1,6 @@
 #pragma once
 
-// On-screen strings as data (assets/text/<language>.json): a flat object of
+// On-screen strings as data (assets/interface/text/<language>.json): a flat object of
 // key -> string. Keys used by code live in game/text_ids.h. Strings may hold
 // named placeholders ("HOLE {hole} OF {count}") filled by format_text.
 

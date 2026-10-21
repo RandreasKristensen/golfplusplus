@@ -1,7 +1,7 @@
 #pragma once
 
-// Keys into the string table (assets/text/en.json) and names of text styles
-// (assets/ui/text_styles.json). Tests check that every `text_*` id here exists
+// Keys into the string table (assets/interface/text/en.json) and names of text styles
+// (assets/interface/text/styles.json). Tests check that every `text_*` id here exists
 // in en.json and every `style_*` id exists in text_styles.json, so keep one
 // constant per line in this exact form.
 //

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/lighting_loader.h"
+#include "game/prop_loader.h"
 #include "game/tee_box.h"
 
 #include <cstddef>
@@ -164,11 +165,12 @@ void append_swing_club(world_marker_batch& batch,
 
 // Clears `batch` and fills it with every tee box of the area (`boxes` may be
 // null), drawn in the hub and on a hole alike, in a pass of their own that
-// the shadow map falls on (assets/shaders/tee_box.frag).
+// the shadow map falls on (assets/picture/shaders/tee_box.frag).
 void build_tee_box_batch(world_marker_batch& batch, const std::vector<tee_box>* boxes, const marker_colors& colors);
 
 // Clears `batch` and fills it for one frame: hole and hub markers, aim dots, the swing club, carts, and other players and their balls. All hub cups come before all hub
 // flagsticks: cups never write depth and sit above their own terrain, so the
 // order between different holes' cups and flags is never visible, and the
 // hub collapses into a few runs instead of two per hole.
-void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors);
+void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors,
+                              const prop_set& props);

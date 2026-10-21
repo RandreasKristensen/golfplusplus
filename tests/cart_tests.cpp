@@ -226,7 +226,7 @@ TEST_CASE("the cart does not drift: interact at its wheel only steps out, and no
     CHECK(on_foot(state));
     CHECK(fastest_cart_speed(state.tuning.cart) == state.tuning.cart.speed * state.tuning.cart.road_speed_scale);
 
-    const audio_manifest_parse_result sounds = load_audio_manifest_from_file(asset_root() + "/audio/sounds.json");
+    const audio_manifest_parse_result sounds = load_audio_manifest_from_file(asset_root() + "/" + sounds_path);
     REQUIRE(sounds.manifest.has_value());
     for (const audio_sound_definition& sound : sounds.manifest->sounds) {
         CHECK(sound.id.find("drift") == std::string::npos);

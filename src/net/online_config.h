@@ -1,6 +1,6 @@
 #pragma once
 
-// Where online play connects and how it signs in: assets/online.json, with
+// Where online play connects and how it signs in: assets/play/online.json, with
 // the server and database overridable from the command line or environment
 // for development and self-hosted servers. None of it is secret: the game is
 // a public client (no client secret), and PKCE protects the sign-in. At
@@ -10,7 +10,7 @@
 #include <optional>
 #include <string>
 
-inline constexpr const char* online_config_path = "online.json";
+inline constexpr const char* online_config_path = "play/online.json";
 
 struct online_config {
     std::string server_uri;  // e.g. https://maincloud.spacetimedb.com

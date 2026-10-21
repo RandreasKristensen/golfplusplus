@@ -8,7 +8,7 @@
 
 #include <glm/mat4x4.hpp>
 
-#include "game/lighting_loader.h"
+#include "game/prop_loader.h"
 #include "profiling/profiling.h"
 #include "renderer/frustum.h"
 #include "renderer/render_mesh.h"
@@ -45,7 +45,7 @@ public:
     void shutdown();
 
     // Uploads instance data if `revision`/tree count changed, then draws in
-    // `colors`, lit and hazed by the frame_lighting block.
+    // `tree`'s colours, lit and hazed by the frame_lighting block.
     // No draw calls are issued when there are no trees, or when the whole batch
     // is outside `frustum`. Returns true when the batch was drawn.
     bool draw(const std::vector<tree_body>& trees,
@@ -53,7 +53,7 @@ public:
               const glm::mat4& view,
               const glm::mat4& proj,
               const view_frustum& frustum,
-              const tree_colors& colors,
+              const prop_model& tree,
               frame_profile* profile);
     // The same batch with `depth_shader` (already in use, instanced like
     // tree_instanced.vert) seen through `view_proj`: the shadow map's casters.

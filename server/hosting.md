@@ -112,7 +112,7 @@ Any of these:
   `--anonymous` to connect without signing in. A Windows shortcut can carry them
   (Properties, Target).
 - **Environment**: `GOLFPP_SERVER` and `GOLFPP_DB` (with `--anonymous` as above).
-- **The game's settings file**: `assets/online.json` next to the game:
+- **The game's settings file**: `assets/play/online.json` next to the game:
   `server_uri`, `database`, and the sign-in provider (step 6). Every launch then
   uses your server.
 
@@ -149,12 +149,12 @@ authorization code flow with PKCE, returning to `http://127.0.0.1/callback`
 2. In the project, add a client with **Private Client** and **Web Application**
    both off and the redirect URI `http://127.0.0.1/callback`.
 3. Turn on the providers players may use (magic link, Google, Discord, ...).
-4. Put the client id in the game's `assets/online.json` (`auth_client_id`).
+4. Put the client id in the game's `assets/play/online.json` (`auth_client_id`).
    The issuer, scopes and endpoints there are SpacetimeAuth's already.
 5. On the server, `admin_set_config` with the issuer
    `https://auth.spacetimedb.com/oidc` and the client id as the audience.
 
 Another OpenID Connect provider works the same way if it allows public clients
 with that loopback redirect: put its issuer, endpoints and client id in
-`assets/online.json`, and its issuer and the client id in `admin_set_config`.
+`assets/play/online.json`, and its issuer and the client id in `admin_set_config`.
 SpacetimeDB checks the provider's tokens against the keys the issuer publishes.

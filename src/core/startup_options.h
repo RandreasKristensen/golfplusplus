@@ -39,7 +39,7 @@
 //   GOLFPP_GOD=1      the god menu (F1) can be opened, as with --god.
 //   GOLFPP_SERVER=uri, GOLFPP_DB=name
 //                     connect online play to another server or database
-//                     than assets/online.json says (a local or self-hosted
+//                     than assets/play/online.json says (a local or self-hosted
 //                     server). The command line wins.
 //
 // Command line: --server <uri>, --db <name>, and --anonymous to connect
@@ -48,8 +48,8 @@
 struct startup_options {
     bool vsync = true;
     std::string boot_course_id;
-    std::string online_server;    // empty: assets/online.json's
-    std::string online_database;  // empty: assets/online.json's
+    std::string online_server;    // empty: assets/play/online.json's
+    std::string online_database;  // empty: assets/play/online.json's
     bool online_anonymous = false;
     int window_width = 0;  // 0: the default size
     int window_height = 0;

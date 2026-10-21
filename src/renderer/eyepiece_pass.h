@@ -1,6 +1,6 @@
 #pragma once
 
-// The rangefinder's eyepiece (assets/shaders/eyepiece.frag), between the
+// The rangefinder's eyepiece (assets/picture/shaders/eyepiece.frag), between the
 // scene and the camcorder, at scene resolution into an HDR target of its
 // own: inside the round view the scene drawn again at the eyepiece's zoom
 // into its zoom target (begin_zoom, end_zoom), so the magnified view has

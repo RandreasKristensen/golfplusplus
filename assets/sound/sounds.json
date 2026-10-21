@@ -1,0 +1,226 @@
+{
+  "master_volume": 0.8,
+  "categories": {
+    "ui": 0.55,
+    "gameplay": 0.85,
+    "ambience": 0.45
+  },
+  "sounds": [
+    {
+      "id": "ui_move",
+      "file": "effects/ui_move.wav",
+      "type": "sfx",
+      "category": "ui",
+      "description": "Short VHS menu cursor tick, dry and low-fi.",
+      "target_length_seconds": 0.05,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ui_select",
+      "file": "effects/ui_select.wav",
+      "type": "sfx",
+      "category": "ui",
+      "description": "Confirm/select blip.",
+      "target_length_seconds": 0.12,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ui_back",
+      "file": "effects/ui_back.wav",
+      "type": "sfx",
+      "category": "ui",
+      "description": "Back/cancel thunk.",
+      "target_length_seconds": 0.12,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "swing_start",
+      "file": "effects/swing_start.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Power meter starts, subtle club grip or backswing cue.",
+      "target_length_seconds": 0.2,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "club_hit_driver",
+      "file": "effects/club_hit_driver.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Loud wooden or metal golf drive hit, short transient.",
+      "target_length_seconds": 0.5,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "club_hit_iron",
+      "file": "effects/club_hit_iron.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Crisp iron strike.",
+      "target_length_seconds": 0.4,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "club_hit_wedge",
+      "file": "effects/club_hit_wedge.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Softer wedge chip hit.",
+      "target_length_seconds": 0.35,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "club_hit_putter",
+      "file": "effects/club_hit_putter.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Small putter tap.",
+      "target_length_seconds": 0.2,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ball_land_grass",
+      "file": "effects/ball_land_grass.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Ball thump on grass.",
+      "target_length_seconds": 0.25,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ball_land_bunker",
+      "file": "effects/ball_land_bunker.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Muffled sand impact.",
+      "target_length_seconds": 0.4,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ball_splash",
+      "file": "effects/ball_splash.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Small water splash.",
+      "target_length_seconds": 0.7,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ball_tree_hit",
+      "file": "effects/ball_tree_hit.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Woody knock and leaves rustle.",
+      "target_length_seconds": 0.45,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ball_cup",
+      "file": "effects/ball_cup.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Ball dropping into cup.",
+      "target_length_seconds": 0.7,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "club_change",
+      "file": "effects/club_change.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Small inventory or club switch click.",
+      "target_length_seconds": 0.15,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "cart_start",
+      "file": "effects/cart_start.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Golf cart motor start or engage.",
+      "target_length_seconds": 1.0,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "cart_drive_loop",
+      "file": "effects/cart_drive_loop.mp3",
+      "type": "loop",
+      "category": "gameplay",
+      "description": "Low golf cart electric motor loop, seamless.",
+      "target_length_seconds": 2.0,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "cart_crash",
+      "file": "effects/cart_crash.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (empty file): golf cart thumping into a tree, pole, fence or tee box.",
+      "target_length_seconds": 0.6,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "player_bump",
+      "file": "effects/player_bump.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (empty file): walking into a tree, pole, sign or flagstick, a soft dull bump.",
+      "target_length_seconds": 0.25,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "emote_smoke",
+      "file": "effects/emote_smoke.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Lighter inhale and exhale cue.",
+      "target_length_seconds": 1.4,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "emote_beer",
+      "file": "effects/emote_beer.mp3",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Can open plus sip or glug.",
+      "target_length_seconds": 1.4,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "thunder_close",
+      "file": "effects/thunder_close.wav",
+      "type": "sfx",
+      "category": "ambience",
+      "description": "Close thunder: a crack, then a rolling rumble. Made by tooling/audio/make_thunder.py.",
+      "target_length_seconds": 6.0,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "thunder_far",
+      "file": "effects/thunder_far.wav",
+      "type": "sfx",
+      "category": "ambience",
+      "description": "Distant thunder: a low rumble. Made by tooling/audio/make_thunder.py.",
+      "target_length_seconds": 7.0,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ambience_course_day",
+      "file": "ambience/course_day.mp3",
+      "type": "ambience",
+      "category": "ambience",
+      "description": "Outdoor golf course bed: light wind, distant birds, no music, seamless.",
+      "target_length_seconds": 40.0,
+      "volume_multiplier": 1.0
+    },
+    {
+      "id": "ambience_menu_vcr",
+      "file": "ambience/menu_vcr.mp3",
+      "type": "ambience",
+      "category": "ambience",
+      "description": "Very quiet CRT/VCR hum for menus, seamless.",
+      "target_length_seconds": 20.0,
+      "volume_multiplier": 1.0
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 #pragma once
 
-// The small TV the picture is shown on (assets/shaders/crt.frag): the last
+// The small TV the picture is shown on (assets/picture/shaders/crt.frag): the last
 // pass, at window resolution, never off. Each scene line is a whole number
 // of window rows (renderer/picture_size.h), nearest vertically and soft
 // sideways. Strengths are picture.json's `tv` section.

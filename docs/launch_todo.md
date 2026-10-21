@@ -107,9 +107,9 @@ release ships the built server (`server/hosting.md`), never its source.
 ### Audio and asset licences
 The plan: all art is drawn by code, and all music and sound is original. Art
 drawn by AI-written code needs no AI disclosure on Steam.
-- [ ] Replace every placeholder in `assets/audio/` with original music and
+- [ ] Replace every placeholder in `assets/sound/` with original music and
   sound design (the thunder from `tooling/audio/make_thunder.py` stays).
-- [ ] Redesign the icon (`assets/icons/`), drawn by a script kept in
+- [ ] Redesign the icon (`assets/interface/icons/`), drawn by a script kept in
   `tooling/art/` like the rest of the art (the code that drew the current one
   wasn't kept).
 - [ ] Before submitting, check that nothing players see or hear came from a
@@ -278,7 +278,7 @@ Start only when the owner confirms the app id exists. Then:
 - Verify with a throwaway script. POST `https://auth.spacetimedb.com/oidc/token` with
   `grant_type=urn:spacetimeauth:steam-ticket`, `steam_ticket=<hex ticket>`,
   `steam_app_id=<id>`, `client_id=<ours>`, then check:
-  - whether a public client (no secret) is allowed on this grant (the browser client is public; if this grant needs a secret, ship it in `assets/online.json` and say in `AGENTS.md` that it is not truly secret),
+  - whether a public client (no secret) is allowed on this grant (the browser client is public; if this grant needs a secret, ship it in `assets/play/online.json` and say in `AGENTS.md` that it is not truly secret),
   - whether a refresh token is returned (not needed: a fresh ticket can be fetched any time Steam is running),
   - the ID token lifetime,
   - that the claims include `login_method: "steam"`, `provider_id`, `preferred_username` and `steam_owned_games`.
@@ -315,7 +315,7 @@ Start only when the owner confirms the app id exists. Then:
 
 - Add `stdb_login_with_steam_ticket(stdb_client*, const uint8_t* ticket, size_t len, uint32_t app_id)`
   to the C API, and `reqwest` + `rustls` to the bridge for the exchange. `signed_in` events carry the method.
-- The app id comes from the Steam session (`SteamUtils()->GetAppID()`), not from `assets/online.json`.
+- The app id comes from the Steam session (`SteamUtils()->GetAppID()`), not from `assets/play/online.json`.
 - Flow, tried **before** browser sign-in whenever a Steam session exists:
   1. Get a ticket and hand it to `stdb_login_with_steam_ticket`.
   2. The bridge exchanges it and connects with `with_token(id_token)`. Nothing is stored on disk; the next launch just gets a new ticket.

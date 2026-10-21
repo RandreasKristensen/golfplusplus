@@ -1,0 +1,23 @@
+{
+  "swing": {
+    "meter_cycle_seconds": 1.4,
+    "min_power": 0.01,
+    "power_curve_exponent": 0.7,
+    "side_spin_scale": 4.0
+  },
+  "aim_preview": {
+    "step_seconds": 0.18,
+    "max_points": 28
+  },
+  "flight_path": {
+    "color": [0.92, 0.18, 0.16],
+    "alpha": 0.45,
+    "min_point_spacing": 0.25,
+    "max_points": 96,
+    "line_width": 1.0
+  },
+  "xp_drops": {
+    "lifetime_seconds": 2.4,
+    "min_visible_xp": 5
+  }
+}

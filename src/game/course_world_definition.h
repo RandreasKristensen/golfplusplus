@@ -1,6 +1,6 @@
 #pragma once
 
-// A course's world (assets/course_worlds/*.json), in shared course
+// A course's world (assets/world/courses/*/world.json), in shared course
 // coordinates: where every hole sits, the land under and between them, and
 // what is placed around them. The course is one continuous area; holes are
 // played where they sit. The tooling also writes metadata (OSM refs, the

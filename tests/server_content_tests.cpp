@@ -4,10 +4,12 @@
 #include "game/course_session.h"
 #include "game/game_state.h"
 #include "game/shot_simulation.h"
+#include "game/tuning_loader.h"
 #include "server_content.h"
 
 #include "server_test_support.h"
 
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -56,14 +58,17 @@ TEST_CASE("the server loads the content it needs and only courses with a world")
 
 TEST_CASE("missing server content is reported, not filled in") {
     content_fixture fixture = fixture_content_files();
-    fixture.files.erase("tuning/game_tuning.json");
+    const std::string tuning_folder = std::string(tuning_path) + "/";
+    for (auto it = fixture.files.begin(); it != fixture.files.end();) {
+        it = it->first.compare(0, tuning_folder.size(), tuning_folder) == 0 ? fixture.files.erase(it) : std::next(it);
+    }
     const server_content_load_result loaded = parse_server_content(fixture.files);
     CHECK(!loaded.content.has_value());
-    CHECK(loaded.error.find("tuning/game_tuning.json") != std::string::npos);
+    CHECK(loaded.error.find(tuning_path) != std::string::npos);
 
     fixture = fixture_content_files();
     const server_content content = *parse_server_content(fixture.files).content;
-    fixture.files.erase("holes/test2.json");
+    fixture.files.erase(std::string(fixture_hub_folder) + "/holes/test2.json");
     CHECK(!build_server_course(fixture.files, content, fixture_hub_course().id).has_value());
     CHECK(!build_server_course(fixture.files, content, "missing").has_value());
 }

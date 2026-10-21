@@ -378,7 +378,8 @@ void build_tee_box_batch(world_marker_batch& batch, const std::vector<tee_box>* 
     }
 }
 
-void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors) {
+void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors,
+                              const prop_set& props) {
     const marker_colors& marks = colors.markers;
     batch.clear();
 
@@ -411,7 +412,7 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
     }
     if (scene.carts != nullptr) {
         for (const render_cart& cart : *scene.carts) {
-            append_cart_model(batch, cart, scene.cart_seat_offset, colors.cart);
+            append_cart_model(batch, cart, scene.cart_seat_offset, props.golf_cart);
         }
     }
     if (scene.remote_avatars != nullptr) {

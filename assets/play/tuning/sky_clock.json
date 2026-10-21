@@ -1,0 +1,8 @@
+{
+  "sky_clock": {
+    "anchor_real_date": "2026-10-01",
+    "anchor_game_hour": 6,
+    "game_days_per_real_day": 6,
+    "year": 1989
+  }
+}

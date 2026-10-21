@@ -70,7 +70,7 @@ TEST_CASE("a course with a missing hole or world does not start") {
     CHECK(!start_course(state, missing_hole));
 
     course_definition missing_world = fixture_hub_course();
-    missing_world.world = "course_worlds/missing.json";
+    missing_world.world = "world/courses/missing/world.json";
     CHECK(!start_course(state, missing_world));
     CHECK(state.course_holes.empty());
 }

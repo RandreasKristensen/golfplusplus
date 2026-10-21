@@ -7,7 +7,7 @@
 // selected setting by its step; the mouse selects by hovering, a click on a
 // tile's left half (its "<") steps down and on its right half (its ">") up,
 // and the wheel scrolls. Adding a setting is adding it to
-// assets/ui/settings.json (and applying it in app); this screen lists it
+// assets/interface/settings.json (and applying it in app); this screen lists it
 // without changes.
 
 #include "core/input.h"

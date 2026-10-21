@@ -14,6 +14,7 @@
 #include "game/golf_cart.h"
 #include "game/hole_data.h"
 #include "game/lighting_loader.h"
+#include "game/prop_loader.h"
 #include "game/play_area.h"
 #include "game/round_state.h"
 #include "game/text_assets.h"
@@ -35,8 +36,11 @@ inline std::string fixture_root() {
     return GOLFPP_TEST_FIXTURES_DIR;
 }
 
+// The fixture hub course's folder under fixture_root().
+inline constexpr const char* fixture_hub_folder = "world/courses/hub";
+
 inline std::string fixture_hole_path(const std::string& name) {
-    return fixture_root() + "/holes/" + name + ".json";
+    return fixture_root() + "/" + fixture_hub_folder + "/holes/" + name + ".json";
 }
 
 inline bool near(const float a, const float b, const float epsilon = 0.00001f) {
@@ -60,16 +64,22 @@ inline const text_assets& shipped_text_assets() {
 }
 
 // Shipped tuning, clubs and rewards; courses and holes from tests/fixtures.
-// The scene colours render tests draw with (tests/fixtures/visuals/lighting.json).
+// The scene colours render tests draw with (tests/fixtures/picture/lighting.json).
 inline const scene_colors& test_scene_colors() {
     static const scene_colors colors = load_lighting(fixture_root())->colors;
     return colors;
 }
 
+// The shipped props (assets/world/props).
+inline const prop_set& test_props() {
+    static const prop_set props = *load_props(asset_root()).props;
+    return props;
+}
+
 inline game_content fixture_content() {
     game_content content = shipped_content();
     content.asset_root = fixture_root();
-    content.courses = load_courses_from_directory(fixture_root() + "/courses");
+    content.courses = load_courses(fixture_root());
     return content;
 }
 
@@ -79,12 +89,12 @@ inline course_definition course_of(const std::vector<std::string>& holes) {
     course.id = "course_of";
     course.name = "Course Of";
     course.holes = holes;
-    course.world = "course_worlds/course_of.json";
+    course.world = "world/courses/course_of/world.json";
     return course;
 }
 
 inline course_definition fixture_hub_course() {
-    return *load_course_from_file(fixture_root() + "/courses/hub.json");
+    return *load_course(fixture_root(), fixture_hub_folder);
 }
 
 // A fresh state playing `course` (fixture holes).

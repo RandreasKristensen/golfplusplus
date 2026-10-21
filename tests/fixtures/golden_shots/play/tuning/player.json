@@ -1,0 +1,53 @@
+{
+  "player": {
+    "walk_speed": 7.0,
+    "turn_rate": 1.8,
+    "aim_turn_rate": 0.75,
+    "look_pitch_rate": 1.2,
+    "max_look_pitch": 1.2,
+    "mouse_look_radians": 0.0025,
+    "ball_interact_radius": 3.0,
+    "ball_stand_off_distance": 2.0,
+    "address_back_distance": 0.4,
+    "emote_seconds": 2.0,
+    "jump_speed": 3.5,
+    "jump_gravity": 14.0,
+    "body_radius": 0.3
+  },
+  "camera": {
+    "walking_eye_height": 1.65,
+    "walking_look_distance": 10.0,
+    "aiming_back_distance": 2.0,
+    "aiming_eye_height": 1.55,
+    "aiming_look_distance": 12.0,
+    "aiming_look_height": 1.05,
+    "address_side_distance": 2.4,
+    "address_back_distance": 0.7,
+    "address_eye_height": 2.0,
+    "address_look_distance": 0.7,
+    "address_look_height": 0.25,
+    "follow_look_height": 0.25,
+    "transition_seconds": 0.55,
+    "transition_jump_distance": 1.5,
+    "viewmodel_fov_degrees": 60.0
+  },
+  "rangefinder": {
+    "magnification": 3.0,
+    "raise_seconds": 0.15,
+    "max_range_meters": 600.0,
+    "march_step_meters": 2.0,
+    "refine_steps": 10,
+    "flag_lock_degrees": 1.5,
+    "jolt_seconds": 0.6,
+    "jolt_flashes": 3,
+    "surround_brightness": 0.35,
+    "surround_saturation": 0.15,
+    "person_height": 1.8,
+    "cart_height": 2.0,
+    "ping_seconds": 0.4,
+    "light_rain_error": 0.1,
+    "light_fog_error": 0.2,
+    "blank_share": 0.35,
+    "nonsense_slope": 0.15
+  }
+}

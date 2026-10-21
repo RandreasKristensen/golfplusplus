@@ -1,6 +1,6 @@
 #pragma once
 
-// Named text styles (assets/ui/text_styles.json): how text fills the box it
+// Named text styles (assets/interface/text/styles.json): how text fills the box it
 // is drawn in, colour and alignment, so drawing code never hand-picks sizes.
 // Sizes are relative to the box (renderer/pixel_font.h turns them into a
 // whole-number pixel scale). Style names used by code live in game/text_ids.h.

@@ -39,9 +39,9 @@ std::string golden_root() {
 
 game_content golden_content() {
     game_content content = fixture_content();
-    content.tuning = *parse_game_tuning_from_text(*read_text_file(golden_root() + "/tuning/game_tuning.json")).tuning;
-    content.rewards = *parse_rewards_from_text(*read_text_file(golden_root() + "/progression/rewards.json"));
-    content.clubs = load_clubs_from_directory(golden_root() + "/clubs");
+    content.tuning = *parse_game_tuning_from_texts(json_texts_in_directory(golden_root() + "/play/tuning")).tuning;
+    content.rewards = *parse_rewards_from_text(*read_text_file(golden_root() + "/play/progression/rewards.json"));
+    content.clubs = load_clubs_from_directory(golden_root() + "/play/clubs");
     return content;
 }
 

@@ -1,0 +1,30 @@
+{
+  "net": {
+    "motion_heartbeat_seconds": 2.0,
+    "motion_min_interval_seconds": 0.25,
+    "motion_correction_distance": 1.0,
+    "motion_correction_yaw": 0.35,
+    "remote_extrapolation_seconds": 3.0,
+    "remote_correction_seconds": 0.2,
+    "shot_correction_distance": 0.05,
+    "shot_correction_seconds": 0.3,
+    "remote_trail_fade_seconds": 1.5,
+    "group_join_distance": 3.0,
+    "notice_seconds": 3.0
+  },
+  "server": {
+    "room_capacity": 40,
+    "group_capacity": 4,
+    "name_min_length": 3,
+    "name_max_length": 12,
+    "link_code_minutes": 10.0,
+    "link_codes_per_hour": 5,
+    "link_failures_per_hour": 10,
+    "motion_speed_scale": 1.5,
+    "motion_distance_slack": 2.0,
+    "max_motion_gap_seconds": 3.5,
+    "interact_slack": 2.0,
+    "shot_time_slack_seconds": 2.0,
+    "timing_slack_seconds": 0.25
+  }
+}

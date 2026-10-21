@@ -1,6 +1,6 @@
 #pragma once
 
-// The scene's light and colours from assets/visuals/lighting.json: art
+// The scene's light and colours from assets/picture/lighting.json: art
 // direction for the renderer, loaded by app like picture.json, so not part
 // of game_content. The light is keyed on the sun's elevation, not the clock,
 // so dusk lasts as long as it would at the course's latitude; the colours
@@ -12,7 +12,7 @@
 
 #include <glm/vec3.hpp>
 
-inline constexpr const char* lighting_path = "visuals/lighting.json";
+inline constexpr const char* lighting_path = "picture/lighting.json";
 
 // The light at one sun elevation. A surface takes the sky's light from
 // above and the ground's from below (blended by how it faces), plus the sun
@@ -213,11 +213,6 @@ struct ground_colors {
     glm::vec3 underwater{0.0f};  // over the picture seen from under a pond
 };
 
-struct tree_colors {
-    glm::vec3 trunk{0.0f};
-    glm::vec3 leaves{0.0f};
-};
-
 // The ball, tee boxes, cups and flags, aim dots, collectibles and the club
 // at address.
 struct marker_colors {
@@ -236,27 +231,6 @@ struct marker_colors {
     glm::vec3 club_sole{0.0f};
 };
 
-struct cart_colors {
-    glm::vec3 body{0.0f};
-    glm::vec3 trim{0.0f};
-    glm::vec3 cream{0.0f};
-    glm::vec3 canopy{0.0f};
-    glm::vec3 rubber{0.0f};
-    glm::vec3 hub_cap{0.0f};
-    glm::vec3 seat{0.0f};
-    glm::vec3 bag{0.0f};
-};
-
-struct emote_colors {
-    glm::vec3 cigarette{0.0f};
-    glm::vec3 ember_dim{0.0f};  // the lit tip glows between these
-    glm::vec3 ember_bright{0.0f};
-    glm::vec3 smoke{0.0f};
-    glm::vec3 can{0.0f};
-    glm::vec3 can_label{0.0f};
-    glm::vec3 can_lid{0.0f};
-};
-
 // Other players: every figure's clothes, a shirt per player and a cap per
 // group (picked by id), and their balls, tinted towards their shirt.
 struct figure_colors {
@@ -268,15 +242,6 @@ struct figure_colors {
     std::vector<glm::vec3> group_caps;
     glm::vec3 ball{0.0f};
     float ball_shirt_share = 0.0f;
-};
-
-// Hole signs and fences.
-struct fixture_colors {
-    glm::vec3 sign_board{0.0f};
-    glm::vec3 sign_post{0.0f};
-    glm::vec3 fence_post{0.0f};
-    glm::vec3 floodlight_pole{0.0f};
-    glm::vec3 floodlight_head{0.0f};  // its housing; the lamp's face glows (night_light_style::lamp_glow)
 };
 
 // The least light some things show, 0..1, so they stay readable when the
@@ -293,12 +258,8 @@ struct glow_floors {
 
 struct scene_colors {
     ground_colors ground;
-    tree_colors trees;
     marker_colors markers;
-    cart_colors cart;
-    emote_colors emotes;
     figure_colors figures;
-    fixture_colors fixtures;
     glow_floors glow;
 };
 
@@ -380,7 +341,7 @@ struct night_light_style {
 // inside the cloud only. A strike is near_meters to far_meters away, its
 // thunder heard after the sound covers that at sound_speed m/s: the close
 // clap within close_meters, the far rumble beyond. As drawn
-// (assets/shaders/backdrop.frag), its bolt is bolt_width_deg wide,
+// (assets/picture/shaders/backdrop.frag), its bolt is bolt_width_deg wide,
 // wandering up to bolt_jitter_deg either way, bolt_brightness bright in
 // `color`, lighting the clouds within glow_radius_deg of its top by
 // glow_strength.

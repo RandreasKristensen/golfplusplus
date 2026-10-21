@@ -6,12 +6,11 @@ make a full bag, with the driver going ~300 to make 18 hole courses more fun. Ma
 - accelleration and decelleration more accurate on the cart, slower uphill but never stopping.
 - see each other on map? Or maybe not see yourself or ball on map at all - forcing people to drop if they dont find ball type shit
 - linux and mac 
-- 
 - tee times, instead of room caps. Makes par 3s have less people naturally, and improves "group finding" - naturally getting paired with others on the same teetime.
 
 
 
-## **Test feedback**
+## **Feedback**
 
 
 ## **bugs**

@@ -3,6 +3,7 @@
 // Helpers for tests of the server module's plain C++ (server/golfpp_module/src).
 
 #include "game/content_files.h"
+#include "game/course_loader.h"
 #include "server_content.h"
 
 #include "test_support.h"
@@ -25,20 +26,19 @@ struct content_fixture {
     content_fixture& operator=(const content_fixture&) = delete;
 };
 
-inline void add_content_directory(content_fixture& fixture, const std::string& root, const std::string& directory) {
-    for (const std::filesystem::path& path : json_files_in_directory(root + "/" + directory)) {
-        fixture.texts[directory + "/" + path.filename().string()] = *read_text_file(path);
+// Every JSON file under `root`/`folder`, keyed by its path relative to `root`.
+inline void add_content_folder(content_fixture& fixture, const std::string& root, const std::string& folder) {
+    for (const std::filesystem::path& path : json_files_under(std::filesystem::path(root) / folder)) {
+        fixture.texts[path.lexically_relative(root).generic_string()] = *read_text_file(path);
     }
 }
 
 inline content_fixture fixture_content_files() {
     content_fixture fixture;
-    for (const char* directory : {"tuning", "clubs", "progression", "fonts"}) {
-        add_content_directory(fixture, asset_root(), directory);
+    for (const char* folder : {"play", "interface/fonts"}) {
+        add_content_folder(fixture, asset_root(), folder);
     }
-    for (const char* directory : {"courses", "holes", "course_worlds"}) {
-        add_content_directory(fixture, fixture_root(), directory);
-    }
+    add_content_folder(fixture, fixture_root(), courses_path);
     for (const auto& [path, text] : fixture.texts) {
         fixture.files.emplace(path, text);
     }

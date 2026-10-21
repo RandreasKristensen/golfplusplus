@@ -10,7 +10,7 @@ code reads them.
 
 | Variable | Effect |
 |---|---|
-| `GOLFPP_COURSE=<course id>` | Skip the menu and boot straight into that course (the `id` in `assets/courses/*.json`). Unknown ids fall back to the menu. |
+| `GOLFPP_COURSE=<course id>` | Skip the menu and boot straight into that course (the `id` in `assets/world/courses/*/course.json`). Unknown ids fall back to the menu. |
 | `GOLFPP_VSYNC=0` | Present without vsync so FPS shows real headroom. Also accepts `off`, `no`, `false`, `disable(d)`; anything else keeps vsync on. |
 | `GOLFPP_WINDOW=<W>x<H>` | Open the window at this size in pixels (e.g. `3440x1440`) instead of 1280x720. Anything else keeps the default. The fullscreen setting still wins. |
 | `GOLFPP_SCREENSHOT=<path.bmp>` | 120 frames after loading (into `GOLFPP_COURSE`, or the menu), save the window's picture after the TV pass as a 24-bit BMP and quit. Runs with default settings and never writes the save. For reviewing the picture. |
@@ -80,7 +80,7 @@ The rules are in `AGENTS.md` ("Offline and online part in one place"); in short:
   room of 40 multiplies whatever one player's rows cost.
 - Motion is sparse: sent on a change of intent, as a heartbeat while moving,
   or when others' extrapolation would drift too far, and never more often than
-  `net.motion_min_interval_seconds` (`assets/tuning/game_tuning.json`).
+  `net.motion_min_interval_seconds` (`assets/play/tuning/network.json`).
   Others carry each player on between updates (`extrapolate_motion`).
 - A shot is one event (its inputs and where it rests); every client simulates
   the flight itself (`src/game/remote_players.h`), so no flight is streamed.

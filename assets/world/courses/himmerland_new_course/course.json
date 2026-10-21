@@ -1,0 +1,40 @@
+{
+  "id": "himmerland_new_course",
+  "name": "Himmerland New Course",
+  "backdrop": {
+    "sky": "sky.bmp",
+    "land": "land.bmp",
+    "haze_color": [
+      0.75,
+      0.8,
+      0.83
+    ],
+    "haze_amount": 1.0,
+    "haze_distance": 800
+  },
+  "sky": {
+    "date": "06-21",
+    "utc_offset_hours": 2
+  },
+  "holes": [
+    "holes/h01.json",
+    "holes/h02.json",
+    "holes/h03.json",
+    "holes/h04.json",
+    "holes/h05.json",
+    "holes/h06.json",
+    "holes/h07.json",
+    "holes/h08.json",
+    "holes/h09.json",
+    "holes/h10.json",
+    "holes/h11.json",
+    "holes/h12.json",
+    "holes/h13.json",
+    "holes/h14.json",
+    "holes/h15.json",
+    "holes/h16.json",
+    "holes/h17.json",
+    "holes/h18.json"
+  ],
+  "world": "world.json"
+}

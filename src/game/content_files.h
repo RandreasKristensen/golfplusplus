@@ -27,15 +27,21 @@ bool replace_text_file(const std::filesystem::path& path, const std::string& tex
 // Every *.json file directly in `directory`, sorted by path. Empty when the
 // directory is missing or unreadable.
 std::vector<std::filesystem::path> json_files_in_directory(const std::filesystem::path& directory);
+// The text of every *.json file directly in `directory`, in path order.
+std::vector<std::string> json_texts_in_directory(const std::filesystem::path& directory);
+// Every *.json file in `directory` and the folders in it, sorted by path.
+std::vector<std::filesystem::path> json_files_under(const std::filesystem::path& directory);
 
 std::optional<hole_data> load_hole_from_file(const std::string& path);
 
 // Every valid club in `directory`, in bag order (parse_clubs_from_texts).
 std::vector<club_definition> load_clubs_from_directory(const std::string& directory);
 
-std::optional<course_definition> load_course_from_file(const std::string& path);
-// Every valid course in `directory`, sorted by file name.
-std::vector<course_definition> load_courses_from_directory(const std::string& directory);
+// The course in `folder` (relative to `asset_root`), its references made
+// relative to the asset root (course_in_folder).
+std::optional<course_definition> load_course(const std::string& asset_root, const std::string& folder);
+// Every valid course under `asset_root`'s courses_path, sorted by folder.
+std::vector<course_definition> load_courses(const std::string& asset_root);
 
 // File path of hole `hole_index` (course_hole_reference under `asset_root`),
 // or empty when the index is out of range.

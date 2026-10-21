@@ -191,7 +191,7 @@ TEST_CASE("a shot into a floodlight pole is stopped like one into a tree trunk")
 
 TEST_CASE("floodlights are drawn as a pole, an arm and a lamp head whose face glows") {
     const play_area area = hole_area(long_hole(400.0f), tuning());
-    const render_floodlights drawn = build_render_floodlights(area, 3U, test_scene_colors().fixtures);
+    const render_floodlights drawn = build_render_floodlights(area, 3U, test_props().floodlight);
     CHECK(drawn.revision == 3U);
     REQUIRE(!drawn.vertices.empty());
     CHECK(drawn.vertices.size() % 3U == 0U);

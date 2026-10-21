@@ -16,13 +16,14 @@ local multiplayer server.
 
 ## art/make_art.py
 
-Draws `assets/textures/rough_grass.bmp` and the two backdrop panoramas each
-course file in `assets/courses/` names, from code and fixed seeds:
+Draws `assets/world/ground/rough_grass.bmp`, `assets/world/props/fence_net.bmp`
+and the two backdrop panoramas each course names, into its folder in
+`assets/world/courses/`, from code and fixed seeds:
 
 ```json
 "backdrop": {
-  "sky": "backdrops/<id>_sky.bmp",
-  "land": "backdrops/<id>_land.bmp",
+  "sky": "sky.bmp",
+  "land": "land.bmp",
   "haze_color": [0.75, 0.80, 0.83],
   "haze_amount": 1.0,
   "haze_distance": 800
@@ -45,7 +46,7 @@ python tooling/art/make_art.py
 ```
 
 ## audio/make_thunder.py
-Writes `assets/audio/sfx/thunder_close.wav` and `thunder_far.wav` from
+Writes `assets/sound/effects/thunder_close.wav` and `thunder_far.wav` from
 seeded noise (no recorded audio, nothing to license), the same every run.
 
 ```
@@ -87,7 +88,7 @@ starts the local database over.
 `net/dev.ps1` on its own: no arguments brings the server up, `-Down` stops it.
 It needs the spacetime CLI and the Emscripten SDK (`-Emsdk`, else `EMSDK`,
 else `~\emsdk`). Anonymous logins are turned on with `admin_set_config` as the
-publisher, keeping the issuer and client id from `assets/online.json` (so
+publisher, keeping the issuer and client id from `assets/play/online.json` (so
 browser sign-in works locally too) and the database's link secret (a random
 one for a new database).
 
@@ -142,9 +143,9 @@ open hole_editor/hole-editor.html
 ```
 
 In Chromium/Edge, use **open project** and choose the golf++ repo root. The
-editor will read `assets/courses/*.json`, show the holes referenced by the
-selected course manifest, and save the current hole back to its file under
-`assets/holes/`. Browsers without the File System Access API can still use the
+editor will read `assets/world/courses/*/course.json`, show the holes referenced by the
+selected course manifest, and save the current hole back to its file in the
+course's `holes/` folder. Browsers without the File System Access API can still use the
 paste import/export workflow.
 
 ### Canvas controls
@@ -262,8 +263,8 @@ py -3 osm_golf_convert.py --lat 56.180454 --lon 10.156731
 py -3 osm_golf_convert.py --id W1019045811
 py -3 osm_golf_convert.py --id R3456789
 
-# Custom output directory
-py -3 osm_golf_convert.py "Aarhus Golf Klub" -o ../../assets/holes --course-out ../../assets/courses
+# Custom output directory: the course goes in <dir>/<course id>/
+py -3 osm_golf_convert.py "Aarhus Golf Klub" -o some/other/courses
 
 # Skip writing the course manifest
 py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-course
@@ -447,28 +448,31 @@ an untagged fence is a `FENCE_NO_HEIGHT` note in the audit.
 
 ### Output
 
-Running the converter from `tooling/osm_import/` writes directly to the game's asset
-folders by default:
+The converter writes each course into a folder of its own in the game's
+assets by default:
 
 ```
-../../assets/holes/
-  aarhus_golf_klub_h01.json
-  aarhus_golf_klub_h02.json
-  ...
-../../assets/courses/
-  aarhus_golf_klub.json          ← course manifest
+../../assets/world/courses/aarhus_golf_klub/
+  course.json      ← course manifest
+  world.json       ← course world
+  holes/
+    h01.json
+    h02.json
+    ...
 ```
 
-The course manifest follows the same format as the hand-authored course files:
+(`tooling/art/make_art.py` then adds `sky.bmp` and `land.bmp`.) The course
+manifest's references are relative to its folder:
 
 ```json
 {
   "id": "aarhus_golf_klub",
   "name": "Aarhus Golf Klub",
   "holes": [
-    "holes/aarhus_golf_klub_h01.json",
+    "holes/h01.json",
     ...
-  ]
+  ],
+  "world": "world.json"
 }
 ```
 
@@ -567,7 +571,7 @@ in a minute.
 published par and length of each hole (`metres`, along the line of play, from
 the tee set named in `tees`), optionally its direction (`bearing_deg`, or
 `faces`: `N`, `NE`, … `NNW`), the `sources` and a `confidence` note saying how
-the numbers were taken. Every course in `assets/courses` has one.
+the numbers were taken. Every course in `assets/world/courses` has one.
 
 Current results (`--all`): no errors. Warnings: Marienlyst's 1st and 5th are
 16-19% short of the club's rounded lengths; Mollerup's 4th is 19% short of the

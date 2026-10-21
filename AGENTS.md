@@ -40,6 +40,16 @@ course, groups of up to 4 sharing a scorecard, each player with their own ball
 at their own pace. Offline stays a complete solo mode.
 Everything is unlocked today: no money, shop, quests or unlock gating.
 
+**Stage: early alpha.** The first alpha has been played by about ten of the
+owner's friends, and nothing depends on it. Breaking changes are fine and
+need no caution: change the save, the server's tables and reducers, the
+protocol, the content's layout and file formats freely, in one go, without
+compatibility shims, migrations or staged rollouts. Old saves and old
+servers may simply stop working. Still bump `protocol_version` when the
+server changes (it is one number, and it tells old clients to update), and
+still follow the rules below; they are about how the code is built, not
+about protecting players. This lasts until the owner says otherwise.
+
 ## Where to start reading
 
 | To change… | Start at |
@@ -51,42 +61,43 @@ Everything is unlocked today: no money, shop, quests or unlock gating.
 | Per-frame gameplay | `src/game/game_state.h` |
 | A shot's flight (deterministic, replayable), its playback | `src/game/shot_simulation.h`, `play_shot` in `src/game/game_state.h` |
 | Offline vs online: progress changes, net commands, motion updates | `src/game/mode_dispatch.h`, `src/game/net_types.h`, `src/game/motion_sync.h` |
-| The online connection: sign-in, subscriptions, sending and receiving | `src/net/net_client.h` (C++), over `src/net/stdb_bridge.h`, the C API of the Rust bridge in `net/client_bridge/`; where to connect is `assets/online.json` |
+| The online connection: sign-in, subscriptions, sending and receiving | `src/net/net_client.h` (C++), over `src/net/stdb_bridge.h`, the C API of the Rust bridge in `net/client_bridge/`; where to connect is `assets/play/online.json` |
 | Between the menus and the connection; rejoining a room after a reconnect | `src/core/online_session.h` |
 | My room's rows (players, balls, groups, shots), the server clock | `src/net/room_rows.h` |
 | An online round: the server's answers to my shots and actions | `src/game/online_play.h` |
 | Other players and their shots, as shown | `src/game/remote_players.h`; drawn by `src/renderer/remote_avatar_batch.h`, `src/renderer/online_overlay.h`, `src/core/render_online.h` |
-| Starting courses and holes, the hub | `src/game/course_session.h`, `src/game/play_area.h` |
-| The golf cart (parked beside hole 1, stepped into and out of, driven; online, anyone can ride in another's passenger seat) | `src/game/golf_cart.h`, its seats and parking spots `src/game/cart_seats.h` (shared with the server); the server's `golf_cart` table and `board_cart` / `leave_cart` in `server/golfpp_module/src/lib.cpp`; drawn by `src/renderer/cart_batch.h` |
+| Starting courses and holes, the hub | `src/game/course_session.h`, `src/game/play_area.h`; a course is its folder in `assets/world/courses/` (`src/game/course_loader.h`) |
+| A thing drawn in the world (cigarette, beer can, golf cart, tree, fence, floodlight, hole sign): its colours, and the parts a fixed-shape thing is built from | its file in `assets/world/props/` (`src/game/prop_loader.h`); parts placed by `src/renderer/prop_pieces.h` |
+| The golf cart (parked beside hole 1, stepped into and out of, driven; online, anyone can ride in another's passenger seat) | `src/game/golf_cart.h`, its seats and parking spots `src/game/cart_seats.h` (shared with the server); the server's `golf_cart` table and `board_cart` / `leave_cart` in `server/golfpp_module/src/lib.cpp`; drawn by `src/renderer/cart_batch.h` from `assets/world/props/golf_cart.json` |
 | The sign at every tee (placed at runtime, posts stop shots) | `src/game/hole_sign.h`; its face `src/renderer/hole_sign_face.h`, drawn by `src/renderer/hole_sign_renderer.h` |
 | The course map held up with M (fitted to the holes, numbered) | `src/renderer/course_map_overlay.h`; its ground `src/renderer/course_map_fill.h` (the one home of map inks) |
-| The tee box at every tee (flat, placed at runtime, the surface on it) | `src/game/tee_box.h`; drawn by `src/renderer/world_marker_batch.h` and `assets/shaders/tee_box.frag` (the shadow map falls on it) |
+| The tee box at every tee (flat, placed at runtime, the surface on it) | `src/game/tee_box.h`; drawn by `src/renderer/world_marker_batch.h` and `assets/picture/shaders/tee_box.frag` (the shadow map falls on it) |
 | What players and carts bump into (trunks, poles, sign boards, nets, flagsticks, carts and people on foot; tee boxes for carts only), the bump and crash sounds | `src/game/area_obstacles.h` (built with the area), `src/game/body_contact.h` (walking and driving), over `src/physics/body_collision.h` |
 | Fences in course worlds (shots stop at their nets) | `src/physics/fence_collision.h`; drawn by `src/renderer/fence_renderer.h` |
-| The floodlight poles along every hole (placed at runtime, alternating down the fairway, at each tee and green; poles stop shots like trunks) | `src/game/floodlights.h`; their light after dark in `src/core/light_frame.h`; drawn (and into the shadow map) by `src/renderer/floodlight_renderer.h` from `src/renderer/floodlight_batch.h` and `assets/shaders/floodlight.vert` |
-| Player settings (volumes, field of view, fullscreen): the screen, the file next to the save | `src/core/settings_menu.h`, `src/game/settings.h`; entries in `assets/ui/settings.json` |
+| The floodlight poles along every hole (placed at runtime, alternating down the fairway, at each tee and green; poles stop shots like trunks) | `src/game/floodlights.h`; their light after dark in `src/core/light_frame.h`; drawn (and into the shadow map) by `src/renderer/floodlight_renderer.h` from `src/renderer/floodlight_batch.h` and `assets/picture/shaders/floodlight.vert` |
+| Player settings (volumes, field of view, fullscreen): the screen, the file next to the save | `src/core/settings_menu.h`, `src/game/settings.h`; entries in `assets/interface/settings.json` |
 | XP, collectibles, completion rules | `src/game/progress_rules.h` (pure functions over `save_data`) |
-| Feel numbers | `assets/tuning/game_tuning.json` (struct: `src/game/game_tuning.h`) |
-| Rewards and skills | `assets/progression/*.json` (`src/game/reward_rules.h`) |
+| Feel numbers | `assets/play/tuning/*.json`, a few sections each (struct: `src/game/game_tuning.h`) |
+| Rewards and skills | `assets/play/progression/*.json` (`src/game/reward_rules.h`) |
 | Ball flight, contact, terrain | `src/physics/` |
 | HUD | `src/renderer/hud_overlay.cpp` (scorecards in `scorecard_overlay.cpp`); the GL side is `src/renderer/renderer.cpp` |
-| The picture's look: line count, camcorder, tape and TV | `assets/visuals/picture.json` (`src/game/picture_loader.h`), sized by `src/renderer/picture_size.h`; the camcorder is `src/renderer/camcorder_pass.h` and `assets/shaders/camcorder*.frag` (exposure, white, gain and saturation by time of day are keys of `assets/visuals/lighting.json`); the tape is `src/renderer/tape_pass.h` and `assets/shaders/tape.frag` (tracking noise from `src/core/tape_tracking.h`), the TV `src/renderer/tv_pass.h` and `assets/shaders/crt.frag` |
+| The picture's look: line count, camcorder, tape and TV | `assets/picture/picture.json` (`src/game/picture_loader.h`), sized by `src/renderer/picture_size.h`; the camcorder is `src/renderer/camcorder_pass.h` and `assets/picture/shaders/camcorder*.frag` (exposure, white, gain and saturation by time of day are keys of `assets/picture/lighting.json`); the tape is `src/renderer/tape_pass.h` and `assets/picture/shaders/tape.frag` (tracking noise from `src/core/tape_tracking.h`), the TV `src/renderer/tv_pass.h` and `assets/picture/shaders/crt.frag` |
 | The camcorder's datestamp and the VCR's PLAY / PAUSE tag and still frame | `src/core/vcr_frame.h` (the `datestamp` setting), drawn by `src/renderer/vcr_overlay.h` |
-| Text size and layout | `src/renderer/pixel_font.h`, styles in `assets/ui/text_styles.json` |
+| Text size and layout | `src/renderer/pixel_font.h`, styles in `assets/interface/text/styles.json` |
 | Content format | the loader next to it (`src/game/*_loader.cpp`), each with `parse_*_from_text` |
 | The online server (SpacetimeDB module): tables, views, reducers | `server/golfpp_module/src/lib.cpp`; its rules next to it in `account_rules.h`, `play_rules.h`, `server_content.h` |
 | Shots natively vs in the server's WASM | `tooling/net/check_determinism.ps1` |
 | Tooling | `tooling/README.md` (OSM importer, hole editor, art generator) |
 | The weather: wind, cloud, rain, thunder, fog (never in a shot) and the ground's wetness as numbers that push each other (days-long settled and unsettled regimes; clouds run ahead of the storm, rain trails it, so a clearing sky makes a sun shower; `coupled_weather` keeps any set of them possible), the kinds read off them, and what they do to a shot | `src/game/weather.h` (the `wind` and `weather` sections of the tuning), the wind by height `src/physics/wind.h`, in a shot `step_shot` in `src/game/shot_simulation.h`; offline or online `course_weather_at` in `src/game/mode_dispatch.h` |
-| The weather as drawn: overcast, rain and fog light, haze and wet ground, the sky's cloud deck, lightning and its thunder (`src/core/lightning_frame.h`, the sounds from `tooling/audio/make_thunder.py`), the rainbow, rain streaks, the wind's specks and every flag flying, faded in and out | `src/core/weather_frame.h` (presentation only, kept by `app`), the light under it `src/game/weather_lighting.h`; drawn by `src/renderer/weather_renderer.h` and `assets/shaders/weather_streak.vert`, the sky's part in `assets/shaders/backdrop.frag`, the ground's in `terrain.frag`, flags in `src/renderer/world_marker_batch.h`; its numbers in the `weather`, `rain` and `wind` sections (the rainbow in `sky`) of `assets/visuals/lighting.json` |
-| The rangefinder (Left Shift: the eyepiece, its zoom, distance and height to whatever it points at or any flag it locks onto, spoiled by rain and fog, the wind) | `src/game/rangefinder.h` (the `rangefinder` section of the tuning), what its laser meets `src/game/sight_line.h`; drawn by `src/renderer/rangefinder_overlay.h` and `src/renderer/eyepiece_pass.h` (`assets/shaders/eyepiece.frag`) |
+| The weather as drawn: overcast, rain and fog light, haze and wet ground, the sky's cloud deck, lightning and its thunder (`src/core/lightning_frame.h`, the sounds from `tooling/audio/make_thunder.py`), the rainbow, rain streaks, the wind's specks and every flag flying, faded in and out | `src/core/weather_frame.h` (presentation only, kept by `app`), the light under it `src/game/weather_lighting.h`; drawn by `src/renderer/weather_renderer.h` and `assets/picture/shaders/weather_streak.vert`, the sky's part in `assets/picture/shaders/backdrop.frag`, the ground's in `terrain.frag`, flags in `src/renderer/world_marker_batch.h`; its numbers in the `weather`, `rain` and `wind` sections (the rainbow in `sky`) of `assets/picture/lighting.json` |
+| The rangefinder (Left Shift: the eyepiece, its zoom, distance and height to whatever it points at or any flag it locks onto, spoiled by rain and fog, the wind) | `src/game/rangefinder.h` (the `rangefinder` section of the tuning), what its laser meets `src/game/sight_line.h`; drawn by `src/renderer/rangefinder_overlay.h` and `src/renderer/eyepiece_pass.h` (`assets/picture/shaders/eyepiece.frag`) |
 | The god menu (F1 with `GOLFPP_GOD` or `--god`: time of day, a weather kind, then its cloud, rain, fog and thunder, wind, wetness, offline) | `src/core/god_menu.h`, drawn by `src/renderer/god_menu_overlay.h` |
 | The time of day: the sky's clock, the sun and moon over a course | `src/game/sky_clock.h` (its timeline is the `sky_clock` section of the tuning; each course's fixed date, clock and lowest sun are the `sky` of its course file); each frame's sky in `src/core/sky_frame.h` |
-| Scene colours and light: what each thing is coloured, the light, sky and haze by sun elevation, glow floors | `assets/visuals/lighting.json` (`src/game/lighting_loader.h`, its fields and ranges in `src/game/lighting_fields.h`), evaluated at a sun elevation by `src/game/sun_lighting.h`; the shaders' light and haze in `assets/shaders/lighting.glsl`, uploaded by `src/renderer/lighting_uniforms.h` (the haze from `src/renderer/scene_haze.h`); the ground's baked sky visibility and horizons in `src/renderer/sky_visibility.h` |
-| Shadows and night lights: the blob under the ball (cast along the sun) and at the feet of players, carts and trees, the shadow map of trees, floodlights, players and carts, the land's shadow at low sun, the lights after dark (ball, headlights, floodlights) and the glow floors and lamp faces they raise | `src/core/light_frame.h` (what casts and what lights, from the frame and the game's ground); the shadow map is `src/renderer/shadow_map_pass.h` (players and carts in it from `src/renderer/shadow_casters.h`, fitted by `src/renderer/shadow_map_fit.h`, sampled in `assets/shaders/terrain.frag`); the land's shadow is `sun_shadow` in `assets/shaders/lighting.glsl` over the horizons `src/renderer/sky_visibility.h` bakes; the nearest lights picked by `src/renderer/scene_lights.h`; blobs drawn by `src/renderer/blob_shadow_renderer.h` and `assets/shaders/blob_shadow.vert`; their numbers in the `shadows` and `night_lights` sections of `assets/visuals/lighting.json` |
+| Scene colours and light: the ground's, the markers' and players' colours, the light, sky and haze by sun elevation, glow floors | `assets/picture/lighting.json` (`src/game/lighting_loader.h`, its fields and ranges in `src/game/lighting_fields.h`), evaluated at a sun elevation by `src/game/sun_lighting.h`; the shaders' light and haze in `assets/picture/shaders/lighting.glsl`, uploaded by `src/renderer/lighting_uniforms.h` (the haze from `src/renderer/scene_haze.h`); the ground's baked sky visibility and horizons in `src/renderer/sky_visibility.h` |
+| Shadows and night lights: the blob under the ball (cast along the sun) and at the feet of players, carts and trees, the shadow map of trees, floodlights, players and carts, the land's shadow at low sun, the lights after dark (ball, headlights, floodlights) and the glow floors and lamp faces they raise | `src/core/light_frame.h` (what casts and what lights, from the frame and the game's ground); the shadow map is `src/renderer/shadow_map_pass.h` (players and carts in it from `src/renderer/shadow_casters.h`, fitted by `src/renderer/shadow_map_fit.h`, sampled in `assets/picture/shaders/terrain.frag`); the land's shadow is `sun_shadow` in `assets/picture/shaders/lighting.glsl` over the horizons `src/renderer/sky_visibility.h` bakes; the nearest lights picked by `src/renderer/scene_lights.h`; blobs drawn by `src/renderer/blob_shadow_renderer.h` and `assets/picture/shaders/blob_shadow.vert`; their numbers in the `shadows` and `night_lights` sections of `assets/picture/lighting.json` |
 | The ground's static meshes on the GPU (terrain, drawn zone shapes) | `src/renderer/terrain_renderer.h` |
-| The sky: gradient, horizon glow, clouds lit by the low sun, sun, moon, stars (one home, with the course's panoramas) | `src/renderer/backdrop_pass.h` and `assets/shaders/backdrop.frag`; its numbers in the `sky` section of `assets/visuals/lighting.json` |
-| Course backdrops, ground textures | `tooling/art/make_art.py`, drawn by `src/renderer/backdrop_pass.h` and `assets/shaders/terrain.frag` |
+| The sky: gradient, horizon glow, clouds lit by the low sun, sun, moon, stars (one home, with the course's panoramas) | `src/renderer/backdrop_pass.h` and `assets/picture/shaders/backdrop.frag`; its numbers in the `sky` section of `assets/picture/lighting.json` |
+| Course backdrops, ground textures | `tooling/art/make_art.py`, drawn by `src/renderer/backdrop_pass.h` and `assets/picture/shaders/terrain.frag` |
 | What players download: the installer, the zip, the server package, `THIRD_PARTY.txt` | `tooling/release/build_release.ps1` (`tooling/README.md`); what it stages is the `install` rules in `CMakeLists.txt` |
 
 Reuse these instead of writing your own: `src/physics/vector_math.h` (yaw,
@@ -95,7 +106,14 @@ horizontal distance, safe normalize, `clamp01`; use `glm::radians` and
 `src/game/content_files.h` (every file read and directory scan: loaders parse
 text, so the server can parse the same content without a filesystem),
 `tests/test_support.h` (fixtures, `started_hole()`, `started_game()`,
-`near()`).
+`near()`), `src/renderer/camera_local.h` (placing and posing things in a
+thing's own frame).
+
+Every local frame (a prop's, a cart's, a figure's, the camera's) is
+**x left, y up, z forward**: a plain rotation, so turns follow the
+right-hand rule, and +x is on the screen's left when seen from behind.
+Pose a thing by where its sides point (`posed_model`), not by Euler
+angles, so a pose reads as what it looks like.
 
 ## Build and test
 
@@ -166,6 +184,12 @@ at any window size, for reviewing visuals), `GOLFPP_GAME_TIME` (the time
 of day pinned), `GOLFPP_WEATHER` (the weather held offline) and `GOLFPP_GOD`
 (the god menu on F1, as `--god`) are in `docs/performance.md`.
 
+A test of something placed, posed or animated in the picture says what a
+player would see, in the picture's own terms: project through the camera
+and check what is in view, which way it faces and where it sits on screen
+("the can's opening faces me and is in view"), not only invariants that
+hold whichever way it points. A wrong sign must fail a test.
+
 The version is `project(VERSION)` in `CMakeLists.txt`; the main menu and the
 installer show it. Players' builds (`build_release.ps1`) set
 `GOLFPP_NO_CONSOLE`, so they open no console window and startup errors are
@@ -222,9 +246,10 @@ module first, then the installer built from the same commit
 (`server/README.md`).
 
 **Content is data.** No gameplay numbers, rewards, item stats, sound choices or
-text in C++. Feel numbers go in `game_tuning.json`, rewards in `rewards.json`,
-skills in `skills.json`, club sounds in the club files, scene colours and
-their light in `assets/visuals/lighting.json`. Loaders don't invent fallback
+text in C++. Feel numbers go in `assets/play/tuning/`, rewards in `rewards.json`,
+skills in `skills.json`, club sounds in the club files, a prop's colours and
+shape in its file in `assets/world/props/`, the rest of the scene's colours
+and their light in `assets/picture/lighting.json`. Loaders don't invent fallback
 content: missing content fails loudly at startup.
 
 **The weather is shared, replayable and in play.** A course's weather is a
@@ -247,7 +272,7 @@ the date of its course file's `sky` (shown on its own clock, its sun
 optionally never sinking below a floor), so the seasons never change. No
 save field, no server row; changing the cycle needs a game update. A gameplay rule that ever depends on the time of day
 uses `game_day_at` (plain arithmetic the server can replay), never the sun's
-trigonometry. All scene light and haze come from `assets/shaders/lighting.glsl`
+trigonometry. All scene light and haze come from `assets/picture/shaders/lighting.glsl`
 and its `frame_lighting` block, uploaded once per frame; no shader has a light
 or haze uniform of its own (the shadow map is a texture the terrain and tee
 boxes sample, drawn while the sun is up), and the clock moving changes uniforms
@@ -272,8 +297,8 @@ check ball-against-fairway and flag-against-sky contrast at every palette
 key, and the ball's glow and the cup against its floodlit green at night:
 when one fails, fix the palette, not the check.
 
-**Text is data.** On-screen strings live in `assets/text/en.json`, styles in
-`assets/ui/text_styles.json`, both referenced through `src/game/text_ids.h`;
+**Text is data.** On-screen strings live in `assets/interface/text/en.json`, styles in
+`assets/interface/text/styles.json`, both referenced through `src/game/text_ids.h`;
 sounds code plays are in `src/audio/sound_ids.h`. Tests check every id exists.
 A missing string draws as `#key#`, a missing glyph as a box, a missing style in
 magenta. HUD text is the bitmap font only, never a TTF. The only text outside
@@ -304,7 +329,7 @@ window resolution, last). The camcorder doesn't repeat what the tape owns
 (colour bleed, the tape's colour loss and grain). While paused the scene and
 camcorder hold their last frame and the tape plays on over it. The TV upscale is nearest vertically
 and soft horizontally. The line count is art direction (`target_lines` in
-`assets/visuals/picture.json`), never a setting: each scene line is a whole
+`assets/picture/picture.json`), never a setting: each scene line is a whole
 number of window rows (`src/renderer/picture_size.h`), so wider windows get
 more width. Tape effects are sized as fractions of the picture height, never
 in pixels, so the look doesn't change with the window size; the tape wear
@@ -368,7 +393,8 @@ differs). The bridge's sign-in failures are ids the game turns into text,
 and the text it shows in the browser comes from the string table.
 
 **Saves.** `src/game/save_data.h` is the offline save. Any change to its shape
-bumps `current_save_version` and adds a migration step; parsing ignores
+bumps `current_save_version` (a migration step only once there are saves
+worth keeping; in the alpha, an older save may just be refused); parsing ignores
 unknown fields and refuses newer versions. Save on hole completion, course
 completion, leaving a round and clean exit; never mid-hole, never transient
 state. An unreadable save is backed up, never overwritten silently. Player settings are not progress and apply online too: they live in
@@ -405,8 +431,24 @@ Bad patterns replicate: assume whatever you write will be copied.
 
 ## Content and licensing
 
-`assets/` holds every hole, course, course world, club, tuning, reward, string,
-style, font, shader and sound. Holes and course worlds come from
+`assets/` holds all the game's content, by what it is for:
+
+- `world/`: what the game takes place in. `courses/<course id>/` is one
+  course: its manifest `course.json`, its world `world.json`, its holes in
+  `holes/`, its backdrops `sky.bmp` and `land.bmp`; the manifest's references
+  are relative to its folder. `props/` holds every thing drawn in the world,
+  a file each (and a texture of its own beside it); `ground/` the ground's
+  textures.
+- `play/`: how it plays: the tuning in `tuning/` (each file whole sections of
+  `game_tuning`, each section in one file), the clubs, the rewards and skills
+  in `progression/`, and `online.json`, where online play connects.
+- `picture/`: how it looks: `lighting.json`, `picture.json` and the shaders.
+- `sound/`: `sounds.json` and the sound files it names.
+- `interface/`: the strings and text styles in `text/`, the font, the
+  settings screen's entries and the icons.
+
+A new kind of content goes in the folder of what it is for, never a new
+top-level one. Holes and course worlds come from
 `tooling/osm_import/` and are cleaned up in `tooling/hole_editor/`. Course
 worlds also carry tooling-only data (`walking_shortcuts`, `spawn_zones`,
 `interactables`, OSM refs) that the game does not read yet: placeholders for
@@ -424,9 +466,9 @@ system.
   gitignored `tooling/osm_import/dataforsyning_token.txt`.
 - All art is drawn by code (shaders, `tooling/art/make_art.py`, the pixel
   font's data): no image files from elsewhere, no AI image tools. The icon in
-  `assets/icons/` was drawn by code that wasn't kept; it is redrawn by a kept
+  `assets/interface/icons/` was drawn by code that wasn't kept; it is redrawn by a kept
   script when it is redesigned. Every music and sound
-  file in `assets/audio/` is a placeholder until original music and sound
+  file in `assets/sound/` is a placeholder until original music and sound
   design replace it (the thunder is drawn by `tooling/audio/make_thunder.py`).
   Record the source and licence of any asset not made by code; only use
   assets that allow commercial use.

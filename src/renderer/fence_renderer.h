@@ -20,7 +20,7 @@
 
 class fence_renderer {
 public:
-    // `net_image` is the net texture's file (assets/textures/fence_net.bmp).
+    // `net_image` is the net texture's file (assets/world/props/fence_net.bmp).
     bool init(const std::string& vertex_path, const std::string& fragment_path, const std::string& net_image);
     void shutdown();
 

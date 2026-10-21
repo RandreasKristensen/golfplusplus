@@ -10,7 +10,7 @@ Usage:
   python osm_golf_convert.py --name "Skandinavisk Golf Center"
   python osm_golf_convert.py --id R123456          # OSM relation ID
   python osm_golf_convert.py --lat 56.19 --lon 10.19  # nearest course
-  python osm_golf_convert.py --id R123456 -o ../../assets/holes --course-out ../../assets/courses
+  python osm_golf_convert.py --id R123456 -o some/other/courses  # writes some/other/courses/<course id>/
 
 Requirements: pip install requests (optional; falls back to Python stdlib)
 """
@@ -2791,16 +2791,15 @@ def _course_ground(world: dict, hole_jsons: list[dict], sampler,
 
 def _write_ground_only(args) -> None:
     """Adds or replaces the ground grid of an existing course world."""
-    course_path = Path(args.course_out) / f"{args.ground_only}.json"
-    with open(course_path, "r", encoding="utf-8") as f:
+    course_folder = Path(args.out) / args.ground_only
+    with open(course_folder / "course.json", "r", encoding="utf-8") as f:
         course = json.load(f)
-    asset_root = course_path.parent.parent
-    world_path = asset_root / course["world"]
+    world_path = course_folder / course["world"]
     with open(world_path, "r", encoding="utf-8") as f:
         world = json.load(f)
     hole_jsons = []
     for hole_ref in course["holes"]:
-        with open(asset_root / hole_ref, "r", encoding="utf-8") as f:
+        with open(course_folder / hole_ref, "r", encoding="utf-8") as f:
             hole_jsons.append(json.load(f))
 
     config = load_generation_config(args.config, args.ground_only)
@@ -2850,16 +2849,11 @@ Examples:
     ap.add_argument("--id",   metavar="ID",  help="OSM relation/way ID, e.g. R3456789")
     ap.add_argument("--lat",  type=float,    help="Latitude  for nearest-course search")
     ap.add_argument("--lon",  type=float,    help="Longitude for nearest-course search")
-    default_holes = _project_root() / "assets" / "holes"
-    default_courses = _project_root() / "assets" / "courses"
-    default_worlds = _project_root() / "assets" / "course_worlds"
+    default_courses = _project_root() / "assets" / "world" / "courses"
     default_config = Path(__file__).resolve().parent / "osm_golf_config.json"
-    ap.add_argument("-o", "--out", default=str(default_holes), metavar="DIR",
-                    help=f"Output directory for hole JSON files (default: {default_holes})")
-    ap.add_argument("--course-out", default=str(default_courses), metavar="DIR",
-                    help=f"Output directory for course manifest JSON (default: {default_courses})")
-    ap.add_argument("--world-out", default=str(default_worlds), metavar="DIR",
-                    help=f"Output directory for course-world JSON (default: {default_worlds})")
+    ap.add_argument("-o", "--out", default=str(default_courses), metavar="DIR",
+                    help="Where the course folders are: the course goes in <DIR>/<course id>/ as course.json, "
+                         f"world.json and holes/hNN.json (default: {default_courses})")
     ap.add_argument("--config", default=str(default_config), metavar="FILE",
                     help=f"Generation tuning JSON (default: {default_config})")
     ap.add_argument("--overpass", metavar="URL",
@@ -2969,14 +2963,9 @@ Examples:
                           config["tree"])
 
     # ── 5. Write hole files ───────────────────────────────────────────────────
-    out_dir = Path(args.out)
+    course_dir = Path(args.out) / course_id
+    out_dir = course_dir / "holes"
     out_dir.mkdir(parents=True, exist_ok=True)
-    course_dir = Path(args.course_out)
-    if not args.no_course:
-        course_dir.mkdir(parents=True, exist_ok=True)
-    world_dir = Path(args.world_out)
-    if not args.no_world:
-        world_dir.mkdir(parents=True, exist_ok=True)
     hole_paths = []
 
     elevation = _make_elevation_sampler(args, config, origin_lat, origin_lon)
@@ -2986,7 +2975,7 @@ Examples:
     for num in sorted(holes.keys()):
         print(f"  Processing hole {num}...", file=sys.stderr)
         h_json = hole_to_json(num, holes[num], origin_lat, origin_lon, course_id, config, elevation)
-        fname = f"{course_id}_h{num:02d}.json"
+        fname = f"h{num:02d}.json"
         fpath = out_dir / fname
         with open(fpath, "w", encoding="utf-8") as f:
             json.dump(h_json, f, indent=2)
@@ -3004,7 +2993,7 @@ Examples:
             print(f"      [warn] {warning}", file=sys.stderr)
 
     # ── 6. Write course manifest ──────────────────────────────────────────────
-    world_reference = f"course_worlds/{course_id}.json"
+    world_reference = "world.json"
     world_json = course_world_to_json(course_id,
                                       course_name,
                                       course_el,
@@ -3019,7 +3008,7 @@ Examples:
     if not args.no_world:
         world_json["ground"] = _course_ground(world_json, list(hole_jsons.values()), elevation,
                                               origin_lat, origin_lon, config)
-        world_file = world_dir / f"{course_id}.json"
+        world_file = course_dir / world_reference
         world_file.write_text(osm_ground.course_world_text(world_json), encoding="utf-8")
         print(f"\n-> Course world: {world_file}", file=sys.stderr)
 
@@ -3030,8 +3019,8 @@ Examples:
             # Drawn by tooling/art/make_art.py, whose sky meets the haze at
             # the horizon. A mild summer haze; tune it per course by hand.
             "backdrop": {
-                "sky": f"backdrops/{course_id}_sky.bmp",
-                "land": f"backdrops/{course_id}_land.bmp",
+                "sky": "sky.bmp",
+                "land": "land.bmp",
                 "haze_color": [0.75, 0.80, 0.83],
                 "haze_amount": 1.0,
                 "haze_distance": 800,
@@ -3041,7 +3030,7 @@ Examples:
         }
         if not args.no_world:
             course_json["world"] = world_reference
-        course_file = course_dir / f"{course_id}.json"
+        course_file = course_dir / "course.json"
         with open(course_file, "w", encoding="utf-8") as f:
             json.dump(course_json, f, indent=2)
         print(f"\n→ Course manifest: {course_file}", file=sys.stderr)

@@ -1,14 +1,14 @@
 #pragma once
 
-// Skills and XP rewards as data (assets/progression/). Offline play and the
+// Skills and XP rewards as data (assets/play/progression/). Offline play and the
 // server read the same files, so the numbers have one source.
 
 #include <optional>
 #include <string>
 #include <vector>
 
-inline constexpr const char* skills_path = "progression/skills.json";
-inline constexpr const char* rewards_path = "progression/rewards.json";
+inline constexpr const char* skills_path = "play/progression/skills.json";
+inline constexpr const char* rewards_path = "play/progression/rewards.json";
 
 struct skill_definition {
     std::string id;

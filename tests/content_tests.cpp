@@ -49,6 +49,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -68,7 +69,7 @@ TEST_CASE("the shipped content loads") {
 TEST_CASE("missing content is reported, not filled in") {
     const game_content_load_result result = load_game_content(fixture_root());
     CHECK(!result.content.has_value());
-    CHECK(result.error.find("tuning/game_tuning.json") != std::string::npos);
+    CHECK(result.error.find(tuning_path) != std::string::npos);
 }
 
 TEST_CASE("game tuning names every missing field") {
@@ -82,15 +83,42 @@ TEST_CASE("game tuning names every missing field") {
     CHECK(!parse_game_tuning_from_text("not json").tuning.has_value());
 }
 
+namespace {
+// The shipped tuning files' texts, with `find` (in exactly one of them)
+// replaced by `replacement`.
+std::vector<std::string> shipped_tuning_with(const std::string& find, const std::string& replacement) {
+    std::vector<std::string> texts = json_texts_in_directory(std::filesystem::path(asset_root()) / tuning_path);
+    int edited = 0;
+    for (std::string& text : texts) {
+        const std::size_t at = text.find(find);
+        if (at != std::string::npos) {
+            text.replace(at, find.size(), replacement);
+            ++edited;
+        }
+    }
+    CHECK(edited == 1);
+    return texts;
+}
+}
+
+TEST_CASE("game tuning is split over files, each section in one") {
+    const std::vector<std::string> shipped = json_texts_in_directory(std::filesystem::path(asset_root()) / tuning_path);
+    REQUIRE(shipped.size() > 1U);
+    REQUIRE(parse_game_tuning_from_texts(shipped).tuning.has_value());
+
+    std::vector<std::string> twice = shipped;
+    twice.push_back(R"({"cart": {}})");
+    const game_tuning_parse_result result = parse_game_tuning_from_texts(twice);
+    CHECK(!result.tuning.has_value());
+    CHECK(result.error.find("cart") != std::string::npos);
+
+    std::vector<std::string> broken = shipped;
+    broken.push_back("[]");
+    CHECK(!parse_game_tuning_from_texts(broken).tuning.has_value());
+}
+
 TEST_CASE("game tuning needs every lie") {
-    const std::optional<std::string> shipped = read_text_file(asset_root() + "/tuning/game_tuning.json");
-    REQUIRE(shipped.has_value());
-    REQUIRE(parse_game_tuning_from_text(*shipped).tuning.has_value());
-    std::string no_bunker = *shipped;
-    const std::size_t at = no_bunker.find("\"bunker\": { \"power\"");
-    REQUIRE(at != std::string::npos);
-    no_bunker.replace(at, 8, "\"sand\"");
-    const game_tuning_parse_result result = parse_game_tuning_from_text(no_bunker);
+    const game_tuning_parse_result result = parse_game_tuning_from_texts(shipped_tuning_with("\"bunker\": { \"power\"", "\"sand\": { \"power\""));
     CHECK(!result.tuning.has_value());
     CHECK(result.error.find("lies.bunker.power") != std::string::npos);
 }
@@ -104,16 +132,23 @@ TEST_CASE("the shipped sky clock runs from its anchor date, every course on its 
     CHECK(tuning.sky_clock.game_days_per_real_day > 0.0);
     CHECK(tuning.sky_clock.year == 1989);
 
-    std::string bad_date = *read_text_file(asset_root() + "/tuning/game_tuning.json");
-    const std::size_t at = bad_date.find("\"anchor_real_date\": \"");
-    REQUIRE(at != std::string::npos);
-    bad_date.replace(at + 21, 10, "2026-13-01");
-    const game_tuning_parse_result result = parse_game_tuning_from_text(bad_date);
+    const std::string date = "\"anchor_real_date\": \"" + std::string(10, '?');
+    const std::vector<std::string> shipped = json_texts_in_directory(std::filesystem::path(asset_root()) / tuning_path);
+    std::string anchor;
+    for (const std::string& text : shipped) {
+        const std::size_t at = text.find("\"anchor_real_date\": \"");
+        if (at != std::string::npos) {
+            anchor = text.substr(at, date.size());
+        }
+    }
+    REQUIRE(!anchor.empty());
+    const game_tuning_parse_result result =
+        parse_game_tuning_from_texts(shipped_tuning_with(anchor, "\"anchor_real_date\": \"2026-13-01"));
     CHECK(!result.tuning.has_value());
     CHECK(result.error.find("sky_clock.anchor_real_date") != std::string::npos);
 
     // The Danish courses are played at midsummer.
-    const std::vector<course_definition> courses = load_courses_from_directory(asset_root() + "/courses");
+    const std::vector<course_definition> courses = load_courses(asset_root());
     REQUIRE(!courses.empty());
     for (const course_definition& course : courses) {
         CHECK(course.sky.month == 6);
@@ -380,19 +415,33 @@ TEST_CASE("holes parse with tree defaults and reject bad geometry") {
 }
 
 TEST_CASE("courses list holes by id or path") {
-    const std::optional<course_definition> course = load_course_from_file(fixture_root() + "/courses/hub.json");
+    const std::optional<course_definition> course = load_course(fixture_root(), fixture_hub_folder);
     REQUIRE(course.has_value());
     CHECK(course->id == "fixture_hub");
     CHECK(course->name == "Fixture Hub");
-    CHECK(course->world == "course_worlds/hub.json");
-    CHECK((course->holes == std::vector<std::string>{"test", "test2", "test3"}));
-    CHECK(course->backdrop.sky == "backdrops/fixture_sky.bmp");
-    CHECK(course->backdrop.land == "backdrops/fixture_land.bmp");
+    // The manifest's references are written in its folder; loaded, they are
+    // under the asset root.
+    const std::string folder = fixture_hub_folder;
+    CHECK(course->world == folder + "/world.json");
+    CHECK((course->holes == std::vector<std::string>{folder + "/holes/test.json", folder + "/holes/test2.json",
+                                                     folder + "/holes/test3.json"}));
+    CHECK(course->backdrop.sky == folder + "/sky.bmp");
+    CHECK(course->backdrop.land == folder + "/land.bmp");
     CHECK(near(course->backdrop.haze_color.z, 0.83f));
     CHECK(near(course->backdrop.haze_amount, 1.0f));
     CHECK(near(course->backdrop.haze_distance, 500.0f));
-    CHECK(course_hole_path("root", *course, 0) == (std::filesystem::path("root") / "holes" / "test.json").string());
+    CHECK(course_hole_path("root", *course, 0) ==
+          (std::filesystem::path("root") / folder / "holes" / "test.json").make_preferred().string());
     CHECK(course_hole_path("root", *course, 3).empty());
+
+    const std::optional<course_definition> as_written = parse_course_from_text(*read_text_file(fixture_root() + "/" + folder + "/" + course_file_name));
+    REQUIRE(as_written.has_value());
+    CHECK(as_written->holes.front() == "test");
+    CHECK(course_hole_reference(*as_written, 0) == "holes/test.json");
+    CHECK(course_folder_of("world/courses/x/course.json") == std::optional<std::string>("world/courses/x"));
+    CHECK(!course_folder_of("world/courses/x/holes/course.json"));
+    CHECK(!course_folder_of("world/courses/course.json"));
+    CHECK(!course_folder_of("world/courses/x/world.json"));
 
     const std::string backdrop =
         R"("sky": {"date": "06-21", "utc_offset_hours": 2}, "backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500})";
@@ -461,7 +510,7 @@ std::vector<int> bmp_pixel(const rgba_image& image, const int row, const int col
 TEST_CASE("bmp images decode bottom row first") {
     // 4 x 2, 24-bit: red, green, blue, white along the bottom; black, grey,
     // yellow, cyan along the top. No alpha: every pixel is opaque.
-    const std::optional<rgba_image> image = load_bmp_file(fixture_root() + "/backdrops/fixture_sky.bmp");
+    const std::optional<rgba_image> image = load_bmp_file(fixture_root() + "/" + fixture_hub_folder + "/sky.bmp");
     REQUIRE(image.has_value());
     CHECK(image->width == 4);
     CHECK(image->height == 2);
@@ -471,10 +520,10 @@ TEST_CASE("bmp images decode bottom row first") {
     CHECK((bmp_pixel(*image, 1, 2) == std::vector<int>{255, 255, 0, 255}));
     CHECK((bmp_pixel(*image, 1, 3) == std::vector<int>{0, 255, 255, 255}));
 
-    const std::string bytes = *read_text_file(fixture_root() + "/backdrops/fixture_sky.bmp");
+    const std::string bytes = *read_text_file(fixture_root() + "/" + fixture_hub_folder + "/sky.bmp");
     CHECK(!parse_bmp(bytes.substr(0, bytes.size() - 4)));
     CHECK(!parse_bmp("BM not an image at all, just some text long enough to pass the header size"));
-    CHECK(!load_bmp_file(fixture_root() + "/backdrops/missing.bmp"));
+    CHECK(!load_bmp_file(fixture_root() + "/" + fixture_hub_folder + "/missing.bmp"));
 }
 
 TEST_CASE("bmp images written for screenshots read back the same") {
@@ -621,7 +670,7 @@ TEST_CASE("the picture keeps whole window rows per line, and wider windows get m
 TEST_CASE("32-bit bmp images with an alpha mask keep their alpha") {
     // 4 x 2, as tooling/art/make_art.py writes the land panoramas: red,
     // green, blue, white along the bottom with alpha 255, 128, 0 and 64.
-    const std::optional<rgba_image> image = load_bmp_file(fixture_root() + "/backdrops/fixture_land.bmp");
+    const std::optional<rgba_image> image = load_bmp_file(fixture_root() + "/" + fixture_hub_folder + "/land.bmp");
     REQUIRE(image.has_value());
     CHECK(image->width == 4);
     CHECK(image->height == 2);
@@ -632,7 +681,7 @@ TEST_CASE("32-bit bmp images with an alpha mask keep their alpha") {
     CHECK((bmp_pixel(*image, 1, 2) == std::vector<int>{255, 255, 0, 255}));
 
     // The same pixels without the alpha mask are opaque; other masks are refused.
-    std::string bytes = *read_text_file(fixture_root() + "/backdrops/fixture_land.bmp");
+    std::string bytes = *read_text_file(fixture_root() + "/" + fixture_hub_folder + "/land.bmp");
     constexpr std::size_t alpha_mask = 66;
     constexpr std::size_t red_mask = 54;
     std::string no_alpha = bytes;
@@ -724,8 +773,15 @@ TEST_CASE("course worlds need a complete ground grid") {
 TEST_CASE("every shipped course, hole, world and image loads") {
     const game_content& content = shipped_content();
     // A course file the loader refuses would drop out of the menus silently.
-    CHECK(content.courses.size() == json_files_in_directory(std::filesystem::path(content.asset_root) / "courses").size());
-    const std::optional<rgba_image> grass = load_bmp_file(std::filesystem::path(content.asset_root) / "textures" / "rough_grass.bmp");
+    std::size_t course_folders = 0;
+    std::error_code error;
+    for (std::filesystem::directory_iterator it(std::filesystem::path(content.asset_root) / courses_path, error);
+         !error && it != std::filesystem::directory_iterator(); it.increment(error)) {
+        std::error_code type_error;
+        course_folders += it->is_directory(type_error) ? 1U : 0U;
+    }
+    CHECK(content.courses.size() == course_folders);
+    const std::optional<rgba_image> grass = load_bmp_file(std::filesystem::path(content.asset_root) / "world" / "ground" / "rough_grass.bmp");
     CHECK(grass.has_value());
     for (const course_definition& course : content.courses) {
         // The land panorama shows the sky above it and the far ground (never
@@ -1121,7 +1177,7 @@ TEST_CASE("every shipped hole sign's map frames its hole and shows what lies on 
             // in its own ink, whichever hole it was mapped with.
             overlay_batch batch;
             draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 3, 100), area, sign, ground);
-            const rgba_image face = rasterize_overlay_batch(batch, test_scene_colors().fixtures.sign_board);
+            const rgba_image face = rasterize_overlay_batch(batch, test_props().hole_sign.color("board"));
             const auto drawn = [&](const glm::vec3& ink) {
                 for (std::size_t i = 0; i + 3 < face.pixels.size(); i += 4) {
                     if (face.pixels[i] == std::lround(ink.r * 255.0f) && face.pixels[i + 1] == std::lround(ink.g * 255.0f) &&

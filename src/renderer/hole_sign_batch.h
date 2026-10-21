@@ -10,6 +10,7 @@
 #include "game/hole_sign.h"
 #include "game/lighting_loader.h"
 #include "game/play_area.h"
+#include "game/prop_loader.h"
 #include "game/text_assets.h"
 #include "renderer/bmp_image.h"
 
@@ -58,13 +59,14 @@ struct render_hole_signs {
 };
 
 // Appends `sign`'s board and posts as triangles.
-void append_hole_sign_model(std::vector<hole_sign_vertex>& vertices, const hole_sign& sign, const fixture_colors& colors);
+void append_hole_sign_model(std::vector<hole_sign_vertex>& vertices, const hole_sign& sign, const prop_model& model);
 
 // Every sign of `area`, each saying `texts[i]` (one per area.signs[i]).
 render_hole_signs build_render_hole_signs(const play_area& area,
                                           const std::vector<hole_sign_text>& texts,
                                           const text_assets& text,
                                           const scene_colors& colors,
+                                          const prop_model& model,
                                           std::uint64_t revision);
 // Rebuilds `signs` (with `revision`) unless they were built from the same
 // signs saying the same; true when it did.
@@ -73,4 +75,5 @@ bool refresh_render_hole_signs(render_hole_signs& signs,
                                const std::vector<hole_sign_text>& texts,
                                const text_assets& text,
                                const scene_colors& colors,
+                               const prop_model& model,
                                std::uint64_t revision);

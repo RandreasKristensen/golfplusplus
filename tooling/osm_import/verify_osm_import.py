@@ -31,6 +31,8 @@ import osm_contact_sheet
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_ASSETS = HERE.parent.parent / "assets"
+# The course folders under the asset root, one per course id.
+COURSES = Path("world") / "courses"
 DEFAULT_SHEETS = HERE / ".osm_cache" / "contact_sheets"
 
 
@@ -75,23 +77,24 @@ def write_osm_todo(course_name: str, course_el: dict, audit: "osm_checks.Finding
 
 
 def _load_course(assets: Path, course_id: str):
-    with open(assets / "courses" / f"{course_id}.json", "r", encoding="utf-8") as f:
+    folder = assets / COURSES / course_id
+    with open(folder / "course.json", "r", encoding="utf-8") as f:
         course = json.load(f)
     holes = []
     for ref in course.get("holes", []):
-        with open(assets / ref, "r", encoding="utf-8") as f:
+        with open(folder / ref, "r", encoding="utf-8") as f:
             holes.append(json.load(f))
     world = None
     if course.get("world"):
-        with open(assets / course["world"], "r", encoding="utf-8") as f:
+        with open(folder / course["world"], "r", encoding="utf-8") as f:
             world = json.load(f)
     return course, holes, world
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("course", nargs="*", help="Course id(s), the names of files in assets/courses")
-    ap.add_argument("--all", action="store_true", help="Every course in assets/courses")
+    ap.add_argument("course", nargs="*", help="Course id(s), the names of folders in assets/world/courses")
+    ap.add_argument("--all", action="store_true", help="Every course in assets/world/courses")
     ap.add_argument("--assets", default=str(DEFAULT_ASSETS), help=f"Asset root (default: {DEFAULT_ASSETS})")
     ap.add_argument("--config", default=str(HERE / "osm_golf_config.json"),
                     help="Generator config whose `checks` section sets the tolerances")
@@ -107,7 +110,7 @@ def main() -> int:
     conv.set_cache(HERE / ".osm_cache")
 
     assets = Path(args.assets)
-    ids = sorted(p.stem for p in (assets / "courses").glob("*.json")) if args.all else args.course
+    ids = sorted(p.parent.name for p in (assets / COURSES).glob("*/course.json")) if args.all else args.course
     if not ids:
         ap.print_help()
         return 2

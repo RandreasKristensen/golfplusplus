@@ -11,7 +11,7 @@ output is the same on every run:
 
 Panoramas wrap once around the horizon and span BACKDROP_BOTTOM_DEG to
 BACKDROP_TOP_DEG from their bottom row to their top row; keep those and
-MIN_LAND_VISIBILITY in step with assets/shaders/backdrop.frag.
+MIN_LAND_VISIBILITY in step with assets/picture/shaders/backdrop.frag.
 
 The sky (24-bit) fades to the course's `haze_color` at the horizon. The land
 (32-bit with alpha) is the far ground, hills and treelines in their own
@@ -19,7 +19,7 @@ colours; its alpha is how much of each shows through the haze (0 where the sky
 shows), so the game can change the haze colour, and the sky, with the time of
 day. The further back something sits the hazier it is: the ground towards the
 horizon, then each treeline band, then the hills. Below the horizon the land
-fades into the backdrop ground colour (assets/visuals/lighting.json) at
+fades into the backdrop ground colour (assets/picture/lighting.json) at
 FAR_GROUND_HAZE, which the renderer reads back from the bottom row and fades
 the drawn ground to, so the far edge of the drawn ground meets it without a
 seam.
@@ -43,7 +43,7 @@ BACKDROP_HEIGHT = 256
 BACKDROP_BOTTOM_DEG = -30.0
 BACKDROP_TOP_DEG = 60.0
 # The plain the game draws under and around the course.
-BACKDROP_GROUND = tuple(json.loads((REPO / "assets/visuals/lighting.json").read_text(encoding="utf-8"))["ground"]["backdrop"])
+BACKDROP_GROUND = tuple(json.loads((REPO / "assets/picture/lighting.json").read_text(encoding="utf-8"))["ground"]["backdrop"])
 # Land never shows less than this through the haze, so the shader can tell
 # hazy land from sky.
 MIN_LAND_VISIBILITY = 0.15
@@ -441,13 +441,13 @@ def course_theme(course: dict) -> dict:
 
 def outputs() -> dict[Path, bytes]:
     assets = REPO / "assets"
-    files = {assets / "textures" / "rough_grass.bmp": bmp_bytes(GRASS_SIZE, GRASS_SIZE, grass_texture()),
-             assets / "textures" / "fence_net.bmp": bmp_bytes_with_alpha(NET_SIZE, NET_SIZE, net_texture())}
-    for course_file in sorted((assets / "courses").glob("*.json")):
+    files = {assets / "world" / "ground" / "rough_grass.bmp": bmp_bytes(GRASS_SIZE, GRASS_SIZE, grass_texture()),
+             assets / "world" / "props" / "fence_net.bmp": bmp_bytes_with_alpha(NET_SIZE, NET_SIZE, net_texture())}
+    for course_file in sorted((assets / "world" / "courses").glob("*/course.json")):
         course = json.loads(course_file.read_text(encoding="utf-8"))
         theme = course_theme(course)
-        sky = assets / course["backdrop"]["sky"]
-        land = assets / course["backdrop"]["land"]
+        sky = course_file.parent / course["backdrop"]["sky"]
+        land = course_file.parent / course["backdrop"]["land"]
         if sky not in files:
             files[sky] = bmp_bytes(BACKDROP_WIDTH, BACKDROP_HEIGHT, sky_panorama(theme))
         if land not in files:

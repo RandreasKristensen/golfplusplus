@@ -1,0 +1,21 @@
+{
+  "colors": {
+    "filter": [0.78, 0.5, 0.22],
+    "band": [0.88, 0.76, 0.4],
+    "paper": [0.93, 0.91, 0.86],
+    "ash": [0.4, 0.39, 0.38],
+    "ember_dim": [0.95, 0.2, 0.1],
+    "ember_bright": [0.95, 0.4, 0.1],
+    "smoke": [0.78, 0.8, 0.78]
+  },
+  "parts": [
+    {"shape": "cylinder", "from": [0, 0, 0], "to": [0, 0, 0.28], "radius": 0.058, "color": "filter"},
+    {"shape": "cylinder", "from": [0, 0, 0.28], "to": [0, 0, 0.31], "radius": 0.061, "color": "band"},
+    {"shape": "cylinder", "from": [0, 0, 0.31], "to": [0, 0, 0.86], "radius": 0.058, "color": "paper"},
+    {"shape": "cylinder", "from": [0, 0, 0.86], "to": [0, 0, 0.94], "radius": 0.054, "color": "ash"},
+    {"shape": "sphere", "at": [0, 0, 1], "radius": 0.08, "color": "ember_dim", "glow": "ember", "tag": "ember"}
+  ],
+  "points": {
+    "smoke": [0, 0, 1]
+  }
+}

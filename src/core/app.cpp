@@ -136,7 +136,7 @@ bool app::init(const startup_options& options) {
     const std::string asset_root = resolve_asset_root(sdl_path(SDL_GetBasePath()));
     const bool sized = options.window_width > 0 && options.window_height > 0;
     if (!window_.init("golf++", sized ? options.window_width : window_width, sized ? options.window_height : window_height,
-                      options.vsync, asset_root + "/icons/golfpp-icon.bmp")) {
+                      options.vsync, asset_root + "/interface/icons/golfpp-icon.bmp")) {
         return false;
     }
     const std::optional<picture_style> picture = load_picture_style(asset_root);
@@ -150,6 +150,12 @@ bool app::init(const startup_options& options) {
         return false;
     }
     lighting_ = std::move(*lighting);
+    prop_set_load_result props = load_props(asset_root);
+    if (!props.props) {
+        SDL_Log("Failed to load props: %s from %s", props.error.c_str(), asset_root.c_str());
+        return false;
+    }
+    props_ = std::move(*props.props);
     sky_.pinned_hour = options.game_hour;
     sky_.pinned_date = options.game_date;
     god_.enabled = options.god_menu;
@@ -159,7 +165,7 @@ bool app::init(const startup_options& options) {
     god_.wetness = options.wetness;
     screenshot_path_ = options.screenshot_path;
     tape_style_ = picture->tape;
-    if (!renderer_.init(window_.sdl_window(), asset_root, *picture, lighting_)) {
+    if (!renderer_.init(window_.sdl_window(), asset_root, *picture, lighting_, props_)) {
         SDL_Log("Renderer init failed (shaders in %s/shaders)", asset_root.c_str());
         return false;
     }
@@ -242,7 +248,7 @@ bool app::init(const startup_options& options) {
     // Typing only reaches input_state::text_typed while a text field is focused.
     set_text_input_enabled(false);
     audio_.init();
-    audio_.load_manifest(std::filesystem::path(asset_root) / "audio" / "sounds.json");
+    audio_.load_manifest(std::filesystem::path(asset_root) / sounds_path);
     apply_settings(false);
     audio_.start_ambience(menu_.flow == startup_flow::playing ? sound_ambience_course_day : sound_ambience_menu_vcr);
     running_ = true;
@@ -518,10 +524,10 @@ void app::refresh_render_meshes() {
     terrain_render_mesh_ = make_terrain_render_mesh({&game_.area.ground}, revision, colors.ground, light);
     material_overlay_render_mesh_ =
         make_terrain_render_mesh({&game_.area.material_overlay}, revision, colors.ground, light);
-    refresh_render_hole_signs(hole_signs_, game_.area, hole_sign_texts(game_), text_, colors, revision);
-    fences_ = build_render_fences(game_.area, revision, colors.fixtures.fence_post);
+    refresh_render_hole_signs(hole_signs_, game_.area, hole_sign_texts(game_), text_, colors, props_.hole_sign, revision);
+    fences_ = build_render_fences(game_.area, revision, props_.fence.color("post"));
     water_ = build_render_water(game_.area, revision);
-    floodlights_ = build_render_floodlights(game_.area, revision, colors.fixtures);
+    floodlights_ = build_render_floodlights(game_.area, revision, props_.floodlight);
     render_meshes_revision_ = revision;
 }
 

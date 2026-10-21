@@ -2,7 +2,7 @@
 
 // RuneScape-style skills: any skill id maps to an XP total, and the level
 // (1-99) follows from the XP curve. The skill list itself is data
-// (assets/progression/skills.json).
+// (assets/play/progression/skills.json).
 
 #include <map>
 #include <string>

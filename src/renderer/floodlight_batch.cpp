@@ -62,16 +62,18 @@ void append_box(std::vector<floodlight_vertex>& out, const glm::vec3& center, co
     }
 }
 
-void append_floodlight(std::vector<floodlight_vertex>& out, const floodlight& light, const fixture_colors& colors) {
+void append_floodlight(std::vector<floodlight_vertex>& out, const floodlight& light, const prop_model& model) {
+    const glm::vec3 pole = model.color("pole");
+    const glm::vec3 head = model.color("head");
     const float radius = std::max(min_drawn_pole_radius, light.radius);
     const glm::vec3 top(light.foot.x, light.lamp.y, light.foot.z);
-    append_pole(out, light.foot, radius, light.lamp.y - light.foot.y, colors.floodlight_pole);
+    append_pole(out, light.foot, radius, light.lamp.y - light.foot.y, pole);
 
     const glm::vec3 aim = safe_normalize(light.aim, -world_up);
     const glm::vec3 across = safe_normalize(glm::cross(aim, world_up), glm::vec3(1.0f, 0.0f, 0.0f));
     const glm::vec3 head_up = glm::cross(across, aim);
     append_box(out, light.lamp, across, head_up, aim, glm::vec3(head_width, head_height, head_depth) * 0.5f,
-               colors.floodlight_head, colors.floodlight_pole, true);
+               head, pole, true);
 
     // The arm from the pole's top to the back of the head.
     const glm::vec3 back = light.lamp - aim * (head_depth * 0.5f);
@@ -81,17 +83,17 @@ void append_floodlight(std::vector<floodlight_vertex>& out, const floodlight& li
         const glm::vec3 along = reach / length;
         const glm::vec3 side = safe_normalize(glm::cross(along, world_up), glm::vec3(1.0f, 0.0f, 0.0f));
         append_box(out, top + reach * 0.5f, side, glm::cross(side, along), along,
-                   glm::vec3(arm_half_width, arm_half_width, length * 0.5f), colors.floodlight_pole,
-                   colors.floodlight_pole, false);
+                   glm::vec3(arm_half_width, arm_half_width, length * 0.5f), pole,
+                   pole, false);
     }
 }
 }
 
-render_floodlights build_render_floodlights(const play_area& area, const std::uint64_t revision, const fixture_colors& colors) {
+render_floodlights build_render_floodlights(const play_area& area, const std::uint64_t revision, const prop_model& model) {
     render_floodlights floodlights;
     floodlights.revision = revision;
     for (const floodlight& light : area.floodlights) {
-        append_floodlight(floodlights.vertices, light, colors);
+        append_floodlight(floodlights.vertices, light, model);
     }
     return floodlights;
 }

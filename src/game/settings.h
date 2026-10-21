@@ -1,7 +1,7 @@
 #pragma once
 
 // Player settings (master and music volume, field of view, ...): which settings exist
-// and their ranges come from assets/ui/settings.json; the player's values
+// and their ranges come from assets/interface/settings.json; the player's values
 // live in their own file next to the save, not in it, because the save is offline
 // progress and settings apply online too. A setting is a whole number
 // stepped between a minimum and a maximum; the settings screen
@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-inline constexpr const char* setting_definitions_path = "ui/settings.json";
+inline constexpr const char* setting_definitions_path = "interface/settings.json";
 
 // The settings code applies; load_game_content refuses a definitions file
 // without them.

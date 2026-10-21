@@ -1,6 +1,6 @@
 #pragma once
 
-// The named fields of assets/visuals/lighting.json and the ranges each must
+// The named fields of assets/picture/lighting.json and the ranges each must
 // be within: what lighting_loader.cpp reads, and the lighting key's fields
 // sun_lighting.cpp blends between keys.
 
@@ -242,11 +242,6 @@ inline constexpr color_field<ground_colors> ground_fields[] = {
     {"underwater", &ground_colors::underwater},
 };
 
-inline constexpr color_field<tree_colors> tree_fields[] = {
-    {"trunk", &tree_colors::trunk},
-    {"leaves", &tree_colors::leaves},
-};
-
 inline constexpr color_field<marker_colors> marker_fields[] = {
     {"ball", &marker_colors::ball},
     {"tee_grout", &marker_colors::tee_grout},
@@ -263,27 +258,6 @@ inline constexpr color_field<marker_colors> marker_fields[] = {
     {"club_sole", &marker_colors::club_sole},
 };
 
-inline constexpr color_field<cart_colors> cart_fields[] = {
-    {"body", &cart_colors::body},
-    {"trim", &cart_colors::trim},
-    {"cream", &cart_colors::cream},
-    {"canopy", &cart_colors::canopy},
-    {"rubber", &cart_colors::rubber},
-    {"hub_cap", &cart_colors::hub_cap},
-    {"seat", &cart_colors::seat},
-    {"bag", &cart_colors::bag},
-};
-
-inline constexpr color_field<emote_colors> emote_fields[] = {
-    {"cigarette", &emote_colors::cigarette},
-    {"ember_dim", &emote_colors::ember_dim},
-    {"ember_bright", &emote_colors::ember_bright},
-    {"smoke", &emote_colors::smoke},
-    {"can", &emote_colors::can},
-    {"can_label", &emote_colors::can_label},
-    {"can_lid", &emote_colors::can_lid},
-};
-
 inline constexpr color_field<figure_colors> figure_fields[] = {
     {"trousers", &figure_colors::trousers},
     {"skin", &figure_colors::skin},
@@ -292,10 +266,3 @@ inline constexpr color_field<figure_colors> figure_fields[] = {
     {"ball", &figure_colors::ball},
 };
 
-inline constexpr color_field<fixture_colors> fixture_fields[] = {
-    {"sign_board", &fixture_colors::sign_board},
-    {"sign_post", &fixture_colors::sign_post},
-    {"fence_post", &fixture_colors::fence_post},
-    {"floodlight_pole", &fixture_colors::floodlight_pole},
-    {"floodlight_head", &fixture_colors::floodlight_head},
-};

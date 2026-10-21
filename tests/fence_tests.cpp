@@ -111,7 +111,7 @@ TEST_CASE("a fence stands on the ground and stops a shot hit into it") {
 TEST_CASE("a fence is drawn as a post at every pole and a net between each pair") {
     play_area area;
     area.fences = {course_world_fence{{glm::vec3(0.0f), glm::vec3(10.0f, 0.0f, 0.0f), glm::vec3(10.0f, 1.0f, 4.0f)}, 12.0f}};
-    const render_fences fences = build_render_fences(area, 7, test_scene_colors().fixtures.fence_post);
+    const render_fences fences = build_render_fences(area, 7, test_props().fence.color("post"));
     CHECK(fences.revision == 7U);
     CHECK(fences.posts.size() == 3U * 4U * 6U);  // three posts, four sides, two triangles a side
     REQUIRE(fences.nets.size() == 2U * 6U);
@@ -124,5 +124,5 @@ TEST_CASE("a fence is drawn as a post at every pole and a net between each pair"
     }
     CHECK(near(second_start, 10.0f / net_tile_metres));
     CHECK(near(top, 12.0f / net_tile_metres));
-    CHECK(build_render_fences(play_area{}, 1, test_scene_colors().fixtures.fence_post).nets.empty());
+    CHECK(build_render_fences(play_area{}, 1, test_props().fence.color("post")).nets.empty());
 }

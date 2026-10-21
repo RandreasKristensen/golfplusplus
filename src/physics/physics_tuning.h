@@ -1,6 +1,6 @@
 #pragma once
 
-// Values come from assets/tuning/game_tuning.json (see game/tuning_loader.h).
+// Values come from assets/play/tuning/ (see game/tuning_loader.h).
 
 #include <vector>
 

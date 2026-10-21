@@ -2,7 +2,7 @@
 
 #include <string>
 
-// Club stats from assets/clubs/*.json.
+// Club stats from assets/play/clubs/*.json.
 struct club_stats {
     float power = 0.0f;                // launch speed at full swing power, m/s
     float loft_degrees = 0.0f;         // launch angle above the aim direction
@@ -17,7 +17,7 @@ struct club_definition {
     std::string id;
     std::string name;
     std::string label;      // short HUD label, e.g. "7I"
-    std::string hit_sound;  // sound id in assets/audio/sounds.json
+    std::string hit_sound;  // sound id in assets/sound/sounds.json
     int bag_order = 0;      // place in the bag, shortest club first
     club_stats stats;
 };

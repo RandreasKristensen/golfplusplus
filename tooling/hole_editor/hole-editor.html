@@ -431,9 +431,7 @@ let isDirty = false;
 
 let projectDirHandle = null;
 let assetsDirHandle = null;
-let holesDirHandle = null;
 let coursesDirHandle = null;
-let courseWorldsDirHandle = null;
 let toolingDirHandle = null;
 let courseManifests = [];
 let activeCourseIndex = -1;
@@ -879,7 +877,8 @@ async function getFileHandleFromPath(root, pathText, create = false) {
   return await dir.getFileHandle(parts[parts.length - 1], { create });
 }
 
-function holeReferenceToAssetPath(reference) {
+// A course's references are relative to its folder (assets/world/courses/<id>/).
+function holeReferenceToCoursePath(reference) {
   let ref = String(reference || '').replace(/\\/g, '/').replace(/^\/+/, '');
   if (!ref) return '';
   if (!ref.includes('/') && !ref.endsWith('.json')) ref = `holes/${ref}.json`;
@@ -887,13 +886,8 @@ function holeReferenceToAssetPath(reference) {
   return ref;
 }
 
-function worldReferenceToAssetPath(reference, courseId = '') {
-  let ref = String(reference || '').replace(/\\/g, '/').replace(/^\/+/, '');
-  if (!ref && courseId) ref = `course_worlds/${courseId}.json`;
-  if (!ref) return '';
-  if (!ref.includes('/') && !ref.endsWith('.json')) ref = `course_worlds/${ref}.json`;
-  else if (!ref.includes('/')) ref = `course_worlds/${ref}`;
-  return ref;
+function worldReferenceToCoursePath(reference) {
+  return String(reference || 'world.json').replace(/\\/g, '/').replace(/^\/+/, '');
 }
 
 async function readJsonFile(handle) {
@@ -916,12 +910,11 @@ async function openProjectFolder() {
     return;
   }
 
-  holesDirHandle = await getOptionalDirectory(assetsDirHandle, 'holes');
-  coursesDirHandle = await getOptionalDirectory(assetsDirHandle, 'courses');
-  courseWorldsDirHandle = await getOptionalDirectory(assetsDirHandle, 'course_worlds');
+  const worldDirHandle = await getOptionalDirectory(assetsDirHandle, 'world');
+  coursesDirHandle = worldDirHandle ? await getOptionalDirectory(worldDirHandle, 'courses') : null;
   toolingDirHandle = await getOptionalDirectory(dir, 'tooling');
-  if (!holesDirHandle || !coursesDirHandle) {
-    setProjectStatus('Expected assets/holes and assets/courses.', true);
+  if (!coursesDirHandle) {
+    setProjectStatus('Expected assets/world/courses.', true);
     return;
   }
 
@@ -929,7 +922,7 @@ async function openProjectFolder() {
   await loadCourseManifests();
   updateProjectPanel();
   if (courseManifests.length > 0) await selectCourse(0);
-  else setProjectStatus('No valid course manifests found in assets/courses.', true);
+  else setProjectStatus('No valid course found in assets/world/courses.', true);
 }
 
 async function loadGeneratorConfig() {
@@ -965,12 +958,13 @@ async function loadGeneratorConfig() {
 
 async function loadCourseManifests() {
   courseManifests = [];
-  for await (const [name, handle] of coursesDirHandle.entries()) {
-    if (handle.kind !== 'file' || !name.endsWith('.json')) continue;
+  for await (const [name, folder] of coursesDirHandle.entries()) {
+    if (folder.kind !== 'directory') continue;
     try {
+      const handle = await folder.getFileHandle('course.json');
       const data = await readJsonFile(handle);
       if (Array.isArray(data.holes) && data.holes.length > 0) {
-        courseManifests.push({ name, handle, data });
+        courseManifests.push({ name, folder, handle, data });
       }
     } catch (_) {
       // Ignore malformed course manifests; the game loader does the same at runtime.
@@ -1030,7 +1024,7 @@ async function loadActiveCourseWorld() {
   if (!active) return;
   await loadCourseHoleOutlines(active);
 
-  const assetPath = worldReferenceToAssetPath(active.data.world, active.data.id || active.name.replace(/\.json$/,''));
+  const assetPath = worldReferenceToCoursePath(active.data.world);
   activeWorldRef = assetPath;
   if (!assetPath) {
     setWorldStatus('Course manifest has no world reference.', true);
@@ -1038,7 +1032,7 @@ async function loadActiveCourseWorld() {
     return;
   }
   try {
-    activeWorldHandle = await getFileHandleFromPath(assetsDirHandle, assetPath);
+    activeWorldHandle = await getFileHandleFromPath(active.folder, assetPath);
     courseWorld = await readJsonFile(activeWorldHandle);
     normalizeCourseWorld();
     markWorldDirty(false);
@@ -1051,11 +1045,11 @@ async function loadActiveCourseWorld() {
 
 async function loadCourseHoleOutlines(active) {
   courseHoleOutlines = [];
-  if (!active?.data?.holes || !assetsDirHandle) return;
+  if (!active?.data?.holes || !active.folder) return;
   for (let i = 0; i < active.data.holes.length; i++) {
     try {
-      const assetPath = holeReferenceToAssetPath(active.data.holes[i]);
-      const handle = await getFileHandleFromPath(assetsDirHandle, assetPath);
+      const assetPath = holeReferenceToCoursePath(active.data.holes[i]);
+      const handle = await getFileHandleFromPath(active.folder, assetPath);
       const data = await readJsonFile(handle);
       courseHoleOutlines[i] = normalizeHoleOutline(data);
     } catch (e) {
@@ -1074,9 +1068,9 @@ async function selectCourseHole(index) {
 
   activeHoleIndex = index;
   activeHoleRef = active.data.holes[index];
-  const assetPath = holeReferenceToAssetPath(activeHoleRef);
+  const assetPath = holeReferenceToCoursePath(activeHoleRef);
   try {
-    activeHoleHandle = await getFileHandleFromPath(assetsDirHandle, assetPath);
+    activeHoleHandle = await getFileHandleFromPath(active.folder, assetPath);
     hole = await readJsonFile(activeHoleHandle);
     if (!hole.tee) hole.tee = [0,0,0];
     if (!hole.pin) hole.pin = [0,0,80];
@@ -1126,7 +1120,7 @@ async function saveCurrentHole() {
   await writable.write(buildJSON());
   await writable.close();
   markDirty(false);
-  setProjectStatus(`Saved ${holeReferenceToAssetPath(activeHoleRef)}`);
+  setProjectStatus(`Saved ${holeReferenceToCoursePath(activeHoleRef)}`);
 }
 
 async function saveCurrentWorld() {

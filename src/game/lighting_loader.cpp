@@ -292,11 +292,7 @@ std::optional<lighting_palette> parse_lighting_from_text(const std::string& text
     scene_colors& colors = palette.colors;
     if (!keys || !figures || !glow || !sky || !shadows || !night_lights || !weather || !rain || !wind || !lightning ||
         !read_colors(*root, "ground", ground_fields, colors.ground) ||
-        !read_colors(*root, "trees", tree_fields, colors.trees) ||
-        !read_colors(*root, "markers", marker_fields, colors.markers) ||
-        !read_colors(*root, "cart", cart_fields, colors.cart) ||
-        !read_colors(*root, "emotes", emote_fields, colors.emotes) ||
-        !read_colors(*root, "fixtures", fixture_fields, colors.fixtures)) {
+        !read_colors(*root, "markers", marker_fields, colors.markers)) {
         return std::nullopt;
     }
     palette.keys = std::move(*keys);

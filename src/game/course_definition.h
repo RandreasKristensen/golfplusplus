@@ -8,7 +8,7 @@
 // What is drawn behind a course (renderer/backdrop_pass.h): a sky panorama, a
 // land panorama (far ground, hills and treelines, transparent where the sky
 // shows) over it, and the haze they and the drawn scene fade into with
-// distance. Both images are relative to the asset root and drawn by
+// distance. Both images are relative to the asset root (course_in_folder) and drawn by
 // tooling/art/make_art.py, which also takes the sky's horizon from
 // `haze_color` so the far land melts into it.
 struct course_backdrop {
@@ -39,14 +39,16 @@ struct course_sky {
     float lowest_sun_deg = -90.0f;
 };
 
-// A course manifest (assets/courses/*.json).
+// A course manifest (assets/world/courses/<course>/course.json). Its file
+// references are written relative to its folder; course_in_folder makes
+// them relative to the asset root.
 struct course_definition {
     std::string id;
     std::string name;
-    // Hole references: a path relative to the asset root, or a bare hole id
-    // meaning holes/<id>.json. See course_hole_path.
+    // Hole references: a path, or a bare hole id meaning holes/<id>.json.
+    // See course_hole_path.
     std::vector<std::string> holes;
-    // The course world, relative to the asset root.
+    // The course world.
     std::string world;
     course_backdrop backdrop;
     course_sky sky;

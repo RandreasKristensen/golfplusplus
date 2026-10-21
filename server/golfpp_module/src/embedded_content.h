@@ -1,8 +1,9 @@
 #pragma once
 
-// The game content compiled into the module: every JSON file of the content
-// directories, keyed by its path relative to assets/ ("holes/x.json"). The
-// definitions are generated at build time by embed_content.cmake.
+// The game content compiled into the module: every file matching the content
+// patterns of CMakeLists.txt, keyed by its path relative to assets/
+// ("world/courses/x/holes/h01.json"). The definitions are generated at build
+// time by embed_content.cmake.
 
 #include <cstddef>
 #include <string_view>

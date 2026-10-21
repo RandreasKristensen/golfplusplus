@@ -83,30 +83,60 @@ std::vector<std::filesystem::path> json_files_in_directory(const std::filesystem
     return files;
 }
 
+std::vector<std::filesystem::path> json_files_under(const std::filesystem::path& directory) {
+    std::vector<std::filesystem::path> files;
+    std::error_code error;
+    std::filesystem::recursive_directory_iterator it(directory, error);
+    for (; !error && it != std::filesystem::recursive_directory_iterator(); it.increment(error)) {
+        std::error_code type_error;
+        if (it->is_regular_file(type_error) && it->path().extension() == ".json") {
+            files.push_back(it->path());
+        }
+    }
+    std::sort(files.begin(), files.end());
+    return files;
+}
+
 std::optional<hole_data> load_hole_from_file(const std::string& path) {
     const std::optional<std::string> text = read_text_file(path);
     return text ? parse_hole_from_text(*text) : std::nullopt;
 }
 
-std::vector<club_definition> load_clubs_from_directory(const std::string& directory) {
+std::vector<std::string> json_texts_in_directory(const std::filesystem::path& directory) {
     std::vector<std::string> texts;
     for (const std::filesystem::path& path : json_files_in_directory(directory)) {
         if (std::optional<std::string> text = read_text_file(path)) {
             texts.push_back(std::move(*text));
         }
     }
-    return parse_clubs_from_texts(texts);
+    return texts;
 }
 
-std::optional<course_definition> load_course_from_file(const std::string& path) {
-    const std::optional<std::string> text = read_text_file(path);
-    return text ? parse_course_from_text(*text) : std::nullopt;
+std::vector<club_definition> load_clubs_from_directory(const std::string& directory) {
+    return parse_clubs_from_texts(json_texts_in_directory(directory));
 }
 
-std::vector<course_definition> load_courses_from_directory(const std::string& directory) {
+std::optional<course_definition> load_course(const std::string& asset_root, const std::string& folder) {
+    const std::optional<std::string> text =
+        read_text_file(std::filesystem::path(asset_root) / folder / course_file_name);
+    std::optional<course_definition> course = text ? parse_course_from_text(*text) : std::nullopt;
+    return course ? std::optional<course_definition>(course_in_folder(std::move(*course), folder)) : std::nullopt;
+}
+
+std::vector<course_definition> load_courses(const std::string& asset_root) {
+    std::vector<std::string> folders;
+    std::error_code error;
+    std::filesystem::directory_iterator it(std::filesystem::path(asset_root) / courses_path, error);
+    for (; !error && it != std::filesystem::directory_iterator(); it.increment(error)) {
+        std::error_code type_error;
+        if (it->is_directory(type_error)) {
+            folders.push_back(std::string(courses_path) + "/" + it->path().filename().string());
+        }
+    }
+    std::sort(folders.begin(), folders.end());
     std::vector<course_definition> courses;
-    for (const std::filesystem::path& path : json_files_in_directory(directory)) {
-        if (std::optional<course_definition> course = load_course_from_file(path.string())) {
+    for (const std::string& folder : folders) {
+        if (std::optional<course_definition> course = load_course(asset_root, folder)) {
             courses.push_back(std::move(*course));
         }
     }

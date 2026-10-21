@@ -98,3 +98,30 @@ std::string course_hole_reference(const course_definition& course, const std::si
     const bool bare_id = reference.find_first_of("/\\.") == std::string::npos;
     return bare_id ? "holes/" + reference + ".json" : reference;
 }
+
+course_definition course_in_folder(course_definition course, const std::string& folder) {
+    const auto in_folder = [&folder](const std::string& reference) {
+        return folder.empty() ? reference : folder + "/" + reference;
+    };
+    for (std::size_t i = 0; i < course.holes.size(); ++i) {
+        course.holes[i] = in_folder(course_hole_reference(course, i));
+    }
+    course.world = in_folder(course.world);
+    course.backdrop.sky = in_folder(course.backdrop.sky);
+    course.backdrop.land = in_folder(course.backdrop.land);
+    return course;
+}
+
+std::optional<std::string> course_folder_of(const std::string& path) {
+    const std::string prefix = std::string(courses_path) + "/";
+    const std::string suffix = std::string("/") + course_file_name;
+    if (path.size() <= prefix.size() + suffix.size() || path.compare(0, prefix.size(), prefix) != 0 ||
+        path.compare(path.size() - suffix.size(), suffix.size(), suffix) != 0) {
+        return std::nullopt;
+    }
+    std::string folder = path.substr(0, path.size() - suffix.size());
+    if (folder.find('/', prefix.size()) != std::string::npos) {
+        return std::nullopt;
+    }
+    return folder;
+}

@@ -14,18 +14,18 @@
 #include "physics/vector_math.h"
 #include "renderer/camera_local.h"
 #include "renderer/primitive_mesh.h"
+#include "renderer/prop_pieces.h"
 
 namespace {
 constexpr float no_glow = 0.0f;
 constexpr bool writes_depth = true;
 
 constexpr std::size_t quad_vertex_count = 6;
-constexpr std::size_t box_count = 8;
 constexpr std::size_t wheel_rim_segments = 12;
 constexpr std::size_t wheel_spoke_count = 3;
-// Posts, wheels, bag, steering column, the steering wheel's rim and spokes;
-// hub caps and the steering wheel's hub.
-constexpr std::size_t cylinder_count = 4 + 4 + 1 + 1 + wheel_rim_segments + wheel_spoke_count;
+// Besides its model's parts: the wheels, steering column, the steering
+// wheel's rim and spokes; hub caps and the steering wheel's hub.
+constexpr std::size_t cylinder_count = 4 + 1 + wheel_rim_segments + wheel_spoke_count;
 constexpr std::size_t sphere_count = 4 + 1;
 
 // The wheels, in the cart's frame: their hubs at the wheel radius over its
@@ -60,9 +60,12 @@ constexpr float wheel_column_radius = 0.024f;
 constexpr float wheel_full_turn_degrees = 110.0f;
 }
 
-std::size_t cart_vertex_count() {
-    return box_count * 6 * quad_vertex_count + cylinder_count * make_cylinder_positions(primitive_cylinder_segments).size() +
-           sphere_count * make_sphere_positions(primitive_sphere_latitude_segments, primitive_sphere_longitude_segments).size();
+std::size_t cart_vertex_count(const prop_model& model) {
+    const std::size_t cylinder = make_cylinder_positions(primitive_cylinder_segments).size();
+    const std::size_t sphere = make_sphere_positions(primitive_sphere_latitude_segments, primitive_sphere_longitude_segments).size();
+    return prop_piece_count(model, prop_mesh::quad) * quad_vertex_count +
+           (prop_piece_count(model, prop_mesh::cylinder) + cylinder_count) * cylinder +
+           (prop_piece_count(model, prop_mesh::sphere) + sphere_count) * sphere;
 }
 
 glm::mat4 cart_frame(const render_cart& cart) {
@@ -132,26 +135,29 @@ render_cart cart_on_ground(const glm::vec3& position, const float yaw,
     return cart;
 }
 
-void append_cart_model(world_marker_batch& batch, const render_cart& cart, const float seat_offset, const cart_colors& colors) {
+void append_cart_model(world_marker_batch& batch, const render_cart& cart, const float seat_offset, const prop_model& model) {
     // Built in the cart's frame (x towards its left, y up, z forward, world
     // units), under the middle of its seat at the bottom of its wheels, then
-    // set in the world by cart_frame.
+    // set in the world by cart_frame: its model's parts, then the wheels and
+    // the steering wheel, which turn.
     const glm::mat4 frame = cart_frame(cart);
+    for (const prop_piece& piece : prop_pieces(model, frame)) {
+        switch (piece.mesh) {
+        case prop_mesh::cylinder:
+            batch.append_cylinder(piece.model, piece.color, no_glow, writes_depth);
+            break;
+        case prop_mesh::sphere:
+            batch.append_sphere(piece.model, piece.color, no_glow, writes_depth);
+            break;
+        case prop_mesh::quad:
+            batch.append_quad(piece.model, piece.color, no_glow, writes_depth);
+            break;
+        }
+    }
     const glm::vec3 feet(0.0f);
     const glm::vec3 facing(0.0f, 0.0f, 1.0f);
-    const auto panel = [&](const glm::vec3& local, const glm::vec3& rotation, const glm::vec2& half_size,
-                           const glm::vec3& color) {
-        batch.append_quad(frame * local_panel_model(feet, facing, local, rotation, half_size), color, no_glow, writes_depth);
-    };
-    const auto box = [&](const glm::vec3& centre, const glm::vec3& half, const glm::vec3& color) {
-        const float quarter = glm::radians(90.0f);
-        panel(centre + glm::vec3(0.0f, 0.0f, half.z), glm::vec3(0.0f), glm::vec2(half.x, half.y), color);
-        panel(centre - glm::vec3(0.0f, 0.0f, half.z), glm::vec3(0.0f), glm::vec2(half.x, half.y), color);
-        panel(centre + glm::vec3(half.x, 0.0f, 0.0f), glm::vec3(0.0f, quarter, 0.0f), glm::vec2(half.z, half.y), color);
-        panel(centre - glm::vec3(half.x, 0.0f, 0.0f), glm::vec3(0.0f, quarter, 0.0f), glm::vec2(half.z, half.y), color);
-        panel(centre + glm::vec3(0.0f, half.y, 0.0f), glm::vec3(quarter, 0.0f, 0.0f), glm::vec2(half.x, half.z), color);
-        panel(centre - glm::vec3(0.0f, half.y, 0.0f), glm::vec3(quarter, 0.0f, 0.0f), glm::vec2(half.x, half.z), color);
-    };
+    const glm::vec3 rubber = model.color("rubber");
+    const glm::vec3 trim = model.color("trim");
     const auto cylinder = [&](const glm::vec3& local, const glm::vec3& rotation, const glm::vec3& scale, const glm::vec3& color) {
         batch.append_cylinder(frame * local_cylinder_model(feet, facing, local, rotation, scale), color, no_glow, writes_depth);
     };
@@ -159,33 +165,14 @@ void append_cart_model(world_marker_batch& batch, const render_cart& cart, const
         batch.append_cylinder(frame * local_segment_model(feet, facing, from, to, radius), color, no_glow, writes_depth);
     };
 
-    box(glm::vec3(0.0f, 0.40f, 0.15f), glm::vec3(0.62f, 0.08f, 1.15f), colors.body);    // floor and frame
-    box(glm::vec3(0.0f, 0.62f, 1.05f), glm::vec3(0.60f, 0.16f, 0.28f), colors.body);    // hood
-    box(glm::vec3(0.0f, 0.86f, 0.80f), glm::vec3(0.58f, 0.08f, 0.06f), colors.cream);   // dash
-    box(glm::vec3(0.0f, 0.36f, 1.34f), glm::vec3(0.64f, 0.06f, 0.04f), colors.trim);    // bumper
-    box(glm::vec3(0.0f, 0.58f, -0.12f), glm::vec3(0.58f, 0.12f, 0.28f), colors.seat);   // seat
-    box(glm::vec3(0.0f, 0.98f, -0.40f), glm::vec3(0.58f, 0.26f, 0.05f), colors.seat);   // seat back
-    box(glm::vec3(0.0f, 0.62f, -0.78f), glm::vec3(0.62f, 0.14f, 0.24f), colors.body);   // rear deck
-    box(glm::vec3(0.0f, 2.00f, 0.05f), glm::vec3(0.72f, 0.03f, 1.00f), colors.canopy);  // roof
-
-    const std::array<float, 2> post_x{-0.56f, 0.56f};
-    const std::array<float, 2> post_z{-0.62f, 0.72f};
-    for (const float x : post_x) {
-        for (const float z : post_z) {
-            cylinder(glm::vec3(x, 1.23f, z), glm::vec3(0.0f), glm::vec3(0.03f, 1.50f, 0.03f), colors.cream);
-        }
-    }
     for (const float x : wheel_x) {
         for (const float z : wheel_z) {
             cylinder(glm::vec3(x, tyre_radius, z), glm::vec3(0.0f, 0.0f, glm::radians(-90.0f)),
-                     glm::vec3(tyre_radius, tyre_width, tyre_radius), colors.rubber);
+                     glm::vec3(tyre_radius, tyre_width, tyre_radius), rubber);
             batch.append_sphere(frame * local_sphere_model(feet, facing, glm::vec3(x * 1.1f, tyre_radius, z), 0.085f),
-                                colors.hub_cap, no_glow, writes_depth);
+                                model.color("hub_cap"), no_glow, writes_depth);
         }
     }
-    // A golf bag stood in the rear deck, leaning back.
-    cylinder(glm::vec3(0.0f, 1.05f, -0.82f), glm::vec3(glm::radians(-20.0f), 0.0f, 0.0f), glm::vec3(0.14f, 0.75f, 0.14f),
-             colors.bag);
 
     // The steering wheel faces the driver's chest on a column down into the
     // dash; across its face run `side` (the cart's left) and `rise` (up it).
@@ -194,7 +181,7 @@ void append_cart_model(world_marker_batch& batch, const render_cart& cart, const
     const glm::vec3 towards_driver(0.0f, std::sin(lean), -std::cos(lean));
     const glm::vec3 side(1.0f, 0.0f, 0.0f);
     const glm::vec3 rise(0.0f, std::cos(lean), std::sin(lean));
-    rod(hub - towards_driver * wheel_column_length, hub, wheel_column_radius, colors.trim);
+    rod(hub - towards_driver * wheel_column_length, hub, wheel_column_radius, trim);
     const float turn = -glm::clamp(cart.steer, -1.0f, 1.0f) * glm::radians(wheel_full_turn_degrees);
     const auto rim_point = [&](const float angle) {
         return hub + (side * std::cos(angle + turn) + rise * std::sin(angle + turn)) * wheel_radius;
@@ -203,11 +190,11 @@ void append_cart_model(world_marker_batch& batch, const render_cart& cart, const
     const float rim_step = 2.0f * pi / static_cast<float>(wheel_rim_segments);
     for (std::size_t i = 0; i < wheel_rim_segments; ++i) {
         rod(rim_point(rim_step * static_cast<float>(i)), rim_point(rim_step * static_cast<float>(i + 1)), wheel_rim_radius,
-            colors.rubber);
+            rubber);
     }
     // Held straight, its spokes run out to either side and down.
     for (const float angle : std::array<float, wheel_spoke_count>{0.0f, pi, 1.5f * pi}) {
-        rod(hub, rim_point(angle), wheel_spoke_radius, colors.trim);
+        rod(hub, rim_point(angle), wheel_spoke_radius, trim);
     }
-    batch.append_sphere(frame * local_sphere_model(feet, facing, hub, wheel_hub_radius), colors.trim, no_glow, writes_depth);
+    batch.append_sphere(frame * local_sphere_model(feet, facing, hub, wheel_hub_radius), trim, no_glow, writes_depth);
 }

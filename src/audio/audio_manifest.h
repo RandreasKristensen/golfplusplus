@@ -1,6 +1,6 @@
 #pragma once
 
-// assets/audio/sounds.json. Entries may carry authoring notes
+// assets/sound/sounds.json. Entries may carry authoring notes
 // ("description", "target_length_seconds") that the game ignores.
 
 #include "game/settings.h"
@@ -9,6 +9,9 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+// The manifest under the asset root; its sounds' files are beside it.
+inline constexpr const char* sounds_path = "sound/sounds.json";
 
 enum class audio_sound_type {
     sfx,

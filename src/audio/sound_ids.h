@@ -1,6 +1,6 @@
 #pragma once
 
-// Ids of sounds that code plays, from assets/audio/sounds.json. A test checks
+// Ids of sounds that code plays, from assets/sound/sounds.json. A test checks
 // every id here exists in the manifest with an existing file, so keep one
 // constant per line in this exact form. Club hit sounds are data: each club's
 // "hit_sound".

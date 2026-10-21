@@ -1,6 +1,6 @@
 #pragma once
 
-// Plays the sounds in assets/audio/sounds.json through SDL_mixer. Missing
+// Plays the sounds in assets/sound/sounds.json through SDL_mixer. Missing
 // files and failed loads are logged once and then ignored, so the game runs
 // without audio.
 

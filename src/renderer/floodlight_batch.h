@@ -6,7 +6,7 @@
 // Built when the play area changes. GL-free; renderer/floodlight_renderer
 // draws it, and into the shadow map.
 
-#include "game/lighting_loader.h"
+#include "game/prop_loader.h"
 #include "game/play_area.h"
 
 #include <cstdint>
@@ -27,4 +27,5 @@ struct render_floodlights {
     std::uint64_t revision = 0;
 };
 
-render_floodlights build_render_floodlights(const play_area& area, std::uint64_t revision, const fixture_colors& colors);
+// Its colours are assets/world/props/floodlight.json's.
+render_floodlights build_render_floodlights(const play_area& area, std::uint64_t revision, const prop_model& model);

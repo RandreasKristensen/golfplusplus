@@ -173,7 +173,7 @@ TEST_CASE("audio manifest parser keeps SDL_mixer asset classes explicit") {
 }
 
 TEST_CASE("every sound the game plays is in the manifest with an existing file") {
-    const audio_manifest_parse_result result = load_audio_manifest_from_file(asset_root() + "/audio/sounds.json");
+    const audio_manifest_parse_result result = load_audio_manifest_from_file(asset_root() + "/" + sounds_path);
     REQUIRE(result.manifest.has_value());
 
     std::vector<std::string> played;
@@ -194,24 +194,24 @@ TEST_CASE("every sound the game plays is in the manifest with an existing file")
         const audio_sound_definition* sound = find_sound(*result.manifest, id);
         CHECK(sound != nullptr);
         if (sound != nullptr) {
-            CHECK(std::filesystem::exists(std::filesystem::path(asset_root()) / "audio" / sound->file));
+            CHECK(std::filesystem::exists((std::filesystem::path(asset_root()) / sounds_path).parent_path() / sound->file));
         }
     }
 }
 
 TEST_CASE("every file in the manifest exists") {
-    const audio_manifest_parse_result result = load_audio_manifest_from_file(asset_root() + "/audio/sounds.json");
+    const audio_manifest_parse_result result = load_audio_manifest_from_file(asset_root() + "/" + sounds_path);
     REQUIRE(result.manifest.has_value());
     for (const audio_sound_definition& sound : result.manifest->sounds) {
-        CHECK(std::filesystem::exists(std::filesystem::path(asset_root()) / "audio" / sound.file));
+        CHECK(std::filesystem::exists((std::filesystem::path(asset_root()) / sounds_path).parent_path() / sound.file));
     }
 }
 
 TEST_CASE("every file in the manifest is the format its extension says") {
-    const audio_manifest_parse_result result = load_audio_manifest_from_file(asset_root() + "/audio/sounds.json");
+    const audio_manifest_parse_result result = load_audio_manifest_from_file(asset_root() + "/" + sounds_path);
     REQUIRE(result.manifest.has_value());
     for (const audio_sound_definition& sound : result.manifest->sounds) {
-        CHECK(contents_match_extension(std::filesystem::path(asset_root()) / "audio" / sound.file));
+        CHECK(contents_match_extension((std::filesystem::path(asset_root()) / sounds_path).parent_path() / sound.file));
     }
 }
 

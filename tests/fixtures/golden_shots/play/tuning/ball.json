@@ -1,0 +1,45 @@
+{
+  "scale": {
+    "meters_per_world_unit": 1.0,
+    "ball_physics_radius_meters": 0.021335,
+    "ball_visual_radius_meters": 0.10,
+    "cup_radius_meters": 0.75,
+    "pin_visual_height_meters": 2.10,
+    "flagstick_radius_meters": 0.05
+  },
+  "physics": {
+    "drag_coeff": 0.004,
+    "magnus_coeff": 0.0004,
+    "spin_decay": 0.6,
+    "water_drag_coeff": 0.22,
+    "water_spin_decay": 2.8
+  },
+  "ball": {
+    "stop_speed": 0.08,
+    "water_linger_seconds": 0.5,
+    "ground_restitution": 0.35,
+    "ground_friction": 0.08,
+    "water_restitution": 0.05,
+    "water_friction": 0.28,
+    "bunker_restitution": 0.0,
+    "bunker_friction": 0.6,
+    "bunker_roll_deceleration": 25.0,
+    "tree_restitution": 0.25,
+    "tree_friction": 0.35,
+    "green_roll_deceleration": 1.0,
+    "fairway_roll_deceleration": 1.0,
+    "rough_roll_deceleration": 1.0,
+    "settle_speed": 0.6,
+    "cup_capture_speed": 3.0,
+    "cup_lip_capture_scale": 0.4,
+    "cup_dunk_scale": 1.0
+  },
+  "lies": {
+    "tee": { "power": 1.0, "spin": 1.0 },
+    "fairway": { "power": 1.0, "spin": 1.0 },
+    "rough": { "power": 1.0, "spin": 1.0 },
+    "green": { "power": 1.0, "spin": 1.0 },
+    "bunker": { "power": 1.0, "spin": 1.0 },
+    "water": { "power": 1.0, "spin": 1.0 }
+  }
+}

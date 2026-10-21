@@ -18,11 +18,11 @@ game_content_load_result load_game_content(const std::string& asset_root) {
     game_content content;
     content.asset_root = asset_root;
 
-    const std::optional<std::string> tuning_text = read_text_file(root / game_tuning_path);
-    if (!tuning_text) {
-        return fail(std::string("cannot read ") + game_tuning_path);
+    const std::vector<std::string> tuning_texts = json_texts_in_directory(root / tuning_path);
+    if (tuning_texts.empty()) {
+        return fail(std::string("cannot read ") + tuning_path);
     }
-    game_tuning_parse_result tuning = parse_game_tuning_from_text(*tuning_text);
+    game_tuning_parse_result tuning = parse_game_tuning_from_texts(tuning_texts);
     if (!tuning.tuning) {
         return fail(tuning.error);
     }
@@ -50,13 +50,13 @@ game_content_load_result load_game_content(const std::string& asset_root) {
     }
     content.settings = std::move(*settings);
 
-    content.clubs = load_clubs_from_directory((root / "clubs").string());
+    content.clubs = load_clubs_from_directory((root / clubs_path).string());
     if (content.clubs.empty()) {
-        return fail("no valid clubs in clubs/");
+        return fail(std::string("no valid clubs in ") + clubs_path);
     }
-    content.courses = load_courses_from_directory((root / "courses").string());
+    content.courses = load_courses(asset_root);
     if (content.courses.empty()) {
-        return fail("no valid courses in courses/");
+        return fail(std::string("no valid courses in ") + courses_path);
     }
 
     result.content = std::move(content);

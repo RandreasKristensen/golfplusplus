@@ -9,7 +9,7 @@
 
 #include <glm/vec3.hpp>
 
-// One hole as authored in assets/holes/*.json, in the hole's own coordinates.
+// One hole as authored in assets/world/courses/*/holes/*.json, in the hole's own coordinates.
 struct hole_spline {
     std::vector<glm::vec3> control_points;
     std::vector<float> bank;  // per control point, see terrain_spline::bank; empty = level

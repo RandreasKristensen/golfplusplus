@@ -11,24 +11,20 @@ namespace {
 glm::vec3 camera_forward(const glm::vec3& camera_position, const glm::vec3& camera_target) {
     return safe_normalize(horizontal(camera_target - camera_position), glm::vec3(0.0f, 0.0f, 1.0f));
 }
-
-glm::vec3 camera_right(const glm::vec3& forward) {
-    return glm::normalize(glm::cross(world_up, forward));
-}
 }
 
 glm::vec3 camera_local_point(const glm::vec3& camera_position, const glm::vec3& camera_target, const glm::vec3& local) {
     const glm::vec3 forward = camera_forward(camera_position, camera_target);
-    return camera_position + camera_right(forward) * local.x + world_up * local.y + forward * local.z;
+    return camera_position + yaw_left(forward) * local.x + world_up * local.y + forward * local.z;
 }
 
 glm::mat4 camera_view_frame(const glm::vec3& camera_position, const glm::vec3& camera_target) {
     const glm::vec3 level = camera_forward(camera_position, camera_target);
     const glm::vec3 forward = safe_normalize(camera_target - camera_position, level);
-    const glm::vec3 right = safe_normalize(glm::cross(world_up, forward), camera_right(level));
+    const glm::vec3 left = safe_normalize(glm::cross(world_up, forward), yaw_left(level));
     glm::mat4 frame(1.0f);
-    frame[0] = glm::vec4(right, 0.0f);
-    frame[1] = glm::vec4(glm::cross(forward, right), 0.0f);
+    frame[0] = glm::vec4(left, 0.0f);
+    frame[1] = glm::vec4(glm::cross(forward, left), 0.0f);
     frame[2] = glm::vec4(forward, 0.0f);
     frame[3] = glm::vec4(camera_position, 1.0f);
     return frame;
@@ -41,7 +37,7 @@ glm::mat4 camera_local_model(const glm::vec3& camera_position,
                              const glm::vec3& scale) {
     const glm::vec3 forward = camera_forward(camera_position, camera_target);
     glm::mat4 model(1.0f);
-    model[0] = glm::vec4(camera_right(forward), 0.0f);
+    model[0] = glm::vec4(yaw_left(forward), 0.0f);
     model[1] = glm::vec4(world_up, 0.0f);
     model[2] = glm::vec4(forward, 0.0f);
     model[3] = glm::vec4(camera_local_point(camera_position, camera_target, local), 1.0f);
@@ -49,6 +45,17 @@ glm::mat4 camera_local_model(const glm::vec3& camera_position,
     model = glm::rotate(model, rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
     model = glm::rotate(model, rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
     return glm::scale(model, scale);
+}
+
+glm::mat4 posed_model(const glm::vec3& at, const glm::vec3& up, const glm::vec3& front, const glm::vec3& scale) {
+    const glm::vec3 y = safe_normalize(up, world_up);
+    const glm::vec3 z = safe_normalize(front - y * glm::dot(front, y), glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::mat4 model(1.0f);
+    model[0] = glm::vec4(glm::cross(y, z) * scale.x, 0.0f);
+    model[1] = glm::vec4(y * scale.y, 0.0f);
+    model[2] = glm::vec4(z * scale.z, 0.0f);
+    model[3] = glm::vec4(at, 1.0f);
+    return model;
 }
 
 glm::mat4 local_panel_model(const glm::vec3& camera_position,

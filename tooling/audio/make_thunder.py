@@ -1,4 +1,4 @@
-"""Writes the thunder the game plays after lightning: assets/audio/sfx/
+"""Writes the thunder the game plays after lightning: assets/sound/effects/
 thunder_close.wav (a crack, then a rolling rumble) and thunder_far.wav (a
 low rumble only). Drawn by this script from seeded noise, so the same every
 run: no recorded or licensed audio. Standard library only.
@@ -13,7 +13,7 @@ import struct
 import wave
 
 RATE = 22050
-ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..', 'assets', 'audio', 'sfx'))
+ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..', 'assets', 'sound', 'effects'))
 
 
 def low_pass(samples, cutoff_hz):

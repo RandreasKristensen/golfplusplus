@@ -1,7 +1,7 @@
 #pragma once
 
 // The one place keys and the mouse are bound to game actions. The help
-// screen text in assets/text/en.json ("help.*") describes these bindings.
+// screen text in assets/interface/text/en.json ("help.*") describes these bindings.
 
 #include "core/input.h"
 #include "game/game_input.h"

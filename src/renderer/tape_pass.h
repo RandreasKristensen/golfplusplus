@@ -1,7 +1,7 @@
 #pragma once
 
 // VHS playback of what the camcorder recorded (renderer/camcorder_pass.h;
-// assets/shaders/tape.frag), at scene resolution into a target of its own
+// assets/picture/shaders/tape.frag), at scene resolution into a target of its own
 // that the overlay is then drawn onto, so text is never smeared or noisy: brightness and colour blurred sideways apart,
 // colour bleeding right, the tone curve, grain, wobble, the head-switching
 // band, dropouts and, when the frame asks for it, tracking noise. Never off.

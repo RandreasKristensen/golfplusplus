@@ -31,13 +31,13 @@ constexpr float backdrop_ground_drop = 2.0f;
 constexpr float flight_path_lift = 0.02f;
 constexpr int grass_texture_unit = 1;
 constexpr int shadow_map_unit = 4;
-constexpr const char* grass_texture_path = "textures/rough_grass.bmp";
-constexpr const char* fence_net_texture_path = "textures/fence_net.bmp";
+constexpr const char* grass_texture_path = "world/ground/rough_grass.bmp";
+constexpr const char* fence_net_texture_path = "world/props/fence_net.bmp";
 constexpr float min_far_plane = 160.0f;
 constexpr float far_plane_extent_scale = 2.5f;
 
 std::string shader_path(const std::string& asset_root, const char* name) {
-    return (std::filesystem::path(asset_root) / "shaders" / name).string();
+    return (std::filesystem::path(asset_root) / "picture" / "shaders" / name).string();
 }
 
 // Draw submissions go through these so draw calls are counted in the profile.
@@ -62,10 +62,11 @@ void delete_vertex_array(unsigned int& vao) {
 }
 
 bool renderer::init(SDL_Window* window, const std::string& asset_root, const picture_style& picture,
-                    const lighting_palette& palette) {
+                    const lighting_palette& palette, const prop_set& props) {
     window_ = window;
     picture_style_ = picture;
     colors_ = palette.colors;
+    props_ = props;
     if (window_ == nullptr) {
         return false;
     }
@@ -189,7 +190,7 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
     if (!data.vcr.still_frame || !camcorder_pass_.has_frame()) {
         const profile_scope scene_timer(profile, profile_stage::render_scene);
         const std::vector<tree_body> no_trees;
-        build_shadow_casters(shadow_casters_, data, colors_);
+        build_shadow_casters(shadow_casters_, data, colors_, props_);
         shadow_map_pass_.draw(tree_renderer_, data.trees != nullptr ? *data.trees : no_trees, data.trees_revision,
                               floodlight_renderer_, data.floodlights, shadow_casters_,
                               data.lighting.sun_direction, data.lighting.shadows.sun_share, data.camera_position,
@@ -373,7 +374,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
 
     gpu_timers_.begin(gpu_profile_stage::trees);
     cull_stats_.trees_visible = tree_renderer_.draw(data.trees != nullptr ? *data.trees : std::vector<tree_body>{},
-                                                    data.trees_revision, view, proj, frustum, colors_.trees, profile);
+                                                    data.trees_revision, view, proj, frustum, props_.tree, profile);
     hole_sign_renderer_.draw(data.hole_signs, view_proj, profile);
     fence_renderer_.draw_posts(data.fences, view_proj, profile);
     floodlight_renderer_.draw(data.floodlights, view_proj, profile);
@@ -399,7 +400,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     markers.remote_avatars = &data.remote_avatars;
     markers.remote_balls = &data.remote_balls;
     markers.avatar_eye_height = data.avatar_eye_height;
-    build_world_marker_batch(world_marker_batch_, markers, colors_);
+    build_world_marker_batch(world_marker_batch_, markers, colors_, props_);
     world_marker_renderer_.draw(world_marker_batch_, view_proj, profile);
 
     // Behind everything solid, before anything blends over it.
@@ -412,7 +413,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     emote_props_.clear();
     for (const render_remote_avatar& avatar : data.remote_avatars) {
         if (const std::optional<emote_holder> holder = remote_emote_holder(avatar, data.avatar_eye_height)) {
-            append_emote_props(emote_props_, *holder, colors_);
+            append_emote_props(emote_props_, *holder, props_, colors_.glow);
         }
     }
     draw_emote_props(view_proj);
@@ -449,14 +450,14 @@ void renderer::render_viewmodel(const glm::mat4& view, const render_data& data) 
         data.camera_position, data.camera_target,
         data.smoke_emote_active ? std::optional<float>(data.smoke_emote_elapsed) : std::nullopt,
         data.beer_emote_active ? std::optional<float>(data.beer_emote_elapsed) : std::nullopt);
-    append_emote_props(emote_props_, mine, colors_);
+    append_emote_props(emote_props_, mine, props_, colors_.glow);
     // Never cut into by the world it sits in.
     glClear(GL_DEPTH_BUFFER_BIT);
     draw_emote_props(scene_projection(data.viewmodel_fov_degrees, data.area_extent) * view);
 }
 
 // The emote props collected this frame: the opaque pieces, then the smoke
-// blended over them.
+// and beer blended over them.
 void renderer::draw_emote_props(const glm::mat4& view_proj) {
     if (emote_props_.empty()) {
         return;
@@ -467,9 +468,9 @@ void renderer::draw_emote_props(const glm::mat4& view_proj) {
             if ((prop.alpha < 1.0f) != blended) {
                 continue;
             }
-            const primitive_buffers& mesh = prop.mesh == emote_prop_mesh::cylinder ? cylinder_
-                                            : prop.mesh == emote_prop_mesh::sphere ? ball_
-                                                                                   : panel_;
+            const primitive_buffers& mesh = prop.mesh == prop_mesh::cylinder ? cylinder_
+                                            : prop.mesh == prop_mesh::sphere ? ball_
+                                                                             : panel_;
             set_terrain_draw_state(terrain_shader_, prop.model, view_proj, prop.color, prop.alpha, prop.glow, false);
             glBindVertexArray(mesh.vao);
             draw_arrays(terrain_shader_, GL_TRIANGLES, 0, mesh.vertex_count);

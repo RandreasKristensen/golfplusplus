@@ -110,12 +110,15 @@ set(GOLFPP_SHARED_SOURCES
 )
 list(TRANSFORM GOLFPP_SHARED_SOURCES PREPEND "${GOLFPP_ROOT}/")
 
-# Every JSON file of these asset directories is compiled in.
-set(GOLFPP_CONTENT_DIRECTORIES holes courses course_worlds clubs progression tuning fonts)
+# Every asset file matching these patterns is compiled in: the play
+# content, the font, and every course's manifest, world and holes.
+set(GOLFPP_CONTENT_PATTERNS
+  play/tuning/*.json play/clubs/*.json play/progression/*.json interface/fonts/*.json
+  world/courses/*/course.json world/courses/*/world.json world/courses/*/holes/*.json)
 set(GOLFPP_ASSET_ROOT "${GOLFPP_ROOT}/assets")
 set(GOLFPP_CONTENT_FILES "")
-foreach(directory IN LISTS GOLFPP_CONTENT_DIRECTORIES)
-  file(GLOB files CONFIGURE_DEPENDS "${GOLFPP_ASSET_ROOT}/${directory}/*.json")
+foreach(pattern IN LISTS GOLFPP_CONTENT_PATTERNS)
+  file(GLOB files CONFIGURE_DEPENDS "${GOLFPP_ASSET_ROOT}/${pattern}")
   list(APPEND GOLFPP_CONTENT_FILES ${files})
 endforeach()
 set(GOLFPP_EMBEDDED_SOURCE "${CMAKE_BINARY_DIR}/embedded_content.cpp")
@@ -123,7 +126,7 @@ add_custom_command(
   OUTPUT "${GOLFPP_EMBEDDED_SOURCE}"
   COMMAND "${CMAKE_COMMAND}"
     "-DASSET_ROOT=${GOLFPP_ASSET_ROOT}"
-    "-DDIRECTORIES=${GOLFPP_CONTENT_DIRECTORIES}"
+    "-DPATTERNS=${GOLFPP_CONTENT_PATTERNS}"
     "-DOUTPUT=${GOLFPP_EMBEDDED_SOURCE}"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/embed_content.cmake"
   DEPENDS ${GOLFPP_CONTENT_FILES} "${CMAKE_CURRENT_SOURCE_DIR}/embed_content.cmake"

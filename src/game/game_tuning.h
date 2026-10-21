@@ -1,6 +1,6 @@
 #pragma once
 
-// Gameplay feel constants, loaded from assets/tuning/game_tuning.json by
+// Gameplay feel constants, loaded from assets/play/tuning/ by
 // game/tuning_loader.h. Every field is required in the file; the zero
 // defaults here only exist so the structs are plain values. Distances are in
 // meters, times in seconds, angles in radians unless named otherwise.

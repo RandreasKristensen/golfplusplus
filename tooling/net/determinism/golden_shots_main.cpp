@@ -5,6 +5,7 @@
 // Usage: golden_shots <repo root>
 
 #include "game/content_files.h"
+#include "game/course_loader.h"
 #include "game/json_util.h"
 #include "game/play_area.h"
 #include "game/shot_simulation.h"
@@ -21,10 +22,11 @@
 #include <glm/trigonometric.hpp>
 
 namespace {
-void add_directory(std::map<std::string, std::string>& texts, const std::string& root, const std::string& directory) {
-    for (const std::filesystem::path& path : json_files_in_directory(root + "/" + directory)) {
+// Every JSON file under `root`/`folder`, keyed by its path relative to `root`.
+void add_folder(std::map<std::string, std::string>& texts, const std::string& root, const std::string& folder) {
+    for (const std::filesystem::path& path : json_files_under(std::filesystem::path(root) / folder)) {
         if (const std::optional<std::string> text = read_text_file(path)) {
-            texts[directory + "/" + path.filename().string()] = *text;
+            texts[path.lexically_relative(root).generic_string()] = *text;
         }
     }
 }
@@ -42,13 +44,9 @@ int main(int argc, char** argv) {
     // The golden shots' frozen tuning, clubs and rewards, the shipped font,
     // and the fixture courses, as the golden test uses them.
     std::map<std::string, std::string> texts;
-    add_directory(texts, golden, "tuning");
-    add_directory(texts, golden, "clubs");
-    add_directory(texts, golden, "progression");
-    add_directory(texts, repo + "/assets", "fonts");
-    for (const char* directory : {"courses", "holes", "course_worlds"}) {
-        add_directory(texts, fixtures, directory);
-    }
+    add_folder(texts, golden, "play");
+    add_folder(texts, repo + "/assets", "interface/fonts");
+    add_folder(texts, fixtures, courses_path);
     content_files files;
     for (const auto& [path, text] : texts) {
         files.emplace(path, text);

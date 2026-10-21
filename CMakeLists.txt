@@ -128,6 +128,7 @@ golfpp_library(golfpp-game
     src/game/string_table.cpp
     src/game/swing.cpp
     src/game/text_assets.cpp
+    src/game/prop_loader.cpp
     src/game/text_style.cpp
     src/game/tuning_loader.cpp
     src/game/utf8.cpp
@@ -146,6 +147,7 @@ golfpp_library(golfpp-render-data
     src/renderer/course_map_fill.cpp
     src/renderer/course_map_overlay.cpp
     src/renderer/emote_props.cpp
+    src/renderer/prop_pieces.cpp
     src/renderer/frustum.cpp
     src/renderer/fence_batch.cpp
     src/renderer/floodlight_batch.cpp
@@ -346,6 +348,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/camera_transition_tests.cpp
         tests/cart_tests.cpp
         tests/content_tests.cpp
+        tests/prop_tests.cpp
         tests/controls_tests.cpp
         tests/course_map_fill_tests.cpp
         tests/course_tests.cpp

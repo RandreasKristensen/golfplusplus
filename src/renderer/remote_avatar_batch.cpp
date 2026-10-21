@@ -29,20 +29,20 @@ constexpr std::size_t seated_cylinder_count = 9;  // thighs, shins, torso, arms,
 constexpr std::size_t figure_sphere_count = 3;    // head, shoes
 constexpr std::size_t figure_quad_count = 1;      // cap brim
 
-// Where the figure's limbs go, in its frame (x right, y up, z forward) as
+// Where the figure's limbs go, in its frame (x left, y up, z forward) as
 // fractions of its height: the left one, the right mirrored.
-const glm::vec3 shoulder(-0.168f, 0.78f, 0.0f);
-const glm::vec3 hanging_hand(-0.212f, 0.46f, 0.0f);
-const glm::vec3 hip(-0.07f, 0.46f, 0.0f);
-const glm::vec3 foot(-0.07f, 0.0f, 0.0f);
-const glm::vec3 shoe(-0.07f, 0.05f, 0.03f);
+const glm::vec3 shoulder(0.168f, 0.78f, 0.0f);
+const glm::vec3 hanging_hand(0.212f, 0.46f, 0.0f);
+const glm::vec3 hip(0.07f, 0.46f, 0.0f);
+const glm::vec3 foot(0.07f, 0.0f, 0.0f);
+const glm::vec3 shoe(0.07f, 0.05f, 0.03f);
 // Sat at a cart's wheel (cart_batch.h): on its seat, feet on its floor.
-const glm::vec3 seated_hip(-0.07f, 0.45f, 0.0f);
-const glm::vec3 seated_knee(-0.07f, 0.45f, 0.24f);
-const glm::vec3 seated_foot(-0.07f, 0.30f, 0.27f);
-const glm::vec3 seated_shoe(-0.07f, 0.30f, 0.31f);
-const glm::vec3 wheel_hand(-0.08f, 0.57f, 0.22f);
-const glm::vec3 lap_hand(-0.12f, 0.48f, 0.18f);
+const glm::vec3 seated_hip(0.07f, 0.45f, 0.0f);
+const glm::vec3 seated_knee(0.07f, 0.45f, 0.24f);
+const glm::vec3 seated_foot(0.07f, 0.30f, 0.27f);
+const glm::vec3 seated_shoe(0.07f, 0.30f, 0.31f);
+const glm::vec3 wheel_hand(0.08f, 0.57f, 0.22f);
+const glm::vec3 lap_hand(0.12f, 0.48f, 0.18f);
 constexpr float leg_radius = 0.06f;
 constexpr float arm_radius = 0.045f;
 constexpr float shoe_radius = 0.05f;
@@ -64,7 +64,7 @@ std::size_t figure_vertices(const std::size_t cylinders) {
 class figure_painter {
 public:
     figure_painter(world_marker_batch& batch, const glm::vec3& feet, const float yaw, const float height)
-        : batch_(batch), feet_(feet), forward_(yaw_direction(yaw)), right_(glm::cross(world_up, forward_)), h_(height) {}
+        : batch_(batch), feet_(feet), forward_(yaw_direction(yaw)), left_(yaw_left(forward_)), h_(height) {}
 
     void cylinder(const glm::vec3& centre, const glm::vec3& rotation, const glm::vec3& scale, const glm::vec3& color) const {
         batch_.append_cylinder(local_cylinder_model(feet_, feet_ + forward_, centre * h_, rotation, scale * h_), color, no_glow,
@@ -84,14 +84,14 @@ public:
     // A world point in the frame, as fractions of the height.
     glm::vec3 local(const glm::vec3& world) const {
         const glm::vec3 offset = world - feet_;
-        return glm::vec3(glm::dot(offset, right_), offset.y, glm::dot(offset, forward_)) / h_;
+        return glm::vec3(glm::dot(offset, left_), offset.y, glm::dot(offset, forward_)) / h_;
     }
 
 private:
     world_marker_batch& batch_;
     glm::vec3 feet_;
     glm::vec3 forward_;
-    glm::vec3 right_;
+    glm::vec3 left_;
     float h_;
 };
 
@@ -184,11 +184,12 @@ std::optional<emote_holder> remote_emote_holder(const render_remote_avatar& avat
     holder.frame = camera_local_model(head, head + yaw_direction(avatar.yaw), glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f));
     holder.scale = s;
     // The cigarette between the lips, as it sits in my view; the can tipped
-    // back to the mouth, its label facing out.
+    // back to the mouth, its label facing out, spilling down the chin.
     holder.grip.cigarette_filter = mouth;
     holder.grip.cigarette_tip = mouth + (camera.cigarette_tip - camera.cigarette_filter) * s;
-    holder.grip.can_centre = mouth + glm::vec3(0.0f, -0.12f, 0.26f) * s;
-    holder.grip.can_rotation = glm::vec3(glm::radians(60.0f), glm::radians(180.0f), 0.0f);
+    holder.grip.can_held = can_pose{mouth + glm::vec3(0.0f, -0.12f, 0.26f) * s, glm::vec3(0.0f, 0.5f, -0.866f),
+                                    glm::vec3(0.0f, -0.866f, -0.5f)};
+    holder.grip.can_pouring = holder.grip.can_held;
     holder.smoke_elapsed = avatar.smoke_elapsed;
     holder.drink_elapsed = avatar.drink_elapsed;
     return holder;

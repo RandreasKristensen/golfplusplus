@@ -1,6 +1,6 @@
 #pragma once
 
-// The picture's look from assets/visuals/picture.json: art direction for the
+// The picture's look from assets/picture/picture.json: art direction for the
 // renderer, loaded by app before the renderer starts (it draws the loading
 // card with it), so not part of game_content. Lengths are fractions of the
 // picture's height, never pixels, so the look is the same at every window
@@ -11,7 +11,7 @@
 
 #include <glm/vec3.hpp>
 
-inline constexpr const char* picture_style_path = "visuals/picture.json";
+inline constexpr const char* picture_style_path = "picture/picture.json";
 
 // What tape wear changes, from a fresh tape (next to no tape at all) to a
 // worn one.

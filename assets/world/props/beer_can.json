@@ -1,0 +1,28 @@
+{
+  "colors": {
+    "aluminium": [0.74, 0.75, 0.72],
+    "band": [0.72, 0.14, 0.1],
+    "stripe": [0.92, 0.88, 0.72],
+    "badge": [0.88, 0.7, 0.26],
+    "lid": [0.56, 0.56, 0.54],
+    "tab": [0.66, 0.66, 0.62],
+    "opening": [0.16, 0.16, 0.14],
+    "beer": [0.86, 0.58, 0.14],
+    "foam": [0.95, 0.93, 0.84]
+  },
+  "parts": [
+    {"shape": "cylinder", "from": [0, -0.24, 0], "to": [0, -0.215, 0], "radius": 0.128, "color": "aluminium"},
+    {"shape": "cylinder", "from": [0, -0.215, 0], "to": [0, 0.205, 0], "radius": 0.145, "color": "aluminium"},
+    {"shape": "cylinder", "from": [0, 0.205, 0], "to": [0, 0.232, 0], "radius": 0.128, "color": "aluminium"},
+    {"shape": "cylinder", "from": [0, 0.232, 0], "to": [0, 0.245, 0], "radius": 0.122, "color": "lid"},
+    {"shape": "cylinder", "from": [0, -0.15, 0], "to": [0, 0.14, 0], "radius": 0.149, "color": "band"},
+    {"shape": "cylinder", "from": [0, 0.08, 0], "to": [0, 0.105, 0], "radius": 0.151, "color": "stripe"},
+    {"shape": "cylinder", "from": [0, -0.115, 0], "to": [0, -0.095, 0], "radius": 0.151, "color": "stripe"},
+    {"shape": "panel", "at": [0, -0.005, -0.153], "size": [0.12, 0.11], "color": "badge"},
+    {"shape": "panel", "at": [0, 0.246, -0.06], "size": [0.07, 0.035], "turn": [90, 0, 0], "color": "opening"},
+    {"shape": "panel", "at": [0, 0.247, 0.02], "size": [0.05, 0.07], "turn": [90, 0, 0], "color": "tab"}
+  ],
+  "points": {
+    "pour": [0, 0.246, -0.1]
+  }
+}

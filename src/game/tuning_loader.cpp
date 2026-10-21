@@ -71,17 +71,12 @@ struct section_reader {
 };
 }
 
-game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
+namespace {
+game_tuning_parse_result parse_game_tuning(const json& root) {
     game_tuning_parse_result result;
-    const std::optional<json> root = parse_json(text);
-    if (!root || !root->is_object()) {
-        result.error = "game tuning is not a JSON object";
-        return result;
-    }
-
     std::vector<std::string> missing;
     const auto section = [&](const char* name) {
-        return section_reader{json_object(*root, name), name, &missing};
+        return section_reader{json_object(root, name), name, &missing};
     };
 
     game_tuning tuning;
@@ -355,7 +350,7 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     tuning.sky_clock.year = sky_clock.integer("year");
 
     // One entry per lie, named as ball_lie lists them.
-    const json* lies = json_object(*root, "lies");
+    const json* lies = json_object(root, "lies");
     const char* const lie_names[ball_lie_count] = {"tee", "fairway", "rough", "green", "bunker", "water"};
     for (std::size_t i = 0; i < ball_lie_count; ++i) {
         const section_reader lie{lies != nullptr ? json_object(*lies, lie_names[i]) : nullptr,
@@ -373,4 +368,35 @@ game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
     }
     result.tuning = tuning;
     return result;
+}
+}
+
+game_tuning_parse_result parse_game_tuning_from_text(const std::string& text) {
+    const std::optional<json> root = parse_json(text);
+    if (!root || !root->is_object()) {
+        game_tuning_parse_result result;
+        result.error = "game tuning is not a JSON object";
+        return result;
+    }
+    return parse_game_tuning(*root);
+}
+
+game_tuning_parse_result parse_game_tuning_from_texts(const std::vector<std::string>& texts) {
+    game_tuning_parse_result result;
+    json merged = json::object();
+    for (const std::string& text : texts) {
+        const std::optional<json> file = parse_json(text);
+        if (!file || !file->is_object()) {
+            result.error = "a game tuning file is not a JSON object";
+            return result;
+        }
+        for (const auto& [name, section] : file->items()) {
+            if (merged.contains(name)) {
+                result.error = "game tuning section " + name + " is in two files";
+                return result;
+            }
+            merged[name] = section;
+        }
+    }
+    return parse_game_tuning(merged);
 }

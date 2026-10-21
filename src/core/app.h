@@ -16,6 +16,7 @@
 #include "game/game_content.h"
 #include "game/game_state.h"
 #include "game/lighting_loader.h"
+#include "game/prop_loader.h"
 #include "game/picture_loader.h"
 #include "game/text_assets.h"
 #include "profiling/profiling.h"
@@ -98,6 +99,7 @@ private:
     bool cart_loop_playing_ = false;
     tape_style tape_style_;
     lighting_palette lighting_;
+    prop_set props_;  // assets/world/props
     sky_controls sky_;  // GOLFPP_GAME_TIME, the developer's scrub and the god menu's hour
     god_menu_state god_;
     tape_tracking_state tape_tracking_;

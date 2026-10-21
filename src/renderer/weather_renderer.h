@@ -2,7 +2,7 @@
 
 // Draws the weather's moving things (render_weather): rain streaks and the
 // wind's specks, each one draw of lines from a buffer of random places
-// filled once at init (assets/shaders/weather_streak.vert wraps them round
+// filled once at init (assets/picture/shaders/weather_streak.vert wraps them round
 // the camera). Blended over the scene, depth-tested but never written.
 
 #include "profiling/profiling.h"

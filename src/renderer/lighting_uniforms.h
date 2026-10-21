@@ -1,6 +1,6 @@
 #pragma once
 
-// The `frame_lighting` uniform block (assets/shaders/lighting.glsl): the
+// The `frame_lighting` uniform block (assets/picture/shaders/lighting.glsl): the
 // scene's light and haze, uploaded once per frame into one buffer that every
 // scene shader reads. shader_program binds the block of every program that
 // has it to frame_lighting_binding when it links.
