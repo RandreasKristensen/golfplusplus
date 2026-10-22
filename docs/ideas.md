@@ -1,11 +1,8 @@
 # **scratchpad**
 
 Todo
-- new hitting system with curves, lefthanded/righthanded, natural fade/draw, pitching/hitting speed, 
-make a full bag, with the driver going ~300 to make 18 hole courses more fun. Make claude research real golf physics and review EVERYTHING in this repo - the way its coded, what the tests expect - whats not realistic, and how do we improve it both now and on an engine level to make further development better?
 - accelleration and decelleration more accurate on the cart, slower uphill but never stopping.
 - see each other on map? Or maybe not see yourself or ball on map at all - forcing people to drop if they dont find ball type shit
-- linux and mac 
 - tee times, instead of room caps. Makes par 3s have less people naturally, and improves "group finding" - naturally getting paired with others on the same teetime.
 
 
@@ -18,12 +15,12 @@ make a full bag, with the driver going ~300 to make 18 hole courses more fun. Ma
 - LAG after and "entering" every hole on 18 hole courses - i suspect everything loads every time you go in/out of the "overworld/underworld"
 - (recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
 - fairways are always the same width, and always fairways - you cant have like driver over rough then the fairway starts type beat. Bunkers also consist of many small circles - which is fine - but it would be cool if they "merged" into one big bunker instead of having grass in the middle of most of them
-- putting is REALLY hard with the wetness ground. Its just affecting the putts way too much
 - some of the lights are colliding with trees.
 - rainbows at night lmao
-- grouping is a little bugged? Maybe mostly when youve already played
+- grouping is a little bugged? Maybe mostly when youve already played. Fix with a friends menu on a phone.
 - when setting up its kinda bugged where you stand; It should always be the same for people viewing other people, as it is for them
 - final scorecard says 10 hole 10
+- Tree leaves are solid! they should't be.
 
 ## **alpha roadmap**
 
@@ -34,12 +31,7 @@ When the game feels balanced, full and fun, release :D
 
 1. **new shooting physics system.**
 
-  - you line up
-  - you can adjust club angle with up and down
-  - when ready to swing you hold right for backswing, and left to swing down.
-  - The angle, line up, amount of backswing and timing, together with your skill(driver, woods, hybrids, long irons, short irons, wedges) determines the flight path and length.
-Also WASD movement!
-Tree leaves are solid!
+markdown
 
 2. **real skills and leveling system and unlocks**
 
@@ -89,7 +81,7 @@ flirting with the cart girl
 - player owned housing - small instances where friends can join and be invited, where you can displayed collectibles, tournament wins and gear like clubsets etc.
 - lil better fidelity?
 - Tournaments, some only enterable with a caddy, which should be a real person. Live and longer timed events (i.e. one entry before thursday.)
-- browser and mac ports?
+- linux and mac 
 - player owned clubs with player made courses - endgame and expensive, revenue from players playing and making tounaments
 
 ## **story**
