@@ -195,7 +195,8 @@ struct audio_event {
 
 // Terrain-anchored positions of static objects, so a frame does not resample
 // them. Rebuilt whenever terrain_render_revision changes; every code path that
-// changes `area`, `hole` or `hub` bumps it (see mark_terrain_render_dirty).
+// changes `area` or `hub` bumps it (see mark_terrain_render_dirty). Changing
+// `hole` only re-anchors its tee and pin (refresh_hole_anchors).
 struct static_anchor_cache {
     bool valid = false;
     std::uint64_t revision = 0;
@@ -344,6 +345,8 @@ static_anchor_cache build_static_anchor_cache(const game_state& state, frame_pro
 bool static_anchor_cache_is_current(const game_state& state);
 void refresh_static_anchor_cache(game_state& state, frame_profile* profile = nullptr);
 void mark_terrain_render_dirty(game_state& state);
+// After `hole` changes: the cache current, its tee and pin on the new hole.
+void refresh_hole_anchors(game_state& state);
 // A replacement state restarts terrain_render_revision, but render caches
 // outside game_state key on it. Call this so the revision keeps increasing.
 void continue_terrain_render_revision(game_state& state, std::uint64_t previous_revision);

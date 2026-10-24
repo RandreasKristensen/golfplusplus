@@ -24,8 +24,8 @@ void draw_course_map_paper(overlay_batch& batch, const course_map_layout& layout
 
 // The boxes data.map_holes' numbers are drawn in, one per hole in order:
 // each centred on its hole's line of play, halfway along it, or further
-// towards either end while that place is taken by the numbers before it or
-// the marks, inside the paper; all as large as lets no two overlap.
+// towards either end while that place is taken by the other numbers or the
+// marks, inside the paper; all as large as lets no two overlap.
 std::vector<ui_rect> course_map_number_boxes(const course_map_layout& layout,
                                              overlay_grid grid,
                                              const render_data& data);

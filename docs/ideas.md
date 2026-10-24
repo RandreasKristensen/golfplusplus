@@ -1,9 +1,12 @@
 # **scratchpad**
 
+(recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
+
 Todo
 - accelleration and decelleration more accurate on the cart, slower uphill but never stopping.
 - see each other on map? Or maybe not see yourself or ball on map at all - forcing people to drop if they dont find ball type shit
 - tee times, instead of room caps. Makes par 3s have less people naturally, and improves "group finding" - naturally getting paired with others on the same teetime.
+- collectibles are only balls, for now. Balls from given up holes become collectibles. for a scavenging skill?
 
 
 
@@ -13,7 +16,6 @@ Todo
 ## **bugs**
 
 - LAG after and "entering" every hole on 18 hole courses - i suspect everything loads every time you go in/out of the "overworld/underworld"
-- (recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
 - fairways are always the same width, and always fairways - you cant have like driver over rough then the fairway starts type beat. Bunkers also consist of many small circles - which is fine - but it would be cool if they "merged" into one big bunker instead of having grass in the middle of most of them
 - some of the lights are colliding with trees.
 - rainbows at night lmao
@@ -21,6 +23,7 @@ Todo
 - when setting up its kinda bugged where you stand; It should always be the same for people viewing other people, as it is for them
 - final scorecard says 10 hole 10
 - Tree leaves are solid! they should't be.
+- sound playing at same level always, no matter "where sound happens"
 
 ## **alpha roadmap**
 
@@ -31,7 +34,7 @@ When the game feels balanced, full and fun, release :D
 
 1. **new shooting physics system.**
 
-markdown
+markdown, bugs
 
 2. **real skills and leveling system and unlocks**
 
@@ -101,4 +104,3 @@ Youll probably want to hit just above 200 with your driver when you enter here, 
 Like runescape it unlocks some abilities like driving, 18 hole real courses, etc.
 You can play tournaments, which are a type of quest to unlock specific cooler courses where exp is enhanced.
 You also get more exp from playing in a group.
-

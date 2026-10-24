@@ -211,6 +211,54 @@
         "5": {"par": 3},
         "6": {"par": 3, "metres": 90, "bearing_deg": 74}
       }
+    },
+    "jelling_golfklub": {
+      "name": "Jelling Golfklub",
+      "osm": "relation/7918922",
+      "tees": "blue",
+      "sources": [
+        "https://www.hole19golf.com/courses/jelling-golfklub"
+      ],
+      "confidence": "Medium for pars, low for metres. Pars from a third-party scorecard (Hole19), matching OSM's ref- and par-tagged hole ways. Its only lengths are the blue tees (5085 m in all; the club gives 5994 m from white), so OSM's hole lines run about 10-15% longer.",
+      "total_par": 72,
+      "holes": {
+        "1": {"par": 4, "metres": 340},
+        "2": {"par": 5, "metres": 431},
+        "3": {"par": 3, "metres": 171},
+        "4": {"par": 4, "metres": 289},
+        "5": {"par": 5, "metres": 443},
+        "6": {"par": 4, "metres": 309},
+        "7": {"par": 3, "metres": 138},
+        "8": {"par": 4, "metres": 289},
+        "9": {"par": 4, "metres": 255},
+        "10": {"par": 3, "metres": 130},
+        "11": {"par": 4, "metres": 277},
+        "12": {"par": 3, "metres": 172},
+        "13": {"par": 5, "metres": 433},
+        "14": {"par": 4, "metres": 248},
+        "15": {"par": 4, "metres": 259},
+        "16": {"par": 5, "metres": 380},
+        "17": {"par": 4, "metres": 222},
+        "18": {"par": 4, "metres": 299}
+      }
+    },
+    "jelling_par_3": {
+      "name": "Jelling Par 3",
+      "osm": "way/1570910367",
+      "tees": "single",
+      "sources": [
+        "https://bookgolf.dk/klub/jelling-golfklub"
+      ],
+      "confidence": "Medium for count: the club's booking page calls MalerPind Banen its '6 hulleres par 3 bane' (6 holes, par 18). No published per-hole lengths or directions; the owner mapped the holes in OSM.",
+      "total_par": 18,
+      "holes": {
+        "1": {"par": 3},
+        "2": {"par": 3},
+        "3": {"par": 3},
+        "4": {"par": 3},
+        "5": {"par": 3},
+        "6": {"par": 3}
+      }
     }
   }
 }

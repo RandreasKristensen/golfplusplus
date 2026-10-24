@@ -48,7 +48,7 @@ void tee_up(game_state& state) {
 // `placed_hole` is in the play area's coordinates.
 void enter_hole(game_state& state, const std::size_t index, const hole_data& placed_hole) {
     state.hole = active_hole{index, placed_hole.tee_position, placed_hole.pin_position};
-    mark_terrain_render_dirty(state);
+    refresh_hole_anchors(state);
     reset_play_state(state);
     tee_up(state);
     record_hole_started(state, index);
@@ -57,7 +57,7 @@ void enter_hole(game_state& state, const std::size_t index, const hole_data& pla
 // The view stays where it was: after holing out, on the cup.
 void enter_hub(game_state& state, const glm::vec3& position) {
     state.hole.reset();
-    mark_terrain_render_dirty(state);
+    refresh_hole_anchors(state);
     reset_play_state(state);
     state.player.position = anchor_on_terrain(state.area, position);
     state.ball.position = state.player.position;
@@ -103,6 +103,7 @@ bool start_course(game_state& state, const course_definition& course) {
     state.area = build_course_area(*holes, *world, state.tuning);
     state.hub = build_hub(*world, *holes);
     state.course_holes = std::move(*holes);
+    mark_terrain_render_dirty(state);
     state.round = start_round(state.course_holes.size());
     state.xp_drops.clear();
     state.pending_xp_drop_amounts.clear();

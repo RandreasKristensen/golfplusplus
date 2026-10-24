@@ -523,12 +523,14 @@ TEST_CASE("static anchors stay fresh through hub, hole and course changes") {
     walk_to(state, state.hub->world.hole_starts[1].position);
     update_game(state, interact_input(), 0.016f);
     REQUIRE(state.hole.has_value());
-    CHECK(state.terrain_render_revision > revision);
+    // The course is the same place: nothing is rebuilt or re-uploaded.
+    CHECK(state.terrain_render_revision == revision);
     check_anchors_are_fresh(state);
     CHECK(state.static_anchors.hub_pin_markers.size() == 3U);
 
     finish_hole(state, 3);
     CHECK(in_hub(state));
+    CHECK(state.terrain_render_revision == revision);
     check_anchors_are_fresh(state);
     CHECK(same_trees(state.static_anchors.trees, hub_trees));
 }

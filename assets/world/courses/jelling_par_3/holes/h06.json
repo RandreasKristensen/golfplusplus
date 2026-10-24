@@ -1,0 +1,86 @@
+{
+  "id": "jelling_par_3_h06",
+  "name": "Hole 6",
+  "par": 3,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    62.72,
+    0.0,
+    41.75
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        15.68,
+        0.0,
+        10.44
+      ],
+      [
+        31.36,
+        0.0,
+        20.88
+      ],
+      [
+        47.04,
+        0.0,
+        31.32
+      ],
+      [
+        62.72,
+        0.0,
+        41.75
+      ]
+    ],
+    "width": 20.0,
+    "rough_width": 31.0
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "center": [
+        62.41,
+        0,
+        42.7
+      ],
+      "radii": [
+        8.54,
+        7.42
+      ],
+      "rotation_degrees": 33.1
+    }
+  ],
+  "trees": [],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      55.7454762,
+      9.4306636
+    ],
+    "pin_latlon": [
+      55.7451011,
+      9.4316645
+    ],
+    "centerline": "hole_way",
+    "elevation": "dhm",
+    "tee_elevation": 77.12,
+    "hole_way": "way/1570910381",
+    "zone_fit": [
+      {
+        "osm": "way/1570910382",
+        "type": "green",
+        "pieces": 1,
+        "iou": 0.91
+      }
+    ],
+    "made_green": false
+  }
+}

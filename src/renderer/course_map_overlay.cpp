@@ -42,6 +42,8 @@ constexpr std::array<float, 7> number_places{0.5f, 0.42f, 0.58f, 0.34f, 0.66f, 0
 // Space wanted between a number's box and the other numbers and marks, as a
 // share of the box's half size.
 constexpr float number_spacing = 0.25f;
+// How many times overlapping numbers are all placed again before a smaller box is tried.
+constexpr int number_replacing_rounds = 4;
 
 // Target pixels per clip unit (a square grid when there is none).
 glm::vec2 pixels_per_clip(const overlay_grid grid) {
@@ -90,7 +92,8 @@ struct number_placement {
 
 // Each hole's number in a box of `half` size at the first place along its
 // line of play that clears what is placed before it and the paper's edge,
-// else the clearest.
+// else the clearest. While two overlap, each is placed again against all the
+// others, so a number placed early can make room for a later neighbour's.
 number_placement place_numbers(const course_map_layout& layout,
                                const render_data& data,
                                const std::vector<ui_rect>& marks,
@@ -99,25 +102,29 @@ number_placement place_numbers(const course_map_layout& layout,
     const glm::vec2 high = layout.center + layout.half_size - half;
     number_placement placement;
     placement.boxes.reserve(data.map_holes.size());
-    // How far `box` is from the nearest of `others`, in box half sizes.
-    const auto clearance = [&](const ui_rect& box, const std::vector<ui_rect>& others) {
+    // How far `box` is from the nearest of `others` but `skipped`, in box half sizes.
+    const auto clearance = [&](const ui_rect& box, const std::vector<ui_rect>& others, const std::size_t skipped) {
         float nearest = std::numeric_limits<float>::max();
-        for (const ui_rect& other : others) {
-            const glm::vec2 gap = (glm::abs(box.center - other.center) - (box.half_size + other.half_size)) / half;
+        for (std::size_t i = 0; i < others.size(); ++i) {
+            if (i == skipped) {
+                continue;
+            }
+            const glm::vec2 gap = (glm::abs(box.center - others[i].center) - (box.half_size + others[i].half_size)) / half;
             nearest = std::min(nearest, std::max(gap.x, gap.y));
         }
         return nearest;
     };
-    for (const render_map_hole& hole : data.map_holes) {
+    const auto place = [&](const render_map_hole& hole, const std::size_t own) {
         const float length = polyline_length(hole.line_of_play);
         ui_rect chosen;
         float chosen_clearance = std::numeric_limits<float>::lowest();
-        for (const float place : number_places) {
-            const glm::vec2 point = map_point(layout, point_along(hole.line_of_play, length * place));
+        for (const float share : number_places) {
+            const glm::vec2 point = map_point(layout, point_along(hole.line_of_play, length * share));
             const ui_rect box{glm::clamp(point, low, high), half};
             // Pushed in off its hole by the paper's edge: only if no place is clear.
             const float edge = box.center == point ? std::numeric_limits<float>::max() : 0.0f;
-            const float box_clearance = std::min({clearance(box, placement.boxes), clearance(box, marks), edge});
+            const float box_clearance =
+                std::min({clearance(box, placement.boxes, own), clearance(box, marks, marks.size()), edge});
             if (box_clearance > chosen_clearance) {
                 chosen = box;
                 chosen_clearance = box_clearance;
@@ -126,8 +133,25 @@ number_placement place_numbers(const course_map_layout& layout,
                 break;
             }
         }
-        placement.overlapping = placement.overlapping || clearance(chosen, placement.boxes) < 0.0f;
-        placement.boxes.push_back(chosen);
+        return chosen;
+    };
+    const auto any_overlap = [&] {
+        for (std::size_t i = 0; i < placement.boxes.size(); ++i) {
+            if (clearance(placement.boxes[i], placement.boxes, i) < 0.0f) {
+                return true;
+            }
+        }
+        return false;
+    };
+    for (const render_map_hole& hole : data.map_holes) {
+        placement.boxes.push_back(place(hole, placement.boxes.size()));
+    }
+    placement.overlapping = any_overlap();
+    for (int round = 0; round < number_replacing_rounds && placement.overlapping; ++round) {
+        for (std::size_t i = 0; i < data.map_holes.size(); ++i) {
+            placement.boxes[i] = place(data.map_holes[i], i);
+        }
+        placement.overlapping = any_overlap();
     }
     return placement;
 }

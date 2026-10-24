@@ -520,27 +520,34 @@ bool cart_on_road(const game_state& state) {
     return in_hub(state) && on_cart_road(state.hub->world.cart_roads, state.player.position, state.tuning.cart);
 }
 
+namespace {
+void anchor_hole(static_anchor_cache& cache, const game_state& state, frame_profile* profile) {
+    cache.tee_anchor = state.hole ? anchor_on_terrain(state.area, state.hole->tee_position, profile) : glm::vec3(0.0f);
+    cache.pin_anchor = state.hole ? anchor_on_terrain(state.area, state.hole->pin_position, profile) : glm::vec3(0.0f);
+}
+}
+
 static_anchor_cache build_static_anchor_cache(const game_state& state, frame_profile* profile) {
     static_anchor_cache cache;
     cache.valid = true;
     cache.revision = state.terrain_render_revision;
     const play_area& area = state.area;
-    if (state.hole) {
-        cache.tee_anchor = anchor_on_terrain(area, state.hole->tee_position, profile);
-        cache.pin_anchor = anchor_on_terrain(area, state.hole->pin_position, profile);
-    }
+    anchor_hole(cache, state, profile);
     cache.trees = standing_trees(area, profile);
     if (state.hub) {
         for (const hub_hole_marker& marker : state.hub->markers) {
             cache.hub_pin_markers.push_back(anchor_on_terrain(area, marker.pin_position, profile));
         }
-    }
-    if (in_hub(state)) {
         for (const course_world_collectible& collectible : state.hub->world.collectibles) {
             cache.collectibles.push_back(anchor_on_terrain(area, collectible.position, profile));
         }
     }
     return cache;
+}
+
+void refresh_hole_anchors(game_state& state) {
+    refresh_static_anchor_cache(state);
+    anchor_hole(state.static_anchors, state, nullptr);
 }
 
 bool static_anchor_cache_is_current(const game_state& state) {

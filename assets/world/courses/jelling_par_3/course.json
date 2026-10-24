@@ -1,0 +1,28 @@
+{
+  "id": "jelling_par_3",
+  "name": "Jelling Par 3",
+  "backdrop": {
+    "sky": "sky.bmp",
+    "land": "land.bmp",
+    "haze_color": [
+      0.75,
+      0.8,
+      0.83
+    ],
+    "haze_amount": 1.0,
+    "haze_distance": 800
+  },
+  "sky": {
+    "date": "06-21",
+    "utc_offset_hours": 2
+  },
+  "holes": [
+    "holes/h01.json",
+    "holes/h02.json",
+    "holes/h03.json",
+    "holes/h04.json",
+    "holes/h05.json",
+    "holes/h06.json"
+  ],
+  "world": "world.json"
+}
