@@ -93,7 +93,9 @@ TEST_CASE("a hole sign faces along the hole's line near the tee, not the pin") {
     // A dogleg: straight up +Z for 100, then hard to +X.
     hole.spline.control_points = {glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 100.0f), glm::vec3(100.0f, 0.0f, 100.0f)};
     hole.pin_position = glm::vec3(100.0f, 0.0f, 100.0f);
-    const hole_sign& sign = area_for(hole).signs.front();
+    const play_area area = area_for(hole);
+    REQUIRE(area.signs.size() == 1U);
+    const hole_sign& sign = area.signs.front();
     CHECK(near(sign.down_hole, glm::vec3(0.0f, 0.0f, 1.0f), 0.0001f));
     CHECK(near(sign.length, 200.0f, 0.001f));
 }

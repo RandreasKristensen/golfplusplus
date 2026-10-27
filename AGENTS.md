@@ -82,7 +82,7 @@ follow the rules below. This lasts until the owner says otherwise.
 | Backdrops, ground textures | `tooling/art/make_art.py` |
 | Tooling (OSM importer, hole editor, art) | `tooling/README.md` |
 | Shots natively vs in WASM | `tooling/net/check_determinism.ps1` |
-| What players download | `tooling/release/build_release.ps1`, the `install` rules in `CMakeLists.txt` |
+| What players download | `tooling/release/build_release.ps1` (Windows, the server package), `build_release.sh` and `build_deps.sh` (macOS, Linux; run by `.github/workflows/release.yml`), the `install` rules in `CMakeLists.txt` |
 
 Reuse instead of writing your own: `src/physics/vector_math.h` (yaw,
 horizontal distance, safe normalize, `clamp01`; `glm::radians` and
@@ -110,7 +110,8 @@ py -3 verify_osm_import.py --all                        # in tooling/osm_import/
 The `test` preset is optimized (`-O2 -g`, asserts on) and runs in well under a
 minute; step through code in the `debug` preset. A test over a second is
 usually a slow game function: fix the function. The build uses `-Wall -Wextra
--Wpedantic -Wshadow` and stays warning-free. Tests use `vendor/doctest.h`
+-Wpedantic -Wshadow` and stays warning-free: the `test` preset (which every
+release builds first) makes warnings errors. Tests use `vendor/doctest.h`
 (`TEST_CASE`, `CHECK`, `REQUIRE`). Gameplay tests run on `tests/fixtures/`, not
 `assets/`; shipped content is tested in `tests/content_tests.cpp`. Golden shots
 (`tests/fixtures/golden_shots/`) run on frozen copies of the tuning, clubs and
@@ -141,8 +142,9 @@ clients); `.\tooling\gb -x` stops it. Hosting is `server/hosting.md`, shipped
 to owners who run their own server. The module's plain C++ (all of
 `server/golfpp_module/src` but `lib.cpp` and `module_cache`) is in the native
 test build. The module compiles content in: republish it after content
-changes. Online needs Rust (`net/client_bridge`, target
-`x86_64-pc-windows-gnu`); the test preset builds with `-DGOLFPP_NET=OFF` and
+changes. Online needs Rust (`net/client_bridge`; on Windows the target
+`x86_64-pc-windows-gnu`, on macOS `aarch64-apple-darwin` and
+`x86_64-apple-darwin`); the test preset builds with `-DGOLFPP_NET=OFF` and
 links `src/net/` against `tests/fake_stdb_bridge.h`. `--server <uri> --db
 <name> --anonymous` point the game at a server.
 
@@ -152,8 +154,10 @@ The version is `project(VERSION)` in `CMakeLists.txt`. Players' builds set
 **Flag any new dependency first.** Approved: the SpacetimeDB CLI, C++ bindings
 and `spacetimedb-sdk` (pinned to the CLI's version), the Emscripten SDK, the
 crates in `net/client_bridge/Cargo.toml`, SpacetimeAuth, Inno Setup 6 and
-Python for releases. The Steamworks SDK is approved but **blocked** until the
-owner has a Steam app id.
+Python for releases, GitHub Actions for the macOS and Linux releases, and the
+pinned SDL2, SDL2_mixer and GLM sources in `tooling/release/build_deps.sh`.
+The Steamworks SDK is approved but **blocked** until the owner has a Steam
+app id.
 
 ---
 
@@ -288,8 +292,9 @@ Parsing ignores unknown fields and refuses newer versions. Save on hole and
 course completion, leaving a round and clean exit; never mid-hole or transient
 state. An unreadable save is backed up, never overwritten. Settings live in
 `settings.json` next to the save, never in it. Online progress is never
-written to disk; only the login's refresh token is kept, in Windows Credential
-Manager.
+written to disk; only the login's refresh token is kept, in the system's
+credential store (Windows Credential Manager, the macOS Keychain, the Secret
+Service on Linux).
 
 ## Writing code that documents itself
 

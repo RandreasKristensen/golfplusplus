@@ -118,7 +118,7 @@ try {
     $compiler = (Select-String -Path (Join-Path $build_dir "CMakeCache.txt") -Pattern '^CMAKE_CXX_COMPILER:\w+=(.+)$').Matches[0].Groups[1].Value
     $licenses = Join-Path (Split-Path -Parent (Split-Path -Parent $compiler)) "share\licenses"
     Invoke-Checked "writing THIRD_PARTY.txt" {
-        py -3 (Join-Path $release_dir "third_party.py") --licenses $licenses --out (Join-Path $stage_dir "THIRD_PARTY.txt")
+        py -3 (Join-Path $release_dir "third_party.py") --platform windows --licenses $licenses --out (Join-Path $stage_dir "THIRD_PARTY.txt")
     }
 
     $zip_path = Join-Path $dist_dir "golfpp-$version.zip"

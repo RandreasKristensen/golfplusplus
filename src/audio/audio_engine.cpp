@@ -89,6 +89,14 @@ bool audio_engine::load_manifest(const std::filesystem::path& manifest_path) {
                 warn_once("load:" + path.string(), "audio load failed: " + path.string() + " - " + Mix_GetError());
                 continue;
             }
+            // A sound with no samples: SDL_mixer may already have freed its
+            // buffer (a realloc to 0 bytes) yet still points at it, so only
+            // the chunk itself is freed.
+            if (chunk->alen == 0) {
+                SDL_free(chunk.release());
+                warn_once("load:" + path.string(), "audio load failed: " + path.string() + " has no sound in it");
+                continue;
+            }
             Mix_VolumeChunk(chunk.get(), mixer_volume(played_gain(mix_gain, sound.type, levels_)));
             chunks_[sound.id] = loaded_chunk{std::move(chunk), mix_gain, sound.type};
         }

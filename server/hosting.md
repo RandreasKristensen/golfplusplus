@@ -110,9 +110,10 @@ Any of these:
 
 - **Command line**: `golf++ --server http://<host>:3000 --db golfpp`, plus
   `--anonymous` to connect without signing in. A Windows shortcut can carry them
-  (Properties, Target).
+  (Properties, Target); on macOS, `open -a golf++ --args --server …`.
 - **Environment**: `GOLFPP_SERVER` and `GOLFPP_DB` (with `--anonymous` as above).
-- **The game's settings file**: `assets/play/online.json` next to the game:
+- **The game's settings file**: `assets/play/online.json` next to the game
+  (on macOS, in `golf++.app/Contents/Resources`):
   `server_uri`, `database`, and the sign-in provider (step 6). Every launch then
   uses your server.
 

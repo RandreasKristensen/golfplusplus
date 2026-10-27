@@ -10,7 +10,8 @@ local multiplayer server.
 | `art/make_art.py` | Draws the rough's grass texture and every course's sky and land backdrop panoramas |
 | `audio/make_thunder.py` | Draws the thunder heard after lightning, close and far, from seeded noise |
 | `gb.cmd` / `gb.ps1` | Windows release build helper, and local multiplayer testing (see below) |
-| `release/build_release.ps1` | What players download: the installer and the zip (see below) |
+| `release/build_release.ps1` | What Windows players download: the installer and the zip; the server package (see below) |
+| `release/build_release.sh`, `release/build_deps.sh` | What macOS and Linux players download: the .dmg and the .tar.gz (see below) |
 | `net/dev.ps1` | The local SpacetimeDB server on demand: start, publish, anonymous logins, stop |
 | `net/check_determinism.ps1` | Golden shots natively and in the server's WASM |
 
@@ -125,11 +126,49 @@ settings (`%APPDATA%\golfplusplus`) and the stored login alone. Neither the
 installer nor the game is signed, so Windows SmartScreen says "Windows protected your PC": "More info",
 then "Run anyway". There is no updater: players run the next installer.
 
+### macOS and Linux
+
+`.github/workflows/release.yml` builds them on GitHub's runners (macOS 14 and
+Ubuntu 22.04), by hand from the Actions tab or on pushing a tag `alpha-v*`,
+which attaches them to that tag's GitHub release (a draft when there is
+none). Each runs
+
+```bash
+tooling/release/build_deps.sh build/deps        # SDL2, SDL2_mixer, GLM from pinned sources
+tooling/release/build_release.sh build/deps
+```
+
+`build_deps.sh` builds SDL2 and SDL2_mixer (MP3, OGG and WAV only) as static
+libraries, so players need neither installed, and the GLM headers, each with
+its licence in `build/deps/share/licenses`; on macOS, set
+`CMAKE_OSX_ARCHITECTURES="arm64;x86_64"` and `CMAKE_OSX_DEPLOYMENT_TARGET=11.0`
+first. `build_release.sh` runs the tests, builds the release in
+`build/installer`, stages it with `cmake --install` and writes
+`THIRD_PARTY.txt` like the Windows build, then packs:
+
+- macOS: `build/dist/golfpp-<version>-macos.dmg`, `golf++.app` (Apple Silicon
+  and Intel, macOS 11 or newer, `assets/` in its `Contents/Resources`) next
+  to an Applications link to drag it onto. The app is signed ad hoc, not
+  notarized, so the first launch says Apple cannot check it: the player
+  opens System Settings, Privacy & Security, "Open Anyway". The save and
+  settings are in `~/Library/Application Support/golfplusplus/golf++`, the
+  login in the Keychain.
+- Linux: `build/dist/golfpp-<version>-linux-x86_64.tar.gz`, a folder with
+  `golf++`, `assets/` and `THIRD_PARTY.txt`: unpack anywhere and run
+  `./golf++`. It needs glibc 2.35 or newer (Ubuntu 22.04, Fedora 36, Debian
+  12), OpenGL 3.3, OpenSSL 3 and D-Bus, which every desktop has. The save
+  and settings are in `~/.local/share/golfplusplus/golf++`, the login in
+  the Secret Service (GNOME Keyring, KWallet); without one, sign-in asks
+  for the browser every time.
+
 A release: bump the version, publish the module to Maincloud
-(`server/README.md`, Maincloud), then build and hand out the installer and
-the server package from the same commit. Before handing it out, install it on a PC without MSYS2, Rust
-or the SpacetimeDB CLI (a missing DLL only shows there), sign in and play a
-hole online, and check it plays offline with no network.
+(`server/README.md`, Maincloud), push the commit and its tag `alpha-v<version>`
+(the workflow attaches the macOS and Linux packages to a draft release),
+build the installer and the server package from the same commit and attach
+them, then publish the release. Before handing it out, install it on a PC
+without MSYS2, Rust or the SpacetimeDB CLI (a missing DLL only shows there),
+sign in and play a hole online, and check it plays offline with no network;
+on a Mac and a Linux PC, check it starts, plays a hole and signs in.
 
 ---
 

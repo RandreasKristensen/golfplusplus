@@ -11,9 +11,19 @@ crate-type = ["staticlib"]
 [dependencies]
 spacetimedb-sdk = "=2.10.2"
 oauth2 = { version = "5", default-features = false, features = ["reqwest-blocking", "rustls-tls"] }
-keyring = { version = "3", features = ["windows-native"] }
 open = "5"
 serde = { version = "1", features = ["derive"] }
+
+# The refresh token's store: Windows Credential Manager, the macOS Keychain,
+# the Secret Service (GNOME Keyring, KWallet) on Linux.
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 
 [profile.release]
 panic = "abort"

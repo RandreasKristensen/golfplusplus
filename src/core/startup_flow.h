@@ -119,7 +119,7 @@ struct startup_flow_state {
     // The in-round menu shows settings instead.
     bool confirm_settings = false;
     // The settings screen's, from the main menu or the in-round menu.
-    settings_view settings_view;
+    ::settings_view settings_view;
     // The player's settings: app loads them, applies them when a menu
     // reports settings_changed, and saves them. Kept across every screen.
     settings_values settings;
