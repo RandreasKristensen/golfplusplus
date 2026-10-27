@@ -32,12 +32,12 @@ play_area flat_area(const game_tuning& tuning) {
     return hole_area(straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 300.0f), 40.0f), tuning);
 }
 
-// What it sees: `flags` 2 units tall, and `trees`.
-rangefinder_view view_of(const std::vector<glm::vec3>& flags = {}, const std::vector<tree_body>* trees = nullptr) {
+// What it sees: `flags` 2 units tall, and what stands on `area`.
+rangefinder_view view_of(const std::vector<glm::vec3>& flags = {}, const play_area* area = nullptr) {
     rangefinder_view view;
     view.flags = flags;
     view.flag_height = 2.0f;
-    view.scene.trees = trees;
+    view.scene.area = area;
     return view;
 }
 
@@ -133,7 +133,7 @@ TEST_CASE("held up the rangefinder magnifies its eyepiece, not the view, and slo
     REQUIRE(state.rangefinder_active);
     CHECK(near(rangefinder_magnification(state), state.tuning.rangefinder.magnification));
     CHECK(near(live_camera_view(state, fov).fov_degrees, fov));
-    const render_data data = make_render_data(state, shipped_text_assets(), shipped_content().skills, render_meshes{}, fov, false);
+    const render_data data = make_render_data(state, shipped_text_assets(), shipped_content().skills, render_meshes{}, test_props(), fov, false);
     CHECK(near(data.rangefinder_eyepiece.magnification, state.tuning.rangefinder.magnification));
 
     const float yaw = state.player.yaw;
@@ -186,7 +186,7 @@ TEST_CASE("the rangefinder's frame signs the height up or down hill") {
     raise_rangefinder(state);
     const auto label = [&](const float meters) {
         state.rangefinder.height_meters = meters;
-        return make_render_data(state, shipped_text_assets(), shipped_content().skills, render_meshes{}, 70.0f, false)
+        return make_render_data(state, shipped_text_assets(), shipped_content().skills, render_meshes{}, test_props(), 70.0f, false)
             .rangefinder_height_label;
     };
     CHECK(label(4.4f) == "+4M");
@@ -197,7 +197,7 @@ TEST_CASE("the rangefinder's frame signs the height up or down hill") {
 
 TEST_CASE("the rangefinder's flag reading shrinks walking towards the pin") {
     game_state state = dry_hole();
-    const glm::vec3 pin = pin_anchor_position(state);
+    const glm::vec3 pin = pin_anchor_position(state, state.ball->hole);
     const glm::vec3 eye = first_person_eye(state);
     const glm::vec3 to_pin = pin + world_up - eye;
     state.player.yaw = yaw_towards(state.player.position, pin);
@@ -225,14 +225,14 @@ TEST_CASE("the rangefinder's frame shows the wind across the view") {
     game_state state = dry_hole();
     raise_rangefinder(state);
     state.weather.wind = yaw_direction(state.player.yaw + glm::radians(90.0f)) * 4.5f;
-    const render_data data = make_render_data(state, shipped_text_assets(), shipped_content().skills, render_meshes{}, 70.0f, false);
+    const render_data data = make_render_data(state, shipped_text_assets(), shipped_content().skills, render_meshes{}, test_props(), 70.0f, false);
     REQUIRE(data.show_rangefinder);
     CHECK(data.rangefinder_wind_label == "4.5 M/S");
     REQUIRE(data.rangefinder_wind_angle.has_value());
     CHECK(near(*data.rangefinder_wind_angle, glm::radians(90.0f), 0.001f));
 
     state.weather.wind = glm::vec3(0.0f);
-    CHECK(!make_render_data(state, shipped_text_assets(), shipped_content().skills, render_meshes{}, 70.0f, false)
+    CHECK(!make_render_data(state, shipped_text_assets(), shipped_content().skills, render_meshes{}, test_props(), 70.0f, false)
                .rangefinder_wind_angle);
 }
 
@@ -256,18 +256,23 @@ TEST_CASE("the rangefinder reads the tree it points at, and cannot lock onto a f
     const play_area area = flat_area(tuning);
     const glm::vec3 player(0.0f, 0.0f, 100.0f);
     const glm::vec3 eye = player + world_up * 1.65f;
-    const std::vector<tree_body> trees{tree_body{glm::vec3(0.0f, 0.0f, 130.0f), tree_shape{0.5f, 3.0f, 2.0f, 4.0f}}};
+    // A tree: its trunk 3 up, its leaves 4 more.
+    play_area wooded = area;
+    solid stem = test_post(glm::vec3(0.0f, 0.0f, 130.0f), 0.5f, 3.0f);
+    stem.kind = solid_kind::trunk;
+    set_solids(wooded, {stem, test_solid(solid_shape::cone, solid_kind::leaves, glm::vec3(0.0f, 3.0f, 130.0f), 2.0f, 4.0f)});
+    const play_area* trees = &wooded;
     const glm::vec3 flag(0.0f, 0.0f, 250.0f);
 
     const rangefinder_reading trunk =
-        read_rangefinder(area, view_of({flag}, &trees), player, eye, look_along_z(0.0f), test_rangefinder(), tuning.scale);
+        read_rangefinder(area, view_of({flag}, trees), player, eye, look_along_z(0.0f), test_rangefinder(), tuning.scale);
     CHECK(!trunk.flag);
     REQUIRE(trunk.distance_meters.has_value());
     CHECK(near(*trunk.distance_meters, 29.5f * tuning.scale.meters_per_world_unit, 0.01f));
 
     // Up into its leaves, which are nearer than the ground beyond.
     const float to_leaves = std::atan2(5.0f - eye.y, 30.0f);
-    const rangefinder_reading leaves = read_rangefinder(area, view_of({}, &trees), player, eye,
+    const rangefinder_reading leaves = read_rangefinder(area, view_of({}, trees), player, eye,
                                                         look_along_z(glm::degrees(to_leaves)), test_rangefinder(), tuning.scale);
     REQUIRE(leaves.distance_meters.has_value());
     CHECK(*leaves.distance_meters < 30.0f * tuning.scale.meters_per_world_unit);

@@ -3,7 +3,7 @@
 #include <algorithm>
 
 tape_tracking_signals tape_tracking_signals_for(const game_state& game, const bool paused) {
-    return tape_tracking_signals{paused, game.hole.has_value(), game.mode != game_mode::walking};
+    return tape_tracking_signals{paused, ball_in_play(game), game.mode != game_mode::walking};
 }
 
 tape_tracking_state update_tape_tracking(const tape_tracking_state& state, const tape_tracking_signals& signals,

@@ -7,7 +7,6 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct UpdateMotionArgs {
-    pub zone: i32,
     pub mode: u8,
     pub x: f32,
     pub y: f32,
@@ -21,7 +20,6 @@ pub(super) struct UpdateMotionArgs {
 impl From<UpdateMotionArgs> for super::Reducer {
     fn from(args: UpdateMotionArgs) -> Self {
         Self::UpdateMotion {
-            zone: args.zone,
             mode: args.mode,
             x: args.x,
             y: args.y,
@@ -51,7 +49,6 @@ pub trait update_motion {
     /// /// Use [`update_motion:update_motion_then`] to run a callback after the reducer completes.
     fn update_motion(
         &self,
-        zone: i32,
         mode: u8,
         x: f32,
         y: f32,
@@ -61,18 +58,7 @@ pub trait update_motion {
         turn_rate: f32,
         client_time: f64,
     ) -> __sdk::Result<()> {
-        self.update_motion_then(
-            zone,
-            mode,
-            x,
-            y,
-            z,
-            yaw,
-            speed,
-            turn_rate,
-            client_time,
-            |_, _| {},
-        )
+        self.update_motion_then(mode, x, y, z, yaw, speed, turn_rate, client_time, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `update_motion` to run as soon as possible,
@@ -83,7 +69,6 @@ pub trait update_motion {
     ///  and its status can be observed with the `callback`.
     fn update_motion_then(
         &self,
-        zone: i32,
         mode: u8,
         x: f32,
         y: f32,
@@ -102,7 +87,6 @@ pub trait update_motion {
 impl update_motion for super::RemoteReducers {
     fn update_motion_then(
         &self,
-        zone: i32,
         mode: u8,
         x: f32,
         y: f32,
@@ -118,7 +102,6 @@ impl update_motion for super::RemoteReducers {
     ) -> __sdk::Result<()> {
         self.imp.invoke_reducer_with_callback(
             UpdateMotionArgs {
-                zone,
                 mode,
                 x,
                 y,

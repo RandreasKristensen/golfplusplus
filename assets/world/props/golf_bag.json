@@ -1,0 +1,32 @@
+{
+  "kind": "bag",
+  "colors": {
+    "body": [0.46, 0.16, 0.12],
+    "trim": [0.78, 0.74, 0.62],
+    "pocket": [0.36, 0.12, 0.09],
+    "strap": [0.12, 0.11, 0.1],
+    "grip": [0.06, 0.06, 0.06],
+    "cover": [0.86, 0.84, 0.76],
+    "iron": [0.62, 0.62, 0.6]
+  },
+  "parts": [
+    {"shape": "cylinder", "from": [0, 0, 0], "to": [0, 0.04, 0], "radius": 0.13, "color": "trim"},
+    {"shape": "cylinder", "from": [0, 0.04, 0], "to": [0, 0.8, 0], "radius": 0.12, "color": "body"},
+    {"shape": "cylinder", "from": [0, 0.8, 0], "to": [0, 0.88, 0], "radius": 0.135, "color": "trim"},
+    {"shape": "box", "at": [0, 0.36, 0.11], "size": [0.16, 0.42, 0.06], "color": "pocket"},
+    {"shape": "box", "at": [0, 0.62, 0.115], "size": [0.12, 0.12, 0.05], "color": "pocket"},
+    {"shape": "box", "at": [0, 0.5, -0.125], "size": [0.05, 0.62, 0.02], "color": "strap"},
+    {"shape": "cylinder", "from": [0.05, 0.86, 0.03], "to": [0.06, 1.0, 0.05], "radius": 0.045, "color": "cover"},
+    {"shape": "sphere", "at": [0.06, 1.02, 0.05], "radius": 0.055, "color": "cover"},
+    {"shape": "cylinder", "from": [-0.05, 0.86, 0.04], "to": [-0.06, 0.97, 0.06], "radius": 0.04, "color": "cover"},
+    {"shape": "sphere", "at": [-0.06, 0.99, 0.06], "radius": 0.048, "color": "cover"},
+    {"shape": "cylinder", "from": [0.03, 0.86, -0.05], "to": [0.04, 0.96, -0.07], "radius": 0.012, "color": "iron"},
+    {"shape": "box", "at": [0.04, 0.97, -0.075], "size": [0.07, 0.035, 0.02], "color": "iron"},
+    {"shape": "cylinder", "from": [-0.03, 0.86, -0.05], "to": [-0.04, 0.95, -0.07], "radius": 0.012, "color": "iron"},
+    {"shape": "box", "at": [-0.045, 0.96, -0.075], "size": [0.07, 0.035, 0.02], "color": "iron"},
+    {"shape": "cylinder", "from": [0, 0.86, -0.01], "to": [0, 0.94, -0.01], "radius": 0.014, "color": "grip"}
+  ],
+  "points": {
+    "hang": [0, 0, 0]
+  }
+}

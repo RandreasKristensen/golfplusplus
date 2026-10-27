@@ -312,7 +312,7 @@ TEST_CASE("the frame's light comes from the course's sky and the palette") {
     CHECK(midnight.star_visibility == star_visibility(palette.sky, glm::degrees(std::asin(midnight.sun_direction.y))));
     const sky_state sky = compute_sky_state(
         frame_game_day(state.tuning.sky_clock, state.course.sky, controls, 0),
-        state.hub->world.latitude_deg, state.hub->world.longitude_deg);
+        state.world.latitude_deg, state.world.longitude_deg);
     CHECK(near(midnight.moon_direction, sky.moon_direction, 0.0001f));
     CHECK(midnight.moon_phase == sky.moon_phase);
 

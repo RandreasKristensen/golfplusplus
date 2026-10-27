@@ -12,7 +12,7 @@ import osm_dhm as dhm
 import osm_elevation as elev
 import osm_checks
 import osm_contact_sheet
-import osm_ellipse
+import osm_outline
 
 
 def way(osm_id, tags, coords):
@@ -768,60 +768,59 @@ class HoleTagTests(unittest.TestCase):
 
 
 class ZoneTests(unittest.TestCase):
-    @staticmethod
-    def turned(points, degrees, dx=0.0, dz=0.0):
-        c, s_ = math.cos(math.radians(degrees)), math.sin(math.radians(degrees))
-        return [(x * c - z * s_ + dx, x * s_ + z * c + dz) for x, z in points]
+    def test_an_outline_is_simplified_to_within_half_a_metre(self):
+        ring = osm_outline.circle((0.0, 0.0), 20.0, 128)
 
-    def test_an_ellipse_keeps_the_polygons_centre_area_and_turn(self):
-        # A 30 x 10 m green turned 30 degrees the way rotate_about_y turns.
-        green = self.turned([(-15, -5), (15, -5), (15, 5), (-15, 5)], 30.0, 40.0, -20.0)
+        simple = osm_outline.simplify(ring, 0.5)
 
-        fitted = osm_ellipse.ellipse_from_polygon(green)
+        self.assertLess(len(simple), 40)
+        self.assertGreater(len(simple), 8)
+        self.assertTrue(all(osm_outline.edge_distance(p, simple) <= 0.5 + 1e-9 for p in ring))
 
-        self.assertAlmostEqual(40.0, fitted["center"][0], places=6)
-        self.assertAlmostEqual(-20.0, fitted["center"][1], places=6)
-        self.assertAlmostEqual(300.0, math.pi * fitted["radii"][0] * fitted["radii"][1], places=3)
-        self.assertGreater(fitted["radii"][0], fitted["radii"][1] * 2.5)
-        self.assertAlmostEqual(30.0, math.degrees(fitted["rotation"]), places=6)
+    def test_a_square_keeps_its_corners(self):
+        square = [(0, 0), (5, 0), (10, 0), (10, 5), (10, 10), (5, 10), (0, 10), (0, 5)]
 
-    def test_a_circle_stays_a_circle(self):
-        ring = [(10 * math.cos(i * math.tau / 48), 10 * math.sin(i * math.tau / 48)) for i in range(48)]
+        self.assertEqual(4, len(osm_outline.simplify(square, 0.5)))
 
-        zone = osm_ellipse.zone_json("green", osm_ellipse.ellipse_from_polygon(ring))
+    def test_a_small_green_grows_to_the_least_area_keeping_its_shape(self):
+        small = [(0.0, 0.0), (8.0, 0.0), (8.0, 2.0), (0.0, 2.0)]
 
-        self.assertEqual(zone["radii"][0], zone["radii"][1])
-        self.assertEqual(0.0, zone["rotation_degrees"])
-        self.assertNotIn("radius", zone)
+        grown = osm_outline.with_min_area(small, 64.0)
 
-    def test_the_first_radius_points_along_the_rotation_like_rotate_about_y(self):
-        # Long along +z: rotate_about_y turns local +x onto (cos r, sin r).
-        strip = [(-2.0, -20.0), (2.0, -20.0), (2.0, 20.0), (-2.0, 20.0)]
+        self.assertAlmostEqual(64.0, abs(osm_outline.polygon_area(grown)), places=6)
+        self.assertAlmostEqual(4.0, (grown[1][0] - grown[0][0]) / (grown[2][1] - grown[1][1]), places=6)
+        self.assertEqual((4.0, 1.0), tuple(round(v, 6) for v in osm_outline.centroid(grown)))
 
-        zone = osm_ellipse.zone_json("bunker", osm_ellipse.ellipse_from_polygon(strip))
+    def test_bunkers_a_seam_apart_are_one_and_those_further_apart_stay_apart(self):
+        left = osm_outline.circle((0.0, 0.0), 3.0)
+        right = osm_outline.circle((6.8, 0.0), 3.0)  # 0.8 m of grass between them
+        far = osm_outline.circle((30.0, 0.0), 3.0)
 
-        self.assertGreater(zone["radii"][0], zone["radii"][1])
-        self.assertAlmostEqual(90.0, abs(zone["rotation_degrees"]), places=3)
+        joined = osm_outline.join_close([left, right, far], 1.5, 0.25, 0.5)
 
-    def test_a_bent_bunker_is_split_into_several_ellipses(self):
-        l_shape = [(0, 0), (40, 0), (40, 6), (6, 6), (6, 40), (0, 40)]
+        self.assertEqual(2, len(joined))
+        one = max(joined, key=lambda ring: abs(osm_outline.polygon_area(ring)))
+        self.assertTrue(osm_outline.point_in_polygon((3.4, 0.0), one))  # the seam is sand
+        self.assertGreater(abs(osm_outline.polygon_area(one)), 2 * abs(osm_outline.polygon_area(left)))
+        self.assertIn(far, joined)
 
-        single, single_iou = osm_ellipse.fit_polygon(l_shape, max_pieces=1)
-        split, split_iou = osm_ellipse.fit_polygon(l_shape, max_pieces=4)
+    def test_a_generated_fairway_starts_past_the_carry_and_narrows_to_the_green(self):
+        design = conv.DEFAULT_CONFIG["generated_fairway"]
+        line = [(0.0, 0.0), (0.0, -400.0)]
 
-        self.assertEqual(1, len(single))
-        self.assertGreater(len(split), 1)
-        self.assertGreater(split_iou, single_iou + 0.3)
+        fairway = osm_outline.generated_fairway(line, 4, design)
+        par3 = osm_outline.generated_fairway([(0.0, 0.0), (0.0, -150.0)], 3, design)
 
-    def test_a_small_green_grows_to_the_minimum_keeping_its_shape(self):
-        small = {"center": (0.0, 0.0), "radii": (4.0, 2.0), "rotation": 0.3}
+        zs = [-p[1] for p in fairway]
+        self.assertAlmostEqual(design["start_meters"], min(zs), delta=5.0)
+        def width_at(z, ring=fairway):
+            xs = [p[0] for p in ring if abs(-p[1] - z) < 3.0]
+            return max(xs) - min(xs)
+        self.assertAlmostEqual(design["landing_width_meters"]["4"], width_at(150.0), delta=0.5)
+        self.assertLess(width_at(395.0), design["landing_width_meters"]["4"] - 8.0)
+        self.assertAlmostEqual(150.0 - design["par3_approach_meters"], min(-p[1] for p in par3), delta=5.0)
 
-        grown = osm_ellipse.with_min_radius(small, 5.0)
-
-        self.assertAlmostEqual(25.0, grown["radii"][0] * grown["radii"][1], places=6)
-        self.assertAlmostEqual(2.0, grown["radii"][0] / grown["radii"][1], places=6)
-
-    def test_hole_zones_are_ellipses_with_their_fit_recorded(self):
+    def test_hole_zones_are_outlines_and_a_missing_fairway_is_generated(self):
         lat, lon = 56.0, 10.0
         d_lat = 1.0 / conv.EARTH_METERS_PER_DEGREE_LAT
         d_lon = 1.0 / (conv.EARTH_METERS_PER_DEGREE_LAT * math.cos(math.radians(lat)))
@@ -829,19 +828,30 @@ class ZoneTests(unittest.TestCase):
             return way(osm_id, tags, [(lat - z * d_lat, lon + x * d_lon) for x, z in
                                       ((x0, z0), (x1, z0), (x1, z1), (x0, z1), (x0, z0))])
         holes = conv.group_holes([
-            way(1, {"golf": "hole", "ref": "1"}, [(lat, lon), (lat + 150 * d_lat, lon)]),
-            box(2, {"golf": "green", "ref": "1"}, -10, -160, 10, -140),
+            way(1, {"golf": "hole", "ref": "1", "par": "4"}, [(lat, lon), (lat + 300 * d_lat, lon)]),
+            box(2, {"golf": "green", "ref": "1"}, -10, -310, 10, -290),
             box(3, {"golf": "water_hazard", "ref": "1"}, 20, -100, 60, -90),
         ])
 
         h_json = conv.hole_to_json(1, holes[1], lat, lon, "test", conv.load_generation_config(None))
 
         types = sorted(z["type"] for z in h_json["material_zones"])
-        self.assertEqual(["green", "water"], types)
+        self.assertEqual(["fairway", "green", "water"], types)
         for zone in h_json["material_zones"]:
-            self.assertEqual({"type", "center", "radii", "rotation_degrees"}, set(zone))
-        self.assertEqual(["way/2", "way/3"], sorted(f["osm"] for f in h_json["source"]["zone_fit"]))
+            self.assertEqual({"type", "outline"}, set(zone))
+        green = next(z for z in h_json["material_zones"] if z["type"] == "green")
+        self.assertAlmostEqual(400.0, abs(osm_outline.polygon_area(green["outline"])), delta=1.0)
+        self.assertEqual("generated", h_json["source"]["fairway"])
         self.assertEqual("way/1", h_json["source"]["hole_way"])
+
+
+class FallbackRoadTests(unittest.TestCase):
+    def test_a_generated_road_spine_passes_beside_every_pond(self):
+        pond = [(-5.0, 10.0), (3.0, 10.0), (3.0, 20.0), (-5.0, 20.0)]
+        beyond = [(-30.0, 100.0), (-20.0, 100.0), (-20.0, 110.0), (-30.0, 110.0)]
+
+        self.assertEqual(-10.0, conv._spine_clear_of(0.0, [0.0, 40.0], [pond, beyond], 5.0))
+        self.assertEqual(20.0, conv._spine_clear_of(20.0, [0.0, 40.0], [pond], 5.0))
 
 
 class SharedGreenTests(unittest.TestCase):
@@ -1154,20 +1164,22 @@ class MadeGreenTests(unittest.TestCase):
         greens = [z for z in h_json["material_zones"] if z["type"] == "green"]
         self.assertEqual(1, len(greens))
         self.assertTrue(h_json["source"]["made_green"])
-        self.assertAlmostEqual(-200.0, greens[0]["center"][2], delta=0.5)
+        self.assertAlmostEqual(-200.0, osm_outline.centroid(greens[0]["outline"])[1], delta=0.5)
 
 
 class WaterShapeTests(unittest.TestCase):
-    def test_a_stream_drawn_as_a_line_becomes_a_chain_along_it(self):
+    def test_a_stream_drawn_as_a_line_becomes_overlapping_strips_along_it(self):
         creek = way(5, {"golf": "water_hazard"}, [latlon_at(0, 0), latlon_at(60, 0), latlon_at(60, -60)])
         h = conv._empty_hole()
         h["waters"].append(creek)
 
-        zones, fits = conv._material_zones(h, 56.0, 10.0, (0.0, 0.0), conv.DEFAULT_CONFIG["zones"])
+        zones = conv._material_zones(h, 56.0, 10.0, (0.0, 0.0), conv.DEFAULT_CONFIG["zones"])
 
         self.assertGreaterEqual(len(zones), 4)
-        self.assertTrue(fits[0]["stream"])
-        self.assertTrue(all(z["radii"][1] == 2.5 for z in zones))
+        rings = [[tuple(q) for q in z["outline"]] for z in zones]
+        for point in ((0.0, 2.0), (30.0, -2.0), (58.0, -30.0), (60.0, -59.0)):
+            self.assertTrue(any(osm_outline.point_in_polygon(point, ring) for ring in rings), point)
+        self.assertFalse(any(osm_outline.point_in_polygon((30.0, 4.0), ring) for ring in rings))
 
     def test_a_multipolygon_lake_split_into_member_ways_is_one_ring(self):
         lake = {"type": "relation", "id": 7, "tags": {"golf": "water_hazard"}, "members": [
@@ -1179,7 +1191,7 @@ class WaterShapeTests(unittest.TestCase):
 
         self.assertEqual(1, len(shapes))
         self.assertTrue(shapes[0][1])
-        self.assertAlmostEqual(800.0, abs(osm_ellipse.polygon_area(shapes[0][0])), delta=2.0)
+        self.assertAlmostEqual(800.0, abs(osm_outline.polygon_area(shapes[0][0])), delta=2.0)
 
 
 def synthetic_course(holes):
@@ -1195,8 +1207,7 @@ def synthetic_course(holes):
             "tee": [0.0, 0.0, 0.0], "pin": [rel[0], 0.0, rel[1]],
             "spline": {"control_points": [[0.0, 0.0, 0.0], [rel[0] / 2, 0.0, rel[1] / 2], [rel[0], 0.0, rel[1]]],
                        "width": 30.0, "rough_width": 46.0},
-            "material_zones": [{"type": "green", "center": [rel[0], 0, rel[1]], "radii": [12.0, 9.0],
-                                "rotation_degrees": 20.0}],
+            "material_zones": [osm_outline.zone_json("green", osm_outline.circle((rel[0], rel[1]), 22.0))],
             "trees": [],
             "source": {"tee_latlon": list(latlon_at(*tee)), "pin_latlon": list(latlon_at(*pin))},
         })
@@ -1286,19 +1297,24 @@ class CheckTests(unittest.TestCase):
         def break_things(hole_jsons, world):
             hole_jsons[0]["id"] = "t_h07"
             world["hole_starts"][1]["position"] = [140.0, 0.0, -350.0]
-            hole_jsons[2]["material_zones"][0]["center"] = [60.0, 0, -100.0]
+            hole_jsons[2]["material_zones"][0] = osm_outline.zone_json("green", osm_outline.circle((60.0, -100.0), 10.0))
             hole_jsons[2]["material_zones"].append({"type": "bunker", "center": [0, 0, -50], "radius": 3})
 
         findings = self.check(edit=break_things)
 
         self.assertEqual(["HOLE_START_MISMATCH", "NUMBERING_GAP", "PIN_OFF_GREEN", "ZONE_FORMAT"], self.codes(findings))
 
-    def test_poor_zone_fits_and_made_greens_are_warnings(self):
+    def test_made_greens_are_warnings_and_small_greens_and_made_fairways_are_noted(self):
         def mark(hole_jsons, world):
-            hole_jsons[0]["source"]["zone_fit"] = [{"osm": "way/9", "type": "bunker", "pieces": 6, "iou": 0.4}]
+            hole_jsons[0]["material_zones"][0] = osm_outline.zone_json("green", osm_outline.circle((0.0, -350.0), 8.0))
             hole_jsons[1]["source"]["made_green"] = True
+            hole_jsons[2]["source"]["fairway"] = "generated"
 
-        self.assertEqual(["GREEN_MADE", "ZONE_FIT"], self.codes(self.check(edit=mark), "warn"))
+        findings = self.check(edit=mark)
+
+        self.assertEqual(["GREEN_MADE"], self.codes(findings, "warn"))
+        self.assertIn("GREEN_SMALL", self.codes(findings, "info"))
+        self.assertIn("FAIRWAY_GENERATED", self.codes(findings, "info"))
 
     def test_holes_are_placed_by_their_start_and_rotation(self):
         hole_jsons, world = synthetic_course([((0, 0), (0, -100), 3)])
@@ -1318,7 +1334,7 @@ class CheckTests(unittest.TestCase):
                                        osm_checks.check_course("t", hole_jsons, world, self.CARD))
 
         self.assertTrue(svg.startswith("<svg"))
-        self.assertEqual(3, svg.count("<ellipse"))
+        self.assertEqual(3, svg.count("<polygon"))
         for number in ("1", "2", "3"):
             self.assertGreaterEqual(svg.count(f">{number}</text>"), 2)
         self.assertIn("0 error(s), 0 warning(s)", svg)

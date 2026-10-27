@@ -1,0 +1,18 @@
+{
+  "source": "TrackMan, PGA Tour averages (2024 update of the 2023 data), metres chart, https://trackman.media/tour-averages; checked 2026-10-25 against the chart itself",
+  "units": { "club_speed": "m/s (chart: mph)", "ball_speed": "m/s (chart: mph)", "attack": "deg", "launch": "deg", "spin": "rpm", "max_height": "m", "land_angle": "deg", "carry": "m" },
+  "clubs": [
+    { "club": "driver",  "club_speed": 51.41, "attack": -0.9, "ball_speed": 76.44, "smash": 1.49, "launch": 10.4, "spin": 2545, "max_height": 32, "land_angle": 39, "carry": 258 },
+    { "club": "3_wood",  "club_speed": 49.17, "attack": -2.3, "ball_speed": 72.42, "smash": 1.47, "launch": 9.3,  "spin": 3663, "max_height": 29, "land_angle": 44, "carry": 228 },
+    { "club": "5_wood",  "club_speed": 47.39, "attack": -2.5, "ball_speed": 69.74, "smash": 1.47, "launch": 9.7,  "spin": 4322, "max_height": 30, "land_angle": 48, "carry": 216 },
+    { "club": "hybrid",  "club_speed": 45.60, "attack": -2.4, "ball_speed": 66.61, "smash": 1.47, "launch": 10.2, "spin": 4587, "max_height": 28, "land_angle": 49, "carry": 211 },
+    { "club": "3_iron",  "club_speed": 44.70, "attack": -2.5, "ball_speed": 64.82, "smash": 1.46, "launch": 10.3, "spin": 4404, "max_height": 27, "land_angle": 48, "carry": 199 },
+    { "club": "4_iron",  "club_speed": 43.81, "attack": -2.9, "ball_speed": 62.59, "smash": 1.44, "launch": 10.8, "spin": 4782, "max_height": 28, "land_angle": 49, "carry": 191 },
+    { "club": "5_iron",  "club_speed": 42.92, "attack": -3.4, "ball_speed": 60.35, "smash": 1.41, "launch": 11.9, "spin": 5280, "max_height": 30, "land_angle": 50, "carry": 182 },
+    { "club": "6_iron",  "club_speed": 42.02, "attack": -3.7, "ball_speed": 58.12, "smash": 1.39, "launch": 14.0, "spin": 6204, "max_height": 29, "land_angle": 50, "carry": 172 },
+    { "club": "7_iron",  "club_speed": 41.13, "attack": -3.9, "ball_speed": 54.99, "smash": 1.34, "launch": 16.1, "spin": 7124, "max_height": 31, "land_angle": 51, "carry": 161 },
+    { "club": "8_iron",  "club_speed": 39.79, "attack": -4.2, "ball_speed": 52.75, "smash": 1.33, "launch": 17.8, "spin": 8078, "max_height": 30, "land_angle": 51, "carry": 150 },
+    { "club": "9_iron",  "club_speed": 38.89, "attack": -4.3, "ball_speed": 50.07, "smash": 1.29, "launch": 20.0, "spin": 8793, "max_height": 29, "land_angle": 52, "carry": 139 },
+    { "club": "pitching_wedge", "club_speed": 37.55, "attack": -4.7, "ball_speed": 46.49, "smash": 1.24, "launch": 23.7, "spin": 9316, "max_height": 29, "land_angle": 52, "carry": 130 }
+  ]
+}

@@ -10,6 +10,10 @@ glm::vec3 seat_side(const cart_pose& cart, const cart_seat seat) {
 }
 }
 
+float game_top_speed(const cart_spec& spec, const cart_tuning& tuning) {
+    return spec.top_speed_mps * tuning.time_scale;
+}
+
 glm::vec3 seat_position(const cart_pose& cart, const cart_seat seat, const cart_tuning& tuning) {
     return cart.position + seat_side(cart, seat) * tuning.seat_offset;
 }
@@ -21,6 +25,25 @@ glm::vec3 step_out_position(const cart_pose& cart, const cart_seat seat, const c
 cart_pose cart_around_seat(const glm::vec3& feet, const float yaw, const cart_seat seat, const cart_tuning& tuning) {
     const cart_pose facing{feet, yaw};
     return cart_pose{feet - seat_side(facing, seat) * tuning.seat_offset, yaw};
+}
+
+glm::vec3 bag_spot(const cart_pose& cart, const cart_seat seat, const cart_tuning& tuning) {
+    return seat_position(cart, seat, tuning) - yaw_direction(cart.yaw) * tuning.bag_behind_seat;
+}
+
+solid cart_solid(const cart_pose& pose, const cart_tuning& tuning, const float height) {
+    const glm::vec3 forward = yaw_direction(pose.yaw);
+    solid cart;
+    cart.shape = solid_shape::box;
+    cart.kind = solid_kind::cart;
+    cart.base = pose.position + forward * (0.5f * (tuning.body_front - tuning.body_back));
+    cart.along = forward;
+    cart.half_length = 0.5f * (tuning.body_front + tuning.body_back);
+    cart.half_width = tuning.body_half_width;
+    cart.height = height;
+    cart.stops_walker = true;
+    cart.stops_cart = true;
+    return cart;
 }
 
 bool in_seat_reach(const cart_pose& cart, const cart_seat seat, const glm::vec3& position, const cart_tuning& tuning) {

@@ -4,6 +4,8 @@
 // Every change to this shape bumps current_save_version and adds a step to
 // migrate_save_data.
 
+#include "game/golfer.h"
+#include "game/loadout.h"
 #include "game/progression.h"
 
 #include <map>
@@ -11,7 +13,7 @@
 #include <string>
 #include <vector>
 
-inline constexpr int current_save_version = 6;
+inline constexpr int current_save_version = 8;
 
 struct repeatable_collectible_state {
     int claim_count = 0;
@@ -29,6 +31,11 @@ struct save_data {
     std::vector<std::string> collected_ids;
     std::map<std::string, repeatable_collectible_state> repeatable_collectibles;
     std::vector<std::string> world_flags;
+    // What is equipped (v7); a slot left empty, or naming no item of its
+    // kind, takes the default when the game starts (fitted_loadout).
+    loadout equipped;
+    // The golfer's natural shape (v8), picked before the save's first round.
+    std::optional<natural_shape> natural;
 };
 
 save_data migrate_save_data(save_data save);

@@ -10,8 +10,8 @@
 #include <utility>
 
 namespace {
-constexpr int confirm_item_count = 3;
 constexpr int confirm_settings_item = 2;
+constexpr int confirm_give_up_item = 3;
 // The exit prompt's YES and NO.
 constexpr int exit_yes = 0;
 constexpr int exit_no = 1;
@@ -21,7 +21,7 @@ render_hole_preview make_hole_preview(const hole_data& hole) {
     preview.tee_position = hole.tee_position;
     preview.pin_position = hole.pin_position;
     preview.control_points = hole.spline.control_points;
-    preview.fairway_width = hole.spline.width;
+    preview.fairway_width = has_fairway_outline(hole) ? 0.0f : hole.spline.width;
     preview.material_zones = hole.material_zones;
     return preview;
 }
@@ -59,6 +59,7 @@ startup_menu_screen screen_for_flow(const startup_flow flow) {
     case startup_flow::joining:
         return startup_menu_screen::form;
     case startup_flow::exit_prompt:
+    case startup_flow::natural_shape_picker:
         return startup_menu_screen::confirm;
     case startup_flow::playing:
         return startup_menu_screen::none;
@@ -109,6 +110,8 @@ int item_count(const startup_flow flow, const startup_catalog& catalog, const on
         return static_cast<int>(catalog.courses.size());
     case startup_flow::exit_prompt:
         return 2;
+    case startup_flow::natural_shape_picker:
+        return 3;
     default:
         return 0;
     }
@@ -192,6 +195,11 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
         if (state.flow == startup_flow::main) {
             open_screen(state, startup_flow::exit_prompt);
             state.selection = exit_no;
+        } else if (state.flow == startup_flow::natural_shape_picker) {
+            // Online the room is joined already: a shape must be picked.
+            if (state.picking_for_play == play_mode::offline) {
+                open_screen(state, startup_flow::course_picker);
+            }
         } else {
             return_to_main_menu(state);
         }
@@ -218,10 +226,23 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
             return_to_main_menu(state);
         }
         break;
+    case startup_flow::natural_shape_picker:
+        result.action = startup_action::start_course;
+        result.course = state.picking_for_course;
+        result.play = state.picking_for_play;
+        result.natural = natural_shape_from_index(state.selection);
+        break;
     default:
         break;
     }
     return result;
+}
+
+void open_natural_shape_picker(startup_flow_state& state, const course_definition& course, const play_mode play) {
+    open_screen(state, startup_flow::natural_shape_picker);
+    state.selection = natural_shape_index(natural_shape::neutral);
+    state.picking_for_course = course;
+    state.picking_for_play = play;
 }
 
 void enter_playing(startup_flow_state& state) {
@@ -243,10 +264,11 @@ bool wants_text_input(const startup_flow_state& state) {
         state.flow == startup_flow::settings || (state.confirm_active && state.confirm_settings);
 }
 
-void open_confirm_menu(startup_flow_state& state) {
+void open_confirm_menu(startup_flow_state& state, const std::optional<std::size_t> give_up_hole) {
     state.confirm_active = true;
     state.confirm_selection = 1;
     state.confirm_settings = false;
+    state.confirm_give_up_hole = give_up_hole;
 }
 
 confirm_menu_result update_confirm_menu(startup_flow_state& state,
@@ -262,7 +284,8 @@ confirm_menu_result update_confirm_menu(startup_flow_state& state,
         state.confirm_settings = !outcome.back;
         return result;
     }
-    const int hit = select_with_input(startup_menu_screen::confirm, 1, state.confirm_selection, confirm_item_count,
+    const int item_count = state.confirm_give_up_hole ? confirm_give_up_item + 1 : confirm_settings_item + 1;
+    const int hit = select_with_input(startup_menu_screen::confirm, 1, state.confirm_selection, item_count,
                                       input, pointer, result.sounds);
 
     if (input.enter.pressed || input.space.pressed || hit >= 0) {
@@ -274,6 +297,7 @@ confirm_menu_result update_confirm_menu(startup_flow_state& state,
         }
         state.confirm_active = false;
         result.leave_round = state.confirm_selection == 0;
+        result.give_up_hole = state.confirm_selection == confirm_give_up_item;
     } else if (input.escape.pressed) {
         result.sounds.push_back(ui_sound::back);
         state.confirm_active = false;
@@ -321,6 +345,17 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
         add_tile(menu, lookup_text(text, text_menu_confirm_yes), "", selected(exit_yes));
         add_tile(menu, lookup_text(text, text_menu_confirm_no), "", selected(exit_no));
         break;
+    case startup_flow::natural_shape_picker:
+        menu.title = lookup_text(text, text_menu_natural_shape_title);
+        menu.subtitle = lookup_text(text, text_menu_natural_shape_subtitle);
+        add_tile(menu, lookup_text(text, text_menu_natural_shape_draw), lookup_text(text, text_menu_natural_shape_draw_hint),
+                 selected(static_cast<std::size_t>(natural_shape_index(natural_shape::draw))));
+        add_tile(menu, lookup_text(text, text_menu_natural_shape_neutral),
+                 lookup_text(text, text_menu_natural_shape_neutral_hint),
+                 selected(static_cast<std::size_t>(natural_shape_index(natural_shape::neutral))));
+        add_tile(menu, lookup_text(text, text_menu_natural_shape_fade), lookup_text(text, text_menu_natural_shape_fade_hint),
+                 selected(static_cast<std::size_t>(natural_shape_index(natural_shape::fade))));
+        break;
     case startup_flow::help:
         menu.title = lookup_text(text, text_menu_help_title);
         menu.subtitle = lookup_text(text, text_menu_help_subtitle);
@@ -350,5 +385,9 @@ render_startup_menu make_confirm_menu_render_data(const startup_flow_state& stat
     add_tile(menu, lookup_text(text, text_menu_confirm_yes), "", state.confirm_selection == 0);
     add_tile(menu, lookup_text(text, text_menu_confirm_no), "", state.confirm_selection == 1);
     add_tile(menu, lookup_text(text, text_menu_confirm_settings), "", state.confirm_selection == confirm_settings_item);
+    if (state.confirm_give_up_hole) {
+        add_tile(menu, format_text(text, text_menu_confirm_give_up, {{"hole", std::to_string(*state.confirm_give_up_hole + 1)}}),
+                 "", state.confirm_selection == confirm_give_up_item);
+    }
     return menu;
 }

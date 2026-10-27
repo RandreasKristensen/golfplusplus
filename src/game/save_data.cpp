@@ -63,6 +63,12 @@ std::optional<save_data> parse_save_data(const std::string& text) {
     save.collected_ids = json_string_array(*root, "collected_ids");
     save.repeatable_collectibles = repeatable_collectibles_from_json(*root);
     save.world_flags = json_string_array(*root, "world_flags");
+    if (const std::optional<std::string> natural = json_string(*root, "natural_shape")) {
+        save.natural = natural_shape_from_name(*natural);
+    }
+    if (const json* equipped = json_object(*root, "loadout")) {
+        save.equipped = parse_loadout_from_text(equipped->dump()).value_or(loadout{});
+    }
     return migrate_save_data(save);
 }
 
@@ -90,6 +96,17 @@ std::string save_data_to_json(const save_data& save) {
         repeatable[id] = value;
     }
     root["repeatable_collectibles"] = repeatable;
+
+    json equipped = json::object();
+    equipped["cart"] = save.equipped.cart;
+    equipped["cart_mounts"] = save.equipped.cart_mounts;
+    equipped["smokable"] = save.equipped.smokable;
+    equipped["drinkable"] = save.equipped.drinkable;
+    equipped["bag"] = save.equipped.bag;
+    root["loadout"] = equipped;
+    if (save.natural) {
+        root["natural_shape"] = natural_shape_name(*save.natural);
+    }
 
     return root.dump(2) + "\n";
 }

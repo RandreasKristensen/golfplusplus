@@ -44,13 +44,13 @@ TEST_CASE("adding xp reports what was applied and stops at the cap") {
 
 TEST_CASE("movement xp carries leftover meters") {
     const movement_xp_rate rate{"fitness", 10.0f};
-    const movement_xp_update first = award_movement_xp(save_data{}, rate, 0.0f, 25.0f);
+    const movement_xp_update first = award_movement_xp(save_data{}, rate, 0.0f, 25.0f, xp_effects{});
     CHECK(skill_xp(first.update.progress.skills, "fitness") == 2);
     CHECK(near(first.remainder_meters, 5.0f));
     REQUIRE(first.update.awarded.size() == 1U);
     CHECK(first.update.awarded[0].xp == 2);
 
-    const movement_xp_update second = award_movement_xp(first.update.progress, rate, first.remainder_meters, 4.0f);
+    const movement_xp_update second = award_movement_xp(first.update.progress, rate, first.remainder_meters, 4.0f, xp_effects{});
     CHECK(skill_xp(second.update.progress.skills, "fitness") == 2);
     CHECK(near(second.remainder_meters, 9.0f));
     CHECK(second.update.awarded.empty());
@@ -64,13 +64,13 @@ TEST_CASE("a one-off collectible is claimed once and sets its flag") {
 
     save_data save;
     CHECK(collectible_available(save, lost_ball));
-    const claim_update claim = claim_collectible(save, lost_ball);
+    const claim_update claim = claim_collectible(save, lost_ball, xp_effects{});
     CHECK(claim.claimed);
     CHECK(skill_xp(claim.update.progress.skills, "fitness") == 12);
     CHECK(claim.update.progress.collected_ids == std::vector<std::string>{"lost_ball"});
     CHECK(claim.update.progress.world_flags == std::vector<std::string>{"found_lost_ball"});
     CHECK(!collectible_available(claim.update.progress, lost_ball));
-    CHECK(!claim_collectible(claim.update.progress, lost_ball).claimed);
+    CHECK(!claim_collectible(claim.update.progress, lost_ball, xp_effects{}).claimed);
 }
 
 TEST_CASE("a repeatable collectible cools down over completed holes, across rounds") {
@@ -82,7 +82,7 @@ TEST_CASE("a repeatable collectible cools down over completed holes, across roun
 
     save_data save;
     save.holes_completed = 7;
-    save = claim_collectible(save, token).update.progress;
+    save = claim_collectible(save, token, xp_effects{}).update.progress;
     CHECK(save.repeatable_collectibles["token"].claim_count == 1);
     CHECK(!collectible_available(save, token));
 

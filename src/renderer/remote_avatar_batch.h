@@ -4,24 +4,19 @@
 // or sat in a cart's seat (the cart is drawn on its own, cart_batch.h), its
 // hands on the wheel when driving, and their balls. Each player
 // has a shirt tint; a group shares the colour of its members' caps. While they address their ball, their club is drawn at
-// it as mine is, their hands on its grip; their emote props are held at
-// their mouth (emote_props.h). GL-free.
+// it as mine is, their hands on its grip; what they smoke and drink is held
+// at their mouth (held_props.h). GL-free.
 
-#include "renderer/emote_props.h"
+#include "renderer/held_props.h"
+#include "renderer/swing_club.h"
 #include "renderer/world_marker_batch.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 
 #include <glm/vec3.hpp>
-
-// Their club while they address their ball, as append_swing_club draws it.
-struct render_remote_swing {
-    glm::vec3 ball_position{0.0f};  // the drawn ball's centre
-    float aim_angle = 0.0f;
-    float power = 0.0f;
-};
 
 struct render_remote_avatar {
     glm::vec3 position{0.0f};  // feet, on the ground
@@ -30,10 +25,16 @@ struct render_remote_avatar {
     bool at_wheel = false;  // seated in the driver's seat
     std::uint64_t player_id = 0;  // picks the tint
     std::uint64_t group_id = 0;   // 0: none
-    // How far into each emote they are (none: not playing).
-    std::optional<float> smoke_elapsed;
-    std::optional<float> drink_elapsed;
-    std::optional<render_remote_swing> swing;
+    // What they smoke and drink while they use it.
+    std::optional<render_item_use> smoking;
+    std::optional<render_item_use> drinking;
+    // Addressing their ball: the club in their hands, as append_swing_club draws it.
+    std::optional<render_club_pose> swing;
+    // Their bag's model while it is on their back, and the club in their
+    // hand (bag_batch.h); empty for none.
+    std::string bag_model;
+    std::string carried_club_model;
+    bool left_handed = false;
 };
 
 struct render_remote_ball {
@@ -53,16 +54,9 @@ void append_remote_avatar(world_marker_batch& batch, const render_remote_avatar&
 void append_remote_ball(world_marker_batch& batch, const render_remote_ball& ball, float radius, const figure_colors& colors,
                         float glow);
 
-// Where a figure stands to address a ball, its hands on the club's grip
-// (swing_club_grip), and which way it faces: at the ball, side on to the aim.
-struct figure_stance {
-    glm::vec3 position{0.0f};
-    float yaw = 0.0f;
-};
-figure_stance figure_address_stance(const glm::vec3& ball_position, float ball_radius, float aim_angle);
-
-// Their emote props, held at their figure's mouth; none when no emote plays.
-std::optional<emote_holder> remote_emote_holder(const render_remote_avatar& avatar, float eye_height);
+// What they smoke and drink, held at their figure's mouth, its models from
+// `props`; none when they use nothing.
+std::optional<prop_holder> remote_prop_holder(const render_remote_avatar& avatar, float eye_height, const prop_catalog& props);
 
 // Vertices of a figure on foot, and of one sat in a cart.
 std::size_t remote_figure_vertex_count();

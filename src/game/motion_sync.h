@@ -2,7 +2,7 @@
 
 // When the local player's movement goes to the server in online play. Motion
 // is sparse: others carry it on with extrapolate_motion (game/net_types.h), so it is sent when
-// the intent changes (zone, mode, starting, stopping or reversing a move or a
+// the intent changes (mode, starting, stopping or reversing a move or a
 // turn, a cart getting on or off a road), as a heartbeat while moving, and as a correction when that
 // extrapolation drifts too far from where the player really is or which way
 // they face (the mouse turns without a turn rate). Never more
@@ -34,7 +34,7 @@ net_motion current_motion(const game_state& state);
 
 // Online: pushes a motion command when should_send_motion says so, except
 // while a shot plays or the ball blends to the server's rest (the server may
-// already have the player back in the hub). Offline: nothing.
+// have finished the hole already). Offline: nothing.
 void sync_motion(game_state& state, float dt);
 
 // Online: pushes the current motion now, whatever the interval, so the

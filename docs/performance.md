@@ -49,10 +49,19 @@ whole microseconds to keep the lines short.
 | `TSAMP` / `TTRI` | Terrain sample calls / triangles tested across them |
 | `CHUNK v/c R IDX` | Terrain chunks visible / culled, merged draw ranges, indices drawn |
 | `TREE` | `ON` when the instanced tree batch passed frustum culling |
-| `GPU SMAP` / `TER` / `SHD` / `TRE` / `SKY` / `WTR` / `BLM` / `SMR` / `CAM` / `EYE` / `TAPE` / `OVL` / `CRT` / `ZOOM` | GPU timings from timer queries, reported 2 frames late: the shadow map of trees, floodlights, players and carts (`shadow_map_pass`, 0 with the sun down) / terrain / blob shadows (`blob_shadow_renderer`) / trees, signs, fence posts and floodlights / the sky and land panorama behind them, its rainbow too (`backdrop_pass`) / rain streaks and the wind's specks (`weather_renderer`, two line draws, 0 with neither) / the camcorder's quarter-size copy, metering and bloom / its column smear / its recording of the picture (`camcorder_pass`) / the rangefinder's eyepiece (`eyepiece_pass`, 0 when not held up) / tape pass / overlay / TV pass / the eyepiece's zoomed view, the scene drawn again within the eyepiece at its zoom (0 when not held up). While paused only the tape, overlay and TV run |
+| `GPU SMAP` / `TER` / `SHD` / `TRE` / `PRP` / `SKY` / `WTR` / `BLM` / `SMR` / `CAM` / `EYE` / `TAPE` / `OVL` / `CRT` / `ZOOM` | GPU timings from timer queries, reported 2 frames late: the shadow map of trees, floodlights, players and carts (`shadow_map_pass`, 0 with the sun down) / terrain / blob shadows (`blob_shadow_renderer`) / trees, signs, fence posts and floodlights / every model: carts, clubs and what is held, mine pinned to the camera too (`prop_renderer`) / the sky and land panorama behind them, its rainbow too (`backdrop_pass`) / rain streaks and the wind's specks (`weather_renderer`, two line draws, 0 with neither) / the camcorder's quarter-size copy, metering and bloom / its column smear / its recording of the picture (`camcorder_pass`) / the rangefinder's eyepiece (`eyepiece_pass`, 0 when not held up) / tape pass / overlay / TV pass / the eyepiece's zoomed view, the scene drawn again within the eyepiece at its zoom (0 when not held up). While paused only the tape, overlay and TV run |
 
 The overlay text comes from `format_profile_overlay_lines` in
 `src/profiling/profiling.cpp`.
+
+## Measured on the largest course
+
+`himmerland_new_course` (2026-10-26, the owner's machine): building the
+course takes about 1.1 s (`golfpp-shot-lab --course himmerland_new_course
+--hole 1 --club driver`); a shot simulates in about 7 ms (the shot lab's 42
+shots of the whole bag at three backswings in 0.3 s more); walking costs
+about 0.03 ms of `update_game` a frame (the test preset, 3000 frames walking
+and turning across the course).
 
 ## Online: server energy and traffic
 

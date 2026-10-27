@@ -24,7 +24,9 @@ std::optional<setting_definition> setting_from_json(const json& value) {
         *step <= 0 || *default_value < *min || *default_value > *max) {
         return std::nullopt;
     }
-    setting_definition definition{*id, *label, value_text.value_or(""), {}, *min, *max, *step, *default_value};
+    setting_definition definition{*id,  *label,         value_text.value_or(""),
+                                  {},   *min,           *max,
+                                  *step, *default_value, json_bool(value, "golfer").value_or(false)};
     if (value_texts != nullptr) {
         const int range = *max - *min;
         if (range % *step != 0 || value_texts->size() != static_cast<std::size_t>(range / *step + 1)) {
@@ -72,7 +74,9 @@ bool has_applied_settings(const std::vector<setting_definition>& definitions) {
         find_setting(definitions, setting_fullscreen) != nullptr &&
         find_setting(definitions, setting_tape_wear) != nullptr &&
         find_setting(definitions, setting_datestamp) != nullptr &&
-        find_setting(definitions, setting_interact_prompt) != nullptr;
+        find_setting(definitions, setting_interact_prompt) != nullptr &&
+        find_setting(definitions, setting_handedness) != nullptr &&
+        find_setting(definitions, setting_natural_shape) != nullptr;
 }
 
 int setting_value(const settings_values& values, const setting_definition& definition) {
@@ -113,6 +117,9 @@ std::optional<settings_values> parse_settings_from_text(const std::string& text,
     }
     settings_values values;
     for (const setting_definition& definition : definitions) {
+        if (definition.golfer) {
+            continue;
+        }
         if (const std::optional<int> value = json_int(*stored, definition.id.c_str())) {
             values[definition.id] = std::clamp(*value, definition.min, definition.max);
         }
@@ -120,12 +127,15 @@ std::optional<settings_values> parse_settings_from_text(const std::string& text,
     return values;
 }
 
-std::string settings_to_text(const settings_values& values) {
+std::string settings_to_text(const settings_values& values, const std::vector<setting_definition>& definitions) {
     json root = json::object();
     root["version"] = settings_file_version;
     json stored = json::object();
     for (const auto& [id, value] : values) {
-        stored[id] = value;
+        const setting_definition* definition = find_setting(definitions, id);
+        if (definition == nullptr || !definition->golfer) {
+            stored[id] = value;
+        }
     }
     root["values"] = std::move(stored);
     return root.dump(2) + "\n";
@@ -140,6 +150,7 @@ settings_values load_settings(const std::filesystem::path& path, const std::vect
     return text ? parse_settings_from_text(*text, definitions).value_or(settings_values{}) : settings_values{};
 }
 
-bool write_settings(const std::filesystem::path& path, const settings_values& values) {
-    return replace_text_file(path, settings_to_text(values));
+bool write_settings(const std::filesystem::path& path, const settings_values& values,
+                    const std::vector<setting_definition>& definitions) {
+    return replace_text_file(path, settings_to_text(values, definitions));
 }

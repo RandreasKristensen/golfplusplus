@@ -21,6 +21,8 @@ struct terrain_spline {
     // Full ribbon width (fairway + rough). `fairway_width` is the inner strip.
     float width = 0.0f;
     float fairway_width = 0.0f;
+    // False when the fairway comes from zones: the whole ribbon is rough.
+    bool paints_fairway = true;
     // Minimum number of sections along the spline (more are added for long holes).
     int sample_count = 0;
 };
@@ -38,19 +40,38 @@ inline constexpr std::size_t terrain_material_count = 5;
 // A ribbon's rough edge sits up to this much lower than its fairway.
 inline constexpr float ribbon_edge_drop = 0.18f;
 
-// How deep bunkers and ponds are carved into the ground (zone_carve_depth).
-// Every bunker is as deep; a pond is as deep as it is big: `water_depth_per_metre`
-// of its smaller radius, between the least and most depth, so a narrow creek
-// stays shallow and a lake is deep.
+// How deep bunkers and ponds are carved into the ground (carved_height), in
+// metres from their edge: a bunker's floor is `bunker_depth` down
+// `bunker_lip_meters` in from its edge; a pond's floor is `water_min_depth`
+// under its level at its edge, deepening to `water_max_depth` under it
+// `water_bank_meters` in, so a creek a few metres across stays shallow and a
+// lake is deep; outside, its shore rises from there to its level over
+// `water_shore_meters`, so no water lies on ground above its level.
 struct terrain_zone_tuning {
     float bunker_depth = 0.0f;
-    float water_depth_per_metre = 0.0f;
+    float bunker_lip_meters = 0.0f;
     float water_min_depth = 0.0f;
     float water_max_depth = 0.0f;
+    float water_bank_meters = 0.0f;
+    float water_shore_meters = 0.0f;
 };
 
-// The depth of `zone`'s bowl at its centre (0 for greens).
-float zone_depth(const material_zone& zone, const terrain_zone_tuning& tuning);
+// A zone the ground is carved by at a point, with its pond's level (water
+// only) or the pieces of its edge outside every other bunker (bunkers only).
+struct carving_zone {
+    const material_zone* zone = nullptr;
+    float water_level = 0.0f;
+    const std::vector<zone_edge>* bunker_edge = nullptr;
+};
+
+// The ground at `position`, `height` there uncarved, with `zones` carved into
+// it: lowered into the bunkers' bowl by how far the point is from the nearest
+// ground outside every bunker (so overlapping bunkers share one floor and one
+// lip; `zones` holds every bunker within a lip of the point), and in
+// a pond down to its floor under its level wherever the ground is higher
+// (so a pond on a slope has a cut bank on its high side).
+float carved_height(const std::vector<carving_zone>& zones, const glm::vec3& position, float height,
+                    const terrain_zone_tuning& tuning);
 
 struct terrain_vertex {
     glm::vec3 position{0.0f};
@@ -114,36 +135,29 @@ glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, float t);
 
 // Builds the ribbon mesh, fairway down the middle and rough at the sides.
 // Zones are not on the ribbon: zone_material_at gives their materials from
-// the exact shapes, and the ground carves them (zone_carve_depth). Includes
+// the exact shapes, and the ground carves them (carved_height). Includes
 // the spatial index.
 terrain_mesh build_terrain_mesh(const terrain_spline& terrain);
 
 // The zone that decides the material at `position` (XZ): its index in
-// `zones`, its material and how far into it the point is (0 at its centre, 1
-// on its edge). Where zones overlap, bunker beats green beats water; among
-// equals, the one whose centre is nearest. Zones of unknown type are ignored.
+// `zones`, its material and how far inside it the point is (metres from its
+// edge). Where zones overlap, bunker beats green beats water beats fairway;
+// among equals, the one the point is deepest in. Zones of unknown type are
+// ignored.
 struct zone_hit {
     std::size_t index = 0;
     terrain_material material = terrain_material::fairway;
-    float normalized_distance = 1.0f;
+    float depth = 0.0f;
 };
 std::optional<zone_hit> winning_zone_at(const std::vector<material_zone>& zones, const glm::vec3& position);
 
 // The material of the winning zone at `position` (XZ), nothing outside every zone.
 std::optional<terrain_material> zone_material_at(const std::vector<material_zone>& zones, const glm::vec3& position);
 
-// How far below the ground the winning zone's bowl reaches at `position`:
-// bunkers and ponds are bowls zone_depth deep at their centre, level with the
-// ground at their edge. 0 outside them and on greens.
-float zone_carve_depth(const std::vector<material_zone>& zones, const glm::vec3& position,
-                       const terrain_zone_tuning& tuning);
-
 // Zone shapes on `ground`, for drawing: each ground triangle under a zone cut
-// to the zone's outline (sides at most `spacing` long), so the shapes lie
-// exactly on the ground. Each vertex shows the zone that wins at its spot.
-terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground,
-                                         const std::vector<material_zone>& zones,
-                                         float spacing);
+// to the zone's outline, so the shapes lie exactly on the ground. Each
+// vertex shows the zone that wins at its spot.
+terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground, const std::vector<material_zone>& zones);
 
 // Two triangles per grid cell over `rows` x `columns` vertices laid out row by
 // row starting at `first_vertex`.

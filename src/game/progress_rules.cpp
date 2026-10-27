@@ -8,8 +8,9 @@ bool contains(const std::vector<std::string>& values, const std::string& value) 
     return std::find(values.begin(), values.end(), value) != values.end();
 }
 
-void add_xp(progress_update& update, const std::string& skill_id, const int xp) {
-    const add_skill_xp_result result = add_skill_xp(update.progress.skills, skill_id, xp);
+void add_xp(progress_update& update, const std::string& skill_id, const int xp, const xp_effects& boosts) {
+    const xp_reward earned = effective_reward(xp_reward{skill_id, xp}, boosts.effects, boosts.now_ms);
+    const add_skill_xp_result result = add_skill_xp(update.progress.skills, skill_id, earned.xp);
     if (result.applied_xp > 0) {
         update.awarded.push_back(awarded_xp{skill_id, result.applied_xp});
     }
@@ -27,23 +28,24 @@ bool requirement_met(const save_data& progress, const course_world_collectible_r
 }
 }
 
-progress_update award_xp(const save_data& progress, const xp_reward& reward) {
+progress_update award_xp(const save_data& progress, const xp_reward& reward, const xp_effects& boosts) {
     progress_update update{progress, {}};
-    add_xp(update, reward.skill_id, reward.xp);
+    add_xp(update, reward.skill_id, reward.xp, boosts);
     return update;
 }
 
 movement_xp_update award_movement_xp(const save_data& progress,
                                      const movement_xp_rate& rate,
                                      const float remainder_meters,
-                                     const float meters) {
+                                     const float meters,
+                                     const xp_effects& boosts) {
     movement_xp_update result{{progress, {}}, remainder_meters + std::max(0.0f, meters)};
     if (rate.meters_per_xp <= 0.0f) {
         return result;
     }
     const int xp = static_cast<int>(std::floor(result.remainder_meters / rate.meters_per_xp));
     if (xp > 0) {
-        add_xp(result.update, rate.skill_id, xp);
+        add_xp(result.update, rate.skill_id, xp, boosts);
         result.remainder_meters -= static_cast<float>(xp) * rate.meters_per_xp;
     }
     return result;
@@ -68,7 +70,8 @@ bool collectible_available(const save_data& progress, const course_world_collect
     return progress.holes_completed - *it->second.claimed_at_holes_completed >= collectible.repeatable_cooldown_holes;
 }
 
-claim_update claim_collectible(const save_data& progress, const course_world_collectible& collectible) {
+claim_update claim_collectible(const save_data& progress, const course_world_collectible& collectible,
+                               const xp_effects& boosts) {
     claim_update result{false, {progress, {}}};
     if (!collectible_available(progress, collectible)) {
         return result;
@@ -77,7 +80,7 @@ claim_update claim_collectible(const save_data& progress, const course_world_col
     result.claimed = true;
     save_data& next = result.update.progress;
     for (const course_world_skill_reward& reward : collectible.skill_rewards) {
-        add_xp(result.update, reward.skill_id, reward.xp);
+        add_xp(result.update, reward.skill_id, reward.xp, boosts);
     }
     if (!collectible.world_flag.empty() && !contains(next.world_flags, collectible.world_flag)) {
         next.world_flags.push_back(collectible.world_flag);

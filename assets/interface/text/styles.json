@@ -27,8 +27,6 @@
     "god_live": { "fill": 0.70, "max_scale": 1, "color": [0.55, 0.58, 0.54], "align": "right" },
     "god_held": { "fill": 0.70, "max_scale": 1, "color": [0.95, 0.78, 0.28], "align": "right" },
     "god_note": { "fill": 0.70, "max_scale": 1, "color": [0.55, 0.58, 0.54], "align": "center" },
-    "cart_label": { "fill": 0.90, "color": [0.94, 0.86, 0.52], "align": "left" },
-    "cart_drive": { "fill": 0.90, "color": [0.72, 0.80, 0.36], "align": "left" },
     "xp_drop": { "fill": 1.0, "color": [0.96, 0.86, 0.38], "align": "left" },
     "rangefinder": { "fill": 0.90, "max_scale": 2, "color": [0.95, 0.78, 0.28], "align": "right" },
     "rangefinder_unit": { "fill": 0.60, "max_scale": 1, "color": [0.95, 0.78, 0.28], "align": "left", "valign": "bottom" },

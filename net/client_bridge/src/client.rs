@@ -198,8 +198,12 @@ impl StdbClient {
         watch_keyed!(avatar_motion, AvatarMotion);
         watch_keyed!(ball, Ball);
         watch_keyed!(golf_cart, GolfCart);
+        watch_keyed!(player_loadout, PlayerLoadout);
+        watch_keyed!(running_effect, RunningEffect);
+        watch_keyed!(player_bag, PlayerBag);
+        watch_keyed!(green_flag, GreenFlag);
         watch_events!(shot_event, ShotEvent);
-        watch_events!(emote_event, EmoteEvent);
+        watch_events!(item_use_event, ItemUseEvent);
         watch!(my_account, MyAccount);
         watch!(my_link_code, MyLinkCode);
         watch!(my_link_status, MyLinkStatus);

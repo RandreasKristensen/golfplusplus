@@ -1,0 +1,10 @@
+{
+  "model": "beer_can",
+  "name": "item.beer.name",
+  "use": {
+    "seconds_per_use": 2.0,
+    "sound": "emote_beer"
+  },
+  "stacking": "refresh",
+  "effects": []
+}

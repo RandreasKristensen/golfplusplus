@@ -71,6 +71,25 @@
       "max": 1,
       "step": 1,
       "default": 1
+    },
+    {
+      "id": "handedness",
+      "label": "menu.settings.handedness",
+      "values": ["menu.settings.right_handed", "menu.settings.left_handed"],
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0
+    },
+    {
+      "id": "natural_shape",
+      "label": "menu.settings.natural_shape",
+      "values": ["menu.settings.natural_draw", "menu.settings.natural_neutral", "menu.settings.natural_fade"],
+      "min": 0,
+      "max": 2,
+      "step": 1,
+      "default": 1,
+      "golfer": true
     }
   ]
 }

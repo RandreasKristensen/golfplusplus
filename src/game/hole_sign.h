@@ -5,12 +5,11 @@
 // the tee. Placed at runtime from the hole and its place on the course (no
 // authored data), so every imported course has them. Pure: the server builds
 // the same signs, and their posts stop shots like tree trunks
-// (play_area::sign_posts). What is drawn on the face is the renderer's
+// (game/area_solids.h). What is drawn on the face is the renderer's
 // (renderer/hole_sign_face.h).
 
 #include "game/game_tuning.h"
 #include "game/hole_data.h"
-#include "physics/tree_collision.h"
 
 #include <array>
 #include <cstddef>
@@ -59,7 +58,5 @@ std::vector<hole_sign> place_hole_signs(const play_area& area,
 // it (horizontal unit vector). Its sign and tee box face this way.
 glm::vec3 down_hole_at_tee(const hole_data& hole, float look_ahead);
 
-// The signs' posts as obstacles: trunks without leaves.
-std::vector<tree_body> hole_sign_posts(const std::vector<hole_sign>& signs);
 // Where a post's top is (the board's top edge).
 float hole_sign_top(const hole_sign& sign);

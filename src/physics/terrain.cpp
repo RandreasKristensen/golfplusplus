@@ -1,5 +1,6 @@
 #include "physics/terrain.h"
 
+#include "physics/det_math.h"
 #include "physics/vector_math.h"
 
 #include <algorithm>
@@ -18,7 +19,6 @@ constexpr int ribbon_cross_section_count = 9;
 // The ribbon's outer 45% drops away by ribbon_edge_drop (terrain.h).
 constexpr float ribbon_flat_fraction = 0.55f;
 // Fewest rim vertices of a round zone overlay, however small the zone.
-constexpr int overlay_circle_segments = 32;
 
 float distance_xz_squared(const glm::vec3& a, const glm::vec3& b) {
     const glm::vec3 delta = horizontal(a - b);
@@ -65,6 +65,8 @@ std::optional<terrain_material> material_from_zone(const material_zone_type type
         return terrain_material::bunker;
     case material_zone_type::water:
         return terrain_material::water;
+    case material_zone_type::fairway:
+        return terrain_material::fairway;
     case material_zone_type::unknown:
         return std::nullopt;
     }
@@ -78,18 +80,19 @@ std::optional<zone_hit> winning_zone_at(const std::vector<material_zone>& zones,
     for (std::size_t index = 0; index < zones.size(); ++index) {
         const material_zone& zone = zones[index];
         const std::optional<terrain_material> material = material_from_zone(zone.type);
-        const std::optional<float> distance = zone_normalized_distance(zone, position);
-        if (!material || !distance) {
+        if (!material || !zone_contains(zone, position)) {
             continue;
         }
-        if (best) {
-            const int priority = material_priority(*material);
-            const int best_priority = material_priority(best->material);
-            if (priority < best_priority || (priority == best_priority && *distance >= best->normalized_distance)) {
-                continue;
-            }
+        const int priority = material_priority(*material);
+        const int best_priority = best ? material_priority(best->material) : -2;
+        if (priority < best_priority) {
+            continue;
         }
-        best = zone_hit{index, *material, *distance};
+        const float depth = zone_edge_distance(zone, position);
+        if (priority == best_priority && depth <= best->depth) {
+            continue;
+        }
+        best = zone_hit{index, *material, depth};
     }
     return best;
 }
@@ -792,25 +795,44 @@ glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, const float
                        local_t);
 }
 
-float zone_depth(const material_zone& zone, const terrain_zone_tuning& tuning) {
-    if (zone.type == material_zone_type::bunker) {
-        return std::max(0.0f, tuning.bunker_depth);
+float carved_height(const std::vector<carving_zone>& zones, const glm::vec3& position, const float height,
+                    const terrain_zone_tuning& tuning) {
+    const auto eased = [](const float t) {
+        const float c = clamp01(t);
+        return c * c * (3.0f - 2.0f * c);
+    };
+    bool in_bunker = false;
+    float bunker_inside = std::numeric_limits<float>::max();
+    float carved = height;
+    for (const carving_zone& carving : zones) {
+        const material_zone& zone = *carving.zone;
+        if (zone.type != material_zone_type::bunker && zone.type != material_zone_type::water) {
+            continue;
+        }
+        if (zone.type == material_zone_type::bunker) {
+            in_bunker = in_bunker || zone_contains(zone, position);
+            bunker_inside = std::min(bunker_inside, edges_distance(*carving.bunker_edge, position));
+            continue;
+        }
+        const std::optional<float> inside = zone_depth_inside(zone, position);
+        if (!inside) {
+            // The shore: outside the outline the ground comes down to the
+            // water's edge, so no water is drawn over ground above its level.
+            const float out = zone_edge_distance(zone, position);
+            if (out < tuning.water_shore_meters) {
+                carved = std::min(carved, carving.water_level - tuning.water_min_depth * (1.0f - eased(out / tuning.water_shore_meters)));
+            }
+            continue;
+        }
+        const float bank = tuning.water_bank_meters > 0.0f ? *inside / tuning.water_bank_meters : 1.0f;
+        const float depth = tuning.water_min_depth + (tuning.water_max_depth - tuning.water_min_depth) * eased(bank);
+        carved = std::min(carved, carving.water_level - depth);
     }
-    if (zone.type == material_zone_type::water) {
-        const float size = std::min(zone.radii.x, zone.radii.y);
-        return std::clamp(size * tuning.water_depth_per_metre, tuning.water_min_depth,
-                          std::max(tuning.water_min_depth, tuning.water_max_depth));
+    if (in_bunker) {
+        const float lip = tuning.bunker_lip_meters > 0.0f ? bunker_inside / tuning.bunker_lip_meters : 1.0f;
+        carved = std::min(carved, height - tuning.bunker_depth * eased(lip));
     }
-    return 0.0f;
-}
-
-float zone_carve_depth(const std::vector<material_zone>& zones, const glm::vec3& position, const terrain_zone_tuning& tuning) {
-    const std::optional<zone_hit> hit = winning_zone_at(zones, position);
-    if (!hit) {
-        return 0.0f;
-    }
-    const float t = clamp01(hit->normalized_distance);
-    return zone_depth(zones[hit->index], tuning) * (1.0f - t * t);
+    return carved;
 }
 
 terrain_mesh build_terrain_mesh(const terrain_spline& terrain) {
@@ -839,7 +861,8 @@ terrain_mesh build_terrain_mesh(const terrain_spline& terrain) {
             vertex.position = frame.center + frame.lateral * offset;
             vertex.position.y += frame.bank * offset + cross_section_height_offset(offset, terrain.width);
             vertex.distance_from_center = offset;
-            vertex.material = std::abs(offset) <= fairway_half_width ? terrain_material::fairway : terrain_material::rough;
+            vertex.material = terrain.paints_fairway && std::abs(offset) <= fairway_half_width ? terrain_material::fairway
+                                                                                               : terrain_material::rough;
             vertices.push_back(vertex);
         }
     }
@@ -933,41 +956,22 @@ std::vector<int> ground_triangles_near(const terrain_mesh& ground, const glm::ve
 
 }
 
-terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground,
-                                         const std::vector<material_zone>& zones,
-                                         const float spacing) {
+terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground, const std::vector<material_zone>& zones) {
     terrain_mesh mesh;
     if (ground.vertices.empty() || ground.indices.size() < 3U || zones.empty()) {
         return mesh;
     }
     mesh.width = ground.width;
-    const float step = std::max(0.1f, spacing);
 
     for (const material_zone& zone : zones) {
         const std::optional<terrain_material> material = material_from_zone(zone.type);
-        if (!material) {
+        if (!material || zone.outline.size() < 3U) {
             continue;
         }
-
-        // The zone's outline: a convex polygon with sides at most `spacing` long.
-        const float longest = std::max(zone.radii.x, zone.radii.y);
-        const int segments = std::max(overlay_circle_segments,
-                                      static_cast<int>(std::ceil(glm::two_pi<float>() * longest / step)));
-        std::vector<glm::vec2> outline;
-        glm::vec2 low(std::numeric_limits<float>::max());
-        glm::vec2 high(std::numeric_limits<float>::lowest());
-        for (int i = 0; i < segments; ++i) {
-            const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
-            const glm::vec3 point = zone_world_point(zone, glm::vec2(std::cos(angle) * zone.radii.x, std::sin(angle) * zone.radii.y));
-            outline.emplace_back(point.x, point.z);
-            low = glm::min(low, outline.back());
-            high = glm::max(high, outline.back());
-        }
         const glm::vec2 centre(zone.center.x, zone.center.z);
-        // The outline holds the zone shrunk by this much (a stretched regular
-        // polygon holds its stretched inner circle), so a triangle whose
-        // corners are all in that needs no cutting.
-        const float surely_inside = std::cos(glm::pi<float>() / static_cast<float>(segments));
+        const glm::vec2 low = centre - zone.half_size;
+        const glm::vec2 high = centre + zone.half_size;
+        const std::vector<std::array<glm::vec2, 3>> pieces = zone_triangles(zone);
         // The zones that can win anywhere under this one: those whose boxes meet its box.
         std::vector<material_zone> overlapping;
         for (const material_zone& other : zones) {
@@ -978,9 +982,27 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground,
             }
         }
 
-        // Each ground triangle under the zone, cut to its outline. The pieces
-        // lie in the ground's own triangles, so the shape is exactly on the
-        // drawn ground (and on what physics samples) with nothing lifted.
+        // Each ground triangle under the zone, cut to its outline's
+        // triangles. The pieces lie in the ground's own triangles, so the
+        // shape is exactly on the drawn ground (and on what physics samples)
+        // with nothing lifted. Where zones overlap, every piece there shows
+        // the zone that wins.
+        const auto add_polygon = [&](const std::vector<overlay_point>& polygon) {
+            if (polygon.size() < 3U) {
+                return;
+            }
+            const std::uint32_t first = static_cast<std::uint32_t>(mesh.vertices.size());
+            for (const overlay_point& point : polygon) {
+                terrain_vertex vertex;
+                vertex.position = point.position;
+                vertex.normal = safe_normalize(point.normal, world_up);
+                vertex.material = zone_material_at(overlapping, point.position).value_or(*material);
+                mesh.vertices.push_back(vertex);
+            }
+            for (std::uint32_t i = 1U; i + 1U < static_cast<std::uint32_t>(polygon.size()); ++i) {
+                mesh.indices.insert(mesh.indices.end(), {first, first + i, first + i + 1U});
+            }
+        };
         for (const int triangle : ground_triangles_near(ground, low, high)) {
             std::vector<overlay_point> polygon;
             glm::vec2 triangle_low(std::numeric_limits<float>::max());
@@ -994,27 +1016,30 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground,
             if (triangle_high.x < low.x || triangle_low.x > high.x || triangle_high.y < low.y || triangle_low.y > high.y) {
                 continue;
             }
+            // Wholly inside when every corner is further in than the
+            // triangle is wide: no edge can cross it.
+            const float span = glm::length(triangle_high - triangle_low);
             const bool inside = std::all_of(polygon.begin(), polygon.end(), [&](const overlay_point& point) {
-                const std::optional<float> distance = zone_normalized_distance(zone, point.position);
-                return distance && *distance <= surely_inside;
+                const std::optional<float> depth = zone_depth_inside(zone, point.position);
+                return depth && *depth > span;
             });
-            for (std::size_t i = 0; !inside && i < outline.size() && polygon.size() >= 3U; ++i) {
-                polygon = clip_to_edge(std::move(polygon), outline[i], outline[(i + 1U) % outline.size()], centre);
-            }
-            if (polygon.size() < 3U) {
+            if (inside) {
+                add_polygon(polygon);
                 continue;
             }
-            // Where zones overlap, every piece there shows the zone that wins.
-            const std::uint32_t first = static_cast<std::uint32_t>(mesh.vertices.size());
-            for (const overlay_point& point : polygon) {
-                terrain_vertex vertex;
-                vertex.position = point.position;
-                vertex.normal = safe_normalize(point.normal, world_up);
-                vertex.material = zone_material_at(overlapping, point.position).value_or(*material);
-                mesh.vertices.push_back(vertex);
-            }
-            for (std::uint32_t i = 1U; i + 1U < static_cast<std::uint32_t>(polygon.size()); ++i) {
-                mesh.indices.insert(mesh.indices.end(), {first, first + i, first + i + 1U});
+            for (const std::array<glm::vec2, 3>& piece : pieces) {
+                const glm::vec2 piece_low = glm::min(piece[0], glm::min(piece[1], piece[2]));
+                const glm::vec2 piece_high = glm::max(piece[0], glm::max(piece[1], piece[2]));
+                if (piece_high.x < triangle_low.x || piece_low.x > triangle_high.x || piece_high.y < triangle_low.y ||
+                    piece_low.y > triangle_high.y) {
+                    continue;
+                }
+                const glm::vec2 piece_middle = (piece[0] + piece[1] + piece[2]) / 3.0f;
+                std::vector<overlay_point> cut = polygon;
+                for (std::size_t edge = 0; edge < 3U && cut.size() >= 3U; ++edge) {
+                    cut = clip_to_edge(std::move(cut), piece[edge], piece[(edge + 1U) % 3U], piece_middle);
+                }
+                add_polygon(cut);
             }
         }
     }

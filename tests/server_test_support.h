@@ -44,3 +44,9 @@ inline content_fixture fixture_content_files() {
     }
     return fixture;
 }
+
+// The server's content parsed from fixture_content_files.
+inline server_content fixture_server_content() {
+    const content_fixture fixture = fixture_content_files();
+    return *parse_server_content(fixture.files).content;
+}

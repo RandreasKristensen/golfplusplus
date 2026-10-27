@@ -27,7 +27,8 @@ enum class help_control_icon {
     escape,
     key_1,
     key_2,
-    key_g
+    key_g,
+    key_p
 };
 
 void draw_key_cap(overlay_batch& batch, const text_assets& text, const char* key, const glm::vec2 center, const glm::vec2 half_size) {
@@ -106,6 +107,9 @@ void draw_help_control_icon(overlay_batch& batch,
     case help_control_icon::key_g:
         draw_key_cap(batch, text, text_controls_key_g, center, key_half);
         break;
+    case help_control_icon::key_p:
+        draw_key_cap(batch, text, text_controls_key_p, center, key_half);
+        break;
     }
 }
 
@@ -148,6 +152,7 @@ void draw_startup_help_screen(overlay_batch& batch, const text_assets& text) {
             {help_control_icon::tab, glm::vec2(0.30f, 0.32f), 0.37f, text_help_tab},
             {help_control_icon::caps_lock, glm::vec2(0.30f, 0.18f), 0.23f, text_help_caps_lock},
             {help_control_icon::escape, glm::vec2(0.30f, 0.04f), 0.09f, text_help_escape},
+            {help_control_icon::key_p, glm::vec2(0.30f, -0.12f), -0.07f, text_help_key_p},
             {help_control_icon::key_1, glm::vec2(0.30f, -0.40f), -0.35f, text_help_key_1},
             {help_control_icon::key_2, glm::vec2(0.30f, -0.54f), -0.49f, text_help_key_2},
             {help_control_icon::key_g, glm::vec2(0.30f, -0.68f), -0.63f, text_help_key_g},
@@ -185,6 +190,8 @@ glm::vec3 thumbnail_zone_color(const ground_colors& ground, const material_zone_
         return terrain_material_color(ground, terrain_material::bunker);
     case material_zone_type::water:
         return terrain_material_color(ground, terrain_material::water);
+    case material_zone_type::fairway:
+        return terrain_material_color(ground, terrain_material::fairway);
     case material_zone_type::unknown:
         break;
     }
@@ -265,13 +272,20 @@ void draw_hole_thumbnail(overlay_batch& batch,
         }
     }
 
-    for (const material_zone& zone : preview.material_zones) {
-        // Each zone as the rectangle around it, at least a dot across.
-        const glm::vec3 color = thumbnail_zone_color(ground, zone.type);
-        const glm::vec2 extent = zone_half_extent(zone);
-        const glm::vec2 drawn = rotate_long_axis ? glm::vec2(extent.y, extent.x) : extent;
-        const glm::vec2 p = preview_point(zone.center, center, inset_half, padded_min, scale, rotate_long_axis);
-        draw_overlay_quad(batch, p, glm::max(drawn * scale, glm::vec2(0.010f)), color, 0.64f);
+    // Fairways first, under the rest; each zone its outline's triangles.
+    for (const bool fairways : {true, false}) {
+        for (const material_zone& zone : preview.material_zones) {
+            if ((zone.type == material_zone_type::fairway) != fairways) {
+                continue;
+            }
+            const glm::vec3 color = thumbnail_zone_color(ground, zone.type);
+            const auto at = [&](const glm::vec2& point) {
+                return preview_point(glm::vec3(point.x, 0.0f, point.y), center, inset_half, padded_min, scale, rotate_long_axis);
+            };
+            for (const auto& [a, b, c] : zone_triangles(zone)) {
+                draw_overlay_corner_quad(batch, at(a), at(b), at(c), at(c), color, 0.64f);
+            }
+        }
     }
 
     const glm::vec2 tee = preview_point(preview.tee_position, center, inset_half, padded_min, scale, rotate_long_axis);

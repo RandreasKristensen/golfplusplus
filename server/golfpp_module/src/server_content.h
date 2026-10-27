@@ -10,11 +10,13 @@
 #include "game/course_world_definition.h"
 #include "game/game_tuning.h"
 #include "game/hole_data.h"
+#include "game/item_catalog.h"
+#include "game/loadout.h"
 #include "game/pixel_font_data.h"
 #include "game/play_area.h"
 #include "game/reward_rules.h"
 #include "game/shot_simulation.h"
-#include "physics/tree_collision.h"
+#include "physics/tree_body.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -33,8 +35,10 @@ struct server_content {
     game_tuning tuning;
     std::vector<club_definition> clubs;
     reward_rules rewards;
+    item_catalog items;
+    loadout default_loadout;  // fits `items`
     pixel_font_data font;
-    std::vector<course_definition> courses;  // only courses with a world: rooms are hubs
+    std::vector<course_definition> courses;  // only courses with a world: a room is one
 };
 
 struct server_content_load_result {
@@ -51,14 +55,13 @@ struct server_course {
     course_world_definition world;
     std::vector<hole_data> holes;  // placed where the world puts them
     play_area area;
-    std::vector<tree_body> trees;
-    std::vector<shot_hole> shot_holes;  // one per hole
 };
 
 // Hole `hole` of `course` as a shot hit at `shot_at` plays on it: in the
-// course's weather then (game/weather.h), as every client replays it.
+// course's weather then (game/weather.h), each green's flag in or out by
+// `flags_out` (hole indices), as every client replays it.
 shot_course server_shot_course(const server_course& course, std::size_t hole, std::int64_t shot_at,
-                               const server_content& content);
+                               const std::vector<int>& flags_out, const server_content& content);
 
 const course_definition* find_server_course(const server_content& content, const std::string& course_id);
 

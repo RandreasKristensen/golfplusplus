@@ -43,8 +43,8 @@ float course_hour(const game_state& game, const sky_controls& controls, const st
 
 render_lighting make_render_lighting(const game_state& game, const lighting_palette& palette, const sky_controls& controls,
                                      const std::int64_t local_unix_ms, const shown_weather& weather) {
-    const double latitude = game.hub ? static_cast<double>(game.hub->world.latitude_deg) : 0.0;
-    const double longitude = game.hub ? static_cast<double>(game.hub->world.longitude_deg) : 0.0;
+    const double latitude = static_cast<double>(game.world.latitude_deg);
+    const double longitude = static_cast<double>(game.world.longitude_deg);
     const double game_day = course_game_day(game, controls, local_unix_ms);
     const sky_state sky = with_lowest_sun(compute_sky_state(game_day, latitude, longitude), game.course.sky.lowest_sun_deg);
     const float sun_elevation_deg = glm::degrees(sky.sun_elevation);

@@ -23,7 +23,6 @@
 #include "renderer/camcorder_pass.h"
 #include "renderer/course_map_fill.h"
 #include "renderer/dynamic_buffer.h"
-#include "renderer/emote_props.h"
 #include "renderer/framebuffer.h"
 #include "renderer/gl_timer.h"
 #include "renderer/fence_renderer.h"
@@ -34,6 +33,8 @@
 #include "renderer/weather_renderer.h"
 #include "renderer/overlay_pass.h"
 #include "renderer/picture_size.h"
+#include "renderer/prop_batch.h"
+#include "renderer/prop_renderer.h"
 #include "renderer/render_data.h"
 #include "renderer/shader.h"
 #include "renderer/shadow_map_pass.h"
@@ -57,10 +58,11 @@ class renderer {
 public:
     // `asset_root` is where shaders/, textures/ and course backdrops are read
     // from; `palette` says what the scene's things are, what the sky shows
-    // and how the shadow map is drawn (lighting.json).
+    // and how the shadow map is drawn (lighting.json); `props` are every
+    // model it draws.
     bool init(SDL_Window* window, const std::string& asset_root, const picture_style& picture,
               const lighting_palette& palette,
-              const prop_set& props);
+              const prop_catalog& props);
     void shutdown();
     // `profile` may be null (profiling off).
     void render(const render_data& data, const text_assets& text, frame_profile* profile = nullptr);
@@ -84,7 +86,9 @@ private:
     glm::mat4 scene_projection(float fov_degrees, float area_extent) const;
     void render_scene(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile);
     void render_viewmodel(const glm::mat4& view, const render_data& data);
-    void draw_emote_props(const glm::mat4& view_proj);
+    // This frame's models in the world: carts, clubs at balls, what others hold.
+    void build_prop_batch(const render_data& data);
+    void draw_props(const prop_batch& batch, const glm::mat4& view_proj, frame_profile* profile);
     void render_flight_path(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile);
     void render_overlay(const glm::mat4& view_proj, const render_data& data, const text_assets& text, frame_profile* profile);
     void render_debug_overlay(const render_data& data, const text_assets& text, frame_profile* profile);
@@ -113,13 +117,16 @@ private:
     weather_renderer weather_renderer_;
     world_marker_renderer world_marker_renderer_;
     world_marker_renderer tee_box_renderer_;
+    prop_renderer prop_renderer_;
     blob_shadow_renderer blob_shadow_renderer_;
     shadow_map_pass shadow_map_pass_;
     // Rebuilt every frame; members so their vectors keep their capacity.
     world_marker_batch world_marker_batch_;
     world_marker_batch shadow_casters_;
     world_marker_batch tee_box_batch_;
-    std::vector<emote_prop> emote_props_;  // this frame's, kept for their capacity
+    prop_batch prop_batch_;
+    prop_batch shadow_models_;
+    prop_batch viewmodel_batch_;
     std::vector<render_terrain_vertex> flight_path_vertices_;
     // Course map terrain fill: rebuilt only when the map layout or terrain changes.
     course_map_fill_cache course_map_fill_cache_;
@@ -132,12 +139,11 @@ private:
     primitive_buffers ball_;       // unit sphere
     primitive_buffers cylinder_;   // unit cylinder, shared with tree_renderer
     primitive_buffers cone_;       // unit cone, only drawn by tree_renderer
-    primitive_buffers panel_;      // unit quad in XY, for emote props
     unsigned int screen_vao_ = 0;  // full-screen quad for the screen passes
     unsigned int screen_vbo_ = 0;
 
     picture_style picture_style_;
-    prop_set props_;
+    prop_catalog props_;
     scene_colors colors_;  // its glow floors this frame's (render_data::glow)
     picture_size picture_;  // the scene target's, for the window's current size
 };

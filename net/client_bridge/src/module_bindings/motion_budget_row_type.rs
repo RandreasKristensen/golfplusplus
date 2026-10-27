@@ -14,11 +14,8 @@ pub struct MotionBudgetRow {
     pub mode: u8,
     pub server_time: __sdk::Timestamp,
     pub slack_left: f32,
-    pub smoke_at: __sdk::Timestamp,
-    pub drink_at: __sdk::Timestamp,
     pub walk_meters_pending: f32,
     pub cart_meters_pending: f32,
-    pub drift_meters_pending: f32,
 }
 
 impl __sdk::InModule for MotionBudgetRow {
@@ -36,11 +33,8 @@ pub struct MotionBudgetRowCols {
     pub mode: __sdk::__query_builder::Col<MotionBudgetRow, u8>,
     pub server_time: __sdk::__query_builder::Col<MotionBudgetRow, __sdk::Timestamp>,
     pub slack_left: __sdk::__query_builder::Col<MotionBudgetRow, f32>,
-    pub smoke_at: __sdk::__query_builder::Col<MotionBudgetRow, __sdk::Timestamp>,
-    pub drink_at: __sdk::__query_builder::Col<MotionBudgetRow, __sdk::Timestamp>,
     pub walk_meters_pending: __sdk::__query_builder::Col<MotionBudgetRow, f32>,
     pub cart_meters_pending: __sdk::__query_builder::Col<MotionBudgetRow, f32>,
-    pub drift_meters_pending: __sdk::__query_builder::Col<MotionBudgetRow, f32>,
 }
 
 impl __sdk::__query_builder::HasCols for MotionBudgetRow {
@@ -54,8 +48,6 @@ impl __sdk::__query_builder::HasCols for MotionBudgetRow {
             mode: __sdk::__query_builder::Col::new(table_name, "mode"),
             server_time: __sdk::__query_builder::Col::new(table_name, "server_time"),
             slack_left: __sdk::__query_builder::Col::new(table_name, "slack_left"),
-            smoke_at: __sdk::__query_builder::Col::new(table_name, "smoke_at"),
-            drink_at: __sdk::__query_builder::Col::new(table_name, "drink_at"),
             walk_meters_pending: __sdk::__query_builder::Col::new(
                 table_name,
                 "walk_meters_pending",
@@ -63,10 +55,6 @@ impl __sdk::__query_builder::HasCols for MotionBudgetRow {
             cart_meters_pending: __sdk::__query_builder::Col::new(
                 table_name,
                 "cart_meters_pending",
-            ),
-            drift_meters_pending: __sdk::__query_builder::Col::new(
-                table_name,
-                "drift_meters_pending",
             ),
         }
     }

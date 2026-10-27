@@ -38,7 +38,7 @@ import osm_audit
 import osm_checks
 import osm_dhm
 import osm_elevation
-import osm_ellipse
+import osm_outline
 import osm_ground
 import verify_osm_import
 
@@ -113,6 +113,9 @@ DEFAULT_CONFIG = {
         "max_path_distance_from_holes": 75.0,
         "fairway_avoidance_clearance": 8.0,
         "fallback_road_extra_offset": 8.0,
+        # A generated road keeps this far from water (its half width, the
+        # game's shore and a margin).
+        "fallback_road_water_clearance": 5.0,
         "max_shortcut_count": 12,
     },
     # Where heights come from: the Danish lidar model where it covers the
@@ -125,21 +128,44 @@ DEFAULT_CONFIG = {
         # Terrarium tile zoom; 14 is ~5–8 m per pixel.
         "terrarium": {"zoom": 14, "ground_cell_size": 20.0},
     },
-    # Green, bunker and water polygons as ellipses (see osm_ellipse.py).
+    # Green, bunker, water and fairway polygons as outlines (see osm_outline.py).
     "zones": {
-        # A fit covering its polygon at least this well (intersection over
-        # union) is good enough; below it the polygon is split.
-        "good_fit_iou": 0.8,
-        # Most ellipses one polygon may become.
-        "max_pieces": {"green": 3, "bunker": 6, "water": 16},
-        # Smallest zone, as the radius of a circle of the same area.
-        "min_radius": {"green": 5.0, "bunker": 1.5, "water": 2.0},
+        # Outline points closer than this to the line through their
+        # neighbours are dropped.
+        "simplify_meters": 0.5,
+        # Smallest zone in square metres; a smaller one is grown to it, its shape kept.
+        "min_area": {"green": 78.5, "bunker": 7.0, "water": 12.5},
         # The green made at the pin of a hole OSM maps without one.
         "missing_green_radius": 10.0,
-        # A stream mapped as a line becomes ellipses this wide either side of it.
+        # A stream mapped as a line becomes a strip this wide either side of it,
         "stream_half_width": 2.5,
         # ... in pieces no longer than this along it.
         "stream_piece_length": 30.0,
+        # Bunkers closer than this are one bunker (a mapping seam, not a
+        # grass island), joined on a grid of this cell.
+        "bunker_join_gap": 1.5,
+        "bunker_join_cell": 0.25,
+    },
+    # The fairway made for a hole OSM maps without one, from real design
+    # numbers (yards in the sources, metres here).
+    "generated_fairway": {
+        "sources": [
+            "Brauer, 'Design Concepts: Debating fairway widths', Golf Course Industry: carries to the "
+            "fairway 70-90 yd from forward tees, 100-120 yd from middle tees, 180-200 yd from the back; "
+            "widths 25-65 yd, 40 yd standard (USGA Slope: a 20 handicap needs 40 yd, scratch 32 yd); "
+            "narrowing from 200-300 yd off the tee; par 5 fairways usually narrower than par 4s",
+            "The R&A Pace of Play Manual: at most a 200 yd carry to the fairway even for elite players",
+        ],
+        # 100 yd: the middle tees' least carry.
+        "start_meters": 91.4,
+        # 40 yd for a par 4; a par 5 narrower, 35 yd.
+        "landing_width_meters": {"4": 36.6, "5": 32.0},
+        # 200 yd out it narrows ...
+        "narrow_from_meters": 182.9,
+        # ... to 25 yd at the green, the narrowest of the range.
+        "approach_width_meters": 22.9,
+        # A par 3's approach only: 30 yd short of the pin (a design choice; no source gives one).
+        "par3_approach_meters": 27.4,
     },
     # The course world's ground grid (see osm_ground.py): its cell when it
     # is flat (no elevation; else the elevation source's), and how far past
@@ -153,6 +179,12 @@ DEFAULT_CONFIG = {
     # summer time by default, and optionally "lowest_sun_deg", how far its sun
     # may sink.
     "sky": {"date": "06-21", "utc_offset_hours": 2},
+    # The course file's air (src/game/course_definition.h): DMI's 1991-2020
+    # normals for Danish midsummer. Its elevation is the ground's height at
+    # the course's origin, from the elevation source (0 when there is none).
+    "air": {"mean_temperature_c": 15.5, "daily_temperature_range_c": 8.5},
+    # How fast its greens roll (stimpmeter feet): a Danish club's in season.
+    "green_stimp_feet": 9.5,
     "courses": {},
 }
 
@@ -2126,34 +2158,28 @@ def _element_shapes_xz(el: dict, origin_lat: float, origin_lon: float) -> list[t
 
 
 def _material_zones(h: dict, origin_lat: float, origin_lon: float, tee_xz: tuple[float, float],
-                    zone_config: dict) -> tuple[list[dict], list[dict]]:
-    """(material zones relative to the tee, fit report per OSM shape)."""
-    good_iou = float(zone_config.get("good_fit_iou", 0.8))
-    half_width = float(zone_config.get("stream_half_width", 2.5))
-    piece_length = float(zone_config.get("stream_piece_length", 30.0))
-    zones, fits = [], []
-    for zone_type, elements in (("green", h["greens"]), ("bunker", h["bunkers"]), ("water", h["waters"])):
-        max_pieces = int(zone_config.get("max_pieces", {}).get(zone_type, 1))
-        min_radius = float(zone_config.get("min_radius", {}).get(zone_type, 0.0))
+                    zone_config: dict) -> list[dict]:
+    """The hole's green, bunker, water and fairway outlines as zones relative
+    to the tee: simplified, grown to their least area, streams as strips and
+    close bunkers joined (osm_outline.py)."""
+    tolerance = float(zone_config["simplify_meters"])
+    rings = {"green": [], "bunker": [], "water": [], "fairway": []}
+    for zone_type, elements in (("green", h["greens"]), ("bunker", h["bunkers"]), ("water", h["waters"]),
+                                ("fairway", h["fairways"])):
+        min_area = float(zone_config["min_area"].get(zone_type, 0.0))
         for el in elements:
             for pts, closed in _element_shapes_xz(el, origin_lat, origin_lon):
                 if closed and len(pts) >= 3:
-                    ellipses, iou = osm_ellipse.fit_polygon(pts, max_pieces, good_iou)
-                    if len(ellipses) == 1:
-                        ellipses = [osm_ellipse.with_min_radius(ellipses[0], min_radius)]
-                    fit = {"iou": round(iou, 2)}
+                    rings[zone_type].append(osm_outline.with_min_area(osm_outline.simplify(pts, tolerance), min_area))
                 elif zone_type == "water" and len(pts) >= 2:
-                    pieces = math.ceil(_polyline_length(pts) / piece_length)
-                    ellipses = osm_ellipse.chain_along(pts, half_width, pieces)
-                    fit = {"stream": True}
-                else:
+                    rings[zone_type] += osm_outline.stream_pieces(pts, float(zone_config["stream_half_width"]),
+                                                                  float(zone_config["stream_piece_length"]))
+                elif zone_type != "fairway":
                     print(f"  [warn] {_format_osm_ref(el)}: a {zone_type} that is not an area; left out",
                           file=sys.stderr)
-                    continue
-                zones += [osm_ellipse.zone_json(zone_type, e, tee_xz) for e in ellipses]
-                if ellipses:
-                    fits.append({"osm": _format_osm_ref(el), "type": zone_type, "pieces": len(ellipses), **fit})
-    return zones, fits
+    rings["bunker"] = osm_outline.join_close(rings["bunker"], float(zone_config["bunker_join_gap"]),
+                                             float(zone_config["bunker_join_cell"]), tolerance)
+    return [osm_outline.zone_json(zone_type, ring, tee_xz) for zone_type, found in rings.items() for ring in found]
 
 
 def _hole_way_ref(h: dict) -> str | None:
@@ -2237,19 +2263,18 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
     def rel_xyz(xz): return [_r(xz[0]-tee_x), 0.0, _r(xz[1]-tee_z)]
 
     # ── material zones ────────────────────────────────────────────────────────
-    # Every green, bunker and water polygon becomes one ellipse, or a few when
-    # one cannot follow its shape (osm_ellipse.py). A double green shared by
-    # two holes is emitted whole for both.
+    # Every green, bunker, water and fairway polygon becomes its outline
+    # (osm_outline.py). A double green shared by two holes is emitted whole
+    # for both.
     zone_config = config.get("zones", DEFAULT_CONFIG["zones"])
-    zones, zone_fit = _material_zones(h, origin_lat, origin_lon, (tee_x, tee_z), zone_config)
+    zones = _material_zones(h, origin_lat, origin_lon, (tee_x, tee_z), zone_config)
     # OSM sometimes maps a pin but no green (Kalø's 11th). A hole needs
     # something to putt on: a circle at the pin stands in, and the
     # verification flags it so it is drawn properly in the editor.
     made_green = not any(zone["type"] == "green" for zone in zones)
     if made_green:
         radius = float(zone_config.get("missing_green_radius", 10.0))
-        zones.insert(0, osm_ellipse.zone_json("green", {"center": pin_xz, "radii": (radius, radius), "rotation": 0.0},
-                                              (tee_x, tee_z)))
+        zones.insert(0, osm_outline.zone_json("green", osm_outline.circle(pin_xz, radius), (tee_x, tee_z)))
 
     # ── par and name ──────────────────────────────────────────────────────────
     # h["tags"] is every tag of every element on the hole merged together, so
@@ -2264,6 +2289,16 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
     if not (3 <= par <= 6):
         dist = max(math.hypot(pin_x-tee_x, pin_z-tee_z), _polyline_length(ctrl_xz))
         par = 3 if dist < 200 else (4 if dist < 430 else 5)
+
+    # A hole OSM maps without a fairway gets one from real design numbers
+    # along its line; the audit lists it, as mapping it is better.
+    fairway = "osm" if any(zone["type"] == "fairway" for zone in zones) else "none"
+    if fairway == "none":
+        made = osm_outline.generated_fairway(ctrl_xz, par, config.get("generated_fairway", DEFAULT_CONFIG["generated_fairway"]))
+        if made:
+            zones.append(osm_outline.zone_json("fairway", osm_outline.simplify(made, float(zone_config["simplify_meters"])),
+                                               (tee_x, tee_z)))
+            fairway = "generated"
 
     name = hole_tags.get("name") or f"Hole {hole_num}"
     if _parse_hole_numbers({"name": name}):
@@ -2307,8 +2342,8 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
             "tee_elevation": tee_elevation,
             # The OSM way this hole's line of play came from, if any.
             "hole_way": _hole_way_ref(h),
-            # How well each zone's ellipses cover its OSM polygon (osm_ellipse.py).
-            "zone_fit": zone_fit,
+            # Where the fairway came from: "osm", "generated" from design numbers, or "none".
+            "fairway": fairway,
             # True when OSM has no green for this hole and a circle at the pin stands in.
             "made_green": made_green
         }
@@ -2474,11 +2509,30 @@ def _is_cart_road(el: dict) -> bool:
     return tags.get("golf") == "cartpath" or tags.get("highway") in ("service", "track")
 
 
+def _spine_clear_of(spine_x: float, spine_z: list[float], rings: list, clearance: float) -> float:
+    """The road spine's x (it runs along z over `spine_z`), moved towards -x
+    until it passes no ring closer than `clearance`."""
+    low, high = min(spine_z), max(spine_z)
+    moved = True
+    while moved:
+        moved = False
+        for ring in rings:
+            xs, zs = [q[0] for q in ring], [q[1] for q in ring]
+            if max(zs) < low - clearance or min(zs) > high + clearance:
+                continue
+            if min(xs) - clearance < spine_x < max(xs) + clearance:
+                spine_x = min(xs) - clearance
+                moved = True
+    return spine_x
+
+
 def _fallback_cart_roads(spawn: tuple[float, float],
                          hole_anchors: list[dict],
                          width: float = 4.0,
                          fairway_corridors: list[dict] | None = None,
-                         extra_offset: float = 8.0) -> list[dict]:
+                         extra_offset: float = 8.0,
+                         water_rings: list | None = None,
+                         water_clearance: float = 0.0) -> list[dict]:
     if not hole_anchors:
         return []
 
@@ -2486,6 +2540,9 @@ def _fallback_cart_roads(spawn: tuple[float, float],
         fairway_points = [pt for corridor in fairway_corridors for pt in corridor.get("line", [])]
         max_radius = max(float(corridor.get("radius", 0.0)) for corridor in fairway_corridors)
         spine_x = min([spawn[0]] + [pt[0] for pt in fairway_points]) - max_radius - extra_offset - 12.0
+        spine_x = _spine_clear_of(spine_x, [spawn[1]] + [z for anchor in hole_anchors
+                                                         for z in (anchor["start_xz"][1], anchor["return_xz"][1])],
+                                  water_rings or [], water_clearance)
         chain = [(spine_x, spawn[1])]
         for anchor in hole_anchors:
             chain.append((spine_x, anchor["start_xz"][1]))
@@ -2683,7 +2740,10 @@ def course_world_to_json(course_id: str,
                                           hole_anchors,
                                           float(world_config.get("fallback_cart_width", 4.0)),
                                           fairway_corridors,
-                                          float(world_config.get("fallback_road_extra_offset", 8.0)))
+                                          float(world_config.get("fallback_road_extra_offset", 8.0)),
+                                          [pts for hole in holes.values() for el in hole["waters"]
+                                           for pts, closed in _element_shapes_xz(el, origin_lat, origin_lon) if closed],
+                                          float(world_config.get("fallback_road_water_clearance", 5.0)))
 
     tee_elevations = {num: h_json["source"].get("tee_elevation") for num, h_json in hole_jsons.items()}
     tee_elevations = {num: height for num, height in tee_elevations.items() if height is not None}
@@ -2771,6 +2831,14 @@ def _make_elevation_sampler(args, config: dict, origin_lat: float, origin_lon: f
         sampler.ground_cell_size = float(terrarium_config.get("ground_cell_size", 20.0))
     print(f"  Sampling elevation from {sampler.description}", file=sys.stderr)
     return sampler
+
+
+def _course_air(sampler, origin_lat: float, origin_lon: float, config: dict) -> dict:
+    """The course file's air: its height above sea level at the origin, and its climate."""
+    height = sampler.elevation(origin_lat, origin_lon) if sampler is not None else None
+    air = {"elevation_meters": round(height) if height is not None else 0}
+    air.update(config["air"])
+    return air
 
 
 def _report_elevation(sampler) -> None:
@@ -3026,6 +3094,8 @@ Examples:
                 "haze_distance": 800,
             },
             "sky": dict(config["sky"]),
+            "green_stimp_feet": config["green_stimp_feet"],
+            "air": _course_air(elevation, origin_lat, origin_lon, config),
             "holes": hole_paths
         }
         if not args.no_world:

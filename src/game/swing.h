@@ -1,23 +1,23 @@
 #pragma once
 
-// Timing swing: the backswing starts the power meter, which rises and falls
-// continuously; the downswing hits at the current power.
+// The swing, once Space commits the setup: the club goes back to the
+// dialled backswing and down to the ball on the club's tempo, whatever the
+// length, and the ball is struck when it gets there. No timing: an
+// animation, not an input. Mine, and others' as shown (remote_players.h).
 
-enum class swing_phase {
-    idle,
-    timing
+#include "game/club_definition.h"
+#include "game/game_tuning.h"
+
+struct swing_tempo {
+    float back_seconds = 0.0f;
+    float down_seconds = 0.0f;
 };
 
-struct swing_state {
-    swing_phase phase = swing_phase::idle;
-    float elapsed = 0.0f;  // seconds since the meter started
-    float power = 0.0f;    // 0..1
-};
+swing_tempo swing_tempo_for(const club_definition& club, const swing_tuning& tuning);
 
-// Meter power after `elapsed` seconds at speed 1: 0 -> 1 -> 0 every `cycle_seconds`.
-float sample_swing_power(float elapsed, float cycle_seconds);
+// Seconds from the swing's start to impact.
+float swing_impact_seconds(const swing_tempo& tempo);
 
-// How far a golfer's club is raised `elapsed` seconds into their swing, the
-// meter running at a club's `timing_speed`: my meter, and the club others
-// see me raise (remote_address_pose in remote_players.h).
-float swing_meter_power(float elapsed, float timing_speed, float cycle_seconds);
+// How far the club is raised `elapsed` seconds into a swing back to
+// `backswing`: none at address, `backswing` at the top, none again at impact.
+float swing_club_raise(float elapsed, float backswing, const swing_tempo& tempo);

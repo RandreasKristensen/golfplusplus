@@ -16,6 +16,12 @@
     "date": "06-21",
     "utc_offset_hours": 2
   },
+  "green_stimp_feet": 9.5,
+  "air": {
+    "elevation_meters": 81,
+    "mean_temperature_c": 15.5,
+    "daily_temperature_range_c": 8.5
+  },
   "holes": [
     "holes/h01.json",
     "holes/h02.json",

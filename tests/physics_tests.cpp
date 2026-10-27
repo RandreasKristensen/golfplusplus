@@ -7,7 +7,7 @@
 #include "physics/ground_mesh.h"
 #include "physics/land_relief.h"
 #include "physics/terrain.h"
-#include "physics/tree_collision.h"
+#include "physics/solid.h"
 #include "physics/wind.h"
 
 #include <algorithm>
@@ -26,11 +26,11 @@
 
 namespace {
 physics_tuning test_physics() {
-    physics_tuning physics;
-    physics.drag_coeff = 0.004f;
-    physics.magnus_coeff = 0.0004f;
-    physics.spin_decay = 0.6f;
-    return physics;
+    return shipped_content().tuning.physics;
+}
+
+air_state sea_level_air() {
+    return air_at(shipped_content().tuning.physics.air, 0.0f, 15.0f);
 }
 
 wind_profile test_profile() {
@@ -43,11 +43,12 @@ TEST_CASE("ball decelerates under aerodynamic drag") {
     b.velocity = glm::vec3(50.0f, 0.0f, 0.0f);
     b.spin = glm::vec3(0.0f, 0.0f, 0.0f);
     b.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    b.radius = 0.021335f;
 
     wind_state w;
     w.velocity = glm::vec3(0.0f, 0.0f, 0.0f);
 
-    const ball_state b2 = step_ball_flight(b, w, 0.016f, test_physics());
+    const ball_state b2 = step_ball_flight(b, w, sea_level_air(), false, 0.016f, test_physics());
     CHECK(glm::length(b2.velocity) < glm::length(b.velocity));
 }
 
@@ -60,8 +61,8 @@ TEST_CASE("step is deterministic") {
     wind_state w;
     w.velocity = glm::vec3(0.0f, 0.0f, 0.0f);
 
-    const ball_state r1 = step_ball_flight(b, w, 0.016f, test_physics());
-    const ball_state r2 = step_ball_flight(b, w, 0.016f, test_physics());
+    const ball_state r1 = step_ball_flight(b, w, sea_level_air(), false, 0.016f, test_physics());
+    const ball_state r2 = step_ball_flight(b, w, sea_level_air(), false, 0.016f, test_physics());
 
     CHECK(near(r1.position, r2.position));
     CHECK(near(r1.velocity, r2.velocity));
@@ -215,8 +216,7 @@ void check_overlay_on_ground(const terrain_mesh& overlay, const terrain_mesh& gr
     for (const terrain_vertex& vertex : overlay.vertices) {
         CHECK(vertex.material == material);
         CHECK(on_ground(vertex.position));
-        const std::optional<float> distance = zone_normalized_distance(zone, vertex.position);
-        CHECK(distance.value_or(0.0f) <= 1.0001f);
+        CHECK(zone_distance_outside(zone, vertex.position) < 0.001f);
     }
     for (std::size_t i = 0; i + 2U < overlay.indices.size(); i += 3U) {
         const glm::vec3 centre = (overlay.vertices[overlay.indices[i]].position + overlay.vertices[overlay.indices[i + 1U]].position
@@ -237,7 +237,7 @@ TEST_CASE("material overlay lies on the downhill ground it is cut from") {
 
     const material_zone bunker_zone = circle_zone(material_zone_type::bunker, glm::vec3(0.0f, 0.0f, 10.0f), 2.0f);
     const terrain_mesh ground = plain_terrain_mesh(terrain);
-    const terrain_mesh overlay = build_material_overlay_mesh(ground, {bunker_zone}, 1.0f);
+    const terrain_mesh overlay = build_material_overlay_mesh(ground, {bunker_zone});
 
     REQUIRE(overlay.indices.size() >= 3U);
     check_overlay_on_ground(overlay, ground, bunker_zone, terrain_material::bunker);
@@ -248,7 +248,7 @@ TEST_CASE("material overlay lies on the downhill ground it is cut from") {
     CHECK(found_sample_below_authored_height);
 }
 
-TEST_CASE("turned ellipse material overlay covers its shape on the ground") {
+TEST_CASE("a zone's material overlay covers its outline on the ground") {
     terrain_spline terrain;
     terrain.control_points = {
         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -257,12 +257,11 @@ TEST_CASE("turned ellipse material overlay covers its shape on the ground") {
     terrain.width = 12.0f;
     terrain.sample_count = 20;
 
-    // 4 m long, 2 m wide, turned a quarter so its long axis runs along z.
-    material_zone water_zone = ellipse_zone(material_zone_type::water, glm::vec3(0.0f, 0.0f, 10.0f), 2.0f, 1.0f);
-    water_zone.rotation = glm::radians(90.0f);
+    // 4 m long along z, 2 m wide.
+    const material_zone water_zone = ellipse_zone(material_zone_type::water, glm::vec3(0.0f, 0.0f, 10.0f), 1.0f, 2.0f);
 
     const terrain_mesh ground = plain_terrain_mesh(terrain);
-    const terrain_mesh overlay = build_material_overlay_mesh(ground, {water_zone}, 1.0f);
+    const terrain_mesh overlay = build_material_overlay_mesh(ground, {water_zone});
 
     REQUIRE(overlay.indices.size() >= 3U);
     check_overlay_on_ground(overlay, ground, water_zone, terrain_material::water);
@@ -493,7 +492,7 @@ TEST_CASE("the ground around a lone hole follows the hole, on it and past its ed
     terrain.sample_count = 20;
 
     const std::vector<terrain_mesh> holes{plain_terrain_mesh(terrain)};
-    const terrain_mesh ground = build_ground(holes, {}, nullptr, ground_settings{1.0f, 10.0f, 0.0f});
+    const terrain_mesh ground = build_ground(holes, {}, nullptr, ground_settings{1.0f, 10.0f, 0.0f}).mesh;
 
     // On the hole the ground matches the ribbon; beside it, the edge height.
     const glm::vec3 on_hole(0.0f, 0.0f, 10.0f);
@@ -545,41 +544,38 @@ TEST_CASE("terrain collision uses spline elevation and is deterministic") {
     CHECK(near(r1.velocity, r2.velocity));
 }
 
-TEST_CASE("tree trunk collision pushes ball outside and reflects deterministically") {
-    tree_body tree;
-    tree.base = glm::vec3(0.0f);
-    tree.shape.trunk_radius = 0.35f;
-    tree.shape.trunk_height = 2.4f;
+TEST_CASE("a trunk pushes the ball outside and reflects it deterministically") {
+    solid trunk = test_post(glm::vec3(0.0f), 0.35f, 2.4f);
+    trunk.kind = solid_kind::trunk;
+    trunk.restitution = 0.25f;
+    trunk.friction = 0.35f;
 
     ball_state ball;
     ball.radius = 0.1f;
     ball.position = glm::vec3(0.30f, 1.0f, 0.0f);
     ball.velocity = glm::vec3(-2.0f, 0.0f, 0.0f);
 
-    const ball_state r1 = resolve_tree_collision(ball, tree, 0.25f, 0.35f);
-    const ball_state r2 = resolve_tree_collision(ball, tree, 0.25f, 0.35f);
+    const ball_state r1 = resolve_solid_contact(ball, trunk);
+    const ball_state r2 = resolve_solid_contact(ball, trunk);
 
-    CHECK(r1.position.x >= tree.shape.trunk_radius + ball.radius - 0.0001f);
+    CHECK(r1.position.x >= trunk.radius + ball.radius - 0.0001f);
     CHECK(r1.velocity.x > 0.0f);
     CHECK(near(r1.position, r2.position));
     CHECK(near(r1.velocity, r2.velocity));
 }
 
-TEST_CASE("tree leaf cone collision damps and deflects deterministically") {
-    tree_body tree;
-    tree.base = glm::vec3(0.0f);
-    tree.shape.trunk_radius = 0.25f;
-    tree.shape.trunk_height = 2.0f;
-    tree.shape.leaf_radius = 1.5f;
-    tree.shape.leaf_height = 3.0f;
+TEST_CASE("a cone of leaves damps and deflects the ball deterministically") {
+    solid leaves = test_solid(solid_shape::cone, solid_kind::leaves, glm::vec3(0.0f, 2.0f, 0.0f), 1.5f, 3.0f);
+    leaves.restitution = 0.2f;
+    leaves.friction = 0.5f;
 
     ball_state ball;
     ball.radius = 0.1f;
     ball.position = glm::vec3(0.8f, 3.0f, 0.0f);
     ball.velocity = glm::vec3(-4.0f, 0.0f, 0.0f);
 
-    const ball_state r1 = resolve_tree_collision(ball, tree, 0.2f, 0.5f);
-    const ball_state r2 = resolve_tree_collision(ball, tree, 0.2f, 0.5f);
+    const ball_state r1 = resolve_solid_contact(ball, leaves);
+    const ball_state r2 = resolve_solid_contact(ball, leaves);
 
     CHECK(glm::length(r1.velocity) < glm::length(ball.velocity));
     CHECK(r1.position.x > ball.position.x);
@@ -587,18 +583,35 @@ TEST_CASE("tree leaf cone collision damps and deflects deterministically") {
     CHECK(near(r1.velocity, r2.velocity));
 }
 
-TEST_CASE("tree collision leaves distant ball unchanged") {
-    tree_body tree;
-    tree.base = glm::vec3(0.0f);
-    tree.shape = tree_shape{0.35f, 2.4f, 1.6f, 3.2f};
-
+TEST_CASE("solids leave a distant ball unchanged") {
     ball_state ball;
     ball.position = glm::vec3(5.0f, 1.0f, 0.0f);
     ball.velocity = glm::vec3(1.0f, 0.0f, 0.0f);
 
-    const ball_state result = resolve_tree_collision(ball, tree, 0.25f, 0.35f);
-    CHECK(near(result.position, ball.position));
-    CHECK(near(result.velocity, ball.velocity));
+    for (const solid& thing : {test_post(glm::vec3(0.0f), 0.35f, 2.4f),
+                               test_solid(solid_shape::cone, solid_kind::leaves, glm::vec3(0.0f, 2.4f, 0.0f), 1.6f, 3.2f),
+                               test_box(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f), 2.0f, 1.0f)}) {
+        const ball_state result = resolve_solid_contact(ball, thing);
+        CHECK(near(result.position, ball.position));
+        CHECK(near(result.velocity, ball.velocity));
+    }
+}
+
+TEST_CASE("a box pushes a ball out of it along the side it is nearest") {
+    const solid box = test_box(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f), 2.0f, 1.0f, 0.5f);
+    ball_state ball;
+    ball.radius = 0.1f;
+    ball.position = glm::vec3(1.05f, 0.25f, 0.0f);
+    ball.velocity = glm::vec3(-3.0f, 0.0f, 0.0f);
+    const ball_state side = resolve_solid_contact(ball, box);
+    CHECK(side.position.x >= 1.1f - 0.0001f);
+    CHECK(side.velocity.x >= 0.0f);
+
+    ball.position = glm::vec3(0.0f, 0.55f, 0.5f);
+    ball.velocity = glm::vec3(0.0f, -3.0f, 0.0f);
+    const ball_state top = resolve_solid_contact(ball, box);
+    CHECK(top.position.y >= 0.6f - 0.0001f);
+    CHECK(top.velocity.y >= 0.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -664,11 +677,11 @@ TEST_CASE("terrain spatial index is built by the mesh builders") {
           == static_cast<std::size_t>(mesh.spatial_index.cells_x) * static_cast<std::size_t>(mesh.spatial_index.cells_z) + 1U);
     CHECK(mesh.spatial_index.cell_triangles.size() >= mesh.indices.size() / 3U);
 
-    const terrain_mesh ground = build_ground({mesh}, index_test_zones(), nullptr, ground_settings{8.0f, 12.0f, 0.0f});
+    const terrain_mesh ground = build_ground({mesh}, index_test_zones(), nullptr, ground_settings{8.0f, 12.0f, 0.0f}).mesh;
     CHECK(ground.spatial_index.cells_x > 0);
     CHECK(ground.spatial_index.triangle_count == static_cast<uint32_t>(ground.indices.size() / 3U));
 
-    const terrain_mesh overlay = build_material_overlay_mesh(ground, index_test_zones(), 1.0f);
+    const terrain_mesh overlay = build_material_overlay_mesh(ground, index_test_zones());
     CHECK(overlay.spatial_index.cells_x > 0);
     CHECK(overlay.spatial_index.triangle_count == static_cast<uint32_t>(overlay.indices.size() / 3U));
 }
@@ -785,7 +798,7 @@ TEST_CASE("indexed terrain sampling matches the full scan on mesh edges and beyo
 
 TEST_CASE("indexed terrain sampling matches the full scan on the ground mesh") {
     const terrain_mesh mesh = index_test_mesh();
-    const terrain_mesh ground = build_ground({mesh}, index_test_zones(), nullptr, ground_settings{8.0f, 12.0f, 0.0f});
+    const terrain_mesh ground = build_ground({mesh}, index_test_zones(), nullptr, ground_settings{8.0f, 12.0f, 0.0f}).mesh;
     const terrain_mesh reference_ground = without_spatial_index(ground);
     CHECK(ground.indices.size() >= 3U);
     if (ground.indices.size() < 3U) {
@@ -956,15 +969,23 @@ TEST_CASE("terrain spatial index keeps triangles tested per sample near constant
     CHECK(large_average < small_average * 4.0);
 }
 
-TEST_CASE("the tree grid hits exactly what testing every tree hits") {
-    std::vector<tree_body> trees;
+TEST_CASE("the solid grid hits exactly what testing every solid hits") {
+    std::vector<solid> trees;
     for (int i = 0; i < 400; ++i) {
         // A scattered wood, some trees close enough to touch each other.
         const float x = static_cast<float>((i * 37) % 200) - 100.0f + static_cast<float>(i % 7) * 0.3f;
         const float z = static_cast<float>((i * 53) % 160) - 80.0f + static_cast<float>(i % 5) * 0.4f;
-        trees.push_back(tree_body{glm::vec3(x, static_cast<float>(i % 3), z), tree_shape{0.6f, 4.0f, 4.0f + static_cast<float>(i % 4), 6.0f}});
+        const glm::vec3 base(x, static_cast<float>(i % 3), z);
+        solid trunk = test_post(base, 0.6f, 4.0f);
+        solid leaves = test_solid(solid_shape::cone, solid_kind::leaves, base + glm::vec3(0.0f, 4.0f, 0.0f),
+                                  4.0f + static_cast<float>(i % 4), 6.0f);
+        for (solid* part : {&trunk, &leaves}) {
+            part->restitution = 0.3f;
+            part->friction = 0.2f;
+            trees.push_back(*part);
+        }
     }
-    const tree_grid grid = build_tree_grid(trees, 16.0f);
+    const solid_grid grid = build_solid_grid(trees, 16.0f);
     int touched = 0;
     for (int i = 0; i < 2000; ++i) {
         ball_state ball;
@@ -973,60 +994,149 @@ TEST_CASE("the tree grid hits exactly what testing every tree hits") {
                                   static_cast<float>(i % 12),
                                   static_cast<float>((i * 41) % 200) - 100.0f + 0.17f * static_cast<float>(i % 13));
         ball.velocity = glm::vec3(static_cast<float>(i % 9) - 4.0f, -1.0f, static_cast<float>(i % 7) - 3.0f);
-        const ball_state every = resolve_tree_collisions(ball, trees, 0.3f, 0.2f);
-        const ball_state near = resolve_tree_collisions(ball, trees, grid, 0.3f, 0.2f);
+        ball_state every = ball;
+        for (const solid& thing : trees) {
+            every = resolve_solid_contact(every, thing);
+        }
+        const ball_state near = resolve_ball_contacts(ball.position, ball, trees, grid, {}, 0).ball;
         CHECK(every.position == near.position);
         CHECK(every.velocity == near.velocity);
         touched += every.position != ball.position ? 1 : 0;
     }
     CHECK(touched > 50);  // the test reaches into canopies, not only empty air
-    CHECK(resolve_tree_collisions(ball_state{}, {}, build_tree_grid({}, 16.0f), 0.3f, 0.2f).position == glm::vec3(0.0f));
+    const std::vector<solid> none;
+    CHECK(resolve_ball_contacts(glm::vec3(0.0f), ball_state{}, none, build_solid_grid(none, 16.0f), {}, 0).ball.position ==
+          glm::vec3(0.0f));
 }
 
-TEST_CASE("a body moving over the ground stops at posts, slides along walls and is put out of blocks") {
-    upright_obstacles obstacles;
-    obstacles.posts.push_back(upright_post{glm::vec2(0.0f, 5.0f), 0.5f});
-    const ground_body walker{{glm::vec2(0.0f)}, 0.3f};
+TEST_CASE("a body moving over the ground stops at posts, slides along walls and is put out of boxes") {
+    const std::vector<solid> post{test_post(glm::vec3(0.0f, 0.0f, 5.0f), 0.5f)};
+    const ground_body walker = circle_body(0.3f, 0.0f, 0.0f);
+    const auto move = [](const std::vector<solid>& solids, const ground_body& body, const glm::vec3& from, const glm::vec3& to) {
+        return move_among(solids, solid_mover::walker, body, from, to);
+    };
 
     // Straight into the post: stopped at its edge, touching it.
-    const body_move stopped = move_body({&obstacles}, walker, glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(0.0f, 3.0f, 10.0f));
+    const body_move stopped = move(post, walker, glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(0.0f, 3.0f, 10.0f));
     CHECK(stopped.touched);
     CHECK(near(stopped.position.z, 4.2f, 0.001f));
     CHECK(near(stopped.position.y, 3.0f));
-    const body_move clear = move_body({&obstacles}, walker, glm::vec3(2.0f, 0.0f, 0.0f), glm::vec3(2.0f, 0.0f, 10.0f));
+    const body_move clear = move(post, walker, glm::vec3(2.0f, 0.0f, 0.0f), glm::vec3(2.0f, 0.0f, 10.0f));
     CHECK(!clear.touched);
     CHECK(near(clear.position, glm::vec3(2.0f, 0.0f, 10.0f)));
 
     // Against a thin net at an angle it slides along it, even moving a long
     // way in one go, never through it.
-    upright_obstacles net;
-    net.walls.push_back(upright_wall{glm::vec2(-10.0f, 3.0f), glm::vec2(10.0f, 3.0f), 0.05f});
-    const body_move slid = move_body({&net}, walker, glm::vec3(0.0f), glm::vec3(4.0f, 0.0f, 8.0f));
+    const std::vector<solid> net{test_wall(glm::vec3(-10.0f, 0.0f, 3.0f), glm::vec3(10.0f, 0.0f, 3.0f), 0.05f)};
+    const body_move slid = move(net, walker, glm::vec3(0.0f), glm::vec3(4.0f, 0.0f, 8.0f));
     CHECK(slid.touched);
     CHECK(slid.position.z < 3.0f - 0.3f);
     CHECK(slid.position.x > 3.9f);
 
-    // A block stops what comes at it, and pushes out what starts inside it.
-    upright_obstacles block;
-    block.blocks.push_back(upright_block{glm::vec2(0.0f), glm::vec2(0.0f, 1.0f), 3.0f, 1.0f});
-    const body_move blocked = move_body({&block}, walker, glm::vec3(-5.0f, 0.0f, 0.0f), glm::vec3(5.0f, 0.0f, 0.0f));
+    // A box stops what comes at it, and pushes out what starts inside it.
+    const std::vector<solid> box{test_box(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f), 3.0f, 1.0f)};
+    const body_move blocked = move(box, walker, glm::vec3(-5.0f, 0.0f, 0.0f), glm::vec3(5.0f, 0.0f, 0.0f));
     CHECK(blocked.touched);
     CHECK(near(blocked.position.x, -1.3f, 0.001f));
-    const body_move out = move_body({&block}, walker, glm::vec3(0.6f, 0.0f, 0.0f), glm::vec3(0.6f, 0.0f, 0.0f));
+    const body_move out = move(box, walker, glm::vec3(0.6f, 0.0f, 0.0f), glm::vec3(0.6f, 0.0f, 0.0f));
     CHECK(near(out.position.x, 1.3f, 0.001f));
 
-    // A body of several circles is kept clear by each, in every set.
-    const ground_body cart{{glm::vec2(0.0f, 0.7f), glm::vec2(0.0f, -0.3f)}, 0.7f};
-    const body_move parked = move_body({&net, &obstacles}, cart, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 2.0f));
-    CHECK(parked.position.z + 0.7f <= 3.0f - 0.05f - 0.7f + 0.001f);
+    // A box body stops with its front face at the net.
+    const ground_body cart = box_body(glm::vec2(0.0f, 1.0f), 1.2f, 0.7f, 0.2f, 0.0f, 0.0f);
+    const body_move parked = move({net[0], post[0]}, cart, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 2.0f));
+    CHECK(parked.touched);
+    CHECK(near(parked.position.z + 1.4f, 3.0f - 0.05f, 0.001f));
+}
+
+TEST_CASE("a box body is its rectangle: square corners, and boxes meet boxes by separating axes") {
+    const auto move = [](const std::vector<solid>& solids, const ground_body& body, const glm::vec3& from, const glm::vec3& to) {
+        return move_among(solids, solid_mover::walker, body, from, to);
+    };
+    // A post just inside the rectangle's corner stops its flat front.
+    const ground_body cart = box_body(glm::vec2(0.0f, 1.0f), 1.2f, 0.7f, 0.0f, 0.0f, 0.0f);
+    const std::vector<solid> post{test_post(glm::vec3(0.65f, 0.0f, 5.0f), 0.1f)};
+    const body_move stopped = move(post, cart, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 6.0f));
+    CHECK(stopped.touched);
+    CHECK(near(stopped.position.z + 1.2f, 4.9f, 0.01f));
+    // Beside it, it passes.
+    CHECK(!move(post, box_body(glm::vec2(0.0f, 1.0f), 1.2f, 0.5f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f),
+                glm::vec3(0.0f, 0.0f, 8.0f))
+               .touched);
+
+    // Turned 45 degrees, its corner leads into a wall.
+    const glm::vec2 diagonal = glm::normalize(glm::vec2(1.0f, 1.0f));
+    const std::vector<solid> wall{test_wall(glm::vec3(-20.0f, 0.0f, 4.0f), glm::vec3(20.0f, 0.0f, 4.0f), 0.05f)};
+    const body_move cornered = move(wall, box_body(diagonal, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f),
+                                    glm::vec3(0.0f, 0.0f, 4.0f));
+    CHECK(cornered.touched);
+    CHECK(near(cornered.position.z + std::sqrt(2.0f), 4.0f - 0.05f, 0.01f));
+
+    // Into a box turned 30 degrees: stopped against it, never in it.
+    const glm::vec3 turned(std::sin(glm::radians(30.0f)), 0.0f, std::cos(glm::radians(30.0f)));
+    const std::vector<solid> block{test_box(glm::vec3(5.0f, 0.0f, 0.0f), turned, 1.0f, 1.0f)};
+    const ground_body square = box_body(glm::vec2(0.0f, 1.0f), 1.0f, 1.0f, 0.0f, 0.0f, 0.0f);
+    const body_move against = move(block, square, glm::vec3(0.0f), glm::vec3(5.0f, 0.0f, 0.0f));
+    CHECK(against.touched);
+    CHECK(against.position.x < 5.0f - 2.0f + 0.01f);
+    CHECK(against.position.x > 5.0f - 1.0f - std::sqrt(2.0f) - 0.01f);
+    // Moved again from there it stays put: nothing left to push.
+    CHECK(near(move(block, square, against.position, against.position).position, against.position, 0.001f));
+}
+
+TEST_CASE("a walkable top no higher than a body's step-up does not stop it; higher, it does") {
+    solid step = test_box(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 1.0f), 2.0f, 2.0f, 0.25f);
+    step.walkable = true;
+    const glm::vec3 from(0.0f, 0.0f, 0.0f);
+    const glm::vec3 to(0.0f, 0.0f, 10.0f);
+    CHECK(!move_among({step}, solid_mover::walker, circle_body(0.3f, 0.0f, 0.3f), from, to).touched);
+    CHECK(move_among({step}, solid_mover::walker, circle_body(0.3f, 0.0f, 0.2f), from, to).touched);
+    // From up on it already, it is no step at all.
+    CHECK(!move_among({step}, solid_mover::walker, circle_body(0.3f, 0.0f, 0.0f), glm::vec3(0.0f, 0.25f, 4.0f), to).touched);
+    // Not walkable, as high as a step, it is a wall.
+    step.walkable = false;
+    CHECK(move_among({step}, solid_mover::walker, circle_body(0.3f, 0.0f, 0.3f), from, to).touched);
+}
+
+TEST_CASE("a body follows the surface within a step, falls off higher edges and lands") {
+    const float gravity = 10.0f;
+    // Up and down a step it stays on the surface.
+    CHECK(settle_vertical(vertical_body{1.0f, 0.0f, true}, 1.2f, 0.3f, gravity, 0.02f).y == 1.2f);
+    CHECK(settle_vertical(vertical_body{1.0f, 0.0f, true}, 0.8f, 0.3f, gravity, 0.02f).y == 0.8f);
+    // Off an edge higher than that it falls as anything falls, and lands.
+    vertical_body body{1.0f, 0.0f, true};
+    float seconds = 0.0f;
+    while (seconds < 2.0f) {
+        body = settle_vertical(body, 0.0f, 0.3f, gravity, 0.01f);
+        seconds += 0.01f;
+        if (body.grounded) {
+            break;
+        }
+    }
+    CHECK(body.grounded);
+    CHECK(body.y == 0.0f);
+    CHECK(near(seconds, std::sqrt(2.0f * 1.0f / gravity), 0.011f));
+    // A body moving up leaves the surface.
+    const vertical_body rising = settle_vertical(vertical_body{0.0f, 3.0f, false}, 0.0f, 0.3f, gravity, 0.1f);
+    CHECK(!rising.grounded);
+    CHECK(near(rising.y, 0.3f - 0.05f, 1e-5f));
+}
+
+TEST_CASE("a body is stopped only by what stops its kind of mover") {
+    solid cart_only = test_box(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f), 3.0f, 1.0f);
+    cart_only.stops_walker = false;
+    const std::vector<solid> box{cart_only};
+    const ground_body body = circle_body(0.3f, 0.0f, 0.0f);
+    const glm::vec3 from(-5.0f, 0.0f, 0.0f);
+    const glm::vec3 to(5.0f, 0.0f, 0.0f);
+    CHECK(!move_among(box, solid_mover::walker, body, from, to).touched);
+    CHECK(move_among(box, solid_mover::cart, body, from, to).touched);
 }
 
 TEST_CASE("a body with friction scrapes to a stop along what it presses against; without, it slides") {
-    upright_obstacles net;
-    net.walls.push_back(upright_wall{glm::vec2(-20.0f, 3.0f), glm::vec2(20.0f, 3.0f), 0.05f});
+    const std::vector<solid> net{test_wall(glm::vec3(-20.0f, 0.0f, 3.0f), glm::vec3(20.0f, 0.0f, 3.0f), 0.05f)};
     const auto along = [&](const float friction) {
-        const ground_body body{{glm::vec2(0.0f)}, 0.5f, friction};
-        return move_body({&net}, body, glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(6.0f, 0.0f, 8.0f)).position.x;
+        const ground_body body = circle_body(0.5f, friction, 0.0f);
+        return move_among(net, solid_mover::walker, body, glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(6.0f, 0.0f, 8.0f)).position.x;
     };
     CHECK(along(0.0f) > 5.9f);
     CHECK(along(0.9f) < 1.0f);

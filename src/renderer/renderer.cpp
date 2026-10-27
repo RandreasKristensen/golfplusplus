@@ -1,14 +1,18 @@
 #include "renderer/renderer.h"
 
+#include "game/model_kinds.h"
+#include "renderer/cart_batch.h"
 #include "renderer/course_map_overlay.h"
-#include "renderer/emote_props.h"
+#include "renderer/held_props.h"
 #include "renderer/gl_loader.h"
 #include "renderer/hud_overlay.h"
 #include "renderer/menu_overlay.h"
 #include "renderer/primitive_mesh.h"
 #include "renderer/remote_avatar_batch.h"
 #include "renderer/scorecard_overlay.h"
+#include "renderer/bag_batch.h"
 #include "renderer/shadow_casters.h"
+#include "renderer/swing_club.h"
 #include "renderer/vcr_overlay.h"
 
 #include <algorithm>
@@ -62,7 +66,7 @@ void delete_vertex_array(unsigned int& vao) {
 }
 
 bool renderer::init(SDL_Window* window, const std::string& asset_root, const picture_style& picture,
-                    const lighting_palette& palette, const prop_set& props) {
+                    const lighting_palette& palette, const prop_catalog& props) {
     window_ = window;
     picture_style_ = picture;
     colors_ = palette.colors;
@@ -92,6 +96,7 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
                             tree_renderer::mesh_source{cone_.vbo, cone_.vertex_count}) &&
         world_marker_renderer_.init(path("world_marker.vert"), path("world_marker.frag")) &&
         tee_box_renderer_.init(path("tee_box.vert"), path("tee_box.frag")) &&
+        prop_renderer_.init(path("prop.vert"), path("prop.frag")) &&
         blob_shadow_renderer_.init(path("blob_shadow.vert"), path("blob_shadow.frag")) &&
         shadow_map_pass_.init(path("shadow_map.vert"), path("shadow_map.frag"), palette.shadows) &&
         hole_sign_renderer_.init(path("hole_sign.vert"), path("hole_sign.frag")) &&
@@ -118,6 +123,8 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
     terrain_shader_.set_int("u_shadow_map", shadow_map_unit);
     tee_box_renderer_.shader().use();
     tee_box_renderer_.shader().set_int("u_shadow_map", shadow_map_unit);
+    prop_renderer_.shader().use();
+    prop_renderer_.shader().set_int("u_shadow_map", shadow_map_unit);
 
     gpu_timers_.init();
     return true;
@@ -129,6 +136,7 @@ void renderer::shutdown() {
     tree_renderer_.shutdown();
     world_marker_renderer_.shutdown();
     tee_box_renderer_.shutdown();
+    prop_renderer_.shutdown();
     blob_shadow_renderer_.shutdown();
     shadow_map_pass_.shutdown();
     hole_sign_renderer_.shutdown();
@@ -149,7 +157,7 @@ void renderer::shutdown() {
     delete_vertex_array(flight_path_vao_);
 
     terrain_renderer_.shutdown();
-    for (primitive_buffers* buffers : {&ground_, &ball_, &cylinder_, &cone_, &panel_}) {
+    for (primitive_buffers* buffers : {&ground_, &ball_, &cylinder_, &cone_}) {
         delete_buffer(buffers->vbo);
         delete_vertex_array(buffers->vao);
         *buffers = primitive_buffers{};
@@ -190,9 +198,9 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
     if (!data.vcr.still_frame || !camcorder_pass_.has_frame()) {
         const profile_scope scene_timer(profile, profile_stage::render_scene);
         const std::vector<tree_body> no_trees;
-        build_shadow_casters(shadow_casters_, data, colors_, props_);
+        build_shadow_casters(shadow_casters_, shadow_models_, data, colors_, props_);
         shadow_map_pass_.draw(tree_renderer_, data.trees != nullptr ? *data.trees : no_trees, data.trees_revision,
-                              floodlight_renderer_, data.floodlights, shadow_casters_,
+                              floodlight_renderer_, data.floodlights, shadow_casters_, shadow_models_,
                               data.lighting.sun_direction, data.lighting.shadows.sun_share, data.camera_position,
                               data.camera_target - data.camera_position, gpu_timers_, profile);
         glEnable(GL_DEPTH_TEST);
@@ -283,7 +291,6 @@ bool renderer::init_geometry() {
     make_primitive(ground_, make_xz_quad_vertices(), true);
     make_primitive(ball_, make_sphere_vertices(primitive_sphere_latitude_segments, primitive_sphere_longitude_segments), true);
     make_primitive(cylinder_, make_cylinder_vertices(primitive_cylinder_segments), true);
-    make_primitive(panel_, make_xy_quad_vertices(), true);
     // Only drawn instanced by tree_renderer, which describes the buffer itself.
     make_primitive(cone_, make_cone_vertices(primitive_cone_segments), false);
 
@@ -374,7 +381,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
 
     gpu_timers_.begin(gpu_profile_stage::trees);
     cull_stats_.trees_visible = tree_renderer_.draw(data.trees != nullptr ? *data.trees : std::vector<tree_body>{},
-                                                    data.trees_revision, view, proj, frustum, props_.tree, profile);
+                                                    data.trees_revision, view, proj, frustum, props_.at(tree_model), profile);
     hole_sign_renderer_.draw(data.hole_signs, view_proj, profile);
     fence_renderer_.draw_posts(data.fences, view_proj, profile);
     floodlight_renderer_.draw(data.floodlights, view_proj, profile);
@@ -384,23 +391,18 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     markers.show_hole = data.show_hole;
     markers.pin_position = data.pin_position;
     markers.pin_markers = &data.pin_markers;
+    markers.flags_out = &data.flags_out;
+    markers.lying_flags = &data.lying_flags;
     markers.collectible_markers = &data.collectible_markers;
     markers.cup_radius_meters = data.cup_radius_meters;
     markers.pin_visual_height_meters = data.pin_visual_height_meters;
     markers.flag = flag_pose{data.weather.flag_wind, data.weather.flag_lift, data.weather.flag_phase, data.weather.flag_flap};
-    markers.show_aim_indicator = data.show_aim_indicator;
-    markers.aim_arc_points = &data.aim_arc_points;
-    markers.show_swing_club = data.show_swing_club;
-    markers.ball_position = data.ball_position;
+    markers.address_marks = data.address_marks ? &*data.address_marks : nullptr;
     markers.ball_visual_radius_meters = data.ball_visual_radius_meters;
-    markers.aim_angle = data.aim_angle;
-    markers.swing_power = data.swing_power;
-    markers.carts = &data.carts;
-    markers.cart_seat_offset = data.cart_seat_offset;
     markers.remote_avatars = &data.remote_avatars;
     markers.remote_balls = &data.remote_balls;
     markers.avatar_eye_height = data.avatar_eye_height;
-    build_world_marker_batch(world_marker_batch_, markers, colors_, props_);
+    build_world_marker_batch(world_marker_batch_, markers, colors_);
     world_marker_renderer_.draw(world_marker_batch_, view_proj, profile);
 
     // Behind everything solid, before anything blends over it.
@@ -408,15 +410,9 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     backdrop_pass_.draw(view, proj, data.clock_seconds, data.weather.lightning);
     gpu_timers_.end();
 
-    // Other players' emote props blend (smoke puffs), so they go after the
-    // opaque markers.
-    emote_props_.clear();
-    for (const render_remote_avatar& avatar : data.remote_avatars) {
-        if (const std::optional<emote_holder> holder = remote_emote_holder(avatar, data.avatar_eye_height)) {
-            append_emote_props(emote_props_, *holder, props_, colors_.glow);
-        }
-    }
-    draw_emote_props(view_proj);
+    // After the sky: smoke and beer blend over it.
+    build_prop_batch(data);
+    draw_props(prop_batch_, view_proj, profile);
     render_flight_path(view, proj, data, profile);
 
     if (data.show_ball) {
@@ -439,49 +435,60 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     gpu_timers_.end();
 }
 
-// What is pinned to the camera, my emote props, drawn over the scene at the
+// What is pinned to the camera, what I hold, drawn over the scene at the
 // field of view it was posed for (render_data.h).
 void renderer::render_viewmodel(const glm::mat4& view, const render_data& data) {
-    if (!data.smoke_emote_active && !data.beer_emote_active) {
+    const auto held = [this](const std::optional<render_item_use>& use) -> std::optional<held_use> {
+        const auto model = use ? props_.find(use->model) : props_.end();
+        return model != props_.end() ? std::optional<held_use>(held_use{&model->second, use->elapsed}) : std::nullopt;
+    };
+    const std::optional<held_use> smokable = held(data.smoking);
+    const std::optional<held_use> drinkable = held(data.drinking);
+    if (!smokable && !drinkable) {
         return;
     }
-    emote_props_.clear();
-    const emote_holder mine = camera_emote_holder(
-        data.camera_position, data.camera_target,
-        data.smoke_emote_active ? std::optional<float>(data.smoke_emote_elapsed) : std::nullopt,
-        data.beer_emote_active ? std::optional<float>(data.beer_emote_elapsed) : std::nullopt);
-    append_emote_props(emote_props_, mine, props_, colors_.glow);
+    viewmodel_batch_.clear();
+    append_held_props(viewmodel_batch_, camera_prop_holder(data.camera_position, data.camera_target, smokable, drinkable),
+                      colors_.glow);
     // Never cut into by the world it sits in.
     glClear(GL_DEPTH_BUFFER_BIT);
-    draw_emote_props(scene_projection(data.viewmodel_fov_degrees, data.area_extent) * view);
+    draw_props(viewmodel_batch_, scene_projection(data.viewmodel_fov_degrees, data.area_extent) * view, nullptr);
 }
 
-// The emote props collected this frame: the opaque pieces, then the smoke
-// and beer blended over them.
-void renderer::draw_emote_props(const glm::mat4& view_proj) {
-    if (emote_props_.empty()) {
+void renderer::build_prop_batch(const render_data& data) {
+    prop_batch_.clear();
+    const auto model = [this](const std::string& id) -> const prop_model* {
+        const auto found = props_.find(id);
+        return found != props_.end() ? &found->second : nullptr;
+    };
+    append_carts_and_bags(prop_batch_, data, props_, colors_.glow);
+    if (data.my_club) {
+        if (const prop_model* club = model(data.my_club->club_model)) {
+            append_swing_club(prop_batch_, *data.my_club, data.ball_visual_radius_meters, *club, colors_.glow);
+        }
+    }
+    for (const render_remote_avatar& avatar : data.remote_avatars) {
+        if (avatar.swing) {
+            if (const prop_model* theirs = model(avatar.swing->club_model)) {
+                append_swing_club(prop_batch_, *avatar.swing, data.ball_visual_radius_meters, *theirs, colors_.glow);
+            }
+        }
+        if (const std::optional<prop_holder> holder = remote_prop_holder(avatar, data.avatar_eye_height, props_)) {
+            append_held_props(prop_batch_, *holder, colors_.glow);
+        }
+        append_figure_gear(prop_batch_, avatar, data.avatar_eye_height, props_, colors_.glow);
+    }
+}
+
+void renderer::draw_props(const prop_batch& batch, const glm::mat4& view_proj, frame_profile* profile) {
+    if (batch.empty()) {
         return;
     }
-    terrain_shader_.use();
-    const auto draw = [&](const bool blended) {
-        for (const emote_prop& prop : emote_props_) {
-            if ((prop.alpha < 1.0f) != blended) {
-                continue;
-            }
-            const primitive_buffers& mesh = prop.mesh == prop_mesh::cylinder ? cylinder_
-                                            : prop.mesh == prop_mesh::sphere ? ball_
-                                                                             : panel_;
-            set_terrain_draw_state(terrain_shader_, prop.model, view_proj, prop.color, prop.alpha, prop.glow, false);
-            glBindVertexArray(mesh.vao);
-            draw_arrays(terrain_shader_, GL_TRIANGLES, 0, mesh.vertex_count);
-        }
-    };
-    draw(false);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    draw(true);
-    glDisable(GL_BLEND);
-    glBindVertexArray(0);
+    gpu_timers_.begin(gpu_profile_stage::props);
+    prop_renderer_.shader().use();
+    shadow_map_pass_.bind(prop_renderer_.shader(), shadow_map_unit);
+    prop_renderer_.draw(batch, view_proj, profile);
+    gpu_timers_.end();
 }
 
 // My shot's flight path and other players' shot trails, as line strips.

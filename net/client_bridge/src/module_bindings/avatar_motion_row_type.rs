@@ -9,7 +9,6 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub struct AvatarMotionRow {
     pub account_id: u64,
     pub room_id: u64,
-    pub zone: i32,
     pub mode: u8,
     pub x: f32,
     pub y: f32,
@@ -31,7 +30,6 @@ impl __sdk::InModule for AvatarMotionRow {
 pub struct AvatarMotionRowCols {
     pub account_id: __sdk::__query_builder::Col<AvatarMotionRow, u64>,
     pub room_id: __sdk::__query_builder::Col<AvatarMotionRow, u64>,
-    pub zone: __sdk::__query_builder::Col<AvatarMotionRow, i32>,
     pub mode: __sdk::__query_builder::Col<AvatarMotionRow, u8>,
     pub x: __sdk::__query_builder::Col<AvatarMotionRow, f32>,
     pub y: __sdk::__query_builder::Col<AvatarMotionRow, f32>,
@@ -49,7 +47,6 @@ impl __sdk::__query_builder::HasCols for AvatarMotionRow {
         AvatarMotionRowCols {
             account_id: __sdk::__query_builder::Col::new(table_name, "account_id"),
             room_id: __sdk::__query_builder::Col::new(table_name, "room_id"),
-            zone: __sdk::__query_builder::Col::new(table_name, "zone"),
             mode: __sdk::__query_builder::Col::new(table_name, "mode"),
             x: __sdk::__query_builder::Col::new(table_name, "x"),
             y: __sdk::__query_builder::Col::new(table_name, "y"),

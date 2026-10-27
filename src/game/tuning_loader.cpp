@@ -42,6 +42,25 @@ struct section_reader {
         return days.value_or(0);
     }
 
+    // [[x, y], ...] with rising x.
+    tuning_curve curve(const char* key) const {
+        tuning_curve out;
+        const json* points = section != nullptr ? json_array(*section, key) : nullptr;
+        bool valid = points != nullptr && !points->empty();
+        for (std::size_t i = 0; valid && i < points->size(); ++i) {
+            const json& point = (*points)[i];
+            valid = point.is_array() && point.size() == 2 && point[0].is_number() && point[1].is_number() &&
+                (out.points.empty() || point[0].get<float>() > out.points.back().x);
+            if (valid) {
+                out.points.emplace_back(point[0].get<float>(), point[1].get<float>());
+            }
+        }
+        if (!valid) {
+            missing->push_back(name + "." + key);
+        }
+        return out;
+    }
+
     // [[height, scale], ...] with rising heights.
     wind_profile profile(const char* key) const {
         wind_profile out;
@@ -85,7 +104,6 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.scale.meters_per_world_unit = scale.number("meters_per_world_unit");
     tuning.scale.ball_physics_radius_meters = scale.number("ball_physics_radius_meters");
     tuning.scale.ball_visual_radius_meters = scale.number("ball_visual_radius_meters");
-    tuning.scale.cup_radius_meters = scale.number("cup_radius_meters");
     tuning.scale.pin_visual_height_meters = scale.number("pin_visual_height_meters");
     tuning.scale.flagstick_radius_meters = scale.number("flagstick_radius_meters");
 
@@ -94,7 +112,9 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.terrain.ground_cell_size = terrain.number("ground_cell_size");
     tuning.terrain.ground_blend_distance = terrain.number("ground_blend_distance");
     tuning.terrain.zones.bunker_depth = terrain.number("bunker_depth");
-    tuning.terrain.zones.water_depth_per_metre = terrain.number("water_depth_per_metre");
+    tuning.terrain.zones.bunker_lip_meters = terrain.number("bunker_lip_meters");
+    tuning.terrain.zones.water_bank_meters = terrain.number("water_bank_meters");
+    tuning.terrain.zones.water_shore_meters = terrain.number("water_shore_meters");
     tuning.terrain.zones.water_min_depth = terrain.number("water_min_depth");
     tuning.terrain.zones.water_max_depth = terrain.number("water_max_depth");
     tuning.terrain.fairway_cell_size = terrain.number("fairway_cell_size");
@@ -102,14 +122,29 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.terrain.relief.scale = terrain.number("relief_scale");
     tuning.terrain.relief.green_scale = terrain.number("green_relief_scale");
     tuning.terrain.relief.green_blend_distance = terrain.number("green_relief_blend_distance");
-    tuning.terrain.material_overlay_spacing = terrain.number("material_overlay_spacing");
 
     const section_reader physics = section("physics");
-    tuning.physics.drag_coeff = physics.number("drag_coeff");
-    tuning.physics.magnus_coeff = physics.number("magnus_coeff");
-    tuning.physics.spin_decay = physics.number("spin_decay");
     tuning.physics.water_drag_coeff = physics.number("water_drag_coeff");
     tuning.physics.water_spin_decay = physics.number("water_spin_decay");
+
+    const section_reader flight = section("flight");
+    tuning.physics.aero.mass = flight.number("mass_kg");
+    tuning.physics.aero.lift_max = flight.number("lift_max");
+    tuning.physics.aero.lift_half_spin = flight.number("lift_half_spin");
+    tuning.physics.aero.lift_crisis = flight.number("lift_crisis");
+    tuning.physics.aero.drag_base = flight.number("drag_base");
+    tuning.physics.aero.drag_spin = flight.number("drag_spin");
+    tuning.physics.aero.drag_crisis = flight.number("drag_crisis");
+    tuning.physics.aero.crisis_re_start = flight.number("crisis_re_start");
+    tuning.physics.aero.crisis_re_end = flight.number("crisis_re_end");
+    tuning.physics.aero.spin_decay = flight.number("spin_decay");
+
+    const section_reader air = section("air");
+    tuning.physics.air.sea_level_pressure = air.number("sea_level_pressure_pa");
+    tuning.physics.air.standard_temperature = air.number("standard_temperature_k");
+    tuning.physics.air.lapse_rate = air.number("lapse_rate_k_per_m");
+    tuning.physics.air.gas_constant = air.number("gas_constant");
+    tuning.physics.air.viscosity = air.number("viscosity_pa_s");
 
     const section_reader wind = section("wind");
     tuning.wind.profile = wind.profile("height_profile");
@@ -152,63 +187,122 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.weather.drying_per_hour = weather.number("drying_per_hour");
     tuning.weather.history_hours = weather.number("history_hours");
     tuning.weather.step_hours = weather.number("step_hours");
-    tuning.weather.rain_drag_coeff = weather.number("rain_drag_coeff");
-    tuning.weather.wet_spin_loss = weather.number("wet_spin_loss");
-    tuning.weather.wet_bounce_loss = weather.number("wet_bounce_loss");
-    tuning.weather.wet_friction_gain = weather.number("wet_friction_gain");
-    tuning.weather.wet_roll_gain = weather.number("wet_roll_gain");
-    tuning.weather.wet_green_friction_gain = weather.number("wet_green_friction_gain");
-    tuning.weather.wet_green_roll_gain = weather.number("wet_green_roll_gain");
+
+    const section_reader temperature = section("temperature");
+    tuning.weather.temperature.coldest_hour = temperature.number("coldest_hour");
+    tuning.weather.temperature.warmest_hour = temperature.number("warmest_hour");
+    tuning.weather.temperature.cloud_range_damping = temperature.number("cloud_range_damping");
+    tuning.weather.temperature.rain_cooling_c = temperature.number("rain_cooling_c");
+    tuning.weather.temperature.noise_c = temperature.number("noise_c");
+    tuning.weather.temperature.noise_hours = temperature.number("noise_hours");
 
     const section_reader ball = section("ball");
     tuning.ball.stop_speed = ball.number("stop_speed");
     tuning.ball.water_linger_seconds = ball.number("water_linger_seconds");
-    tuning.ball.ground_restitution = ball.number("ground_restitution");
-    tuning.ball.ground_friction = ball.number("ground_friction");
     tuning.ball.water_restitution = ball.number("water_restitution");
     tuning.ball.water_friction = ball.number("water_friction");
-    tuning.ball.bunker_restitution = ball.number("bunker_restitution");
-    tuning.ball.bunker_friction = ball.number("bunker_friction");
-    tuning.ball.bunker_roll_deceleration = ball.number("bunker_roll_deceleration");
-    tuning.ball.tree_restitution = ball.number("tree_restitution");
-    tuning.ball.tree_friction = ball.number("tree_friction");
-    tuning.ball.green_roll_deceleration = ball.number("green_roll_deceleration");
-    tuning.ball.fairway_roll_deceleration = ball.number("fairway_roll_deceleration");
-    tuning.ball.rough_roll_deceleration = ball.number("rough_roll_deceleration");
     tuning.ball.settle_speed = ball.number("settle_speed");
-    tuning.ball.cup_capture_speed = ball.number("cup_capture_speed");
-    tuning.ball.cup_lip_capture_scale = ball.number("cup_lip_capture_scale");
-    tuning.ball.cup_dunk_scale = ball.number("cup_dunk_scale");
+
+    const section_reader surfaces = section("surfaces");
+    const auto surface = [&](const char* name, const bool own_stimp) {
+        const section_reader of{surfaces.section != nullptr ? json_object(*surfaces.section, name) : nullptr,
+                                std::string("surfaces.") + name, &missing};
+        surface_tuning out;
+        out.dry.contact_angle_scale = of.number("contact_angle_scale");
+        out.dry.restitution_scale = of.number("restitution_scale");
+        out.dry.friction = of.number("friction");
+        out.dry.stimp_feet = own_stimp ? of.number("stimp_feet") : 0.0f;
+        out.dry.grass_drag = of.number("grass_drag");
+        out.dry.plug_speed = of.number("plug_speed");
+        out.dry.plug_depth = of.number("plug_depth");
+        out.wet_stimp_scale = of.number("wet_stimp_scale");
+        out.wet_contact_angle_scale = of.number("wet_contact_angle_scale");
+        out.wet_restitution_scale = of.number("wet_restitution_scale");
+        out.wet_friction_scale = of.number("wet_friction_scale");
+        out.wet_plug_speed_scale = of.number("wet_plug_speed_scale");
+        return out;
+    };
+    tuning.surfaces.fairway = surface("fairway", true);
+    tuning.surfaces.rough = surface("rough", true);
+    tuning.surfaces.green = surface("green", false);
+    tuning.surfaces.bunker = surface("bunker", true);
+    const section_reader cart_surfaces{surfaces.section != nullptr ? json_object(*surfaces.section, "cart") : nullptr,
+                                       "surfaces.cart", &missing};
+    const auto cart_surface = [&](const char* name) {
+        const section_reader of{cart_surfaces.section != nullptr ? json_object(*cart_surfaces.section, name) : nullptr,
+                                std::string("surfaces.cart.") + name, &missing};
+        return cart_surface_tuning{of.number("rolling_resistance"), of.number("grip"),
+                                   of.number("wet_rolling_resistance_scale"), of.number("wet_grip_scale")};
+    };
+    tuning.surfaces.cart.path = cart_surface("path");
+    tuning.surfaces.cart.fairway = cart_surface("fairway");
+    tuning.surfaces.cart.rough = cart_surface("rough");
+    tuning.surfaces.cart.green = cart_surface("green");
+    tuning.surfaces.cart.bunker = cart_surface("bunker");
+    tuning.surfaces.cart.water = cart_surface("water");
+
+    const section_reader cup = section("cup");
+    tuning.cup.radius_meters = cup.number("radius_meters");
+    tuning.cup.depth_meters = cup.number("depth_meters");
+    tuning.cup.leniency = cup.number("leniency");
+    tuning.cup.rim_radius_meters = cup.number("rim_radius_meters");
+    tuning.cup.contact.rim_restitution = cup.number("rim_restitution");
+    tuning.cup.contact.rim_friction = cup.number("rim_friction");
+    tuning.cup.contact.liner_restitution = cup.number("liner_restitution");
+    tuning.cup.contact.liner_friction = cup.number("liner_friction");
+    tuning.cup.flagstick_radius_meters = cup.number("flagstick_radius_meters");
+    tuning.cup.wrong_cup_drop_distance_meters = cup.number("wrong_cup_drop_distance_meters");
 
     const section_reader swing = section("swing");
-    tuning.swing.meter_cycle_seconds = swing.number("meter_cycle_seconds");
-    tuning.swing.min_power = swing.number("min_power");
-    tuning.swing.power_curve_exponent = swing.number("power_curve_exponent");
-    tuning.swing.side_spin_scale = swing.number("side_spin_scale");
+    tuning.swing.backswing_seconds = swing.number("backswing_seconds");
+    tuning.swing.downswing_seconds = swing.number("downswing_seconds");
+    tuning.swing.putt_backswing_seconds = swing.number("putt_backswing_seconds");
+    tuning.swing.putt_downswing_seconds = swing.number("putt_downswing_seconds");
+    tuning.swing.speed_share = swing.curve("speed_share");
+    tuning.swing.putting_speed_share = swing.curve("putting_speed_share");
+    tuning.swing.ball_position_loft_degrees = swing.number("ball_position_loft_degrees");
+    tuning.swing.ball_position_attack_degrees = swing.number("ball_position_attack_degrees");
+    tuning.swing.pure_strike_centredness = swing.number("pure_strike_centredness");
+
+    const section_reader setup = section("setup");
+    tuning.setup.aim_step_degrees = setup.number("aim_step_degrees");
+    tuning.setup.face_step_degrees = setup.number("face_step_degrees");
+    tuning.setup.ball_position_step = setup.number("ball_position_step");
+    tuning.setup.backswing_steps = setup.integer("backswing_steps");
+    tuning.setup.putter_backswing_steps = setup.integer("putter_backswing_steps");
+    tuning.setup.overswing_max = setup.number("overswing_max");
+    tuning.setup.ball_position_meters = setup.number("ball_position_meters");
+    tuning.setup.repeat_delay_seconds = setup.number("repeat_delay_seconds");
+    tuning.setup.repeat_rate = setup.number("repeat_rate");
+    tuning.setup.repeat_acceleration = setup.number("repeat_acceleration");
+    tuning.setup.max_repeat_rate = setup.number("max_repeat_rate");
+    tuning.setup.pointer_radius_degrees = setup.number("pointer_radius_degrees");
+    tuning.setup.drag_threshold_counts = setup.integer("drag_threshold_counts");
+    tuning.setup.face_line_half_length_meters = setup.number("face_line_half_length_meters");
+    tuning.setup.stick_out_meters = setup.number("stick_out_meters");
+    tuning.setup.stick_half_length_meters = setup.number("stick_half_length_meters");
 
     const section_reader player = section("player");
     tuning.player.walk_speed = player.number("walk_speed");
     tuning.player.turn_rate = player.number("turn_rate");
-    tuning.player.aim_turn_rate = player.number("aim_turn_rate");
     tuning.player.look_pitch_rate = player.number("look_pitch_rate");
     tuning.player.max_look_pitch = player.number("max_look_pitch");
     tuning.player.mouse_look_radians = player.number("mouse_look_radians");
     tuning.player.ball_interact_radius = player.number("ball_interact_radius");
+    tuning.player.flag_reach = player.number("flag_reach");
+    tuning.player.bag_reach = player.number("bag_reach");
+    tuning.player.bag_set_down_distance = player.number("bag_set_down_distance");
     tuning.player.ball_stand_off_distance = player.number("ball_stand_off_distance");
-    tuning.player.address_back_distance = player.number("address_back_distance");
-    tuning.player.emote_seconds = player.number("emote_seconds");
     tuning.player.jump_speed = player.number("jump_speed");
     tuning.player.jump_gravity = player.number("jump_gravity");
     tuning.player.body_radius = player.number("body_radius");
+    tuning.player.step_up = player.number("step_up");
 
     const section_reader cart = section("cart");
-    tuning.cart.speed = cart.number("speed");
-    tuning.cart.turn_rate = cart.number("turn_rate");
-    tuning.cart.damping = cart.number("damping");
-    tuning.cart.reverse_speed_scale = cart.number("reverse_speed_scale");
-    tuning.cart.full_steer_speed = cart.number("full_steer_speed");
     tuning.cart.steering_wheel_rate = cart.number("steering_wheel_rate");
+    tuning.cart.time_scale = cart.number("time_scale");
     tuning.cart.seat_offset = cart.number("seat_offset");
+    tuning.cart.bag_behind_seat = cart.number("bag_behind_seat");
     tuning.cart.board_reach = cart.number("board_reach");
     tuning.cart.step_out_distance = cart.number("step_out_distance");
     tuning.cart.step_seconds = cart.number("step_seconds");
@@ -217,29 +311,33 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.cart.park_spacing = cart.number("park_spacing");
     tuning.cart.road_reach_margin = cart.number("road_reach_margin");
     tuning.cart.min_road_reach = cart.number("min_road_reach");
-    tuning.cart.road_speed_scale = cart.number("road_speed_scale");
-    tuning.cart.road_control_scale = cart.number("road_control_scale");
-    tuning.cart.off_road_speed_scale = cart.number("off_road_speed_scale");
-    tuning.cart.off_road_control_scale = cart.number("off_road_control_scale");
-    tuning.cart.body_radius = cart.number("body_radius");
-    tuning.cart.body_ahead = cart.number("body_ahead");
-    tuning.cart.body_behind = cart.number("body_behind");
-    tuning.cart.crash_bounce = cart.number("crash_bounce");
+    tuning.cart.body_half_width = cart.number("body_half_width");
+    tuning.cart.body_front = cart.number("body_front");
+    tuning.cart.body_back = cart.number("body_back");
+    tuning.cart.step_up = cart.number("step_up");
     tuning.cart.crash_sound_speed = cart.number("crash_sound_speed");
     tuning.cart.scrape_friction = cart.number("scrape_friction");
+    tuning.cart.motor_idle_pitch = cart.number("motor_idle_pitch");
+    tuning.cart.motor_top_speed_pitch = cart.number("motor_top_speed_pitch");
+    tuning.cart.motor_load_pitch = cart.number("motor_load_pitch");
 
     const section_reader camera = section("camera");
     tuning.camera.walking_eye_height = camera.number("walking_eye_height");
     tuning.camera.walking_look_distance = camera.number("walking_look_distance");
-    tuning.camera.aiming_back_distance = camera.number("aiming_back_distance");
-    tuning.camera.aiming_eye_height = camera.number("aiming_eye_height");
-    tuning.camera.aiming_look_distance = camera.number("aiming_look_distance");
-    tuning.camera.aiming_look_height = camera.number("aiming_look_height");
-    tuning.camera.address_side_distance = camera.number("address_side_distance");
-    tuning.camera.address_back_distance = camera.number("address_back_distance");
     tuning.camera.address_eye_height = camera.number("address_eye_height");
-    tuning.camera.address_look_distance = camera.number("address_look_distance");
-    tuning.camera.address_look_height = camera.number("address_look_height");
+    tuning.camera.address_eye_out = camera.number("address_eye_out");
+    tuning.camera.address_target_yaw_degrees = camera.number("address_target_yaw_degrees");
+    tuning.camera.address_target_pitch_degrees = camera.number("address_target_pitch_degrees");
+    tuning.camera.address_down_yaw_degrees = camera.number("address_down_yaw_degrees");
+    tuning.camera.address_down_pitch_degrees = camera.number("address_down_pitch_degrees");
+    tuning.camera.address_min_yaw_degrees = camera.number("address_min_yaw_degrees");
+    tuning.camera.address_max_yaw_degrees = camera.number("address_max_yaw_degrees");
+    tuning.camera.address_min_pitch_degrees = camera.number("address_min_pitch_degrees");
+    tuning.camera.address_max_pitch_degrees = camera.number("address_max_pitch_degrees");
+    tuning.camera.address_snap_seconds = camera.number("address_snap_seconds");
+    tuning.camera.follow_side_distance = camera.number("follow_side_distance");
+    tuning.camera.follow_back_distance = camera.number("follow_back_distance");
+    tuning.camera.follow_eye_height = camera.number("follow_eye_height");
     tuning.camera.follow_look_height = camera.number("follow_look_height");
     tuning.camera.transition_seconds = camera.number("transition_seconds");
     tuning.camera.transition_jump_distance = camera.number("transition_jump_distance");
@@ -264,9 +362,10 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.rangefinder.blank_share = rangefinder.number("blank_share");
     tuning.rangefinder.nonsense_slope = rangefinder.number("nonsense_slope");
 
-    const section_reader aim_preview = section("aim_preview");
-    tuning.aim_preview.step_seconds = aim_preview.number("step_seconds");
-    tuning.aim_preview.max_points = aim_preview.integer("max_points");
+    const section_reader shot_preview = section("shot_preview");
+    tuning.shot_preview.step_seconds = shot_preview.number("step_seconds");
+    tuning.shot_preview.putt_line_meters = shot_preview.number("putt_line_meters");
+    tuning.shot_preview.putt_line_step_meters = shot_preview.number("putt_line_step_meters");
 
     const section_reader flight_path = section("flight_path");
     tuning.flight_path.color = flight_path.vec3("color");
@@ -306,6 +405,7 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.server.interact_slack = server.number("interact_slack");
     tuning.server.shot_time_slack_seconds = server.number("shot_time_slack_seconds");
     tuning.server.timing_slack_seconds = server.number("timing_slack_seconds");
+    tuning.server.cart_condition_slack = server.number("cart_condition_slack");
 
     const section_reader hole_sign = section("hole_sign");
     tuning.hole_sign.edge_inset = hole_sign.number("edge_inset");
@@ -325,8 +425,27 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
 
     const section_reader fence = section("fence");
     tuning.fence.pole_radius = fence.number("pole_radius");
-    tuning.fence.net_restitution = fence.number("net_restitution");
-    tuning.fence.net_friction = fence.number("net_friction");
+
+    const section_reader solids = section("solids");
+    const auto contact = [&](const char* kind) {
+        const section_reader of_kind{solids.section != nullptr ? json_object(*solids.section, kind) : nullptr,
+                                     std::string("solids.") + kind, &missing};
+        return solid_contact_tuning{of_kind.number("restitution"), of_kind.number("friction")};
+    };
+    tuning.solids.trunk = contact("trunk");
+    tuning.solids.leaves = contact("leaves");
+    tuning.solids.pole = contact("pole");
+    tuning.solids.net = contact("net");
+    tuning.solids.tee_box = contact("tee_box");
+    tuning.solids.board = contact("board");
+    tuning.solids.flagstick = contact("flagstick");
+    tuning.solids.lamp = contact("lamp");
+    tuning.solids.cart = contact("cart");
+    tuning.solids.person = contact("person");
+    tuning.solids.ball = contact("ball");
+    tuning.solids.self_hit_grace_seconds = solids.number("self_hit_grace_seconds");
+    tuning.solids.leaves_drag_per_meter = solids.number("leaves_drag_per_meter");
+    tuning.solids.leaves_scatter_degrees_per_meter = solids.number("leaves_scatter_degrees_per_meter");
 
     const section_reader floodlights = section("floodlights");
     tuning.floodlights.spacing = floodlights.number("spacing");
@@ -338,6 +457,9 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.floodlights.pole_height = floodlights.number("pole_height");
     tuning.floodlights.pole_radius = floodlights.number("pole_radius");
     tuning.floodlights.arm_length = floodlights.number("arm_length");
+    tuning.floodlights.head_width = floodlights.number("head_width");
+    tuning.floodlights.head_height = floodlights.number("head_height");
+    tuning.floodlights.head_depth = floodlights.number("head_depth");
     tuning.floodlights.obstacle_clearance = floodlights.number("obstacle_clearance");
     tuning.floodlights.nudge_step = floodlights.number("nudge_step");
     tuning.floodlights.nudge_tries = floodlights.integer("nudge_tries");
@@ -349,15 +471,34 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.sky_clock.game_days_per_real_day = sky_clock.number("game_days_per_real_day");
     tuning.sky_clock.year = sky_clock.integer("year");
 
-    // One entry per lie, named as ball_lie lists them.
-    const json* lies = json_object(root, "lies");
-    const char* const lie_names[ball_lie_count] = {"tee", "fairway", "rough", "green", "bunker", "water"};
-    for (std::size_t i = 0; i < ball_lie_count; ++i) {
-        const section_reader lie{lies != nullptr ? json_object(*lies, lie_names[i]) : nullptr,
-                                 std::string("lies.") + lie_names[i], &missing};
-        tuning.lies[i].power = lie.number("power");
-        tuning.lies[i].spin = lie.number("spin");
-    }
+    const section_reader golfer = section("golfer");
+    tuning.golfer.speed_share_spread = golfer.number("speed_share_spread");
+    tuning.golfer.face_spread_degrees = golfer.number("face_spread_degrees");
+    tuning.golfer.path_spread_degrees = golfer.number("path_spread_degrees");
+    tuning.golfer.strike_toe_spread_meters = golfer.number("strike_toe_spread_meters");
+    tuning.golfer.strike_high_spread_meters = golfer.number("strike_high_spread_meters");
+    tuning.golfer.spread_at_level_one = golfer.number("spread_at_level_one");
+    tuning.golfer.overswing_spread = golfer.number("overswing_spread");
+    tuning.golfer.natural_shape_spread = golfer.number("natural_shape_spread");
+    tuning.golfer.natural_face_bias_degrees = golfer.number("natural_face_bias_degrees");
+    tuning.golfer.curve_full_degrees = golfer.number("curve_full_degrees");
+    tuning.golfer.ball_full = golfer.number("ball_full");
+    tuning.golfer.flop_start_degrees = golfer.number("flop_start_degrees");
+    tuning.golfer.flop_full_degrees = golfer.number("flop_full_degrees");
+    tuning.golfer.word_threshold = golfer.number("word_threshold");
+
+    const section_reader lies = section("lies");
+    tuning.lies.rough_grip_share = lies.number("rough_grip_share");
+    tuning.lies.wet_grip_loss = lies.number("wet_grip_loss");
+    tuning.lies.rough_speed_loss = lies.number("rough_speed_loss");
+    tuning.lies.rough_face_close_per_loft = lies.number("rough_face_close_per_loft");
+    tuning.lies.sand_grip_share = lies.number("sand_grip_share");
+    tuning.lies.sand.speed_share = lies.number("explosion_speed_share");
+    tuning.lies.sand.spin_share = lies.number("explosion_spin_share");
+    tuning.lies.sand.entry_blend_degrees = lies.number("explosion_entry_blend_degrees");
+    tuning.lies.sand.descent_blend_degrees = lies.number("explosion_descent_blend_degrees");
+    tuning.lies.stance_ball_distance_meters = lies.number("stance_ball_distance_meters");
+    tuning.lies.stance_width_meters = lies.number("stance_width_meters");
 
     if (!missing.empty()) {
         result.error = "game tuning is missing or has malformed fields:";

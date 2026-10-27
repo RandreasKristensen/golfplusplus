@@ -1,8 +1,12 @@
 #pragma once
 
 // assets/sound/sounds.json. Entries may carry authoring notes
-// ("description", "target_length_seconds") that the game ignores.
+// ("description", "target_length_seconds") that the game ignores. Each
+// sound either carries in the world (reference_distance and max_distance,
+// metres, picked by ear) or says "placed": false and plays at full level,
+// centred (menus, the HUD, thunder, the ambience).
 
+#include "audio/sound_placement.h"
 #include "game/settings.h"
 
 #include <optional>
@@ -25,6 +29,7 @@ struct audio_sound_definition {
     std::string category;
     float volume_multiplier = 1.0f;
     audio_sound_type type = audio_sound_type::sfx;
+    std::optional<sound_spread> spread;  // none: not placed
 };
 
 struct audio_manifest {

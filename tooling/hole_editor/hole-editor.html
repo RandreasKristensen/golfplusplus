@@ -265,6 +265,7 @@ body {
   <button class="btn"        id="btn-green"   onclick="setMode('add_zone','green')">+ green</button>
   <button class="btn"        id="btn-bunker"  onclick="setMode('add_zone','bunker')">+ bunker</button>
   <button class="btn"        id="btn-water"   onclick="setMode('add_zone','water')">+ water</button>
+  <button class="btn"        id="btn-fairway" onclick="setMode('add_zone','fairway')">+ fairway</button>
   <button class="btn"        id="btn-tree"    onclick="setMode('add_tree')">+ tree</button>
   <button class="btn"        id="btn-fence"   onclick="setMode('add_fence')">+ fence</button>
   <div class="sep"></div>
@@ -410,8 +411,8 @@ let hole = {
     rough_width: 28.0
   },
   material_zones: [
-    { type: "green",  center: [0, 0, 80], radii: [6, 6], rotation_degrees: 0 },
-    { type: "bunker", center: [5, 0, 52], radii: [3.5, 3.5], rotation_degrees: 0 }
+    { type: "green",  outline: circleOutline(0, 80, 6) },
+    { type: "bunker", outline: circleOutline(5, 52, 3.5) }
   ],
   trees: []
 };
@@ -478,7 +479,7 @@ const c2w = (cx, cy) => ({
   x: (cx - canvas.width  / 2) / view.scale + view.ox,
   z: (cy - canvas.height / 2) / view.scale + view.oz
 });
-const r2 = v => Math.round(v * 100) / 100;
+function r2(v) { return Math.round(v * 100) / 100; }
 
 function pointXZ(p) {
   if (Array.isArray(p)) return { x: p[0] || 0, z: p.length >= 3 ? (p[2] || 0) : (p[1] || 0) };
@@ -490,45 +491,48 @@ function distXZ(a, b) {
   return Math.hypot(pa.x - pb.x, pa.z - pb.z);
 }
 
-// A zone's shape as the game reads it (src/physics/material_zone.h): an
-// ellipse (`center`, `radii` along its own x and z, `rotation_degrees`
-// turning it the way rotate_about_y does, which on this canvas is clockwise).
-const MIN_ZONE_RADIUS = 0.5;
-const ROTATE_HANDLE_PX = 22;
+// A zone's shape as the game reads it (src/physics/material_zone.h): its
+// `outline`, [x, z] points round its edge, the last joined to the first.
+const ZONE_SIZES = { green: 6, bunker: 3.5, water: 8, fairway: 15 };
+function circleOutline(cx, cz, radius, points = 16) {
+  return Array.from({ length: points }, (_, k) => {
+    const a = 2 * Math.PI * k / points;
+    return [r2(cx + radius * Math.cos(a)), r2(cz + radius * Math.sin(a))];
+  });
+}
+// The outline as points, with the middle of the box round it.
 function zoneShape(z) {
-  const c = z.center || [0,0,0];
-  const r = Array.isArray(z.radii) ? z.radii : [0,0];
-  return { x:+c[0]||0, y:+c[1]||0, z:+c[2]||0, rx:+r[0]||0, rz:+r[1]||0,
-           rot:(+z.rotation_degrees||0) * Math.PI / 180 };
+  const pts = (Array.isArray(z.outline) ? z.outline : []).map(q => ({ x: +q[0] || 0, z: +q[1] || 0 }));
+  const xs = pts.map(q => q.x), zs = pts.map(q => q.z);
+  return { pts, x: pts.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : 0,
+           z: pts.length ? (Math.min(...zs) + Math.max(...zs)) / 2 : 0 };
 }
-function setZoneShape(z, s) {
-  const rx = r2(Math.max(MIN_ZONE_RADIUS, s.rx)), rz = r2(Math.max(MIN_ZONE_RADIUS, s.rz));
-  let degrees = r2(s.rot * 180 / Math.PI) % 360;
-  if (degrees > 180) degrees -= 360;
-  if (degrees <= -180) degrees += 360;
-  z.center = [r2(s.x), s.y, r2(s.z)];
-  z.radii = [rx, rz];
-  z.rotation_degrees = r2(degrees);
+function setZoneOutline(z, pts) {
+  z.outline = pts.map(q => [r2(q.x), r2(q.z)]);
 }
-// The world point at (lx, lz) in the zone's own frame, and back.
-function zoneWorldPoint(s, lx, lz) {
-  const c = Math.cos(s.rot), sn = Math.sin(s.rot);
-  return { x: s.x + lx*c - lz*sn, z: s.z + lx*sn + lz*c };
+function zoneArea(s) {
+  let twice = 0;
+  s.pts.forEach((a, k) => { const b = s.pts[(k + 1) % s.pts.length]; twice += a.x * b.z - b.x * a.z; });
+  return Math.abs(twice) / 2;
 }
-function zoneLocalPoint(s, wx, wz) {
-  const dx = wx - s.x, dz = wz - s.z, c = Math.cos(s.rot), sn = Math.sin(s.rot);
-  return { x: dx*c + dz*sn, z: -dx*sn + dz*c };
-}
+// Even-odd, as the game tests.
 function zoneContains(s, wx, wz) {
-  const l = zoneLocalPoint(s, wx, wz);
-  return s.rx > 0 && s.rz > 0 && (l.x/s.rx)**2 + (l.z/s.rz)**2 <= 1;
+  let inside = false;
+  for (let k = 0, j = s.pts.length - 1; k < s.pts.length; j = k++) {
+    const a = s.pts[k], b = s.pts[j];
+    if ((a.z > wz) !== (b.z > wz) && wx < a.x + (wz - a.z) * (b.x - a.x) / (b.z - a.z)) inside = !inside;
+  }
+  return inside;
 }
-// Canvas handles of a selected zone: one per radius on its own axes, and a
-// rotation handle past the x radius.
+// Canvas handles of a selected zone: each point, and each side's middle
+// (dragging one adds a point there).
 function zoneHandles(s) {
-  const ex = zoneWorldPoint(s, s.rx, 0), ez = zoneWorldPoint(s, 0, s.rz);
-  const er = zoneWorldPoint(s, s.rx + ROTATE_HANDLE_PX / view.scale, 0);
-  return [{ kind:'rx', ...w2c(ex.x, ex.z) }, { kind:'rz', ...w2c(ez.x, ez.z) }, { kind:'rot', ...w2c(er.x, er.z) }];
+  const handles = s.pts.map((q, k) => ({ kind:'pt', k, ...w2c(q.x, q.z) }));
+  s.pts.forEach((a, k) => {
+    const b = s.pts[(k + 1) % s.pts.length];
+    handles.push({ kind:'mid', k, ...w2c((a.x + b.x) / 2, (a.z + b.z) / 2) });
+  });
+  return handles;
 }
 
 function vec3(value, fallback = [0, 0, 0]) {
@@ -644,12 +648,13 @@ function pointInRectXZ(pos, rect) {
   return p.x >= rect.minX && p.x <= rect.maxX && p.z >= rect.minZ && p.z <= rect.maxZ;
 }
 
+// Moves the zone so the middle of its box is at `v` along `key` (x or z).
 function setZoneValue(i, key, v) {
   if (!Number.isFinite(v)) return;
   const z = hole.material_zones[i];
   const s = zoneShape(z);
-  if (key === 'rot') s.rot = v * Math.PI / 180; else s[key] = v;
-  setZoneShape(z, s);
+  const d = v - s[key];
+  setZoneOutline(z, s.pts.map(q => ({ ...q, [key]: q[key] + d })));
   markDirty(); render();
 }
 
@@ -1196,7 +1201,8 @@ function splinePathLength(samples = 160) {
 const ZONE = {
   green:  { fill: 'rgba(50,130,50,0.3)',  stroke: 'rgba(80,180,70,0.65)'  },
   bunker: { fill: 'rgba(170,140,50,0.3)', stroke: 'rgba(210,175,70,0.65)' },
-  water:  { fill: 'rgba(35,75,190,0.3)',  stroke: 'rgba(60,110,220,0.65)' }
+  water:  { fill: 'rgba(35,75,190,0.3)',  stroke: 'rgba(60,110,220,0.65)' },
+  fairway:{ fill: 'rgba(90,160,70,0.18)', stroke: 'rgba(120,190,90,0.5)'  }
 };
 
 function render() {
@@ -1263,22 +1269,15 @@ function render() {
 
     const s = zoneShape(z);
     const c = w2c(s.x, s.z);
-    ctx.save();
-    ctx.translate(c.x, c.y);
-    ctx.rotate(s.rot);
     ctx.beginPath();
-    ctx.ellipse(0, 0, s.rx*view.scale, s.rz*view.scale, 0, 0, Math.PI*2);
-    ctx.restore();
+    s.pts.forEach((q, k) => { const p = w2c(q.x, q.z); k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
+    ctx.closePath();
     ctx.fillStyle = col.fill; ctx.fill();
     ctx.strokeStyle = isSel ? '#f0c060' : col.stroke; ctx.stroke();
     if (sel && sel.type === 'zone' && sel.index === i) {
-      const handles = zoneHandles(s);
-      const [edge, , rot] = handles;
-      ctx.strokeStyle = '#f0c060'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(edge.x, edge.y); ctx.lineTo(rot.x, rot.y); ctx.stroke();
-      handles.forEach(h => {
-        ctx.beginPath(); ctx.arc(h.x, h.y, h.kind === 'rot' ? 5 : 4, 0, Math.PI*2);
-        if (h.kind === 'rot') { ctx.strokeStyle = '#f0c060'; ctx.lineWidth = 1.5; ctx.stroke(); }
+      zoneHandles(s).forEach(h => {
+        ctx.beginPath(); ctx.arc(h.x, h.y, h.kind === 'mid' ? 3 : 4, 0, Math.PI*2);
+        if (h.kind === 'mid') { ctx.strokeStyle = '#f0c060'; ctx.lineWidth = 1; ctx.stroke(); }
         else { ctx.fillStyle = '#f0c060'; ctx.fill(); }
       });
     }
@@ -1502,7 +1501,7 @@ function hit(cx, cy) {
   // handles of the selected zone, over everything else
   if (sel?.type === 'zone' && hole.material_zones[sel.index]) {
     for (const h of zoneHandles(zoneShape(hole.material_zones[sel.index]))) {
-      if (Math.hypot(cx - h.x, cy - h.y) < 8) return { type:'zone_handle', index:sel.index, kind:h.kind };
+      if (Math.hypot(cx - h.x, cy - h.y) < 8) return { type:'zone_handle', index:sel.index, kind:h.kind, k:h.k };
     }
   }
   for (let i=hole.trees.length-1; i>=0; i--) {
@@ -1586,6 +1585,15 @@ canvas.addEventListener('mousedown', e => {
     if (h2?.type==='cp' && removeControlPoint(h2.index)) {
       if (sel?.type==='cp') sel=null;
       deleted = true;
+    } else if (h2?.type==='zone_handle' && h2.kind==='pt') {
+      // A point of the selected zone; it keeps at least three.
+      const z = hole.material_zones[h2.index];
+      const s = zoneShape(z);
+      if (s.pts.length > 3) {
+        s.pts.splice(h2.k, 1);
+        setZoneOutline(z, s.pts);
+        deleted = true;
+      }
     } else if (h2?.type==='zone') {
       hole.material_zones.splice(h2.index,1);
       if (sel?.type==='zone') sel=null;
@@ -1635,8 +1643,7 @@ canvas.addEventListener('mousedown', e => {
 
   // place zone
   if (mode==='add_zone') {
-    const radii = { green:[6,6], bunker:[3.5,3.5], water:[8,5] }[ztype];
-    hole.material_zones.push({ type:ztype, center:[r2(w.x),0,r2(w.z)], radii, rotation_degrees:0 });
+    hole.material_zones.push({ type:ztype, outline: circleOutline(w.x, w.z, ZONE_SIZES[ztype]) });
     sel = { type:'zone', index: hole.material_zones.length-1 };
     markDirty();
     setMode('select'); updatePanel(); render(); return;
@@ -1661,8 +1668,18 @@ canvas.addEventListener('mousedown', e => {
   if (h2) {
     selectedAreaItems = [];
     sel = h2.type==='zone_handle' ? { type:'zone', index:h2.index } : h2;
+    if (h2.type==='zone_handle' && h2.kind==='mid') {
+      // A side's middle: a new point there, dragged from now on.
+      const z = hole.material_zones[h2.index];
+      const s = zoneShape(z);
+      const a = s.pts[h2.k], b = s.pts[(h2.k + 1) % s.pts.length];
+      s.pts.splice(h2.k + 1, 0, { x:(a.x + b.x) / 2, z:(a.z + b.z) / 2 });
+      setZoneOutline(z, s.pts);
+      h2.kind = 'pt'; h2.k += 1;
+    }
     const op = origPos(h2);
-    drag = { ...h2, cx0:cx, cy0:cy, ox:op.x, oz:op.z };
+    drag = { ...h2, cx0:cx, cy0:cy, ox:op.x, oz:op.z,
+             outline: h2.type==='zone' ? zoneShape(hole.material_zones[h2.index]).pts : null };
   } else {
     sel = null;
     pan  = { cx0:cx, cy0:cy, vox:view.ox, voz:view.oz };
@@ -1688,6 +1705,10 @@ function origPos(h2) {
   if (h2.type==='zone') {
     const s = zoneShape(hole.material_zones[h2.index]);
     return {x:s.x, z:s.z};
+  }
+  if (h2.type==='zone_handle') {
+    const q = zoneShape(hole.material_zones[h2.index]).pts[h2.k];
+    return {x:q.x, z:q.z};
   }
   if (h2.type==='tree') { const t=hole.trees[h2.index]; return {x:t.position[0],z:t.position[2]}; }
   return {x:0,z:0};
@@ -1925,25 +1946,13 @@ canvas.addEventListener('mousemove', e => {
   else if (drag.type==='pin') { hole.pin[0]=nx; hole.pin[2]=nz; }
   else if (drag.type==='tree') { hole.trees[drag.index].position[0]=nx; hole.trees[drag.index].position[2]=nz; }
   else if (drag.type==='zone') {
-    const z = hole.material_zones[drag.index];
-    const s = zoneShape(z);
-    s.x = nx; s.z = nz;
-    setZoneShape(z, s);
+    const dx = nx - drag.ox, dz = nz - drag.oz;
+    setZoneOutline(hole.material_zones[drag.index], drag.outline.map(q => ({ x:q.x + dx, z:q.z + dz })));
   } else if (drag.type==='zone_handle') {
-    // Each radius follows the mouse along its own axis; the rotation handle
-    // points the zone's own x at the mouse (shift snaps to 15 degrees).
     const z = hole.material_zones[drag.index];
     const s = zoneShape(z);
-    const w2 = c2w(cx, cy);
-    const local = zoneLocalPoint(s, w2.x, w2.z);
-    if (drag.kind === 'rx') s.rx = Math.abs(local.x);
-    else if (drag.kind === 'rz') s.rz = Math.abs(local.z);
-    else {
-      const step = Math.PI / 12;
-      const angle = Math.atan2(w2.z - s.z, w2.x - s.x);
-      s.rot = e.shiftKey ? Math.round(angle / step) * step : angle;
-    }
-    setZoneShape(z, s);
+    s.pts[drag.k] = { x:nx, z:nz };
+    setZoneOutline(z, s.pts);
   }
   markDirty(true, false);
   updatePanel(); render();
@@ -2212,7 +2221,7 @@ function setMode(m, zt) {
   mode=m; ztype=zt||null;
   const map = { select:'btn-select', area_select:'btn-area-select', add_cp:'btn-addcp',
     measure:'btn-measure', add_tree:'btn-tree', add_fence:'btn-fence',
-    'add_zone:green':'btn-green','add_zone:bunker':'btn-bunker','add_zone:water':'btn-water' };
+    'add_zone:green':'btn-green','add_zone:bunker':'btn-bunker','add_zone:water':'btn-water','add_zone:fairway':'btn-fairway' };
   document.querySelectorAll('#toolbar .btn').forEach(b=>b.classList.remove('active'));
   document.getElementById(viewScope === 'world' ? 'btn-world-view' : 'btn-hole-view')?.classList.add('active');
   const k = m==='add_zone'?`add_zone:${zt}`:m;
@@ -2330,8 +2339,7 @@ function updatePanel() {
   hole.material_zones.forEach((z,i) => {
     const isSel = sel?.type==='zone' && sel.index===i;
     const zs = zoneShape(z);
-    const size = `${(zs.rx*2).toFixed(1)}×${(zs.rz*2).toFixed(1)}`;
-    const desc = `${size} ${(zs.rot*180/Math.PI).toFixed(0)}° @ ${zs.x.toFixed(1)},${zs.z.toFixed(1)}`;
+    const desc = `${zoneArea(zs).toFixed(0)} m², ${zs.pts.length} points @ ${zs.x.toFixed(1)},${zs.z.toFixed(1)}`;
     const el = document.createElement('div');
     el.className='list-item'+(isSel?' selected':'');
     el.innerHTML =
@@ -2360,8 +2368,7 @@ function updatePanel() {
         `<div class="field compact"><label>${label}</label><input type="number" step="${step}" value="${r2(value)}" oninput="setZoneValue(${sel.index},'${key}',+this.value)"></div>`;
       zEdit.innerHTML =
         `<div class="field-row">${field('x','x',zs.x,0.5)}${field('z','z',zs.z,0.5)}</div>` +
-        `<div class="field-row">${field('radius x','rx',zs.rx,0.5)}${field('radius z','rz',zs.rz,0.5)}</div>` +
-        `<div class="field-row">${field('rotation °','rot',zs.rot*180/Math.PI,5)}</div>`;
+        `<div class="panel-note">Drag a point to move it, a side's middle to add one; right-click a point to remove it.</div>`;
     } else { zEdit.innerHTML=''; }
   } else { zEdit.innerHTML=''; }
 
@@ -2797,10 +2804,7 @@ function buildJSON() {
   h.spline.control_points = h.spline.control_points.map(p=>p.map(r2));
   // A level hole leaves bank out, as hand-made holes always have.
   if (h.spline.bank.every(b => b === 0)) delete h.spline.bank;
-  h.material_zones = h.material_zones.map(z=>{
-    setZoneShape(z, zoneShape(z));
-    return z;
-  });
+  h.material_zones = h.material_zones.map(z => ({ type: z.type, outline: zoneShape(z).pts.map(q => [r2(q.x), r2(q.z)]) }));
   h.trees = (h.trees || []).map(t => {
     t.position = t.position.map(r2);
     t.trunk_radius = r2(t.trunk_radius);
@@ -2937,7 +2941,7 @@ function newHole() {
     id:'hole_01', name:'New Hole', par:3,
     tee:[0,0,0], pin:[0,0,80],
     spline:{ control_points:[[0,0,0],[0,0,20],[0,0,40],[0,0,60],[0,0,80]], width:18, rough_width:28 },
-    material_zones:[{ type:'green', center:[0,0,80], radii:[6,6], rotation_degrees:0 }],
+    material_zones:[{ type:'green', outline: circleOutline(0, 80, 6) }],
     trees:[]
   };
   sel=null; markDirty(true); fitView(); updatePanel(); render();

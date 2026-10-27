@@ -32,7 +32,6 @@ constexpr int detail_height = 9;
 // Empty texels between the hole's extent and the map box's edges.
 constexpr float map_margin_texels = 2.0f;
 // Points around the pin's green's outline when fitting the map to it.
-constexpr int green_outline_points = 16;
 
 // A whole-texel rectangle on the face: columns from the left, rows from the
 // top (as hole_sign_texels), clipped to `clip`.
@@ -193,9 +192,8 @@ hole_sign_map_frame make_hole_sign_map_frame(const play_area& area, const hole_s
         if (zone.type != material_zone_type::green || !zone_contains(zone, pin)) {
             continue;
         }
-        for (int i = 0; i < green_outline_points; ++i) {
-            const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(green_outline_points);
-            cover(zone_world_point(zone, glm::vec2(std::cos(angle), std::sin(angle)) * zone.radii));
+        for (const glm::vec2& point : zone.outline) {
+            cover(glm::vec3(point.x, 0.0f, point.y));
         }
     }
 

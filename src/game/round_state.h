@@ -4,8 +4,8 @@
 #include <optional>
 #include <vector>
 
-// Strokes per hole for the course being played. In a hub, holes can be played
-// in any order; the round is finished once every hole has a score.
+// Strokes per hole for the course being played. Holes can be played in any
+// order; the round is finished once every hole has a score.
 struct round_state {
     std::vector<std::optional<int>> strokes;  // nullopt until the hole is completed
     std::size_t current_hole_index = 0;       // the hole being played, or the next to play

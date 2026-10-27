@@ -6,14 +6,13 @@
 // runtime from the holes and the finished ground (no authored data), so every
 // imported course has them, never on fairway, green, tee, sand, water or a
 // cart road, nor against a tree or another post. Pure: the server builds the
-// same poles, and they stop shots like tree trunks (play_area::floodlight_poles).
+// same poles, and they stop shots like tree trunks (game/area_solids.h).
 // Their light after dark is core/light_frame.h's; drawn by
 // renderer/floodlight_batch.h.
 
 #include "game/course_world_definition.h"
 #include "game/game_tuning.h"
 #include "game/hole_data.h"
-#include "physics/tree_collision.h"
 
 #include <cstddef>
 #include <vector>
@@ -41,5 +40,3 @@ std::vector<floodlight> place_floodlights(const play_area& area,
                                           const std::vector<course_world_cart_road>& roads,
                                           const game_tuning& tuning);
 
-// The poles as obstacles: trunks without leaves, up to their lamps.
-std::vector<tree_body> floodlight_poles(const std::vector<floodlight>& lights);

@@ -2,12 +2,20 @@
 
 #include "net/online_config.h"
 
+#include <cstdio>
+#include <functional>
+
+#include "audio/audio_manifest.h"
+#include "game/item_catalog.h"
+#include "game/loadout.h"
+#include "game/prop_loader.h"
+
 #include "core/god_menu.h"
 #include "core/startup_flow.h"
 #include "core/vcr_frame.h"
-#include "game/club_loader.h"
 #include "game/content_files.h"
 #include "game/course_loader.h"
+#include "game/course_session.h"
 #include "game/course_world_loader.h"
 #include "game/hole_sign.h"
 #include "game/hole_loader.h"
@@ -17,6 +25,7 @@
 #include "game/picture_loader.h"
 #include "game/reward_rules.h"
 #include "game/scorecard.h"
+#include "game/shot_simulation.h"
 #include "game/sky_clock.h"
 #include "game/sun_lighting.h"
 #include "game/weather_lighting.h"
@@ -117,10 +126,11 @@ TEST_CASE("game tuning is split over files, each section in one") {
     CHECK(!parse_game_tuning_from_texts(broken).tuning.has_value());
 }
 
-TEST_CASE("game tuning needs every lie") {
-    const game_tuning_parse_result result = parse_game_tuning_from_texts(shipped_tuning_with("\"bunker\": { \"power\"", "\"sand\": { \"power\""));
+TEST_CASE("game tuning needs every lie number") {
+    const game_tuning_parse_result result =
+        parse_game_tuning_from_texts(shipped_tuning_with("\"rough_grip_share\"", "\"rough_grip\""));
     CHECK(!result.tuning.has_value());
-    CHECK(result.error.find("lies.bunker.power") != std::string::npos);
+    CHECK(result.error.find("lies.rough_grip_share") != std::string::npos);
 }
 
 TEST_CASE("the shipped sky clock runs from its anchor date, every course on its own date") {
@@ -188,10 +198,6 @@ TEST_CASE("the shipped lighting loads, and its daylight shows the scene as it wa
 }
 
 namespace {
-float luminance(const glm::vec3& color) {
-    return glm::dot(color, glm::vec3(0.2126f, 0.7152f, 0.0722f));
-}
-
 // The brighter's luminance over the darker's, each with a little flare.
 float luminance_contrast(const glm::vec3& a, const glm::vec3& b) {
     const float flare = 0.05f;
@@ -201,7 +207,7 @@ float luminance_contrast(const glm::vec3& a, const glm::vec3& b) {
 }
 }
 
-TEST_CASE("the ball stands out on the fairway and the flag against the sky at every time of day") {
+TEST_CASE("the ball, the alignment stick and the face's line stand out on the grass and the flag against the sky at every time of day") {
     constexpr float min_readable_contrast = 1.6f;
     const std::optional<lighting_palette> palette = load_lighting(asset_root());
     REQUIRE(palette.has_value());
@@ -220,6 +226,13 @@ TEST_CASE("the ball stands out on the fairway and the flag against the sky at ev
             const glm::vec3 fairway = colors.ground.fairway * wet * light;
             const glm::vec3 ball = colors.markers.ball * glm::max(light, glm::vec3(colors.glow.ball));
             CHECK(luminance_contrast(ball, fairway) >= min_readable_contrast);
+            // At address the setup on the ground, wherever the ball lies but sand.
+            const glm::vec3 stick = colors.markers.alignment_stick * glm::max(light, glm::vec3(colors.glow.alignment_stick));
+            const glm::vec3 face_line = colors.markers.face_line * glm::max(light, glm::vec3(colors.glow.face_line));
+            for (const glm::vec3& grass : {colors.ground.fairway, colors.ground.rough, colors.ground.green}) {
+                CHECK(luminance_contrast(stick, grass * wet * light) >= min_readable_contrast);
+                CHECK(luminance_contrast(face_line, grass * wet * light) >= min_readable_contrast);
+            }
             const glm::vec3 flag = colors.markers.flag * glm::max(light, glm::vec3(colors.glow.flag));
             for (const course_definition& course : shipped_content().courses) {
                 // The sky at the horizon: the course's haze, giving way to the
@@ -251,7 +264,7 @@ TEST_CASE("at night the ball glows past white and the green's floodlights lift t
     // which faces up, and on the cup, which takes them unlit.
     game_state game = started_game(fixture_hub_course());
     refresh_static_anchor_cache(game);
-    REQUIRE(game.static_anchors.hub_pin_markers.size() == game.course_holes.size());
+    REQUIRE(game.static_anchors.pins.size() == game.course_holes.size());
     const auto smooth = [](const float edge0, const float edge1, const float x) {
         const float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
         return t * t * (3.0f - 2.0f * t);
@@ -260,7 +273,7 @@ TEST_CASE("at night the ball glows past white and the green's floodlights lift t
     const float cone_full = std::cos(glm::radians(lights.floodlight_cone_deg - lights.floodlight_soft_deg));
     const glm::vec3 sky = glm::min(night.ambient_sky + night.sun_color, glm::vec3(1.0f));
     for (std::size_t hole = 0; hole < game.course_holes.size(); ++hole) {
-        const glm::vec3 pin = game.static_anchors.hub_pin_markers[hole];
+        const glm::vec3 pin = game.static_anchors.pins[hole];
         glm::vec3 on_green(0.0f);
         glm::vec3 on_cup(0.0f);
         int green_lamps = 0;
@@ -288,19 +301,30 @@ TEST_CASE("at night the ball glows past white and the green's floodlights lift t
     }
 }
 
-TEST_CASE("the shipped bag is in order with labels and a rising power ladder") {
-    const std::vector<club_definition>& clubs = shipped_content().clubs;
-    const std::vector<std::string> ids{"putter", "sand_wedge", "pitching_wedge", "nine_iron", "seven_iron",
-                                       "five_iron", "seven_wood", "four_wood", "driver"};
-    const std::vector<std::string> labels{"P", "SW", "PW", "9I", "7I", "5I", "7W", "4W", "DR"};
-    REQUIRE(clubs.size() == ids.size());
+TEST_CASE("the shipped bag is fourteen clubs, longest first, each faster off the face than the next") {
+    const game_content& content = shipped_content();
+    const std::vector<club_definition>& clubs = content.clubs;
+    const std::vector<std::string> labels{"DR", "3W", "5W", "4H", "5I", "6I", "7I", "8I", "9I", "PW", "GW", "SW", "LW", "P"};
+    REQUIRE(clubs.size() == labels.size());
+    const audio_manifest manifest = *load_audio_manifest_from_file(asset_root() + "/" + sounds_path).manifest;
+    const auto has_sound = [&manifest](const std::string& id) {
+        return std::any_of(manifest.sounds.begin(), manifest.sounds.end(),
+                           [&id](const audio_sound_definition& sound) { return sound.id == id; });
+    };
     for (std::size_t i = 0; i < clubs.size(); ++i) {
-        CHECK(clubs[i].id == ids[i]);
         CHECK(clubs[i].label == labels[i]);
-        CHECK(!clubs[i].hit_sound.empty());
+        CHECK(has_sound(clubs[i].hit_sound));
+        CHECK(has_sound(clubs[i].mishit_sound));
     }
-    for (std::size_t i = 2; i + 1 < clubs.size(); ++i) {
-        CHECK(clubs[i + 1].stats.power > clubs[i].stats.power);
+    CHECK(clubs.back().club_class == "putter");
+    const ball_on_lie teed{ball_lie::tee, {}, 0.0f};
+    for (std::size_t i = 0; i + 2 < clubs.size(); ++i) {
+        const float faster =
+            club_strike(clubs[i], stock_swing(clubs[i], content.tuning, 1.0f, ball_lie::tee), teed, content.tuning).launch.ball_speed;
+        const float slower =
+            club_strike(clubs[i + 1], stock_swing(clubs[i + 1], content.tuning, 1.0f, ball_lie::tee), teed, content.tuning)
+                .launch.ball_speed;
+        CHECK(faster > slower);
     }
 }
 
@@ -357,33 +381,59 @@ TEST_CASE("the shipped clubs' labels are unique and can't be misread as each oth
     }
 }
 
-TEST_CASE("clubs need stats and a hit sound") {
-    const std::optional<club_definition> club = parse_club_from_text(R"({
-      "id": "test_iron", "hit_sound": "club_hit_iron",
-      "stats": { "power": 30, "loft_degrees": 30, "backspin": 0.1, "side_spin": 0.5, "bunker_power": 0.4 }
-    })");
-    REQUIRE(club.has_value());
-    CHECK(club->stats.bunker_power == 0.4f);
-    CHECK(club->name == "test_iron");
-    CHECK(club->stats.timing_speed == 1.0f);
-    CHECK(club->stats.roll_friction_scale == 1.0f);
-    CHECK(!parse_club_from_text(R"({"id": "x", "stats": {"power": 1, "loft_degrees": 1, "backspin": 0, "side_spin": 0}})"));
-    // No bunker_power: how a club plays from sand is not guessed.
-    CHECK(!parse_club_from_text(R"({"id": "x", "hit_sound": "club_hit_iron",
-      "stats": {"power": 1, "loft_degrees": 1, "backspin": 0, "side_spin": 0}})"));
-}
-
 TEST_CASE("every reward pays into a listed skill") {
     const game_content& content = shipped_content();
     const auto listed = [&content](const std::string& id) {
         return std::any_of(content.skills.begin(), content.skills.end(), [&id](const skill_definition& skill) { return skill.id == id; });
     };
     const reward_rules& rewards = content.rewards;
-    for (const std::string& skill : {rewards.shot.skill_id, rewards.smoke.skill_id, rewards.walking.skill_id,
-                                     rewards.cart_on_road.skill_id}) {
+    for (const std::string& skill : {rewards.shot.skill_id, rewards.walking.skill_id, rewards.cart_on_road.skill_id}) {
         CHECK(listed(skill));
     }
+    for (const auto& [id, item] : content.items.items) {
+        if (item.use && item.use->xp_per_use) {
+            CHECK(listed(item.use->xp_per_use->skill_id));
+        }
+    }
     CHECK(!parse_rewards_from_text("{}").has_value());
+}
+
+TEST_CASE("every shipped item looks like a model of its kind, plays a sound there is and is named in the string table") {
+    const game_content& content = shipped_content();
+    const prop_catalog& props = test_props();
+    const audio_manifest manifest = *load_audio_manifest_from_file(asset_root() + "/" + sounds_path).manifest;
+    const auto has_sound = [&manifest](const std::string& id) {
+        return std::any_of(manifest.sounds.begin(), manifest.sounds.end(),
+                           [&id](const audio_sound_definition& sound) { return sound.id == id; });
+    };
+    const text_assets& text = shipped_text_assets();
+    const std::map<item_kind, std::string> model_kind{
+        {item_kind::smokable, "cigarette"}, {item_kind::drinkable, "can"}, {item_kind::cart, "cart"}, {item_kind::trinket, "trinket"},
+        {item_kind::club, "club"}, {item_kind::bag, "bag"}};
+    REQUIRE(!content.items.items.empty());
+    for (const auto& [id, item] : content.items.items) {
+        const auto model = props.find(item.model);
+        REQUIRE(model != props.end());
+        CHECK(model->second.kind == model_kind.at(item.kind));
+        CHECK(text.strings.entries.count(item.name) == 1U);
+        if (item.use) {
+            CHECK(has_sound(item.use->sound));
+        }
+    }
+    // The defaults fit, and what hangs on the cart hangs at a mount its model has.
+    const loadout& defaults = content.default_loadout;
+    CHECK(loadout_fits(defaults, content.items));
+    const prop_model& cart = props.at(content.items.find(defaults.cart)->model);
+    for (const auto& [mount, trinket] : defaults.cart_mounts) {
+        CHECK(cart.mounts.count(mount) == 1U);
+    }
+    // The steering wheel is before the driver, who sits seat_offset to the cart's left.
+    CHECK(near(cart.point("steering_wheel").x, content.tuning.cart.seat_offset, 0.0001f));
+    // Every club looks like a club.
+    for (const club_definition& club : content.clubs) {
+        REQUIRE(props.count(club.model) == 1U);
+        CHECK(props.at(club.model).kind == "club");
+    }
 }
 
 TEST_CASE("holes parse with tree defaults and reject bad geometry") {
@@ -392,7 +442,7 @@ TEST_CASE("holes parse with tree defaults and reject bad geometry") {
       "tee": [0, 0, 0], "pin": [0, 0, 40],
       "spline": { "control_points": [[0, 0, 0], [0, 0, 40]], "width": 12, "rough_width": 24 },
       "trees": [ { "position": [14, 0, 20], "leaf_radius": 2.5 }, { "position": ["bad", 0, 20] } ],
-      "material_zones": [ { "type": "lava", "center": [0, 0, 20], "radii": [3, 3], "rotation_degrees": 0 } ]
+      "material_zones": [ { "type": "lava", "outline": [[0, 18], [3, 18], [3, 21]] } ]
     })");
     REQUIRE(hole.has_value());
     CHECK(hole->name == "tree_hole");
@@ -445,8 +495,14 @@ TEST_CASE("courses list holes by id or path") {
 
     const std::string backdrop =
         R"("sky": {"date": "06-21", "utc_offset_hours": 2}, "backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500})";
-    const std::string named = R"("id": "ok", "name": "Ok", "world": "w.json", )";
-    CHECK(parse_course_from_text("{" + named + backdrop + R"(, "holes": ["ok"]})"));
+    const std::string named =
+        R"("id": "ok", "name": "Ok", "world": "w.json", "green_stimp_feet": 10, "air": {"elevation_meters": 30, "mean_temperature_c": 15, "daily_temperature_range_c": 8}, )";
+    const std::optional<course_definition> parsed = parse_course_from_text("{" + named + backdrop + R"(, "holes": ["ok"]})");
+    REQUIRE(parsed.has_value());
+    CHECK(parsed->air.elevation_meters == 30.0f);
+    CHECK(parsed->air.daily_temperature_range_c == 8.0f);
+    // The air over it is not guessed.
+    CHECK(!parse_course_from_text(R"({"id": "ok", "name": "Ok", "world": "w.json", )" + backdrop + R"(, "holes": ["ok"]})"));
     CHECK(!parse_course_from_text("{" + named + backdrop + R"(, "holes": []})"));
     CHECK(!parse_course_from_text("{" + named + backdrop + R"(, "holes": ["ok", 3]})"));
     CHECK(!parse_course_from_text(R"({"name": "Ok", "world": "w.json", )" + backdrop + R"(, "holes": ["ok"]})"));
@@ -469,7 +525,7 @@ TEST_CASE("a course's sky is a day of the year and how low its sun may sink") {
     CHECK(fixture_hub_course().sky.lowest_sun_deg == -90.0f);
 
     const std::string start =
-        R"({"id": "ok", "name": "Ok", "world": "w.json", "holes": ["ok"], "backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500})";
+        R"({"id": "ok", "name": "Ok", "world": "w.json", "green_stimp_feet": 10, "holes": ["ok"], "backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500}, "air": {"elevation_meters": 0, "mean_temperature_c": 15, "daily_temperature_range_c": 8})";
     const auto sky_of = [&start](const std::string& sky) { return parse_course_from_text(start + sky + "}"); };
     const std::optional<course_definition> white_nights = sky_of(R"(, "sky": {"date": "06-24", "utc_offset_hours": 1, "lowest_sun_deg": 1.5})");
     REQUIRE(white_nights.has_value());
@@ -915,8 +971,9 @@ void check_fits(const overlay_grid& grid,
 
 const club_definition& longest_named_club() {
     const std::vector<club_definition>& clubs = shipped_content().clubs;
-    return *std::max_element(clubs.begin(), clubs.end(), [](const club_definition& a, const club_definition& b) {
-        return a.name.size() < b.name.size();
+    const text_assets& text = shipped_text_assets();
+    return *std::max_element(clubs.begin(), clubs.end(), [&text](const club_definition& a, const club_definition& b) {
+        return lookup_text(text, a.name.c_str()).size() < lookup_text(text, b.name.c_str()).size();
     });
 }
 
@@ -929,10 +986,15 @@ render_data busy_hud(const text_assets& text, const club_definition& club) {
                                    {"players", std::to_string(shipped_content().tuning.server.room_capacity)},
                                    {"capacity", std::to_string(shipped_content().tuning.server.room_capacity)}});
     data.show_swing_clock = true;
-    data.swing_power = 1.0f;
-    data.driving_cart = true;
+    data.swing_backswing = 1.0f;
+    data.show_address_hints = true;
+    data.setup_word = format_text(text, text_hud_setup_word_pair,
+                                  {{"height", lookup_text(text, text_hud_setup_word_punch)},
+                                   {"curve", lookup_text(text, text_hud_setup_word_flop)}});
+    data.swing_backswing_max = 1.1f;
+    data.bag_shown = bag_pictogram::ground;
     data.selected_club_label = club.label;
-    data.selected_club_name = club.name;
+    data.selected_club_name = lookup_text(text, club.name.c_str());
     data.show_skills_panel = true;
     for (const skill_definition& skill : shipped_content().skills) {
         data.skills.push_back(render_skill_progress{lookup_text(text, skill_text_key(skill.id).c_str()), 99, 9999999, 9999999});
@@ -1177,7 +1239,7 @@ TEST_CASE("every shipped hole sign's map frames its hole and shows what lies on 
             // in its own ink, whichever hole it was mapped with.
             overlay_batch batch;
             draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 3, 100), area, sign, ground);
-            const rgba_image face = rasterize_overlay_batch(batch, test_props().hole_sign.color("board"));
+            const rgba_image face = rasterize_overlay_batch(batch, test_props().at("hole_sign").color("board"));
             const auto drawn = [&](const glm::vec3& ink) {
                 for (std::size_t i = 0; i + 3 < face.pixels.size(); i += 4) {
                     if (face.pixels[i] == std::lround(ink.r * 255.0f) && face.pixels[i + 1] == std::lround(ink.g * 255.0f) &&
@@ -1188,16 +1250,26 @@ TEST_CASE("every shipped hole sign's map frames its hole and shows what lies on 
                 return false;
             };
             for (const material_zone& zone : area.zones) {
+                // A point surely in the zone: the middle of its biggest triangle.
+                glm::vec3 inside(0.0f);
+                float biggest = -1.0f;
+                for (const auto& [a, b, c] : zone_triangles(zone)) {
+                    const float size = std::abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+                    if (size > biggest) {
+                        biggest = size;
+                        inside = glm::vec3((a.x + b.x + c.x) / 3.0f, 0.0f, (a.y + b.y + c.y) / 3.0f);
+                    }
+                }
                 float off_line = std::numeric_limits<float>::max();
                 for (const glm::vec3& point : samples) {
-                    off_line = std::min(off_line, horizontal_distance(point, zone.center));
+                    off_line = std::min(off_line, horizontal_distance(point, inside));
                 }
                 if (off_line > sign.half_width) {
                     continue;
                 }
-                CHECK(in_box(frame.texel(zone.center), 0));
-                const std::optional<terrain_material> there = zone_material_at(area.zones, zone.center);
-                const std::optional<hole_sign_map_spot> spot = hole_sign_map_spot_at(area, sign, zone.center);
+                CHECK(in_box(frame.texel(inside), 0));
+                const std::optional<terrain_material> there = zone_material_at(area.zones, inside);
+                const std::optional<hole_sign_map_spot> spot = hole_sign_map_spot_at(area, sign, inside);
                 REQUIRE(there.has_value());
                 REQUIRE(spot.has_value());
                 CHECK(spot->material == *there);
@@ -1213,7 +1285,7 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
     const online_menu_status online = busy_online(catalog.name_max_length);
     for (const overlay_grid& grid : shipped_grids()) {
         for (const startup_flow flow : {startup_flow::main, startup_flow::help, startup_flow::course_picker, startup_flow::exit_prompt,
-                                        startup_flow::link_code_show,
+                                        startup_flow::natural_shape_picker, startup_flow::link_code_show,
                                         startup_flow::online_course_picker}) {
             startup_flow_state state;
             state.flow = flow;
@@ -1245,13 +1317,17 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
             }
         }
 
-        startup_flow_state confirm;
-        open_confirm_menu(confirm);
-        overlay_batch confirm_batch;
-        confirm_batch.grid = grid;
-        draw_startup_menu(confirm_batch, text, make_confirm_menu_render_data(confirm, text, catalog.settings),
-                          test_scene_colors().ground);
-        CHECK(confirm_batch.truncated_text_count == 0U);
+        // The in-round menu, with and without a hole to give up (the
+        // longest number a course has).
+        for (const std::optional<std::size_t> give_up : {std::optional<std::size_t>{}, std::optional<std::size_t>{17}}) {
+            startup_flow_state confirm;
+            open_confirm_menu(confirm, give_up);
+            overlay_batch confirm_batch;
+            confirm_batch.grid = grid;
+            draw_startup_menu(confirm_batch, text, make_confirm_menu_render_data(confirm, text, catalog.settings),
+                              test_scene_colors().ground);
+            CHECK(confirm_batch.truncated_text_count == 0U);
+        }
 
         // Settings from the main menu and in a round, at every setting's
         // widest values.
@@ -1278,9 +1354,44 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
             CHECK(batch.truncated_text_count == 0U);
         }
 
+        // The give-up question at a tee.
+        {
+            render_data data = busy_hud(text, longest_named_club());
+            data.give_up_label = format_text(text, text_hud_give_up, {{"hole", "18"}});
+            overlay_batch batch;
+            batch.grid = grid;
+            draw_hud(batch, text, data, glm::mat4(1.0f));
+            CHECK(batch.truncated_text_count == 0U);
+        }
+
+        // At my bag, its keys; its picker open on every club, and my bag on my back.
+        {
+            render_data data = busy_hud(text, longest_named_club());
+            data.show_address_hints = false;
+            data.show_bag_hints = true;
+            overlay_batch batch;
+            batch.grid = grid;
+            draw_hud(batch, text, data, glm::mat4(1.0f));
+            CHECK(batch.truncated_text_count == 0U);
+            render_club_picker picker;
+            for (const club_definition& each : shipped_content().clubs) {
+                picker.labels.push_back(each.label);
+            }
+            for (std::size_t highlighted = 0; highlighted < picker.labels.size(); ++highlighted) {
+                picker.highlighted = highlighted;
+                picker.in_hand = picker.labels.size() - 1 - highlighted;
+                data.club_picker = picker;
+                overlay_batch with_picker;
+                with_picker.grid = grid;
+                draw_hud(with_picker, text, data, glm::mat4(1.0f));
+                CHECK(with_picker.truncated_text_count == 0U);
+            }
+        }
+
         // Every refusal the server can send, and waiting for the group, as the notice.
         std::vector<std::string> notices = online_messages(text);
         notices.push_back(text_scorecard_waiting_for_group);
+        notices.push_back(text_hud_bag_on_back);
         for (const std::string& message : notices) {
             render_data data = busy_hud(text, longest_named_club());
             data.notice_label = lookup_text(text, message.c_str());
@@ -1371,4 +1482,71 @@ TEST_CASE("the shipped online config loads, and dev overrides replace only what 
     CHECK(local.database == config->database);
     CHECK(local.anonymous);
     CHECK(!parse_online_config_from_text("{\"server_uri\": \"x\"}").has_value());
+}
+
+TEST_CASE("every reference fixture names where its numbers come from") {
+    // Every object holding a "value" or a "form" says its source, and
+    // whether that was checked against the primary text.
+    std::function<void(const json&, const std::string&)> walk = [&](const json& node, const std::string& path) {
+        if (!node.is_object()) {
+            return;
+        }
+        if (node.contains("value") || node.contains("form")) {
+            const bool cited = node.contains("source") || node.contains("note");
+            CHECK(cited);
+            if (!cited) {
+                std::printf("uncited: %s\n", path.c_str());
+            }
+        }
+        for (const auto& [key, child] : node.items()) {
+            walk(child, path + "/" + key);
+        }
+    };
+    const std::vector<std::filesystem::path> files = json_files_in_directory(fixture_root() + "/reference");
+    REQUIRE(files.size() >= 9U);
+    for (const std::filesystem::path& path : files) {
+        const std::optional<json> root = parse_json(*read_text_file(path));
+        REQUIRE(root.has_value());
+        CHECK((root->contains("source") || root->size() > 0U));
+        walk(*root, path.filename().string());
+    }
+    // The tour table has every club TrackMan lists, its numbers in metric.
+    const std::optional<json> tour = parse_json(*read_text_file(fixture_root() + "/reference/trackman_tour.json"));
+    const json* clubs = json_array(*tour, "clubs");
+    REQUIRE(clubs != nullptr);
+    CHECK(clubs->size() == 12U);
+    CHECK(near(*json_float(clubs->front(), "carry"), 258.0f, 0.001f));
+}
+
+TEST_CASE("every shipped pond's water lies on ground under its level") {
+    std::vector<std::string> dry;
+    for (const course_definition& course : shipped_content().courses) {
+        game_state state = make_game_state(shipped_content(), save_data{});
+        REQUIRE(start_course(state, course));
+        int above = 0;
+        for (std::size_t i = 0; i < state.area.zones.size(); ++i) {
+            const material_zone& zone = state.area.zones[i];
+            if (zone.type != material_zone_type::water) {
+                continue;
+            }
+            for (float x = zone.center.x - zone.half_size.x; x <= zone.center.x + zone.half_size.x; x += 2.0f) {
+                for (float z = zone.center.z - zone.half_size.y; z <= zone.center.z + zone.half_size.y; z += 2.0f) {
+                    // The ground, not what stands on it (a bridge, a tee box).
+                    const glm::vec3 at(x, 0.0f, z);
+                    const terrain_sample sample = sample_area(state.area, at);
+                    const float ground = sample_terrain_mesh(state.area.ground, at, state.area.ground_y).point.y;
+                    if (sample.material == terrain_material::water && !(ground < sample.water_level)) {
+                        ++above;
+                    }
+                }
+            }
+        }
+        if (above > 0) {
+            dry.push_back(course.id + ": " + std::to_string(above));
+        }
+    }
+    CHECK(dry.empty());
+    for (const std::string& where : dry) {
+        std::fprintf(stderr, "water above its level: %s\n", where.c_str());
+    }
 }

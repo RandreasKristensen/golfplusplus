@@ -1,13 +1,37 @@
 {
   "swing": {
-    "meter_cycle_seconds": 1.4,
-    "min_power": 0.01,
-    "power_curve_exponent": 0.7,
-    "side_spin_scale": 4.0
+    "backswing_seconds": 0.8,
+    "downswing_seconds": 0.27,
+    "putt_backswing_seconds": 0.6,
+    "putt_downswing_seconds": 0.3,
+    "speed_share": [[0.0, 0.15], [0.25, 0.45], [0.5, 0.62], [0.75, 0.82], [1.0, 1.0], [1.1, 1.03]],
+    "putting_speed_share": [[0.0, 0.03], [1.0, 1.0]],
+    "ball_position_loft_degrees": 6.0,
+    "ball_position_attack_degrees": 3.0,
+    "pure_strike_centredness": 0.8
   },
-  "aim_preview": {
-    "step_seconds": 0.18,
-    "max_points": 28
+  "setup": {
+    "aim_step_degrees": 0.25,
+    "face_step_degrees": 1.0,
+    "ball_position_step": 0.2,
+    "backswing_steps": 40,
+    "putter_backswing_steps": 80,
+    "overswing_max": 1.1,
+    "ball_position_meters": 0.1,
+    "repeat_delay_seconds": 0.3,
+    "repeat_rate": 8.0,
+    "repeat_acceleration": 40.0,
+    "max_repeat_rate": 60.0,
+    "pointer_radius_degrees": 4.0,
+    "drag_threshold_counts": 6,
+    "face_line_half_length_meters": 0.14,
+    "stick_out_meters": 0.5,
+    "stick_half_length_meters": 0.6
+  },
+  "shot_preview": {
+    "step_seconds": 0.05,
+    "putt_line_meters": 1.5,
+    "putt_line_step_meters": 0.1
   },
   "flight_path": {
     "color": [0.92, 0.18, 0.16],

@@ -73,26 +73,16 @@ std::optional<float> cone_hit(const glm::vec3& axis, const float bottom, const f
     return best;
 }
 
-std::optional<float> tree_hit(const tree_body& tree, const glm::vec3& eye, const glm::vec3& direction) {
-    std::optional<float> best = post_hit(sight_post{tree.base, tree.shape.trunk_radius, tree.shape.trunk_height}, eye, direction);
-    keep_nearest(best, cone_hit(tree.base, tree.base.y + tree.shape.trunk_height, tree.shape.leaf_radius, tree.shape.leaf_height,
-                                eye, direction));
-    return best;
-}
-
-void hit_trees(std::optional<float>& best, const std::vector<tree_body>& trees, const glm::vec3& eye,
-               const glm::vec3& direction, const float max_distance) {
-    for (const tree_body& tree : trees) {
-        const float reach = std::max(tree.shape.trunk_radius, tree.shape.leaf_radius);
-        if (flat_distance_to_line(tree.base, eye, direction, best.value_or(max_distance)) <= reach) {
-            keep_nearest(best, tree_hit(tree, eye, direction));
-        }
-    }
+// A thing standing whose round footprint is `radius` across `base`, if the
+// line's first `length` passes near enough to hit it.
+bool near_line(const glm::vec3& base, const float radius, const glm::vec3& eye, const glm::vec3& direction,
+               const float length) {
+    return flat_distance_to_line(base, eye, direction, length) <= radius;
 }
 
 // A fence's net: upright between its poles, from the ground up its height.
-std::optional<float> net_hit(const fence_panel& panel, const glm::vec3& eye, const glm::vec3& direction) {
-    const glm::vec3 span = horizontal(panel.b - panel.a);
+std::optional<float> net_hit(const solid& net, const glm::vec3& eye, const glm::vec3& direction) {
+    const glm::vec3 span = horizontal(net.end - net.base);
     const float span_length2 = glm::dot(span, span);
     if (span_length2 < tiny) {
         return std::nullopt;
@@ -102,19 +92,51 @@ std::optional<float> net_hit(const fence_panel& panel, const glm::vec3& eye, con
     if (std::abs(facing) < tiny) {
         return std::nullopt;
     }
-    const float t = glm::dot(panel.a - eye, normal) / facing;
+    const float t = glm::dot(net.base - eye, normal) / facing;
     const glm::vec3 at = eye + direction * t;
-    const float s = glm::dot(horizontal(at - panel.a), span) / span_length2;
+    const float s = glm::dot(horizontal(at - net.base), span) / span_length2;
     if (s < 0.0f || s > 1.0f) {
         return std::nullopt;
     }
-    const float ground = panel.a.y + (panel.b.y - panel.a.y) * s;
-    return at.y >= ground && at.y <= ground + panel.height ? std::optional<float>(t) : std::nullopt;
+    const float ground = net.base.y + (net.end.y - net.base.y) * s;
+    return at.y >= ground && at.y <= ground + net.height ? std::optional<float>(t) : std::nullopt;
 }
 
-sight_box board_box(const hole_sign& sign) {
-    return sight_box{sign.board_center, sign.down_hole,
-                     glm::vec3(sign.board_half_width, sign.board_half_height, 0.5f * sign.board_thickness)};
+// A sign's board, a wall with some thickness.
+sight_box board_box(const solid& board) {
+    const glm::vec3 span = horizontal(board.end - board.base);
+    const glm::vec3 middle = 0.5f * (board.base + board.end) + glm::vec3(0.0f, 0.5f * board.height, 0.0f);
+    return sight_box{middle, safe_normalize(span, glm::vec3(0.0f, 0.0f, 1.0f)),
+                     glm::vec3(0.5f * glm::length(span), 0.5f * board.height, board.radius)};
+}
+
+std::optional<float> solid_hit(const solid& thing, const glm::vec3& eye, const glm::vec3& direction, const float length) {
+    switch (thing.kind) {
+    case solid_kind::trunk:
+    case solid_kind::pole:
+        return near_line(thing.base, thing.radius, eye, direction, length)
+            ? post_hit(sight_post{thing.base, thing.radius, thing.height}, eye, direction)
+            : std::nullopt;
+    case solid_kind::leaves:
+        return near_line(thing.base, thing.radius, eye, direction, length)
+            ? cone_hit(thing.base, thing.base.y, thing.radius, thing.height, eye, direction)
+            : std::nullopt;
+    case solid_kind::net:
+        return net_hit(thing, eye, direction);
+    case solid_kind::board:
+        return box_hit(board_box(thing), eye, direction);
+    case solid_kind::lamp:
+        return box_hit(sight_box{thing.base + glm::vec3(0.0f, 0.5f * thing.height, 0.0f), thing.along,
+                                 glm::vec3(thing.half_length, 0.5f * thing.height, thing.half_width)},
+                       eye, direction);
+    case solid_kind::flagstick:
+    case solid_kind::tee_box:
+    case solid_kind::cart:
+    case solid_kind::person:
+    case solid_kind::ball:
+        break;
+    }
+    return std::nullopt;
 }
 }
 
@@ -182,19 +204,9 @@ std::optional<float> box_hit(const sight_box& box, const glm::vec3& eye, const g
 std::optional<float> standing_hit(const sight_scene& scene, const glm::vec3& eye, const glm::vec3& direction,
                                   const float max_distance) {
     std::optional<float> best;
-    if (scene.trees != nullptr) {
-        hit_trees(best, *scene.trees, eye, direction, max_distance);
-    }
     if (scene.area != nullptr) {
-        const play_area& area = *scene.area;
-        hit_trees(best, area.sign_posts, eye, direction, max_distance);
-        hit_trees(best, area.fence_poles, eye, direction, max_distance);
-        hit_trees(best, area.floodlight_poles, eye, direction, max_distance);
-        for (const hole_sign& sign : area.signs) {
-            keep_nearest(best, box_hit(board_box(sign), eye, direction));
-        }
-        for (const fence_panel& panel : area.fence_panels) {
-            keep_nearest(best, net_hit(panel, eye, direction));
+        for (const solid& thing : scene.area->solids) {
+            keep_nearest(best, solid_hit(thing, eye, direction, best.value_or(max_distance)));
         }
     }
     for (const sight_post& post : scene.posts) {

@@ -1,6 +1,5 @@
 #include "server_content.h"
 
-#include "game/club_loader.h"
 #include "game/course_loader.h"
 #include "game/course_world_loader.h"
 #include "game/hole_loader.h"
@@ -18,7 +17,7 @@ std::optional<std::string> file_text(const content_files& files, const std::stri
     return found != files.end() ? std::optional<std::string>(std::string(found->second)) : std::nullopt;
 }
 
-// Every file directly in `directory` (clubs_path), in path order.
+// Every file directly in `directory` (tuning_path), in path order.
 std::vector<std::string> files_in(const content_files& files, const std::string& directory) {
     std::vector<std::string> texts;
     const std::string prefix = directory + "/";
@@ -55,6 +54,32 @@ server_content_load_result parse_server_content(const content_files& files) {
     }
     content.rewards = *rewards;
 
+    std::map<std::string, std::string> item_texts;
+    const std::string items_prefix = std::string(items_path) + "/";
+    for (const auto& [path, text] : files) {
+        if (path.compare(0, items_prefix.size(), items_prefix) == 0 && path.find('/', items_prefix.size()) != std::string::npos) {
+            item_texts[path.substr(items_prefix.size())] = std::string(text);
+        }
+    }
+    item_catalog_load_result items = parse_item_catalog(item_texts);
+    if (!items.catalog) {
+        result.error = items.error;
+        return result;
+    }
+    content.items = std::move(*items.catalog);
+    const std::optional<std::string> loadout_text = file_text(files, default_loadout_path);
+    const std::optional<loadout> defaults = loadout_text ? parse_loadout_from_text(*loadout_text) : std::nullopt;
+    if (!defaults || !loadout_fits(*defaults, content.items)) {
+        result.error = std::string("cannot load ") + default_loadout_path;
+        return result;
+    }
+    content.default_loadout = *defaults;
+    content.clubs = clubs_of(content.items);
+    if (content.clubs.empty()) {
+        result.error = std::string("no clubs in ") + items_path;
+        return result;
+    }
+
     const std::optional<std::string> font_text = file_text(files, text_font_path);
     const std::optional<pixel_font_data> font = font_text ? parse_pixel_font(*font_text) : std::nullopt;
     if (!font) {
@@ -63,11 +88,6 @@ server_content_load_result parse_server_content(const content_files& files) {
     }
     content.font = *font;
 
-    content.clubs = parse_clubs_from_texts(files_in(files, clubs_path));
-    if (content.clubs.empty()) {
-        result.error = std::string("no valid clubs in ") + clubs_path;
-        return result;
-    }
 
     for (const auto& [path, text] : files) {
         const std::optional<std::string> folder = course_folder_of(path);
@@ -86,10 +106,16 @@ server_content_load_result parse_server_content(const content_files& files) {
 }
 
 shot_course server_shot_course(const server_course& course, const std::size_t hole, const std::int64_t shot_at,
-                               const server_content& content) {
+                               const std::vector<int>& flags_out, const server_content& content) {
     const game_tuning& tuning = content.tuning;
-    return shot_course{course.area, course.trees, course.shot_holes[hole],
-                       weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course_weather_seed(course.course.id), shot_at)};
+    std::vector<bool> flags_in(course.area.cups.size(), true);
+    for (const int out : flags_out) {
+        if (out >= 0 && static_cast<std::size_t>(out) < flags_in.size()) {
+            flags_in[static_cast<std::size_t>(out)] = false;
+        }
+    }
+    return make_shot_course(course.area, hole, weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course.course, shot_at),
+                            course.course, flags_in, tuning);
 }
 
 const course_definition* find_server_course(const server_content& content, const std::string& course_id) {
@@ -125,10 +151,8 @@ std::optional<server_course> build_server_course(const content_files& files,
     server_course built;
     built.course = *course;
     built.area = build_course_area(holes, *world, content.tuning);
-    built.trees = standing_trees(built.area);
     for (std::size_t i = 0; i < holes.size(); ++i) {
         hole_data placed = place_hole(holes[i], world->hole_starts[i]);
-        built.shot_holes.push_back(shot_hole{anchor_on_terrain(built.area, placed.pin_position)});
         built.holes.push_back(std::move(placed));
     }
     built.world = std::move(*world);

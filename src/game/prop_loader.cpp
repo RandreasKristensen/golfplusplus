@@ -3,14 +3,21 @@
 #include "game/content_files.h"
 #include "game/json_util.h"
 #include "game/lighting_fields.h"
+#include "game/model_kinds.h"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <iterator>
 
+#include <glm/geometric.hpp>
 #include <glm/vector_relational.hpp>
 
 namespace {
+// The objects a variant merges into its base's by name; anything else it
+// names replaces the base's.
+const std::vector<std::string> merged_keys{"colors", "points", "mounts"};
+
 bool is_color(const glm::vec3& color) {
     return !glm::any(glm::lessThan(color, glm::vec3(0.0f))) && !glm::any(glm::greaterThan(color, glm::vec3(1.0f)));
 }
@@ -100,25 +107,33 @@ std::optional<prop_part> parse_part(const json& object, const std::map<std::stri
     return std::nullopt;
 }
 
-std::optional<prop_model> load_prop(const std::string& asset_root,
-                                    const char* name,
-                                    const std::vector<std::string>& needed_colors,
-                                    const std::vector<std::string>& needed_points) {
-    const std::optional<std::string> text =
-        read_text_file(std::filesystem::path(asset_root) / props_path / (std::string(name) + ".json"));
-    return text ? parse_prop_from_text(*text, needed_colors, needed_points) : std::nullopt;
-}
+// Its sides one long each and square to each other.
+std::optional<prop_mount> parse_mount(const json& object) {
+    const std::optional<glm::vec3> at = json_vec3(object, "at");
+    const std::optional<glm::vec3> forward = json_vec3(object, "forward");
+    const std::optional<glm::vec3> up = json_vec3(object, "up");
+    constexpr float tolerance = 0.001f;
+    const auto unit = [](const glm::vec3& side) { return std::abs(glm::length(side) - 1.0f) < tolerance; };
+    if (!at || !forward || !up || !unit(*forward) || !unit(*up) || std::abs(glm::dot(*forward, *up)) > tolerance) {
+        return std::nullopt;
+    }
+    return prop_mount{*at, *forward, *up};
 }
 
-std::optional<prop_model> parse_prop_from_text(const std::string& text,
-                                               const std::vector<std::string>& needed_colors,
-                                               const std::vector<std::string>& needed_points) {
-    const std::optional<json> root = parse_json(text);
-    const json* colors = root && root->is_object() ? json_object(*root, "colors") : nullptr;
-    if (colors == nullptr || !colors->is_object()) {
+template <typename Map>
+bool has_all(const std::vector<std::string>& names, const Map& map) {
+    return std::all_of(names.begin(), names.end(), [&map](const std::string& name) { return map.count(name) > 0; });
+}
+
+std::optional<prop_model> parse_prop(const json& root) {
+    const json* colors = root.is_object() ? json_object(root, "colors") : nullptr;
+    const std::optional<std::string> kind_name = root.is_object() ? json_string(root, "kind") : std::nullopt;
+    const model_kind* kind = kind_name ? find_model_kind(*kind_name) : nullptr;
+    if (colors == nullptr || !colors->is_object() || kind == nullptr) {
         return std::nullopt;
     }
     prop_model model;
+    model.kind = *kind_name;
     for (const auto& [name, value] : colors->items()) {
         const std::optional<glm::vec3> color = json_vec3(value);
         if (!color || !is_color(*color)) {
@@ -126,9 +141,11 @@ std::optional<prop_model> parse_prop_from_text(const std::string& text,
         }
         model.colors[name] = *color;
     }
-    const json* parts = json_array(*root, "parts");
-    const json* points = json_object(*root, "points");
-    if ((root->contains("parts") && parts == nullptr) || (root->contains("points") && points == nullptr)) {
+    const json* parts = json_array(root, "parts");
+    const json* points = json_object(root, "points");
+    const json* mounts = json_object(root, "mounts");
+    if ((root.contains("parts") && parts == nullptr) || (root.contains("points") && (points == nullptr || !points->is_object())) ||
+        (root.contains("mounts") && (mounts == nullptr || !mounts->is_object()))) {
         return std::nullopt;
     }
     if (parts != nullptr) {
@@ -149,39 +166,76 @@ std::optional<prop_model> parse_prop_from_text(const std::string& text,
             model.points[name] = *point;
         }
     }
-    const bool has_colors = std::all_of(needed_colors.begin(), needed_colors.end(),
-                                        [&model](const std::string& name) { return model.colors.count(name) > 0; });
-    const bool has_points = std::all_of(needed_points.begin(), needed_points.end(),
-                                        [&model](const std::string& name) { return model.points.count(name) > 0; });
-    if (!has_colors || !has_points) {
+    if (mounts != nullptr) {
+        for (const auto& [name, value] : mounts->items()) {
+            const std::optional<prop_mount> mount = value.is_object() ? parse_mount(value) : std::nullopt;
+            if (!mount) {
+                return std::nullopt;
+            }
+            model.mounts[name] = *mount;
+        }
+    }
+    const bool has_tags = std::all_of(kind->part_tags.begin(), kind->part_tags.end(), [&model](const std::string& tag) {
+        return std::any_of(model.parts.begin(), model.parts.end(), [&tag](const prop_part& part) { return part.tag == tag; });
+    });
+    if (!has_all(kind->colors, model.colors) || !has_all(kind->points, model.points) ||
+        !has_all(kind->mounts, model.mounts) || !has_tags) {
         return std::nullopt;
     }
     return model;
 }
+}
 
-prop_set_load_result load_props(const std::string& asset_root) {
-    prop_set_load_result result;
-    prop_set props;
-    const auto load = [&](prop_model& out, const char* name, const std::vector<std::string>& colors,
-                          const std::vector<std::string>& points) {
-        std::optional<prop_model> model = load_prop(asset_root, name, colors, points);
-        if (!model) {
-            if (result.error.empty()) {
-                result.error = std::string("cannot load ") + props_path + "/" + name + ".json";
-            }
-            return;
-        }
-        out = std::move(*model);
-    };
-    load(props.cigarette, "cigarette", {"ember_dim", "ember_bright", "smoke"}, {"smoke"});
-    load(props.beer_can, "beer_can", {"beer", "foam"}, {"pour"});
-    load(props.golf_cart, "golf_cart", {"trim", "rubber", "hub_cap"}, {});
-    load(props.tree, "tree", {"trunk", "leaves"}, {});
-    load(props.fence, "fence", {"post"}, {});
-    load(props.floodlight, "floodlight", {"pole", "head"}, {});
-    load(props.hole_sign, "hole_sign", {"board", "post"}, {});
-    if (result.error.empty()) {
-        result.props = std::move(props);
+std::optional<prop_model> parse_prop_from_text(const std::string& text) {
+    const std::optional<json> root = parse_json(text);
+    if (!root || !root->is_object() || root->contains("base")) {
+        return std::nullopt;
     }
+    return parse_prop(*root);
+}
+
+prop_catalog_load_result parse_prop_catalog(const std::map<std::string, std::string>& texts) {
+    prop_catalog_load_result result;
+    std::map<std::string, json> files;
+    for (const auto& [name, text] : texts) {
+        std::optional<json> root = parse_json(text);
+        if (!root) {
+            result.error = std::string("cannot parse ") + props_path + "/" + name + ".json";
+            return result;
+        }
+        files[name] = std::move(*root);
+    }
+    prop_catalog catalog;
+    for (const auto& [name, file] : files) {
+        const std::optional<json> merged = json_with_base(name, files, merged_keys);
+        std::optional<prop_model> model = merged ? parse_prop(*merged) : std::nullopt;
+        if (!model) {
+            result.error = std::string("cannot load ") + props_path + "/" + name + ".json";
+            return result;
+        }
+        catalog[name] = std::move(*model);
+    }
+    for (const required_model& required : required_models()) {
+        const auto found = catalog.find(required.id);
+        if (found == catalog.end() || found->second.kind != required.kind) {
+            result.error = std::string("missing ") + props_path + "/" + required.id + ".json";
+            return result;
+        }
+    }
+    result.props = std::move(catalog);
     return result;
+}
+
+prop_catalog_load_result load_props(const std::string& asset_root) {
+    std::map<std::string, std::string> texts;
+    for (const std::filesystem::path& path : json_files_in_directory(std::filesystem::path(asset_root) / props_path)) {
+        const std::optional<std::string> text = read_text_file(path);
+        if (!text) {
+            prop_catalog_load_result result;
+            result.error = "cannot read " + path.string();
+            return result;
+        }
+        texts[path.stem().string()] = *text;
+    }
+    return parse_prop_catalog(texts);
 }

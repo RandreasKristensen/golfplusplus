@@ -82,27 +82,15 @@ rangefinder_view rangefinder_view_of(const game_state& state) {
     const cart_tuning& cart = state.tuning.cart;
     rangefinder_view view;
     view.scene.area = &state.area;
-    view.scene.trees = &state.static_anchors.trees;
     for (const cart_in_world& shown : carts_in_world(state)) {
-        const glm::vec3 forward = yaw_direction(shown.pose.yaw);
-        const glm::vec3 middle = shown.pose.position + forward * (0.5f * (cart.body_ahead - cart.body_behind)) +
-            world_up * (0.5f * tuning.cart_height);
-        view.scene.boxes.push_back(sight_box{
-            middle, forward,
-            glm::vec3(0.5f * (cart.body_ahead + cart.body_behind) + cart.body_radius, 0.5f * tuning.cart_height, cart.body_radius)});
+        const solid body = cart_solid(shown.pose, cart, tuning.cart_height);
+        view.scene.boxes.push_back(sight_box{body.base + world_up * (0.5f * body.height), body.along,
+                                             glm::vec3(body.half_length, 0.5f * body.height, body.half_width)});
     }
     for (const auto& [account, avatar] : state.remote_avatars) {
         view.scene.posts.push_back(sight_post{avatar.position, state.tuning.player.body_radius, tuning.person_height});
     }
-    view.flags = state.static_anchors.hub_pin_markers;
-    if (state.hole) {
-        const std::size_t index = state.round.current_hole_index;
-        if (index < view.flags.size()) {
-            view.flags[index] = pin_anchor_position(state);
-        } else {
-            view.flags.push_back(pin_anchor_position(state));
-        }
-    }
+    view.flags = state.static_anchors.pins;
     const world_scale_tuning& scale = state.tuning.scale;
     view.flag_height = scale.pin_visual_height_meters / std::max(0.0001f, scale.meters_per_world_unit);
     return view;

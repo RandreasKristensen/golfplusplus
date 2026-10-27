@@ -162,10 +162,10 @@ TEST_CASE("the game's net commands become reducer calls, once") {
 
     state.play = play_mode::online;
     update_game(state, game_input{}, 0.016f);  // the first motion update
-    shot_input shot;
+    shot_setup shot;
     shot.club_id = "putter";
     shot.aim_angle = 1.5f;
-    shot.power = 0.6f;
+    shot.backswing = 0.6f;
     shot.shot_at = 2000;
     net_command take;
     take.type = net_command_type::take_shot;
@@ -173,32 +173,33 @@ TEST_CASE("the game's net commands become reducer calls, once") {
     take.stroke = 3;
     state.net_commands.push_back(take);
     net_command enter;
-    enter.type = net_command_type::enter_hole;
+    enter.type = net_command_type::tee_up;
     enter.hole_index = 4;
+    enter.give_up = true;
     state.net_commands.push_back(enter);
     net_command claim;
     claim.type = net_command_type::claim_collectible;
     claim.collectible_id = "lost_ball";
     state.net_commands.push_back(claim);
     net_command smoke;
-    smoke.type = net_command_type::emote;
-    smoke.emote = emote_id::smoke;
+    smoke.type = net_command_type::use_item;
+    smoke.item_id = "cigarette";
     state.net_commands.push_back(smoke);
 
     client.update(state);
     const std::vector<fake_stdb_bridge::call>& calls = fake_bridge().calls;
-    const std::vector<std::string> expected{"stdb_update_motion", "stdb_take_shot", "stdb_enter_hole",
-                                            "stdb_claim_collectible", "stdb_emote"};
+    const std::vector<std::string> expected{"stdb_update_motion", "stdb_take_shot", "stdb_tee_up",
+                                            "stdb_claim_collectible", "stdb_use_item"};
     REQUIRE(fake_bridge().call_names() == expected);
-    CHECK(calls[0].motion.zone == 0);
     CHECK(calls[0].motion.x == state.player.position.x);
     CHECK(calls[1].shot.stroke == 3);
     CHECK(calls[1].club_id == "putter");
-    CHECK(calls[1].shot.power == 0.6f);
+    CHECK(calls[1].shot.backswing == 0.6f);
     CHECK(calls[1].shot.shot_at == 2000);
     CHECK(calls[2].number == 4);
+    CHECK(calls[2].flag);
     CHECK(calls[3].text == "lost_ball");
-    CHECK(calls[4].text == "smoke");
+    CHECK(calls[4].text == "cigarette");
     CHECK(state.net_commands.empty());
 
     client.update(state);
@@ -210,7 +211,7 @@ TEST_CASE("commands made while not connected are dropped, not sent later") {
     game_state state = started_hole();
     net_client client = *net_client::create(fake_online_config(), "signed in", "failed");
     net_command enter;
-    enter.type = net_command_type::enter_hole;
+    enter.type = net_command_type::tee_up;
     state.net_commands.push_back(enter);
     client.update(state);
     CHECK(state.net_commands.empty());
@@ -474,7 +475,7 @@ TEST_CASE("linking this login to another account never mixes their progress") {
     CHECK(state.xp_drops.empty());
 }
 
-TEST_CASE("my room's rows become its players, balls, carts, groups, shots and emotes") {
+TEST_CASE("my room's rows become its players, balls, carts, loadouts, groups, shots and item uses") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
     queue_event(member_row(42, 7, STDB_ROW_INSERT));
@@ -483,11 +484,15 @@ TEST_CASE("my room's rows become its players, balls, carts, groups, shots and em
     const std::string me = "ME";
     const std::string other = "OTHER";
     const std::string club = "driver";
-    const std::string smoke = "smoke";
-    const std::string drink = "drink";
+    const std::string cigarette = "cigarette";
+    const std::string beer = "beer";
+    const std::string red_cart = "red_cart";
+    const std::string golf_bag = "golf_bag";
+    const std::string mirror = "mirror";
+    const std::string fuzzy_dice = "fuzzy_dice";
     const std::vector<std::int32_t> strokes{4, 0};
     stdb_row row{};
-    row.room_member = stdb_room_member{43, 7, 9, 1, strokes.data(), strokes.size()};
+    row.room_member = stdb_room_member{43, 7, 9, strokes.data(), strokes.size()};
     queue_event(row_event(STDB_TABLE_ROOM_MEMBER, STDB_ROW_INSERT, row));
     row = stdb_row{};
     row.player = stdb_player{42, fake_text(me), true, 0};
@@ -496,37 +501,44 @@ TEST_CASE("my room's rows become its players, balls, carts, groups, shots and em
     row.player = stdb_player{43, fake_text(other), true, 0};
     queue_event(row_event(STDB_TABLE_PLAYER, STDB_ROW_INSERT, row));
     row = stdb_row{};
-    row.avatar_motion = stdb_avatar_motion{43, 7, stdb_motion{1, 1, 1.0f, 2.0f, 3.0f, 0.5f, 1.2f, 0.0f, 0.0}, 2000000};
+    row.avatar_motion = stdb_avatar_motion{43, 7, stdb_motion{1, 1.0f, 2.0f, 3.0f, 0.5f, 1.2f, 0.0f, 0.0}, 2000000};
     queue_event(row_event(STDB_TABLE_AVATAR_MOTION, STDB_ROW_INSERT, row));
     row = stdb_row{};
-    row.avatar_motion = stdb_avatar_motion{42, 7, stdb_motion{-1, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0}, 9000000000};
+    row.avatar_motion = stdb_avatar_motion{42, 7, stdb_motion{0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0}, 9000000000};
     queue_event(row_event(STDB_TABLE_AVATAR_MOTION, STDB_ROW_INSERT, row));
     row = stdb_row{};
-    row.ball = stdb_ball{43, 7, 1, 4.0f, 5.0f, 6.0f, 2, 1500};
+    row.ball = stdb_ball{43, 7, 1, 4.0f, 5.0f, 6.0f, 2, 1500, true};
     queue_event(row_event(STDB_TABLE_BALL, STDB_ROW_INSERT, row));
     row = stdb_row{};
-    row.golf_cart = stdb_golf_cart{43, 7, 10.0f, 1.0f, -3.0f, 0.75f, 42};
+    row.golf_cart = stdb_golf_cart{43, 7, 10.0f, 1.0f, -3.0f, 0.75f, 42, static_cast<std::uint8_t>(cart_condition::on_left_side)};
     queue_event(row_event(STDB_TABLE_GOLF_CART, STDB_ROW_INSERT, row));
     row = stdb_row{};
     row.golf_group = stdb_golf_group{9, 7, 43, 1};
     queue_event(row_event(STDB_TABLE_GOLF_GROUP, STDB_ROW_INSERT, row));
     row = stdb_row{};
-    row.shot_event = stdb_shot_event{7, 43, 1, stdb_shot{2, 0.25f, fake_text(club), 0.8f, true, 3500},
-                                     1.0f, 2.0f, 3.0f, 7.0f, 8.0f, 9.0f, false};
+    const std::int32_t flags_out[] = {3};
+    const stdb_snapshot_entry snapshot[] = {stdb_snapshot_entry{1, 4.0f, 0.0f, 5.0f, 0.5f, false},
+                                            stdb_snapshot_entry{0, 1.0f, 2.0f, 3.5f, 0.0f, true}};
+    row.shot_event = stdb_shot_event{7, 43, 1, stdb_shot{2, 0.25f, 0.1f, -0.4f, 0.8f, fake_text(club), 3500, flags_out, 1},
+                                     1, 2, 0.5f, 99, snapshot, 2, 1.0f, 2.0f, 3.0f, 7.0f, 8.0f, 9.0f, false};
     queue_event(row_event(STDB_TABLE_SHOT_EVENT, STDB_ROW_INSERT, row));
     row = stdb_row{};
-    row.emote_event = stdb_emote_event{7, 42, fake_text(smoke)};
-    queue_event(row_event(STDB_TABLE_EMOTE_EVENT, STDB_ROW_INSERT, row));
+    row.item_use_event = stdb_item_use_event{7, 42, fake_text(cigarette)};
+    queue_event(row_event(STDB_TABLE_ITEM_USE_EVENT, STDB_ROW_INSERT, row));
     row = stdb_row{};
-    row.emote_event = stdb_emote_event{7, 43, fake_text(drink)};
-    queue_event(row_event(STDB_TABLE_EMOTE_EVENT, STDB_ROW_INSERT, row));
+    row.item_use_event = stdb_item_use_event{7, 43, fake_text(beer)};
+    queue_event(row_event(STDB_TABLE_ITEM_USE_EVENT, STDB_ROW_INSERT, row));
+    const stdb_loadout_mount mounts[] = {stdb_loadout_mount{fake_text(mirror), fake_text(fuzzy_dice)}};
+    row = stdb_row{};
+    row.player_loadout =
+        stdb_player_loadout{43, fake_text(red_cart), mounts, 1, fake_text(cigarette), fake_text(beer), fake_text(golf_bag)};
+    queue_event(row_event(STDB_TABLE_PLAYER_LOADOUT, STDB_ROW_INSERT, row));
     client.update(state);
 
     REQUIRE(state.online.players.size() == 2U);
     const room_player& them = state.online.players.at(43);
     CHECK(them.name == "OTHER");
     CHECK(them.group_id == 9U);
-    CHECK(them.zone == 1);
     CHECK((them.round_strokes == std::vector<int>{4, 0}));
     REQUIRE(them.motion.has_value());
     CHECK(them.motion->mode == motion_mode::walk);
@@ -536,27 +548,45 @@ TEST_CASE("my room's rows become its players, balls, carts, groups, shots and em
 
     // My own motion row sets the server clock: no earlier than its stamp.
     CHECK(state.online.server_now >= 9000000000);
-    CHECK(state.online.smoke_accepted_at >= 9000000000);
 
     REQUIRE(state.online.balls.count(43) == 1U);
     CHECK(state.online.balls.at(43).stroke_count == 2);
+    CHECK(state.online.balls.at(43).hole == 1);
+    CHECK(state.online.balls.at(43).in_cup);
     REQUIRE(state.online.carts.count(43) == 1U);
     CHECK(near(state.online.carts.at(43).position, glm::vec3(10.0f, 1.0f, -3.0f)));
     CHECK(near(state.online.carts.at(43).yaw, 0.75f));
     CHECK(state.online.carts.at(43).passenger == 42U);
+    CHECK(state.online.carts.at(43).condition == cart_condition::on_left_side);
     CHECK(state.online.group_sizes.at(9) == 1);
     REQUIRE(state.online.shots.size() == 1U);
     const room_shot& shot = state.online.shots.front();
     CHECK(shot.account_id == 43U);
     CHECK(shot.stroke == 2);
-    CHECK(shot.input.club_id == "driver");
-    CHECK(shot.input.cigarette_active);
-    CHECK(near(shot.input.ball_start, glm::vec3(1.0f, 2.0f, 3.0f)));
+    CHECK(shot.record.setup.club_id == "driver");
+    CHECK(near(shot.record.setup.ball_start, glm::vec3(1.0f, 2.0f, 3.0f)));
+    CHECK(shot.record.setup.face_open == 0.1f);
+    CHECK(shot.record.setup.ball_position == -0.4f);
+    CHECK(shot.record.setup.backswing == 0.8f);
+    CHECK(shot.record.setup.hand == handedness::left);
+    CHECK(shot.record.seed == 99U);
+    REQUIRE(shot.record.snapshot.size() == 2U);
+    CHECK(shot.record.snapshot[0].kind == snapshot_kind::cart);
+    CHECK(shot.record.snapshot[1].shooter);
+    CHECK(shot.golfer.natural == natural_shape::fade);
+    CHECK(shot.golfer.spread_scale == 0.5f);
+    CHECK((shot.flags_out == std::vector<int>{3}));
     CHECK(near(shot.rest, glm::vec3(7.0f, 8.0f, 9.0f)));
-    // Others' emotes go to the game to play; mine only lights my cigarette.
-    REQUIRE(state.online.emotes.size() == 1U);
-    CHECK(state.online.emotes.front().account_id == 43U);
-    CHECK(state.online.emotes.front().emote == emote_id::drink);
+    // Others' item uses go to the game to play; mine played as I used it.
+    REQUIRE(state.online.item_uses.size() == 1U);
+    CHECK(state.online.item_uses.front().account_id == 43U);
+    CHECK(state.online.item_uses.front().item_id == "beer");
+    REQUIRE(state.online.loadouts.count(43) == 1U);
+    const loadout& theirs = state.online.loadouts.at(43);
+    CHECK(theirs.cart == "red_cart");
+    CHECK(theirs.cart_mounts.at("mirror") == "fuzzy_dice");
+    CHECK(theirs.smokable == "cigarette");
+    CHECK(theirs.drinkable == "beer");
 
     // Leaving the room forgets all of it.
     queue_event(member_row(42, 7, STDB_ROW_DELETE));
@@ -564,7 +594,36 @@ TEST_CASE("my room's rows become its players, balls, carts, groups, shots and em
     CHECK(state.online.players.empty());
     CHECK(state.online.balls.empty());
     CHECK(state.online.carts.empty());
+    CHECK(state.online.loadouts.empty());
     CHECK(state.online.group_sizes.empty());
+}
+
+TEST_CASE("my active effect rows are the effects the server runs on me; others' are not mine") {
+    game_state state = started_hole();
+    net_client client = connected_client(state, 42);
+    const std::string item = "lucky_charm";
+    const std::string target = "xp.all";
+    stdb_row row{};
+    row.running_effect = stdb_running_effect{5, 42, fake_text(item), fake_text(target), 1, 0.5f, 1, 30.0f, 1000, 31000};
+    queue_event(row_event(STDB_TABLE_RUNNING_EFFECT, STDB_ROW_INSERT, row));
+    row.running_effect.id = 6;
+    row.running_effect.account_id = 43;
+    queue_event(row_event(STDB_TABLE_RUNNING_EFFECT, STDB_ROW_INSERT, row));
+    client.update(state);
+    REQUIRE(state.online.effects.size() == 1U);
+    const active_effect& effect = state.online.effects.front();
+    CHECK(effect.item == "lucky_charm");
+    CHECK(effect.effect.target == "xp.all");
+    CHECK(effect.effect.bucket == effect_bucket::increased);
+    CHECK(effect.effect.duration == effect_duration::seconds);
+    CHECK(effect.started_at_ms == 1000);
+    CHECK(effect.ends_at_ms == 31000);
+
+    row.running_effect.id = 5;
+    row.running_effect.account_id = 42;
+    queue_event(row_event(STDB_TABLE_RUNNING_EFFECT, STDB_ROW_DELETE, row));
+    client.update(state);
+    CHECK(state.online.effects.empty());
 }
 
 TEST_CASE("refused gameplay goes to the game, refused menu actions to the menus") {
@@ -606,6 +665,23 @@ TEST_CASE("stepping into and out of another's cart reaches its reducers, whose r
     CHECK(fake_bridge().calls[0].number == 43);
     CHECK(fake_bridge().calls[1].name == "stdb_leave_cart");
 
+    // My cart going over, and righting someone's.
+    net_command overturn;
+    overturn.type = net_command_type::overturn_cart;
+    overturn.overturned_to = cart_condition::sunk;
+    state.net_commands.push_back(overturn);
+    net_command right;
+    right.type = net_command_type::right_cart;
+    right.cart_owner = 44;
+    state.net_commands.push_back(right);
+    fake_bridge().calls.clear();
+    client.update(state);
+    REQUIRE(fake_bridge().calls.size() == 2U);
+    CHECK(fake_bridge().calls[0].name == "stdb_overturn_cart");
+    CHECK(fake_bridge().calls[0].number == static_cast<std::int64_t>(cart_condition::sunk));
+    CHECK(fake_bridge().calls[1].name == "stdb_right_cart");
+    CHECK(fake_bridge().calls[1].number == 44);
+
     const std::string board_cart = reducer_board_cart;
     const std::string seat_taken = "seat_taken";
     stdb_event refused = fake_event(STDB_EVENT_REDUCER_FAILED);
@@ -621,7 +697,7 @@ TEST_CASE("group and give-up commands reach their reducers") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
     for (const net_command_type type : {net_command_type::create_group, net_command_type::join_group,
-                                        net_command_type::leave_group, net_command_type::return_to_hub}) {
+                                        net_command_type::leave_group, net_command_type::give_up_hole}) {
         net_command command;
         command.type = type;
         command.group_id = 9;
@@ -632,7 +708,7 @@ TEST_CASE("group and give-up commands reach their reducers") {
     const std::vector<std::string> names = fake_bridge().call_names();
     CHECK(std::find(names.begin(), names.end(), "stdb_create_group") != names.end());
     CHECK(std::find(names.begin(), names.end(), "stdb_leave_group") != names.end());
-    CHECK(std::find(names.begin(), names.end(), "stdb_return_to_hub") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "stdb_give_up_hole") != names.end());
     for (const fake_stdb_bridge::call& call : fake_bridge().calls) {
         if (call.name == "stdb_join_group") {
             CHECK(call.number == 9);

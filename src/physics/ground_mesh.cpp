@@ -201,11 +201,13 @@ terrain_material surface_material(const std::vector<material_zone>& zones,
     return zone_material_at(zones, position).value_or(on_hole != nullptr ? on_hole->material : terrain_material::rough);
 }
 
-terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
+built_ground build_ground(const std::vector<terrain_mesh>& holes,
                           const std::vector<material_zone>& zones,
                           const height_grid* land,
                           const ground_settings& settings) {
-    terrain_mesh ground;
+    built_ground built;
+    built.water_levels.assign(zones.size(), 0.0f);
+    terrain_mesh& ground = built.mesh;
     std::vector<grid_bounds> hole_bounds;
     grid_bounds bounds;
     for (const terrain_mesh& hole : holes) {
@@ -216,6 +218,13 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
     const float margin = std::max(0.0f, settings.margin);
     bounds.low -= glm::vec3(margin, 0.0f, margin);
     bounds.high += glm::vec3(margin, 0.0f, margin);
+    // Every zone with its lip or shore, however far from its hole it is mapped.
+    const float zone_reach = std::max(settings.zones.bunker_lip_meters, settings.zones.water_shore_meters) + settings.cell_size;
+    for (const material_zone& zone : zones) {
+        const glm::vec3 half(zone.half_size.x + zone_reach, 0.0f, zone.half_size.y + zone_reach);
+        bounds.low = glm::min(bounds.low, zone.center - half);
+        bounds.high = glm::max(bounds.high, zone.center + half);
+    }
     if (land != nullptr && land->columns > 1 && land->rows > 1) {
         bounds.low = glm::min(bounds.low, glm::vec3(land->origin_x, 0.0f, land->origin_z));
         bounds.high = glm::max(bounds.high,
@@ -226,7 +235,7 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
     const glm::vec3 low = bounds.low;
     const glm::vec3 high = bounds.high;
     if (!(low.x < high.x) || !(low.z < high.z)) {
-        return ground;
+        return built;
     }
 
     const float cell = std::max(0.5f, settings.cell_size);
@@ -329,6 +338,105 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
         }
     }
 
+    // The ground before any carving, between the grid's points.
+    const auto uncarved_at = [&](const glm::vec3& point) {
+        const float u_cells = std::clamp((point.x - low.x) / step_x, 0.0f, static_cast<float>(cell_columns));
+        const float v_cells = std::clamp((point.z - low.z) / step_z, 0.0f, static_cast<float>(cell_rows));
+        const int column = std::min(static_cast<int>(u_cells), cell_columns - 1);
+        const int row = std::min(static_cast<int>(v_cells), cell_rows - 1);
+        const float u = u_cells - static_cast<float>(column);
+        const float v = v_cells - static_cast<float>(row);
+        const auto at = [&](const int r, const int c) { return offset[static_cast<std::size_t>(r * columns + c)]; };
+        return land_at(point) + (at(row, column) * (1.0f - u) + at(row, column + 1) * u) * (1.0f - v) +
+            (at(row + 1, column) * (1.0f - u) + at(row + 1, column + 1) * u) * v;
+    };
+
+    // Each pond's level: the lowest of the uncarved ground round its edge
+    // (its corners and the middles of its sides), but where another pond's
+    // water is. Ponds whose outlines meet are one, at the lowest of their levels.
+    std::vector<std::size_t> pond(zones.size());
+    for (std::size_t i = 0; i < zones.size(); ++i) {
+        pond[i] = i;
+    }
+    const auto root = [&pond](std::size_t i) {
+        while (pond[i] != i) {
+            i = pond[i];
+        }
+        return i;
+    };
+    const auto is_water = [&zones](const std::size_t i) { return zones[i].type == material_zone_type::water; };
+    std::vector<float> rim_low(zones.size(), std::numeric_limits<float>::max());
+    for (std::size_t i = 0; i < zones.size(); ++i) {
+        if (!is_water(i)) {
+            continue;
+        }
+        const std::vector<glm::vec2>& outline = zones[i].outline;
+        for (std::size_t k = 0; k < outline.size(); ++k) {
+            for (const glm::vec2& rim : {outline[k], 0.5f * (outline[k] + outline[(k + 1) % outline.size()])}) {
+                const glm::vec3 point(rim.x, 0.0f, rim.y);
+                bool under_other = false;
+                for (std::size_t j = 0; j < zones.size(); ++j) {
+                    if (j != i && is_water(j) && zone_contains(zones[j], point)) {
+                        under_other = true;
+                        pond[root(j)] = root(i);
+                    }
+                }
+                if (!under_other) {
+                    rim_low[i] = std::min(rim_low[i], uncarved_at(point));
+                }
+            }
+        }
+    }
+    std::vector<float> pond_low(zones.size(), std::numeric_limits<float>::max());
+    for (std::size_t i = 0; i < zones.size(); ++i) {
+        if (is_water(i)) {
+            pond_low[root(i)] = std::min(pond_low[root(i)], rim_low[i]);
+        }
+    }
+    for (std::size_t i = 0; i < zones.size(); ++i) {
+        if (is_water(i)) {
+            const float level = pond_low[root(i)];
+            built.water_levels[i] = level < std::numeric_limits<float>::max() ? level : uncarved_at(zones[i].center);
+        }
+    }
+
+    // Each bunker's edge where it meets ground outside every bunker.
+    std::vector<const material_zone*> bunkers;
+    for (const material_zone& zone : zones) {
+        if (zone.type == material_zone_type::bunker) {
+            bunkers.push_back(&zone);
+        }
+    }
+    std::vector<std::vector<zone_edge>> bunker_edges(zones.size());
+    for (std::size_t i = 0; i < zones.size(); ++i) {
+        if (zones[i].type == material_zone_type::bunker) {
+            bunker_edges[i] = edge_outside(zones[i], bunkers);
+        }
+    }
+
+    // What carves each cell: its bunkers (and those within a lip of it) and
+    // ponds (and those within a shore of it), with their levels and edges.
+    std::unordered_map<std::size_t, std::vector<carving_zone>> cell_carving;
+    for (std::size_t i = 0; i < zones.size(); ++i) {
+        const material_zone& zone = zones[i];
+        const bool bunker = zone.type == material_zone_type::bunker;
+        if (!bunker && !is_water(i)) {
+            continue;
+        }
+        const glm::vec2 reach = zone_half_extent(zone) + (bunker ? settings.zones.bunker_lip_meters : settings.zones.water_shore_meters);
+        for (int row = cell_row_at(zone.center.z - reach.y); row <= cell_row_at(zone.center.z + reach.y); ++row) {
+            for (int column = cell_column_at(zone.center.x - reach.x); column <= cell_column_at(zone.center.x + reach.x); ++column) {
+                cell_carving[static_cast<std::size_t>(row * cell_columns + column)].push_back(
+                    carving_zone{&zone, built.water_levels[i], &bunker_edges[i]});
+            }
+        }
+    }
+    const std::vector<carving_zone> no_carving;
+    const auto carving_at = [&](const glm::vec3& point) -> const std::vector<carving_zone>& {
+        const auto found = cell_carving.find(static_cast<std::size_t>(cell_row_at(point.z) * cell_columns + cell_column_at(point.x)));
+        return found != cell_carving.end() ? found->second : no_carving;
+    };
+
     // The cells over a bunker or pond, and a cell beyond, so the carve is
     // nothing at their outer edges: only their corners are carved, and when
     // they are split finer they meet their neighbours without a step.
@@ -392,7 +500,7 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
             vertex.position = grid_point(row, column);
             vertex.position.y = base[index] + offset[index];
             if (corner_of_near_cell(row, column)) {
-                vertex.position.y -= zone_carve_depth(zones_at(vertex.position), vertex.position, settings.zones);
+                vertex.position.y = carved_height(carving_at(vertex.position), vertex.position, vertex.position.y, settings.zones);
             }
             vertex.material = materials[index];
             vertices.push_back(vertex);
@@ -440,7 +548,7 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
             for (int c = first_column; c <= last_column; ++c) {
                 const std::size_t cell_index = static_cast<std::size_t>(r * cell_columns + c);
                 if (near_zone[cell_index]) {
-                    return y - zone_carve_depth(zones_at(position), position, settings.zones);
+                    return carved_height(carving_at(position), position, y, settings.zones);
                 }
             }
         }
@@ -520,5 +628,6 @@ terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
     }
 
     ground.vertices = with_smooth_normals(std::move(vertices), ground.indices);
-    return build_terrain_mesh_index(std::move(ground));
+    ground = build_terrain_mesh_index(std::move(ground));
+    return built;
 }

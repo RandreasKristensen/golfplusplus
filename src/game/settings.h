@@ -3,7 +3,9 @@
 // Player settings (master and music volume, field of view, ...): which settings exist
 // and their ranges come from assets/interface/settings.json; the player's values
 // live in their own file next to the save, not in it, because the save is offline
-// progress and settings apply online too. A setting is a whole number
+// progress and settings apply online too. A golfer setting (the natural
+// shot) is shown with them but kept with the golfer's progress, never in
+// that file. A setting is a whole number
 // stepped between a minimum and a maximum; the settings screen
 // (core/settings_menu.h) lists every definition in file order.
 
@@ -25,6 +27,9 @@ inline constexpr const char* setting_fullscreen = "fullscreen";  // 0 windowed, 
 inline constexpr const char* setting_tape_wear = "tape_wear";    // from a fresh tape (min) to a worn one (max)
 inline constexpr const char* setting_datestamp = "datestamp";    // 0 off, 1 the camcorder's date and time in the corner
 inline constexpr const char* setting_interact_prompt = "interact_prompt";  // 0 off, 1 the F key shown when F would act
+inline constexpr const char* setting_handedness = "handedness";  // 0 right-handed, 1 left-handed
+// A golfer setting: game/golfer.h natural_shape by its index.
+inline constexpr const char* setting_natural_shape = "natural_shape";
 
 struct setting_definition {
     std::string id;
@@ -35,6 +40,7 @@ struct setting_definition {
     int max = 0;
     int step = 0;
     int default_value = 0;
+    bool golfer = false;  // kept with progress, not in the settings file
 };
 
 // The player's values by setting id. A setting missing here has its default.
@@ -63,14 +69,17 @@ settings_values adjust_setting(const settings_values& values, const setting_defi
 settings_values cycle_setting(const settings_values& values, const setting_definition& definition, int steps);
 
 // Values for the known settings in the text, clamped to their ranges;
-// unknown ids are dropped. nullopt when the text is not a settings file.
+// unknown ids and golfer settings are dropped. nullopt when the text is
+// not a settings file.
 std::optional<settings_values> parse_settings_from_text(const std::string& text,
                                                         const std::vector<setting_definition>& definitions);
-std::string settings_to_text(const settings_values& values);
+// Every value but the golfer settings'.
+std::string settings_to_text(const settings_values& values, const std::vector<setting_definition>& definitions);
 
 // <save_root>/settings.json
 std::filesystem::path settings_file_path(const std::filesystem::path& save_root);
 // Empty (every default) when the file is missing or unreadable: settings
 // are not progress, so a bad file is simply replaced on the next change.
 settings_values load_settings(const std::filesystem::path& path, const std::vector<setting_definition>& definitions);
-bool write_settings(const std::filesystem::path& path, const settings_values& values);
+bool write_settings(const std::filesystem::path& path, const settings_values& values,
+                    const std::vector<setting_definition>& definitions);

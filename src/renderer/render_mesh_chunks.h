@@ -17,7 +17,7 @@
 //   - every chunk is a contiguous index range and the chunks tile the buffer,
 //   - the triangle draw order is exactly the authored order. This matters:
 //     overlapping, coplanar material overlay zones (and overlapping hole/ground
-//     terrain in the hub) resolve with GL_LESS by draw order, so reordering
+//     terrain on a course) resolve with GL_LESS by draw order, so reordering
 //     triangles by a spatial grid could flip which surface wins.
 // Course meshes are emitted as spline section rows, ground grid rows and one
 // zone at a time, so consecutive triangles are spatially coherent and the runs
@@ -26,7 +26,7 @@
 struct render_chunk_settings {
     // Largest XZ size of one chunk, in world units (meters). A single triangle
     // larger than this still forms one chunk. About two ribbon widths: small
-    // enough that walking around a hub culls most of the terrain.
+    // enough that walking around a course culls most of the terrain.
     float target_extent = 48.0f;
     // Upper bound on chunk count. If a mesh would produce more (e.g. input that
     // is not spatially coherent), `target_extent` is doubled until it fits, so

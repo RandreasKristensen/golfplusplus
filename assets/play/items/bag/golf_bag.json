@@ -1,0 +1,6 @@
+{
+  "model": "golf_bag",
+  "name": "item.golf_bag.name",
+  "stacking": "refresh",
+  "effects": []
+}

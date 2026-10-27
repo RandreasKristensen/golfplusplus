@@ -1,0 +1,18 @@
+{
+  "golfer": {
+    "speed_share_spread": 0.01,
+    "face_spread_degrees": 0.3,
+    "path_spread_degrees": 0.5,
+    "strike_toe_spread_meters": 0.0015,
+    "strike_high_spread_meters": 0.003,
+    "spread_at_level_one": 4.0,
+    "overswing_spread": 3.0,
+    "natural_shape_spread": 0.85,
+    "natural_face_bias_degrees": 1.0,
+    "curve_full_degrees": 4.0,
+    "ball_full": 0.6,
+    "flop_start_degrees": 15.0,
+    "flop_full_degrees": 25.0,
+    "word_threshold": 0.5
+  }
+}

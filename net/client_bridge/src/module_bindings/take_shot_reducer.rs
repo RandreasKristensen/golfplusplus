@@ -9,10 +9,12 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub(super) struct TakeShotArgs {
     pub stroke: i32,
     pub aim_angle: f32,
+    pub face_open: f32,
+    pub ball_position: f32,
+    pub backswing: f32,
     pub club_id: String,
-    pub power: f32,
-    pub cigarette_active: bool,
     pub shot_at: i64,
+    pub flags_out: Vec<i32>,
 }
 
 impl From<TakeShotArgs> for super::Reducer {
@@ -20,10 +22,12 @@ impl From<TakeShotArgs> for super::Reducer {
         Self::TakeShot {
             stroke: args.stroke,
             aim_angle: args.aim_angle,
+            face_open: args.face_open,
+            ball_position: args.ball_position,
+            backswing: args.backswing,
             club_id: args.club_id,
-            power: args.power,
-            cigarette_active: args.cigarette_active,
             shot_at: args.shot_at,
+            flags_out: args.flags_out,
         }
     }
 }
@@ -47,18 +51,22 @@ pub trait take_shot {
         &self,
         stroke: i32,
         aim_angle: f32,
+        face_open: f32,
+        ball_position: f32,
+        backswing: f32,
         club_id: String,
-        power: f32,
-        cigarette_active: bool,
         shot_at: i64,
+        flags_out: Vec<i32>,
     ) -> __sdk::Result<()> {
         self.take_shot_then(
             stroke,
             aim_angle,
+            face_open,
+            ball_position,
+            backswing,
             club_id,
-            power,
-            cigarette_active,
             shot_at,
+            flags_out,
             |_, _| {},
         )
     }
@@ -73,10 +81,12 @@ pub trait take_shot {
         &self,
         stroke: i32,
         aim_angle: f32,
+        face_open: f32,
+        ball_position: f32,
+        backswing: f32,
         club_id: String,
-        power: f32,
-        cigarette_active: bool,
         shot_at: i64,
+        flags_out: Vec<i32>,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -89,10 +99,12 @@ impl take_shot for super::RemoteReducers {
         &self,
         stroke: i32,
         aim_angle: f32,
+        face_open: f32,
+        ball_position: f32,
+        backswing: f32,
         club_id: String,
-        power: f32,
-        cigarette_active: bool,
         shot_at: i64,
+        flags_out: Vec<i32>,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -102,10 +114,12 @@ impl take_shot for super::RemoteReducers {
             TakeShotArgs {
                 stroke,
                 aim_angle,
+                face_open,
+                ball_position,
+                backswing,
                 club_id,
-                power,
-                cigarette_active,
                 shot_at,
+                flags_out,
             },
             callback,
         )

@@ -1,6 +1,5 @@
 #include "game/game_content.h"
 
-#include "game/club_loader.h"
 #include "game/content_files.h"
 #include "game/course_loader.h"
 #include "game/tuning_loader.h"
@@ -42,6 +41,18 @@ game_content_load_result load_game_content(const std::string& asset_root) {
     }
     content.rewards = *rewards;
 
+    item_catalog_load_result items = load_items(asset_root);
+    if (!items.catalog) {
+        return fail(items.error);
+    }
+    content.items = std::move(*items.catalog);
+    const std::optional<std::string> loadout_text = read_text_file(root / default_loadout_path);
+    const std::optional<loadout> defaults = loadout_text ? parse_loadout_from_text(*loadout_text) : std::nullopt;
+    if (!defaults || !loadout_fits(*defaults, content.items)) {
+        return fail(std::string("cannot load ") + default_loadout_path);
+    }
+    content.default_loadout = *defaults;
+
     const std::optional<std::string> settings_text = read_text_file(root / setting_definitions_path);
     std::optional<std::vector<setting_definition>> settings =
         settings_text ? parse_setting_definitions_from_text(*settings_text) : std::nullopt;
@@ -50,9 +61,9 @@ game_content_load_result load_game_content(const std::string& asset_root) {
     }
     content.settings = std::move(*settings);
 
-    content.clubs = load_clubs_from_directory((root / clubs_path).string());
+    content.clubs = clubs_of(content.items);
     if (content.clubs.empty()) {
-        return fail(std::string("no valid clubs in ") + clubs_path);
+        return fail(std::string("no clubs in ") + items_path);
     }
     content.courses = load_courses(asset_root);
     if (content.courses.empty()) {

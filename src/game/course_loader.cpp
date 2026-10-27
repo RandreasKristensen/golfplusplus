@@ -34,6 +34,20 @@ std::optional<course_sky> parse_sky(const json& root) {
     return sky;
 }
 
+std::optional<course_air> parse_air(const json& root) {
+    const json* object = json_object(root, "air");
+    if (object == nullptr) {
+        return std::nullopt;
+    }
+    const std::optional<float> elevation = json_float(*object, "elevation_meters");
+    const std::optional<float> mean = json_float(*object, "mean_temperature_c");
+    const std::optional<float> range = json_float(*object, "daily_temperature_range_c");
+    if (!elevation || !mean || !range || *range < 0.0f) {
+        return std::nullopt;
+    }
+    return course_air{*elevation, *mean, *range};
+}
+
 std::optional<course_backdrop> parse_backdrop(const json& root) {
     const json* object = json_object(root, "backdrop");
     if (object == nullptr) {
@@ -65,14 +79,16 @@ std::optional<course_definition> parse_course_from_text(const std::string& text)
     const json* holes = json_array(*root, "holes");
     const std::optional<course_backdrop> backdrop = parse_backdrop(*root);
     const std::optional<course_sky> sky = parse_sky(*root);
-    if (holes == nullptr || holes->empty() || !backdrop || !sky) {
+    const std::optional<course_air> air = parse_air(*root);
+    if (holes == nullptr || holes->empty() || !backdrop || !sky || !air) {
         return std::nullopt;
     }
 
     const std::optional<std::string> id = json_string(*root, "id");
     const std::optional<std::string> name = json_string(*root, "name");
     const std::optional<std::string> world = json_string(*root, "world");
-    if (!id || id->empty() || !name || !world || world->empty()) {
+    const std::optional<float> stimp = json_float(*root, "green_stimp_feet");
+    if (!id || id->empty() || !name || !world || world->empty() || !stimp || *stimp <= 0.0f) {
         return std::nullopt;
     }
     course_definition course;
@@ -81,6 +97,8 @@ std::optional<course_definition> parse_course_from_text(const std::string& text)
     course.world = *world;
     course.backdrop = *backdrop;
     course.sky = *sky;
+    course.air = *air;
+    course.green_stimp_feet = *stimp;
     for (const json& hole : *holes) {
         if (!hole.is_string() || hole.get<std::string>().empty()) {
             return std::nullopt;

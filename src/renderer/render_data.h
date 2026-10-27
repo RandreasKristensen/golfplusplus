@@ -8,7 +8,7 @@
 #include "game/remote_players.h"
 #include "game/scorecard.h"
 #include "game/tee_box.h"
-#include "physics/tree_collision.h"
+#include "physics/tree_body.h"
 #include "profiling/profiling.h"
 #include "renderer/cart_batch.h"
 #include "renderer/god_menu_overlay.h"
@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <glm/vec3.hpp>
@@ -53,6 +54,28 @@ struct render_xp_drop {
 
 // A name over another player's head (world position of the tag), coloured
 // by what they are to me.
+enum class bag_pictogram {
+    cart,
+    back,
+    ground
+};
+
+// My bag's club picker open: the clubs' labels in bag order, the one it
+// highlights and the one in my hand.
+struct render_club_picker {
+    std::vector<std::string> labels;
+    std::size_t highlighted = 0;
+    std::size_t in_hand = 0;
+};
+
+// A bag set down: standing at `position` (its bottom, on the ground),
+// its pocket facing along `yaw`.
+struct render_ground_bag {
+    std::string model;
+    glm::vec3 position{0.0f};
+    float yaw = 0.0f;
+};
+
 struct render_name_tag {
     glm::vec3 position{0.0f};
     std::string name;
@@ -236,9 +259,9 @@ struct render_data {
     glm::vec3 camera_position{0.0f};
     glm::vec3 camera_target{0.0f, 0.0f, 1.0f};
     float camera_fov_degrees = 0.0f;
-    // My emote props, pinned to the camera, are drawn at this field of view
-    // in a pass of their own, so the player's setting never changes how they
-    // sit in the frame.
+    // What I hold, pinned to the camera, is drawn at this field of view in a
+    // pass of its own, so the player's setting never changes how it sits in
+    // the frame.
     float viewmodel_fov_degrees = 0.0f;
 
     render_lighting lighting;
@@ -277,24 +300,37 @@ struct render_data {
     float ball_visual_radius_meters = 0.0f;
     float cup_radius_meters = 0.0f;
     float pin_visual_height_meters = 0.0f;
-    // The hole being played (its cup and flag; its tee for the course map);
-    // unset in the hub.
+    // The hole my ball is in play on (its cup and flag; its tee for the
+    // course map); unset while my ball is in my pocket or a cup.
     bool show_hole = false;
     glm::vec3 tee_position{0.0f};
     glm::vec3 pin_position{0.0f};
-    // Every tee box of the area, hub or hole.
+    // Every tee box of the area.
     const std::vector<tee_box>* tee_boxes = nullptr;
     // The pins of every hole on the course but the one being played (whose
     // pin is `pin_position`): a course is one world, so they stay up in a round.
     std::vector<glm::vec3> pin_markers;
-    // Hub only: the collectibles that can be claimed now.
+    // The cups whose flag is out, and each flagstick lying beside its cup,
+    // from its foot to its tip.
+    std::vector<glm::vec3> flags_out;
+    std::vector<std::pair<glm::vec3, glm::vec3>> lying_flags;
+    // The collectibles that can be claimed now.
     std::vector<glm::vec3> collectible_markers;
 
-    bool show_aim_indicator = false;
-    std::vector<glm::vec3> aim_arc_points;
-    float aim_angle = 0.0f;
-    bool show_swing_club = false;
-    float swing_power = 0.0f;
+    // Over my ball, on the OSD (renderer/osd_overlay.h): what my setup would
+    // do (game/address_play.h preview_shot), its flight to the landing
+    // bracket and the rest tick; a putt only its start line. The setup's
+    // shape in a word, empty for the stock shot.
+    std::vector<glm::vec3> osd_line;
+    std::optional<glm::vec3> osd_landing;
+    std::optional<glm::vec3> osd_rest;
+    std::string setup_word;
+    // Over my ball: the club in my hands at it, the setup on the ground
+    // (the alignment stick, the face's line, my shoes), and what the wheel
+    // would change, outlined on the overlay round these points.
+    std::optional<render_club_pose> my_club;
+    std::optional<render_address_marks> address_marks;
+    std::vector<glm::vec3> setup_outline;
 
     bool show_flight_path = false;
     const std::vector<glm::vec3>* flight_path_points = nullptr;
@@ -303,16 +339,15 @@ struct render_data {
     float flight_path_width = 0.0f;
 
     // Sat at my cart's wheel: the cart HUD shows.
-    bool driving_cart = false;
-    float cart_speed_fraction = 0.0f;  // of the cart's top speed
-    // Every cart drawn whole in the world, mine too while I sit in it; the
-    // driver's seat is cart_seat_offset to a cart's left.
+    // Every cart drawn whole in the world, mine too while I sit in it.
     std::vector<render_cart> carts;
-    float cart_seat_offset = 0.0f;
-    bool smoke_emote_active = false;
-    float smoke_emote_elapsed = 0.0f;
-    bool beer_emote_active = false;
-    float beer_emote_elapsed = 0.0f;
+    // Bags set down on the ground (renderer/bag_batch.h).
+    std::vector<render_ground_bag> ground_bags;
+    // The god menu's view of what is solid near me (renderer/solid_outline.h).
+    std::vector<std::pair<glm::vec3, glm::vec3>> solid_outlines;
+    // What I smoke and drink while I use it, held before my eyes.
+    std::optional<render_item_use> smoking;
+    std::optional<render_item_use> drinking;
 
     // My figure on foot as others see it: never drawn (I look out of its
     // eyes), only into the shadow map (renderer/shadow_casters.h).
@@ -327,12 +362,21 @@ struct render_data {
     // HUD.
     // Which progress this round plays for: offline, or the online room.
     std::string mode_label;
-    // Over the ball: the swing clock shows, its hand at swing_power; E
-    // starts the backswing, then Q hits.
+    // Over the ball: the swing clock shows, its hand at the setup's
+    // backswing, and until the swing the strip of setup keys.
     bool show_swing_clock = false;
-    bool swing_running = false;
+    float swing_backswing = 0.0f;
+    float swing_backswing_max = 1.0f;  // past 1, the overswing band
+    // Where my bag is, as the OSD's pictogram shows it; none before a course.
+    std::optional<bag_pictogram> bag_shown;
+    bool show_address_hints = false;
+    // At my bag: its keys, and with its picker open the picker and its keys.
+    bool show_bag_hints = false;
+    std::optional<render_club_picker> club_picker;
     // Something in reach that F acts on (game_state.h interact_available).
     bool show_interact_prompt = false;
+    // F at another tee with my ball in play: the question asked; empty when none.
+    std::string give_up_label;
     int stroke_count = 0;
     std::string selected_club_label;  // short, e.g. "7I"
     std::string selected_club_name;
@@ -355,6 +399,8 @@ struct render_data {
     glm::vec3 course_map_low{0.0f};
     glm::vec3 course_map_high{0.0f};
     std::vector<render_map_hole> map_holes;
+    // My bag, when it is not on my back.
+    std::optional<glm::vec3> map_bag_position;
     bool show_scorecard = false;
     bool show_course_results = false;
     scorecard_data scorecard;

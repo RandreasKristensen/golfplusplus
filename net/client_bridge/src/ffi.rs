@@ -82,12 +82,16 @@ pub enum StdbTable {
     AvatarMotion = 9,
     Ball = 10,
     ShotEvent = 11,
-    EmoteEvent = 12,
+    ItemUseEvent = 12,
     MyAccount = 13,
     MyLinkCode = 14,
     MyLinkStatus = 15,
     ServerProtocol = 16,
     GolfCart = 17,
+    PlayerLoadout = 18,
+    RunningEffect = 19,
+    PlayerBag = 20,
+    GreenFlag = 21,
 }
 
 #[repr(C)]
@@ -106,6 +110,10 @@ pub struct StdbPlayer {
     pub display_name: StdbString,
     pub online: bool,
     pub holes_completed: i32,
+    /// handedness in game/shot_setup.h.
+    pub hand: u8,
+    /// natural_shape in game/golfer.h, or natural_shape_unset.
+    pub natural_shape: u8,
 }
 
 #[repr(C)]
@@ -170,7 +178,6 @@ pub struct StdbRoomMember {
     pub account_id: u64,
     pub room_id: u64,
     pub group_id: u64,
-    pub zone: i32,
     pub round_strokes: *const i32,
     pub round_strokes_count: usize,
 }
@@ -187,7 +194,6 @@ pub struct StdbGolfGroup {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct StdbMotion {
-    pub zone: i32,
     pub mode: u8,
     pub x: f32,
     pub y: f32,
@@ -212,13 +218,14 @@ pub struct StdbAvatarMotion {
 pub struct StdbBall {
     pub account_id: u64,
     pub room_id: u64,
-    pub zone: i32,
+    pub hole: i32,
     pub x: f32,
     pub y: f32,
     pub z: f32,
     pub stroke_count: i32,
     /// UTC milliseconds.
     pub last_shot_at: i64,
+    pub in_cup: bool,
 }
 
 #[repr(C)]
@@ -232,6 +239,8 @@ pub struct StdbGolfCart {
     pub yaw: f32,
     /// 0: nobody.
     pub passenger: u64,
+    /// cart_condition (physics/cart_dynamics.h).
+    pub condition: u8,
 }
 
 #[repr(C)]
@@ -239,11 +248,27 @@ pub struct StdbGolfCart {
 pub struct StdbShot {
     pub stroke: i32,
     pub aim_angle: f32,
+    pub face_open: f32,
+    pub ball_position: f32,
+    pub backswing: f32,
     pub club_id: StdbString,
-    pub power: f32,
-    pub cigarette_active: bool,
     /// UTC milliseconds, on the server's clock as the client estimates it.
     pub shot_at: i64,
+    /// The holes whose flag the client has out.
+    pub flags_out: *const i32,
+    pub flags_out_count: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbSnapshotEntry {
+    /// snapshot_kind in game/shot_snapshot.h.
+    pub kind: u8,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub yaw: f32,
+    pub shooter: bool,
 }
 
 #[repr(C)]
@@ -251,8 +276,14 @@ pub struct StdbShot {
 pub struct StdbShotEvent {
     pub room_id: u64,
     pub account_id: u64,
-    pub zone: i32,
+    pub hole: i32,
     pub shot: StdbShot,
+    pub hand: u8,
+    pub natural_shape: u8,
+    pub spread_scale: f32,
+    pub seed: u64,
+    pub snapshot: *const StdbSnapshotEntry,
+    pub snapshot_count: usize,
     pub start_x: f32,
     pub start_y: f32,
     pub start_z: f32,
@@ -264,10 +295,71 @@ pub struct StdbShotEvent {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct StdbEmoteEvent {
+pub struct StdbItemUseEvent {
     pub room_id: u64,
     pub account_id: u64,
-    pub emote_id: StdbString,
+    pub item_id: StdbString,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbLoadoutMount {
+    pub mount: StdbString,
+    pub item_id: StdbString,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbPlayerLoadout {
+    pub account_id: u64,
+    pub cart: StdbString,
+    pub cart_mounts: *const StdbLoadoutMount,
+    pub cart_mounts_count: usize,
+    pub smokable: StdbString,
+    pub drinkable: StdbString,
+    pub bag: StdbString,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbPlayerBag {
+    pub account_id: u64,
+    pub room_id: u64,
+    /// bag_where in game/bag_place.h.
+    pub place: u8,
+    /// cart_seat.
+    pub seat: u8,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub yaw: f32,
+    pub club_in_hand: StdbString,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbGreenFlag {
+    pub id: u64,
+    pub room_id: u64,
+    pub hole: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbRunningEffect {
+    pub id: u64,
+    pub account_id: u64,
+    pub item_id: StdbString,
+    pub target: StdbString,
+    /// effect_bucket in game/effects.h.
+    pub bucket: u8,
+    pub value: f32,
+    /// effect_duration.
+    pub duration: u8,
+    pub seconds: f32,
+    /// UTC milliseconds.
+    pub started_at_ms: i64,
+    pub ends_at_ms: i64,
 }
 
 #[repr(C)]
@@ -306,11 +398,15 @@ pub union StdbRow {
     pub avatar_motion: StdbAvatarMotion,
     pub ball: StdbBall,
     pub shot_event: StdbShotEvent,
-    pub emote_event: StdbEmoteEvent,
+    pub item_use_event: StdbItemUseEvent,
     pub link_code: StdbLinkCode,
     pub link_status: StdbLinkStatus,
     pub server_protocol: StdbServerProtocol,
     pub golf_cart: StdbGolfCart,
+    pub player_loadout: StdbPlayerLoadout,
+    pub running_effect: StdbRunningEffect,
+    pub player_bag: StdbPlayerBag,
+    pub green_flag: StdbGreenFlag,
 }
 
 /// One thing that happened. Only the fields named for its kind are set.
@@ -350,22 +446,29 @@ pub fn layout() -> Vec<usize> {
     describe!(out, StdbString, data, len);
     describe!(out, StdbConfig, server_uri, database, auth_issuer, auth_client_id, auth_scopes, auth_authorization_endpoint,
               auth_token_endpoint, page_signed_in, page_failed, anonymous);
-    describe!(out, StdbPlayer, account_id, display_name, online, holes_completed);
+    describe!(out, StdbPlayer, account_id, display_name, online, holes_completed, hand, natural_shape);
     describe!(out, StdbPlayerSkill, id, account_id, skill_id, xp);
     describe!(out, StdbHoleScore, id, account_id, course_id, hole_index, strokes, par);
     describe!(out, StdbCompletedCourse, id, account_id, course_id);
     describe!(out, StdbCollected, id, account_id, collectible_id, repeatable, claim_count, claimed_at_holes_completed);
     describe!(out, StdbWorldFlag, id, account_id, flag);
     describe!(out, StdbRoom, room_id, course_id, player_count);
-    describe!(out, StdbRoomMember, account_id, room_id, group_id, zone, round_strokes, round_strokes_count);
+    describe!(out, StdbRoomMember, account_id, room_id, group_id, round_strokes, round_strokes_count);
     describe!(out, StdbGolfGroup, group_id, room_id, leader, member_count);
-    describe!(out, StdbMotion, zone, mode, x, y, z, yaw, speed, turn_rate, client_time);
+    describe!(out, StdbMotion, mode, x, y, z, yaw, speed, turn_rate, client_time);
     describe!(out, StdbAvatarMotion, account_id, room_id, motion, server_time_micros);
-    describe!(out, StdbBall, account_id, room_id, zone, x, y, z, stroke_count, last_shot_at);
-    describe!(out, StdbGolfCart, owner, room_id, x, y, z, yaw, passenger);
-    describe!(out, StdbShot, stroke, aim_angle, club_id, power, cigarette_active, shot_at);
-    describe!(out, StdbShotEvent, room_id, account_id, zone, shot, start_x, start_y, start_z, rest_x, rest_y, rest_z, holed);
-    describe!(out, StdbEmoteEvent, room_id, account_id, emote_id);
+    describe!(out, StdbBall, account_id, room_id, hole, x, y, z, stroke_count, last_shot_at, in_cup);
+    describe!(out, StdbGolfCart, owner, room_id, x, y, z, yaw, passenger, condition);
+    describe!(out, StdbShot, stroke, aim_angle, face_open, ball_position, backswing, club_id, shot_at, flags_out, flags_out_count);
+    describe!(out, StdbSnapshotEntry, kind, x, y, z, yaw, shooter);
+    describe!(out, StdbShotEvent, room_id, account_id, hole, shot, hand, natural_shape, spread_scale, seed, snapshot, snapshot_count,
+              start_x, start_y, start_z, rest_x, rest_y, rest_z, holed);
+    describe!(out, StdbItemUseEvent, room_id, account_id, item_id);
+    describe!(out, StdbLoadoutMount, mount, item_id);
+    describe!(out, StdbPlayerLoadout, account_id, cart, cart_mounts, cart_mounts_count, smokable, drinkable, bag);
+    describe!(out, StdbPlayerBag, account_id, room_id, place, seat, x, y, z, yaw, club_in_hand);
+    describe!(out, StdbGreenFlag, id, room_id, hole);
+    describe!(out, StdbRunningEffect, id, account_id, item_id, target, bucket, value, duration, seconds, started_at_ms, ends_at_ms);
     describe!(out, StdbLinkCode, code, expires_at_micros);
     describe!(out, StdbLinkStatus, result, at_micros);
     describe!(out, StdbServerProtocol, version);

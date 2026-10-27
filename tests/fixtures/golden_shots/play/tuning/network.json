@@ -25,6 +25,7 @@
     "max_motion_gap_seconds": 3.5,
     "interact_slack": 2.0,
     "shot_time_slack_seconds": 2.0,
-    "timing_slack_seconds": 0.25
+    "timing_slack_seconds": 0.25,
+    "cart_condition_slack": 0.2
   }
 }

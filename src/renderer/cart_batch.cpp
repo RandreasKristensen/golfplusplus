@@ -13,14 +13,11 @@
 
 #include "physics/vector_math.h"
 #include "renderer/camera_local.h"
-#include "renderer/primitive_mesh.h"
 #include "renderer/prop_pieces.h"
 
 namespace {
 constexpr float no_glow = 0.0f;
-constexpr bool writes_depth = true;
 
-constexpr std::size_t quad_vertex_count = 6;
 constexpr std::size_t wheel_rim_segments = 12;
 constexpr std::size_t wheel_spoke_count = 3;
 // Besides its model's parts: the wheels, steering column, the steering
@@ -28,11 +25,9 @@ constexpr std::size_t wheel_spoke_count = 3;
 constexpr std::size_t cylinder_count = 4 + 1 + wheel_rim_segments + wheel_spoke_count;
 constexpr std::size_t sphere_count = 4 + 1;
 
-// The wheels, in the cart's frame: their hubs at the wheel radius over its
-// origin, `wheel_x` to either side and `wheel_z` behind and ahead.
-constexpr std::array<float, 2> wheel_x{-0.66f, 0.66f};
-constexpr std::array<float, 2> wheel_z{-0.70f, 1.00f};
-constexpr float tyre_radius = 0.23f;
+// The wheels' hubs in the cart's frame, from its model: right rear, left
+// rear, right front, left front. A tyre's radius is its hub's height.
+constexpr const char* wheel_points[] = {"wheel_right_rear", "wheel_left_rear", "wheel_right_front", "wheel_left_front"};
 constexpr float tyre_width = 0.16f;
 // The cart rests on the ground smoothed round each wheel, out to
 // `ground_smoothing_radius` in `ground_smoothing_samples` directions, so it
@@ -45,11 +40,8 @@ constexpr float tyre_clearance = 0.04f;
 constexpr float tyre_least_clearance = 0.01f;
 constexpr std::array<float, 3> tyre_check_degrees{-45.0f, 0.0f, 45.0f};
 
-// The steering wheel before the driver's seat, in the cart's frame: its
-// middle, how far its face leans back from upright, and how far it turns at
-// full steer.
-constexpr float wheel_height = 1.06f;
-constexpr float wheel_ahead = 0.46f;
+// The steering wheel before the driver's seat, round its model's point: how
+// far its face leans back from upright, and how far it turns at full steer.
 constexpr float wheel_lean_degrees = 40.0f;
 constexpr float wheel_radius = 0.19f;
 constexpr float wheel_rim_radius = 0.017f;
@@ -61,11 +53,8 @@ constexpr float wheel_full_turn_degrees = 110.0f;
 }
 
 std::size_t cart_vertex_count(const prop_model& model) {
-    const std::size_t cylinder = make_cylinder_positions(primitive_cylinder_segments).size();
-    const std::size_t sphere = make_sphere_positions(primitive_sphere_latitude_segments, primitive_sphere_longitude_segments).size();
-    return prop_piece_count(model, prop_mesh::quad) * quad_vertex_count +
-           (prop_piece_count(model, prop_mesh::cylinder) + cylinder_count) * cylinder +
-           (prop_piece_count(model, prop_mesh::sphere) + sphere_count) * sphere;
+    return prop_model_vertex_count(model) + cylinder_count * prop_mesh_vertex_count(prop_mesh::cylinder) +
+           sphere_count * prop_mesh_vertex_count(prop_mesh::sphere);
 }
 
 glm::mat4 cart_frame(const render_cart& cart) {
@@ -80,11 +69,16 @@ glm::mat4 cart_frame(const render_cart& cart) {
     return frame;
 }
 
-render_cart cart_on_ground(const glm::vec3& position, const float yaw,
+render_cart cart_on_ground(const glm::vec3& position, const float yaw, const prop_model& model,
                            const std::function<float(const glm::vec3&)>& ground_height) {
     render_cart cart;
     cart.position = glm::vec3(position.x, 0.0f, position.z);
     cart.yaw = yaw;
+    // [side][end]: right then left, rear then front; their feet on the ground.
+    std::array<std::array<glm::vec3, 2>, 2> wheels{};
+    for (std::size_t i = 0; i < 4; ++i) {
+        wheels[i % 2][i / 2] = model.point(wheel_points[i]);
+    }
 
     // Tilted along the smoothed rise from its rear wheels to its front ones
     // and from its right wheels to its left ones.
@@ -97,16 +91,19 @@ render_cart cart_on_ground(const glm::vec3& position, const float yaw,
         }
         return sum / static_cast<float>(ground_smoothing_samples + 1);
     };
+    const auto foot = [&wheels](const std::size_t side, const std::size_t end) {
+        return glm::vec3(wheels[side][end].x, 0.0f, wheels[side][end].z);
+    };
     std::array<std::array<float, 2>, 2> ground{};
     for (std::size_t side = 0; side < 2; ++side) {
         for (std::size_t end = 0; end < 2; ++end) {
-            ground[side][end] = smoothed_ground(glm::vec3(level * glm::vec4(wheel_x[side], 0.0f, wheel_z[end], 1.0f)));
+            ground[side][end] = smoothed_ground(glm::vec3(level * glm::vec4(foot(side, end), 1.0f)));
         }
     }
     const float rise_ahead = 0.5f * (ground[0][1] + ground[1][1] - ground[0][0] - ground[1][0]);
     const float rise_left = 0.5f * (ground[1][0] + ground[1][1] - ground[0][0] - ground[0][1]);
-    const glm::vec3 along = glm::vec3(level[2]) * (wheel_z[1] - wheel_z[0]) + world_up * rise_ahead;
-    const glm::vec3 across = glm::vec3(level[0]) * (wheel_x[1] - wheel_x[0]) + world_up * rise_left;
+    const glm::vec3 along = glm::vec3(level[2]) * (foot(0, 1).z - foot(0, 0).z) + world_up * rise_ahead;
+    const glm::vec3 across = glm::vec3(level[0]) * (foot(1, 0).x - foot(0, 0).x) + world_up * rise_left;
     cart.up = safe_normalize(glm::cross(along, across), world_up);
 
     // Its tyres at the clearance over the smoothed ground on average, lifted
@@ -115,16 +112,17 @@ render_cart cart_on_ground(const glm::vec3& position, const float yaw,
     float lift = 0.0f;
     for (std::size_t side = 0; side < 2; ++side) {
         for (std::size_t end = 0; end < 2; ++end) {
-            const glm::vec3 bottom(tilted * glm::vec4(wheel_x[side], 0.0f, wheel_z[end], 1.0f));
+            const glm::vec3 bottom(tilted * glm::vec4(foot(side, end), 1.0f));
             lift += 0.25f * (ground[side][end] + tyre_clearance - bottom.y);
         }
     }
-    for (const float x : wheel_x) {
-        for (const float z : wheel_z) {
+    for (const auto& side : wheels) {
+        for (const glm::vec3& hub : side) {
+            const float tyre_radius = hub.y;
             for (const float edge : {-0.5f * tyre_width, 0.5f * tyre_width}) {
                 for (const float degrees : tyre_check_degrees) {
                     const float angle = glm::radians(degrees);
-                    const glm::vec3 local(x + edge, tyre_radius * (1.0f - std::cos(angle)), z + tyre_radius * std::sin(angle));
+                    const glm::vec3 local(hub.x + edge, tyre_radius * (1.0f - std::cos(angle)), hub.z + tyre_radius * std::sin(angle));
                     const glm::vec3 point(tilted * glm::vec4(local, 1.0f));
                     lift = std::max(lift, ground_height(point) + tyre_least_clearance - point.y);
                 }
@@ -135,49 +133,48 @@ render_cart cart_on_ground(const glm::vec3& position, const float yaw,
     return cart;
 }
 
-void append_cart_model(world_marker_batch& batch, const render_cart& cart, const float seat_offset, const prop_model& model) {
+render_cart cart_on_side(const glm::vec3& position, const float yaw, const bool on_left_side, const prop_model& model,
+                         const float ground) {
+    // Rolled about the line its wheels on that side touch the ground along:
+    // its middle ends up as far over that line as the wheels were out from it.
+    const float half_track = std::abs(model.point(wheel_points[1]).x) + 0.5f * tyre_width;
+    const glm::vec3 side = yaw_left(yaw_direction(yaw)) * (on_left_side ? 1.0f : -1.0f);
+    render_cart cart;
+    cart.yaw = yaw;
+    cart.up = side;
+    cart.position = glm::vec3(position.x, ground + half_track, position.z) + side * half_track;
+    return cart;
+}
+
+void append_cart_model(prop_batch& batch, const render_cart& cart, const prop_model& model, const glow_floors& glow) {
     // Built in the cart's frame (x towards its left, y up, z forward, world
     // units), under the middle of its seat at the bottom of its wheels, then
     // set in the world by cart_frame: its model's parts, then the wheels and
     // the steering wheel, which turn.
     const glm::mat4 frame = cart_frame(cart);
-    for (const prop_piece& piece : prop_pieces(model, frame)) {
-        switch (piece.mesh) {
-        case prop_mesh::cylinder:
-            batch.append_cylinder(piece.model, piece.color, no_glow, writes_depth);
-            break;
-        case prop_mesh::sphere:
-            batch.append_sphere(piece.model, piece.color, no_glow, writes_depth);
-            break;
-        case prop_mesh::quad:
-            batch.append_quad(piece.model, piece.color, no_glow, writes_depth);
-            break;
-        }
-    }
+    append_prop_model(batch, model, frame, glow);
     const glm::vec3 feet(0.0f);
     const glm::vec3 facing(0.0f, 0.0f, 1.0f);
     const glm::vec3 rubber = model.color("rubber");
     const glm::vec3 trim = model.color("trim");
     const auto cylinder = [&](const glm::vec3& local, const glm::vec3& rotation, const glm::vec3& scale, const glm::vec3& color) {
-        batch.append_cylinder(frame * local_cylinder_model(feet, facing, local, rotation, scale), color, no_glow, writes_depth);
+        batch.append(prop_mesh::cylinder, frame * local_cylinder_model(feet, facing, local, rotation, scale), color, no_glow);
     };
     const auto rod = [&](const glm::vec3& from, const glm::vec3& to, const float radius, const glm::vec3& color) {
-        batch.append_cylinder(frame * local_segment_model(feet, facing, from, to, radius), color, no_glow, writes_depth);
+        batch.append(prop_mesh::cylinder, frame * local_segment_model(feet, facing, from, to, radius), color, no_glow);
     };
 
-    for (const float x : wheel_x) {
-        for (const float z : wheel_z) {
-            cylinder(glm::vec3(x, tyre_radius, z), glm::vec3(0.0f, 0.0f, glm::radians(-90.0f)),
-                     glm::vec3(tyre_radius, tyre_width, tyre_radius), rubber);
-            batch.append_sphere(frame * local_sphere_model(feet, facing, glm::vec3(x * 1.1f, tyre_radius, z), 0.085f),
-                                model.color("hub_cap"), no_glow, writes_depth);
-        }
+    for (const char* name : wheel_points) {
+        const glm::vec3 hub = model.point(name);
+        cylinder(hub, glm::vec3(0.0f, 0.0f, glm::radians(-90.0f)), glm::vec3(hub.y, tyre_width, hub.y), rubber);
+        batch.append(prop_mesh::sphere, frame * local_sphere_model(feet, facing, glm::vec3(hub.x * 1.1f, hub.y, hub.z), 0.085f),
+                     model.color("hub_cap"), no_glow);
     }
 
     // The steering wheel faces the driver's chest on a column down into the
     // dash; across its face run `side` (the cart's left) and `rise` (up it).
     const float lean = glm::radians(wheel_lean_degrees);
-    const glm::vec3 hub(seat_offset, wheel_height, wheel_ahead);
+    const glm::vec3 hub = model.point("steering_wheel");
     const glm::vec3 towards_driver(0.0f, std::sin(lean), -std::cos(lean));
     const glm::vec3 side(1.0f, 0.0f, 0.0f);
     const glm::vec3 rise(0.0f, std::cos(lean), std::sin(lean));
@@ -196,5 +193,5 @@ void append_cart_model(world_marker_batch& batch, const render_cart& cart, const
     for (const float angle : std::array<float, wheel_spoke_count>{0.0f, pi, 1.5f * pi}) {
         rod(hub, rim_point(angle), wheel_spoke_radius, trim);
     }
-    batch.append_sphere(frame * local_sphere_model(feet, facing, hub, wheel_hub_radius), trim, no_glow, writes_depth);
+    batch.append(prop_mesh::sphere, frame * local_sphere_model(feet, facing, hub, wheel_hub_radius), trim, no_glow);
 }

@@ -1,66 +1,30 @@
 #include "game/course_session.h"
 
 #include "game/content_files.h"
+#include "game/golf_bag.h"
 #include "game/mode_dispatch.h"
 #include "game/net_types.h"
+#include "game/shot_dice.h"
 #include "game/text_ids.h"
 #include "physics/vector_math.h"
 
 #include <utility>
 
 namespace {
-// Clears everything that only lives for one hole or one visit to the hub.
-void reset_play_state(game_state& state) {
-    state.ball = ball_state{};
-    state.ball.radius = state.tuning.scale.ball_physics_radius_meters;
-    state.shot.reset();
-    // The cart stays where it is; whoever sat in it stands up.
-    leave_cart_at_once(state);
-    state.smoke_emote = emote_state{};
-    state.beer_emote = emote_state{};
-    state.cigarette_seconds_left = 0.0f;
-    state.mode = game_mode::walking;
-    state.swing = swing_state{};
-    state.stroke_count = 0;
-    state.walk_meters_pending = 0.0f;
-    state.cart_meters_pending = 0.0f;
-    state.flight_path_points.clear();
-    state.shot_start_position = glm::vec3(0.0f);
-    state.online_hole = online_hole_state{};
-    state.ball_correction.reset();
-}
-
 void face(game_state& state, const float yaw) {
     state.player.yaw = yaw;
-    state.aim_angle = yaw;
     state.look.pitch = 0.0f;
 }
 
-// Ball resting on the tee, player standing behind it facing the pin.
-void tee_up(game_state& state) {
-    state.ball.position = resting_ball_position(state.area, state.hole->tee_position, state.ball.radius);
-    const glm::vec3 pin = pin_anchor_position(state);
-    face(state, yaw_towards(state.ball.position, pin));
-    state.player.position =
-        tee_stance_position(state.area, state.ball.position, pin, state.tuning.player.ball_stand_off_distance);
-}
-
-// `placed_hole` is in the play area's coordinates.
-void enter_hole(game_state& state, const std::size_t index, const hole_data& placed_hole) {
-    state.hole = active_hole{index, placed_hole.tee_position, placed_hole.pin_position};
-    refresh_hole_anchors(state);
-    reset_play_state(state);
-    tee_up(state);
-    record_hole_started(state, index);
-}
-
-// The view stays where it was: after holing out, on the cup.
-void enter_hub(game_state& state, const glm::vec3& position) {
-    state.hole.reset();
-    refresh_hole_anchors(state);
-    reset_play_state(state);
-    state.player.position = anchor_on_terrain(state.area, position);
-    state.ball.position = state.player.position;
+// What lives for one ball's hole: its shot and the address over it.
+void end_ball_play(game_state& state) {
+    state.shot.reset();
+    state.mode = game_mode::walking;
+    state.address = address_state{};
+    state.flight_path_points.clear();
+    state.online_hole = online_hole_state{};
+    state.ball_correction.reset();
+    state.give_up_prompt.reset();
 }
 
 std::optional<std::vector<hole_data>> load_course_holes(const std::string& asset_root, const course_definition& course) {
@@ -75,15 +39,13 @@ std::optional<std::vector<hole_data>> load_course_holes(const std::string& asset
     return holes;
 }
 
-course_hub build_hub(const course_world_definition& world, const std::vector<hole_data>& holes) {
-    course_hub hub;
-    hub.world = world;
+std::vector<course_hole> place_holes(const course_world_definition& world, const std::vector<hole_data>& holes) {
+    std::vector<course_hole> placed;
     for (std::size_t i = 0; i < holes.size(); ++i) {
-        const course_world_hole_start& start = world.hole_starts[i];
-        const hole_data placed = place_hole(holes[i], start);
-        hub.markers.push_back(hub_hole_marker{placed.tee_position, placed.pin_position});
+        const hole_data hole = place_hole(holes[i], world.hole_starts[i]);
+        placed.push_back(course_hole{hole.tee_position, hole.pin_position, hole.par});
     }
-    return hub;
+    return placed;
 }
 }
 
@@ -101,26 +63,46 @@ bool start_course(game_state& state, const course_definition& course) {
 
     state.course = course;
     state.area = build_course_area(*holes, *world, state.tuning);
-    state.hub = build_hub(*world, *holes);
+    state.world = *world;
+    state.holes = place_holes(*world, *holes);
     state.course_holes = std::move(*holes);
+    state.flags_in.assign(state.course_holes.size(), true);
     mark_terrain_render_dirty(state);
     state.round = start_round(state.course_holes.size());
+    state.round_seed = round_shot_seed(static_cast<std::uint64_t>(state.local_unix_ms), 0);
+    state.shots_hit = 0;
+    state.picker.reset();
+    state.server_bag_adopted = false;
     state.xp_drops.clear();
     state.pending_xp_drop_amounts.clear();
-    state.cup_ball.reset();
-    state.picked_cup_ball.reset();
-    enter_hub(state, state.hub->world.hole_starts.front().position);
-    face(state, yaw_towards(state.player.position, state.hub->markers.front().pin_position));
+    state.ball.reset();
+    end_ball_play(state);
+    leave_cart_at_once(state);
+    state.smoking.reset();
+    state.drinking.reset();
+    state.walk_meters_pending = 0.0f;
+    state.cart_meters_pending = 0.0f;
+    state.shot_start_position = glm::vec3(0.0f);
+    state.player.position = anchor_on_terrain(state.area, state.world.hole_starts.front().position);
+    face(state, yaw_towards(state.player.position, state.holes.front().pin_position));
     park_cart(state);
+    strap_bag_on_cart(state);
     return true;
 }
 
-bool start_hub_hole(game_state& state, const std::size_t hole_index) {
-    if (!in_hub(state) || hole_index >= state.course_holes.size() || hole_played(state.round, hole_index)) {
+bool tee_up(game_state& state, const std::size_t hole_index, const bool give_up) {
+    if (hole_index >= state.holes.size() || hole_played(state.round, hole_index)) {
         return false;
     }
-    if (state.cup_ball) {
+    if (state.ball && state.ball->place == ball_place::in_cup) {
         state.notice = game_notice{text_ball_in_cup, 0.0f};
+        return false;
+    }
+    if (state.ball && state.ball->hole == hole_index) {
+        return false;  // that hole's ball is mine: it is played where it lies
+    }
+    if (state.ball && !give_up) {
+        state.notice = game_notice{text_ball_in_play, 0.0f};
         return false;
     }
     if (is_online(state) &&
@@ -128,58 +110,58 @@ bool start_hub_hole(game_state& state, const std::size_t hole_index) {
         state.notice = game_notice{text_online_tee_in_use, 0.0f};
         return false;
     }
-    const hole_data& hole = state.course_holes[hole_index];
-    const course_world_hole_start& start = state.hub->world.hole_starts[hole_index];
+    end_ball_play(state);
     state.round.current_hole_index = hole_index;
-    enter_hole(state, hole_index, place_hole(hole, start));
+    const float radius = state.tuning.scale.ball_physics_radius_meters;
+    const glm::vec3 tee = resting_ball_position(state.area, state.holes[hole_index].tee_position, radius);
+    state.ball = my_ball{hole_index, tee, 0, ball_place::teed};
+    const glm::vec3 pin = pin_anchor_position(state, hole_index);
+    face(state, yaw_towards(tee, pin));
+    state.player.position = tee_stance_position(state.area, tee, pin, state.tuning.player.ball_stand_off_distance);
+    record_tee_up(state, hole_index, give_up);
     return true;
 }
 
 void complete_current_hole(game_state& state) {
-    if (!state.hole) {
+    if (!ball_in_play(state)) {
         return;
     }
-    const std::size_t index = state.hole->index;
-    state.round = complete_hole(state.round, index, state.stroke_count);
+    my_ball& ball = *state.ball;
+    state.round = complete_hole(state.round, ball.hole, ball.strokes);
     record_hole_completed(state);
-    state.mode = game_mode::walking;
-    state.flight_path_points.clear();
+    end_ball_play(state);
     // The ball stays in the cup until it is picked up, into the next round too.
-    state.cup_ball = pin_anchor_position(state);
-
-    if (round_finished(state.round)) {
-        return;
-    }
-    // The player stays where they holed out from.
-    enter_hub(state, state.player.position);
+    ball.place = ball_place::in_cup;
+    ball.position = pin_anchor_position(state, ball.hole);
 }
 
-void abandon_hole(game_state& state, const glm::vec3& position) {
-    if (state.hole && state.hub) {
-        enter_hub(state, position);
+void give_up_hole(game_state& state) {
+    if (!ball_in_play(state)) {
+        return;
     }
+    end_ball_play(state);
+    state.ball.reset();
+    record_hole_given_up(state);
 }
 
 void start_next_round(game_state& state) {
-    if (!state.hub || !state.hole) {
+    if (!course_started(state) || !round_finished(state.round)) {
         return;
     }
     state.round = start_round(state.course_holes.size());
     state.group_strokes.clear();
-    enter_hub(state, state.player.position);
 }
 
 bool cup_ball_in_reach(const game_state& state) {
-    return in_hub(state) && state.cup_ball &&
-        horizontal_distance(state.player.position, *state.cup_ball) <= state.tuning.player.ball_interact_radius;
+    return state.ball && state.ball->place == ball_place::in_cup &&
+        horizontal_distance(state.player.position, state.ball->position) <= state.tuning.player.ball_interact_radius;
 }
 
 bool pick_up_cup_ball(game_state& state) {
     if (!cup_ball_in_reach(state)) {
         return false;
     }
-    state.picked_cup_ball = state.cup_ball;
-    state.cup_ball.reset();
+    state.ball.reset();
     record_ball_picked_up(state);
     return true;
 }

@@ -130,7 +130,7 @@ TEST_CASE("a cart casts a cart's blob over whoever sits in it, and players on fo
 TEST_CASE("trees and floodlight poles darken the ground faintly at their foot, rebuilt only when the trees change") {
     game_state game = started_game(fixture_hub_course());
     const shadow_style& style = fixture_palette().shadows;
-    const std::size_t poles = game.area.floodlight_poles.size();
+    const std::size_t poles = game.area.floodlights.size();
     REQUIRE(poles > 0U);
     tree_body tree;
     tree.base = above_ground(game, game.player.position + glm::vec3(5.0f, 0.0f, 0.0f), 0.0f);
@@ -146,7 +146,7 @@ TEST_CASE("trees and floodlight poles darken the ground faintly at their foot, r
     CHECK(near(cache.blobs[0].strength, style.blob_strength * style.foot_share, 0.0001f));
     CHECK(near(cache.blobs[0].base, tree.base, 0.0001f));
     const render_blob_shadow& pole = cache.blobs[2];
-    CHECK(near(pole.base, game.area.floodlight_poles[0].base, 0.0001f));
+    CHECK(near(pole.base, game.area.floodlights[0].foot, 0.0001f));
     CHECK(near(pole.radius, style.pole_radius, 0.0001f));
 
     game.static_anchors.trees.pop_back();
@@ -212,7 +212,7 @@ TEST_CASE("after dark the ball, carts' headlights and the floodlights light up, 
     }
 }
 
-TEST_CASE("in the hub at dusk every floodlight is on as far as the night is") {
+TEST_CASE("at dusk every floodlight is on as far as the night is") {
     const game_state game = started_game(fixture_hub_course());
     const night_light_style& style = fixture_palette().night_lights;
     render_data hub = lit_frame(sun_at(-20.0f), 0.0f, 0.5f);

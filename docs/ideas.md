@@ -3,10 +3,12 @@
 (recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
 
 Todo
-- accelleration and decelleration more accurate on the cart, slower uphill but never stopping.
 - see each other on map? Or maybe not see yourself or ball on map at all - forcing people to drop if they dont find ball type shit
 - tee times, instead of room caps. Makes par 3s have less people naturally, and improves "group finding" - naturally getting paired with others on the same teetime.
-- collectibles are only balls, for now. Balls from given up holes become collectibles. for a scavenging skill?
+- port to sdl3, possibly also away from opengl to ensure longterm support. 
+- analyze the servercode / tables. Riding together in a cart should send more often to ridealongs, its terrible experience right now. Figure out how we are doing it right now, research mmo server table design etc. to go crazy. 
+- the camera sould stop following the ball basically whenever its rolling on the ground, then ou should be able to freemove while the ball settles the rest of the way. You should never be able to address a moving ball
+
 
 
 
@@ -15,15 +17,15 @@ Todo
 
 ## **bugs**
 
-- LAG after and "entering" every hole on 18 hole courses - i suspect everything loads every time you go in/out of the "overworld/underworld"
-- fairways are always the same width, and always fairways - you cant have like driver over rough then the fairway starts type beat. Bunkers also consist of many small circles - which is fine - but it would be cool if they "merged" into one big bunker instead of having grass in the middle of most of them
+- random scores showing up on group scorecards for holes not yet played, different for each person in the group
+- too far away cart desync
+- water graphics - blue ground but only water up to the lowest edge
 - some of the lights are colliding with trees.
+- no lights for many of the jelling course tees
 - rainbows at night lmao
 - grouping is a little bugged? Maybe mostly when youve already played. Fix with a friends menu on a phone.
 - when setting up its kinda bugged where you stand; It should always be the same for people viewing other people, as it is for them
 - final scorecard says 10 hole 10
-- Tree leaves are solid! they should't be.
-- sound playing at same level always, no matter "where sound happens"
 
 ## **alpha roadmap**
 
@@ -37,6 +39,8 @@ When the game feels balanced, full and fun, release :D
 markdown, bugs
 
 2. **real skills and leveling system and unlocks**
+
+!!!! Simulator! Simple hub world that just consists of these and like a bus where you choose where to go.
 
 - Skills in **driver**, **woods**, **hybrids**, **long irons**, **short irons**, **wedges**.
 Your ability to shoot the different clubs - chance to miss, withd hit range.
@@ -86,6 +90,7 @@ flirting with the cart girl
 - Tournaments, some only enterable with a caddy, which should be a real person. Live and longer timed events (i.e. one entry before thursday.)
 - linux and mac 
 - player owned clubs with player made courses - endgame and expensive, revenue from players playing and making tounaments
+- having different bags affecting walking speeds differently - i.e. a smaller setup bag for par 3 courses that would allow you to walk faster.
 
 ## **story**
 

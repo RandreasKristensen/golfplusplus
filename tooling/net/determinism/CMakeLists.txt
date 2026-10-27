@@ -25,22 +25,35 @@ set(sources
   server/golfpp_module/src/server_content.cpp
   src/physics/ball_physics.cpp
   src/physics/body_collision.cpp
+  src/physics/impact.cpp
   src/physics/land_relief.cpp
+  src/physics/launch.cpp
   src/physics/collision.cpp
+  src/physics/det_math.cpp
   src/physics/flight_model.cpp
+  src/physics/cup.cpp
   src/physics/ground_contact.cpp
+  src/physics/turf_contact.cpp
   src/physics/ground_mesh.cpp
   src/physics/material_zone.cpp
   src/physics/terrain.cpp
-  src/physics/fence_collision.cpp
-  src/physics/tree_collision.cpp
+  src/physics/solid.cpp
   src/physics/wind.cpp
-  src/game/area_obstacles.cpp
-  src/game/club_loader.cpp
+  src/game/area_solids.cpp
   src/game/content_files.cpp
   src/game/course_loader.cpp
   src/game/course_world_loader.cpp
+  src/game/delivery.cpp
+  src/game/shot_setup.cpp
+  src/game/cart_seats.cpp
+  src/game/golfer.cpp
+  src/game/shot_ability.cpp
+  src/game/shot_dice.cpp
+  src/game/shot_snapshot.cpp
+  src/game/effects.cpp
   src/game/hole_loader.cpp
+  src/game/item_catalog.cpp
+  src/game/loadout.cpp
   src/game/floodlights.cpp
   src/game/hole_sign.cpp
   src/game/json_util.cpp

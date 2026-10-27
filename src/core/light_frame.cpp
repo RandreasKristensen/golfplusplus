@@ -171,16 +171,16 @@ void refresh_tree_shadows(tree_shadow_cache& cache, const game_state& game, cons
     }
     std::vector<render_blob_shadow>& blobs = cache.blobs;
     blobs.clear();
-    blobs.reserve(game.static_anchors.trees.size() + game.area.floodlight_poles.size());
-    const auto blob_at = [&](const tree_body& body, const float radius) {
-        const terrain_sample ground = sample_area(game.area, body.base);
-        blobs.push_back(render_blob_shadow{body.base, ground.normal, 1.0f, radius, shadows.blob_strength * shadows.foot_share});
+    blobs.reserve(game.static_anchors.trees.size() + game.area.floodlights.size());
+    const auto blob_at = [&](const glm::vec3& foot, const float radius) {
+        const terrain_sample ground = sample_area(game.area, foot);
+        blobs.push_back(render_blob_shadow{foot, ground.normal, 1.0f, radius, shadows.blob_strength * shadows.foot_share});
     };
     for (const tree_body& tree : game.static_anchors.trees) {
-        blob_at(tree, tree.shape.leaf_radius * shadows.tree_radius_share);
+        blob_at(tree.base, tree.shape.leaf_radius * shadows.tree_radius_share);
     }
-    for (const tree_body& pole : game.area.floodlight_poles) {
-        blob_at(pole, shadows.pole_radius);
+    for (const floodlight& light : game.area.floodlights) {
+        blob_at(light.foot, shadows.pole_radius);
     }
     cache.revision = game.static_anchors.revision;
     cache.built = true;
@@ -191,7 +191,7 @@ void add_frame_lights(render_data& data, const game_state& game, const lighting_
     data.glow = night_glow_floors(palette.colors.glow, palette.night_lights, data.lighting.night_lights);
     const night_light_style& style = palette.night_lights;
     data.lighting.lamp_glow = style.floodlight.color * style.lamp_glow * data.lighting.night_lights;
-    if (!game.hub) {
+    if (!course_started(game)) {
         return;
     }
     data.lights = night_lights(data, game, palette.night_lights);

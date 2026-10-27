@@ -22,20 +22,16 @@ _ZONE_STYLE = {
     "green": 'fill="#7bc96f" stroke="#2f7a2a" stroke-width="0.6"',
     "bunker": 'fill="#efe2b0" stroke="#b49a4a" stroke-width="0.5"',
     "water": 'fill="#7fb6e6" stroke="#2f6fa8" stroke-width="0.6"',
+    "fairway": 'fill="#b8dfa0" stroke="#7aa860" stroke-width="0.4"',
 }
 _LINE_COLOURS = ["#c0392b", "#1f5fa8", "#7d3c98", "#b9770e", "#117a65", "#a93226"]
 _PANEL_WIDTH = 520
 
 
-def _zone_svg(zone, to_px, scale) -> str:
-    cx, cy = to_px(zone["center"])
-    rx, ry = zone["radii"][0] * scale, zone["radii"][1] * scale
-    angle = math.degrees(zone["rotation"])
+def _zone_svg(zone, to_px) -> str:
     style = _ZONE_STYLE.get(zone["type"], 'fill="#ccc"')
-    # x/z map straight to SVG x/y (z is south, SVG y is down), so the game's
-    # turn about the vertical is the same SVG rotation.
-    return (f'<ellipse cx="{cx:.1f}" cy="{cy:.1f}" rx="{rx:.1f}" ry="{ry:.1f}" '
-            f'transform="rotate({angle:.1f} {cx:.1f} {cy:.1f})" {style}/>')
+    points = " ".join(f"{x:.1f},{y:.1f}" for x, y in (to_px(q) for q in zone["outline"]))
+    return f'<polygon points="{points}" {style}/>'
 
 
 def render(course_name: str, placed: list[dict], scorecard: dict | None,
@@ -47,9 +43,8 @@ def render(course_name: str, placed: list[dict], scorecard: dict | None,
             xs.append(q[0])
             zs.append(q[1])
         for zone in p["zones"]:
-            r = max(zone["radii"])
-            xs += [zone["center"][0] - r, zone["center"][0] + r]
-            zs += [zone["center"][1] - r, zone["center"][1] + r]
+            xs += [q[0] for q in zone["outline"]]
+            zs += [q[1] for q in zone["outline"]]
     if not xs:
         xs, zs = [0.0, 100.0], [0.0, 100.0]
     margin = 60.0
@@ -76,8 +71,8 @@ def render(course_name: str, placed: list[dict], scorecard: dict | None,
 
     # Zones first, so lines and labels sit on top.
     for p in placed:
-        for zone in sorted(p["zones"], key=lambda z: {"water": 0, "green": 1, "bunker": 2}.get(z["type"], 3)):
-            out.append(_zone_svg(zone, to_px, scale))
+        for zone in sorted(p["zones"], key=lambda z: {"fairway": 0, "water": 1, "green": 2, "bunker": 3}.get(z["type"], 4)):
+            out.append(_zone_svg(zone, to_px))
 
     # Walks from each green to the next tee.
     for a, b in zip(placed, placed[1:]):

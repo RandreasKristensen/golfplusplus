@@ -32,4 +32,6 @@ struct render_fences {
 };
 
 // Posts in `post_color`.
-render_fences build_render_fences(const play_area& area, std::uint64_t revision, const glm::vec3& post_color);
+// `pole_radius`: fence.pole_radius; thin poles are drawn a little wider.
+render_fences build_render_fences(const play_area& area, std::uint64_t revision, const glm::vec3& post_color,
+                                  float pole_radius);

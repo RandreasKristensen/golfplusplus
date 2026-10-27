@@ -1,8 +1,8 @@
 #pragma once
 
 // This frame's sky: the shared clock (shared_unix_ms in game/mode_dispatch.h)
-// on the tuning's sky timeline, on the course's date over its world (hub and
-// holes alike), lit by the lighting palette. Also the developer's hold on it:
+// on the tuning's sky timeline, on the course's date over its world, lit by
+// the lighting palette. Also the developer's hold on it:
 // GOLFPP_GAME_TIME pins the time of day (and the date), and T scrubs the time
 // while the Ctrl overlay shows (docs/performance.md). GL-free.
 

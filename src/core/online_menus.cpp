@@ -350,6 +350,7 @@ bool is_online_flow(const startup_flow flow) {
     case startup_flow::settings:
     case startup_flow::course_picker:
     case startup_flow::exit_prompt:
+    case startup_flow::natural_shape_picker:
     case startup_flow::playing:
         return false;
     }

@@ -1,0 +1,20 @@
+{
+  "source": "golf++ design (docs/plan.md 5.2.2): the bag at skill 99 with stock setups, about 5% longer than the TrackMan tour averages so the driver totals about 300 m; calm air, sea level, 15 C, a firm fairway. Not a measurement: what the club specs are fitted to.",
+  "tolerance_share": 0.04,
+  "clubs": [
+    { "label": "DR", "static_loft": 10.5, "carry": 270, "total": 300 },
+    { "label": "3W", "static_loft": 15.0, "carry": 240, "total": 260 },
+    { "label": "5W", "static_loft": 18.0, "carry": 225, "total": 240 },
+    { "label": "4H", "static_loft": 22.0, "carry": 212, "total": 222 },
+    { "label": "4I", "static_loft": 21.0, "carry": 202, "total": 210 },
+    { "label": "5I", "static_loft": 24.0, "carry": 192, "total": 199 },
+    { "label": "6I", "static_loft": 27.0, "carry": 180, "total": 186 },
+    { "label": "7I", "static_loft": 31.0, "carry": 168, "total": 173 },
+    { "label": "8I", "static_loft": 35.0, "carry": 156, "total": 160 },
+    { "label": "9I", "static_loft": 40.0, "carry": 144, "total": 147 },
+    { "label": "PW", "static_loft": 45.0, "carry": 132, "total": 134 },
+    { "label": "GW", "static_loft": 50.0, "carry": 118, "total": 120 },
+    { "label": "SW", "static_loft": 56.0, "carry": 102, "total": 103 },
+    { "label": "LW", "static_loft": 60.0, "carry": 86,  "total": 87 }
+  ]
+}

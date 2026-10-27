@@ -5,7 +5,9 @@
 // whether that is an error. Reading files is game/content_files.h.
 
 #include <cstdint>
+#include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -35,3 +37,12 @@ std::optional<std::vector<glm::vec3>> json_vec3_array(const json& value);
 std::optional<glm::vec3> json_vec3(const json& object, const char* key);
 // The string elements of an array member; other elements are skipped.
 std::vector<std::string> json_string_array(const json& object, const char* key);
+
+// Catalog files that may name a `base` file of theirs to build on: file
+// `name` of `files` (by name) laid over its base's, resolved through as
+// many levels as are named. Each object member named in `merged_keys` merges
+// into the base's member by member; any other member replaces the base's.
+// The result has no `base`. nullopt for a missing file or base, a cycle, or
+// a `kind` that differs from its base's.
+std::optional<json> json_with_base(const std::string& name, const std::map<std::string, json>& files,
+                                   const std::vector<std::string>& merged_keys);

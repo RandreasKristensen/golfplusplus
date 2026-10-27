@@ -19,7 +19,6 @@ struct camera_view {
 
 enum class camera_rig {
     walking,  // on foot and in the cart
-    aiming,
     addressing,
     following_shot
 };

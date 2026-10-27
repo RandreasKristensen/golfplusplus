@@ -150,4 +150,5 @@ private:
     std::map<std::uint64_t, std::string> completed_courses_;
     std::map<std::uint64_t, collected_state> collected_;
     std::map<std::uint64_t, std::string> world_flags_;
+    std::map<std::uint64_t, active_effect> effects_;
 };

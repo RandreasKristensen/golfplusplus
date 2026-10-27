@@ -14,6 +14,7 @@ pub struct GolfCartRow {
     pub z: f32,
     pub yaw: f32,
     pub passenger: u64,
+    pub condition: u8,
 }
 
 impl __sdk::InModule for GolfCartRow {
@@ -31,6 +32,7 @@ pub struct GolfCartRowCols {
     pub z: __sdk::__query_builder::Col<GolfCartRow, f32>,
     pub yaw: __sdk::__query_builder::Col<GolfCartRow, f32>,
     pub passenger: __sdk::__query_builder::Col<GolfCartRow, u64>,
+    pub condition: __sdk::__query_builder::Col<GolfCartRow, u8>,
 }
 
 impl __sdk::__query_builder::HasCols for GolfCartRow {
@@ -44,6 +46,7 @@ impl __sdk::__query_builder::HasCols for GolfCartRow {
             z: __sdk::__query_builder::Col::new(table_name, "z"),
             yaw: __sdk::__query_builder::Col::new(table_name, "yaw"),
             passenger: __sdk::__query_builder::Col::new(table_name, "passenger"),
+            condition: __sdk::__query_builder::Col::new(table_name, "condition"),
         }
     }
 }

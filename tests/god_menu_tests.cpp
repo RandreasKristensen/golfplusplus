@@ -4,6 +4,7 @@
 #include "game/mode_dispatch.h"
 #include "test_support.h"
 
+#include <algorithm>
 #include <optional>
 
 namespace {
@@ -38,7 +39,7 @@ TEST_CASE("the god menu opens only when enabled, and its rows wrap") {
     REQUIRE(menu.open);
     god_menu_keys up;
     up.up = true;
-    CHECK(update_god_menu(menu, sky_controls{}, up, breezy(), 12.0f).menu.row == god_menu_row::wetness);
+    CHECK(update_god_menu(menu, sky_controls{}, up, breezy(), 12.0f).menu.row == god_menu_row::solids);
 }
 
 TEST_CASE("changing a live row starts from the live value, and backspace lets it run live again") {
@@ -142,4 +143,56 @@ TEST_CASE("run_god_menu puts the held weather into play offline") {
     menu.wetness.reset();
     run_god_menu(menu, sky, state, god_menu_keys{});
     CHECK(!state.weather_override.has_value());
+}
+
+TEST_CASE("the god menu shows every solid near me as outlines, and hides them again") {
+    god_menu_state menu;
+    menu.enabled = true;
+    menu.open = true;
+    menu.row = god_menu_row::solids;
+    menu = update_god_menu(menu, sky_controls{}, pressed_right(), breezy(), 12.0f).menu;
+    CHECK(menu.show_solids);
+
+    const game_state state = started_hole();
+    const std::vector<world_segment> shown = god_solid_outlines(menu, state, state.player.position);
+    CHECK(!shown.empty());
+    for (const world_segment& edge : shown) {
+        CHECK(horizontal_distance(edge.first, state.player.position) < 80.0f);
+    }
+    god_menu_keys live;
+    live.live = true;
+    menu = update_god_menu(menu, sky_controls{}, live, breezy(), 12.0f).menu;
+    CHECK(!menu.show_solids);
+    CHECK(god_solid_outlines(menu, state, state.player.position).empty());
+}
+
+TEST_CASE("a solid's outline: a box its twelve edges, an upright cylinder its two rings joined, a cone to its tip") {
+    solid box;
+    box.shape = solid_shape::box;
+    box.base = glm::vec3(1.0f, 0.0f, 2.0f);
+    box.along = glm::vec3(0.0f, 0.0f, 1.0f);
+    box.half_length = 2.0f;
+    box.half_width = 1.0f;
+    box.height = 1.5f;
+    const std::vector<world_segment> edges = solid_outline(box);
+    CHECK(edges.size() == 12U);
+    float top = 0.0f;
+    for (const world_segment& edge : edges) {
+        top = std::max({top, edge.first.y, edge.second.y});
+        CHECK(std::abs(edge.first.z - box.base.z) <= 2.0001f);
+        CHECK(std::abs(edge.first.x - box.base.x) <= 1.0001f);
+    }
+    CHECK(near(top, 1.5f));
+
+    solid trunk;
+    trunk.shape = solid_shape::cylinder;
+    trunk.radius = 0.3f;
+    trunk.height = 4.0f;
+    for (const world_segment& edge : solid_outline(trunk)) {
+        CHECK(near(horizontal_distance(edge.first, trunk.base), 0.3f, 0.0001f));
+    }
+    solid leaves = trunk;
+    leaves.shape = solid_shape::cone;
+    const std::vector<world_segment> cone = solid_outline(leaves);
+    CHECK(near(cone.back().second, glm::vec3(0.0f, 4.0f, 0.0f)));
 }

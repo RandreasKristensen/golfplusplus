@@ -1,8 +1,8 @@
 #include "renderer/world_marker_batch.h"
 
 #include "physics/vector_math.h"
+#include "renderer/camera_local.h"
 #include "renderer/primitive_mesh.h"
-#include "renderer/cart_batch.h"
 #include "renderer/remote_avatar_batch.h"
 
 #include <glm/common.hpp>
@@ -28,11 +28,17 @@ constexpr float tee_side_bury = 0.2f;
 constexpr float tee_mat_share_across = 0.7f;
 constexpr float tee_mat_share_along = 0.75f;
 constexpr float collectible_scale = 1.2f;
+// The flagstick as drawn: thicker than a real one so it reads at a distance.
+constexpr float pole_half_width = 0.028f;
 // A flag: its length out from the pole and half its height; in calm it
 // hangs this far from straight down; how much of a wave runs along it, and
 // how far its wave's phase moves per metre across the course.
 constexpr float flag_length = 0.72f;
 constexpr float flag_half_height = 0.24f;
+// A laid-down flagstick: a flat strip seen from above, drawn this far over
+// the green so it never sinks into it.
+constexpr float lying_half_width = 0.018f;
+constexpr float lying_lift = 0.01f;
 constexpr float flag_hang_radians = 0.35f;
 constexpr float flag_waves = 0.75f;
 constexpr float flag_phase_per_metre = 0.37f;
@@ -46,14 +52,6 @@ float axis_x_yaw_radians(const glm::vec3& axis) {
         flat = glm::normalize(flat);
     }
     return std::atan2(-flat.z, flat.x);
-}
-
-glm::vec3 rotate_top_down_ccw_90_y(const glm::vec3& axis) {
-    glm::vec3 rotated(-axis.z, 0.0f, axis.x);
-    if (glm::length(rotated) <= 0.0001f) {
-        return glm::vec3(1.0f, 0.0f, 0.0f);
-    }
-    return glm::normalize(rotated);
 }
 }
 
@@ -176,12 +174,6 @@ glm::mat4 pin_cup_model(const glm::vec3& position, const float cup_scale) {
                       glm::vec3(cup_scale, 1.0f, cup_scale));
 }
 
-glm::mat4 aim_dot_model(const glm::vec3& point, const std::size_t index) {
-    const float scale = 0.35f + static_cast<float>(index % 3) * 0.04f;
-    return glm::scale(glm::translate(glm::mat4(1.0f), point + glm::vec3(0.0f, 0.05f, 0.0f)),
-                      glm::vec3(scale, 1.0f, scale));
-}
-
 glm::mat4 panel_model(const glm::vec3& center, const float yaw_degrees, const glm::vec3& scale) {
     glm::mat4 model = glm::translate(glm::mat4(1.0f), center);
     model = glm::rotate(model, glm::radians(yaw_degrees), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -262,7 +254,7 @@ void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, 
                           const marker_colors& colors, const glow_floors& glow, const flag_pose& flag) {
     const float pin_height = std::max(0.1f, pin_visual_height_meters);
     const glm::vec3 pin_base = position + glm::vec3(0.0f, pin_height * 0.5f, 0.0f);
-    const glm::vec3 pole_scale(0.045f, pin_height * 0.5f, 1.0f);
+    const glm::vec3 pole_scale(pole_half_width, pin_height * 0.5f, 1.0f);
     batch.append_quad(panel_model(pin_base, 0.0f, pole_scale), colors.pin_pole, glow.pin_pole, true);
     batch.append_quad(panel_model(pin_base, 90.0f, pole_scale), colors.pin_pole, glow.pin_pole, true);
 
@@ -287,86 +279,52 @@ void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, 
                             true);
 }
 
-void append_aim_dots(world_marker_batch& batch, const std::vector<glm::vec3>& points, const marker_colors& colors,
-                     const glow_floors& glow) {
-    for (std::size_t i = 0; i < points.size(); ++i) {
-        batch.append_disc(aim_dot_model(points[i], i), colors.aim_dot, glow.aim_dot, true);
-    }
+void append_lying_flagstick(world_marker_batch& batch, const glm::vec3& foot, const glm::vec3& tip,
+                            const marker_colors& colors, const glow_floors& glow) {
+    const glm::vec3 along = safe_normalize(tip - foot, glm::vec3(1.0f, 0.0f, 0.0f));
+    const glm::vec3 across = safe_normalize(glm::cross(world_up, along), glm::vec3(0.0f, 0.0f, 1.0f)) * lying_half_width;
+    const glm::vec3 lift = world_up * lying_lift;
+    batch.append_world_quad(foot + lift - across, tip + lift - across, tip + lift + across, foot + lift + across, colors.pin_pole,
+                            glow.pin_pole, true);
+    // The flag lies flat by the tip, out to one side.
+    const glm::vec3 side = glm::normalize(across);
+    const glm::vec3 hoist = tip - along * (2.0f * flag_half_height) + lift * 2.0f;
+    batch.append_world_quad(hoist, tip + lift * 2.0f, tip + lift * 2.0f + side * flag_length,
+                            hoist + side * flag_length, colors.flag, glow.flag, true);
 }
 
 namespace {
-constexpr float club_shaft_length = 1.10f;
-// The shaft's lean back from straight down at address, and how much further
-// it swings back at full power.
-constexpr float club_address_angle_degrees = 12.0f;
-constexpr float club_backswing_degrees = 60.0f;
-// Half the height of the club head's tallest panel: at address the head's
-// bottom rests on the ground under the ball.
-constexpr float club_head_half_height = 0.045f;
+// The stick and the face's line, wide enough to read at the picture's
+// lines, lifted off the ground they lie on; the shoes' size.
+constexpr float stick_half_width = 0.012f;
+constexpr float face_line_half_width = 0.008f;
+constexpr float tick_half_length = 0.05f;
+constexpr float mark_lift = 0.004f;
+constexpr glm::vec3 shoe_half_size(0.05f, 0.045f, 0.14f);
 
-// The club's frame at a ball: the side it swings back to, and the axis its head lies along.
-struct club_axes {
-    glm::vec3 swing_side{0.0f};
-    glm::vec3 head_axis{0.0f};
-};
+// A flat strip on the ground from `a` to `b`.
+void append_ground_strip(world_marker_batch& batch, const glm::vec3& a, const glm::vec3& b, const float half_width,
+                         const glm::vec3& color, const float glow) {
+    const glm::vec3 across = yaw_left(safe_normalize(horizontal(b - a), glm::vec3(0.0f, 0.0f, 1.0f))) * half_width;
+    const glm::vec3 lift = world_up * mark_lift;
+    batch.append_world_quad(a - across + lift, b - across + lift, b + across + lift, a + across + lift, color, glow, true);
+}
+}
 
-club_axes swing_club_axes(const float aim_angle) {
-    const glm::vec3 forward = yaw_direction(aim_angle);
-    glm::vec3 player_side = glm::normalize(glm::cross(world_up, forward));
-    if (glm::length(player_side) <= 0.0001f) {
-        player_side = glm::vec3(1.0f, 0.0f, 0.0f);
+void append_address_marks(world_marker_batch& batch, const render_address_marks& marks, const scene_colors& colors) {
+    const marker_colors& markers = colors.markers;
+    append_ground_strip(batch, marks.stick_back, marks.stick_front, stick_half_width, markers.alignment_stick,
+                        colors.glow.alignment_stick);
+    const glm::vec3 across = yaw_left(safe_normalize(horizontal(marks.stick_front - marks.stick_back), glm::vec3(0.0f, 0.0f, 1.0f)));
+    append_ground_strip(batch, marks.stock_tick - across * tick_half_length, marks.stock_tick + across * tick_half_length,
+                        stick_half_width, markers.alignment_stick, colors.glow.alignment_stick);
+    append_ground_strip(batch, marks.face_heel, marks.face_toe, face_line_half_width, markers.face_line, colors.glow.face_line);
+    for (const glm::vec3& foot : {marks.lead_foot, marks.trail_foot}) {
+        // Toes towards the ball.
+        const glm::vec3 toes = safe_normalize(horizontal(marks.ball - foot), glm::vec3(0.0f, 0.0f, 1.0f));
+        const glm::mat4 shoe = posed_model(foot + world_up * shoe_half_size.y, world_up, toes, shoe_half_size);
+        batch.append_sphere(shoe, colors.figures.shoes, 0.0f, true);
     }
-    return club_axes{-rotate_top_down_ccw_90_y(player_side), rotate_top_down_ccw_90_y(forward)};
-}
-}
-
-glm::vec3 swing_club_grip(const glm::vec3& ball_position, const float ball_visual_radius_meters, const float aim_angle) {
-    const club_axes axes = swing_club_axes(aim_angle);
-    const float ball_radius = std::max(0.02f, ball_visual_radius_meters);
-    const float ground_y = ball_position.y - ball_radius;
-    glm::vec3 grip = ball_position + axes.swing_side * (ball_radius + 0.10f) - axes.head_axis * 0.36f;
-    grip.y = ground_y + club_head_half_height + club_shaft_length * std::cos(glm::radians(club_address_angle_degrees));
-    return grip;
-}
-
-void append_swing_club(world_marker_batch& batch,
-                       const glm::vec3& ball_position,
-                       const float ball_visual_radius_meters,
-                       const float aim_angle,
-                       const float swing_power,
-                       const marker_colors& colors) {
-    const float power = std::clamp(swing_power, 0.0f, 1.0f);
-    const glm::vec3 up = world_up;
-    const club_axes axes = swing_club_axes(aim_angle);
-    const glm::vec3 club_swing_side = axes.swing_side;
-    const glm::vec3 club_head_axis = axes.head_axis;
-    const glm::vec3 club_face_axis = club_head_axis;
-
-    const float shaft_length = club_shaft_length;
-    const float swing_angle = glm::radians(club_address_angle_degrees + power * club_backswing_degrees);
-    const glm::vec3 grip_position = swing_club_grip(ball_position, ball_visual_radius_meters, aim_angle);
-
-    const glm::vec3 shaft_direction = glm::normalize(club_swing_side * std::sin(swing_angle) -
-                                                     up * std::cos(swing_angle));
-    const glm::vec3 shaft_center = grip_position + shaft_direction * (shaft_length * 0.5f);
-    const glm::vec3 head_center = grip_position + shaft_direction * shaft_length;
-
-    batch.append_quad(world_panel_model(shaft_center, club_swing_side, swing_angle, glm::vec2(0.018f, shaft_length * 0.5f)),
-                      colors.club_shaft,
-                      no_glow,
-                      true);
-    batch.append_quad(world_panel_model(head_center + club_head_axis * 0.03f, club_face_axis, 0.0f, glm::vec2(0.16f, 0.040f)),
-                      colors.club_face,
-                      no_glow,
-                      true);
-    batch.append_quad(world_panel_model(head_center + club_head_axis * 0.055f, -club_face_axis, 0.0f, glm::vec2(0.14f, club_head_half_height)),
-                      colors.club_back,
-                      no_glow,
-                      true);
-    batch.append_quad(world_panel_model(head_center - club_swing_side * 0.02f, club_face_axis, 0.0f, glm::vec2(0.13f, 0.035f)),
-                      colors.club_sole,
-                      no_glow,
-                      true);
 }
 
 void build_tee_box_batch(world_marker_batch& batch, const std::vector<tee_box>* boxes, const marker_colors& colors) {
@@ -378,8 +336,7 @@ void build_tee_box_batch(world_marker_batch& batch, const std::vector<tee_box>* 
     }
 }
 
-void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors,
-                              const prop_set& props) {
+void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors) {
     const marker_colors& marks = colors.markers;
     batch.clear();
 
@@ -387,9 +344,20 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
     const auto markers = [&none](const std::vector<glm::vec3>* positions) -> const std::vector<glm::vec3>& {
         return positions != nullptr ? *positions : none;
     };
+    const auto flag_out = [&](const glm::vec3& cup) {
+        const std::vector<glm::vec3>& out = markers(scene.flags_out);
+        return std::find(out.begin(), out.end(), cup) != out.end();
+    };
     if (scene.show_hole) {
         append_pin_cup(batch, scene.pin_position, scene.cup_radius_meters, marks, colors.glow);
-        append_pin_flagstick(batch, scene.pin_position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag);
+        if (!flag_out(scene.pin_position)) {
+            append_pin_flagstick(batch, scene.pin_position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag);
+        }
+    }
+    if (scene.lying_flags != nullptr) {
+        for (const auto& [foot, tip] : *scene.lying_flags) {
+            append_lying_flagstick(batch, foot, tip, marks, colors.glow);
+        }
     }
 
     for (const glm::vec3& position : markers(scene.collectible_markers)) {
@@ -400,20 +368,13 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
         append_pin_cup(batch, position, scene.cup_radius_meters, marks, colors.glow);
     }
     for (const glm::vec3& position : pins) {
-        append_pin_flagstick(batch, position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag);
+        if (!flag_out(position)) {
+            append_pin_flagstick(batch, position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag);
+        }
     }
 
-    if (scene.show_aim_indicator && scene.aim_arc_points != nullptr) {
-        append_aim_dots(batch, *scene.aim_arc_points, marks, colors.glow);
-    }
-    if (scene.show_swing_club) {
-        append_swing_club(batch, scene.ball_position, scene.ball_visual_radius_meters, scene.aim_angle, scene.swing_power,
-                          marks);
-    }
-    if (scene.carts != nullptr) {
-        for (const render_cart& cart : *scene.carts) {
-            append_cart_model(batch, cart, scene.cart_seat_offset, props.golf_cart);
-        }
+    if (scene.address_marks != nullptr) {
+        append_address_marks(batch, *scene.address_marks, colors);
     }
     if (scene.remote_avatars != nullptr) {
         for (const render_remote_avatar& avatar : *scene.remote_avatars) {

@@ -1,5 +1,7 @@
 #include "core/god_menu.h"
 
+#include "game/area_solids.h"
+
 #include "game/mode_dispatch.h"
 #include "game/text_ids.h"
 #include "physics/vector_math.h"
@@ -18,6 +20,8 @@ constexpr float wind_speed_step = 0.5f;
 constexpr float max_wind_speed = 20.0f;
 constexpr float wind_heading_step_degrees = 22.5f;
 constexpr float wetness_step = 0.1f;
+// Solids are outlined this far round the eye (metres).
+constexpr float god_solids_reach = 60.0f;
 constexpr float amount_step = 0.1f;
 constexpr float hours_per_day = 24.0f;
 
@@ -76,6 +80,9 @@ void change_row(god_menu_state& menu, sky_controls& sky, const int by, const wea
     case god_menu_row::wetness:
         menu.wetness = clamp01(menu.wetness.value_or(now.wetness) + wetness_step * step);
         break;
+    case god_menu_row::solids:
+        menu.show_solids = !menu.show_solids;
+        break;
     }
 }
 
@@ -108,6 +115,9 @@ void make_live(god_menu_state& menu, sky_controls& sky) {
         break;
     case god_menu_row::wetness:
         menu.wetness.reset();
+        break;
+    case god_menu_row::solids:
+        menu.show_solids = false;
         break;
     }
 }
@@ -219,6 +229,8 @@ render_god_menu god_menu_view(const god_menu_state& menu,
     view.rows.push_back(row_view(text, text_god_wetness,
                                  format_text(text, text_god_percent, {{"percent", number_text("%.0f", shown.wetness * 100.0f)}}),
                                  offline && menu.wetness.has_value(), selected(god_menu_row::wetness)));
+    view.rows.push_back(row_view(text, text_god_solids, lookup_text(text, menu.show_solids ? text_god_on : text_god_off),
+                                 menu.show_solids, selected(god_menu_row::solids)));
     view.note = lookup_text(text, online ? text_god_online : text_god_keys);
     return view;
 }
@@ -245,6 +257,28 @@ void run_god_menu(god_menu_state& menu, sky_controls& sky, game_state& game, con
     menu = next.menu;
     sky = next.sky;
     game.weather_override = god_weather(menu, live, game.tuning.weather);
+}
+
+std::vector<world_segment> god_solid_outlines(const god_menu_state& menu, const game_state& game, const glm::vec3& eye) {
+    std::vector<world_segment> outlines;
+    if (!menu.show_solids) {
+        return outlines;
+    }
+    const play_area& area = game.area;
+    const glm::vec3 reach(god_solids_reach, 0.0f, god_solids_reach);
+    const auto add = [&](const solid& thing) {
+        const std::vector<world_segment> edges = solid_outline(thing);
+        outlines.insert(outlines.end(), edges.begin(), edges.end());
+    };
+    for (const std::uint32_t index : solids_near(area.solids_grid, eye - reach, eye + reach, 0.0f)) {
+        add(area.solids[index]);
+    }
+    for (const solid& stick : flagstick_solids(area.cups, game.flags_in, game.tuning)) {
+        if (horizontal_distance(stick.base, eye) <= god_solids_reach) {
+            add(stick);
+        }
+    }
+    return outlines;
 }
 
 render_god_menu god_menu_frame_view(const god_menu_state& menu, const sky_controls& sky, const game_state& game,

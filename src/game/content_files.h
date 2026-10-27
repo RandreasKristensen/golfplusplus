@@ -6,10 +6,10 @@
 // functions feed the game the same text from assets/. None of them throw: an
 // unreadable file gives nullopt (or an empty result).
 
-#include "game/club_definition.h"
 #include "game/course_definition.h"
 #include "game/course_world_definition.h"
 #include "game/hole_data.h"
+#include "game/item_catalog.h"
 
 #include <cstddef>
 #include <filesystem>
@@ -32,10 +32,10 @@ std::vector<std::string> json_texts_in_directory(const std::filesystem::path& di
 // Every *.json file in `directory` and the folders in it, sorted by path.
 std::vector<std::filesystem::path> json_files_under(const std::filesystem::path& directory);
 
-std::optional<hole_data> load_hole_from_file(const std::string& path);
+// Every item under `asset_root`'s items_path (parse_item_catalog).
+item_catalog_load_result load_items(const std::string& asset_root);
 
-// Every valid club in `directory`, in bag order (parse_clubs_from_texts).
-std::vector<club_definition> load_clubs_from_directory(const std::string& directory);
+std::optional<hole_data> load_hole_from_file(const std::string& path);
 
 // The course in `folder` (relative to `asset_root`), its references made
 // relative to the asset root (course_in_folder).

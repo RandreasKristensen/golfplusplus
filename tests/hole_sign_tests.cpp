@@ -111,15 +111,16 @@ TEST_CASE("the line of play runs tee, interior control points, pin") {
     CHECK(near(polyline_length({glm::vec3(0.0f), glm::vec3(3.0f, 7.0f, 4.0f)}), 5.0f));
 }
 
-TEST_CASE("every hole of a hub course gets a sign at its placed tee, and posts that stop shots") {
+TEST_CASE("every hole of a course gets a sign at its placed tee, and posts that stop shots") {
     const game_state state = started_game(fixture_hub_course());
-    REQUIRE(state.hub);
+    REQUIRE(course_started(state));
     REQUIRE(state.area.signs.size() == state.course_holes.size());
-    CHECK(state.area.sign_posts.size() == state.area.signs.size() * 2U);
     for (std::size_t i = 0; i < state.area.signs.size(); ++i) {
         const hole_sign& sign = state.area.signs[i];
         CHECK(sign.area_hole == i);
-        CHECK(near(sign.line_of_play.front(), state.hub->markers[i].tee_position, 0.001f));
+        CHECK(solid_stands_at(state.area, solid_kind::pole, sign.post_feet[0]));
+        CHECK(solid_stands_at(state.area, solid_kind::pole, sign.post_feet[1]));
+        CHECK(near(sign.line_of_play.front(), state.holes[i].tee_position, 0.001f));
         CHECK(on_tee_box(state.area.tee_boxes[i], sign.post_feet[0]));
         CHECK(on_tee_box(state.area.tee_boxes[i], sign.post_feet[1]));
     }
@@ -129,18 +130,23 @@ TEST_CASE("a ball bounces off a hole sign's post") {
     game_state state = started_hole();
     play_hole(state, wide_hole(4.0f, 4.0f));
     still_air(state);
-    REQUIRE(state.area.sign_posts.size() == 2U);
-    const tree_body& post = state.area.sign_posts.front();
-    CHECK(post.shape.leaf_height == 0.0f);
-    CHECK(near(post.base.y + post.shape.trunk_height, hole_sign_top(state.area.signs.front())));
+    const std::vector<solid> poles = solids_of(state.area, solid_kind::pole);
+    const hole_sign& sign = state.area.signs.front();
+    const auto found = std::find_if(poles.begin(), poles.end(), [&](const solid& pole) {
+        return horizontal_distance(pole.base, sign.post_feet[0]) < 0.001f;
+    });
+    REQUIRE(found != poles.end());
+    const solid& post = *found;
+    CHECK(post.stops_ball);
+    CHECK(near(post.base.y + post.height, hole_sign_top(sign)));
 
-    ball_state ball = state.ball;
+    ball_state ball = still_ball(state);
     ball.radius = 0.1f;
     ball.position = post.base + glm::vec3(0.0f, 0.5f, -0.12f);
     ball.velocity = glm::vec3(0.0f, 0.0f, 3.0f);
-    const shot_step step = step_shot(ball, sample_area(state.area, ball.position), current_shot_course(state),
-                                     state.clubs.front().stats, state.tuning, 0.016f);
-    CHECK(step.hit_tree);
+    const shot_step step =
+        step_shot(ball, sample_area(state.area, ball.position), current_shot_course(state), state.tuning, 0.016f);
+    CHECK(step.hit == shot_event_kind::pole_hit);
     CHECK(step.ball.velocity.z < 0.0f);
 }
 
@@ -175,7 +181,7 @@ TEST_CASE("a hole sign's face shows the hole in map inks and its labels fit") {
     draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 18, 5, 999), area, area.signs.front(),
                         test_scene_colors().ground);
     CHECK(batch.truncated_text_count == 0U);
-    const rgba_image face = rasterize_overlay_batch(batch, test_props().hole_sign.color("board"));
+    const rgba_image face = rasterize_overlay_batch(batch, test_props().at("hole_sign").color("board"));
     CHECK(face.width == hole_sign_face_width);
     CHECK(face.height == hole_sign_face_height);
     CHECK(count_texels(face, course_map_ink(terrain_material_color(test_scene_colors().ground, terrain_material::fairway))) > 20U);
@@ -186,22 +192,22 @@ TEST_CASE("render hole signs are rebuilt only when the signs change") {
     game_state state = started_game(fixture_hub_course());
     const text_assets& text = shipped_text_assets();
     render_hole_signs signs;
-    CHECK(refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, test_scene_colors(), test_props().hole_sign, 1));
+    CHECK(refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, test_scene_colors(), test_props().at("hole_sign"), 1));
     CHECK(signs.revision == 1U);
-    REQUIRE(start_hub_hole(state, 1));
-    CHECK(!refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, test_scene_colors(), test_props().hole_sign, 2));
+    REQUIRE(tee_up(state, 1, false));
+    CHECK(!refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, test_scene_colors(), test_props().at("hole_sign"), 2));
     CHECK(signs.revision == 1U);
 
     std::vector<hole_sign_text> renumbered = hole_sign_texts(state);
     renumbered.front().par += 1;
-    CHECK(refresh_render_hole_signs(signs, state.area, renumbered, text, test_scene_colors(), test_props().hole_sign, 3));
+    CHECK(refresh_render_hole_signs(signs, state.area, renumbered, text, test_scene_colors(), test_props().at("hole_sign"), 3));
     CHECK(signs.revision == 3U);
 }
 
 TEST_CASE("render hole signs carry a face and a model per sign, numbered by course hole") {
     game_state state = started_game(fixture_hub_course());
     const render_hole_signs signs =
-        build_render_hole_signs(state.area, hole_sign_texts(state), shipped_text_assets(), test_scene_colors(), test_props().hole_sign, 7);
+        build_render_hole_signs(state.area, hole_sign_texts(state), shipped_text_assets(), test_scene_colors(), test_props().at("hole_sign"), 7);
     CHECK(signs.revision == 7U);
     REQUIRE(signs.signs.size() == state.area.signs.size());
     CHECK(signs.truncated_text_count == 0U);
@@ -307,7 +313,7 @@ TEST_CASE("a hole sign's map is framed on its hole alone and shows the whole cou
     const text_assets& text = shipped_text_assets();
     overlay_batch batch;
     draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 4, 120), crowded, sign, test_scene_colors().ground);
-    const rgba_image drawn = rasterize_overlay_batch(batch, test_props().hole_sign.color("board"));
+    const rgba_image drawn = rasterize_overlay_batch(batch, test_props().at("hole_sign").color("board"));
     CHECK(count_texels(drawn, course_map_material_ink(test_scene_colors().ground, terrain_material::bunker)) > 0U);
     CHECK(count_texels(drawn, course_map_tree_ink) == 1U);
     CHECK(count_texels(drawn, hole_sign_map_ink(ground, *own_fairway)) > 20U);

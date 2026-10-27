@@ -6,15 +6,26 @@
 // (play_shot), whatever the frame rate.
 
 #include "game/club_definition.h"
+#include "game/course_definition.h"
+#include "game/delivery.h"
+#include "game/golfer.h"
 #include "game/game_tuning.h"
 #include "game/play_area.h"
 #include "game/reward_rules.h"
+#include "game/shot_dice.h"
+#include "game/shot_setup.h"
 #include "game/weather.h"
 #include "physics/ball_state.h"
+#include "physics/flight_model.h"
+#include "physics/impact.h"
+#include "physics/launch.h"
+#include "physics/solid.h"
 #include "physics/terrain.h"
-#include "physics/tree_collision.h"
+#include "physics/turf_contact.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,34 +38,58 @@ inline constexpr float shot_step_seconds = 1.0f / 120.0f;
 inline constexpr int shot_max_steps = 120 * 60;
 inline constexpr int shot_steps_per_trajectory_point = 2;
 
-// Everything the player chose for a shot.
-struct shot_input {
-    glm::vec3 ball_start{0.0f};
-    float aim_angle = 0.0f;  // see yaw_direction in physics/vector_math.h
-    std::string club_id;
-    float power = 0.0f;  // swing meter power, clamped to [swing.min_power, 1]
-    bool cigarette_active = false;
-    // UTC milliseconds when it was hit, which pick the weather it flies in
-    // (shot_course::weather); online the server's clock as I estimate it.
-    std::int64_t shot_at = 0;
-};
-
 // The hole a shot is played on, in play-area coordinates.
 struct shot_hole {
-    glm::vec3 pin{0.0f};  // the cup centre, on the terrain
+    glm::vec3 pin{0.0f};    // the cup centre, on the terrain
+    std::size_t index = 0;  // its cup in play_area::cups
 };
 
 // What a shot plays on, borrowed for one simulation.
 struct shot_course {
-    const play_area& area;  // its hole signs' posts, fences and floodlight poles are hit too
-    const std::vector<tree_body>& trees;  // standing on `area` (static_anchor_cache::trees)
+    const play_area& area;  // the ball meets its ground, its solids and its cups
     shot_hole hole;
     weather_state weather;  // the course's at the shot's shot_at, for the whole flight
+    // Metres above sea level (course_definition's air): with the weather's
+    // temperature, how thin the air is.
+    float elevation = 0.0f;
+    float green_stimp_feet = 0.0f;  // the course's greens
+    // What the ball meets besides the area's solids, as of the hit: every
+    // green's flagstick by its flag (area_solids.h flagstick_solids), and
+    // the people, carts and balls at rest of the shot's snapshot
+    // (shot_snapshot.h). The one who hit it, when there, is the last, met
+    // only from solids.self_hit_grace_seconds after the hit.
+    std::vector<solid> dynamic;
+    std::optional<std::size_t> shooter;
+    // The shot's dice: what turns it at random through a canopy.
+    std::uint64_t seed = 0;
 };
+
+// The course a shot towards hole `hole` plays on: `area`, `course`'s air and
+// greens, `weather`, and each green's flag in or out by `flags_in`.
+shot_course make_shot_course(const play_area& area, std::size_t hole, const weather_state& weather,
+                             const course_definition& course, const std::vector<bool>& flags_in,
+                             const game_tuning& tuning);
+
+// The dice of a shot set up as `setup` says: the same for everyone who
+// replays it. Online, until the server rolls each shot's seed.
+std::uint64_t shot_seed(const shot_setup& setup);
+
+// How `material` takes a ball at `wetness` (0..1), its green at `green_stimp_feet`.
+turf turf_for(terrain_material material, float wetness, float green_stimp_feet, const game_tuning& tuning);
+
+// The air `course` flies through (flight_model.h air_at).
+air_state shot_air(const shot_course& course, const game_tuning& tuning);
 
 enum class shot_event_kind {
     land,
-    tree_hit
+    tree_hit,    // a trunk
+    pole_hit,    // a pole, a fence's net or a lamp head
+    board_hit,   // a sign's board, a tee box's side or a cart
+    flag_hit,    // a flagstick, standing or lying
+    cup_rattle,  // the rim or the inside of a cup
+    leaves,      // through a canopy
+    person_hit,  // someone standing in the way
+    ball_hit     // another's ball at rest
 };
 
 // Something to hear during playback.
@@ -73,9 +108,14 @@ struct shot_result {
     // launch; the last point is where the simulation stopped, at `duration`.
     std::vector<glm::vec3> trajectory;
     std::vector<shot_event> events;  // in time order
-    // 1 when the ball went under water: it sinks to the pond's floor and lies
-    // there ball.water_linger_seconds before the shot ends, and the next is
-    // played from where this one was, a stroke later.
+    // How near the face's middle it was struck, 1 dead centre (which sound).
+    float strike_centredness = 1.0f;
+    // Under water: it sinks to the pond's floor and lies there
+    // ball.water_linger_seconds before the shot ends, and the next is played
+    // from where this one was, a stroke later.
+    bool lost = false;
+    // Added to the stroke: 1 for a lost ball, 2 when a shot from a putting
+    // green hits another's ball at rest on one (Rule 11.1a).
     int penalty_strokes = 0;
 };
 
@@ -84,7 +124,13 @@ struct shot_step {
     ball_state ball;
     terrain_sample ground;  // under the ball after the step
     bool landed = false;
-    bool hit_tree = false;
+    std::optional<shot_event_kind> hit;  // what it struck, but the ground
+    std::optional<std::size_t> hit_dynamic;  // which of the course's dynamic solids that was
+    bool through_leaves = false;
+    bool plugged = false;  // buried in sand: it stays there
+    bool resting = false;  // still, and held where it is
+    // The cup the ball is in, by play_area::cups, or touching.
+    std::optional<std::size_t> cup;
 };
 
 // The club with this id, or null.
@@ -93,47 +139,65 @@ const club_definition* find_club(const std::vector<club_definition>& clubs, cons
 // What a ball at `position` lies on: a tee box, else the material under it.
 ball_lie lie_at(const play_area& area, const glm::vec3& position);
 
-// The club's stats with the cigarette modifiers from rewards.json applied.
-club_stats shot_club_stats(const club_stats& club, bool cigarette_active, const reward_rules& rewards);
+// The slope a stance stands on to strike a ball at `ball` along `aim`:
+// the ground under both feet (tuning.lies' stance, on the ball's left for
+// a right-hander, its right for a left-hander) against the ground under
+// the ball.
+stance_slope stance_at(const play_area& area, const glm::vec3& ball, float aim, handedness hand,
+                       const game_tuning& tuning);
 
-// The club as it plays from `lie`: the lie's power and spin (tuning.lies),
-// from a bunker the club's own bunker_power too, and from wet fairway or
-// rough less backspin (water between club and ball: a flyer).
-club_stats lie_club_stats(const club_stats& club, ball_lie lie, float wetness, const game_tuning& tuning);
+// A ball at `ball` struck along `aim` by a `hand` golfer on a course
+// `wetness` wet.
+ball_on_lie ball_on_lie_at(const play_area& area, const glm::vec3& ball, float aim, handedness hand, float wetness,
+                           const game_tuning& tuning);
 
-// The ball leaving `position` along `aim_angle`, at the club's loft and
-// `power` (clamped to [swing.min_power, 1]) on the tuning's power curve.
-ball_state launch_ball(const glm::vec3& position, float aim_angle, const club_stats& stats, float power, const game_tuning& tuning);
+// `club` swung as `setup` says, held within the club's limits
+// (setup_limits_for), straying by `errors`, struck from `on`
+// (game/delivery.h, physics/impact.h).
+strike_outcome club_strike(const club_definition& club, const shot_setup& setup, const ball_on_lie& on,
+                           const game_tuning& tuning, const swing_errors& errors = {});
+ball_state launch_ball(const club_definition& club, const shot_setup& setup, const ball_on_lie& on,
+                       const game_tuning& tuning);
 
-// Flight in the course's wind at the ball's height over `ground` and its
-// rain, ground contact (softer and slower on wet grass), trees and rolling
-// friction over `dt`. `ground` is the terrain under `ball` (the previous
-// step's `ground`).
-// `trees_near` (built from course.trees) makes the tree test cheap; without it
-// every tree is tested, with the same result.
+// Flight in the course's wind at the ball's height over `ground`, the
+// ground (physics/turf_contact.h, its surfaces at the weather's wetness)
+// but over a cup, the cups (physics/cup.h), the area's solids and the
+// course's dynamic ones, and the canopies it passes through, over `dt`, as
+// step number `step` of the shot (its dice for this step). `ground` is the
+// terrain under `ball` (the previous step's `ground`).
 shot_step step_shot(const ball_state& ball,
                     const terrain_sample& ground,
                     const shot_course& course,
-                    const club_stats& stats,
                     const game_tuning& tuning,
                     float dt,
-                    const tree_grid* trees_near = nullptr);
+                    int step = 0);
 
-// True when a grounded ball is slower than ball.stop_speed.
-bool ball_at_rest(const ball_state& ball, const terrain_sample& ground, const ball_tuning& tuning);
-
-// Steps `launched` until it rests, drops into the cup or hits shot_max_steps.
+// Steps `launched` until it rests, plugs or hits shot_max_steps. Holed when
+// it rests in the cup of the course's hole; resting in another green's cup
+// it is dropped beside it (cup.wrong_cup_drop_distance_meters), on the side
+// it came in from.
 shot_result simulate_ball(const ball_state& launched,
-                          const club_stats& stats,
                           const shot_course& course,
                           const game_tuning& tuning);
 
-// The whole shot. An unknown club leaves the ball where it is.
-shot_result simulate_shot(const shot_input& input,
+// The whole shot, its setup held within the club's limits, the swing
+// straying by `errors`: none is the shot as set up, the preview's. An
+// unknown club leaves the ball where it is. A shot from a putting green
+// that hits a ball at rest on one costs two strokes (penalty_strokes).
+shot_result simulate_shot(const shot_setup& setup,
                           const shot_course& course,
                           const game_tuning& tuning,
                           const std::vector<club_definition>& clubs,
-                          const reward_rules& rewards);
+                          const swing_errors& errors = {});
+
+// The shot as `golfer` hits it: `record`'s setup, its swing straying by
+// the golfer's ability (shot_ability.h) times the record's dice, which
+// also turn it through canopies, meeting the record's snapshot too.
+shot_result simulate_struck_shot(const shot_record& record,
+                                 const golfer_profile& golfer,
+                                 const shot_course& course,
+                                 const game_tuning& tuning,
+                                 const std::vector<club_definition>& clubs);
 
 // Where the ball is `time` seconds after launch, between trajectory points.
 glm::vec3 shot_position_at(const shot_result& result, float time);

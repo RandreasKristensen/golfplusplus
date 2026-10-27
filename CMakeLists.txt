@@ -67,15 +67,20 @@ endfunction()
 golfpp_library(golfpp-physics
     src/physics/ball_physics.cpp
     src/physics/collision.cpp
+    src/physics/det_math.cpp
     src/physics/flight_model.cpp
+    src/physics/cup.cpp
     src/physics/ground_contact.cpp
+    src/physics/turf_contact.cpp
     src/physics/ground_mesh.cpp
+    src/physics/impact.cpp
     src/physics/land_relief.cpp
+    src/physics/launch.cpp
     src/physics/material_zone.cpp
     src/physics/terrain.cpp
     src/physics/body_collision.cpp
-    src/physics/fence_collision.cpp
-    src/physics/tree_collision.cpp
+    src/physics/cart_dynamics.cpp
+    src/physics/solid.cpp
     src/physics/wind.cpp
 )
 
@@ -84,19 +89,29 @@ golfpp_library(golfpp-profiling
 )
 
 golfpp_library(golfpp-game
+    src/game/address_play.cpp
+    src/game/address_view.cpp
     src/game/asset_resolver.cpp
+    src/game/bag_place.cpp
     src/game/cart_seats.cpp
-    src/game/club_loader.cpp
     src/game/content_files.cpp
     src/game/course_loader.cpp
     src/game/course_session.cpp
     src/game/course_world_loader.cpp
+    src/game/delivery.cpp
+    src/game/effects.cpp
     src/game/game_content.cpp
     src/game/game_state.cpp
+    src/game/interactables.cpp
     src/game/body_contact.cpp
     src/game/golf_cart.cpp
+    src/game/golf_bag.cpp
+    src/game/golfer.cpp
     src/game/group_round.cpp
     src/game/hole_loader.cpp
+    src/game/item_catalog.cpp
+    src/game/loadout.cpp
+    src/game/model_kinds.cpp
     src/game/floodlights.cpp
     src/game/hole_sign.cpp
     src/game/tee_box.cpp
@@ -108,7 +123,7 @@ golfpp_library(golfpp-game
     src/game/motion_sync.cpp
     src/game/picture_loader.cpp
     src/game/pixel_font_data.cpp
-    src/game/area_obstacles.cpp
+    src/game/area_solids.cpp
     src/game/play_area.cpp
     src/game/progress_rules.cpp
     src/game/progression.cpp
@@ -121,7 +136,12 @@ golfpp_library(golfpp-game
     src/game/save_manager.cpp
     src/game/settings.cpp
     src/game/scorecard.cpp
+    src/game/setup_pointer.cpp
+    src/game/shot_ability.cpp
+    src/game/shot_dice.cpp
+    src/game/shot_setup.cpp
     src/game/shot_simulation.cpp
+    src/game/shot_snapshot.cpp
     src/game/sky_clock.cpp
     src/game/weather.cpp
     src/game/weather_lighting.cpp
@@ -132,6 +152,7 @@ golfpp_library(golfpp-game
     src/game/text_style.cpp
     src/game/tuning_loader.cpp
     src/game/utf8.cpp
+    src/game/world_sounds.cpp
 )
 target_link_libraries(golfpp-game PUBLIC golfpp-physics golfpp-profiling)
 target_compile_definitions(golfpp-game PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
@@ -142,11 +163,14 @@ golfpp_library(golfpp-render-data
     src/renderer/bmp_image.cpp
     src/renderer/camera_local.cpp
     src/renderer/camera_transition.cpp
+    src/renderer/bag_batch.cpp
     src/renderer/cart_batch.cpp
     src/renderer/control_icons.cpp
     src/renderer/course_map_fill.cpp
     src/renderer/course_map_overlay.cpp
-    src/renderer/emote_props.cpp
+    src/renderer/held_props.cpp
+    src/renderer/prop_batch.cpp
+    src/renderer/prop_light.cpp
     src/renderer/prop_pieces.cpp
     src/renderer/frustum.cpp
     src/renderer/fence_batch.cpp
@@ -156,6 +180,8 @@ golfpp_library(golfpp-render-data
     src/renderer/hole_sign_face.cpp
     src/renderer/god_menu_overlay.cpp
     src/renderer/hud_overlay.cpp
+    src/renderer/osd_overlay.cpp
+    src/renderer/solid_outline.cpp
     src/renderer/hud_panel.cpp
     src/renderer/menu_overlay.cpp
     src/renderer/online_overlay.cpp
@@ -172,6 +198,7 @@ golfpp_library(golfpp-render-data
     src/renderer/scorecard_overlay.cpp
     src/renderer/shadow_casters.cpp
     src/renderer/shadow_map_fit.cpp
+    src/renderer/swing_club.cpp
     src/renderer/shader_source.cpp
     src/renderer/sky_visibility.cpp
     src/renderer/terrain_palette.cpp
@@ -231,6 +258,7 @@ endif()
 # SDL-free app logic: startup options, menu flow, audio manifest.
 golfpp_library(golfpp-app-logic
     src/audio/audio_manifest.cpp
+    src/audio/sound_placement.cpp
     src/core/god_menu.cpp
     src/core/input.cpp
     src/core/key_bindings.cpp
@@ -283,6 +311,7 @@ add_executable(golfpp
     src/renderer/water_renderer.cpp
     src/renderer/eyepiece_pass.cpp
     src/renderer/overlay_pass.cpp
+    src/renderer/prop_renderer.cpp
     src/renderer/renderer.cpp
     src/renderer/shader.cpp
     src/renderer/shadow_map_pass.cpp
@@ -315,6 +344,19 @@ if (GOLFPP_NET)
     target_compile_definitions(golfpp PRIVATE GOLFPP_NET=1)
 endif()
 
+# Hits the bag through the game's own simulation and prints what each shot
+# did (tooling/shot_lab).
+add_executable(golfpp-shot-lab EXCLUDE_FROM_ALL tooling/shot_lab/shot_lab_main.cpp)
+target_link_libraries(golfpp-shot-lab PRIVATE golfpp-game golfpp-warnings)
+target_compile_definitions(golfpp-shot-lab PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
+
+if (GOLFPP_NET)
+    # A headless client that checks a running server (tooling/net/online_check).
+    add_executable(golfpp-online-check EXCLUDE_FROM_ALL tooling/net/online_check/online_check_main.cpp)
+    target_link_libraries(golfpp-online-check PRIVATE golfpp-net golfpp-client-bridge golfpp-warnings)
+    target_compile_definitions(golfpp-online-check PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
+endif()
+
 # `cmake --install <build> --prefix <dir>`: everything a player's PC needs
 # to run the game from <dir>, which tooling/release/build_release.ps1 packs.
 # The DLLs are whichever the exe loads from outside Windows, found at install
@@ -345,20 +387,31 @@ if (GOLFPP_BUILD_TESTS)
     add_executable(golfpp-tests
         tests/account_rules_tests.cpp
         tests/audio_manifest_tests.cpp
+        tests/sound_placement_tests.cpp
+        tests/shot_ability_tests.cpp
+        tests/golf_bag_tests.cpp
+        tests/osd_tests.cpp
+        tests/shot_snapshot_tests.cpp
         tests/camera_transition_tests.cpp
+        tests/cart_dynamics_tests.cpp
         tests/cart_tests.cpp
         tests/content_tests.cpp
         tests/prop_tests.cpp
         tests/controls_tests.cpp
         tests/course_map_fill_tests.cpp
         tests/course_tests.cpp
+        tests/det_math_tests.cpp
         tests/dynamic_buffer_tests.cpp
         tests/fence_tests.cpp
+        tests/flight_tests.cpp
+        tests/impact_tests.cpp
+        tests/lie_tests.cpp
         tests/floodlight_tests.cpp
         tests/gameplay_tests.cpp
         tests/god_menu_tests.cpp
         tests/hazard_tests.cpp
         tests/hole_sign_tests.cpp
+        tests/item_tests.cpp
         tests/tee_box_tests.cpp
         tests/light_frame_tests.cpp
         tests/material_zone_tests.cpp

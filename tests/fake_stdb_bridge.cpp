@@ -171,12 +171,13 @@ void stdb_update_motion(stdb_client*, const stdb_motion* motion) {
     fake_bridge().calls.back().motion = *motion;
 }
 
-void stdb_enter_hole(stdb_client*, const int32_t hole_index) {
-    record("stdb_enter_hole", {}, hole_index);
+void stdb_tee_up(stdb_client*, const int32_t hole_index, const bool give_up) {
+    record("stdb_tee_up", {}, hole_index);
+    fake_bridge().calls.back().flag = give_up;
 }
 
-void stdb_return_to_hub(stdb_client*) {
-    record("stdb_return_to_hub");
+void stdb_give_up_hole(stdb_client*) {
+    record("stdb_give_up_hole");
 }
 
 void stdb_pick_up_ball(stdb_client*) {
@@ -191,14 +192,46 @@ void stdb_leave_cart(stdb_client*) {
     record("stdb_leave_cart");
 }
 
+void stdb_overturn_cart(stdb_client*, const uint8_t condition) {
+    record("stdb_overturn_cart", {}, condition);
+}
+
+void stdb_right_cart(stdb_client*, const uint64_t owner) {
+    record("stdb_right_cart", {}, static_cast<std::int64_t>(owner));
+}
+
 void stdb_take_shot(stdb_client*, const stdb_shot* shot) {
     record("stdb_take_shot");
     fake_bridge().calls.back().shot = *shot;
     fake_bridge().calls.back().club_id = text_of(shot->club_id.data, shot->club_id.len);
+    fake_bridge().calls.back().flags_out.assign(shot->flags_out, shot->flags_out + shot->flags_out_count);
 }
 
-void stdb_emote(stdb_client*, const char* emote_id, const size_t len) {
-    record("stdb_emote", text_of(emote_id, len));
+void stdb_set_flag(stdb_client*, const int32_t hole, const bool out) {
+    record("stdb_set_flag", {}, hole);
+    fake_bridge().calls.back().flag = out;
+}
+
+void stdb_place_bag(stdb_client*, const uint8_t place, const uint8_t seat, const float x, const float y, const float z,
+                    const float yaw) {
+    record("stdb_place_bag", {}, place * 256 + seat);
+    fake_stdb_bridge::call& call = fake_bridge().calls.back();
+    call.position[0] = x;
+    call.position[1] = y;
+    call.position[2] = z;
+    call.position[3] = yaw;
+}
+
+void stdb_take_club(stdb_client*, const char* club_id, const size_t len) {
+    record("stdb_take_club", text_of(club_id, len));
+}
+
+void stdb_set_golfer(stdb_client*, const uint8_t hand, const uint8_t natural_shape) {
+    record("stdb_set_golfer", {}, hand * 256 + natural_shape);
+}
+
+void stdb_use_item(stdb_client*, const char* item_id, const size_t len) {
+    record("stdb_use_item", text_of(item_id, len));
 }
 
 void stdb_claim_collectible(stdb_client*, const char* collectible_id, const size_t len) {

@@ -1,0 +1,13 @@
+{
+  "source": "manufacturers' specifications of electric two-seat golf cars (e.g. Club Car Onward, E-Z-GO RXV, Yamaha Drive2) and vehicle-dynamics measurements of utility vehicles (static stability factor, NHTSA rollover rating method); ranges, not one model",
+  "checked": false,
+  "mass_empty_kg": [250, 320],
+  "motor_power_kw": [3.0, 4.0],
+  "governed_top_speed_mps": [5.3, 6.7],
+  "climbs_grade_share": [0.20, 0.30],
+  "rolling_resistance": { "paved": 0.015, "mown_grass": 0.05, "rough": [0.08, 0.10], "dry_sand": [0.15, 0.30] },
+  "track_m": [0.9, 1.0],
+  "loaded_cg_height_m": [0.6, 0.7],
+  "static_stability_factor": { "form": "SSF = track / (2 cg height)", "source": "NHTSA rollover resistance rating (static stability factor), applied to the cart ranges above", "range": [0.7, 0.8], "roll_on_side_slope_degrees_standing": [35, 38] },
+  "grip": { "dry_grass": [0.5, 0.6], "wet_grass": [0.3, 0.4], "path": 0.8 }
+}

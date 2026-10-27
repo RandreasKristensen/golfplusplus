@@ -1,11 +1,16 @@
 #pragma once
 
-// The things drawn in the world, one file each in assets/world/props/: its
-// colours by name, and for a thing of fixed shape the parts it is built
-// from in its own frame (x left, y up, z forward), plus named points the
-// code animates from (where a cigarette's smoke rises). What is fitted to
-// the course (a tree's size, a fence's line, a floodlight's pole) or moves
-// (a cart's wheels) is the code's; its file holds its colours. GL-free.
+// The models of things drawn in the world, one file each in
+// assets/world/props/, keyed by file name: its kind (game/model_kinds.h),
+// its colours by name, and for a thing of fixed shape the parts it is built
+// from in its own frame (x left, y up, z forward), named points the code
+// animates from (where a cigarette's smoke rises) and mounts other models
+// hang at (a trinket on a cart). A file may name a `base` model of its kind
+// and give only what differs: its colours, points and mounts replace the
+// base's of the same name, its parts all of the base's. What is fitted to the
+// course (a tree's size, a fence's line, a floodlight's pole) or moves (a
+// cart's wheels) is the code's; its file holds its colours. Looks only: what
+// an item does is its item file (game/item_catalog.h). GL-free.
 
 #include <map>
 #include <optional>
@@ -40,36 +45,44 @@ struct prop_part {
     std::string tag;
 };
 
+// Where another model hangs on this one, in this one's frame: the hung
+// model's `hang` point goes `at`, its z along `forward` and its y along `up`.
+struct prop_mount {
+    glm::vec3 at{0.0f};
+    glm::vec3 forward{0.0f, 0.0f, 1.0f};
+    glm::vec3 up{0.0f, 1.0f, 0.0f};
+};
+
 struct prop_model {
+    std::string kind;
     std::map<std::string, glm::vec3> colors;
     std::vector<prop_part> parts;
     std::map<std::string, glm::vec3> points;
+    std::map<std::string, prop_mount> mounts;
 
-    // Colours and points the code asks for are checked when the prop loads.
+    // What the code asks for is checked by kind when the model loads.
     glm::vec3 color(const std::string& name) const { return colors.at(name); }
     glm::vec3 point(const std::string& name) const { return points.at(name); }
+    const prop_mount& mount(const std::string& name) const { return mounts.at(name); }
 };
 
-// nullopt when a colour is not three numbers in 0..1, a part's shape,
-// sizes or colour name is wrong, a glow is not a glow floor, or any of
-// `needed_colors` or `needed_points` is missing.
-std::optional<prop_model> parse_prop_from_text(const std::string& text,
-                                               const std::vector<std::string>& needed_colors,
-                                               const std::vector<std::string>& needed_points);
+// Every model by its file name (no extension).
+using prop_catalog = std::map<std::string, prop_model>;
 
-struct prop_set {
-    prop_model cigarette;
-    prop_model beer_can;
-    prop_model golf_cart;
-    prop_model tree;
-    prop_model fence;
-    prop_model floodlight;
-    prop_model hole_sign;
-};
+// One model with no base: nullopt when a colour is not three numbers in
+// 0..1, a part's shape, sizes or colour name is wrong, a glow is not a glow
+// floor, a mount's sides are not perpendicular, or its kind is unknown or
+// lacks what that kind needs (model_kinds.h).
+std::optional<prop_model> parse_prop_from_text(const std::string& text);
 
-struct prop_set_load_result {
-    std::optional<prop_set> props;
+struct prop_catalog_load_result {
+    std::optional<prop_catalog> props;
     std::string error;  // the file that failed
 };
 
-prop_set_load_result load_props(const std::string& asset_root);
+// Every file's text by its name: each `base` resolved (through as many
+// levels as named, a cycle or a base of another kind refused), then parsed.
+prop_catalog_load_result parse_prop_catalog(const std::map<std::string, std::string>& texts);
+// Every file in props_path, and the catalog's own shipped models it must
+// have (model_kinds.h's required_models).
+prop_catalog_load_result load_props(const std::string& asset_root);

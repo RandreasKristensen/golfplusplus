@@ -28,6 +28,8 @@ import json
 import math
 from pathlib import Path
 
+import osm_outline
+
 SCORECARDS = Path(__file__).resolve().parent / "testdata" / "scorecards.json"
 
 DEFAULT_TOLERANCES = {
@@ -51,8 +53,11 @@ DEFAULT_TOLERANCES = {
     "start_mismatch_m": 1.0,
     # Projected tee-to-pin distance against the geodesic one.
     "projection_error": 0.005,
-    # Zones whose ellipses cover their OSM polygon worse than this.
-    "zone_fit_warn_iou": 0.7,
+    # A green smaller than this share of a real one: the USGA puts the
+    # average US putting green at 5,600-5,700 sq ft (about 525 m²; USGA,
+    # "Brookline's small greens", 2022), the PGA Tour's 2025 courses at 5,944.
+    "green_reference_m2": 525.0,
+    "green_small_share": 0.5,
     # Fewer trees than this per 100 m of hole within `tree_side_m` of one side
     # of its line is worth checking against the real course.
     "sparse_trees_per_100m": 2.0,
@@ -212,10 +217,9 @@ def placed_holes(hole_jsons: list[dict], world: dict | None) -> list[dict]:
 
         zones = []
         for zone in h.get("material_zones", []):
-            if "center" in zone and "radii" in zone:
-                zones.append({"type": zone.get("type"), "center": to_world(zone["center"]),
-                              "radii": tuple(zone["radii"]),
-                              "rotation": math.radians(float(zone.get("rotation_degrees", 0.0))) + turn})
+            if _is_outline(zone.get("outline")):
+                outline = [to_world((x, 0.0, z)) for x, z in zone["outline"]]
+                zones.append({"type": zone.get("type"), "outline": outline, "center": osm_outline.centroid(outline)})
         line = [to_world(p) for p in h.get("spline", {}).get("control_points", [])]
         placed.append({
             "number": index + 1,
@@ -290,14 +294,9 @@ def _check_loader_contract(findings: Findings, p: dict):
     if spline.get("rough_width", width) < width:
         findings.add("error", "LOADER", f"hole {n}'s rough is narrower than its fairway", n)
     for zone in h.get("material_zones", []):
-        radii = zone.get("radii")
-        if "radius" in zone or "bounds" in zone:
-            findings.add("error", "ZONE_FORMAT", f"hole {n} has a {zone.get('type')} zone with "
-                         f"`{'radius' if 'radius' in zone else 'bounds'}`; "
-                         f"zones are ellipses with `radii` and `rotation_degrees`", n)
-        elif not (isinstance(radii, list) and len(radii) == 2
-                                           and min(radii) > 0 and "rotation_degrees" in zone):
-            findings.add("error", "ZONE_FORMAT", f"hole {n} has a malformed {zone.get('type')} zone: {zone}", n)
+        if not _is_outline(zone.get("outline")):
+            findings.add("error", "ZONE_FORMAT", f"hole {n} has a {zone.get('type')} zone without an `outline` "
+                         f"of at least three [x, z] points round a positive area", n)
 
 
 def _check_projection(findings: Findings, p: dict, tol: dict, world: dict | None):
@@ -401,10 +400,15 @@ def _check_plausibility(findings: Findings, p: dict, tol: dict):
         nearest = min(math.dist(p["pin"], z["center"]) for z in greens)
         findings.add("error", "PIN_OFF_GREEN", f"hole {n}'s pin is not on its green (nearest green "
                      f"centre {nearest:.0f} m away)", n)
-    for fit in h.get("source", {}).get("zone_fit", []) or []:
-        if fit.get("iou", 1.0) < tol["zone_fit_warn_iou"]:
-            findings.add("warn", "ZONE_FIT", f"hole {n}'s {fit.get('type')} {fit.get('osm')} is covered "
-                         f"{fit['iou'] * 100:.0f}% by its {fit.get('pieces')} ellipse(s); reshape it in the editor", n)
+    if greens and not h.get("source", {}).get("made_green"):
+        area = sum(abs(osm_outline.polygon_area(z["outline"])) for z in greens)
+        if area < tol["green_small_share"] * tol["green_reference_m2"]:
+            findings.add("info", "GREEN_SMALL", f"hole {n}'s green is {area:.0f} m², under "
+                         f"{tol['green_small_share'] * 100:.0f}% of a real green's {tol['green_reference_m2']:.0f} m²: "
+                         f"check OSM's outline against the orthophoto", n)
+    if h.get("source", {}).get("fairway") == "generated":
+        findings.add("info", "FAIRWAY_GENERATED", f"hole {n} has no fairway in OSM; one was made from design "
+                     f"numbers. Map it in OSM (golf=fairway) and re-import", n)
 
 
 def _check_tree_sides(findings: Findings, p: dict, tol: dict):
@@ -432,12 +436,15 @@ def _check_tree_sides(findings: Findings, p: dict, tol: dict):
                          f"map the trees in OSM (natural=tree, tree_row or wood) and re-import", n)
 
 
+def _is_outline(points) -> bool:
+    return (isinstance(points, list) and len(points) >= 3
+            and all(isinstance(q, list) and len(q) == 2 and all(isinstance(v, (int, float)) for v in q) for q in points)
+            and abs(osm_outline.polygon_area(points)) > 0.0)
+
+
 def _in_zone(pt, zone, pad: float = 0.0) -> bool:
-    dx, dz = pt[0] - zone["center"][0], pt[1] - zone["center"][1]
-    c, s = math.cos(zone["rotation"]), math.sin(zone["rotation"])
-    u, v = dx * c + dz * s, -dx * s + dz * c
-    a, b = zone["radii"][0] + pad, zone["radii"][1] + pad
-    return (u / a) ** 2 + (v / b) ** 2 <= 1.0
+    outline = zone["outline"]
+    return osm_outline.point_in_polygon(pt, outline) or osm_outline.edge_distance(pt, outline) <= pad
 
 
 def _check_numbering(findings: Findings, course_id: str, placed: list[dict]):

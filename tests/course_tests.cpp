@@ -3,6 +3,8 @@
 #include "game/course_session.h"
 #include "game/game_state.h"
 #include "game/hole_loader.h"
+#include "game/interactables.h"
+#include "game/mode_dispatch.h"
 #include "game/play_area.h"
 #include "game/progress_rules.h"
 #include "game/scorecard.h"
@@ -26,18 +28,29 @@ string_table shipped_strings() {
     return load_text_assets(asset_root())->strings;
 }
 
-// Completes the hole being played with `strokes`.
+// Completes the hole my ball is in play on with `strokes`.
 void finish_hole(game_state& state, const int strokes) {
-    state.stroke_count = strokes;
+    REQUIRE(ball_in_play(state));
+    state.ball->strokes = strokes;
     complete_current_hole(state);
 }
 
-// Starts hub hole `index` (the last holed ball picked up first) and holes
+// Tees up on hole `index` (the last holed ball picked up first) and holes
 // out in `strokes`.
-void play_hub_hole(game_state& state, const std::size_t index, const int strokes) {
+void play_course_hole(game_state& state, const std::size_t index, const int strokes) {
     pick_up_from_cup(state);
-    REQUIRE(start_hub_hole(state, index));
+    REQUIRE(tee_up(state, index, false));
     finish_hole(state, strokes);
+}
+
+// A shot that holes out at once, then plays out.
+void hole_out(game_state& state) {
+    const glm::vec3 cup = pin_anchor_position(state, state.ball->hole);
+    state.ball->strokes = 1;
+    play_shot(state, shot_result{cup, true, 0.05f, {state.ball->position, cup}, {}});
+    for (int i = 0; i < 20 && ball_in_play(state); ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
 }
 
 void walk_to(game_state& state, const glm::vec3& position) {
@@ -55,10 +68,9 @@ void check_anchors_are_fresh(const game_state& state) {
     CHECK(static_anchor_cache_is_current(state));
     const static_anchor_cache fresh = build_static_anchor_cache(state);
     const static_anchor_cache& cached = state.static_anchors;
-    CHECK(cached.tee_anchor == fresh.tee_anchor);
-    CHECK(cached.pin_anchor == fresh.pin_anchor);
+    CHECK(cached.tees == fresh.tees);
+    CHECK(cached.pins == fresh.pins);
     CHECK(same_trees(cached.trees, fresh.trees));
-    CHECK(cached.hub_pin_markers == fresh.hub_pin_markers);
     CHECK(cached.collectibles == fresh.collectibles);
 }
 }
@@ -75,21 +87,22 @@ TEST_CASE("a course with a missing hole or world does not start") {
     CHECK(state.course_holes.empty());
 }
 
-TEST_CASE("a hub course starts at hole 1's start facing down hole 1") {
+TEST_CASE("a course starts at hole 1's start facing down hole 1, my ball in my pocket") {
     game_state state = started_game(fixture_hub_course());
-    REQUIRE(state.hub.has_value());
-    CHECK(in_hub(state));
-    CHECK(!state.hole.has_value());
-    CHECK(near(horizontal(state.player.position), horizontal(state.hub->world.hole_starts[0].position), 0.001f));
-    CHECK(nearby_hole_start(state) == std::optional<std::size_t>(0));
-    CHECK(near(state.player.yaw, yaw_towards(state.player.position, state.hub->markers[0].pin_position), 0.0001f));
-    CHECK(!can_interact_with_ball(state));
+    REQUIRE(course_started(state));
+    CHECK(!state.ball.has_value());
+    CHECK(near(horizontal(state.player.position), horizontal(state.world.hole_starts[0].position), 0.001f));
+    const std::optional<interactable> near_me = nearest_interactable(state);
+    REQUIRE(near_me.has_value());
+    CHECK(near_me->kind == interactable_kind::tee);
+    CHECK(near_me->index == 0U);
+    CHECK(near(state.player.yaw, yaw_towards(state.player.position, state.holes[0].pin_position), 0.0001f));
     CHECK(!shot_playing(state));
 }
 
-TEST_CASE("the hub terrain covers every hole start") {
+TEST_CASE("the course's terrain covers every hole start") {
     const game_state state = started_game(fixture_hub_course());
-    for (const course_world_hole_start& start : state.hub->world.hole_starts) {
+    for (const course_world_hole_start& start : state.world.hole_starts) {
         const terrain_sample ground = sample_area(state.area, start.position);
         CHECK(ground.inside_surface);
     }
@@ -198,7 +211,7 @@ TEST_CASE("the land's relief is scaled about its mean, greens flatter, and what 
     const auto green_height = [&](const float x) { return sample_area(course, glm::vec3(x, 0.0f, green.center.z)).point.y; };
     CHECK(near(green_height(0.0f), green_mean, 0.05f));
     CHECK(near((green_height(6.0f) - green_height(-6.0f)) / 12.0f, 0.05f * relief.green_scale, 0.002f));
-    const float beyond = green.radii.x + relief.green_blend_distance + 4.0f;
+    const float beyond = zone_half_extent(green).x + relief.green_blend_distance + 4.0f;
     CHECK(near((green_height(beyond + 2.0f) - green_height(beyond)) / 2.0f, 0.05f * relief.scale, 0.002f));
     float previous = green_height(-40.0f);
     for (float x = -39.8f; x <= 40.0f; x += 0.2f) {
@@ -215,14 +228,14 @@ TEST_CASE("the land's relief is scaled about its mean, greens flatter, and what 
     const glm::vec3 pin = with_green.pin_position;
     CHECK(near(anchor_on_terrain(course, pin).y,
                green_mean + relief.green_scale * (slope(pin.x, pin.z) - slope(green.center.x, green.center.z)), 0.02f));
+    const auto scaled = [&](const glm::vec2& at) { return mean + relief.scale * (slope(at.x, at.y) - mean); };
     float rim = std::numeric_limits<float>::max();
-    for (int k = 0; k < 48; ++k) {
-        const float angle = glm::two_pi<float>() * static_cast<float>(k) / 48.0f;
-        rim = std::min(rim, sample_area(course, pond.center + glm::vec3(std::cos(angle), 0.0f, std::sin(angle)) * pond.radii.x).point.y);
+    for (const glm::vec2& point : pond.outline) {
+        rim = std::min(rim, scaled(point));
     }
     REQUIRE(course.water_levels.size() == 2);
-    CHECK(near(course.water_levels[1], rim, 0.001f));
-    const glm::vec3 past = pond.center - glm::normalize(glm::vec3(0.05f, 0.0f, 0.02f)) * (pond.radii.x + 3.0f);
+    CHECK(near(course.water_levels[1], rim, 0.02f));
+    const glm::vec3 past = pond.center - glm::normalize(glm::vec3(0.05f, 0.0f, 0.02f)) * (zone_half_extent(pond).x + 3.0f);
     CHECK(near(sample_area(course, past).point.y, mean + relief.scale * (slope(past.x, past.z) - mean), 0.02f));
 }
 
@@ -297,60 +310,60 @@ TEST_CASE("holes are placed by their start, rotated around the tee") {
     CHECK(near(place_hole_point(hole, start, hole.pin_position), glm::vec3(90.0f, 0.0f, 200.0f), 0.0001f));
 }
 
-TEST_CASE("a hub hole is played on the whole course") {
+TEST_CASE("a hole is played on the whole course") {
     game_state state = started_game(fixture_hub_course());
     const glm::vec3 course_center = state.area.center;
-    REQUIRE(start_hub_hole(state, 0));
+    REQUIRE(tee_up(state, 0, false));
     CHECK(near(state.area.center, course_center));
-    CHECK(sample_area(state.area, state.hub->world.hole_starts[2].position).inside_surface);
+    CHECK(sample_area(state.area, state.world.hole_starts[2].position).inside_surface);
 }
 
-TEST_CASE("interacting at a hole start plays that hole where the hub shows it") {
+TEST_CASE("interacting at a hole's tee tees my ball up on that hole where the course has it") {
     game_state state = started_game(fixture_hub_course());
-    const hub_hole_marker marker = state.hub->markers[2];
-    walk_to(state, state.hub->world.hole_starts[2].position);
+    const course_hole hole = state.holes[2];
+    walk_to(state, state.world.hole_starts[2].position);
 
     update_game(state, interact_input(), 0.016f);
 
-    REQUIRE(state.hole.has_value());
-    CHECK(state.hole->index == 2);
+    REQUIRE(state.ball.has_value());
+    CHECK(state.ball->hole == 2U);
+    CHECK(state.ball->place == ball_place::teed);
+    CHECK(state.ball->strokes == 0);
     CHECK(state.round.current_hole_index == 2);
-    CHECK(near(horizontal(state.hole->tee_position), horizontal(marker.tee_position), 0.001f));
-    CHECK(near(horizontal(state.hole->pin_position), horizontal(marker.pin_position), 0.001f));
-    CHECK(horizontal_distance(state.ball.position, marker.tee_position) < 0.5f);
-    CHECK(sample_area(state.area, marker.pin_position).inside_surface);
+    CHECK(horizontal_distance(state.ball->position, hole.tee_position) < 0.5f);
+    CHECK(near(horizontal(pin_anchor_position(state, 2)), horizontal(hole.pin_position), 0.001f));
+    CHECK(sample_area(state.area, hole.pin_position).inside_surface);
 }
 
-TEST_CASE("interacting at a hole start takes up its tee ball, so interacting again addresses it") {
+TEST_CASE("interacting at a hole's tee tees up and steps up to the ball, so Space hits it") {
     game_state state = started_game(fixture_hub_course());
-    walk_to(state, state.hub->world.hole_starts[0].position);
+    walk_to(state, state.world.hole_starts[0].position);
 
     update_game(state, interact_input(), 0.016f);
-    REQUIRE(state.hole.has_value());
-    CHECK(state.mode == game_mode::aiming);
+    REQUIRE(ball_in_play(state));
+    CHECK(state.mode == game_mode::addressing);
 
-    // Address, start the meter, hit: as from anywhere beside the ball.
-    for (const game_input& press : {interact_input(), backswing_input(), downswing_input()}) {
-        update_game(state, press, 0.016f);
-    }
-    CHECK(state.stroke_count == 1);
+    // Swing: as from anywhere beside the ball.
+    update_game(state, swing_input(), 0.016f);
+    swing_through(state);
+    CHECK(state.ball->strokes == 1);
+    CHECK(state.ball->place == ball_place::at_rest);
     CHECK(shot_playing(state));
 }
 
-TEST_CASE("holing out on a hub hole leaves the player where they stand") {
+TEST_CASE("holing out leaves the player where they stand and the ball in the cup") {
     game_state state = started_game(fixture_hub_course());
-    REQUIRE(start_hub_hole(state, 1));
+    REQUIRE(tee_up(state, 1, false));
     const glm::vec3 stance = state.player.position;
-    const glm::vec3 cup = pin_anchor_position(state);
+    const glm::vec3 cup = pin_anchor_position(state, 1);
     REQUIRE(horizontal_distance(stance, cup) > 10.0f);
 
-    state.stroke_count = 1;
-    play_shot(state, shot_result{cup, true, 0.05f, {state.ball.position, cup}, {}});
-    for (int i = 0; i < 20 && state.hole; ++i) {
-        update_game(state, game_input{}, 0.02f);
-    }
+    hole_out(state);
 
-    CHECK(in_hub(state));
+    REQUIRE(state.ball.has_value());
+    CHECK(state.ball->place == ball_place::in_cup);
+    CHECK(state.ball->hole == 1U);
+    CHECK(near(state.ball->position, cup));
     CHECK(*state.round.strokes[1] == 1);
     CHECK(state.round.current_hole_index == 2);
     CHECK(near(horizontal(state.player.position), horizontal(stance), 0.001f));
@@ -359,52 +372,84 @@ TEST_CASE("holing out on a hub hole leaves the player where they stand") {
 
 TEST_CASE("holing out keeps the view on the cup, not the next tee") {
     game_state state = started_game(fixture_hub_course());
-    REQUIRE(start_hub_hole(state, 1));
-    const glm::vec3 cup = pin_anchor_position(state);
+    REQUIRE(tee_up(state, 1, false));
+    const glm::vec3 cup = pin_anchor_position(state, 1);
     state.player.yaw = wrap_angle(state.player.yaw + 1.0f);
     state.look.pitch = -0.2f;
 
-    state.stroke_count = 1;
-    play_shot(state, shot_result{cup, true, 0.05f, {state.ball.position, cup}, {}});
-    for (int i = 0; i < 20 && state.hole; ++i) {
-        update_game(state, game_input{}, 0.02f);
-    }
+    hole_out(state);
 
-    REQUIRE(in_hub(state));
+    REQUIRE(!ball_in_play(state));
     CHECK(near(state.player.yaw, yaw_towards(state.player.position, cup), 0.0001f));
     CHECK(near(state.look.pitch, -0.2f, 0.0001f));
 }
 
-TEST_CASE("hub holes can be played in any order and the round ends after all of them") {
+TEST_CASE("a hole completing ends nothing else: my seat in my cart, a lit cigarette, an item's effect") {
+    game_state state = started_game(fixture_hub_course());
+    REQUIRE(tee_up(state, 1, false));
+    update_game(state, [] {
+        game_input smoke;
+        smoke.use_smokable = true;
+        return smoke;
+    }(), 0.016f);
+    REQUIRE(state.smoking.has_value());
+    item_effect quicker;
+    quicker.target = effect_target_walk_speed;
+    quicker.bucket = effect_bucket::increased;
+    quicker.value = 0.5f;
+    quicker.duration = effect_duration::seconds;
+    quicker.seconds = 60.0f;
+    state.effects.push_back(active_effect{"shoes", quicker, shot_unix_ms(state), shot_unix_ms(state) + 60000});
+    const glm::vec3 cup = pin_anchor_position(state, 1);
+    state.ball->strokes = 1;
+    play_shot(state, shot_result{cup, true, 5.0f, {state.ball->position, cup}, {}});
+    // Online the hole may complete only after I have stepped into my cart.
+    state.mode = game_mode::walking;
+    state.shot.reset();
+    sit_in_cart(state);
+    const glm::vec3 seated = state.player.position;
+
+    complete_current_hole(state);
+
+    CHECK(state.ride.has_value());
+    CHECK(driving_cart(state));
+    CHECK(near(state.player.position, seated));
+    CHECK(state.smoking.has_value());
+    CHECK(state.effects.size() == 1U);
+    REQUIRE(state.ball.has_value());
+    CHECK(state.ball->place == ball_place::in_cup);
+}
+
+TEST_CASE("holes can be played in any order and the round ends after all of them") {
     game_state state = started_game(fixture_hub_course());
 
-    REQUIRE(start_hub_hole(state, 2));
+    REQUIRE(tee_up(state, 2, false));
     finish_hole(state, 5);
     CHECK(!round_finished(state.round));
     CHECK(state.save.completed_course_ids.empty());
     pick_up_from_cup(state);
-    CHECK(!start_hub_hole(state, 2));
+    CHECK(!tee_up(state, 2, false));
 
-    REQUIRE(start_hub_hole(state, 0));
+    REQUIRE(tee_up(state, 0, false));
     finish_hole(state, 3);
     pick_up_from_cup(state);
-    REQUIRE(start_hub_hole(state, 1));
+    REQUIRE(tee_up(state, 1, false));
     finish_hole(state, 4);
 
     CHECK(round_finished(state.round));
     CHECK(state.save.completed_course_ids == std::vector<std::string>{"fixture_hub"});
 }
 
-TEST_CASE("the holed ball waits in its cup until it is picked up, and no hole starts before") {
+TEST_CASE("the holed ball waits in its cup until it is picked up, and no hole tees up before") {
     game_state state = started_game(fixture_hub_course());
-    REQUIRE(start_hub_hole(state, 0));
-    const glm::vec3 cup = pin_anchor_position(state);
+    REQUIRE(tee_up(state, 0, false));
+    const glm::vec3 cup = pin_anchor_position(state, 0);
     finish_hole(state, 3);
-    REQUIRE(in_hub(state));
-    REQUIRE(state.cup_ball.has_value());
-    CHECK(near(*state.cup_ball, cup));
+    REQUIRE(state.ball.has_value());
+    CHECK(state.ball->place == ball_place::in_cup);
+    CHECK(near(state.ball->position, cup));
 
-    CHECK(!start_hub_hole(state, 1));
+    CHECK(!tee_up(state, 1, true));
     REQUIRE(state.notice.has_value());
     CHECK(state.notice->text_key == text_ball_in_cup);
 
@@ -412,47 +457,130 @@ TEST_CASE("the holed ball waits in its cup until it is picked up, and no hole st
     walk_to(state, cup + glm::vec3(reach + 1.0f, 0.0f, 0.0f));
     CHECK(!cup_ball_in_reach(state));
     CHECK(!pick_up_cup_ball(state));
-    CHECK(state.cup_ball.has_value());
+    CHECK(state.ball.has_value());
 
     walk_to(state, cup + glm::vec3(reach * 0.5f, 0.0f, 0.0f));
     CHECK(cup_ball_in_reach(state));
     update_game(state, interact_input(), 0.016f);
-    CHECK(in_hub(state));
-    CHECK(!state.cup_ball.has_value());
-    CHECK(start_hub_hole(state, 1));
+    CHECK(!state.ball.has_value());
+    CHECK(tee_up(state, 1, false));
 }
 
 TEST_CASE("the ball in the cup stays into the next round and goes when the course is left") {
     game_state state = started_game(fixture_hub_course());
     for (std::size_t i = 0; i < state.course_holes.size(); ++i) {
-        REQUIRE(start_hub_hole(state, i));
-        finish_hole(state, 3);
         pick_up_from_cup(state);
+        REQUIRE(tee_up(state, i, false));
+        finish_hole(state, 3);
     }
     REQUIRE(round_finished(state.round));
-    REQUIRE(state.cup_ball.has_value());  // not picked up: the round ended
+    REQUIRE(state.ball.has_value());  // not picked up: the round ended
+    CHECK(state.ball->place == ball_place::in_cup);
 
     start_next_round(state);
-    CHECK(state.cup_ball.has_value());
-    CHECK(!start_hub_hole(state, 0));
+    CHECK(state.ball.has_value());
+    CHECK(!tee_up(state, 0, false));
 
     REQUIRE(start_course(state, state.course));
-    CHECK(!state.cup_ball.has_value());
-    CHECK(start_hub_hole(state, 0));
+    CHECK(!state.ball.has_value());
+    CHECK(tee_up(state, 0, false));
 }
 
-TEST_CASE("starts of played holes cannot be used again") {
+TEST_CASE("tees of played holes cannot be used again, nor my ball's own") {
     game_state state = started_game(fixture_hub_course());
-    REQUIRE(start_hub_hole(state, 0));
+    REQUIRE(tee_up(state, 0, false));
+    walk_to(state, state.world.hole_starts[0].position + glm::vec3(0.0f, 0.0f, -3.0f));
+    for (const interactable& thing : interactables_in_reach(state)) {
+        CHECK(thing.kind != interactable_kind::tee);
+    }
+    CHECK(!tee_up(state, 0, true));
+    CHECK(state.ball->strokes == 0);
+
     finish_hole(state, 3);
-
-    walk_to(state, state.hub->world.hole_starts[0].position);
-    CHECK(!nearby_hole_start(state).has_value());
+    pick_up_from_cup(state);
+    walk_to(state, state.world.hole_starts[0].position);
+    for (const interactable& thing : interactables_in_reach(state)) {
+        CHECK(thing.kind != interactable_kind::tee);
+    }
 }
 
-TEST_CASE("claiming a hub collectible gives its xp as an xp drop") {
+namespace {
+// My ball teed on hole 1 and me at hole 3's tee.
+game_state ball_in_play_at_another_tee() {
     game_state state = started_game(fixture_hub_course());
-    const course_world_collectible& lost_ball = state.hub->world.collectibles[1];
+    CHECK(tee_up(state, 0, false));
+    state.ball->strokes = 2;
+    state.ball->place = ball_place::at_rest;
+    walk_to(state, state.world.hole_starts[2].position);
+    return state;
+}
+
+game_input cancel_input() {
+    game_input input;
+    input.cancel = true;
+    return input;
+}
+}
+
+TEST_CASE("F at another tee with my ball in play asks first, and yes gives the hole up with no score") {
+    game_state state = ball_in_play_at_another_tee();
+
+    update_game(state, interact_input(), 0.016f);
+    REQUIRE(state.give_up_prompt == std::optional<std::size_t>(2));
+    CHECK(state.ball->hole == 0U);
+    CHECK(!interact_available(state));
+
+    update_game(state, interact_input(), 0.016f);
+    CHECK(!state.give_up_prompt.has_value());
+    REQUIRE(state.ball.has_value());
+    CHECK(state.ball->hole == 2U);
+    CHECK(state.ball->strokes == 0);
+    CHECK(state.mode == game_mode::addressing);
+    CHECK(!hole_played(state.round, 0));
+    CHECK(state.save.holes_completed == 0);
+}
+
+TEST_CASE("Esc, or walking away, keeps playing the hole the tee asked about") {
+    game_state state = ball_in_play_at_another_tee();
+    update_game(state, interact_input(), 0.016f);
+    REQUIRE(state.give_up_prompt.has_value());
+    update_game(state, cancel_input(), 0.016f);
+    CHECK(!state.give_up_prompt.has_value());
+    CHECK(state.ball->hole == 0U);
+    CHECK(state.ball->strokes == 2);
+
+    update_game(state, interact_input(), 0.016f);
+    REQUIRE(state.give_up_prompt.has_value());
+    walk_to(state, state.world.hole_starts[2].position + glm::vec3(200.0f, 0.0f, 0.0f));
+    update_game(state, game_input{}, 0.016f);
+    CHECK(!state.give_up_prompt.has_value());
+    CHECK(state.ball->hole == 0U);
+}
+
+TEST_CASE("teeing up refuses a ball in play elsewhere unless giving it up") {
+    game_state state = ball_in_play_at_another_tee();
+    CHECK(!tee_up(state, 2, false));
+    REQUIRE(state.notice.has_value());
+    CHECK(state.notice->text_key == text_ball_in_play);
+    CHECK(state.ball->hole == 0U);
+    CHECK(tee_up(state, 2, true));
+    CHECK(state.ball->hole == 2U);
+}
+
+TEST_CASE("giving up a hole puts my ball in my pocket and leaves me where I stand") {
+    game_state state = ball_in_play_at_another_tee();
+    const glm::vec3 standing = state.player.position;
+    give_up_hole(state);
+    CHECK(!state.ball.has_value());
+    CHECK(near(state.player.position, standing));
+    CHECK(!hole_played(state.round, 0));
+    CHECK(tee_up(state, 0, false));
+}
+
+TEST_CASE("claiming a collectible gives its xp as an xp drop, with my ball in play too") {
+    game_state state = started_game(fixture_hub_course());
+    REQUIRE(tee_up(state, 0, false));
+    const course_world_collectible& lost_ball = state.world.collectibles[1];
     walk_to(state, lost_ball.position);
 
     update_game(state, interact_input(), 0.016f);
@@ -461,12 +589,39 @@ TEST_CASE("claiming a hub collectible gives its xp as an xp drop") {
     CHECK(state.save.world_flags == std::vector<std::string>{"found_lost_ball"});
     CHECK(skill_xp(state.save.skills, "fitness") >= 12);
     CHECK(!state.xp_drops.empty());
-    CHECK(!nearby_collectible(state).has_value());
+    for (const interactable& thing : interactables_in_reach(state)) {
+        CHECK(thing.kind != interactable_kind::collectible);
+    }
+    CHECK(ball_in_play(state));
 }
 
-TEST_CASE("the cart is faster on a road and earns road xp only there") {
+TEST_CASE("the nearest thing in reach is what F acts on") {
+    game_state state = started_game(fixture_hub_course());
+    REQUIRE(tee_up(state, 0, false));
+    const glm::vec3 ball = state.ball->position;
+    const glm::vec3 seat = ball + glm::vec3(2.0f, 0.0f, 0.0f);
+    state.cart.pose = cart_around_seat(seat, 0.0f, cart_seat::driver, state.tuning.cart);
+    REQUIRE(horizontal_distance(seat_position(state.cart.pose, cart_seat::driver, state.tuning.cart), seat) < 0.001f);
+
+    // Half a metre from my ball, the seat further: the ball.
+    state.player.position = ball + glm::vec3(0.5f, 0.0f, 0.0f);
+    REQUIRE(interactables_in_reach(state).size() >= 2U);
+    std::optional<interactable> near_me = nearest_interactable(state);
+    REQUIRE(near_me.has_value());
+    CHECK(near_me->kind == interactable_kind::ball);
+
+    // Next to the seat, my ball further: the seat.
+    state.player.position = ball + glm::vec3(1.8f, 0.0f, 0.0f);
+    near_me = nearest_interactable(state);
+    REQUIRE(near_me.has_value());
+    CHECK(near_me->kind == interactable_kind::seat);
+}
+
+TEST_CASE("the cart pulls away quicker on a road and earns road xp only there, with my ball in play too") {
     game_state on_road = started_game(fixture_hub_course());
-    const std::vector<glm::vec3>& road = on_road.hub->world.cart_roads.front().polyline;
+    REQUIRE(tee_up(on_road, 0, false));
+    on_road.mode = game_mode::walking;
+    const std::vector<glm::vec3>& road = on_road.world.cart_roads.front().polyline;
     walk_to(on_road, road.front());
     on_road.player.yaw = yaw_towards(road[0], road[1]);
 
@@ -481,10 +636,10 @@ TEST_CASE("the cart is faster on a road and earns road xp only there") {
     drive.forward_held = true;
     update_game(on_road, drive, 0.05f);
     update_game(off_road, drive, 0.05f);
-    CHECK(on_road.cart.velocity > off_road.cart.velocity);
+    CHECK(my_cart_speed(on_road) > my_cart_speed(off_road));
 
     for (game_state* state : {&on_road, &off_road}) {
-        for (int i = 0; i < 80; ++i) {
+        for (int i = 0; i < 160; ++i) {
             update_game(*state, drive, 0.05f);
         }
     }
@@ -497,7 +652,7 @@ TEST_CASE("road reach uses each road's own width") {
     course_world_cart_road wide;
     wide.width = 40.0f;
     wide.polyline = {glm::vec3(1000.0f, 0.0f, 0.0f), glm::vec3(1100.0f, 0.0f, 0.0f)};
-    state.hub->world.cart_roads.push_back(wide);
+    state.world.cart_roads.push_back(wide);
 
     // 10 m from the narrow road: outside its reach even though another road is wide.
     walk_to(state, glm::vec3(100.0f, 0.0f, -40.0f));
@@ -506,7 +661,7 @@ TEST_CASE("road reach uses each road's own width") {
     CHECK(cart_on_road(state));
 }
 
-TEST_CASE("static anchors stay fresh through hub, hole and course changes") {
+TEST_CASE("static anchors stay fresh, and my ball never moves the terrain revision") {
     game_state state = started_hole();
     check_anchors_are_fresh(state);
 
@@ -515,24 +670,28 @@ TEST_CASE("static anchors stay fresh through hub, hole and course changes") {
     CHECK(state.terrain_render_revision > revision);
     check_anchors_are_fresh(state);
     CHECK(state.static_anchors.trees.size() == state.area.trees.size());
-    CHECK(state.static_anchors.hub_pin_markers.size() == 3U);
+    CHECK(state.static_anchors.pins.size() == 3U);
+    CHECK(state.static_anchors.tees.size() == 3U);
     CHECK(state.static_anchors.collectibles.size() == 3U);
-    const std::vector<tree_body> hub_trees = state.static_anchors.trees;
+    const std::vector<tree_body> course_trees = state.static_anchors.trees;
 
     revision = state.terrain_render_revision;
-    walk_to(state, state.hub->world.hole_starts[1].position);
+    walk_to(state, state.world.hole_starts[1].position);
     update_game(state, interact_input(), 0.016f);
-    REQUIRE(state.hole.has_value());
+    REQUIRE(ball_in_play(state));
     // The course is the same place: nothing is rebuilt or re-uploaded.
     CHECK(state.terrain_render_revision == revision);
     check_anchors_are_fresh(state);
-    CHECK(state.static_anchors.hub_pin_markers.size() == 3U);
 
     finish_hole(state, 3);
-    CHECK(in_hub(state));
+    CHECK(state.terrain_render_revision == revision);
+    pick_up_from_cup(state);
+    CHECK(state.terrain_render_revision == revision);
+    REQUIRE(tee_up(state, 2, false));
+    give_up_hole(state);
     CHECK(state.terrain_render_revision == revision);
     check_anchors_are_fresh(state);
-    CHECK(same_trees(state.static_anchors.trees, hub_trees));
+    CHECK(same_trees(state.static_anchors.trees, course_trees));
 }
 
 TEST_CASE("a replacement state keeps the terrain revision increasing") {
@@ -557,7 +716,7 @@ TEST_CASE("the scorecard lists every hole and totals the played ones") {
     game_state state = started_game(fixture_hub_course());
     const string_table strings = shipped_strings();
 
-    play_hub_hole(state, 0, 4);
+    play_course_hole(state, 0, 4);
     scorecard_data card = build_scorecard_data(state, strings);
     REQUIRE(card.pars.size() == 3U);
     REQUIRE(card.players.size() == 1U);
@@ -570,8 +729,8 @@ TEST_CASE("the scorecard lists every hole and totals the played ones") {
     CHECK(card.players[0].total_strokes == 4);
     CHECK(card.players[0].relative_label == "+1");
 
-    play_hub_hole(state, 1, 2);
-    play_hub_hole(state, 2, 3);
+    play_course_hole(state, 1, 2);
+    play_course_hole(state, 2, 3);
     card = build_scorecard_data(state, strings);
     CHECK(card.finished);
     CHECK(card.players[0].total_strokes == 9);

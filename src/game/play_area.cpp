@@ -1,6 +1,7 @@
 #include "game/play_area.h"
 
-#include "game/area_obstacles.h"
+#include "physics/det_math.h"
+#include "game/area_solids.h"
 
 #include "physics/ground_mesh.h"
 #include "physics/land_relief.h"
@@ -27,13 +28,14 @@ terrain_mesh place_mesh(const terrain_mesh& mesh, const hole_data& hole, const c
     return build_terrain_mesh_index(std::move(placed));
 }
 
-// The zone where the placed hole puts it: it keeps its size and turns with
-// the hole around its own (placed) centre.
+// The zone where the placed hole puts it: every point of its outline placed.
 material_zone place_zone(const material_zone& zone, const hole_data& hole, const course_world_hole_start& start) {
-    material_zone placed = zone;
-    placed.center = place_hole_point(hole, start, zone.center);
-    placed.rotation = zone.rotation + glm::radians(start.rotation_degrees);
-    return placed;
+    std::vector<glm::vec2> outline;
+    for (const glm::vec2& point : zone.outline) {
+        const glm::vec3 placed = place_hole_point(hole, start, glm::vec3(point.x, 0.0f, point.y));
+        outline.emplace_back(placed.x, placed.z);
+    }
+    return make_material_zone(zone.type, std::move(outline));
 }
 
 play_area with_bounds(play_area area) {
@@ -80,84 +82,17 @@ ground_settings ground_settings_for(const float margin, const game_tuning& tunin
                            tuning.terrain.fairway_cell_size, tuning.terrain.zone_cell_size, tuning.terrain.zones};
 }
 
-// Metres per cell of the floodlight poles' grid: any size hits the same poles.
-constexpr float floodlight_grid_cell_size = 32.0f;
-
-// Points around a pond's edge where its water level is found.
-constexpr int water_rim_samples = 48;
-
-glm::vec3 water_rim_point(const material_zone& zone, const int k) {
-    const float angle = glm::two_pi<float>() * static_cast<float>(k) / static_cast<float>(water_rim_samples);
-    return zone_world_point(zone, glm::vec2(std::cos(angle) * zone.radii.x, std::sin(angle) * zone.radii.y));
-}
-
-// Each water zone's level: the lowest point of the ground around its edge,
-// where the bowl is uncarved, so the water fills the bowl without spilling
-// over it. Water zones that overlap are one pond (a lake mapped as several
-// ellipses) and share the lowest of their levels; the part of an edge inside
-// another water zone is under that one's water, not a rim. Other zones get none.
-std::vector<float> water_levels(const play_area& area) {
-    const std::vector<material_zone>& zones = area.zones;
-    std::vector<float> levels(zones.size(), 0.0f);
-    std::vector<std::size_t> pond(zones.size());
-    for (std::size_t i = 0; i < zones.size(); ++i) {
-        pond[i] = i;
-        if (zones[i].type != material_zone_type::water) {
-            continue;
-        }
-        float lowest = std::numeric_limits<float>::max();
-        for (int k = 0; k < water_rim_samples; ++k) {
-            const glm::vec3 rim = water_rim_point(zones[i], k);
-            const bool in_other_water = std::any_of(zones.begin(), zones.end(), [&](const material_zone& other) {
-                return &other != &zones[i] && other.type == material_zone_type::water && zone_contains(other, rim);
-            });
-            if (!in_other_water) {
-                lowest = std::min(lowest, sample_terrain_mesh(area.ground, rim, area.ground_y).point.y);
-            }
-        }
-        levels[i] = lowest;
-    }
-    const auto root = [&pond](std::size_t i) {
-        while (pond[i] != i) {
-            i = pond[i];
-        }
-        return i;
-    };
-    for (std::size_t i = 0; i < zones.size(); ++i) {
-        for (std::size_t j = i + 1; j < zones.size(); ++j) {
-            if (zones[i].type != material_zone_type::water || zones[j].type != material_zone_type::water) {
-                continue;
-            }
-            bool overlap = zone_contains(zones[j], zones[i].center) || zone_contains(zones[i], zones[j].center);
-            for (int k = 0; k < water_rim_samples && !overlap; ++k) {
-                overlap = zone_contains(zones[j], water_rim_point(zones[i], k));
-            }
-            if (overlap) {
-                pond[root(j)] = root(i);
-            }
-        }
-    }
-    std::vector<float> lowest(zones.size(), std::numeric_limits<float>::max());
-    for (std::size_t i = 0; i < zones.size(); ++i) {
-        if (zones[i].type == material_zone_type::water) {
-            lowest[root(i)] = std::min(lowest[root(i)], levels[i]);
-        }
-    }
-    for (std::size_t i = 0; i < zones.size(); ++i) {
-        if (zones[i].type == material_zone_type::water) {
-            // A zone wholly inside others has no rim of its own; ground_y if none of the pond has.
-            levels[i] = lowest[root(i)] < std::numeric_limits<float>::max() ? lowest[root(i)] : area.ground_y;
-        }
-    }
-    return levels;
-}
+// Metres per cell of the solids' grid, a few canopies wide. Any size gives
+// the same contacts; only how many solids each test looks at depends on it.
+constexpr float solid_grid_cell_size = 16.0f;
 
 // The area with its ground built from its holes and zones, and the zone
 // shapes draped on that ground for drawing.
 play_area with_ground(play_area area, const height_grid* land, const float margin, const game_tuning& tuning) {
-    area.ground = build_ground(area.holes, area.zones, land, ground_settings_for(margin, tuning));
-    area.water_levels = water_levels(area);
-    area.material_overlay = build_material_overlay_mesh(area.ground, area.zones, tuning.terrain.material_overlay_spacing);
+    built_ground built = build_ground(area.holes, area.zones, land, ground_settings_for(margin, tuning));
+    area.ground = std::move(built.mesh);
+    area.water_levels = std::move(built.water_levels);
+    area.material_overlay = build_material_overlay_mesh(area.ground, area.zones);
     return area;
 }
 
@@ -169,25 +104,24 @@ play_area with_tee_boxes(play_area area, const std::vector<hole_data>& holes, co
         boxes.push_back(place_tee_box(area, hole, down_hole_at_tee(hole, tuning.hole_sign.look_ahead), tuning.tee_box));
     }
     area.tee_boxes = std::move(boxes);
+    // Their tops are the surface for what is placed on the ground next;
+    // standing_solids makes the whole list once everything stands.
+    area.solids = tee_box_solids(area.tee_boxes, tuning);
+    area.solids_grid = build_solid_grid(area.solids, solid_grid_cell_size);
     return area;
 }
 
 // The area with a sign at each hole's tee, standing on its finished ground.
 play_area with_signs(play_area area, const std::vector<hole_data>& holes, const game_tuning& tuning) {
     area.signs = place_hole_signs(area, holes, tuning.hole_sign);
-    area.sign_posts = hole_sign_posts(area.signs);
     return area;
 }
 
 // The area with `fences` standing on its finished ground.
-play_area with_fences(play_area area, const std::vector<course_world_fence>& fences, const fence_tuning& tuning) {
+play_area with_fences(play_area area, const std::vector<course_world_fence>& fences) {
     for (course_world_fence fence : fences) {
         for (glm::vec3& pole : fence.poles) {
             pole.y = terrain_height(area, pole);
-            area.fence_poles.push_back(tree_body{pole, tree_shape{tuning.pole_radius, fence.height, 0.0f, 0.0f}});
-        }
-        for (std::size_t i = 0; i + 1 < fence.poles.size(); ++i) {
-            area.fence_panels.push_back(fence_panel{fence.poles[i], fence.poles[i + 1], fence.height});
         }
         area.fences.push_back(std::move(fence));
     }
@@ -199,8 +133,6 @@ play_area with_fences(play_area area, const std::vector<course_world_fence>& fen
 play_area with_floodlights(play_area area, const std::vector<hole_data>& holes,
                            const std::vector<course_world_cart_road>& roads, const game_tuning& tuning) {
     area.floodlights = place_floodlights(area, holes, roads, tuning);
-    area.floodlight_poles = floodlight_poles(area.floodlights);
-    area.floodlight_grid = build_tree_grid(area.floodlight_poles, floodlight_grid_cell_size);
     return area;
 }
 
@@ -211,6 +143,7 @@ terrain_mesh build_hole_mesh(const hole_data& hole, const game_tuning& tuning) {
     spline.bank = hole.spline.bank;
     spline.width = ribbon_width(hole);
     spline.fairway_width = hole.spline.width;
+    spline.paints_fairway = !has_fairway_outline(hole);
     spline.sample_count = tuning.terrain.min_sections;
     return build_terrain_mesh(spline);
 }
@@ -287,10 +220,19 @@ play_area build_course_area(const std::vector<hole_data>& holes,
     play_area grounded = with_tee_boxes(with_bounds(with_ground(std::move(course), land, margin, tuning)),
                                         placed_holes, tuning);
     play_area standing = with_floodlights(
-        with_fences(with_signs(std::move(grounded), placed_holes, tuning), world.fences, tuning.fence), placed_holes,
-        world.cart_roads, tuning);
-    standing.obstacles = standing_obstacles(standing, placed_holes, tuning);
-    standing.cart_obstacles = cart_only_obstacles(standing);
+        with_fences(with_signs(std::move(grounded), placed_holes, tuning), world.fences), placed_holes, world.cart_roads,
+        tuning);
+    standing.solids = standing_solids(standing, tuning);
+    standing.solids_grid = build_solid_grid(standing.solids, solid_grid_cell_size);
+    const float unit = tuning.scale.meters_per_world_unit;
+    for (const hole_data& hole : placed_holes) {
+        cup made;
+        made.centre = anchor_on_terrain(standing, hole.pin_position);
+        made.radius = tuning.cup.radius_meters * tuning.cup.leniency / unit;
+        made.depth = tuning.cup.depth_meters / unit;
+        made.rim_radius = tuning.cup.rim_radius_meters / unit;
+        standing.cups.push_back(made);
+    }
     return standing;
 }
 
@@ -309,12 +251,10 @@ terrain_sample sample_area(const play_area& area, const glm::vec3& position, fra
         }
     }
     sample.distance_from_center = on_hole ? on_hole->distance_from_center : 0.0f;
-    for (const tee_box& box : area.tee_boxes) {
-        if (on_tee_box(box, position)) {
-            sample.point.y = box.center.y;
-            sample.normal = world_up;
-            break;
-        }
+    if (const std::optional<float> top = walkable_top_at(area.solids, area.solids_grid, position);
+        top && *top > sample.point.y) {
+        sample.point.y = *top;
+        sample.normal = world_up;
     }
     record_terrain_sample(profile, sample.triangles_tested);
     return sample;
@@ -340,18 +280,13 @@ glm::vec3 tee_stance_position(const play_area& area, const glm::vec3& ball, cons
     return stance;
 }
 
-glm::vec3 address_stance_position(const play_area& area, const glm::vec3& ball, const float aim_angle,
-                                  const player_tuning& player, frame_profile* profile) {
-    const glm::vec3 forward = yaw_direction(aim_angle);
-    glm::vec3 stance = ball + yaw_left(forward) * player.ball_stand_off_distance - forward * player.address_back_distance;
-    stance.y = terrain_height(area, stance, profile);
-    return stance;
-}
-
-bool on_cart_road(const std::vector<course_world_cart_road>& roads, const glm::vec3& position, const cart_tuning& cart) {
+namespace {
+// Within `margin` past a road's half width of it, and never less than `least`.
+bool near_cart_road(const std::vector<course_world_cart_road>& roads, const glm::vec3& position, const float margin,
+                    const float least) {
     const glm::vec3 point = horizontal(position);
     for (const course_world_cart_road& road : roads) {
-        const float reach = std::max(cart.min_road_reach, road.width * 0.5f + cart.road_reach_margin);
+        const float reach = std::max(least, road.width * 0.5f + margin);
         for (std::size_t i = 0; i + 1 < road.polyline.size(); ++i) {
             const glm::vec3 a = horizontal(road.polyline[i]);
             const glm::vec3 ab = horizontal(road.polyline[i + 1]) - a;
@@ -363,6 +298,45 @@ bool on_cart_road(const std::vector<course_world_cart_road>& roads, const glm::v
         }
     }
     return false;
+}
+
+const cart_surface_tuning& cart_surface(const cart_surfaces_tuning& surfaces, const terrain_material material) {
+    switch (material) {
+    case terrain_material::fairway:
+        return surfaces.fairway;
+    case terrain_material::green:
+        return surfaces.green;
+    case terrain_material::bunker:
+        return surfaces.bunker;
+    case terrain_material::water:
+        return surfaces.water;
+    case terrain_material::rough:
+        break;
+    }
+    return surfaces.rough;
+}
+}
+
+bool on_cart_road(const std::vector<course_world_cart_road>& roads, const glm::vec3& position, const cart_tuning& cart) {
+    return near_cart_road(roads, position, cart.road_reach_margin, cart.min_road_reach);
+}
+
+cart_ground cart_ground_at(const play_area& area, const std::vector<course_world_cart_road>& roads, const game_tuning& tuning,
+                           const float wetness, const glm::vec3& position, frame_profile* profile) {
+    const terrain_sample sample = sample_area(area, position, profile);
+    const cart_surfaces_tuning& surfaces = tuning.surfaces.cart;
+    const bool on_road = near_cart_road(roads, position, 0.0f, 0.0f);
+    const cart_surface_tuning& surface = on_road ? surfaces.path : cart_surface(surfaces, sample.material);
+    const float wet = clamp01(wetness);
+    cart_ground ground;
+    ground.normal = sample.normal;
+    ground.rolling_resistance = surface.rolling_resistance * glm::mix(1.0f, surface.wet_rolling_resistance_scale, wet);
+    ground.grip = surface.grip * glm::mix(1.0f, surface.wet_grip_scale, wet);
+    // A cart road over water is its bridge or ford.
+    if (sample.material == terrain_material::water && !on_road) {
+        ground.water_depth = std::max(0.0f, sample.water_level - sample.point.y) * tuning.scale.meters_per_world_unit;
+    }
+    return ground;
 }
 
 std::vector<tree_body> standing_trees(const play_area& area, frame_profile* profile) {

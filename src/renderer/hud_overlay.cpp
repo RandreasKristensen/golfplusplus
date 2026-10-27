@@ -1,6 +1,7 @@
 #include "renderer/hud_overlay.h"
 
 #include "renderer/online_overlay.h"
+#include "renderer/osd_overlay.h"
 
 #include "game/text_ids.h"
 #include "renderer/control_icons.h"
@@ -19,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include <glm/common.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/vec4.hpp>
 
@@ -53,139 +55,32 @@ void draw_mode_label(overlay_batch& batch, const text_assets& text, const std::s
     draw_label(batch, text.font, find_text_style(text, style_hud_mode), label, rect_from_edges(-0.27f, 0.85f, 0.27f, 0.97f));
 }
 
-// The swing clock, bottom right: a quarter of a clock face whose hand is
-// the club, from address at 6 round to the top of the backswing at 12 (the
-// golfer's clock system, its half circle folded into a quarter). Round on
-// the screen at any aspect ratio.
-struct swing_clock {
-    glm::vec2 pivot;
-    float radius;   // clip y
-    float x_per_y;  // clip x per clip y for the same number of pixels
-
-    // `fraction` 0 is 6 o'clock (pointing left), 1 is 12 (up).
-    glm::vec2 point(const float fraction, const float radius_share) const {
-        const float angle = glm::pi<float>() * (1.0f - 0.5f * fraction);
-        return pivot + glm::vec2(std::cos(angle) * x_per_y, std::sin(angle)) * (radius * radius_share);
+// Thin corner brackets round what the wheel would change, where it is on screen.
+void draw_setup_outline(overlay_batch& batch, const std::vector<glm::vec3>& points, const glm::mat4& view_proj) {
+    glm::vec2 low(1.0f);
+    glm::vec2 high(-1.0f);
+    for (const glm::vec3& point : points) {
+        const std::optional<glm::vec2> projected = project_to_screen(view_proj, point);
+        if (!projected) {
+            return;
+        }
+        low = glm::min(low, *projected);
+        high = glm::max(high, *projected);
     }
-};
-
-// A ring between two radius shares from fraction `from` to `to` (an inner
-// share of 0 is a pie wedge).
-void draw_clock_ring(overlay_batch& batch,
-                     const swing_clock& clock,
-                     const float inner,
-                     const float outer,
-                     const float from,
-                     const float to,
-                     const glm::vec3 color,
-                     const float alpha) {
-    constexpr float quarter_segments = 24.0f;
-    const int segments = std::max(1, static_cast<int>(std::ceil((to - from) * quarter_segments)));
-    for (int i = 0; i < segments; ++i) {
-        const float a = from + (to - from) * static_cast<float>(i) / static_cast<float>(segments);
-        const float b = from + (to - from) * static_cast<float>(i + 1) / static_cast<float>(segments);
-        draw_overlay_corner_quad(batch, clock.point(a, inner), clock.point(a, outer), clock.point(b, outer), clock.point(b, inner), color, alpha);
-    }
-}
-
-// A key cap on the clock: lit when it is the key to press now.
-void draw_swing_key(overlay_batch& batch, const text_assets& text, const char* key, const ui_rect& cap, const bool lit) {
-    draw_overlay_quad(batch, cap.center, cap.half_size, lit ? hud_amber * 0.30f : glm::vec3(0.035f, 0.038f, 0.040f), 0.92f);
-    draw_button_outline(batch, cap.center, cap.half_size, lit ? hud_amber : hud_outline_color, lit ? 0.92f : 0.34f);
-    const text_style& style = find_text_style(text, style_control_key);
-    draw_label(batch, text.font, with_color(style, lit ? hud_amber : style.color * 0.60f), lookup_text(text, key), cap);
-}
-
-void draw_swing_clock(overlay_batch& batch, const text_assets& text, const float swing_power, const bool swing_running) {
-    const float power = std::clamp(swing_power, 0.0f, 1.0f);
-    const float x_per_y = batch.grid.width > 0 ? static_cast<float>(batch.grid.height) / static_cast<float>(batch.grid.width) : 1.0f;
-    const swing_clock clock{glm::vec2(0.91f, -0.84f), 0.46f, x_per_y};
-    const swing_clock shadow{clock.pivot + glm::vec2(0.012f, -0.014f), clock.radius, x_per_y};
-    constexpr float line = 0.008f;
-
-    draw_clock_ring(batch, shadow, 0.0f, 1.0f, 0.0f, 1.0f, glm::vec3(0.0f), 0.22f);
-    draw_clock_ring(batch, clock, 0.0f, 1.0f, 0.0f, 1.0f, hud_panel_color, 0.80f);
-    draw_clock_ring(batch, clock, 1.0f - line / clock.radius, 1.0f, 0.0f, 1.0f, hud_outline_color, 0.54f);
-    const glm::vec2 six_end = clock.point(0.0f, 1.0f);
-    const glm::vec2 twelve_end = clock.point(1.0f, 1.0f);
-    draw_overlay_quad(batch,
-                      glm::vec2((six_end.x + clock.pivot.x) * 0.5f, clock.pivot.y),
-                      glm::vec2((clock.pivot.x - six_end.x) * 0.5f, line * 0.5f),
-                      hud_outline_color,
-                      0.54f);
-    draw_overlay_quad(batch,
-                      glm::vec2(clock.pivot.x, (twelve_end.y + clock.pivot.y) * 0.5f),
-                      glm::vec2(line * 0.5f * x_per_y, (twelve_end.y - clock.pivot.y) * 0.5f),
-                      hud_outline_color,
-                      0.54f);
-
-    draw_clock_ring(batch, clock, 0.64f, 0.76f, 0.0f, 1.0f, glm::vec3(0.030f, 0.032f, 0.034f), 0.92f);
-    if (power > 0.0f) {
-        draw_clock_ring(batch, clock, 0.67f, 0.73f, 0.0f, power, hud_amber, 0.92f);
-    }
-
-    const text_style& hours = find_text_style(text, style_hud_scale);
-    const glm::vec2 hour_half(0.05f * x_per_y, 0.034f);
-    const std::array<std::pair<float, const char*>, 3> numbered{
-        {{0.07f, text_hud_swing_six}, {0.5f, text_hud_swing_nine}, {0.92f, text_hud_swing_twelve}}};
-    for (const auto& [fraction, key] : numbered) {
-        draw_label(batch, text.font, hours, lookup_text(text, key), ui_rect{clock.point(fraction, 0.88f), hour_half});
-    }
-
-    // The club: its shaft from the pivot, its head on the track, trailing
-    // towards 6 (or leading, at address, so it stays on the dial).
-    const glm::vec3 club_color(0.98f, 0.80f, 0.24f);
-    constexpr float head_share = 0.07f;
-    const float head_from = std::max(0.0f, power - head_share);
-    draw_overlay_segment(batch, clock.pivot, clock.point(power, 0.74f), 0.010f, club_color, 0.96f);
-    draw_clock_ring(batch, clock, 0.63f, 0.77f, head_from, head_from + head_share, club_color, 0.96f);
-
-    // Beyond the ends of the swing: E towards 12, where the backswing goes,
-    // and Q towards 6, where the downswing goes.
-    const glm::vec2 cap_half(0.048f * x_per_y, 0.048f);
-    const float gap = 0.024f;
-    const ui_rect e_cap{glm::vec2(clock.pivot.x - cap_half.x, twelve_end.y + gap + cap_half.y), cap_half};
-    const ui_rect q_cap{glm::vec2(six_end.x - gap * x_per_y - cap_half.x, clock.pivot.y + cap_half.y), cap_half};
-    draw_swing_key(batch, text, text_controls_key_e, e_cap, !swing_running);
-    draw_swing_key(batch, text, text_controls_key_q, q_cap, swing_running);
-}
-
-void draw_cart_hud(overlay_batch& batch, const text_assets& text, const render_data& data) {
-    if (!data.driving_cart) {
+    if (points.empty()) {
         return;
     }
-
-    const glm::vec3 panel_color(0.055f, 0.060f, 0.065f);
-    const glm::vec3 outline_color(0.60f, 0.62f, 0.56f);
-    const glm::vec3 meter_color(0.72f, 0.80f, 0.36f);
-
-    const glm::vec2 panel_center(-0.74f, 0.72f);
-    const glm::vec2 panel_half(0.19f, 0.13f);
-    draw_overlay_quad(batch, panel_center + glm::vec2(0.012f, -0.012f), panel_half, glm::vec3(0.0f), 0.18f);
-    draw_overlay_quad(batch, panel_center, panel_half, panel_color, 0.82f);
-    draw_button_outline(batch, panel_center, panel_half, outline_color, 0.52f);
-
-    const ui_rect text_area = rect_from_edges(panel_center.x - 0.17f, panel_center.y - 0.05f, panel_center.x + 0.17f, panel_center.y + 0.12f);
-    draw_label(batch, text.font, find_text_style(text, style_cart_label), lookup_text(text, text_hud_cart), rect_row(text_area, 0, 2));
-    draw_label(batch,
-               text.font,
-               find_text_style(text, style_cart_drive),
-               lookup_text(text, text_hud_cart_drive),
-               rect_row(text_area, 1, 2));
-
-    const glm::vec2 track_center = panel_center + glm::vec2(0.0f, -0.085f);
-    const glm::vec2 track_half(0.150f, 0.024f);
-    draw_overlay_quad(batch, track_center, track_half, glm::vec3(0.028f, 0.030f, 0.032f), 0.92f);
-    draw_button_outline(batch, track_center, track_half, outline_color, 0.46f);
-
-    const float speed_ratio = std::clamp(data.cart_speed_fraction, 0.0f, 1.0f);
-    if (speed_ratio > 0.0f) {
-        const float fill_half_width = track_half.x * speed_ratio;
-        draw_overlay_quad(batch,
-                          glm::vec2(track_center.x - track_half.x + fill_half_width, track_center.y),
-                          glm::vec2(fill_half_width, track_half.y * 0.60f),
-                          meter_color,
-                          0.94f);
+    const float x_per_y = batch.grid.width > 0 ? static_cast<float>(batch.grid.height) / static_cast<float>(batch.grid.width) : 1.0f;
+    const glm::vec2 margin(0.035f * x_per_y, 0.035f);
+    low -= margin;
+    high += margin;
+    const glm::vec2 arm = glm::min((high - low) * 0.35f, glm::vec2(0.06f * x_per_y, 0.06f));
+    constexpr float line = 0.006f;
+    const glm::vec3 color(0.96f, 0.94f, 0.86f);
+    for (const glm::vec2& corner : {low, high, glm::vec2(low.x, high.y), glm::vec2(high.x, low.y)}) {
+        const glm::vec2 inward(corner.x == low.x ? 1.0f : -1.0f, corner.y == low.y ? 1.0f : -1.0f);
+        draw_overlay_segment(batch, corner, corner + glm::vec2(arm.x * inward.x, 0.0f), line, color, 0.9f);
+        draw_overlay_segment(batch, corner, corner + glm::vec2(0.0f, arm.y * inward.y), line, color, 0.9f);
     }
 }
 
@@ -401,15 +296,29 @@ void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& 
         draw_rangefinder(batch, text, data, view_proj);
     }
     draw_mode_label(batch, text, data.mode_label);
-    draw_cart_hud(batch, text, data);
     draw_club_label(batch, text, data.selected_club_label, data.selected_club_name);
     draw_xp_drops(batch, text, data.xp_drops);
+    draw_setup_outline(batch, data.setup_outline, view_proj);
+    draw_world_segments(batch, data.solid_outlines, view_proj);
+    draw_shot_preview(batch, data, view_proj);
     if (data.show_swing_clock) {
-        draw_swing_clock(batch, text, data.swing_power, data.swing_running);
+        draw_swing_clock(batch, text, data.swing_backswing, data.swing_backswing_max);
+        draw_setup_word(batch, text, data.setup_word);
+    }
+    if (data.bag_shown) {
+        draw_bag_pictogram(batch, *data.bag_shown);
+    }
+    if (data.club_picker) {
+        draw_club_picker(batch, text, *data.club_picker);
+    } else if (data.show_address_hints) {
+        draw_address_hints(batch, text);
+    } else if (data.show_bag_hints) {
+        draw_bag_hints(batch, text);
     }
     if (data.show_interact_prompt) {
         draw_interact_prompt(batch, text);
     }
+    draw_give_up_prompt(batch, text, data.give_up_label);
     draw_stroke_ticks(batch, data.stroke_count);
     draw_notice(batch, text, data.notice_label);
 }

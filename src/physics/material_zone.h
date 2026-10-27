@@ -1,10 +1,14 @@
 #pragma once
 
-// Authored surface zones (green, bunker, water) that shape and colour the
-// terrain, and the one test of where a point sits in one: everything that asks
-// whether a point is in a zone, or how far in, goes through here.
+// Authored surface zones (green, bunker, water, fairway) that shape and
+// colour the terrain, each its mapped outline, and the one test of where a
+// point sits in one: everything that asks whether a point is in a zone, or
+// how far in, goes through here. Edge blends (a bunker's lip, a pond's bank)
+// fall off with distance from the edge in metres. Pure.
 
+#include <array>
 #include <optional>
+#include <vector>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -13,39 +17,55 @@ enum class material_zone_type {
     green,
     bunker,
     water,
+    fairway,
     unknown  // unrecognised type in the data; ignored by terrain building
 };
 
-// An ellipse on the ground around `center`, with semi-axes `radii.x` along
-// its own x and `radii.y` along its own z (a circle has equal radii), turned
-// by `rotation` radians about the vertical (rotate_about_y,
-// physics/vector_math.h). A placed hole adds its own turn, the way it turns
-// everything else in the hole.
+// A zone is its outline on the ground: points (x, z) round its edge, either
+// way round, the last joined back to the first, the edge never crossing
+// itself. `center` and `half_size` are its box's (y 0), kept with it.
 struct material_zone {
     material_zone_type type = material_zone_type::unknown;
+    std::vector<glm::vec2> outline;
     glm::vec3 center{0.0f};
-    glm::vec2 radii{0.0f};
-    float rotation = 0.0f;
+    glm::vec2 half_size{0.0f};
 };
 
-// How far into the zone `position` is, ignoring height: 0 at the centre, 1 on
-// the edge, the fraction of the way out along the line from the centre. For a
-// circle that is distance / radius; an ellipse is that circle stretched along
-// its axes. Edge blends (a bunker's lip, a pond's bank) fall off along it, so
-// they keep their shape however the zone is stretched. nullopt outside.
-std::optional<float> zone_normalized_distance(const material_zone& zone, const glm::vec3& position);
+// The zone of `type` round `outline`, its box worked out.
+material_zone make_material_zone(material_zone_type type, std::vector<glm::vec2> outline);
 
-// How far `position` is beyond the zone's edge, ignoring height, along the
-// line from its centre: 0 inside, the largest float for a zone of no size.
+// Whether `position` (ignoring height) is inside the outline.
+bool zone_contains(const material_zone& zone, const glm::vec3& position);
+
+// How far (metres, ignoring height) `position` is from the outline's edge,
+// inside or out.
+float zone_edge_distance(const material_zone& zone, const glm::vec3& position);
+
+// How far inside the zone `position` is: its distance from the edge; nullopt
+// outside.
+std::optional<float> zone_depth_inside(const material_zone& zone, const glm::vec3& position);
+
+// How far beyond the zone's edge `position` is: 0 inside.
 float zone_distance_outside(const material_zone& zone, const glm::vec3& position);
 
-inline bool zone_contains(const material_zone& zone, const glm::vec3& position) {
-    return zone_normalized_distance(zone, position).has_value();
+// Half the size of the zone along world x and z: the box around it (about `center`).
+inline glm::vec2 zone_half_extent(const material_zone& zone) {
+    return zone.half_size;
 }
 
-// The world point at `local` (x, z) in the zone's own frame: from its centre,
-// before its rotation. Height is the centre's.
-glm::vec3 zone_world_point(const material_zone& zone, const glm::vec2& local);
+// A piece of an edge: its two ends.
+using zone_edge = std::array<glm::vec2, 2>;
 
-// Half the size of the turned zone along world x and z: the box around it.
-glm::vec2 zone_half_extent(const material_zone& zone);
+// The pieces of `zone`'s edge outside all of `others`: where it is the edge
+// of the ground they cover together.
+std::vector<zone_edge> edge_outside(const material_zone& zone, const std::vector<const material_zone*>& others);
+
+// How far (metres, ignoring height) `position` is from the nearest of `edges`.
+float edges_distance(const std::vector<zone_edge>& edges, const glm::vec3& position);
+
+// The outline's area in square metres.
+float zone_area(const material_zone& zone);
+
+// The outline cut into triangles that cover it exactly (ear clipping), each
+// its three corners.
+std::vector<std::array<glm::vec2, 3>> zone_triangles(const material_zone& zone);

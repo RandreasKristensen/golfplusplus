@@ -1,0 +1,22 @@
+{
+  "kind": "club",
+  "colors": {
+    "grip": [0.08, 0.08, 0.075],
+    "shaft": [0.18, 0.18, 0.2],
+    "head": [0.1, 0.1, 0.11],
+    "face": [0.42, 0.41, 0.38],
+    "crown": [0.06, 0.06, 0.065]
+  },
+  "parts": [
+    {"shape": "cylinder", "from": [0, -0.27, 0], "to": [0, 0, 0], "radius": 0.016, "color": "grip"},
+    {"shape": "cylinder", "from": [0, -1.08, 0], "to": [0, -0.27, 0], "radius": 0.011, "color": "shaft"},
+    {"shape": "cylinder", "from": [0, -1.12, 0], "to": [0, -1.08, 0], "radius": 0.015, "color": "head"},
+    {"shape": "box", "at": [-0.06, -1.12, -0.05], "size": [0.12, 0.06, 0.11], "color": "head"},
+    {"shape": "panel", "at": [-0.06, -1.12, 0.006], "size": [0.11, 0.05], "color": "face"},
+    {"shape": "panel", "at": [-0.06, -1.089, -0.05], "size": [0.11, 0.1], "turn": [-90, 0, 0], "color": "crown"}
+  ],
+  "points": {
+    "grip": [0, 0, 0],
+    "face": [-0.06, -1.12, 0.006]
+  }
+}

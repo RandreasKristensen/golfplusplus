@@ -18,9 +18,12 @@ struct fake_stdb_bridge {
         std::string name;    // the C function, e.g. "stdb_take_shot"
         std::string text;    // its text argument, if any
         std::int64_t number = 0;
+        bool flag = false;   // its bool argument, if any
         stdb_motion motion{};
         stdb_shot shot{};
-        std::string club_id;  // shot.club_id, copied
+        std::string club_id;          // shot.club_id, copied
+        std::vector<int> flags_out;   // shot.flags_out, copied
+        float position[4] = {0.0f, 0.0f, 0.0f, 0.0f};  // stdb_place_bag's x, y, z, yaw
     };
 
     std::vector<call> calls;

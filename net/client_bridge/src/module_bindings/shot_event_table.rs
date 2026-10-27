@@ -3,6 +3,7 @@
 
 #![allow(unused, clippy::all)]
 use super::shot_event_row_type::ShotEventRow;
+use super::snapshot_row_entry_type::SnapshotRowEntry;
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 /// Table handle for the table `shot_event`.

@@ -2,9 +2,10 @@
 
 // The tee box at every hole's tee: a flat platform of tiles under a turf mat,
 // long down the hole. Placed at runtime from the hole and the ground under it
-// (no authored data). Its top sits just over the highest ground it covers, so
-// it never dips into the land; sample_area returns that top inside it, so the
-// ball is teed up, played and stood on there, the same on the server. Pure.
+// (no authored data). Its top sits tee_box.padding over the highest ground it
+// covers, so it never dips into the land. As a solid (game/area_solids.h) its
+// top is walkable, the surface there, so the ball is teed up, played and
+// stood on it, the same on the server, and its sides stand in the way. Pure.
 // Drawn by renderer/world_marker_batch.h.
 
 #include "game/game_tuning.h"

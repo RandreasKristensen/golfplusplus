@@ -1,37 +1,10 @@
 #include "physics/collision.h"
 
+#include "physics/det_math.h"
 #include "physics/vector_math.h"
 
 #include <algorithm>
 #include <cmath>
-
-namespace {
-// Binary digits of a fractional power taken by square roots: far finer
-// than a float's precision for any step.
-constexpr int power_fraction_bits = 20;
-
-// `base` (0..1) to the power `exponent` (0 or more) by multiplications and
-// square roots, which IEEE rounds exactly on every machine, unlike std::pow:
-// the server's WASM replays a shot bit for bit.
-float exact_power(const float base, const float exponent) {
-    const float whole = std::floor(exponent);
-    float result = 1.0f;
-    for (int i = 0; i < static_cast<int>(whole); ++i) {
-        result *= base;
-    }
-    float fraction = exponent - whole;
-    float root = base;
-    for (int bit = 0; bit < power_fraction_bits && fraction > 0.0f; ++bit) {
-        root = std::sqrt(root);
-        fraction *= 2.0f;
-        if (fraction >= 1.0f) {
-            result *= root;
-            fraction -= 1.0f;
-        }
-    }
-    return result;
-}
-}
 
 float contact_friction_keep(const float friction, const float dt) {
     const float per_reference = 1.0f - clamp01(friction);

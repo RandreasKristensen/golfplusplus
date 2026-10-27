@@ -34,13 +34,13 @@ float ground_height(const play_area& area, const glm::vec3& position) {
 }
 }
 
-TEST_CASE("every hole of a hub course gets a tee box on its tee, facing like its sign") {
+TEST_CASE("every hole of a course gets a tee box on its tee, facing like its sign") {
     const game_state state = started_game(fixture_hub_course());
-    REQUIRE(state.hub);
-    REQUIRE(state.area.tee_boxes.size() == state.hub->markers.size());
+    REQUIRE(course_started(state));
+    REQUIRE(state.area.tee_boxes.size() == state.holes.size());
     for (std::size_t i = 0; i < state.area.tee_boxes.size(); ++i) {
         const tee_box& box = state.area.tee_boxes[i];
-        CHECK(horizontal_distance(box.center, state.hub->markers[i].tee_position) < 0.001f);
+        CHECK(horizontal_distance(box.center, state.holes[i].tee_position) < 0.001f);
         CHECK(near(box.down_hole, state.area.signs[i].down_hole));
         CHECK(box.half_width * 2.0f == state.tuning.tee_box.width);
         CHECK(box.half_length * 2.0f == state.tuning.tee_box.length);
@@ -79,9 +79,9 @@ TEST_CASE("a tee box on a slope is flat over its highest ground, its sides down 
 TEST_CASE("a teed-up ball rests on the tee box") {
     const game_state state = started_hole();
     REQUIRE(state.area.tee_boxes.size() == state.course_holes.size());
-    const tee_box& box = state.area.tee_boxes[state.hole->index];
-    CHECK(on_tee_box(box, state.ball.position));
-    CHECK(std::abs(state.ball.position.y - (box.center.y + state.ball.radius)) < 1e-4f);
+    const tee_box& box = state.area.tee_boxes[state.ball->hole];
+    CHECK(on_tee_box(box, state.ball->position));
+    CHECK(std::abs(state.ball->position.y - (box.center.y + state.tuning.scale.ball_physics_radius_meters)) < 1e-4f);
     CHECK(on_tee_box(box, state.player.position));
     CHECK(std::abs(state.player.position.y - box.center.y) < 1e-4f);
 }

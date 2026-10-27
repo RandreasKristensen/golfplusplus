@@ -145,6 +145,35 @@ TEST_CASE("Escape leaves a sub-menu for the main menu, and there asks before qui
     CHECK(result.action == startup_action::quit);
 }
 
+TEST_CASE("the natural shot picker opens on straight, starts its course with the shape picked, and Escape goes back") {
+    const startup_catalog catalog = two_courses();
+    startup_flow_state state;
+    open_natural_shape_picker(state, catalog.courses[1].course, play_mode::offline);
+    REQUIRE(state.flow == startup_flow::natural_shape_picker);
+    const render_startup_menu picker = make_startup_menu_render_data(state, catalog, shipped_text_assets());
+    REQUIRE(picker.tiles.size() == 3U);
+    CHECK(picker.tiles[1].selected);
+
+    input_state down;
+    down.down.pressed = true;
+    update_startup_menu(state, down, menu_pointer{}, catalog);
+    input_state accept;
+    accept.enter.pressed = true;
+    const startup_menu_result result = update_startup_menu(state, accept, menu_pointer{}, catalog);
+    CHECK(result.action == startup_action::start_course);
+    CHECK(result.course.id == catalog.courses[1].course.id);
+    REQUIRE(result.natural.has_value());
+    CHECK(*result.natural == natural_shape::fade);
+
+    input_state escape;
+    escape.escape.pressed = true;
+    open_natural_shape_picker(state, catalog.courses[0].course, play_mode::offline);
+    const startup_menu_result back = update_startup_menu(state, escape, menu_pointer{}, catalog);
+    CHECK(back.action == startup_action::none);
+    CHECK(!back.natural);
+    CHECK(state.flow == startup_flow::course_picker);
+}
+
 TEST_CASE("course picker asks app to start the selected course without leaving the menu") {
     const startup_catalog catalog = two_courses();
     startup_flow_state state;

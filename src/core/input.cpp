@@ -10,6 +10,7 @@ input_state next_frame_input(const input_state& input) {
     input_state next;
     next.mouse_x = input.mouse_x;
     next.mouse_y = input.mouse_y;
+    next.right_drag_counts = input.right_drag_counts;
     next.up = held_only(input.up);
     next.down = held_only(input.down);
     next.left = held_only(input.left);
@@ -18,6 +19,7 @@ input_state next_frame_input(const input_state& input) {
     next.left_shift = held_only(input.left_shift);
     next.right_shift = held_only(input.right_shift);
     next.ctrl = held_only(input.ctrl);
+    next.alt = held_only(input.alt);
     next.enter = held_only(input.enter);
     next.tab = held_only(input.tab);
     next.caps_lock = held_only(input.caps_lock);
@@ -30,11 +32,19 @@ input_state next_frame_input(const input_state& input) {
     next.key_e = held_only(input.key_e);
     next.key_f = held_only(input.key_f);
     next.key_q = held_only(input.key_q);
+    next.key_r = held_only(input.key_r);
+    next.key_v = held_only(input.key_v);
+    next.key_z = held_only(input.key_z);
+    next.key_c = held_only(input.key_c);
+    next.key_b = held_only(input.key_b);
     next.key_m = held_only(input.key_m);
     next.key_1 = held_only(input.key_1);
     next.key_2 = held_only(input.key_2);
     next.key_g = held_only(input.key_g);
+    next.key_p = held_only(input.key_p);
     next.key_t = held_only(input.key_t);
     next.mouse_left = held_only(input.mouse_left);
+    next.mouse_right = held_only(input.mouse_right);
+    next.mouse_middle = held_only(input.mouse_middle);
     return next;
 }

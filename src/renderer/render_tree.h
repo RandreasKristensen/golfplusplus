@@ -2,7 +2,7 @@
 
 // GL-free per-instance data for the instanced tree draw (unit tested).
 
-#include "physics/tree_collision.h"
+#include "physics/tree_body.h"
 #include "renderer/render_mesh.h"
 
 #include <vector>

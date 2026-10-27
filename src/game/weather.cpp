@@ -18,6 +18,7 @@ constexpr std::uint32_t wind_direction_stream = 0x54u;
 constexpr std::uint32_t prevailing_stream = 0x55u;
 constexpr std::uint32_t damp_stream = 0x57u;
 constexpr std::uint32_t regime_stream = 0x58u;
+constexpr std::uint32_t temperature_stream = 0x59u;
 // Cloud from this cover on counts as cloudy, thunder from this a thunderstorm.
 constexpr float cloudy_cover = 0.5f;
 constexpr float thunderstorm_thunder = 0.5f;
@@ -278,11 +279,29 @@ weather_state with_weather_kind(weather_state weather, const weather_kind kind, 
     return weather;
 }
 
+float temperature_at(const weather_tuning& tuning, const course_definition& course, const double hours, const float cloud,
+                     const float rain, const float noise) {
+    const temperature_tuning& t = tuning.temperature;
+    // Local hour of the day, then how far round from the coldest hour to the
+    // warmest (rising) or back (falling).
+    const double local = hours + static_cast<double>(course.sky.utc_offset_hours);
+    const float hour = static_cast<float>(local - hours_per_day * std::floor(local / hours_per_day));
+    const float rise_hours = t.warmest_hour - t.coldest_hour;
+    const float since_coldest = hour >= t.coldest_hour ? hour - t.coldest_hour : hour + 24.0f - t.coldest_hour;
+    const float share = since_coldest <= rise_hours ? since_coldest / rise_hours
+                                                    : 1.0f - (since_coldest - rise_hours) / (24.0f - rise_hours);
+    const float warmth = share * share * (3.0f - 2.0f * share);  // 0 coldest .. 1 warmest
+    const float range = course.air.daily_temperature_range_c * (1.0f - t.cloud_range_damping * clamp01(cloud));
+    return course.air.mean_temperature_c + range * (warmth - 0.5f) - t.rain_cooling_c * clamp01(rain) +
+        t.noise_c * (2.0f * noise - 1.0f);
+}
+
 weather_state weather_at(const weather_tuning& weather,
                          const wind_tuning& wind,
                          const sky_timeline& clock,
-                         const std::uint32_t seed,
+                         const course_definition& course,
                          const std::int64_t unix_ms) {
+    const std::uint32_t seed = course_weather_seed(course.id);
     const double hours = game_day_at(clock, unix_ms) * hours_per_day;
     weather_state out;
     const float lagged = storm_track(weather, seed).at(hours - static_cast<double>(weather.rain_lag_hours));
@@ -294,7 +313,10 @@ weather_state weather_at(const weather_tuning& weather,
     out.fog = ramp(damp, weather.fog_start, weather.fog_full);
     out.thunder = ramp(lagged, weather.thunder_start, weather.thunder_full);
     out.wetness = wetness_at(weather, seed, hours);
-    return coupled_weather(out, weather);
+    out = coupled_weather(out, weather);
+    out.temperature_c = temperature_at(weather, course, hours, out.cloud, out.rain,
+                                       noise_track(seed, temperature_stream, weather.temperature.noise_hours).at(hours));
+    return out;
 }
 
 float wind_speed(const weather_state& weather) {

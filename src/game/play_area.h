@@ -10,10 +10,11 @@
 #include "game/hole_data.h"
 #include "game/hole_sign.h"
 #include "game/tee_box.h"
-#include "physics/body_collision.h"
-#include "physics/fence_collision.h"
+#include "physics/cart_dynamics.h"
+#include "physics/cup.h"
+#include "physics/solid.h"
 #include "physics/terrain.h"
-#include "physics/tree_collision.h"
+#include "physics/tree_body.h"
 #include "profiling/profiling.h"
 
 #include <vector>
@@ -43,25 +44,23 @@ struct play_area {
     std::vector<float> water_levels;
     terrain_mesh ground;            // the one surface (physics/ground_mesh.h)
     terrain_mesh material_overlay;  // render-only zone shapes draped over the ground
-    // A flat tee box at each hole's tee, standing on the ground: inside one,
-    // its top is the surface (sample_area).
+    // A flat tee box at each hole's tee, standing on the ground; as solids,
+    // their tops are walkable.
     std::vector<tee_box> tee_boxes;
-    // A sign at every hole's tee, and their posts as shots hit them.
+    // A sign at every hole's tee.
     std::vector<hole_sign> signs;
-    std::vector<tree_body> sign_posts;
-    // The course world's fences with their poles on the ground, and what
-    // shots hit: each pole like a trunk, the net between each pair of poles.
+    // The course world's fences, their poles on the ground.
     std::vector<course_world_fence> fences;
-    std::vector<tree_body> fence_poles;
-    std::vector<fence_panel> fence_panels;
-    // The floodlights along every hole, and their poles as shots hit them.
+    // The floodlights along every hole.
     std::vector<floodlight> floodlights;
-    std::vector<tree_body> floodlight_poles;
-    tree_grid floodlight_grid;
-    // What stands on the ground as players and carts bump into it, and
-    // what stops carts only (game/area_obstacles.h).
-    upright_obstacles obstacles;
-    upright_obstacles cart_obstacles;
+    // Everything solid standing on the ground (game/area_solids.h), and the
+    // grid that finds those near a point. Nothing else here is a collision list.
+    std::vector<solid> solids;
+    solid_grid solids_grid;
+    // Every hole's cup (physics/cup.h), by hole: its centre at the pin on
+    // the green. Its flagstick stands in it or lies beside it by that
+    // green's flag (area_solids.h flagstick_solids).
+    std::vector<cup> cups;
 };
 
 // Hole-space position -> course position for a hole placed at `start`
@@ -84,9 +83,11 @@ play_area build_course_area(const std::vector<hole_data>& holes,
                             const course_world_definition& world,
                             const game_tuning& tuning);
 
-// The ground's height and normal at `position`, with the material there
-// (surface_material: zones, else the holes' fairway or rough, else rough).
-// On a tee box, its flat top instead of the ground.
+// The one surface: the height and normal at `position` of the ground or of
+// a walkable solid's top over it (a tee box's), whichever is higher, with
+// the ground's material there (surface_material: zones, else the holes'
+// fairway or rough, else rough). The ball, standing, walking and driving all
+// stand on it.
 terrain_sample sample_area(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);
 float terrain_height(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);
 // True below the surface of a pond (a camera looking out from under it).
@@ -100,14 +101,16 @@ glm::vec3 resting_ball_position(const play_area& area, const glm::vec3& position
 // line to `pin`, on the ground.
 glm::vec3 tee_stance_position(const play_area& area, const glm::vec3& ball, const glm::vec3& pin, float stand_off);
 
-// Where a player addressing `ball` aimed along `aim_angle` stands: to its
-// side and a little behind (tuning.player), on the ground.
-glm::vec3 address_stance_position(const play_area& area, const glm::vec3& ball, float aim_angle,
-                                  const player_tuning& player, frame_profile* profile = nullptr);
-
 // True when `position` (XZ) is within reach of one of `roads`: a road's half
 // width plus cart.road_reach_margin, and never less than cart.min_road_reach.
 bool on_cart_road(const std::vector<course_world_cart_road>& roads, const glm::vec3& position, const cart_tuning& cart);
+
+// What a cart's wheels are on at `position` (XZ): on a cart road (within its
+// half width) the path, else the ground's material, its rolling resistance
+// and grip soaked by `wetness` (0 dry .. 1); the ground's slope; and the
+// water over it, in metres (none on a road: it crosses water by its bridge).
+cart_ground cart_ground_at(const play_area& area, const std::vector<course_world_cart_road>& roads, const game_tuning& tuning,
+                           float wetness, const glm::vec3& position, frame_profile* profile = nullptr);
 
 // The area's trees standing on its terrain, as shots hit them.
 std::vector<tree_body> standing_trees(const play_area& area, frame_profile* profile = nullptr);

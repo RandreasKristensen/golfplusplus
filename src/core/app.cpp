@@ -17,11 +17,13 @@
 #include "game/group_round.h"
 #include "game/lighting_loader.h"
 #include "game/mode_dispatch.h"
+#include "game/model_kinds.h"
 #include "game/net_types.h"
 #include "game/picture_loader.h"
 #include "game/save_manager.h"
 #include "game/settings.h"
 #include "game/text_ids.h"
+#include "game/world_sounds.h"
 #include "renderer/sky_visibility.h"
 #include "renderer/terrain_render_mesh.h"
 
@@ -40,8 +42,6 @@
 namespace {
 constexpr int window_width = 1280;
 constexpr int window_height = 720;
-// Below this speed the cart is parked and its engine loop stops.
-constexpr float cart_engine_idle_speed = 0.05f;
 // GOLFPP_SCREENSHOT is taken on this frame after loading, once the camera and
 // streaming have settled.
 constexpr int screenshot_frame = 120;
@@ -99,28 +99,52 @@ std::string sound_for_event(const audio_event& event) {
     case audio_event_type::swing_start:
         return sound_swing_start;
     case audio_event_type::club_hit:
-        return event.club_hit_sound;
+    case audio_event_type::item_use:
+        return event.sound;
     case audio_event_type::ball_land:
         if (event.material == terrain_material::water) {
             return sound_ball_splash;
         }
         return event.material == terrain_material::bunker ? sound_ball_land_bunker : sound_ball_land_grass;
-    case audio_event_type::ball_tree_hit:
+    case audio_event_type::ball_hit:
+        switch (event.hit) {
+        case shot_event_kind::pole_hit:
+            return sound_ball_pole_hit;
+        case shot_event_kind::board_hit:
+            return sound_ball_board_hit;
+        case shot_event_kind::flag_hit:
+            return sound_ball_flag_hit;
+        case shot_event_kind::cup_rattle:
+            return sound_ball_cup_rattle;
+        case shot_event_kind::leaves:
+            return sound_ball_leaves;
+        case shot_event_kind::person_hit:
+            return sound_ball_person_hit;
+        case shot_event_kind::ball_hit:
+            return sound_ball_ball_hit;
+        case shot_event_kind::land:
+        case shot_event_kind::tree_hit:
+            break;
+        }
         return sound_ball_tree_hit;
     case audio_event_type::ball_cup:
         return sound_ball_cup;
     case audio_event_type::club_change:
         return sound_club_change;
+    case audio_event_type::bag_moved:
+        return sound_bag_move;
     case audio_event_type::cart_start:
         return sound_cart_start;
     case audio_event_type::cart_crash:
         return sound_cart_crash;
+    case audio_event_type::cart_tip:
+        return sound_cart_tip;
+    case audio_event_type::cart_sink:
+        return sound_cart_sink;
+    case audio_event_type::cart_righted:
+        return sound_cart_righted;
     case audio_event_type::player_bump:
         return sound_player_bump;
-    case audio_event_type::emote_smoke:
-        return sound_emote_smoke;
-    case audio_event_type::emote_beer:
-        return sound_emote_beer;
     }
     return {};
 }
@@ -150,7 +174,7 @@ bool app::init(const startup_options& options) {
         return false;
     }
     lighting_ = std::move(*lighting);
-    prop_set_load_result props = load_props(asset_root);
+    prop_catalog_load_result props = load_props(asset_root);
     if (!props.props) {
         SDL_Log("Failed to load props: %s from %s", props.error.c_str(), asset_root.c_str());
         return false;
@@ -269,6 +293,10 @@ void app::run() {
             running_ = false;
         }
         if (input_.ctrl.pressed) {
+            ctrl_wheeled_ = false;
+        }
+        ctrl_wheeled_ = ctrl_wheeled_ || (input_.ctrl.is_down && input_.wheel_steps != 0);
+        if (input_.ctrl.released && !ctrl_wheeled_) {
             profiler_.enabled = !profiler_.enabled;
         }
         sky_ = scrub_sky(sky_, profiler_.enabled && input_.key_t.is_down, dt);
@@ -294,7 +322,8 @@ void app::run() {
             }
             render_data data = make_frame(dt, menu_.flow != startup_flow::playing, profile);
             present_frame(data, profile);
-        } else if (menu_.confirm_active || (input_.escape.pressed && game_.mode == game_mode::walking)) {
+        } else if (menu_.confirm_active ||
+                   (input_.escape.pressed && game_.mode == game_mode::walking && !game_.give_up_prompt && !game_.picker)) {
             update_confirm_menu(profile);
         } else {
             update_round(dt, profile);
@@ -340,9 +369,13 @@ void app::return_to_menu() {
 #endif
     return_to_main_menu(menu_);
     reset_to_menu_backdrop();
-    audio_.stop_loop(sound_cart_drive_loop);
-    cart_loop_playing_ = false;
+    stop_motor_loops();
     audio_.start_ambience(sound_ambience_menu_vcr);
+}
+
+// The settings screen shows the golfer's own settings as they are kept with progress.
+void app::show_golfer_settings() {
+    menu_.settings[setting_natural_shape] = natural_shape_index(my_golfer(game_).natural);
 }
 
 // Only the offline save is ever written: online progress lives on the server.
@@ -354,11 +387,16 @@ void app::save_progress() {
 }
 
 void app::apply_settings(const bool write) {
+    const natural_shape natural = *natural_shape_from_index(
+        setting_value(menu_.settings, *find_setting(content_.settings, setting_natural_shape)));
+    if (write && natural != my_golfer(game_).natural) {
+        record_natural_shape(game_, natural);
+    }
     audio_.set_levels(audio_levels_from_settings(menu_.settings, content_.settings));
     // load_game_content refuses settings without fullscreen.
     window_.set_fullscreen(setting_value(menu_.settings, *find_setting(content_.settings, setting_fullscreen)) != 0);
     renderer_.set_tape_wear(setting_fraction(menu_.settings, *find_setting(content_.settings, setting_tape_wear)));
-    if (write && !write_settings(settings_path_, menu_.settings)) {
+    if (write && !write_settings(settings_path_, menu_.settings, content_.settings)) {
         SDL_Log("Failed to write settings %s", settings_path_.string().c_str());
     }
 }
@@ -366,6 +404,7 @@ void app::apply_settings(const bool write) {
 void app::update_menu(frame_profile* profile) {
     set_mouse_captured(false);
     const online_menu_status online = online_status();
+    show_golfer_settings();
     const startup_menu_result result =
         update_startup_menu(menu_, input_, mouse_menu_pointer(input_, window_.sdl_window()), catalog_, online);
     play_ui_sounds(audio_, result.sounds);
@@ -373,8 +412,18 @@ void app::update_menu(frame_profile* profile) {
         apply_settings(true);
     }
     carry_out(result.requests);
+    if (result.action == startup_action::start_course) {
+        game_.play = result.play;
+    }
+    if (result.natural) {
+        record_natural_shape(game_, *result.natural);
+        save_progress();
+    }
     if (result.action == startup_action::quit) {
         running_ = false;
+    } else if (result.action == startup_action::start_course && !natural_shape_picked(game_)) {
+        // A golfer's first round starts once they have picked a natural shot.
+        open_natural_shape_picker(menu_, result.course, result.play);
     } else if (result.action == startup_action::start_course) {
         game_.play = result.play;
         if (start_course(game_, result.course)) {
@@ -443,8 +492,9 @@ void app::update_confirm_menu(frame_profile* profile) {
     set_mouse_captured(false);
     if (!menu_.confirm_active) {
         // Opened this frame; the same key press must not also answer it.
-        open_confirm_menu(menu_);
+        open_confirm_menu(menu_, ball_in_play(game_) ? std::optional<std::size_t>(game_.ball->hole) : std::nullopt);
     } else {
+        show_golfer_settings();
         const confirm_menu_result result =
             ::update_confirm_menu(menu_, input_, mouse_menu_pointer(input_, window_.sdl_window()), catalog_);
         play_ui_sounds(audio_, result.sounds);
@@ -453,6 +503,9 @@ void app::update_confirm_menu(frame_profile* profile) {
         }
         if (result.leave_round) {
             return_to_menu();
+        }
+        if (result.give_up_hole) {
+            give_up_hole(game_);
         }
     }
     set_text_input_enabled(wants_text_input(menu_));
@@ -483,35 +536,54 @@ float app::mouse_look_radians() const {
 void app::update_round(const float dt, frame_profile* profile) {
     {
         const profile_scope timer(profile, profile_stage::update_game);
-        update_game(game_, game_input_from_keys(god_.open ? without_god_menu_keys(input_) : input_, mouse_look_radians()), dt,
-                    profile);
+        game_.hand = setting_value(menu_.settings, *find_setting(content_.settings, setting_handedness)) != 0
+            ? handedness::left
+            : handedness::right;
+        update_game(game_,
+                    game_input_from_keys(god_.open ? without_god_menu_keys(input_) : input_, mouse_look_radians(),
+                                         game_.tuning.setup.drag_threshold_counts),
+                    dt, profile);
     }
     set_mouse_captured(true);
     set_text_input_enabled(false);
     if (game_.save_requested) {
         save_progress();
     }
-    play_game_audio();
 
     render_data data = make_frame(dt, false, profile);
+    play_game_audio();
     present_frame(data, profile);
 }
 
 void app::play_game_audio() {
+    audio_.set_listener(listener_looking(camera_transition_.shown.position, camera_transition_.shown.target),
+                        game_.tuning.scale.meters_per_world_unit);
     for (const audio_event& event : game_.audio_events) {
-        audio_.play(sound_for_event(event));
+        audio_.play_at(sound_for_event(event), event.position);
     }
     game_.audio_events.clear();
 
-    const bool cart_moving = driving_cart(game_) && std::abs(game_.cart.velocity) > cart_engine_idle_speed;
-    if (cart_moving != cart_loop_playing_) {
-        if (cart_moving) {
-            audio_.play_loop(sound_cart_drive_loop);
-        } else {
-            audio_.stop_loop(sound_cart_drive_loop);
-        }
-        cart_loop_playing_ = cart_moving;
+    std::vector<std::string> running;
+    for (const running_motor& motor : running_motors(game_)) {
+        const std::string key = "cart_motor:" + std::to_string(motor.owner);
+        audio_.play_loop(key, sound_cart_drive_loop, motor.position);
+        audio_.place_loop(key, motor.position);
+        audio_.set_loop_pitch(key, motor.pitch);
+        running.push_back(key);
     }
+    for (const std::string& key : motor_loops_) {
+        if (std::find(running.begin(), running.end(), key) == running.end()) {
+            audio_.stop_loop(key);
+        }
+    }
+    motor_loops_ = std::move(running);
+}
+
+void app::stop_motor_loops() {
+    for (const std::string& key : motor_loops_) {
+        audio_.stop_loop(key);
+    }
+    motor_loops_.clear();
 }
 
 void app::refresh_render_meshes() {
@@ -524,10 +596,10 @@ void app::refresh_render_meshes() {
     terrain_render_mesh_ = make_terrain_render_mesh({&game_.area.ground}, revision, colors.ground, light);
     material_overlay_render_mesh_ =
         make_terrain_render_mesh({&game_.area.material_overlay}, revision, colors.ground, light);
-    refresh_render_hole_signs(hole_signs_, game_.area, hole_sign_texts(game_), text_, colors, props_.hole_sign, revision);
-    fences_ = build_render_fences(game_.area, revision, props_.fence.color("post"));
+    refresh_render_hole_signs(hole_signs_, game_.area, hole_sign_texts(game_), text_, colors, props_.at(hole_sign_model), revision);
+    fences_ = build_render_fences(game_.area, revision, props_.at(fence_model).color("post"), game_.tuning.fence.pole_radius);
     water_ = build_render_water(game_.area, revision);
-    floodlights_ = build_render_floodlights(game_.area, revision, props_.floodlight);
+    floodlights_ = build_render_floodlights(game_.area, revision, props_.at(floodlight_model));
     render_meshes_revision_ = revision;
 }
 
@@ -546,7 +618,7 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
     const bool interact_prompt = setting_value(menu_.settings, *find_setting(content_.settings, setting_interact_prompt)) != 0;
     render_data data = make_render_data(game_, text_, content_.skills,
                                         render_meshes{&terrain_render_mesh_, &material_overlay_render_mesh_, &hole_signs_, &fences_, &water_, &floodlights_},
-                                        fov_degrees, interact_prompt, profile);
+                                        props_, fov_degrees, interact_prompt);
 
     const camera_view desired{data.camera_position, data.camera_target, data.camera_fov_degrees};
     const camera_rig rig = active_camera_rig(game_);
@@ -567,6 +639,7 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
     if (god_.open && menu_.flow == startup_flow::playing) {
         data.god_menu = god_menu_frame_view(god_, sky_, game_, text_);
     }
+    data.solid_outlines = god_solid_outlines(god_, game_, data.camera_position);
     return data;
 }
 

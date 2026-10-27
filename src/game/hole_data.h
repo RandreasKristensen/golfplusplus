@@ -1,8 +1,9 @@
 #pragma once
 
 #include "physics/material_zone.h"
-#include "physics/tree_collision.h"
+#include "physics/tree_body.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -32,3 +33,10 @@ struct hole_data {
     std::vector<material_zone> material_zones;
     std::vector<tree_instance> trees;
 };
+
+// Whether the hole's fairway is its fairway outlines, so its ribbon paints
+// none: else the ribbon's middle `spline.width` is fairway.
+inline bool has_fairway_outline(const hole_data& hole) {
+    return std::any_of(hole.material_zones.begin(), hole.material_zones.end(),
+                       [](const material_zone& zone) { return zone.type == material_zone_type::fairway; });
+}

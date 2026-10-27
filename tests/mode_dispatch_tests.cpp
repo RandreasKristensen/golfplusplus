@@ -2,6 +2,7 @@
 
 #include "game/course_session.h"
 #include "game/game_state.h"
+#include "game/interactables.h"
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
 #include "game/net_types.h"
@@ -12,6 +13,7 @@
 
 #include "test_support.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <string>
@@ -101,23 +103,26 @@ TEST_CASE("a shot gives swing xp offline and sends take_shot online") {
     CHECK(sent[0].stroke == 1);
     CHECK(sent[0].shot.club_id == pair.online.clubs[pair.online.selected_club].id);
     CHECK(pair.online.shot.has_value());
-    CHECK(pair.online.stroke_count == 1);
+    CHECK(pair.online.ball->strokes == 1);
 }
 
-TEST_CASE("smoking gives xp offline and sends the emote online; drinking only sends it") {
+TEST_CASE("using items gives their xp offline and asks the server online; drinking earns none") {
     game_input both;
-    both.smoke = true;
-    both.drink = true;
+    both.use_smokable = true;
+    both.use_drinkable = true;
     const mode_pair pair = run_both(started_hole(), [&both](game_state& state) { update_game(state, both, 0.016f); });
 
-    CHECK(skill_xp(pair.offline.save.skills, pair.offline.rewards.smoke.skill_id) >= pair.offline.rewards.smoke.xp);
+    const item_definition& cigarette = *pair.offline.items.find(pair.offline.default_loadout.smokable);
+    const xp_reward& smoke_xp = *cigarette.use->xp_per_use;
+    CHECK(skill_xp(pair.offline.save.skills, smoke_xp.skill_id) >= smoke_xp.xp);
+    CHECK(skill_xp(pair.online.online.progress.skills, smoke_xp.skill_id) == 0);
     const std::vector<net_command> sent = gameplay_commands(pair.online);
     REQUIRE(sent.size() == 2U);
-    CHECK(sent[0].type == net_command_type::emote);
-    CHECK(sent[0].emote == emote_id::smoke);
-    CHECK(sent[1].emote == emote_id::drink);
-    CHECK(pair.online.smoke_emote.active);
-    CHECK(pair.online.cigarette_seconds_left > 0.0f);
+    CHECK(sent[0].type == net_command_type::use_item);
+    CHECK(sent[0].item_id == pair.online.default_loadout.smokable);
+    CHECK(sent[1].item_id == pair.online.default_loadout.drinkable);
+    CHECK(pair.online.smoking.has_value());
+    CHECK(pair.online.drinking.has_value());
 }
 
 TEST_CASE("walking earns movement xp offline only") {
@@ -134,7 +139,7 @@ TEST_CASE("walking earns movement xp offline only") {
 
 TEST_CASE("driving on a road earns cart xp offline only") {
     game_state start = started_game(fixture_hub_course());
-    const std::vector<glm::vec3>& road = start.hub->world.cart_roads.front().polyline;
+    const std::vector<glm::vec3>& road = start.world.cart_roads.front().polyline;
     start.player.position = road.front();
     start.player.yaw = yaw_towards(road[0], road[1]);
     sit_in_cart(start);
@@ -142,7 +147,7 @@ TEST_CASE("driving on a road earns cart xp offline only") {
     drive.forward_held = true;
 
     const mode_pair pair = run_both(start, [&drive](game_state& state) {
-        for (int i = 0; i < 80; ++i) {
+        for (int i = 0; i < 160; ++i) {
             update_game(state, drive, 0.05f);
         }
     });
@@ -153,7 +158,7 @@ TEST_CASE("driving on a road earns cart xp offline only") {
 
 TEST_CASE("a collectible is claimed on the save offline and sent online") {
     game_state start = started_game(fixture_hub_course());
-    const course_world_collectible lost_ball = start.hub->world.collectibles[1];
+    const course_world_collectible lost_ball = start.world.collectibles[1];
     start.player.position = lost_ball.position;
 
     const mode_pair pair = run_both(start, [](game_state& state) { update_game(state, interact_input(), 0.016f); });
@@ -167,7 +172,7 @@ TEST_CASE("a collectible is claimed on the save offline and sent online") {
 
 TEST_CASE("an online claim is not sent again until the server answers") {
     game_state state = in_mode(started_game(fixture_hub_course()), play_mode::online);
-    const course_world_collectible lost_ball = state.hub->world.collectibles[1];
+    const course_world_collectible lost_ball = state.world.collectibles[1];
     state.player.position = lost_ball.position;
 
     update_game(state, interact_input(), 0.016f);
@@ -188,23 +193,32 @@ TEST_CASE("an online claim is not sent again until the server answers") {
     CHECK(state.online.pending_claims.empty());
 }
 
-TEST_CASE("starting a hub hole sends enter_hole online") {
+TEST_CASE("teeing up sends tee_up online") {
     game_state start = started_game(fixture_hub_course());
-    start.player.position = start.hub->world.hole_starts[1].position;
+    start.player.position = start.world.hole_starts[1].position;
 
     const mode_pair pair = run_both(start, [](game_state& state) { update_game(state, interact_input(), 0.016f); });
 
-    CHECK(pair.offline.hole.has_value());
+    CHECK(ball_in_play(pair.offline));
     const std::vector<net_command> sent = gameplay_commands(pair.online);
     REQUIRE(sent.size() == 1U);
-    CHECK(sent[0].type == net_command_type::enter_hole);
+    CHECK(sent[0].type == net_command_type::tee_up);
     CHECK(sent[0].hole_index == 1U);
-    CHECK(pair.online.hole.has_value());
+    CHECK(!sent[0].give_up);
+    CHECK(ball_in_play(pair.online));
+}
+
+TEST_CASE("giving up a hole sends give_up_hole online") {
+    const mode_pair pair = run_both(started_hole(), [](game_state& state) { give_up_hole(state); });
+    CHECK(!pair.offline.ball.has_value());
+    const std::vector<net_command> sent = gameplay_commands(pair.online);
+    REQUIRE(sent.size() == 1U);
+    CHECK(sent[0].type == net_command_type::give_up_hole);
 }
 
 TEST_CASE("completing a hole and the course is saved offline only") {
     const mode_pair pair = run_both(single_hole_course(), [](game_state& state) {
-        state.stroke_count = 2;
+        state.ball->strokes = 2;
         complete_current_hole(state);
     });
 
@@ -218,12 +232,12 @@ TEST_CASE("completing a hole and the course is saved offline only") {
 
 TEST_CASE("no motion is sent for a round that just finished") {
     game_state state = in_mode(single_hole_course(), play_mode::online);
-    state.stroke_count = 2;
+    state.ball->strokes = 2;
     complete_current_hole(state);
     REQUIRE(round_finished(state.round));
     const std::size_t before = state.net_commands.size();
 
-    // The server has the player in the hub: a motion on the last hole would be refused.
+    // The round's results show: the player moves no more.
     sync_motion(state, 5.0f);
     send_motion_now(state);
     CHECK(state.net_commands.size() == before);
@@ -231,17 +245,22 @@ TEST_CASE("no motion is sent for a round that just finished") {
 
 TEST_CASE("each mode shows and checks its own progress") {
     game_state state = started_game(fixture_hub_course());
-    const course_world_collectible& lost_ball = state.hub->world.collectibles[1];
+    const course_world_collectible& lost_ball = state.world.collectibles[1];
     state.player.position = lost_ball.position;
     save_data online = state.online.progress;
     online.collected_ids.push_back(lost_ball.id);
     receive_online_progress(state, online);
 
+    const auto collectible_in_reach = [&state] {
+        const std::vector<interactable> in_reach = interactables_in_reach(state);
+        return std::any_of(in_reach.begin(), in_reach.end(),
+                           [](const interactable& thing) { return thing.kind == interactable_kind::collectible; });
+    };
     CHECK(&active_progress(state) == &state.save);
-    CHECK(nearby_collectible(state).has_value());
+    CHECK(collectible_in_reach());
     state.play = play_mode::online;
     CHECK(&active_progress(state) == &state.online.progress);
-    CHECK(!nearby_collectible(state).has_value());
+    CHECK(!collectible_in_reach());
 }
 
 TEST_CASE("the first online snapshot sets the starting xp without drops") {
@@ -277,10 +296,10 @@ TEST_CASE("online progress from the server shows gained xp as drops and leaves t
     CHECK(state.xp_drops[0].xp == threshold + 3);
 }
 
-TEST_CASE("turning while aiming is sent as motion") {
+TEST_CASE("turning the stance at address is sent as motion") {
     game_state state = started_hole();
     state.play = play_mode::online;
-    enter_aiming(state);
+    enter_addressing(state);
     for (int i = 0; i < 10; ++i) {
         update_game(state, game_input{}, 0.05f);
     }
@@ -288,11 +307,13 @@ TEST_CASE("turning while aiming is sent as motion") {
 
     game_input left;
     left.turn_left_held = true;
-    update_game(state, left, 0.05f);
+    for (int i = 0; i < 100 && state.net_commands.size() == before; ++i) {
+        update_game(state, left, 0.05f);
+    }
 
     REQUIRE(state.net_commands.size() == before + 1);
-    CHECK(state.net_commands.back().motion.mode == motion_mode::aim);
-    CHECK(state.net_commands.back().motion.turn_rate == state.tuning.player.aim_turn_rate);
+    CHECK(state.net_commands.back().motion.mode == motion_mode::address);
+    CHECK(near(state.net_commands.back().motion.yaw, state.address.setup.aim_angle, 0.0001f));
 }
 
 TEST_CASE("offline play never sends motion") {
@@ -310,7 +331,6 @@ TEST_CASE("online motion is sent on intent changes, not every frame") {
     update_game(state, game_input{}, 0.016f);
     REQUIRE(command_types(state) == std::vector<net_command_type>{net_command_type::motion});
     CHECK(state.net_commands[0].motion.mode == motion_mode::idle);
-    CHECK(state.net_commands[0].motion.zone == 0);
 
     for (int i = 0; i < 60; ++i) {
         update_game(state, game_input{}, 0.05f);
@@ -398,19 +418,18 @@ TEST_CASE("extrapolated motion follows the yaw convention, straight and turning"
     CHECK(near(extrapolate_motion(motion, 0.7f), stepped, 0.01f));
 }
 
-TEST_CASE("online, the server hears where the player stands right before entering a hole") {
+TEST_CASE("online, the server hears where the player stands right before teeing up") {
     game_state state = started_game(fixture_hub_course());
     state.play = play_mode::online;
-    const glm::vec3 start = state.hub->world.hole_starts[1].position;
+    const glm::vec3 start = anchor_on_terrain(state.area, state.world.hole_starts[1].position);
     state.player.position = start;
     state.net_commands.clear();
     update_game(state, interact_input(), 0.016f);
 
     REQUIRE(state.net_commands.size() >= 2U);
     CHECK(state.net_commands[0].type == net_command_type::motion);
-    CHECK(state.net_commands[0].motion.zone == hub_zone);
     CHECK(near(horizontal(state.net_commands[0].motion.position), horizontal(start), 0.01f));
-    CHECK(state.net_commands[1].type == net_command_type::enter_hole);
+    CHECK(state.net_commands[1].type == net_command_type::tee_up);
 }
 
 TEST_CASE("online motion pauses while a shot plays") {
@@ -431,16 +450,16 @@ TEST_CASE("online motion pauses while a shot plays") {
     }
 }
 
-TEST_CASE("no emotes while a shot plays, which may hole and end them") {
+TEST_CASE("nothing is used while a shot plays (the server refuses it then too)") {
     game_state state = started_hole();
     state.play = play_mode::online;
     hit_selected_club(state);
     REQUIRE(state.shot.has_value());
     state.net_commands.clear();
     game_input smoke;
-    smoke.smoke = true;
+    smoke.use_smokable = true;
     update_game(state, smoke, 0.016f);
-    CHECK(!state.smoke_emote.active);
+    CHECK(!state.smoking.has_value());
     CHECK(gameplay_commands(state).empty());
 }
 

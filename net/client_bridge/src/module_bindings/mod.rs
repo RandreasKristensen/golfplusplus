@@ -13,6 +13,7 @@ pub mod avatar_motion_table;
 pub mod ball_row_type;
 pub mod ball_table;
 pub mod board_cart_reducer;
+pub mod cart_tow_row_type;
 pub mod claim_collectible_reducer_reducer;
 pub mod claim_name_reducer;
 pub mod collected_row_type;
@@ -21,17 +22,18 @@ pub mod completed_course_row_type;
 pub mod completed_course_table;
 pub mod create_group_reducer;
 pub mod create_link_code_reducer;
-pub mod cup_ball_row_type;
-pub mod emote_event_row_type;
-pub mod emote_event_table;
-pub mod emote_reducer;
-pub mod enter_hole_reducer;
+pub mod give_up_hole_reducer;
 pub mod golf_cart_row_type;
 pub mod golf_cart_table;
 pub mod golf_group_row_type;
 pub mod golf_group_table;
+pub mod green_flag_row_type;
+pub mod green_flag_table;
 pub mod hole_score_row_type;
 pub mod hole_score_table;
+pub mod item_use_event_row_type;
+pub mod item_use_event_table;
+pub mod item_use_row_type;
 pub mod join_course_reducer;
 pub mod join_group_reducer;
 pub mod leave_cart_reducer;
@@ -43,30 +45,44 @@ pub mod link_code_expiry_row_type;
 pub mod link_code_row_type;
 pub mod link_code_view_type;
 pub mod link_status_type;
+pub mod loadout_mount_type;
 pub mod motion_budget_row_type;
 pub mod my_account_table;
 pub mod my_link_code_table;
 pub mod my_link_status_table;
+pub mod overturn_cart_reducer;
 pub mod pick_up_ball_reducer;
+pub mod place_bag_reducer;
+pub mod player_bag_row_type;
+pub mod player_bag_table;
+pub mod player_loadout_row_type;
+pub mod player_loadout_table;
 pub mod player_row_type;
 pub mod player_skill_row_type;
 pub mod player_skill_table;
 pub mod player_table;
 pub mod redeem_link_code_reducer;
-pub mod retee_reducer;
-pub mod return_to_hub_reducer;
+pub mod right_cart_reducer;
 pub mod room_member_row_type;
 pub mod room_member_table;
 pub mod room_row_type;
 pub mod room_table;
+pub mod running_effect_row_type;
+pub mod running_effect_table;
 pub mod server_config_row_type;
 pub mod server_protocol_info_type;
 pub mod server_protocol_table;
 pub mod session_row_type;
+pub mod set_flag_reducer;
+pub mod set_golfer_reducer;
 pub mod shot_event_row_type;
 pub mod shot_event_table;
+pub mod snapshot_row_entry_type;
+pub mod take_club_reducer;
 pub mod take_shot_reducer;
+pub mod tee_up_reducer;
 pub mod update_motion_reducer;
+pub mod use_item_reducer;
 pub mod world_flag_row_type;
 pub mod world_flag_table;
 
@@ -77,6 +93,7 @@ pub use avatar_motion_table::*;
 pub use ball_row_type::BallRow;
 pub use ball_table::*;
 pub use board_cart_reducer::board_cart;
+pub use cart_tow_row_type::CartTowRow;
 pub use claim_collectible_reducer_reducer::claim_collectible_reducer;
 pub use claim_name_reducer::claim_name;
 pub use collected_row_type::CollectedRow;
@@ -85,17 +102,18 @@ pub use completed_course_row_type::CompletedCourseRow;
 pub use completed_course_table::*;
 pub use create_group_reducer::create_group;
 pub use create_link_code_reducer::create_link_code;
-pub use cup_ball_row_type::CupBallRow;
-pub use emote_event_row_type::EmoteEventRow;
-pub use emote_event_table::*;
-pub use emote_reducer::emote;
-pub use enter_hole_reducer::enter_hole;
+pub use give_up_hole_reducer::give_up_hole;
 pub use golf_cart_row_type::GolfCartRow;
 pub use golf_cart_table::*;
 pub use golf_group_row_type::GolfGroupRow;
 pub use golf_group_table::*;
+pub use green_flag_row_type::GreenFlagRow;
+pub use green_flag_table::*;
 pub use hole_score_row_type::HoleScoreRow;
 pub use hole_score_table::*;
+pub use item_use_event_row_type::ItemUseEventRow;
+pub use item_use_event_table::*;
+pub use item_use_row_type::ItemUseRow;
 pub use join_course_reducer::join_course;
 pub use join_group_reducer::join_group;
 pub use leave_cart_reducer::leave_cart;
@@ -107,30 +125,44 @@ pub use link_code_expiry_row_type::LinkCodeExpiryRow;
 pub use link_code_row_type::LinkCodeRow;
 pub use link_code_view_type::LinkCodeView;
 pub use link_status_type::LinkStatus;
+pub use loadout_mount_type::LoadoutMount;
 pub use motion_budget_row_type::MotionBudgetRow;
 pub use my_account_table::*;
 pub use my_link_code_table::*;
 pub use my_link_status_table::*;
+pub use overturn_cart_reducer::overturn_cart;
 pub use pick_up_ball_reducer::pick_up_ball;
+pub use place_bag_reducer::place_bag;
+pub use player_bag_row_type::PlayerBagRow;
+pub use player_bag_table::*;
+pub use player_loadout_row_type::PlayerLoadoutRow;
+pub use player_loadout_table::*;
 pub use player_row_type::PlayerRow;
 pub use player_skill_row_type::PlayerSkillRow;
 pub use player_skill_table::*;
 pub use player_table::*;
 pub use redeem_link_code_reducer::redeem_link_code;
-pub use retee_reducer::retee;
-pub use return_to_hub_reducer::return_to_hub;
+pub use right_cart_reducer::right_cart;
 pub use room_member_row_type::RoomMemberRow;
 pub use room_member_table::*;
 pub use room_row_type::RoomRow;
 pub use room_table::*;
+pub use running_effect_row_type::RunningEffectRow;
+pub use running_effect_table::*;
 pub use server_config_row_type::ServerConfigRow;
 pub use server_protocol_info_type::ServerProtocolInfo;
 pub use server_protocol_table::*;
 pub use session_row_type::SessionRow;
+pub use set_flag_reducer::set_flag;
+pub use set_golfer_reducer::set_golfer;
 pub use shot_event_row_type::ShotEventRow;
 pub use shot_event_table::*;
+pub use snapshot_row_entry_type::SnapshotRowEntry;
+pub use take_club_reducer::take_club;
 pub use take_shot_reducer::take_shot;
+pub use tee_up_reducer::tee_up;
 pub use update_motion_reducer::update_motion;
+pub use use_item_reducer::use_item;
 pub use world_flag_row_type::WorldFlagRow;
 pub use world_flag_table::*;
 
@@ -159,12 +191,7 @@ pub enum Reducer {
     },
     CreateGroup,
     CreateLinkCode,
-    Emote {
-        emote_id: String,
-    },
-    EnterHole {
-        hole_index: i32,
-    },
+    GiveUpHole,
     JoinCourse {
         course_id: String,
     },
@@ -174,22 +201,50 @@ pub enum Reducer {
     LeaveCart,
     LeaveGroup,
     LeaveRoom,
+    OverturnCart {
+        condition: u8,
+    },
     PickUpBall,
+    PlaceBag {
+        place: u8,
+        seat: u8,
+        x: f32,
+        y: f32,
+        z: f32,
+        yaw: f32,
+    },
     RedeemLinkCode {
         typed_code: String,
     },
-    Retee,
-    ReturnToHub,
+    RightCart {
+        owner: u64,
+    },
+    SetFlag {
+        hole: i32,
+        out: bool,
+    },
+    SetGolfer {
+        hand: u8,
+        natural: u8,
+    },
+    TakeClub {
+        club_id: String,
+    },
     TakeShot {
         stroke: i32,
         aim_angle: f32,
+        face_open: f32,
+        ball_position: f32,
+        backswing: f32,
         club_id: String,
-        power: f32,
-        cigarette_active: bool,
         shot_at: i64,
+        flags_out: Vec<i32>,
+    },
+    TeeUp {
+        hole_index: i32,
+        give_up: bool,
     },
     UpdateMotion {
-        zone: i32,
         mode: u8,
         x: f32,
         y: f32,
@@ -198,6 +253,9 @@ pub enum Reducer {
         speed: f32,
         turn_rate: f32,
         client_time: f64,
+    },
+    UseItem {
+        item_id: String,
     },
 }
 
@@ -214,19 +272,24 @@ impl __sdk::Reducer for Reducer {
             Reducer::ClaimName { .. } => "claim_name",
             Reducer::CreateGroup => "create_group",
             Reducer::CreateLinkCode => "create_link_code",
-            Reducer::Emote { .. } => "emote",
-            Reducer::EnterHole { .. } => "enter_hole",
+            Reducer::GiveUpHole => "give_up_hole",
             Reducer::JoinCourse { .. } => "join_course",
             Reducer::JoinGroup { .. } => "join_group",
             Reducer::LeaveCart => "leave_cart",
             Reducer::LeaveGroup => "leave_group",
             Reducer::LeaveRoom => "leave_room",
+            Reducer::OverturnCart { .. } => "overturn_cart",
             Reducer::PickUpBall => "pick_up_ball",
+            Reducer::PlaceBag { .. } => "place_bag",
             Reducer::RedeemLinkCode { .. } => "redeem_link_code",
-            Reducer::Retee => "retee",
-            Reducer::ReturnToHub => "return_to_hub",
+            Reducer::RightCart { .. } => "right_cart",
+            Reducer::SetFlag { .. } => "set_flag",
+            Reducer::SetGolfer { .. } => "set_golfer",
+            Reducer::TakeClub { .. } => "take_club",
             Reducer::TakeShot { .. } => "take_shot",
+            Reducer::TeeUp { .. } => "tee_up",
             Reducer::UpdateMotion { .. } => "update_motion",
+            Reducer::UseItem { .. } => "use_item",
             _ => unreachable!(),
         }
     }
@@ -263,14 +326,7 @@ impl __sdk::Reducer for Reducer {
             Reducer::CreateLinkCode => {
                 __sats::bsatn::to_vec(&create_link_code_reducer::CreateLinkCodeArgs {})
             }
-            Reducer::Emote { emote_id } => __sats::bsatn::to_vec(&emote_reducer::EmoteArgs {
-                emote_id: emote_id.clone(),
-            }),
-            Reducer::EnterHole { hole_index } => {
-                __sats::bsatn::to_vec(&enter_hole_reducer::EnterHoleArgs {
-                    hole_index: hole_index.clone(),
-                })
-            }
+            Reducer::GiveUpHole => __sats::bsatn::to_vec(&give_up_hole_reducer::GiveUpHoleArgs {}),
             Reducer::JoinCourse { course_id } => {
                 __sats::bsatn::to_vec(&join_course_reducer::JoinCourseArgs {
                     course_id: course_id.clone(),
@@ -284,33 +340,81 @@ impl __sdk::Reducer for Reducer {
             Reducer::LeaveCart => __sats::bsatn::to_vec(&leave_cart_reducer::LeaveCartArgs {}),
             Reducer::LeaveGroup => __sats::bsatn::to_vec(&leave_group_reducer::LeaveGroupArgs {}),
             Reducer::LeaveRoom => __sats::bsatn::to_vec(&leave_room_reducer::LeaveRoomArgs {}),
+            Reducer::OverturnCart { condition } => {
+                __sats::bsatn::to_vec(&overturn_cart_reducer::OverturnCartArgs {
+                    condition: condition.clone(),
+                })
+            }
             Reducer::PickUpBall => __sats::bsatn::to_vec(&pick_up_ball_reducer::PickUpBallArgs {}),
+            Reducer::PlaceBag {
+                place,
+                seat,
+                x,
+                y,
+                z,
+                yaw,
+            } => __sats::bsatn::to_vec(&place_bag_reducer::PlaceBagArgs {
+                place: place.clone(),
+                seat: seat.clone(),
+                x: x.clone(),
+                y: y.clone(),
+                z: z.clone(),
+                yaw: yaw.clone(),
+            }),
             Reducer::RedeemLinkCode { typed_code } => {
                 __sats::bsatn::to_vec(&redeem_link_code_reducer::RedeemLinkCodeArgs {
                     typed_code: typed_code.clone(),
                 })
             }
-            Reducer::Retee => __sats::bsatn::to_vec(&retee_reducer::ReteeArgs {}),
-            Reducer::ReturnToHub => {
-                __sats::bsatn::to_vec(&return_to_hub_reducer::ReturnToHubArgs {})
+            Reducer::RightCart { owner } => {
+                __sats::bsatn::to_vec(&right_cart_reducer::RightCartArgs {
+                    owner: owner.clone(),
+                })
+            }
+            Reducer::SetFlag { hole, out } => {
+                __sats::bsatn::to_vec(&set_flag_reducer::SetFlagArgs {
+                    hole: hole.clone(),
+                    out: out.clone(),
+                })
+            }
+            Reducer::SetGolfer { hand, natural } => {
+                __sats::bsatn::to_vec(&set_golfer_reducer::SetGolferArgs {
+                    hand: hand.clone(),
+                    natural: natural.clone(),
+                })
+            }
+            Reducer::TakeClub { club_id } => {
+                __sats::bsatn::to_vec(&take_club_reducer::TakeClubArgs {
+                    club_id: club_id.clone(),
+                })
             }
             Reducer::TakeShot {
                 stroke,
                 aim_angle,
+                face_open,
+                ball_position,
+                backswing,
                 club_id,
-                power,
-                cigarette_active,
                 shot_at,
+                flags_out,
             } => __sats::bsatn::to_vec(&take_shot_reducer::TakeShotArgs {
                 stroke: stroke.clone(),
                 aim_angle: aim_angle.clone(),
+                face_open: face_open.clone(),
+                ball_position: ball_position.clone(),
+                backswing: backswing.clone(),
                 club_id: club_id.clone(),
-                power: power.clone(),
-                cigarette_active: cigarette_active.clone(),
                 shot_at: shot_at.clone(),
+                flags_out: flags_out.clone(),
+            }),
+            Reducer::TeeUp {
+                hole_index,
+                give_up,
+            } => __sats::bsatn::to_vec(&tee_up_reducer::TeeUpArgs {
+                hole_index: hole_index.clone(),
+                give_up: give_up.clone(),
             }),
             Reducer::UpdateMotion {
-                zone,
                 mode,
                 x,
                 y,
@@ -320,7 +424,6 @@ impl __sdk::Reducer for Reducer {
                 turn_rate,
                 client_time,
             } => __sats::bsatn::to_vec(&update_motion_reducer::UpdateMotionArgs {
-                zone: zone.clone(),
                 mode: mode.clone(),
                 x: x.clone(),
                 y: y.clone(),
@@ -329,6 +432,9 @@ impl __sdk::Reducer for Reducer {
                 speed: speed.clone(),
                 turn_rate: turn_rate.clone(),
                 client_time: client_time.clone(),
+            }),
+            Reducer::UseItem { item_id } => __sats::bsatn::to_vec(&use_item_reducer::UseItemArgs {
+                item_id: item_id.clone(),
             }),
             _ => unreachable!(),
         }
@@ -343,17 +449,21 @@ pub struct DbUpdate {
     ball: __sdk::TableUpdate<BallRow>,
     collected: __sdk::TableUpdate<CollectedRow>,
     completed_course: __sdk::TableUpdate<CompletedCourseRow>,
-    emote_event: __sdk::TableUpdate<EmoteEventRow>,
     golf_cart: __sdk::TableUpdate<GolfCartRow>,
     golf_group: __sdk::TableUpdate<GolfGroupRow>,
+    green_flag: __sdk::TableUpdate<GreenFlagRow>,
     hole_score: __sdk::TableUpdate<HoleScoreRow>,
+    item_use_event: __sdk::TableUpdate<ItemUseEventRow>,
     my_account: __sdk::TableUpdate<PlayerRow>,
     my_link_code: __sdk::TableUpdate<LinkCodeView>,
     my_link_status: __sdk::TableUpdate<LinkStatus>,
     player: __sdk::TableUpdate<PlayerRow>,
+    player_bag: __sdk::TableUpdate<PlayerBagRow>,
+    player_loadout: __sdk::TableUpdate<PlayerLoadoutRow>,
     player_skill: __sdk::TableUpdate<PlayerSkillRow>,
     room: __sdk::TableUpdate<RoomRow>,
     room_member: __sdk::TableUpdate<RoomMemberRow>,
+    running_effect: __sdk::TableUpdate<RunningEffectRow>,
     server_protocol: __sdk::TableUpdate<ServerProtocolInfo>,
     shot_event: __sdk::TableUpdate<ShotEventRow>,
     world_flag: __sdk::TableUpdate<WorldFlagRow>,
@@ -377,18 +487,21 @@ impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
                 "completed_course" => db_update
                     .completed_course
                     .append(completed_course_table::parse_table_update(table_update)?),
-                "emote_event" => db_update
-                    .emote_event
-                    .append(emote_event_table::parse_table_update(table_update)?),
                 "golf_cart" => db_update
                     .golf_cart
                     .append(golf_cart_table::parse_table_update(table_update)?),
                 "golf_group" => db_update
                     .golf_group
                     .append(golf_group_table::parse_table_update(table_update)?),
+                "green_flag" => db_update
+                    .green_flag
+                    .append(green_flag_table::parse_table_update(table_update)?),
                 "hole_score" => db_update
                     .hole_score
                     .append(hole_score_table::parse_table_update(table_update)?),
+                "item_use_event" => db_update
+                    .item_use_event
+                    .append(item_use_event_table::parse_table_update(table_update)?),
                 "my_account" => db_update
                     .my_account
                     .append(my_account_table::parse_table_update(table_update)?),
@@ -401,6 +514,12 @@ impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
                 "player" => db_update
                     .player
                     .append(player_table::parse_table_update(table_update)?),
+                "player_bag" => db_update
+                    .player_bag
+                    .append(player_bag_table::parse_table_update(table_update)?),
+                "player_loadout" => db_update
+                    .player_loadout
+                    .append(player_loadout_table::parse_table_update(table_update)?),
                 "player_skill" => db_update
                     .player_skill
                     .append(player_skill_table::parse_table_update(table_update)?),
@@ -410,6 +529,9 @@ impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
                 "room_member" => db_update
                     .room_member
                     .append(room_member_table::parse_table_update(table_update)?),
+                "running_effect" => db_update
+                    .running_effect
+                    .append(running_effect_table::parse_table_update(table_update)?),
                 "server_protocol" => db_update
                     .server_protocol
                     .append(server_protocol_table::parse_table_update(table_update)?),
@@ -457,18 +579,27 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.completed_course = cache
             .apply_diff_to_table::<CompletedCourseRow>("completed_course", &self.completed_course)
             .with_updates_by_pk(|row| &row.id);
-        diff.emote_event = self.emote_event.into_event_diff();
         diff.golf_cart = cache
             .apply_diff_to_table::<GolfCartRow>("golf_cart", &self.golf_cart)
             .with_updates_by_pk(|row| &row.owner);
         diff.golf_group = cache
             .apply_diff_to_table::<GolfGroupRow>("golf_group", &self.golf_group)
             .with_updates_by_pk(|row| &row.group_id);
+        diff.green_flag = cache
+            .apply_diff_to_table::<GreenFlagRow>("green_flag", &self.green_flag)
+            .with_updates_by_pk(|row| &row.id);
         diff.hole_score = cache
             .apply_diff_to_table::<HoleScoreRow>("hole_score", &self.hole_score)
             .with_updates_by_pk(|row| &row.id);
+        diff.item_use_event = self.item_use_event.into_event_diff();
         diff.player = cache
             .apply_diff_to_table::<PlayerRow>("player", &self.player)
+            .with_updates_by_pk(|row| &row.account_id);
+        diff.player_bag = cache
+            .apply_diff_to_table::<PlayerBagRow>("player_bag", &self.player_bag)
+            .with_updates_by_pk(|row| &row.account_id);
+        diff.player_loadout = cache
+            .apply_diff_to_table::<PlayerLoadoutRow>("player_loadout", &self.player_loadout)
             .with_updates_by_pk(|row| &row.account_id);
         diff.player_skill = cache
             .apply_diff_to_table::<PlayerSkillRow>("player_skill", &self.player_skill)
@@ -479,6 +610,9 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.room_member = cache
             .apply_diff_to_table::<RoomMemberRow>("room_member", &self.room_member)
             .with_updates_by_pk(|row| &row.account_id);
+        diff.running_effect = cache
+            .apply_diff_to_table::<RunningEffectRow>("running_effect", &self.running_effect)
+            .with_updates_by_pk(|row| &row.id);
         diff.shot_event = self.shot_event.into_event_diff();
         diff.world_flag = cache
             .apply_diff_to_table::<WorldFlagRow>("world_flag", &self.world_flag)
@@ -509,17 +643,20 @@ impl __sdk::DbUpdate for DbUpdate {
                 "completed_course" => db_update
                     .completed_course
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
-                "emote_event" => db_update
-                    .emote_event
-                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "golf_cart" => db_update
                     .golf_cart
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "golf_group" => db_update
                     .golf_group
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "green_flag" => db_update
+                    .green_flag
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "hole_score" => db_update
                     .hole_score
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "item_use_event" => db_update
+                    .item_use_event
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "my_account" => db_update
                     .my_account
@@ -533,6 +670,12 @@ impl __sdk::DbUpdate for DbUpdate {
                 "player" => db_update
                     .player
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "player_bag" => db_update
+                    .player_bag
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "player_loadout" => db_update
+                    .player_loadout
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "player_skill" => db_update
                     .player_skill
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
@@ -541,6 +684,9 @@ impl __sdk::DbUpdate for DbUpdate {
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "room_member" => db_update
                     .room_member
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "running_effect" => db_update
+                    .running_effect
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "server_protocol" => db_update
                     .server_protocol
@@ -576,17 +722,20 @@ impl __sdk::DbUpdate for DbUpdate {
                 "completed_course" => db_update
                     .completed_course
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
-                "emote_event" => db_update
-                    .emote_event
-                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "golf_cart" => db_update
                     .golf_cart
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "golf_group" => db_update
                     .golf_group
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "green_flag" => db_update
+                    .green_flag
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "hole_score" => db_update
                     .hole_score
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "item_use_event" => db_update
+                    .item_use_event
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "my_account" => db_update
                     .my_account
@@ -600,6 +749,12 @@ impl __sdk::DbUpdate for DbUpdate {
                 "player" => db_update
                     .player
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "player_bag" => db_update
+                    .player_bag
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "player_loadout" => db_update
+                    .player_loadout
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "player_skill" => db_update
                     .player_skill
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
@@ -608,6 +763,9 @@ impl __sdk::DbUpdate for DbUpdate {
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "room_member" => db_update
                     .room_member
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "running_effect" => db_update
+                    .running_effect
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "server_protocol" => db_update
                     .server_protocol
@@ -637,17 +795,21 @@ pub struct AppliedDiff<'r> {
     ball: __sdk::TableAppliedDiff<'r, BallRow>,
     collected: __sdk::TableAppliedDiff<'r, CollectedRow>,
     completed_course: __sdk::TableAppliedDiff<'r, CompletedCourseRow>,
-    emote_event: __sdk::TableAppliedDiff<'r, EmoteEventRow>,
     golf_cart: __sdk::TableAppliedDiff<'r, GolfCartRow>,
     golf_group: __sdk::TableAppliedDiff<'r, GolfGroupRow>,
+    green_flag: __sdk::TableAppliedDiff<'r, GreenFlagRow>,
     hole_score: __sdk::TableAppliedDiff<'r, HoleScoreRow>,
+    item_use_event: __sdk::TableAppliedDiff<'r, ItemUseEventRow>,
     my_account: __sdk::TableAppliedDiff<'r, PlayerRow>,
     my_link_code: __sdk::TableAppliedDiff<'r, LinkCodeView>,
     my_link_status: __sdk::TableAppliedDiff<'r, LinkStatus>,
     player: __sdk::TableAppliedDiff<'r, PlayerRow>,
+    player_bag: __sdk::TableAppliedDiff<'r, PlayerBagRow>,
+    player_loadout: __sdk::TableAppliedDiff<'r, PlayerLoadoutRow>,
     player_skill: __sdk::TableAppliedDiff<'r, PlayerSkillRow>,
     room: __sdk::TableAppliedDiff<'r, RoomRow>,
     room_member: __sdk::TableAppliedDiff<'r, RoomMemberRow>,
+    running_effect: __sdk::TableAppliedDiff<'r, RunningEffectRow>,
     server_protocol: __sdk::TableAppliedDiff<'r, ServerProtocolInfo>,
     shot_event: __sdk::TableAppliedDiff<'r, ShotEventRow>,
     world_flag: __sdk::TableAppliedDiff<'r, WorldFlagRow>,
@@ -676,14 +838,15 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
             &self.completed_course,
             event,
         );
-        callbacks.invoke_table_row_callbacks::<EmoteEventRow>(
-            "emote_event",
-            &self.emote_event,
-            event,
-        );
         callbacks.invoke_table_row_callbacks::<GolfCartRow>("golf_cart", &self.golf_cart, event);
         callbacks.invoke_table_row_callbacks::<GolfGroupRow>("golf_group", &self.golf_group, event);
+        callbacks.invoke_table_row_callbacks::<GreenFlagRow>("green_flag", &self.green_flag, event);
         callbacks.invoke_table_row_callbacks::<HoleScoreRow>("hole_score", &self.hole_score, event);
+        callbacks.invoke_table_row_callbacks::<ItemUseEventRow>(
+            "item_use_event",
+            &self.item_use_event,
+            event,
+        );
         callbacks.invoke_table_row_callbacks::<PlayerRow>("my_account", &self.my_account, event);
         callbacks.invoke_table_row_callbacks::<LinkCodeView>(
             "my_link_code",
@@ -696,6 +859,12 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
             event,
         );
         callbacks.invoke_table_row_callbacks::<PlayerRow>("player", &self.player, event);
+        callbacks.invoke_table_row_callbacks::<PlayerBagRow>("player_bag", &self.player_bag, event);
+        callbacks.invoke_table_row_callbacks::<PlayerLoadoutRow>(
+            "player_loadout",
+            &self.player_loadout,
+            event,
+        );
         callbacks.invoke_table_row_callbacks::<PlayerSkillRow>(
             "player_skill",
             &self.player_skill,
@@ -705,6 +874,11 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks.invoke_table_row_callbacks::<RoomMemberRow>(
             "room_member",
             &self.room_member,
+            event,
+        );
+        callbacks.invoke_table_row_callbacks::<RunningEffectRow>(
+            "running_effect",
+            &self.running_effect,
             event,
         );
         callbacks.invoke_table_row_callbacks::<ServerProtocolInfo>(
@@ -1378,17 +1552,21 @@ impl __sdk::SpacetimeModule for RemoteModule {
         ball_table::register_table(client_cache);
         collected_table::register_table(client_cache);
         completed_course_table::register_table(client_cache);
-        emote_event_table::register_table(client_cache);
         golf_cart_table::register_table(client_cache);
         golf_group_table::register_table(client_cache);
+        green_flag_table::register_table(client_cache);
         hole_score_table::register_table(client_cache);
+        item_use_event_table::register_table(client_cache);
         my_account_table::register_table(client_cache);
         my_link_code_table::register_table(client_cache);
         my_link_status_table::register_table(client_cache);
         player_table::register_table(client_cache);
+        player_bag_table::register_table(client_cache);
+        player_loadout_table::register_table(client_cache);
         player_skill_table::register_table(client_cache);
         room_table::register_table(client_cache);
         room_member_table::register_table(client_cache);
+        running_effect_table::register_table(client_cache);
         server_protocol_table::register_table(client_cache);
         shot_event_table::register_table(client_cache);
         world_flag_table::register_table(client_cache);
@@ -1398,17 +1576,21 @@ impl __sdk::SpacetimeModule for RemoteModule {
         "ball",
         "collected",
         "completed_course",
-        "emote_event",
         "golf_cart",
         "golf_group",
+        "green_flag",
         "hole_score",
+        "item_use_event",
         "my_account",
         "my_link_code",
         "my_link_status",
         "player",
+        "player_bag",
+        "player_loadout",
         "player_skill",
         "room",
         "room_member",
+        "running_effect",
         "server_protocol",
         "shot_event",
         "world_flag",

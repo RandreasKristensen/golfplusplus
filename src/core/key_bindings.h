@@ -7,5 +7,6 @@
 #include "game/game_input.h"
 
 // `mouse_look_radians`: how far one count of mouse movement turns the look
-// (0 while the mouse is not captured).
-game_input game_input_from_keys(const input_state& keys, float mouse_look_radians);
+// (0 while the mouse is not captured). The right button moved further than
+// `drag_threshold_counts` while held is a drag, else a click.
+game_input game_input_from_keys(const input_state& keys, float mouse_look_radians, int drag_threshold_counts);

@@ -2,6 +2,12 @@
 
 #include "core/render_online.h"
 
+#include <glm/trigonometric.hpp>
+#include "game/address_play.h"
+#include "game/area_solids.h"
+
+#include "game/golf_bag.h"
+#include "game/interactables.h"
 #include "game/mode_dispatch.h"
 #include "game/net_types.h"
 #include "game/play_area.h"
@@ -10,6 +16,7 @@
 #include "game/golf_cart.h"
 #include "game/group_round.h"
 #include "game/scorecard.h"
+#include "game/shot_ability.h"
 #include "game/shot_simulation.h"
 #include "game/swing.h"
 #include "game/text_ids.h"
@@ -27,57 +34,61 @@
 #include <string>
 
 namespace {
-// The address view of `ball`: beside it on the player's side, looking along
-// the aim. The follow camera holds this view of where the shot started.
-camera_view address_view(const camera_tuning& camera, const glm::vec3& ball, const float aim_angle,
-                         const float fov_degrees) {
-    const glm::vec3 forward = yaw_direction(aim_angle);
+// Where my ball is; the shot rigs and the preview only run while it is out.
+glm::vec3 my_ball_position(const game_state& game) {
+    return game.ball ? game.ball->position : game.player.position;
+}
+
+const club_definition* club_in_hand(const game_state& game) {
+    return game.selected_club < game.clubs.size() ? &game.clubs[game.selected_club] : nullptr;
+}
+
+// Following a shot: beside where it was hit on its stance's side, looking at the ball.
+camera_view follow_view(const game_state& game, const float fov_degrees) {
+    const camera_tuning& camera = game.tuning.camera;
+    const shot_setup& setup = game.address.setup;
+    const glm::vec3 forward = yaw_direction(setup.aim_angle);
+    const glm::vec3 side = yaw_left(forward) * hand_sign(setup.hand);
     camera_view view;
-    view.position = ball + yaw_left(forward) * camera.address_side_distance - forward * camera.address_back_distance +
-        world_up * camera.address_eye_height;
-    view.target = ball + forward * camera.address_look_distance + world_up * camera.address_look_height;
+    view.position = game.shot_start_position + side * camera.follow_side_distance - forward * camera.follow_back_distance +
+        world_up * camera.follow_eye_height;
+    view.target = my_ball_position(game) + world_up * camera.follow_look_height;
     view.fov_degrees = fov_degrees;
     return view;
 }
 
-// My figure as others see me, at my ball holding the club while I address it.
+// The model of item `id`, empty for no such item.
+std::string item_model(const game_state& game, const std::string& id) {
+    const item_definition* item = game.items.find(id);
+    return item != nullptr ? item->model : std::string();
+}
+
+std::optional<render_item_use> shown_use(const game_state& game, const std::optional<item_use_shown>& use) {
+    return use ? std::optional<render_item_use>(render_item_use{item_model(game, use->item), use->elapsed}) : std::nullopt;
+}
+
+// My bag's model.
+std::string my_bag_model(const game_state& game) {
+    return item_model(game, equipped_loadout(game).bag);
+}
+
+// My figure as others see me, stood to my setup holding the club while I
+// address my ball, else carrying it, my bag on my back when it is there.
 render_remote_avatar my_figure(const game_state& game, const render_data& data) {
     render_remote_avatar me;
     me.position = game.player.position;
     me.yaw = game.player.yaw;
-    if (data.show_swing_club) {
-        me.swing = render_remote_swing{data.ball_position, data.aim_angle, data.swing_power};
-        const figure_stance stance = figure_address_stance(data.ball_position, data.ball_visual_radius_meters, data.aim_angle);
-        me.position = stance.position;
-        me.yaw = stance.yaw;
+    me.left_handed = game.hand == handedness::left;
+    if (data.my_club) {
+        me.swing = data.my_club;
+        me.yaw = address_facing_yaw(game.address.setup);
+    } else if (const club_definition* club = club_in_hand(game)) {
+        me.carried_club_model = club->model;
+    }
+    if (bag_on_back(game)) {
+        me.bag_model = my_bag_model(game);
     }
     return me;
-}
-
-// Where a full-power shot with the selected club would fly, ignoring drag,
-// spin and wind, from the lie the ball is on; ends where it meets the terrain.
-std::vector<glm::vec3> aim_preview_points(const game_state& game, frame_profile* profile) {
-    std::vector<glm::vec3> points;
-    if (game.selected_club >= game.clubs.size()) {
-        return points;
-    }
-    const club_stats stats =
-        lie_club_stats(game.clubs[game.selected_club].stats, lie_at(game.area, game.ball.position), game.weather.wetness, game.tuning);
-    const glm::vec3 velocity = launch_ball(game.ball.position, game.aim_angle, stats, 1.0f, game.tuning).velocity;
-    const aim_preview_tuning& tuning = game.tuning.aim_preview;
-
-    for (int i = 1; i <= tuning.max_points; ++i) {
-        const float t = static_cast<float>(i) * tuning.step_seconds;
-        glm::vec3 point = game.ball.position + velocity * t - world_up * (0.5f * gravity_meters_per_second2 * t * t);
-        const float ground = terrain_height(game.area, point, profile);
-        if (point.y < ground) {
-            point.y = ground;
-            points.push_back(point);
-            break;
-        }
-        points.push_back(point);
-    }
-    return points;
 }
 
 std::vector<render_skill_progress> skill_rows(const save_data& save,
@@ -110,12 +121,12 @@ std::vector<render_xp_drop> xp_drop_rows(const game_state& game, const std::vect
     return rows;
 }
 
-// Every hole's pin but the one being played, which is drawn as `pin_position`.
+// Every hole's pin but the one my ball is in play on, which is drawn as `pin_position`.
 std::vector<glm::vec3> other_pin_markers(const game_state& game) {
     std::vector<glm::vec3> pins;
-    const std::vector<glm::vec3>& all = game.static_anchors.hub_pin_markers;
+    const std::vector<glm::vec3>& all = game.static_anchors.pins;
     for (std::size_t i = 0; i < all.size(); ++i) {
-        if (!game.hole || i != game.round.current_hole_index) {
+        if (!ball_in_play(game) || i != game.ball->hole) {
             pins.push_back(all[i]);
         }
     }
@@ -126,6 +137,9 @@ std::vector<glm::vec3> other_pin_markers(const game_state& game) {
 void add_course_map(render_data& data, const game_state& game, const text_assets& text) {
     data.course_map_low = game.area.holes_low;
     data.course_map_high = game.area.holes_high;
+    if (!bag_on_back(game)) {
+        data.map_bag_position = bag_position(game);
+    }
     for (const hole_sign& sign : game.area.signs) {
         if (sign.line_of_play.empty()) {
             continue;
@@ -163,9 +177,64 @@ void add_rangefinder(render_data& data, const game_state& game, const text_asset
     }
 }
 
-void add_hub_markers(render_data& data, const game_state& game) {
+// Standing over my ball: my club at it, the setup on the ground, the
+// outline round what the wheel would change, the OSD's preview and setup
+// word, the swing clock and the key hints.
+void add_address(render_data& data, const game_state& game, const club_definition& club, const text_assets& text) {
+    const address_state& address = game.address;
+    const float raise = address.swing_elapsed
+        ? swing_club_raise(*address.swing_elapsed, address.setup.backswing, swing_tempo_for(club, game.tuning.swing))
+        : 0.0f;
+    data.my_club = club_pose_at(game, address.setup, raise, club.model);
+
+    const address_marks marks = my_address_marks(game);
+    render_address_marks shown;
+    shown.face_heel = marks.face_heel;
+    shown.face_toe = marks.face_toe;
+    shown.stick_back = marks.stick_back;
+    shown.stick_front = marks.stick_front;
+    shown.stock_tick = marks.stock_tick;
+    shown.lead_foot = marks.lead_foot;
+    shown.trail_foot = marks.trail_foot;
+    shown.ball = marks.ball;
+    data.address_marks = shown;
+    if (!address.swing_elapsed) {
+        switch (my_pointed_part(game)) {
+        case setup_part::face:
+            data.setup_outline = {marks.face_heel, marks.face_toe};
+            break;
+        case setup_part::ball:
+            data.setup_outline = {data.ball_position};
+            break;
+        case setup_part::stance:
+            data.setup_outline = {marks.stick_back, marks.stick_front};
+            break;
+        case setup_part::none:
+            break;
+        }
+        data.show_address_hints = true;
+    }
+
+    if (address.preview && !address.swing_elapsed) {
+        data.osd_line = address.preview->line;
+        data.osd_landing = address.preview->landing;
+        data.osd_rest = address.preview->rest;
+    }
+    const golfer_tuning& golfer = game.tuning.golfer;
+    const setup_word word =
+        setup_word_for(classify_setup(address.setup, club, lie_at(game.area, address.setup.ball_start), golfer), golfer);
+    data.setup_word = word.height && word.curve
+        ? format_text(text, text_hud_setup_word_pair,
+                      {{"height", lookup_text(text, word.height)}, {"curve", lookup_text(text, word.curve)}})
+        : lookup_text(text, word.height ? word.height : word.curve ? word.curve : text_hud_setup_word_stock);
+    data.show_swing_clock = true;
+    data.swing_backswing = address.setup.backswing;
+    data.swing_backswing_max = setup_limits_for(club, game.tuning.setup).backswing_max;
+}
+
+void add_collectible_markers(render_data& data, const game_state& game) {
     const static_anchor_cache& anchors = game.static_anchors;
-    const std::vector<course_world_collectible>& collectibles = game.hub->world.collectibles;
+    const std::vector<course_world_collectible>& collectibles = game.world.collectibles;
     for (std::size_t i = 0; i < collectibles.size() && i < anchors.collectibles.size(); ++i) {
         if (collectible_available(active_progress(game), collectibles[i])) {
             data.collectible_markers.push_back(anchors.collectibles[i]);
@@ -178,8 +247,6 @@ camera_rig active_camera_rig(const game_state& game) {
     switch (game.mode) {
     case game_mode::walking:
         return camera_rig::walking;
-    case game_mode::aiming:
-        return camera_rig::aiming;
     case game_mode::addressing:
         return camera_rig::addressing;
     case game_mode::following_shot:
@@ -198,21 +265,16 @@ camera_view live_camera_view(const game_state& game, const float fov_degrees) {
         view.fov_degrees = fov_degrees;
         return view;
     }
-    case camera_rig::aiming: {
-        const glm::vec3 forward = yaw_direction(game.aim_angle);
+    case camera_rig::addressing: {
+        const eye_view eye = my_address_eye(game);
         camera_view view;
-        view.position = game.ball.position - forward * camera.aiming_back_distance + world_up * camera.aiming_eye_height;
-        view.target = game.ball.position + forward * camera.aiming_look_distance + world_up * camera.aiming_look_height;
+        view.position = eye.position;
+        view.target = eye.position + eye.direction * camera.walking_look_distance;
         view.fov_degrees = fov_degrees;
         return view;
     }
-    case camera_rig::addressing:
-        return address_view(camera, game.ball.position, game.aim_angle, fov_degrees);
-    case camera_rig::following_shot: {
-        camera_view view = address_view(camera, game.shot_start_position, game.aim_angle, fov_degrees);
-        view.target = game.ball.position + world_up * camera.follow_look_height;
-        return view;
-    }
+    case camera_rig::following_shot:
+        return follow_view(game, fov_degrees);
     }
     return camera_view{};
 }
@@ -238,7 +300,25 @@ std::string mode_label(const game_state& game, const text_assets& text) {
 }
 
 glm::vec3 drawn_ball_center(const glm::vec3& physics_center, const world_scale_tuning& scale) {
-    return physics_center + world_up * (scale.ball_visual_radius_meters - scale.ball_physics_radius_meters);
+    return physics_center +
+        world_up * ((scale.ball_visual_radius_meters - scale.ball_physics_radius_meters) / scale.meters_per_world_unit);
+}
+
+render_club_pose club_pose_at(const game_state& game, const shot_setup& setup, const float raise,
+                              const std::string& club_model) {
+    render_club_pose pose;
+    pose.ball_position = drawn_ball_center(setup.ball_start, game.tuning.scale);
+    pose.aim_angle = setup.aim_angle;
+    pose.face_turn = world_face_yaw(setup) - setup.aim_angle;
+    if (const club_definition* club = find_club(game.clubs, setup.club_id)) {
+        pose.shaft_lean =
+            glm::radians(game.tuning.swing.ball_position_loft_degrees) * (club->spec.stock_ball_position - setup.ball_position);
+        pose.putt = club->club_class == "putter";
+    }
+    pose.raise = raise;
+    pose.left_handed = setup.hand == handedness::left;
+    pose.club_model = club_model;
+    return pose;
 }
 
 std::vector<hole_sign_text> hole_sign_texts(const game_state& game) {
@@ -255,9 +335,9 @@ render_data make_render_data(const game_state& game,
                              const text_assets& text,
                              const std::vector<skill_definition>& skills,
                              const render_meshes& meshes,
+                             const prop_catalog& props,
                              const float fov_degrees,
-                             const bool interact_prompt,
-                             frame_profile* profile) {
+                             const bool interact_prompt) {
     render_data data;
     const camera_view view = live_camera_view(game, fov_degrees);
     data.camera_position = view.position;
@@ -279,33 +359,36 @@ render_data make_render_data(const game_state& game,
 
     const world_scale_tuning& scale = game.tuning.scale;
     data.player_position = game.player.position;
-    data.ball_position = drawn_ball_center(game.ball.position, scale);
     data.ball_visual_radius_meters = scale.ball_visual_radius_meters;
-    data.cup_radius_meters = scale.cup_radius_meters;
+    data.cup_radius_meters = game.tuning.cup.radius_meters * game.tuning.cup.leniency;
     data.pin_visual_height_meters = scale.pin_visual_height_meters;
-    data.show_ball = game.hole.has_value();
-    data.show_hole = game.hole.has_value();
-    data.tee_position = game.static_anchors.tee_anchor;
-    data.tee_boxes = &game.area.tee_boxes;
-    data.pin_position = game.static_anchors.pin_anchor;
-    data.pin_markers = other_pin_markers(game);
-    if (in_hub(game)) {
-        add_hub_markers(data, game);
-    }
-    if (in_hub(game) && game.cup_ball) {
+    data.show_ball = game.ball.has_value();
+    data.show_hole = ball_in_play(game);
+    if (game.ball) {
         // Sitting in the cup: its centre at the rim, the top showing.
-        data.show_ball = true;
-        data.ball_position = *game.cup_ball;
+        const bool in_cup = game.ball->place == ball_place::in_cup;
+        data.ball_position = in_cup ? game.ball->position : drawn_ball_center(game.ball->position, scale);
+        data.tee_position = tee_anchor_position(game, game.ball->hole);
+        data.pin_position = pin_anchor_position(game, game.ball->hole);
     }
+    data.tee_boxes = &game.area.tee_boxes;
+    data.pin_markers = other_pin_markers(game);
+    for (std::size_t i = 0; i < game.flags_in.size() && i < game.static_anchors.pins.size(); ++i) {
+        if (!game.flags_in[i]) {
+            data.flags_out.push_back(game.static_anchors.pins[i]);
+        }
+    }
+    for (const solid& stick : flagstick_solids(game.area.cups, game.flags_in, game.tuning)) {
+        if (stick.shape == solid_shape::wall) {
+            data.lying_flags.emplace_back(stick.base, stick.end);
+        }
+    }
+    add_collectible_markers(data, game);
 
-    const bool shot_setup = game.mode == game_mode::aiming || game.mode == game_mode::addressing;
-    data.show_aim_indicator = shot_setup;
-    if (game.mode == game_mode::aiming) {
-        data.aim_arc_points = aim_preview_points(game, profile);
+    const club_definition* club = club_in_hand(game);
+    if (game.mode == game_mode::addressing && game.ball && club != nullptr) {
+        add_address(data, game, *club, text);
     }
-    data.aim_angle = game.aim_angle;
-    data.show_swing_club = game.mode == game_mode::addressing;
-    data.swing_power = game.swing.power;
 
     data.show_flight_path = game.mode == game_mode::following_shot && !game.flight_path_points.empty();
     data.flight_path_points = &game.flight_path_points;
@@ -313,33 +396,62 @@ render_data make_render_data(const game_state& game,
     data.flight_path_alpha = game.tuning.flight_path.alpha;
     data.flight_path_width = game.tuning.flight_path.line_width;
 
-    data.driving_cart = driving_cart(game);
-    data.cart_speed_fraction = std::abs(game.cart.velocity) / std::max(0.001f, fastest_cart_speed(game.tuning.cart));
     for (const cart_in_world& cart : carts_in_world(game)) {
-        render_cart drawn = cart_on_ground(cart.pose.position, cart.pose.yaw,
-                                           [&](const glm::vec3& point) { return terrain_height(game.area, point); });
+        const auto model = props.find(item_model(game, cart.item));
+        if (model == props.end()) {
+            continue;
+        }
+        render_cart drawn = cart_tipped(cart.condition)
+            ? cart_on_side(cart.pose.position, cart.pose.yaw, cart.condition == cart_condition::on_left_side, model->second,
+                           terrain_height(game.area, cart.pose.position))
+            : cart_on_ground(cart.pose.position, cart.pose.yaw, model->second,
+                             [&](const glm::vec3& point) { return terrain_height(game.area, point); });
         drawn.driven = cart.driven;
         drawn.steer = cart.steer;
+        drawn.model = model->first;
+        const auto mount = [](const cart_seat seat) { return seat == cart_seat::driver ? "driver_bag" : "passenger_bag"; };
+        if (cart.owner == 0 && game.bag.where == bag_where::on_cart) {
+            drawn.bags[mount(game.bag.seat)] = my_bag_model(game);
+        }
+        if (const std::optional<shown_bag> theirs = cart.owner != 0 ? remote_bag(game, cart.owner) : std::nullopt;
+            theirs && theirs->place.where == bag_where::on_cart) {
+            drawn.bags[mount(theirs->place.seat)] = theirs->model;
+        }
         data.carts.push_back(drawn);
     }
-    data.cart_seat_offset = game.tuning.cart.seat_offset;
+    if (course_started(game)) {
+        data.bag_shown = game.bag.where == bag_where::on_cart ? bag_pictogram::cart
+            : game.bag.where == bag_where::on_back            ? bag_pictogram::back
+                                                              : bag_pictogram::ground;
+    }
+    if (game.bag.where == bag_where::on_ground) {
+        data.ground_bags.push_back(render_ground_bag{my_bag_model(game), game.bag.position, game.bag.yaw});
+    }
     data.avatar_eye_height = game.tuning.camera.walking_eye_height;
     if (on_foot(game)) {
         data.my_figure = my_figure(game, data);
     }
-    data.smoke_emote_active = game.smoke_emote.active;
-    data.smoke_emote_elapsed = game.smoke_emote.elapsed;
-    data.beer_emote_active = game.beer_emote.active;
-    data.beer_emote_elapsed = game.beer_emote.elapsed;
+    data.smoking = shown_use(game, game.smoking);
+    data.drinking = shown_use(game, game.drinking);
 
     data.mode_label = mode_label(game, text);
-    data.show_swing_clock = game.mode == game_mode::addressing;
     data.show_interact_prompt = interact_prompt && interact_available(game);
-    data.swing_running = game.swing.phase == swing_phase::timing;
-    data.stroke_count = game.stroke_count;
-    if (game.selected_club < game.clubs.size()) {
-        data.selected_club_label = game.clubs[game.selected_club].label;
-        data.selected_club_name = game.clubs[game.selected_club].name;
+    data.show_bag_hints = interact_available(game) && nearest_interactable(game)->kind == interactable_kind::bag;
+    if (game.picker) {
+        render_club_picker picker{{}, game.picker->highlighted, game.selected_club};
+        for (const club_definition& each : game.clubs) {
+            picker.labels.push_back(each.label);
+        }
+        data.club_picker = picker;
+        data.show_interact_prompt = false;
+    }
+    if (game.give_up_prompt && game.ball) {
+        data.give_up_label = format_text(text, text_hud_give_up, {{"hole", std::to_string(game.ball->hole + 1)}});
+    }
+    data.stroke_count = game.ball ? game.ball->strokes : 0;
+    if (club != nullptr) {
+        data.selected_club_label = club->label;
+        data.selected_club_name = lookup_text(text, club->name.c_str());
     }
     data.show_rangefinder = game.rangefinder_active;
     if (data.show_rangefinder) {

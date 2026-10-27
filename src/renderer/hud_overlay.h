@@ -1,6 +1,8 @@
 #pragma once
 
-// The in-round HUD drawn into the overlay batch: club, swing clock, cart,
+// The in-round HUD drawn into the overlay batch: club, the OSD
+// (renderer/osd_overlay.h: the shot preview, setup word, swing clock and
+// where my bag is), cart,
 // rangefinder, XP drops, skills panel, the mode and room line, the
 // compact scorecard (renderer/scorecard_overlay.h) and the online HUD
 // (renderer/online_overlay.h). GL-free.

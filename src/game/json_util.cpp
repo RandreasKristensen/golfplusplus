@@ -124,3 +124,47 @@ std::vector<std::string> json_string_array(const json& object, const char* key) 
     return values;
 }
 
+
+namespace {
+std::optional<json> resolve_base(const std::string& name, const std::map<std::string, json>& files,
+                                 const std::vector<std::string>& merged_keys, std::set<std::string>& resolving) {
+    const auto file = files.find(name);
+    if (file == files.end() || !file->second.is_object() || !resolving.insert(name).second) {
+        return std::nullopt;
+    }
+    const json& own = file->second;
+    const std::optional<std::string> base_name = json_string(own, "base");
+    if (!base_name) {
+        return own.contains("base") ? std::nullopt : std::optional<json>(own);
+    }
+    std::optional<json> merged = resolve_base(*base_name, files, merged_keys, resolving);
+    if (!merged) {
+        return std::nullopt;
+    }
+    const std::optional<std::string> own_kind = json_string(own, "kind");
+    if (own_kind && json_string(*merged, "kind") != own_kind) {
+        return std::nullopt;
+    }
+    for (const auto& [key, value] : own.items()) {
+        if (key == "base") {
+            continue;
+        }
+        const bool merges = std::find(merged_keys.begin(), merged_keys.end(), key) != merged_keys.end();
+        if (merges && value.is_object() && merged->contains(key) && (*merged)[key].is_object()) {
+            for (const auto& [member_key, member_value] : value.items()) {
+                (*merged)[key][member_key] = member_value;
+            }
+        } else {
+            (*merged)[key] = value;
+        }
+    }
+    merged->erase("base");
+    return merged;
+}
+}
+
+std::optional<json> json_with_base(const std::string& name, const std::map<std::string, json>& files,
+                                   const std::vector<std::string>& merged_keys) {
+    std::set<std::string> resolving;
+    return resolve_base(name, files, merged_keys, resolving);
+}

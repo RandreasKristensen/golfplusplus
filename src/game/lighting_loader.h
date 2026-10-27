@@ -213,8 +213,7 @@ struct ground_colors {
     glm::vec3 underwater{0.0f};  // over the picture seen from under a pond
 };
 
-// The ball, tee boxes, cups and flags, aim dots, collectibles and the club
-// at address.
+// The ball, tee boxes, cups and flags, aim dots and collectibles.
 struct marker_colors {
     glm::vec3 ball{0.0f};
     glm::vec3 tee_grout{0.0f};
@@ -224,11 +223,9 @@ struct marker_colors {
     glm::vec3 cup{0.0f};
     glm::vec3 pin_pole{0.0f};
     glm::vec3 flag{0.0f};
-    glm::vec3 aim_dot{0.0f};
-    glm::vec3 club_shaft{0.0f};
-    glm::vec3 club_face{0.0f};
-    glm::vec3 club_back{0.0f};
-    glm::vec3 club_sole{0.0f};
+    // At address, the setup on the ground (game/address_view.h).
+    glm::vec3 alignment_stick{0.0f};
+    glm::vec3 face_line{0.0f};
 };
 
 // Other players: every figure's clothes, a shirt per player and a cap per
@@ -245,13 +242,14 @@ struct figure_colors {
 };
 
 // The least light some things show, 0..1, so they stay readable when the
-// light is gone: the ball, cup, flag and aim dots, and what glows of itself.
+// light is gone: the ball, cup, flag and the setup's marks, and what glows of itself.
 struct glow_floors {
     float ball = 0.0f;
     float cup = 0.0f;
     float pin_pole = 0.0f;
     float flag = 0.0f;
-    float aim_dot = 0.0f;
+    float alignment_stick = 0.0f;
+    float face_line = 0.0f;
     float ember = 0.0f;
     float flight_path = 0.0f;
 };

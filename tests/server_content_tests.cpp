@@ -9,6 +9,7 @@
 
 #include "server_test_support.h"
 
+#include <algorithm>
 #include <iterator>
 #include <string>
 #include <vector>
@@ -30,13 +31,13 @@ bool same_shot(const shot_result& a, const shot_result& b) {
     return true;
 }
 
-bool same_trees(const std::vector<tree_body>& a, const std::vector<tree_body>& b) {
+bool same_solids(const std::vector<solid>& a, const std::vector<solid>& b) {
     if (a.size() != b.size()) {
         return false;
     }
     for (std::size_t i = 0; i < a.size(); ++i) {
-        if (a[i].base != b[i].base || a[i].shape.trunk_radius != b[i].shape.trunk_radius ||
-            a[i].shape.leaf_radius != b[i].shape.leaf_radius) {
+        if (a[i].kind != b[i].kind || a[i].base != b[i].base || a[i].end != b[i].end || a[i].radius != b[i].radius ||
+            a[i].height != b[i].height || a[i].stops_ball != b[i].stops_ball || a[i].restitution != b[i].restitution) {
             return false;
         }
     }
@@ -81,36 +82,57 @@ TEST_CASE("the server builds each hole where the game plays it, and shots land i
     const server_content content = *parse_server_content(fixture.files).content;
     const std::optional<server_course> course = build_server_course(fixture.files, content, fixture_hub_course().id);
     REQUIRE(course.has_value());
-    REQUIRE(course->shot_holes.size() == fixture_hub_course().holes.size());
+    REQUIRE(course->area.cups.size() == fixture_hub_course().holes.size());
     int tree_hits = 0;
 
-    for (std::size_t i = 0; i < course->shot_holes.size(); ++i) {
+    for (std::size_t i = 0; i < course->area.cups.size(); ++i) {
         game_state game = started_game(fixture_hub_course());
-        REQUIRE(start_hub_hole(game, i));
+        REQUIRE(tee_up(game, i, false));
         constexpr std::int64_t shot_at = 1800000000000;
         shot_course client = current_shot_course(game);
         client.weather = course_weather_at(game, shot_at);
-        const shot_course server = server_shot_course(*course, i, shot_at, content);
+        const shot_course server = server_shot_course(*course, i, shot_at, {}, content);
 
         CHECK(server.hole.pin == client.hole.pin);
         CHECK(server.weather.wind == client.weather.wind);
         CHECK(server.weather.wetness == client.weather.wetness);
         CHECK(glm::length(server.weather.wind) > 0.0f);
-        CHECK(same_trees(server.trees, client.trees));
-        CHECK(course->holes[i].tee_position == game.hole->tee_position);
+        CHECK(same_solids(server.area.solids, client.area.solids));
+        CHECK(course->holes[i].tee_position == game.holes[game.ball->hole].tee_position);
 
-        shot_input input;
-        input.ball_start = game.ball.position;
-        input.aim_angle = game.aim_angle + glm::radians(-15.0f);
-        input.club_id = "driver";
-        input.power = 0.85f;
-        input.shot_at = shot_at;
-        const shot_result on_client = simulate_shot(input, client, game.tuning, game.clubs, game.rewards);
-        const shot_result on_server = simulate_shot(input, server, content.tuning, content.clubs, content.rewards);
-        CHECK(on_client.duration > 0.0f);
-        CHECK(same_shot(on_client, on_server));
-        for (const shot_event& event : on_server.events) {
-            tree_hits += event.kind == shot_event_kind::tree_hit ? 1 : 0;
+        for (const float aim_off : {-25.0f, -15.0f, 15.0f, 25.0f}) {
+            shot_setup input;
+            input.ball_start = game.ball->position;
+            input.aim_angle = wrap_angle(game.player.yaw + glm::radians(aim_off));
+            input.club_id = "seven_iron";
+            input = stocked(input, game, 0.85f);
+            input.shot_at = shot_at;
+            const shot_result on_client = simulate_shot(input, client, game.tuning, game.clubs);
+            const shot_result on_server = simulate_shot(input, server, content.tuning, content.clubs);
+            CHECK(on_client.duration > 0.0f);
+            CHECK(same_shot(on_client, on_server));
+            for (const shot_event& event : on_server.events) {
+                tree_hits += event.kind == shot_event_kind::tree_hit || event.kind == shot_event_kind::leaves ? 1 : 0;
+            }
+        }
+        // And hit low straight at the hole's nearest tree.
+        refresh_static_anchor_cache(game);
+        const glm::vec3 from = game.ball->position;
+        const auto nearest = std::min_element(game.static_anchors.trees.begin(), game.static_anchors.trees.end(),
+                                              [&from](const tree_body& a, const tree_body& b) {
+                                                  return horizontal_distance(a.base, from) < horizontal_distance(b.base, from);
+                                              });
+        REQUIRE(nearest != game.static_anchors.trees.end());
+        shot_setup roll;
+        roll.ball_start = from;
+        roll.aim_angle = wrap_angle(yaw_towards(from, nearest->base));
+        roll.club_id = "driver";
+        roll = stocked(roll, game, 0.3f);
+        roll.shot_at = shot_at;
+        const shot_result rolled = simulate_shot(roll, server, content.tuning, content.clubs);
+        CHECK(same_shot(simulate_shot(roll, client, game.tuning, game.clubs), rolled));
+        for (const shot_event& event : rolled.events) {
+            tree_hits += event.kind == shot_event_kind::tree_hit || event.kind == shot_event_kind::leaves ? 1 : 0;
         }
     }
     // The shots go through the trees, not only over open ground.

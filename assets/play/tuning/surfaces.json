@@ -1,0 +1,32 @@
+{
+  "surfaces": {
+    "fairway": {
+      "contact_angle_scale": 0.7, "restitution_scale": 1.0, "friction": 0.43, "stimp_feet": 6.0, "grass_drag": 0.0,
+      "plug_speed": 0.0, "plug_depth": 0.0,
+      "wet_stimp_scale": 0.75, "wet_contact_angle_scale": 2.0, "wet_restitution_scale": 0.7, "wet_friction_scale": 1.1, "wet_plug_speed_scale": 1.0
+    },
+    "rough": {
+      "contact_angle_scale": 1.5, "restitution_scale": 0.75, "friction": 0.5, "stimp_feet": 2.5, "grass_drag": 1.2,
+      "plug_speed": 0.0, "plug_depth": 0.0,
+      "wet_stimp_scale": 0.85, "wet_contact_angle_scale": 1.5, "wet_restitution_scale": 0.75, "wet_friction_scale": 1.0, "wet_plug_speed_scale": 1.0
+    },
+    "green": {
+      "contact_angle_scale": 1.0, "restitution_scale": 1.0, "friction": 0.43, "grass_drag": 0.0,
+      "plug_speed": 0.0, "plug_depth": 0.0,
+      "wet_stimp_scale": 0.85, "wet_contact_angle_scale": 1.5, "wet_restitution_scale": 0.8, "wet_friction_scale": 1.1, "wet_plug_speed_scale": 1.0
+    },
+    "bunker": {
+      "contact_angle_scale": 2.5, "restitution_scale": 0.3, "friction": 0.8, "stimp_feet": 0.8, "grass_drag": 0.0,
+      "plug_speed": 12.0, "plug_depth": 0.015,
+      "wet_stimp_scale": 1.2, "wet_contact_angle_scale": 1.0, "wet_restitution_scale": 1.0, "wet_friction_scale": 1.0, "wet_plug_speed_scale": 1.5
+    },
+    "cart": {
+      "path": { "rolling_resistance": 0.015, "grip": 0.8, "wet_rolling_resistance_scale": 1.0, "wet_grip_scale": 0.75 },
+      "fairway": { "rolling_resistance": 0.05, "grip": 0.6, "wet_rolling_resistance_scale": 1.2, "wet_grip_scale": 0.6 },
+      "green": { "rolling_resistance": 0.05, "grip": 0.6, "wet_rolling_resistance_scale": 1.2, "wet_grip_scale": 0.6 },
+      "rough": { "rolling_resistance": 0.09, "grip": 0.55, "wet_rolling_resistance_scale": 1.2, "wet_grip_scale": 0.6 },
+      "bunker": { "rolling_resistance": 0.35, "grip": 0.45, "wet_rolling_resistance_scale": 0.7, "wet_grip_scale": 1.1 },
+      "water": { "rolling_resistance": 0.2, "grip": 0.3, "wet_rolling_resistance_scale": 1.0, "wet_grip_scale": 1.0 }
+    }
+  }
+}

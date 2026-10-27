@@ -18,17 +18,15 @@ bool moving(const net_motion& motion) {
 }
 
 bool same_intent(const net_motion& a, const net_motion& b) {
-    return a.zone == b.zone && a.mode == b.mode && a.on_road == b.on_road &&
+    return a.mode == b.mode && a.on_road == b.on_road &&
         direction(a.speed, still_speed) == direction(b.speed, still_speed) &&
         direction(a.turn_rate, still_turn_rate) == direction(b.turn_rate, still_turn_rate);
 }
 
 motion_mode current_motion_mode(const game_state& state) {
     switch (state.mode) {
-    case game_mode::aiming:
-        return motion_mode::aim;
     case game_mode::addressing:
-        return state.swing.phase == swing_phase::timing ? motion_mode::swing : motion_mode::address;
+        return state.address.swing_elapsed ? motion_mode::swing : motion_mode::address;
     case game_mode::following_shot:
         return motion_mode::idle;
     case game_mode::walking:
@@ -64,7 +62,6 @@ bool should_send_motion(const motion_sync_state& sync, const net_motion& now, co
 
 net_motion current_motion(const game_state& state) {
     net_motion motion;
-    motion.zone = local_zone(state);
     motion.mode = current_motion_mode(state);
     motion.position = state.player.position;
     // Along the way I go, so others see me walk the way I step.
@@ -84,9 +81,8 @@ void push_motion(game_state& state, const net_motion& now) {
     state.motion_sync = motion_sync_state{now, 0.0f};
 }
 
-// A finished round stays on its last hole here, in the hub zone as on the
-// server (local_zone). The player moves while its results wait for the
-// group; once they show, nothing is sent.
+// The player moves while a finished round's results wait for the group;
+// once they show, nothing is sent.
 bool sends_motion(const game_state& state) {
     return is_online(state) && (!round_finished(state.round) || waiting_for_group(state));
 }

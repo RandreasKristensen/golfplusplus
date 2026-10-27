@@ -3,6 +3,7 @@
 #include "physics/vector_math.h"
 #include "renderer/camera_local.h"
 #include "renderer/primitive_mesh.h"
+#include "renderer/swing_club.h"
 
 
 #include <glm/common.hpp>
@@ -20,7 +21,7 @@ constexpr float figure_head_height = 0.90f;
 constexpr float figure_head_radius = 0.085f;
 // The mouth, from the middle of the head: low on its front.
 const glm::vec3 figure_mouth(0.0f, -0.035f, 0.08f);
-// Emote props on a figure: larger than life, so they read from afar.
+// What a figure holds: larger than life, so it reads from afar.
 constexpr float figure_prop_scale = 0.4f;
 
 constexpr std::size_t quad_vertex_count = 6;
@@ -46,8 +47,6 @@ const glm::vec3 lap_hand(0.12f, 0.48f, 0.18f);
 constexpr float leg_radius = 0.06f;
 constexpr float arm_radius = 0.045f;
 constexpr float shoe_radius = 0.05f;
-// How far in front of the figure it holds a club's grip (world units).
-constexpr float grip_reach = 0.36f;
 
 glm::vec3 mirrored(const glm::vec3& left) {
     return glm::vec3(-left.x, left.y, left.z);
@@ -125,15 +124,6 @@ std::size_t remote_seated_vertex_count() {
     return figure_vertices(seated_cylinder_count);
 }
 
-figure_stance figure_address_stance(const glm::vec3& ball_position, const float ball_radius, const float aim_angle) {
-    // On the side the local player addresses from (address_stance_position),
-    // the grip at arm's length in front.
-    const glm::vec3 grip = swing_club_grip(ball_position, ball_radius, aim_angle);
-    glm::vec3 feet = horizontal(grip) + yaw_left(yaw_direction(aim_angle)) * grip_reach;
-    feet.y = ball_position.y - ball_radius;
-    return figure_stance{feet, yaw_towards(feet, grip)};
-}
-
 void append_remote_avatar(world_marker_batch& batch, const render_remote_avatar& avatar, const float eye_height,
                           const float ball_radius, const scene_colors& colors) {
     const figure_colors& clothes = colors.figures;
@@ -161,37 +151,41 @@ void append_remote_avatar(world_marker_batch& batch, const render_remote_avatar&
     }
     if (avatar.swing) {
         // Both hands on the club's grip.
-        const glm::vec3 grip =
-            figure.local(swing_club_grip(avatar.swing->ball_position, ball_radius, avatar.swing->aim_angle));
+        const glm::vec3 grip = figure.local(swing_club_grip(*avatar.swing, ball_radius));
         append_arms(figure, grip, grip, shirt);
-        append_swing_club(batch, avatar.swing->ball_position, ball_radius, avatar.swing->aim_angle, avatar.swing->power,
-                          colors.markers);
     } else {
         append_arms(figure, hanging_hand, mirrored(hanging_hand), shirt);
     }
 }
 
-std::optional<emote_holder> remote_emote_holder(const render_remote_avatar& avatar, const float eye_height) {
-    if (!avatar.smoke_elapsed && !avatar.drink_elapsed) {
+std::optional<prop_holder> remote_prop_holder(const render_remote_avatar& avatar, const float eye_height,
+                                              const prop_catalog& props) {
+    const auto held = [&props](const std::optional<render_item_use>& use) -> std::optional<held_use> {
+        const auto model = use ? props.find(use->model) : props.end();
+        return model != props.end() ? std::optional<held_use>(held_use{&model->second, use->elapsed}) : std::nullopt;
+    };
+    const std::optional<held_use> smokable = held(avatar.smoking);
+    const std::optional<held_use> drinkable = held(avatar.drinking);
+    if (!smokable && !drinkable) {
         return std::nullopt;
     }
     const float h = eye_height * figure_height_scale;
     const float s = figure_prop_scale;
     const glm::vec3 mouth = figure_mouth * h;
-    const emote_grip camera = camera_emote_grip();
-    emote_holder holder;
+    const held_grip camera = camera_held_grip();
+    prop_holder holder;
     const glm::vec3 head = avatar.position + world_up * (h * figure_head_height);
     holder.frame = camera_local_model(head, head + yaw_direction(avatar.yaw), glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f));
     holder.scale = s;
     // The cigarette between the lips, as it sits in my view; the can tipped
     // back to the mouth, its label facing out, spilling down the chin.
-    holder.grip.cigarette_filter = mouth;
-    holder.grip.cigarette_tip = mouth + (camera.cigarette_tip - camera.cigarette_filter) * s;
+    holder.grip.smokable_filter = mouth;
+    holder.grip.smokable_tip = mouth + (camera.smokable_tip - camera.smokable_filter) * s;
     holder.grip.can_held = can_pose{mouth + glm::vec3(0.0f, -0.12f, 0.26f) * s, glm::vec3(0.0f, 0.5f, -0.866f),
                                     glm::vec3(0.0f, -0.866f, -0.5f)};
     holder.grip.can_pouring = holder.grip.can_held;
-    holder.smoke_elapsed = avatar.smoke_elapsed;
-    holder.drink_elapsed = avatar.drink_elapsed;
+    holder.smokable = smokable;
+    holder.drinkable = drinkable;
     return holder;
 }
 

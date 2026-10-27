@@ -5,7 +5,7 @@
 // course and UTC time on the sky's clock (game hours, game_day_at), like the
 // time of day: the same for everyone on a course at the same moment, with no
 // row or save field, so the server replays a shot in the weather it was hit
-// in (shot_input::shot_at). Unlike the time of day it changes play: wind
+// in (shot_setup::shot_at). Unlike the time of day it changes play: wind
 // and rain in the air, wet ground on landing (fog only hides things).
 //
 // Noises drive it. The slowest is the regime, days long: settled spells of
@@ -20,6 +20,7 @@
 // powers), so the server's WASM gives the very same weather; it costs a few
 // hundred multiplications a call, each noise point hashed once.
 
+#include "game/course_definition.h"
 #include "game/game_tuning.h"
 
 #include <cstddef>
@@ -55,6 +56,9 @@ struct weather_state {
     float thunder = 0.0f;  // how thundery, 0 none .. 1 lightning at its most often
     glm::vec3 wind{0.0f};  // m/s at the wind profile's reference height, level
     float wetness = 0.0f;  // the ground, 0 dry .. 1 soaked
+    // The air's, which sets how thin it is (flight_model.h air_at); the
+    // standard atmosphere's 15 C until a course's weather says.
+    float temperature_c = 15.0f;
 };
 
 // "clear", "cloudy", "light_fog", "fog", "light_rain", "rain", "heavy_rain",
@@ -90,12 +94,22 @@ weather_state coupled_weather(weather_state weather, const weather_tuning& tunin
 // `weather` set to `kind`'s preset cloud, rain, fog and thunder, the rest kept.
 weather_state with_weather_kind(weather_state weather, weather_kind kind, const weather_tuning& tuning);
 
-// The weather on the course seeded `seed` at `unix_ms` (real UTC milliseconds).
+// The weather on `course` at `unix_ms` (real UTC milliseconds): its own
+// (course_weather_seed of its id), its temperature by its clock and air.
 weather_state weather_at(const weather_tuning& weather,
                          const wind_tuning& wind,
                          const sky_timeline& clock,
-                         std::uint32_t seed,
+                         const course_definition& course,
                          std::int64_t unix_ms);
+
+// The air's temperature on `course` at `hours` into the game's day count
+// (game_day_at x 24) under `cloud` and `rain`: its mean, plus the day's
+// cycle on its own clock (coldest at temperature.coldest_hour, warmest at
+// temperature.warmest_hour, a smooth curve between, by plain arithmetic, so
+// the server matches), the cycle damped by cloud, less rain's cooling, plus
+// `noise` (0..1) of temperature.noise_c either way.
+float temperature_at(const weather_tuning& tuning, const course_definition& course, double hours, float cloud, float rain,
+                     float noise);
 
 // The wind's speed (m/s) and the direction it blows towards (radians, as
 // yaw_direction in physics/vector_math.h), for showing it.

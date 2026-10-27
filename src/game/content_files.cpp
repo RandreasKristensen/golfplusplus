@@ -1,6 +1,5 @@
 #include "game/content_files.h"
 
-#include "game/club_loader.h"
 #include "game/course_loader.h"
 #include "game/course_world_loader.h"
 #include "game/hole_loader.h"
@@ -112,10 +111,6 @@ std::vector<std::string> json_texts_in_directory(const std::filesystem::path& di
     return texts;
 }
 
-std::vector<club_definition> load_clubs_from_directory(const std::string& directory) {
-    return parse_clubs_from_texts(json_texts_in_directory(directory));
-}
-
 std::optional<course_definition> load_course(const std::string& asset_root, const std::string& folder) {
     const std::optional<std::string> text =
         read_text_file(std::filesystem::path(asset_root) / folder / course_file_name);
@@ -171,4 +166,23 @@ bool replace_text_file(const std::filesystem::path& path, const std::string& tex
         return false;
     }
     return replace_file(temp, path);
+}
+
+item_catalog_load_result load_items(const std::string& asset_root) {
+    const std::filesystem::path root = std::filesystem::path(asset_root) / items_path;
+    std::map<std::string, std::string> texts;
+    for (const std::filesystem::path& path : json_files_under(root)) {
+        const std::filesystem::path relative = path.lexically_relative(root);
+        if (!relative.has_parent_path()) {
+            continue;  // not an item: the default loadout (game/loadout.h)
+        }
+        const std::optional<std::string> text = read_text_file(path);
+        if (!text) {
+            item_catalog_load_result result;
+            result.error = "cannot read " + path.string();
+            return result;
+        }
+        texts[relative.generic_string()] = *text;
+    }
+    return parse_item_catalog(texts);
 }

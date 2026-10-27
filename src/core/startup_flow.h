@@ -11,6 +11,7 @@
 #include "core/input.h"
 #include "game/course_definition.h"
 #include "game/game_content.h"
+#include "game/golfer.h"
 #include "game/hole_data.h"
 #include "game/net_types.h"
 #include "game/settings.h"
@@ -55,6 +56,7 @@ enum class startup_flow {
     online_course_picker,
     joining,               // join_course sent, waiting for the room
     exit_prompt,           // Escape on the main menu: quit the game? Opens on NO
+    natural_shape_picker,  // before a save's first round: its golfer's natural shot
     playing
 };
 
@@ -113,9 +115,11 @@ struct startup_flow_state {
     startup_flow flow = startup_flow::main;
     int selection = 0;
     bool confirm_active = false;
-    // 0 = YES, 1 = NO, 2 = SETTINGS. Opens on NO so a stray key press never
-    // quits a round.
+    // 0 = YES, 1 = NO, 2 = SETTINGS, 3 = GIVE UP HOLE (while there is one to
+    // give up). Opens on NO so a stray key press never quits a round.
     int confirm_selection = 1;
+    // The hole my ball is in play on when the menu opened, which it can give up.
+    std::optional<std::size_t> confirm_give_up_hole;
     // The in-round menu shows settings instead.
     bool confirm_settings = false;
     // The settings screen's, from the main menu or the in-round menu.
@@ -135,6 +139,9 @@ struct startup_flow_state {
     std::uint64_t account_at_submit = 0;
     std::uint64_t link_results_at_submit = 0;
     course_definition joining_course;
+    // The course the natural shot picker starts once a shape is picked, and how.
+    course_definition picking_for_course;
+    play_mode picking_for_play = play_mode::offline;
     double clock_seconds = 0.0;
 };
 
@@ -174,6 +181,8 @@ struct startup_menu_result {
     // it (see enter_playing), so a course that fails to load keeps the menu.
     course_definition course;
     play_mode play = play_mode::offline;
+    // Picked before the course starts (the natural shot picker): app keeps it with progress.
+    std::optional<natural_shape> natural;
     std::vector<online_request> requests;
     std::vector<ui_sound> sounds;
     bool settings_changed = false;
@@ -181,6 +190,7 @@ struct startup_menu_result {
 
 struct confirm_menu_result {
     bool leave_round = false;  // the player confirmed leaving for the main menu
+    bool give_up_hole = false;  // the player gave up confirm_give_up_hole
     std::vector<ui_sound> sounds;
     bool settings_changed = false;
 };
@@ -196,6 +206,9 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
                                         const startup_catalog& catalog,
                                         const online_menu_status& online = {});
 void enter_playing(startup_flow_state& state);
+// Asks for the golfer's natural shot, then starts `course` as `play`
+// says; offline Escape goes back to the course picker.
+void open_natural_shape_picker(startup_flow_state& state, const course_definition& course, play_mode play);
 void return_to_main_menu(startup_flow_state& state);
 // Back to the online sign-in screen, which shows how the connection is.
 void open_online_login(startup_flow_state& state);
@@ -203,7 +216,8 @@ void open_online_login(startup_flow_state& state);
 // so app turns typing on.
 bool wants_text_input(const startup_flow_state& state);
 
-void open_confirm_menu(startup_flow_state& state);
+// `give_up_hole`: the hole my ball is in play on, which the menu offers to give up.
+void open_confirm_menu(startup_flow_state& state, std::optional<std::size_t> give_up_hole = std::nullopt);
 confirm_menu_result update_confirm_menu(startup_flow_state& state,
                                         const input_state& input,
                                         const menu_pointer& pointer,

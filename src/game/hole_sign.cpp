@@ -109,16 +109,4 @@ float hole_sign_top(const hole_sign& sign) {
     return sign.board_center.y + sign.board_half_height;
 }
 
-std::vector<tree_body> hole_sign_posts(const std::vector<hole_sign>& signs) {
-    std::vector<tree_body> posts;
-    posts.reserve(signs.size() * 2);
-    for (const hole_sign& sign : signs) {
-        for (const glm::vec3& foot : sign.post_feet) {
-            tree_shape shape;
-            shape.trunk_radius = sign.post_radius;
-            shape.trunk_height = hole_sign_top(sign) - foot.y;
-            posts.push_back(tree_body{foot, shape});
-        }
-    }
-    return posts;
-}
+

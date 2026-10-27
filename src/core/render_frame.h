@@ -19,10 +19,15 @@ camera_rig active_camera_rig(const game_state& game);
 // `fov_degrees` is the player's field of view setting.
 camera_view live_camera_view(const game_state& game, float fov_degrees);
 
-// Where to draw a ball whose physical centre is `physics_center`. The drawn
-// ball is bigger than the physical one, so it is raised to touch the ground
-// where the physical ball does, never sunk into it.
+// Where a ball whose physics centre is `physics_center` is drawn: right
+// over it, raised so the bigger drawn ball sits on the ground where the
+// physical one does. The cup is drawn as big as it plays, so a putt is
+// drawn rolling, lipping and dropping exactly as it does.
 glm::vec3 drawn_ball_center(const glm::vec3& physics_center, const world_scale_tuning& scale);
+
+// The club in hand drawn at `setup`'s ball, swung back `raise`: its face
+// turned and its shaft leaning as the setup has them (game/delivery.h).
+render_club_pose club_pose_at(const game_state& game, const shot_setup& setup, float raise, const std::string& club_model);
 
 // What each sign of the play area says (area.signs order): its course hole,
 // par and length.
@@ -45,6 +50,6 @@ render_data make_render_data(const game_state& game,
                              const text_assets& text,
                              const std::vector<skill_definition>& skills,
                              const render_meshes& meshes,
+                             const prop_catalog& props,
                              float fov_degrees,
-                             bool interact_prompt,
-                             frame_profile* profile = nullptr);
+                             bool interact_prompt);

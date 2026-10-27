@@ -71,6 +71,7 @@ enum class gpu_profile_stage : std::size_t {
     terrain,
     shadows,
     trees,
+    props,  // every model: carts, clubs, what is held (prop_renderer)
     sky,
     weather,
     eyepiece,

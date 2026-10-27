@@ -13,8 +13,8 @@
 namespace {
 // Trees smaller than this are treated as authoring mistakes.
 constexpr float min_tree_dimension = 0.01f;
-// A zone narrower than this (radius or half-size, metres) is a broken one.
-constexpr float min_zone_radius = 0.01f;
+// A zone smaller than this (square metres) is a broken one.
+constexpr float min_zone_area = 0.01f;
 
 material_zone_type material_type_from_string(const std::string& value) {
     if (value == "green") {
@@ -26,28 +26,33 @@ material_zone_type material_type_from_string(const std::string& value) {
     if (value == "water") {
         return material_zone_type::water;
     }
+    if (value == "fairway") {
+        return material_zone_type::fairway;
+    }
     return material_zone_type::unknown;
 }
 
-// One zone, an ellipse (`center`, `radii`, `rotation_degrees`). nullopt
-// when any of those is missing or a radius is not positive.
+// One zone, its `outline` ([[x, z], ...] round its edge). nullopt when it
+// has fewer than three finite points or no area.
 std::optional<material_zone> material_zone_from_json(const json& object) {
-    if (!object.is_object()) {
+    const json* points = object.is_object() ? json_array(object, "outline") : nullptr;
+    if (points == nullptr || points->size() < 3U) {
         return std::nullopt;
     }
-    const std::optional<glm::vec3> center = json_vec3(object, "center");
-    const std::optional<glm::vec2> radii = json_vec2(object, "radii");
-    const std::optional<float> rotation_degrees = json_float(object, "rotation_degrees");
-    if (!center || !radii || !rotation_degrees || !std::isfinite(*rotation_degrees)) {
-        return std::nullopt;
+    std::vector<glm::vec2> outline;
+    for (const json& point : *points) {
+        if (!point.is_array() || point.size() != 2U || !point[0].is_number() || !point[1].is_number()) {
+            return std::nullopt;
+        }
+        const glm::vec2 xz(point[0].get<float>(), point[1].get<float>());
+        if (!std::isfinite(xz.x) || !std::isfinite(xz.y)) {
+            return std::nullopt;
+        }
+        outline.push_back(xz);
     }
-    material_zone zone;
-    zone.type = material_type_from_string(json_string(object, "type").value_or(""));
-    zone.center = *center;
-    zone.radii = *radii;
-    zone.rotation = glm::radians(*rotation_degrees);
-    if (!(zone.radii.x >= min_zone_radius) || !(zone.radii.y >= min_zone_radius) ||
-        !std::isfinite(zone.radii.x) || !std::isfinite(zone.radii.y)) {
+    const material_zone zone =
+        make_material_zone(material_type_from_string(json_string(object, "type").value_or("")), std::move(outline));
+    if (!(zone_area(zone) >= min_zone_area)) {
         return std::nullopt;
     }
     return zone;

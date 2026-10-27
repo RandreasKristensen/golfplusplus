@@ -1,0 +1,21 @@
+{
+  "model": "golf_cart",
+  "name": "item.golf_cart.name",
+  "stacking": "refresh",
+  "effects": [],
+  "spec": {
+    "mass_kg": 450,
+    "motor_power_w": 3500,
+    "max_drive_force_n": 2000,
+    "reverse_share": 0.5,
+    "top_speed_mps": 5.8,
+    "wheelbase_m": 1.65,
+    "track_m": 0.95,
+    "cg_height_m": 0.64,
+    "max_steer_degrees": 30,
+    "tip_seconds": 0.25,
+    "wade_depth_m": 0.3,
+    "right_seconds": 4,
+    "tow_seconds": 60
+  }
+}

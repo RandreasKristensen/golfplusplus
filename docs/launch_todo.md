@@ -195,7 +195,7 @@ drawn by AI-written code needs no AI disclosure on Steam.
 ### Footage
 - [ ] One course that looks great from every camera angle: clean splines, trees,
   hole starts, cart roads.
-- [ ] Swing, ball flight, putting and the hub walk/cart loop feel good enough to
+- [ ] Swing, ball flight, putting and the course walk/cart loop feel good enough to
   show in 10-second clips without explanation.
 
 ### Content
@@ -228,7 +228,7 @@ drawn by AI-written code needs no AI disclosure on Steam.
 
 ### Trailer
 - [ ] A 30–60 s trailer that shows golf in the first 5 seconds: swing, ball
-  flight, the VHS look, the hub, the golf carts, skill level-ups, other players.
+  flight, the VHS look, the course as one place, the golf carts, skill level-ups, other players.
 
 ### Description and tags
 - [ ] Short description (one hook sentence) and long description, saying plainly

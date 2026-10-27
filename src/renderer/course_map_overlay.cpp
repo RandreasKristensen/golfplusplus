@@ -19,6 +19,7 @@ const glm::vec3 map_marker_outline(0.04f, 0.035f, 0.025f);
 const glm::vec3 map_ball_ink(0.94f, 0.93f, 0.82f);
 const glm::vec3 map_player_ink(0.22f, 0.46f, 0.72f);
 const glm::vec3 map_cup_ink(0.94f, 0.78f, 0.22f);
+const glm::vec3 map_bag_ink(0.62f, 0.2f, 0.14f);
 
 // Clip units between the paper's edge and the course on it.
 constexpr float map_margin = 0.06f;
@@ -27,6 +28,7 @@ constexpr float player_mark_radius = 0.024f;
 constexpr float tee_mark_radius = 0.023f;
 constexpr float ball_mark_radius = 0.020f;
 constexpr float cup_mark_radius = 0.018f;
+constexpr float bag_mark_radius = 0.018f;
 const glm::vec2 flagstick_offset(0.0f, 0.028f);
 const glm::vec2 flagstick_half(0.004f, 0.042f);
 const glm::vec2 flag_offset(0.022f, 0.055f);
@@ -70,10 +72,13 @@ void draw_hole_number(overlay_batch& batch, const text_assets& text, const ui_re
     draw_text_layout(batch, text.font, number, style.color);
 }
 
-// What the numbers keep clear of: the player and, on a hole, its tee, ball,
+// What the numbers keep clear of: the player, my bag and, on a hole, its tee, ball,
 // pin and flag.
 std::vector<ui_rect> marks_kept_clear(const course_map_layout& layout, const render_data& data) {
     std::vector<ui_rect> marks{{map_point(layout, data.player_position), glm::vec2(player_mark_radius)}};
+    if (data.map_bag_position) {
+        marks.push_back({map_point(layout, *data.map_bag_position), glm::vec2(bag_mark_radius)});
+    }
     if (data.show_hole) {
         const glm::vec2 pin = map_point(layout, data.pin_position);
         marks.push_back({map_point(layout, data.tee_position), glm::vec2(tee_mark_radius)});
@@ -165,6 +170,9 @@ course_map_layout make_course_map_layout(const render_data& data, const overlay_
         cover(data.pin_position, low, high);
         cover(data.ball_position, low, high);
     }
+    if (data.map_bag_position) {
+        cover(*data.map_bag_position, low, high);
+    }
     if (data.course_map_low.x < data.course_map_high.x && data.course_map_low.z < data.course_map_high.z) {
         cover(data.course_map_low, low, high);
         cover(data.course_map_high, low, high);
@@ -223,6 +231,9 @@ void draw_course_map_marks(overlay_batch& batch,
     if (data.show_hole) {
         draw_marker(batch, map_point(layout, data.tee_position), course_map_tee_ink, tee_mark_radius);
         draw_marker(batch, map_point(layout, data.ball_position), map_ball_ink, ball_mark_radius);
+    }
+    if (data.map_bag_position) {
+        draw_marker(batch, map_point(layout, *data.map_bag_position), map_bag_ink, bag_mark_radius);
     }
     draw_marker(batch, map_point(layout, data.player_position), map_player_ink, player_mark_radius);
     if (data.show_hole) {

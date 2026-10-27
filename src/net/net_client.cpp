@@ -17,10 +17,11 @@ stdb_string view(const std::string& text) {
 
 // The reducers net_commands call: the game answers their refusals.
 bool gameplay_reducer(const std::string& reducer) {
-    for (const char* name : {reducer_update_motion, reducer_take_shot, reducer_enter_hole, reducer_claim_collectible,
-                             reducer_emote, reducer_pick_up_ball, reducer_return_to_hub,
+    for (const char* name : {reducer_update_motion, reducer_take_shot, reducer_tee_up, reducer_claim_collectible,
+                             reducer_use_item, reducer_pick_up_ball, reducer_give_up_hole,
                              reducer_create_group, reducer_join_group, reducer_leave_group, reducer_board_cart,
-                             reducer_leave_cart}) {
+                             reducer_leave_cart, reducer_overturn_cart, reducer_right_cart, reducer_set_flag,
+                             reducer_place_bag, reducer_take_club, reducer_set_golfer}) {
         if (reducer == name) {
             return true;
         }
@@ -58,7 +59,8 @@ std::vector<std::size_t> stdb_header_layout() {
               offsetof(stdb_config, auth_authorization_endpoint), offsetof(stdb_config, auth_token_endpoint),
               offsetof(stdb_config, page_signed_in), offsetof(stdb_config, page_failed), offsetof(stdb_config, anonymous)});
     describe(sizeof(stdb_player), {offsetof(stdb_player, account_id), offsetof(stdb_player, display_name),
-                                   offsetof(stdb_player, online), offsetof(stdb_player, holes_completed)});
+                                   offsetof(stdb_player, online), offsetof(stdb_player, holes_completed),
+                                   offsetof(stdb_player, hand), offsetof(stdb_player, natural_shape)});
     describe(sizeof(stdb_player_skill), {offsetof(stdb_player_skill, id), offsetof(stdb_player_skill, account_id),
                                          offsetof(stdb_player_skill, skill_id), offsetof(stdb_player_skill, xp)});
     describe(sizeof(stdb_hole_score),
@@ -75,35 +77,58 @@ std::vector<std::size_t> stdb_header_layout() {
     describe(sizeof(stdb_room), {offsetof(stdb_room, room_id), offsetof(stdb_room, course_id), offsetof(stdb_room, player_count)});
     describe(sizeof(stdb_room_member),
              {offsetof(stdb_room_member, account_id), offsetof(stdb_room_member, room_id), offsetof(stdb_room_member, group_id),
-              offsetof(stdb_room_member, zone),
               offsetof(stdb_room_member, round_strokes),
               offsetof(stdb_room_member, round_strokes_count)});
     describe(sizeof(stdb_golf_group), {offsetof(stdb_golf_group, group_id), offsetof(stdb_golf_group, room_id),
                                        offsetof(stdb_golf_group, leader), offsetof(stdb_golf_group, member_count)});
     describe(sizeof(stdb_motion),
-             {offsetof(stdb_motion, zone), offsetof(stdb_motion, mode), offsetof(stdb_motion, x), offsetof(stdb_motion, y),
+             {offsetof(stdb_motion, mode), offsetof(stdb_motion, x), offsetof(stdb_motion, y),
               offsetof(stdb_motion, z), offsetof(stdb_motion, yaw), offsetof(stdb_motion, speed),
               offsetof(stdb_motion, turn_rate), offsetof(stdb_motion, client_time)});
     describe(sizeof(stdb_avatar_motion),
              {offsetof(stdb_avatar_motion, account_id), offsetof(stdb_avatar_motion, room_id),
               offsetof(stdb_avatar_motion, motion), offsetof(stdb_avatar_motion, server_time_micros)});
-    describe(sizeof(stdb_ball), {offsetof(stdb_ball, account_id), offsetof(stdb_ball, room_id), offsetof(stdb_ball, zone),
+    describe(sizeof(stdb_ball), {offsetof(stdb_ball, account_id), offsetof(stdb_ball, room_id), offsetof(stdb_ball, hole),
                                  offsetof(stdb_ball, x), offsetof(stdb_ball, y), offsetof(stdb_ball, z),
-                                 offsetof(stdb_ball, stroke_count), offsetof(stdb_ball, last_shot_at)});
+                                 offsetof(stdb_ball, stroke_count), offsetof(stdb_ball, last_shot_at),
+                                 offsetof(stdb_ball, in_cup)});
     describe(sizeof(stdb_golf_cart),
              {offsetof(stdb_golf_cart, owner), offsetof(stdb_golf_cart, room_id), offsetof(stdb_golf_cart, x),
               offsetof(stdb_golf_cart, y), offsetof(stdb_golf_cart, z), offsetof(stdb_golf_cart, yaw),
-              offsetof(stdb_golf_cart, passenger)});
-    describe(sizeof(stdb_shot), {offsetof(stdb_shot, stroke), offsetof(stdb_shot, aim_angle), offsetof(stdb_shot, club_id),
-                                 offsetof(stdb_shot, power), offsetof(stdb_shot, cigarette_active),
-                                 offsetof(stdb_shot, shot_at)});
+              offsetof(stdb_golf_cart, passenger), offsetof(stdb_golf_cart, condition)});
+    describe(sizeof(stdb_shot), {offsetof(stdb_shot, stroke), offsetof(stdb_shot, aim_angle), offsetof(stdb_shot, face_open),
+                                 offsetof(stdb_shot, ball_position), offsetof(stdb_shot, backswing), offsetof(stdb_shot, club_id),
+                                 offsetof(stdb_shot, shot_at), offsetof(stdb_shot, flags_out),
+                                 offsetof(stdb_shot, flags_out_count)});
+    describe(sizeof(stdb_snapshot_entry),
+             {offsetof(stdb_snapshot_entry, kind), offsetof(stdb_snapshot_entry, x), offsetof(stdb_snapshot_entry, y),
+              offsetof(stdb_snapshot_entry, z), offsetof(stdb_snapshot_entry, yaw), offsetof(stdb_snapshot_entry, shooter)});
     describe(sizeof(stdb_shot_event),
-             {offsetof(stdb_shot_event, room_id), offsetof(stdb_shot_event, account_id), offsetof(stdb_shot_event, zone),
-              offsetof(stdb_shot_event, shot), offsetof(stdb_shot_event, start_x), offsetof(stdb_shot_event, start_y),
-              offsetof(stdb_shot_event, start_z), offsetof(stdb_shot_event, rest_x), offsetof(stdb_shot_event, rest_y),
-              offsetof(stdb_shot_event, rest_z), offsetof(stdb_shot_event, holed)});
-    describe(sizeof(stdb_emote_event), {offsetof(stdb_emote_event, room_id), offsetof(stdb_emote_event, account_id),
-                                        offsetof(stdb_emote_event, emote_id)});
+             {offsetof(stdb_shot_event, room_id), offsetof(stdb_shot_event, account_id), offsetof(stdb_shot_event, hole),
+              offsetof(stdb_shot_event, shot), offsetof(stdb_shot_event, hand), offsetof(stdb_shot_event, natural_shape),
+              offsetof(stdb_shot_event, spread_scale), offsetof(stdb_shot_event, seed), offsetof(stdb_shot_event, snapshot),
+              offsetof(stdb_shot_event, snapshot_count), offsetof(stdb_shot_event, start_x),
+              offsetof(stdb_shot_event, start_y), offsetof(stdb_shot_event, start_z), offsetof(stdb_shot_event, rest_x),
+              offsetof(stdb_shot_event, rest_y), offsetof(stdb_shot_event, rest_z), offsetof(stdb_shot_event, holed)});
+    describe(sizeof(stdb_item_use_event), {offsetof(stdb_item_use_event, room_id), offsetof(stdb_item_use_event, account_id),
+                                           offsetof(stdb_item_use_event, item_id)});
+    describe(sizeof(stdb_loadout_mount), {offsetof(stdb_loadout_mount, mount), offsetof(stdb_loadout_mount, item_id)});
+    describe(sizeof(stdb_player_loadout),
+             {offsetof(stdb_player_loadout, account_id), offsetof(stdb_player_loadout, cart),
+              offsetof(stdb_player_loadout, cart_mounts), offsetof(stdb_player_loadout, cart_mounts_count),
+              offsetof(stdb_player_loadout, smokable), offsetof(stdb_player_loadout, drinkable),
+              offsetof(stdb_player_loadout, bag)});
+    describe(sizeof(stdb_player_bag),
+             {offsetof(stdb_player_bag, account_id), offsetof(stdb_player_bag, room_id), offsetof(stdb_player_bag, place),
+              offsetof(stdb_player_bag, seat), offsetof(stdb_player_bag, x), offsetof(stdb_player_bag, y),
+              offsetof(stdb_player_bag, z), offsetof(stdb_player_bag, yaw), offsetof(stdb_player_bag, club_in_hand)});
+    describe(sizeof(stdb_green_flag),
+             {offsetof(stdb_green_flag, id), offsetof(stdb_green_flag, room_id), offsetof(stdb_green_flag, hole)});
+    describe(sizeof(stdb_running_effect),
+             {offsetof(stdb_running_effect, id), offsetof(stdb_running_effect, account_id), offsetof(stdb_running_effect, item_id),
+              offsetof(stdb_running_effect, target), offsetof(stdb_running_effect, bucket), offsetof(stdb_running_effect, value),
+              offsetof(stdb_running_effect, duration), offsetof(stdb_running_effect, seconds),
+              offsetof(stdb_running_effect, started_at_ms), offsetof(stdb_running_effect, ends_at_ms)});
     describe(sizeof(stdb_link_code), {offsetof(stdb_link_code, code), offsetof(stdb_link_code, expires_at_micros)});
     describe(sizeof(stdb_link_status), {offsetof(stdb_link_status, result), offsetof(stdb_link_status, at_micros)});
     describe(sizeof(stdb_server_protocol), {offsetof(stdb_server_protocol, version)});
@@ -226,6 +251,10 @@ void net_client::update(game_state& state) {
 
     deliver_progress(state);
     room_.publish(state);
+    state.online.effects.clear();
+    for (const auto& [id, effect] : effects_) {
+        state.online.effects.push_back(effect);
+    }
     state.online.status = status_;
     state.online.server_now = clock_.now(local_now());
 }
@@ -248,28 +277,44 @@ void net_client::send_commands(game_state& state) {
         switch (command.type) {
         case net_command_type::motion: {
             const net_motion& m = command.motion;
-            const stdb_motion motion{m.zone, static_cast<std::uint8_t>(m.mode), m.position.x, m.position.y, m.position.z,
+            const stdb_motion motion{static_cast<std::uint8_t>(m.mode), m.position.x, m.position.y, m.position.z,
                                      m.yaw, m.speed, m.turn_rate, now};
             stdb_update_motion(client, &motion);
             break;
         }
         case net_command_type::take_shot: {
-            const shot_input& s = command.shot;
-            const stdb_shot shot{command.stroke, s.aim_angle, view(s.club_id), s.power, s.cigarette_active, s.shot_at};
+            const shot_setup& s = command.shot;
+            const std::vector<std::int32_t> flags_out(command.flags_out.begin(), command.flags_out.end());
+            const stdb_shot shot{command.stroke, s.aim_angle, s.face_open,       s.ball_position,
+                                 s.backswing,   view(s.club_id), s.shot_at, flags_out.data(),
+                                 flags_out.size()};
             stdb_take_shot(client, &shot);
             break;
         }
-        case net_command_type::enter_hole:
-            stdb_enter_hole(client, static_cast<std::int32_t>(command.hole_index));
+        case net_command_type::set_flag:
+            stdb_set_flag(client, static_cast<std::int32_t>(command.hole_index), command.flag_out);
+            break;
+        case net_command_type::place_bag: {
+            const bag_place& bag = command.bag;
+            stdb_place_bag(client, static_cast<std::uint8_t>(bag.where), static_cast<std::uint8_t>(bag.seat), bag.position.x,
+                           bag.position.y, bag.position.z, bag.yaw);
+            break;
+        }
+        case net_command_type::take_club:
+            stdb_take_club(client, command.club_id.data(), command.club_id.size());
+            break;
+        case net_command_type::set_golfer:
+            stdb_set_golfer(client, static_cast<std::uint8_t>(command.hand), command.natural);
+            break;
+        case net_command_type::tee_up:
+            stdb_tee_up(client, static_cast<std::int32_t>(command.hole_index), command.give_up);
             break;
         case net_command_type::claim_collectible:
             stdb_claim_collectible(client, command.collectible_id.data(), command.collectible_id.size());
             break;
-        case net_command_type::emote: {
-            const std::string name = emote_name(command.emote);
-            stdb_emote(client, name.data(), name.size());
+        case net_command_type::use_item:
+            stdb_use_item(client, command.item_id.data(), command.item_id.size());
             break;
-        }
         case net_command_type::pick_up_ball:
             stdb_pick_up_ball(client);
             break;
@@ -282,14 +327,20 @@ void net_client::send_commands(game_state& state) {
         case net_command_type::leave_group:
             stdb_leave_group(client);
             break;
-        case net_command_type::return_to_hub:
-            stdb_return_to_hub(client);
+        case net_command_type::give_up_hole:
+            stdb_give_up_hole(client);
             break;
         case net_command_type::board_cart:
             stdb_board_cart(client, command.cart_owner);
             break;
         case net_command_type::leave_cart:
             stdb_leave_cart(client);
+            break;
+        case net_command_type::overturn_cart:
+            stdb_overturn_cart(client, static_cast<std::uint8_t>(command.overturned_to));
+            break;
+        case net_command_type::right_cart:
+            stdb_right_cart(client, command.cart_owner);
             break;
         }
     }
@@ -431,6 +482,18 @@ void net_client::handle_row(const stdb_event& event, game_state& state) {
             progress_changed_ = true;
         }
         break;
+    case STDB_TABLE_RUNNING_EFFECT:
+        if (row.running_effect.account_id == account_id_) {
+            const stdb_running_effect& e = row.running_effect;
+            item_effect effect;
+            effect.target = text_of(e.target);
+            effect.bucket = static_cast<effect_bucket>(e.bucket);
+            effect.value = e.value;
+            effect.duration = static_cast<effect_duration>(e.duration);
+            effect.seconds = e.seconds;
+            apply_change(effects_, e.id, change, active_effect{text_of(e.item_id), effect, e.started_at_ms, e.ends_at_ms});
+        }
+        break;
     case STDB_TABLE_WORLD_FLAG:
         if (row.world_flag.account_id == account_id_) {
             apply_change(world_flags_, row.world_flag.id, change, text_of(row.world_flag.flag));
@@ -474,6 +537,7 @@ void net_client::subscribe_self() {
                                                       "SELECT * FROM completed_course WHERE account_id = " + id,
                                                       "SELECT * FROM collected WHERE account_id = " + id,
                                                       "SELECT * FROM world_flag WHERE account_id = " + id,
+                                                      "SELECT * FROM running_effect WHERE account_id = " + id,
                                                       "SELECT * FROM room_member WHERE account_id = " + id,
                                                   });
 }
@@ -497,10 +561,14 @@ void net_client::subscribe_room(const std::uint64_t room_id) {
             "SELECT * FROM avatar_motion WHERE room_id = " + id,
             "SELECT * FROM ball WHERE room_id = " + id,
             "SELECT * FROM golf_cart WHERE room_id = " + id,
+            "SELECT * FROM player_bag WHERE room_id = " + id,
+            "SELECT * FROM green_flag WHERE room_id = " + id,
             "SELECT * FROM shot_event WHERE room_id = " + id,
-            "SELECT * FROM emote_event WHERE room_id = " + id,
-            // Room members' names.
+            "SELECT * FROM item_use_event WHERE room_id = " + id,
+            // Room members' names and what they have equipped.
             "SELECT player.* FROM player JOIN room_member ON player.account_id = room_member.account_id WHERE room_member.room_id = " + id,
+            "SELECT player_loadout.* FROM player_loadout JOIN room_member ON player_loadout.account_id = room_member.account_id "
+            "WHERE room_member.room_id = " + id,
         });
 }
 
@@ -537,6 +605,7 @@ void net_client::forget_progress(game_state& state) {
     completed_courses_.clear();
     collected_.clear();
     world_flags_.clear();
+    effects_.clear();
     room_.clear(state);
     state.online = online_view{};
 }

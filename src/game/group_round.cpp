@@ -25,8 +25,8 @@ void note_round_strokes(game_state& state) {
 }
 
 void note_holed_shot(game_state& state, const room_shot& shot) {
-    if (shot.holed && shot.zone >= 0 && static_cast<std::size_t>(shot.zone) < state.course_holes.size()) {
-        seen_strokes(state, shot.account_id)[static_cast<std::size_t>(shot.zone)] = shot.stroke;
+    if (shot.holed && shot.hole >= 0 && static_cast<std::size_t>(shot.hole) < state.course_holes.size()) {
+        seen_strokes(state, shot.account_id)[static_cast<std::size_t>(shot.hole)] = shot.stroke;
     }
 }
 
@@ -57,27 +57,31 @@ std::vector<int> member_round_strokes(const game_state& state, const std::uint64
 }
 
 bool waiting_for_group(const game_state& state) {
-    if (!is_online(state) || !round_finished(state.round) || !state.hole) {
+    if (!is_online(state) || !round_finished(state.round) || !state.ball) {
         return false;
     }
     const room_player* me = my_room_player(state);
     if (me == nullptr || me->group_id == 0) {
         return false;
     }
-    // A finished round stays on the hole it finished on.
-    const int last_hole = static_cast<int>(state.hole->index);
+    // My ball waits in the cup of the hole the round finished on.
+    const int last_hole = static_cast<int>(state.ball->hole);
     const auto shooting = [&state](const std::uint64_t account) {
         const auto playing = state.remote_shots.find(account);
         if (playing != state.remote_shots.end() && remote_shot_playing(playing->second)) {
             return true;
         }
-        // A shot arrived with the zone it ended in, not played yet.
+        // A shot arrived, not played yet.
         return std::any_of(state.online.shots.begin(), state.online.shots.end(),
                            [account](const room_shot& shot) { return shot.account_id == account; });
     };
+    const auto playing_last_hole = [&state, last_hole](const std::uint64_t account) {
+        const auto ball = state.online.balls.find(account);
+        return ball != state.online.balls.end() && ball->second.hole == last_hole && !ball->second.in_cup;
+    };
     for (const auto& [account, player] : state.online.players) {
         if (account != state.online.account_id && player.group_id == me->group_id &&
-            (player.zone == last_hole || shooting(account))) {
+            (playing_last_hole(account) || shooting(account))) {
             return true;
         }
     }

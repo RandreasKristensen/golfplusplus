@@ -2,6 +2,8 @@
 
 #include <SDL.h>
 
+#include <cstdlib>
+
 namespace {
 button_state* button_for_scancode(input_state& input, const SDL_Scancode scancode) {
     switch (scancode) {
@@ -22,6 +24,9 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
     case SDL_SCANCODE_LCTRL:
     case SDL_SCANCODE_RCTRL:
         return &input.ctrl;
+    case SDL_SCANCODE_LALT:
+    case SDL_SCANCODE_RALT:
+        return &input.alt;
     case SDL_SCANCODE_RETURN:
     case SDL_SCANCODE_KP_ENTER:
         return &input.enter;
@@ -47,6 +52,16 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
         return &input.key_f;
     case SDL_SCANCODE_Q:
         return &input.key_q;
+    case SDL_SCANCODE_R:
+        return &input.key_r;
+    case SDL_SCANCODE_V:
+        return &input.key_v;
+    case SDL_SCANCODE_Z:
+        return &input.key_z;
+    case SDL_SCANCODE_C:
+        return &input.key_c;
+    case SDL_SCANCODE_B:
+        return &input.key_b;
     case SDL_SCANCODE_M:
         return &input.key_m;
     case SDL_SCANCODE_1:
@@ -55,6 +70,8 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
         return &input.key_2;
     case SDL_SCANCODE_G:
         return &input.key_g;
+    case SDL_SCANCODE_P:
+        return &input.key_p;
     case SDL_SCANCODE_T:
         return &input.key_t;
     case SDL_SCANCODE_F1:
@@ -91,6 +108,9 @@ input_state poll_events(const input_state& previous) {
             input.mouse_y = event.motion.y;
             input.mouse_dx += event.motion.xrel;
             input.mouse_dy += event.motion.yrel;
+            if (input.mouse_right.is_down) {
+                input.right_drag_counts += std::abs(event.motion.xrel) + std::abs(event.motion.yrel);
+            }
             break;
         case SDL_MOUSEWHEEL:
             input.wheel_steps += event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y;
@@ -101,6 +121,13 @@ input_state poll_events(const input_state& previous) {
                 input.mouse_x = event.button.x;
                 input.mouse_y = event.button.y;
                 set_button(input.mouse_left, event.type == SDL_MOUSEBUTTONDOWN);
+            } else if (event.button.button == SDL_BUTTON_RIGHT) {
+                if (event.type == SDL_MOUSEBUTTONDOWN && !input.mouse_right.is_down) {
+                    input.right_drag_counts = 0;
+                }
+                set_button(input.mouse_right, event.type == SDL_MOUSEBUTTONDOWN);
+            } else if (event.button.button == SDL_BUTTON_MIDDLE) {
+                set_button(input.mouse_middle, event.type == SDL_MOUSEBUTTONDOWN);
             }
             break;
         case SDL_KEYDOWN:

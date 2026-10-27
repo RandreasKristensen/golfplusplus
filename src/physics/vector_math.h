@@ -1,10 +1,13 @@
 #pragma once
 
 // Small pure vector helpers shared by physics, game and renderer. Use these
-// (and glm::radians / glm::pi) instead of local copies.
+// (and glm::radians / glm::pi) instead of local copies. Their trigonometry
+// is det_math's, so a shot's aim turns the same on every machine.
 
 #include <algorithm>
 #include <cmath>
+
+#include "physics/det_math.h"
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
@@ -37,15 +40,15 @@ inline float horizontal_distance(const glm::vec3& a, const glm::vec3& b) {
 // `point` turned `radians` around the Y axis through the origin, +X towards +Z.
 // Placing a hole on its course turns it this way.
 inline glm::vec3 rotate_about_y(const glm::vec3& point, const float radians) {
-    const float c = std::cos(radians);
-    const float s = std::sin(radians);
+    const float c = det_cos(radians);
+    const float s = det_sin(radians);
     return glm::vec3(point.x * c - point.z * s, point.y, point.x * s + point.z * c);
 }
 
 // Yaw convention for players, carts and aiming: 0 faces +Z, positive turns
 // towards +X.
 inline glm::vec3 yaw_direction(const float yaw) {
-    return glm::vec3(std::sin(yaw), 0.0f, std::cos(yaw));
+    return glm::vec3(det_sin(yaw), 0.0f, det_cos(yaw));
 }
 
 // `angle` in [-pi, pi). A shot's aim is wrapped before it is simulated or
@@ -69,7 +72,7 @@ inline float yaw_towards(const glm::vec3& from, const glm::vec3& to) {
     if (glm::length(delta) <= 0.0001f) {
         return 0.0f;
     }
-    return std::atan2(delta.x, delta.z);
+    return det_atan2(delta.x, delta.z);
 }
 
 // Unit vector to the left of `forward` on the ground plane.

@@ -226,7 +226,8 @@ inline constexpr share_field<glow_floors> glow_fields[] = {
     {"cup", &glow_floors::cup},
     {"pin_pole", &glow_floors::pin_pole},
     {"flag", &glow_floors::flag},
-    {"aim_dot", &glow_floors::aim_dot},
+    {"alignment_stick", &glow_floors::alignment_stick},
+    {"face_line", &glow_floors::face_line},
     {"ember", &glow_floors::ember},
     {"flight_path", &glow_floors::flight_path},
 };
@@ -251,11 +252,8 @@ inline constexpr color_field<marker_colors> marker_fields[] = {
     {"cup", &marker_colors::cup},
     {"pin_pole", &marker_colors::pin_pole},
     {"flag", &marker_colors::flag},
-    {"aim_dot", &marker_colors::aim_dot},
-    {"club_shaft", &marker_colors::club_shaft},
-    {"club_face", &marker_colors::club_face},
-    {"club_back", &marker_colors::club_back},
-    {"club_sole", &marker_colors::club_sole},
+    {"alignment_stick", &marker_colors::alignment_stick},
+    {"face_line", &marker_colors::face_line},
 };
 
 inline constexpr color_field<figure_colors> figure_fields[] = {

@@ -43,17 +43,17 @@ TEST_CASE("camera transition snaps on the first frame") {
 
 TEST_CASE("camera transition eases between rigs and finishes within the duration") {
     const camera_view walking = make_view(glm::vec3(0.0f, 1.65f, 0.0f), glm::vec3(0.0f, 1.65f, 10.0f));
-    const camera_view aiming = make_view(glm::vec3(4.0f, 1.55f, -2.0f), glm::vec3(4.0f, 1.05f, 12.0f), 50.0f);
+    const camera_view addressing = make_view(glm::vec3(4.0f, 1.55f, -2.0f), glm::vec3(4.0f, 1.05f, 12.0f), 50.0f);
     camera_transition_state state = snap_camera_transition(camera_rig::walking, walking);
 
-    state = update_camera_transition(state, camera_rig::aiming, aiming, 0.016f, settings());
+    state = update_camera_transition(state, camera_rig::addressing, addressing, 0.016f, settings());
     // The switch frame still shows the old view: no cut.
     CHECK(near(state.shown.position, walking.position));
 
-    float previous_distance = glm::length(state.shown.position - aiming.position);
+    float previous_distance = glm::length(state.shown.position - addressing.position);
     for (int i = 0; i < 10; ++i) {
-        state = update_camera_transition(state, camera_rig::aiming, aiming, 0.02f, settings());
-        const float distance = glm::length(state.shown.position - aiming.position);
+        state = update_camera_transition(state, camera_rig::addressing, addressing, 0.02f, settings());
+        const float distance = glm::length(state.shown.position - addressing.position);
         CHECK(distance < previous_distance);
         // Each frame moves only a fraction of the way.
         CHECK(distance > 0.0f);
@@ -63,10 +63,10 @@ TEST_CASE("camera transition eases between rigs and finishes within the duration
     CHECK(state.shown.fov_degrees > 50.0f);
 
     for (int i = 0; i < 30; ++i) {
-        state = update_camera_transition(state, camera_rig::aiming, aiming, 0.02f, settings());
+        state = update_camera_transition(state, camera_rig::addressing, addressing, 0.02f, settings());
     }
-    CHECK(near(state.shown.position, aiming.position));
-    CHECK(near(state.shown.target, aiming.target));
+    CHECK(near(state.shown.position, addressing.position));
+    CHECK(near(state.shown.target, addressing.target));
     CHECK(std::abs(state.shown.fov_degrees - 50.0f) < 0.001f);
 }
 
@@ -91,10 +91,10 @@ TEST_CASE("camera transition blends when a rig teleports") {
 
 TEST_CASE("camera transition restarts from the shown view when interrupted") {
     const camera_view walking = make_view(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 10.0f));
-    const camera_view aiming = make_view(glm::vec3(2.0f, 0.0f, 0.0f), glm::vec3(2.0f, 0.0f, 10.0f));
+    const camera_view addressing = make_view(glm::vec3(2.0f, 0.0f, 0.0f), glm::vec3(2.0f, 0.0f, 10.0f));
     camera_transition_state state = snap_camera_transition(camera_rig::walking, walking);
-    state = update_camera_transition(state, camera_rig::aiming, aiming, 0.0f, settings());
-    state = update_camera_transition(state, camera_rig::aiming, aiming, 0.25f, settings());
+    state = update_camera_transition(state, camera_rig::addressing, addressing, 0.0f, settings());
+    state = update_camera_transition(state, camera_rig::addressing, addressing, 0.25f, settings());
     const glm::vec3 midway = state.shown.position;
     CHECK(midway.x > 0.0f);
 

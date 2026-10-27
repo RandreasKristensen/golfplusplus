@@ -50,6 +50,7 @@ private:
     // A fresh state on the first course as the menu backdrop, keeping the save.
     bool reset_to_menu_backdrop();
     void return_to_menu();
+    void show_golfer_settings();
     void save_progress();
     // Plays the menus' audio settings (music volume) and, when `write`,
     // saves them. make_frame reads the field of view every frame.
@@ -65,7 +66,9 @@ private:
     // Keeps an online round in its room: restarts it after a reconnect,
     // and leaves for the menus when the connection or the room is gone.
     void watch_online_round();
+    // The round's sounds, heard from the camera as drawn this frame.
     void play_game_audio();
+    void stop_motor_loops();
     void refresh_render_meshes();
     // `snap_camera` cuts to the live view instead of blending (menus).
     render_data make_frame(float dt, bool snap_camera, frame_profile* profile);
@@ -96,10 +99,10 @@ private:
     render_floodlights floodlights_;
     render_water water_;
     tree_shadow_cache tree_shadows_;
-    bool cart_loop_playing_ = false;
+    std::vector<std::string> motor_loops_;  // the keys of the carts' motor loops playing
     tape_style tape_style_;
     lighting_palette lighting_;
-    prop_set props_;  // assets/world/props
+    prop_catalog props_;  // assets/world/props
     sky_controls sky_;  // GOLFPP_GAME_TIME, the developer's scrub and the god menu's hour
     god_menu_state god_;
     tape_tracking_state tape_tracking_;
@@ -112,9 +115,11 @@ private:
     std::optional<online_session> online_;
 #endif
 
-    // Ctrl toggles the FPS and profiling overlay; the profiler only records
+    // Ctrl, let go without turning the wheel (Ctrl+wheel turns the face),
+    // toggles the FPS and profiling overlay; the profiler only records
     // while it is shown.
     profiler profiler_;
+    bool ctrl_wheeled_ = false;
     bool running_ = false;
     // GOLFPP_SCREENSHOT: where to save the picture, empty when off.
     std::filesystem::path screenshot_path_;

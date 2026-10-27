@@ -61,22 +61,27 @@ bool open_ground(const glm::vec3& spot, const placement& at) {
             return false;
         }
     }
-    const auto clear_of_bodies = [&](const std::vector<tree_body>& bodies) {
-        return std::all_of(bodies.begin(), bodies.end(), [&](const tree_body& body) {
-            return clear_of(spot, body.base, body.shape.trunk_radius, at);
-        });
-    };
     const bool clear_of_trees = std::all_of(area.trees.begin(), area.trees.end(), [&](const tree_instance& tree) {
         return clear_of(spot, tree.position, tree.shape.trunk_radius, at);
-    });
-    const bool clear_of_nets = std::all_of(area.fence_panels.begin(), area.fence_panels.end(), [&](const fence_panel& net) {
-        return distance_to_segment(spot, net.a, net.b) >= at.tuning.floodlights.pole_radius + at.tuning.floodlights.obstacle_clearance;
     });
     const bool clear_of_poles = std::all_of(at.placed.begin(), at.placed.end(), [&](const floodlight& light) {
         return clear_of(spot, light.foot, light.radius, at);
     });
-    return clear_of_trees && clear_of_nets && clear_of_poles && clear_of_bodies(area.sign_posts) &&
-        clear_of_bodies(area.fence_poles);
+    const bool clear_of_signs = std::all_of(area.signs.begin(), area.signs.end(), [&](const hole_sign& sign) {
+        return std::all_of(sign.post_feet.begin(), sign.post_feet.end(),
+                           [&](const glm::vec3& foot) { return clear_of(spot, foot, sign.post_radius, at); });
+    });
+    const float net_clearance = at.tuning.floodlights.pole_radius + at.tuning.floodlights.obstacle_clearance;
+    const bool clear_of_fences = std::all_of(area.fences.begin(), area.fences.end(), [&](const course_world_fence& fence) {
+        for (std::size_t i = 0; i < fence.poles.size(); ++i) {
+            if (!clear_of(spot, fence.poles[i], at.tuning.fence.pole_radius, at) ||
+                (i + 1 < fence.poles.size() && distance_to_segment(spot, fence.poles[i], fence.poles[i + 1]) < net_clearance)) {
+                return false;
+            }
+        }
+        return true;
+    });
+    return clear_of_trees && clear_of_poles && clear_of_signs && clear_of_fences;
 }
 
 // The first open spot from `spot` moved `outward` steps of nudge_step out
@@ -185,14 +190,3 @@ std::vector<floodlight> place_floodlights(const play_area& area,
     return lights;
 }
 
-std::vector<tree_body> floodlight_poles(const std::vector<floodlight>& lights) {
-    std::vector<tree_body> poles;
-    poles.reserve(lights.size());
-    for (const floodlight& light : lights) {
-        tree_shape shape;
-        shape.trunk_radius = light.radius;
-        shape.trunk_height = light.lamp.y - light.foot.y;
-        poles.push_back(tree_body{light.foot, shape});
-    }
-    return poles;
-}

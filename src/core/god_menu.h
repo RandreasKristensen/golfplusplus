@@ -8,7 +8,8 @@
 // (core/sky_frame.h), so it is visual only; the rest is the offline weather
 // override (game_state::weather_override), which online play ignores: the
 // server decides the weather there. GOLFPP_WEATHER starts with the weather
-// held. GL-free.
+// held. Its last row draws every solid's outline near the camera, for
+// checking an import. GL-free.
 
 #include "core/input.h"
 #include "core/sky_frame.h"
@@ -17,6 +18,7 @@
 #include "game/text_assets.h"
 #include "game/weather.h"
 #include "renderer/god_menu_overlay.h"
+#include "renderer/solid_outline.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -31,9 +33,10 @@ enum class god_menu_row : std::size_t {
     thunder,
     wind_speed,
     wind_direction,
-    wetness
+    wetness,
+    solids
 };
-inline constexpr std::size_t god_menu_row_count = 9;
+inline constexpr std::size_t god_menu_row_count = 10;
 
 struct god_menu_state {
     bool enabled = false;  // GOLFPP_GOD or --god
@@ -48,6 +51,7 @@ struct god_menu_state {
     std::optional<float> wind_speed;    // m/s at the wind profile's reference height
     std::optional<float> wind_heading;  // radians, the way it blows towards (yaw_direction)
     std::optional<float> wetness;       // 0..1
+    bool show_solids = false;  // every solid's outline drawn
 };
 
 // What the menu is told each frame, from the keys.
@@ -100,5 +104,9 @@ input_state without_god_menu_keys(input_state input);
 void run_god_menu(god_menu_state& menu, sky_controls& sky, game_state& game, const god_menu_keys& keys);
 
 // The open menu as drawn over `game`.
+// The outlines of every solid within god_solids_reach of `eye` (the
+// area's and each green's flagstick), when the menu shows them.
+std::vector<world_segment> god_solid_outlines(const god_menu_state& menu, const game_state& game, const glm::vec3& eye);
+
 render_god_menu god_menu_frame_view(const god_menu_state& menu, const sky_controls& sky, const game_state& game,
                                     const text_assets& text);
