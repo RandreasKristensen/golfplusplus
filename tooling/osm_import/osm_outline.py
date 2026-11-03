@@ -3,7 +3,10 @@ osm_outline.py — OSM green, bunker, water and fairway polygons as the game's
 outline zones: simplified, grown to a least size, streams as strips, close
 bunkers joined into one, and fairways generated where OSM has none.
 
-Points are (x, z) metres. No dependencies beyond the standard library.
+Points are (x, z) metres. The game draws a zone's edge as a smooth curve
+through its points (`rounded_outline` in src/physics/material_zone.h); three
+or more in a line keep a side straight. No dependencies beyond the standard
+library.
 """
 
 import math
@@ -162,8 +165,9 @@ def stream_pieces(line, half_width: float, piece_length: float):
 
 # ── joining close bunkers ─────────────────────────────────────────────────────
 
-def _trace_outer(filled, columns, rows):
-    """The longest closed boundary round the filled cells, as grid corners (column, row)."""
+def trace_loops(filled, columns, rows):
+    """Every closed boundary round the filled cells, as grid corners (column, row):
+    an outer edge runs with negative area, a hole's edge with positive."""
     def at(c, r):
         return 0 <= c < columns and 0 <= r < rows and filled[r][c]
     # Directed boundary edges with the filled cell on their left.
@@ -196,6 +200,12 @@ def _trace_outer(filled, columns, rows):
             if here not in nxt:
                 break
         loops.append(loop)
+    return loops
+
+
+def _trace_outer(filled, columns, rows):
+    """The longest closed boundary round the filled cells, as grid corners (column, row)."""
+    loops = trace_loops(filled, columns, rows)
     return max(loops, key=lambda loop: abs(polygon_area(loop))) if loops else []
 
 
@@ -258,36 +268,85 @@ def join_close(rings, gap: float, cell: float, tolerance: float):
 
 # ── generated fairways ────────────────────────────────────────────────────────
 
-def generated_fairway(line, par: int, design: dict):
-    """A fairway along a hole's `line` (tee to pin) from real design numbers
-    (`design`, the config's `generated_fairway`, with its sources): it starts
-    past the carry from the tees, as wide as the landing area for its par,
-    narrowing from `narrow_from_meters` to its approach width at the pin. A
-    par 3 gets only its approach. None when the hole is too short for one."""
+def _ring_box(ring):
+    xs, zs = [p[0] for p in ring], [p[1] for p in ring]
+    return min(xs), min(zs), max(xs), max(zs)
+
+
+def _boxes_overlap(a, b) -> bool:
+    return a[0] <= b[2] and b[0] <= a[2] and a[1] <= b[3] and b[1] <= a[3]
+
+
+def _strip_without(line, half_widths, holes, cell: float, least_area: float):
+    """The strip along `line` (`half_widths[i]` either side at point i, the
+    points `cell` apart) with every ring in `holes` cut out: drawn on a grid
+    laid along the line, rows along it and columns across, and each piece's
+    outer edge traced back onto the ground. A piece the line does not pass
+    through, or under `least_area`, is dropped; a hole wholly inside a piece
+    is left in it."""
+    left, right = _offset_sides(line, [1.0] * len(line))
+    normals = [(l[0] - p[0], l[1] - p[1]) for l, p in zip(left, line)]
+    reach = max(half_widths)
+    columns = int(math.ceil(2.0 * reach / cell))
+    rows = len(line) - 1
+
+    def ground(column: float, row: float):
+        r = min(rows, max(0, int(round(row))))
+        offset = -reach + column * cell
+        return (line[r][0] + normals[r][0] * offset, line[r][1] + normals[r][1] * offset)
+
+    filled = []
+    for r in range(rows):
+        half = 0.5 * (half_widths[r] + half_widths[r + 1])
+        row = []
+        for c in range(columns):
+            offset = -reach + (c + 0.5) * cell
+            mid = ((line[r][0] + line[r + 1][0]) * 0.5, (line[r][1] + line[r + 1][1]) * 0.5)
+            n = ((normals[r][0] + normals[r + 1][0]) * 0.5, (normals[r][1] + normals[r + 1][1]) * 0.5)
+            at = (mid[0] + n[0] * offset, mid[1] + n[1] * offset)
+            row.append(abs(offset) <= half and not any(point_in_polygon(at, hole) for hole in holes))
+        filled.append(row)
+    pieces = []
+    for loop in trace_loops(filled, columns, rows):
+        if polygon_area(loop) >= 0.0:
+            continue
+        ring = simplify([ground(c, r) for c, r in loop], cell)
+        if (len(ring) >= 3 and abs(polygon_area(ring)) >= least_area
+                and any(point_in_polygon(p, ring) for p in line)):
+            pieces.append(ring)
+    return pieces
+
+
+def generated_fairway(line, par: int, design: dict, roughs=()):
+    """The fairway along a hole's `line` (tee to pin) for a hole OSM maps
+    without one, from real design numbers (`design`, the config's
+    `generated_fairway`, with its sources): from the tee to the pin, a par 3
+    its approach width all the way, a longer hole as wide as the landing area
+    for its par, narrowing from `narrow_from_meters` to its approach width at
+    the pin. Mapped rough (`roughs`, rings) is cut out of it, which can leave
+    it in pieces. Its outlines; none when the hole is too short for one."""
     length = sum(math.dist(a, b) for a, b in zip(line, line[1:]))
-    if par <= 3:
-        start = length - float(design["par3_approach_meters"])
-    else:
-        start = float(design["start_meters"])
-    if length - start < 10.0:
-        return None
-    pts = resample(line, 5.0)
-    along, kept = 0.0, []
-    for i, p in enumerate(pts):
-        if i:
-            along += math.dist(pts[i - 1], p)
-        if along >= start:
-            kept.append((p, along))
-    if len(kept) < 2:
-        return None
+    if length < 10.0:
+        return []
+    cell = float(design["cell_meters"])
+    pts = resample(line, cell)
+    along = [0.0]
+    for a, b in zip(pts, pts[1:]):
+        along.append(along[-1] + math.dist(a, b))
     approach = 0.5 * float(design["approach_width_meters"])
     if par <= 3:
-        return strip([p for p, _ in kept], [approach] * len(kept))
-    landing = 0.5 * float(design["landing_width_meters"].get(str(par), design["landing_width_meters"]["4"]))
-    # A short hole narrows from half way along its fairway.
-    narrow_from = min(float(design["narrow_from_meters"]), 0.5 * (start + length))
-    widths = [landing + (approach - landing) * max(0.0, d - narrow_from) / (length - narrow_from) for _, d in kept]
-    return strip([p for p, _ in kept], widths)
+        widths = [approach] * len(pts)
+    else:
+        landing = 0.5 * float(design["landing_width_meters"].get(str(par), design["landing_width_meters"]["4"]))
+        # A short hole narrows from half way along.
+        narrow_from = min(float(design["narrow_from_meters"]), 0.5 * length)
+        widths = [landing + (approach - landing) * max(0.0, d - narrow_from) / (length - narrow_from) for d in along]
+    whole = strip(pts, widths)
+    box = _ring_box(whole)
+    cut = [ring for ring in roughs if _boxes_overlap(box, _ring_box(ring))]
+    if not cut:
+        return [whole]
+    return _strip_without(pts, widths, cut, cell, float(design["least_piece_square_meters"]))
 
 
 def zone_json(zone_type: str, ring, offset=(0.0, 0.0), digits: int = 2) -> dict:

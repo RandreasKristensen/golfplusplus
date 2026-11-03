@@ -41,6 +41,17 @@ struct weather_haze {
 
 weather_haze haze_under_weather(const weather_style& style, const shown_weather& weather);
 
+// How the air scatters the night lights' light towards the eye
+// (lighting.glsl's scattered_light): `per_meter` of the light it meets, from
+// the visibility by Koschmieder's law; `forwardness` is the Henyey-Greenstein
+// g of what scatters, the clear air's, the rain's and the fog's by their share.
+struct air_scattering {
+    float per_meter = 0.0f;
+    float forwardness = 0.0f;
+};
+
+air_scattering scattering_under_weather(const weather_style& style, const shown_weather& weather);
+
 // `color` `grey` of the way to its own luminance.
 glm::vec3 greyed(const glm::vec3& color, float grey);
 

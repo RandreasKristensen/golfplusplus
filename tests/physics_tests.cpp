@@ -278,6 +278,59 @@ TEST_CASE("a zone's material overlay covers its outline on the ground") {
     CHECK(near(max_z, 12.0f, 0.01f));
 }
 
+TEST_CASE("a green inside a fairway's outline is drawn once, never over the fairway's overlay") {
+    terrain_spline terrain;
+    terrain.control_points = {glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -2.0f, 30.0f)};
+    terrain.width = 20.0f;
+    terrain.sample_count = 24;
+    const material_zone fairway = ellipse_zone(material_zone_type::fairway, glm::vec3(0.0f, 0.0f, 15.0f), 8.0f, 12.0f);
+    const material_zone green = circle_zone(material_zone_type::green, glm::vec3(1.0f, 0.0f, 18.0f), 4.0f);
+    const std::vector<material_zone> zones = {fairway, green};
+    const terrain_mesh ground = plain_terrain_mesh(terrain);
+    const terrain_mesh overlay = build_material_overlay_mesh(ground, zones);
+    REQUIRE(overlay.indices.size() >= 3U);
+
+    // Over a grid of points, the overlay triangles covering each: never two,
+    // and the one there is the winning zone's, one colour all over.
+    const auto covering = [&overlay](const glm::vec2& point) {
+        std::vector<terrain_material> found;
+        for (std::size_t i = 0; i + 2U < overlay.indices.size(); i += 3U) {
+            const terrain_vertex& a = overlay.vertices[overlay.indices[i]];
+            const terrain_vertex& b = overlay.vertices[overlay.indices[i + 1U]];
+            const terrain_vertex& c = overlay.vertices[overlay.indices[i + 2U]];
+            const auto cross = [&point](const glm::vec3& from, const glm::vec3& to) {
+                return (to.x - from.x) * (point.y - from.z) - (to.z - from.z) * (point.x - from.x);
+            };
+            const float ab = cross(a.position, b.position);
+            const float bc = cross(b.position, c.position);
+            const float ca = cross(c.position, a.position);
+            const bool inside = (ab > 1.0e-4f && bc > 1.0e-4f && ca > 1.0e-4f) || (ab < -1.0e-4f && bc < -1.0e-4f && ca < -1.0e-4f);
+            if (inside) {
+                CHECK(a.material == b.material);
+                CHECK(b.material == c.material);
+                found.push_back(a.material);
+            }
+        }
+        return found;
+    };
+    int on_green = 0;
+    int on_fairway = 0;
+    for (float x = -7.9f; x <= 7.9f; x += 0.37f) {
+        for (float z = 3.1f; z <= 26.9f; z += 0.41f) {
+            const std::vector<terrain_material> found = covering(glm::vec2(x, z));
+            CHECK(found.size() <= 1U);
+            const std::optional<terrain_material> wins = zone_material_at(zones, glm::vec3(x, 0.0f, z));
+            if (found.size() == 1U && wins) {
+                CHECK(found[0] == *wins);
+                on_green += found[0] == terrain_material::green ? 1 : 0;
+                on_fairway += found[0] == terrain_material::fairway ? 1 : 0;
+            }
+        }
+    }
+    CHECK(on_green > 100);
+    CHECK(on_fairway > 300);
+}
+
 TEST_CASE("spline terrain samples loaded elevation") {
     terrain_spline terrain;
     terrain.control_points = {

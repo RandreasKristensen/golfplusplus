@@ -83,6 +83,9 @@ void change_row(god_menu_state& menu, sky_controls& sky, const int by, const wea
     case god_menu_row::solids:
         menu.show_solids = !menu.show_solids;
         break;
+    case god_menu_row::profiler:
+        menu.show_profiler = !menu.show_profiler;
+        break;
     }
 }
 
@@ -118,6 +121,9 @@ void make_live(god_menu_state& menu, sky_controls& sky) {
         break;
     case god_menu_row::solids:
         menu.show_solids = false;
+        break;
+    case god_menu_row::profiler:
+        menu.show_profiler = false;
         break;
     }
 }
@@ -231,6 +237,8 @@ render_god_menu god_menu_view(const god_menu_state& menu,
                                  offline && menu.wetness.has_value(), selected(god_menu_row::wetness)));
     view.rows.push_back(row_view(text, text_god_solids, lookup_text(text, menu.show_solids ? text_god_on : text_god_off),
                                  menu.show_solids, selected(god_menu_row::solids)));
+    view.rows.push_back(row_view(text, text_god_profiler, lookup_text(text, menu.show_profiler ? text_god_on : text_god_off),
+                                 menu.show_profiler, selected(god_menu_row::profiler)));
     view.note = lookup_text(text, online ? text_god_online : text_god_keys);
     return view;
 }

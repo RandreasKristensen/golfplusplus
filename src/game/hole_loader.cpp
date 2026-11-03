@@ -1,6 +1,7 @@
 #include "game/hole_loader.h"
 
 #include "game/json_util.h"
+#include "physics/material_zone.h"
 
 #include <glm/trigonometric.hpp>
 
@@ -15,6 +16,8 @@ namespace {
 constexpr float min_tree_dimension = 0.01f;
 // A zone smaller than this (square metres) is a broken one.
 constexpr float min_zone_area = 0.01f;
+// How far (metres) a zone's drawn edge may stray from its curve.
+constexpr float zone_curve_tolerance = 0.05f;
 
 material_zone_type material_type_from_string(const std::string& value) {
     if (value == "green") {
@@ -32,8 +35,9 @@ material_zone_type material_type_from_string(const std::string& value) {
     return material_zone_type::unknown;
 }
 
-// One zone, its `outline` ([[x, z], ...] round its edge). nullopt when it
-// has fewer than three finite points or no area.
+// One zone, its `outline` ([[x, z], ...] mapped round its edge), its edge
+// the curve through them. nullopt when it has fewer than three finite points
+// or no area.
 std::optional<material_zone> material_zone_from_json(const json& object) {
     const json* points = object.is_object() ? json_array(object, "outline") : nullptr;
     if (points == nullptr || points->size() < 3U) {
@@ -51,7 +55,8 @@ std::optional<material_zone> material_zone_from_json(const json& object) {
         outline.push_back(xz);
     }
     const material_zone zone =
-        make_material_zone(material_type_from_string(json_string(object, "type").value_or("")), std::move(outline));
+        make_material_zone(material_type_from_string(json_string(object, "type").value_or("")),
+                           rounded_outline(outline, zone_curve_tolerance));
     if (!(zone_area(zone) >= min_zone_area)) {
         return std::nullopt;
     }
@@ -153,6 +158,8 @@ std::optional<hole_data> parse_hole_from_text(const std::string& text) {
     }
     hole.material_zones = std::move(*zones);
     hole.trees = trees_from_json(*root);
+    hole.tee_box = json_bool(*root, "tee_box").value_or(true);
+    hole.ribbon_fairway = json_bool(*root, "ribbon_fairway").value_or(true);
     return hole;
 }
 

@@ -39,10 +39,24 @@ setup_limits setup_limits_for(const club_definition& club, const setup_tuning& t
     limits.face_open_max = glm::radians(club.spec.max_face_open_degrees);
     limits.ball_position_min = -1.0f;
     limits.ball_position_max = 1.0f;
-    const int steps = putter ? tuning.putter_backswing_steps : tuning.backswing_steps;
-    limits.backswing_step = 1.0f / static_cast<float>(std::max(1, steps));
+    limits.backswing_step_short = putter ? tuning.putter_backswing_step_short : tuning.backswing_step_short;
+    limits.backswing_step_full = putter ? tuning.putter_backswing_step_full : tuning.backswing_step_full;
+    limits.backswing_min = limits.backswing_step_short;
     limits.backswing_max = putter ? 1.0f : tuning.overswing_max;
     return limits;
+}
+
+float stepped_backswing(float backswing, const int steps, const setup_limits& limits) {
+    // A step up from b is short + growth * min(b, 1); down undoes it exactly.
+    const float growth = limits.backswing_step_full - limits.backswing_step_short;
+    for (int i = 0; i < steps; ++i) {
+        backswing += limits.backswing_step_short + growth * std::min(backswing, 1.0f);
+    }
+    for (int i = 0; i > steps; --i) {
+        const float below = (backswing - limits.backswing_step_short) / (1.0f + growth);
+        backswing = below <= 1.0f ? below : backswing - limits.backswing_step_full;
+    }
+    return backswing;
 }
 
 shot_setup stock_setup(const club_definition& club, const ball_lie lie, const glm::vec3& ball, const float aim,
@@ -64,7 +78,8 @@ shot_setup clamped_setup(const shot_setup& setup, const setup_limits& limits) {
     clamped.aim_angle = wrap_angle(finite(setup.aim_angle));
     clamped.face_open = std::clamp(finite(setup.face_open), limits.face_open_min, limits.face_open_max);
     clamped.ball_position = std::clamp(finite(setup.ball_position), limits.ball_position_min, limits.ball_position_max);
-    clamped.backswing = std::clamp(finite(setup.backswing), limits.backswing_step, limits.backswing_max);
+    clamped.backswing = std::clamp(finite(setup.backswing), limits.backswing_min, limits.backswing_max);
+    clamped.strike_timing = std::clamp(finite(setup.strike_timing), -1.0f, 1.0f);
     return clamped;
 }
 
@@ -75,7 +90,7 @@ shot_setup stepped_setup(const shot_setup& setup, const setup_steps& steps, cons
         steps.aim_radians;
     stepped.face_open = setup.face_open + glm::radians(tuning.face_step_degrees) * static_cast<float>(steps.face);
     stepped.ball_position = setup.ball_position + tuning.ball_position_step * static_cast<float>(steps.ball);
-    stepped.backswing = setup.backswing + limits.backswing_step * static_cast<float>(steps.backswing);
+    stepped.backswing = stepped_backswing(setup.backswing, steps.backswing, limits);
     return clamped_setup(stepped, limits);
 }
 

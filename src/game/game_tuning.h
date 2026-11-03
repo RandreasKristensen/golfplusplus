@@ -138,6 +138,12 @@ struct swing_tuning {
     float downswing_seconds = 0.0f;
     float putt_backswing_seconds = 0.0f;
     float putt_downswing_seconds = 0.0f;
+    // The swipe's meter (game/swing.h): seconds to a full backswing, and
+    // the strike's timing, on time this near the top and as mistimed as it
+    // gets this much further off.
+    float meter_full_seconds = 0.0f;
+    float timing_window_seconds = 0.0f;
+    float timing_full_seconds = 0.0f;
     // The club's speed share by backswing (0 none .. 1 full .. past 1
     // overswing): a full swing's clock (tests/fixtures/reference/impact.json),
     // and a putter's pendulum.
@@ -158,8 +164,13 @@ struct setup_tuning {
     float aim_step_degrees = 0.0f;
     float face_step_degrees = 0.0f;
     float ball_position_step = 0.0f;
-    int backswing_steps = 0;  // from none to full
-    int putter_backswing_steps = 0;
+    // One step of the backswing dial: backswing_step_short at the shortest
+    // backswing, growing with the backswing to backswing_step_full at full,
+    // so a chip's steps are as fine for its length as a full swing's are.
+    float backswing_step_short = 0.0f;
+    float backswing_step_full = 0.0f;
+    float putter_backswing_step_short = 0.0f;
+    float putter_backswing_step_full = 0.0f;
     float overswing_max = 0.0f;  // the longest backswing, past full (not a putter's)
     // Metres the stance moves along the aim for one unit of ball position.
     float ball_position_meters = 0.0f;
@@ -167,12 +178,16 @@ struct setup_tuning {
     float repeat_rate = 0.0f;          // steps per second
     float repeat_acceleration = 0.0f;  // steps per second, per second
     float max_repeat_rate = 0.0f;
-    // What the wheel changes: the part of the setup within this angle of
-    // the view's centre (game/setup_pointer.h).
-    float pointer_radius_degrees = 0.0f;
-    // The right button held moving further than this (mouse counts) turns
-    // the stance; less, it is a click (core/key_bindings.h).
+    // The right button held moving further than this (mouse counts) is a
+    // drag; less, it is a click (core/key_bindings.h).
     int drag_threshold_counts = 0;
+    // Looking down at the ball, a left-drag this far (mouse counts) is one
+    // step of the face (up and down) or the ball (left and right).
+    int pull_counts_per_step = 0;
+    // A whole swipe (game/swing.h): a right-drag this far across (mouse
+    // counts), or the touchpad's two fingers scrolling this far across.
+    int swipe_drag_counts = 0;
+    float swipe_wheel_amount = 0.0f;
     // The setup on the ground (game/address_view.h): the face's line past
     // the head each way, and the alignment stick this far out from the ball
     // along my toes, this long each way.
@@ -183,6 +198,7 @@ struct setup_tuning {
 
 struct player_tuning {
     float walk_speed = 0.0f;
+    float run_factor = 0.0f;  // Shift held: walking speed times this
     float turn_rate = 0.0f;
     // Looking around, first person: the arrow keys look up and down at
     // look_pitch_rate (rad/s) as far as max_look_pitch (rad) either way; the
@@ -199,6 +215,11 @@ struct player_tuning {
     // side (game/golf_bag.h).
     float bag_reach = 0.0f;
     float bag_set_down_distance = 0.0f;
+    // Handling my bag takes this long, standing still: setting it down,
+    // taking it up, onto or off a cart (game/bag_handling.h); swapping the
+    // club in hand for one from it, club_swap_seconds.
+    float bag_handle_seconds = 0.0f;
+    float club_swap_seconds = 0.0f;
     // A hop on foot (game/player_jump.h): up at jump_speed (world units/s),
     // pulled down at jump_gravity (world units/s^2).
     float jump_speed = 0.0f;
@@ -223,7 +244,20 @@ struct cart_tuning {
     // Its two seats, each this far to the side of its middle: the driver's
     // on the left, the passenger's on the right.
     float seat_offset = 0.0f;
-    float board_reach = 0.0f;        // from a seat, to step into it; from its middle, to right it
+    float board_reach = 0.0f;        // to a seat, as far as the server lets one step into it; from its middle, to right it
+    // A seat's door: beside the cart's side at the seat, out to door_depth
+    // from the side and door_half_length along it either way of the seat.
+    // Walking into the cart there (my walk within door_push_share, a
+    // cosine, of straight in) for door_push_seconds steps into a seat; the
+    // other seat's owner scoots across it over scoot_seconds more.
+    float door_depth = 0.0f;
+    float door_half_length = 0.0f;
+    float door_push_share = 0.0f;
+    float door_push_seconds = 0.0f;
+    float scoot_seconds = 0.0f;
+    // A cart tipping onto its side bounces off the ground with this share
+    // of the speed it rolls into it at (physics/cart_rollover.h).
+    float fall_restitution = 0.0f;
     float bag_behind_seat = 0.0f;    // a bag strapped behind a seat, this far back from it
     float step_out_distance = 0.0f;  // from a seat, out to the side, where stepping out stands
     float step_seconds = 0.0f;       // stepping in or out
@@ -269,7 +303,7 @@ struct camera_tuning {
     // ground under the stance and this far out from the ball towards it.
     // The head turns from facing the ball (yaw 0, positive towards the
     // target) within the look's limits; the target and down views are two
-    // framed looks in them, which V turns between in address_snap_seconds.
+    // framed looks in them, which R turns between in address_snap_seconds.
     float address_eye_height = 0.0f;
     float address_eye_out = 0.0f;
     float address_target_yaw_degrees = 0.0f;
@@ -287,6 +321,8 @@ struct camera_tuning {
     float follow_back_distance = 0.0f;
     float follow_eye_height = 0.0f;
     float follow_look_height = 0.0f;
+    // It lets go once the ball has rolled this far after its last bounce.
+    float follow_roll_meters = 0.0f;
     float transition_seconds = 0.0f;        // blend time on rig changes and teleports
     float transition_jump_distance = 0.0f;  // eye movement per frame that counts as a teleport
     // What is held before my eyes (my emote props) is drawn at this field
@@ -301,6 +337,7 @@ struct camera_tuning {
 // far apart so it lies on the slope.
 struct shot_preview_tuning {
     float step_seconds = 0.0f;
+    float start_line_meters = 0.0f;  // a full shot's line, from the ball
     float putt_line_meters = 0.0f;
     float putt_line_step_meters = 0.0f;
 };
@@ -318,6 +355,10 @@ struct flight_path_tuning {
 struct rangefinder_tuning {
     float magnification = 0.0f;   // the zoom; the look turns this much slower
     float raise_seconds = 0.0f;   // from the eye to fully zoomed
+    // It reads nothing nearer than min_range_meters, flags no further than
+    // flag_range_meters and anything else no further than max_range_meters.
+    float min_range_meters = 0.0f;
+    float flag_range_meters = 0.0f;
     float max_range_meters = 0.0f;
     float march_step_meters = 0.0f;  // the view ray is marched in these, then bisected
     int refine_steps = 0;
@@ -332,15 +373,15 @@ struct rangefinder_tuning {
     // How tall people and carts stand to its laser, in world units.
     float person_height = 0.0f;
     float cart_height = 0.0f;
-    // A new reading every ping_seconds. Light rain puts each off by up to
-    // light_rain_error (a share) either way, light fog by light_fog_error;
-    // rain and fog make it nonsense: blank blank_share of the time, else
-    // any distance in range, as far up or down as nonsense_slope of it.
+    // A new reading every ping_seconds. In weather (rangefinder_reach,
+    // weathered_reading): its reach in full fog and in full rain, the
+    // shares of pings their droplets return, and how far off at most.
     float ping_seconds = 0.0f;
-    float light_rain_error = 0.0f;
-    float light_fog_error = 0.0f;
-    float blank_share = 0.0f;
-    float nonsense_slope = 0.0f;
+    float fog_reach_meters = 0.0f;
+    float rain_reach_meters = 0.0f;
+    float fog_false_share = 0.0f;
+    float rain_false_share = 0.0f;
+    float false_return_meters = 0.0f;
 };
 
 // The "+25 XP" popups.
@@ -349,8 +390,57 @@ struct xp_drop_tuning {
     int min_visible_xp = 0;  // smaller gains are pooled until they reach this
 };
 
+// The number a struck shot pops up as (game/shot_number.h): a crit within
+// crit_share of its planned carry. It rises `rise` (overlay clip units)
+// above the ball over lifetime_seconds, fading over its last fade_share.
+// Its box is half_height high (clip units) at no distance, long_half_height
+// at long_meters and beyond, a crit's crit_size times that, and
+// crit_pop_size times for its first crit_pop_seconds.
+struct shot_number_tuning {
+    float crit_share = 0.0f;
+    float lifetime_seconds = 0.0f;
+    float rise = 0.0f;
+    float fade_share = 0.0f;
+    float half_height = 0.0f;
+    float long_half_height = 0.0f;
+    float long_meters = 0.0f;
+    float crit_size = 0.0f;
+    float crit_pop_size = 0.0f;
+    float crit_pop_seconds = 0.0f;
+};
+
+// Pacing a distance off on foot (game/pacing.h): a pace is pace_meters of
+// level ground; its count pops up popup_ahead_meters ahead of my eyes and
+// popup_drop_meters under them, as a shot's number does (shot_numbers).
+struct pacing_tuning {
+    float pace_meters = 0.0f;
+    float popup_ahead_meters = 0.0f;
+    float popup_drop_meters = 0.0f;
+};
+
+// Crouched reading a green (game/green_read.h): my eye drops to eye_height
+// (world units over my feet) over crouch_seconds. Its dots lie every
+// spacing_meters within radius_meters, fading over the last edge_fade_meters
+// and kept clear_meters off the cup and the ball; a dot slides drift_meters
+// downhill at drift_speed_per_percent m/s per percent of slope, and stays
+// put under level_percent.
+struct green_read_tuning {
+    float eye_height = 0.0f;
+    float crouch_seconds = 0.0f;
+    float spacing_meters = 0.0f;
+    float radius_meters = 0.0f;
+    float edge_fade_meters = 0.0f;
+    float clear_meters = 0.0f;
+    float drift_meters = 0.0f;
+    float drift_speed_per_percent = 0.0f;
+    float level_percent = 0.0f;
+};
+
 // Limits on online motion updates (game/motion_sync.h).
 struct net_tuning {
+    float cart_reconcile_distance = 0.0f;
+    float cart_reconcile_yaw = 0.0f;
+    float max_unacked_seconds = 0.0f;
     float motion_heartbeat_seconds = 0.0f;     // resend at least this often while moving
     float motion_min_interval_seconds = 0.0f;  // never send motion more often than this
     float motion_correction_distance = 0.0f;   // resend when others' extrapolation is this far off (world units)
@@ -367,11 +457,17 @@ struct net_tuning {
     float remote_trail_fade_seconds = 0.0f;  // another player's shot trail, after the ball stops
     float group_join_distance = 0.0f;        // G joins the group of a player this close (world units)
     float notice_seconds = 0.0f;             // how long a refusal from the server shows
+    // Driving with a passenger, my cart goes to them alone (the ride_motion
+    // row only the rider follows) this often, seconds; they ride on it
+    // carried on between, a new one blending in over ride_correction_seconds.
+    float ride_motion_interval_seconds = 0.0f;
+    float ride_correction_seconds = 0.0f;
 };
 
 // What the online server allows (server/golfpp_module). Slack covers a
 // client's honest rounding and lag, not cheating.
 struct server_tuning {
+    float motion_cell_meters = 0.0f;  // visible motion: this spatial cell and its eight neighbours
     int room_capacity = 0;
     int group_capacity = 0;
     int name_min_length = 0;  // code points
@@ -379,13 +475,22 @@ struct server_tuning {
     float link_code_minutes = 0.0f;  // how long a link code works
     int link_codes_per_hour = 0;     // per account
     int link_failures_per_hour = 0;  // wrong codes per login
-    // Between motion updates a player may move at their mode's speed (walking
-    // or the fastest cart) times motion_speed_scale, over at most
-    // max_motion_gap_seconds, plus a slack of motion_distance_slack that
-    // refills at that many world units per second (play_rules.h check_motion).
+    // Movement is stepped from the client's inputs, at most
+    // max_motion_gap_seconds of steps saved up (movement_rules.h). Where a
+    // position is claimed it may lie as far as the mode's speed (walking or
+    // the fastest cart) times motion_speed_scale goes in the time left, plus
+    // a slack of motion_distance_slack that refills at that many world units
+    // per second (play_rules.h check_motion). Steps on foot may start
+    // step_start_tolerance from where the server has the player (put out of
+    // a seat where the client saw the cart).
     float motion_speed_scale = 0.0f;
     float motion_distance_slack = 0.0f;  // world units
     float max_motion_gap_seconds = 0.0f;
+    float step_start_tolerance = 0.0f;  // world units
+    // Movement XP is paid for at most this many metres an hour, on foot and
+    // at the wheel on a road: a little over steady play, so no one farms it.
+    float walk_xp_meters_per_hour = 0.0f;
+    float cart_xp_meters_per_hour = 0.0f;
     float interact_slack = 0.0f;      // world units past an interaction radius
     // How far from the server's clock a shot's time (shot_setup::shot_at)
     // may be, and still pick its weather.
@@ -393,9 +498,10 @@ struct server_tuning {
     // How much earlier than the server's clock the client may use an item
     // again, or act once its ball rests (it times them by frames).
     float timing_slack_seconds = 0.0f;
-    // A cart said to have tipped or sunk where the server has it may be this
-    // share short of what tips it (its stability) or sinks it (wade depth).
-    float cart_condition_slack = 0.0f;
+    // XP awards keep their per-award detail this many days, then are summed
+    // per golfer, skill and month by a job run this often (progress_rollup.h).
+    int xp_award_keep_days = 0;
+    float xp_rollup_interval_hours = 0.0f;
 };
 
 // The sign at every hole's tee (game/hole_sign.h), in world units. It stands
@@ -613,6 +719,14 @@ struct golfer_tuning {
     float spread_at_level_one = 0.0f;
     // The face and strike spreads times this at the longest overswing.
     float overswing_spread = 0.0f;
+    // A strike timed as badly as it gets (shot_setup::strike_timing): the
+    // speed and strike-height spreads times mistimed_spread; too early,
+    // struck this far lower on the face (thin); too late, this share of the
+    // club's speed lost in the turf and struck this far higher (fat).
+    float mistimed_spread = 0.0f;
+    float early_strike_low_meters = 0.0f;
+    float late_speed_loss = 0.0f;
+    float late_strike_high_meters = 0.0f;
     // Playing the natural shape: the spreads times this; and how far the
     // stock face leans to it.
     float natural_shape_spread = 0.0f;
@@ -646,6 +760,9 @@ struct game_tuning {
     shot_preview_tuning shot_preview;
     flight_path_tuning flight_path;
     xp_drop_tuning xp_drops;
+    shot_number_tuning shot_numbers;
+    pacing_tuning pacing;
+    green_read_tuning green_read;
     net_tuning net;
     server_tuning server;
     hole_sign_tuning hole_sign;

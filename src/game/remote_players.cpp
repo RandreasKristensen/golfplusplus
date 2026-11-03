@@ -1,5 +1,6 @@
 #include "game/remote_players.h"
 
+#include "game/course_session.h"
 #include "game/mode_dispatch.h"
 #include "game/play_area.h"
 #include "game/player_jump.h"
@@ -28,12 +29,17 @@ void follow(game_state& state, remote_avatar& avatar, const std::uint64_t accoun
         : 0.0f;
     glm::vec3 target = extrapolate_motion(motion, since);
     float yaw = wrap_angle(motion.yaw + motion.turn_rate * since);
-    // Riding along: in the seat of the cart as it is shown.
+    // Riding along: in the seat of the cart as it is shown. Driving the
+    // cart I ride in: at its wheel as its ride motions carry it.
     const std::optional<std::uint64_t> ridden = motion.mode == motion_mode::ride ? cart_ridden_by(state, account) : std::nullopt;
+    const bool carrying_me = motion.mode == motion_mode::cart && state.ride_shown && state.ride_shown->owner == account;
     const std::optional<cart_pose> cart = ridden ? shown_cart(state, *ridden) : std::nullopt;
     if (cart) {
         target = seat_position(*cart, cart_seat::passenger, state.tuning.cart);
         yaw = cart->yaw;
+    } else if (carrying_me) {
+        target = seat_position(state.ride_shown->shown, cart_seat::driver, state.tuning.cart);
+        yaw = state.ride_shown->shown.yaw;
     }
     const float surface = terrain_height(state.area, target);
     target.y = surface;
@@ -72,8 +78,42 @@ void follow(game_state& state, remote_avatar& avatar, const std::uint64_t accoun
     }
     avatar.yaw = yaw;
     avatar.mode = motion.mode;
+    const float crouch_seconds = state.tuning.green_read.crouch_seconds;
+    const float crouch_change = crouch_seconds > 0.0f ? dt / crouch_seconds : 1.0f;
+    avatar.crouch = clamp01(avatar.crouch + (on_foot && motion.crouched ? crouch_change : -crouch_change));
     tick_item_use(avatar.smoking, state.items, dt);
     tick_item_use(avatar.drinking, state.items, dt);
+}
+
+// Their bag or club handled as their bag row changes: a new place carries
+// the bag there, a new club in hand swaps it.
+void follow_bag(game_state& state, remote_avatar& avatar, const room_bag& bag, const float dt) {
+    if (avatar.handling) {
+        avatar.handling = handling_after(*avatar.handling, state.tuning.player, dt);
+    }
+    if (avatar.bag_seen && !same_place(avatar.bag_seen->place, bag.place)) {
+        bag_handling handling;
+        handling.kind = handling_kind::bag;
+        handling.from = avatar.bag_seen->place;
+        handling.to = bag.place;
+        avatar.handling = handling;
+    } else if (avatar.bag_seen && avatar.bag_seen->club_in_hand != bag.club_in_hand) {
+        bag_handling handling;
+        handling.kind = handling_kind::club;
+        handling.from = bag.place;
+        handling.to = bag.place;
+        handling.club_out = avatar.bag_seen->club_in_hand;
+        handling.club_in = bag.club_in_hand;
+        avatar.handling = handling;
+    }
+    avatar.bag_seen = bag;
+}
+
+// The swing of their club in `setup`: theirs, else the full swing's.
+swing_tempo remote_tempo(const game_state& state, const shot_setup& setup) {
+    const club_definition* club = find_club(state.clubs, setup.club_id);
+    return club != nullptr ? swing_tempo_for(*club, state.tuning.swing)
+                           : swing_tempo{state.tuning.swing.backswing_seconds, state.tuning.swing.downswing_seconds};
 }
 
 void append_trail_point(std::vector<glm::vec3>& trail, const glm::vec3& point, const float min_spacing) {
@@ -92,7 +132,11 @@ void update_remote_players(game_state& state, const float dt) {
             continue;
         }
         const bool known = state.remote_avatars.count(account) != 0;
-        follow(state, state.remote_avatars[account], account, player, known, dt);
+        remote_avatar& avatar = state.remote_avatars[account];
+        follow(state, avatar, account, player, known, dt);
+        if (const auto bag = state.online.bags.find(account); bag != state.online.bags.end()) {
+            follow_bag(state, avatar, bag->second, dt);
+        }
     }
     for (auto it = state.remote_avatars.begin(); it != state.remote_avatars.end();) {
         const auto player = state.online.players.find(it->first);
@@ -104,7 +148,13 @@ void update_remote_players(game_state& state, const float dt) {
     for (auto it = state.remote_shots.begin(); it != state.remote_shots.end();) {
         remote_shot& shot = it->second;
         const bool resting = shot.elapsed >= shot.result.duration;
+        const bool struck = shot.elapsed >= 0.0f;
         shot.elapsed += dt;
+        if (!struck && shot.elapsed >= 0.0f) {
+            if (const club_definition* club = find_club(state.clubs, shot.input.club_id)) {
+                push_club_hit(state, *club, shot.result, shot.input.ball_start);
+            }
+        }
         shot.next_event = push_shot_events(state, shot.result, shot.correction, shot.next_event, shot.elapsed);
         if (shot.result.holed && !resting && shot.elapsed >= shot.result.duration) {
             push_audio_event(state, audio_event_type::ball_cup, remote_shot_position(shot));
@@ -143,10 +193,8 @@ void start_remote_shot(game_state& state, const room_shot& shot) {
     playing.input = setup;
     playing.result = room_shot_result(state, shot);
     playing.correction = shot.rest - playing.result.rest_position;
+    playing.elapsed = -remote_tempo(state, setup).down_seconds;
     playing.trail.push_back(remote_shot_position(playing));
-    if (const club_definition* club = find_club(state.clubs, setup.club_id)) {
-        push_club_hit(state, *club, playing.result, setup.ball_start);
-    }
     state.remote_shots[shot.account_id] = std::move(playing);
 }
 
@@ -173,17 +221,32 @@ std::optional<remote_address> remote_address_pose(const game_state& state, const
         return std::nullopt;
     }
     const net_motion& motion = *player->second.motion;
-    const bool addressing = motion.mode == motion_mode::address || motion.mode == motion_mode::swing;
-    if (!addressing || player->second.motion_at == avatar->second.hit_motion_at) {
+    if (!at_ball(motion.mode)) {
         return std::nullopt;
     }
-    remote_address address{ball->second.position, motion.yaw, 0.0f};
+    if (player->second.motion_at == avatar->second.hit_motion_at) {
+        // Struck: the club comes down as the shot has it, until impact.
+        const auto shot = state.remote_shots.find(account);
+        if (shot == state.remote_shots.end() || shot->second.elapsed >= 0.0f) {
+            return std::nullopt;
+        }
+        const shot_setup& setup = shot->second.input;
+        const swing_tempo tempo = remote_tempo(state, setup);
+        return remote_address{setup, swing_club_raise(swing_impact_seconds(tempo) + shot->second.elapsed, setup.backswing, tempo)};
+    }
+    shot_setup stood;
+    stood.ball_start = ball->second.position;
+    if (const auto bag = state.online.bags.find(account); bag != state.online.bags.end()) {
+        stood.club_id = bag->second.club_in_hand;
+    }
+    stood.hand = player->second.hand;
+    remote_address address{with_sent_setup(stood, motion.setup), 0.0f};
     if (motion.mode == motion_mode::swing) {
+        const swing_tempo tempo = remote_tempo(state, address.setup);
         const float since = state.online.server_now != 0
             ? std::max(0.0f, server_seconds_between(player->second.motion_at, state.online.server_now))
             : 0.0f;
-        const swing_tempo tempo{state.tuning.swing.backswing_seconds, state.tuning.swing.downswing_seconds};
-        address.club_raise = swing_club_raise(since, 1.0f, tempo);
+        address.club_raise = swing_club_raise(std::min(since, tempo.back_seconds), address.setup.backswing, tempo);
     }
     return address;
 }
@@ -209,7 +272,9 @@ std::vector<shown_ball> remote_balls(const game_state& state) {
         const auto shot = state.remote_shots.find(account);
         const bool playing = shot != state.remote_shots.end() && remote_shot_playing(shot->second);
         if (account != state.online.account_id && !playing) {
-            balls.push_back(shown_ball{account, ball.position});
+            const bool holed = ball.in_cup && ball.hole >= 0;
+            balls.push_back(
+                shown_ball{account, holed ? lying_in_cup(state, static_cast<std::size_t>(ball.hole), ball.position) : ball.position});
         }
     }
     return balls;

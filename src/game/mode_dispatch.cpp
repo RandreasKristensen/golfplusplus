@@ -1,17 +1,20 @@
 #include "game/mode_dispatch.h"
 
+#include "game/motion_sync.h"
+
 #include "game/progress_rules.h"
 #include "game/progression.h"
 #include "game/remote_players.h"
 #include "game/round_state.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace {
-void queue_xp_drop(game_state& state, const std::string& skill_id, const int xp) {
+void queue_xp_drop(game_state& state, const std::string& skill_id, const std::int64_t xp) {
     for (xp_drop& drop : state.xp_drops) {
         if (drop.skill_id == skill_id) {
             drop.xp += xp;
@@ -27,7 +30,7 @@ void queue_xp_drop(game_state& state, const std::string& skill_id, const int xp)
 void show_awarded_xp(game_state& state, const std::vector<awarded_xp>& awarded) {
     const int min_visible = state.tuning.xp_drops.min_visible_xp;
     for (const awarded_xp& gain : awarded) {
-        int& pending = state.pending_xp_drop_amounts[gain.skill_id];
+        std::int64_t& pending = state.pending_xp_drop_amounts[gain.skill_id];
         pending += gain.xp;
         if (pending >= min_visible) {
             queue_xp_drop(state, gain.skill_id, pending);
@@ -46,7 +49,9 @@ void award_skill_xp(game_state& state, const xp_reward& reward) {
     apply_progress_update(state, award_xp(state.save, reward, current_xp_effects(state)));
 }
 
+// After the steps taken so far, which the server plays first.
 void push_command(game_state& state, net_command command) {
+    send_steps(state);
     state.net_commands.push_back(std::move(command));
 }
 
@@ -70,6 +75,7 @@ const save_data& active_progress(const game_state& state) {
 
 golfer_profile my_golfer(const game_state& state) {
     golfer_profile golfer;
+    golfer.levels = skill_levels(state.skills, active_progress(state).skills);
     golfer.hand = state.hand;
     if (!is_online(state) && state.save.natural) {
         golfer.natural = *state.save.natural;
@@ -96,25 +102,23 @@ void record_natural_shape(game_state& state, const natural_shape shape) {
     }
     net_command command;
     command.type = net_command_type::set_golfer;
-    command.hand = state.hand;
-    command.natural = static_cast<std::uint8_t>(natural_shape_index(shape));
-    state.golfer_sent = std::make_pair(command.hand, command.natural);
+    command.golfer = golfer_row{state.hand, static_cast<std::uint8_t>(natural_shape_index(shape)), state.favourite_colour};
+    state.golfer_sent = command.golfer;
     push_command(state, std::move(command));
 }
 
 void sync_golfer(game_state& state) {
     const room_player* me = is_online(state) ? my_room_player(state) : nullptr;
-    if (me == nullptr || me->hand == state.hand) {
+    if (me == nullptr) {
         return;
     }
-    const std::pair<handedness, std::uint8_t> wanted{state.hand, me->natural_shape};
-    if (state.golfer_sent == wanted) {
+    const golfer_row wanted{state.hand, me->natural_shape, state.favourite_colour};
+    if (wanted == golfer_row{me->hand, me->natural_shape, me->favourite_colour} || state.golfer_sent == wanted) {
         return;
     }
     net_command command;
     command.type = net_command_type::set_golfer;
-    command.hand = wanted.first;
-    command.natural = wanted.second;
+    command.golfer = wanted;
     state.golfer_sent = wanted;
     push_command(state, std::move(command));
 }
@@ -125,7 +129,9 @@ std::uint64_t next_shot_seed(const game_state& state) {
 
 void record_shot(game_state& state, const shot_setup& setup) {
     if (!is_online(state)) {
-        award_skill_xp(state, state.rewards.shot);
+        if (!state.course.practice) {
+            award_skill_xp(state, state.rewards.shot);
+        }
         return;
     }
     net_command command;
@@ -220,7 +226,7 @@ void record_movement(game_state& state, const movement_xp_rate& rate, float& pen
 
 void record_collectible_claim(game_state& state, const course_world_collectible& collectible) {
     if (!is_online(state)) {
-        apply_progress_update(state, claim_collectible(state.save, collectible, current_xp_effects(state)).update);
+        apply_progress_update(state, claim_collectible(state.save, collectible, state.skills, current_xp_effects(state)).update);
         return;
     }
     net_command command;
@@ -261,16 +267,6 @@ void record_cart_boarded(game_state& state, const std::uint64_t owner) {
 
 void record_cart_left(game_state& state) {
     push_online_command(state, net_command_type::leave_cart);
-}
-
-void record_cart_overturned(game_state& state, const cart_condition condition) {
-    if (!is_online(state)) {
-        return;
-    }
-    net_command command;
-    command.type = net_command_type::overturn_cart;
-    command.overturned_to = condition;
-    push_command(state, std::move(command));
 }
 
 void record_cart_righted(game_state& state, const std::uint64_t owner) {
@@ -360,7 +356,7 @@ bool newly_claimed(const save_data& before, const save_data& progress, const std
 void receive_online_progress(game_state& state, const save_data& progress) {
     std::vector<awarded_xp> gained;
     for (const auto& [skill_id, skill] : progress.skills) {
-        const int gain = skill.xp - skill_xp(state.online.progress.skills, skill_id);
+        const std::int64_t gain = skill.xp - skill_xp(state.online.progress.skills, skill_id);
         if (gain > 0 && state.online.progress_received) {
             gained.push_back(awarded_xp{skill_id, gain});
         }

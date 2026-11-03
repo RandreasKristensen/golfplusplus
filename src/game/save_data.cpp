@@ -3,6 +3,7 @@
 #include "game/json_util.h"
 
 #include <algorithm>
+#include <cstdint>
 
 namespace {
 skill_progression skills_from_json(const json& root) {
@@ -10,7 +11,7 @@ skill_progression skills_from_json(const json& root) {
     if (const json* skills = json_object(root, "skills")) {
         for (auto it = skills->begin(); it != skills->end(); ++it) {
             if (it.value().is_number_integer()) {
-                progression[it.key()].xp = std::clamp(it.value().get<int>(), 0, skill_max_xp);
+                progression[it.key()].xp = std::max<std::int64_t>(0, it.value().get<std::int64_t>());
             }
         }
     }

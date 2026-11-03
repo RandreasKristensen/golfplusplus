@@ -201,3 +201,7 @@ shot_result simulate_struck_shot(const shot_record& record,
 
 // Where the ball is `time` seconds after launch, between trajectory points.
 glm::vec3 shot_position_at(const shot_result& result, float time);
+
+// When the ball has rolled `distance` along the ground after its last
+// bounce (from launch for a putt), or the shot's duration if it stops first.
+float shot_rolled_at(const shot_result& result, float distance);

@@ -9,6 +9,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub(super) struct PlaceBagArgs {
     pub place: u8,
     pub seat: u8,
+    pub cart_owner: u64,
     pub x: f32,
     pub y: f32,
     pub z: f32,
@@ -20,6 +21,7 @@ impl From<PlaceBagArgs> for super::Reducer {
         Self::PlaceBag {
             place: args.place,
             seat: args.seat,
+            cart_owner: args.cart_owner,
             x: args.x,
             y: args.y,
             z: args.z,
@@ -47,12 +49,13 @@ pub trait place_bag {
         &self,
         place: u8,
         seat: u8,
+        cart_owner: u64,
         x: f32,
         y: f32,
         z: f32,
         yaw: f32,
     ) -> __sdk::Result<()> {
-        self.place_bag_then(place, seat, x, y, z, yaw, |_, _| {})
+        self.place_bag_then(place, seat, cart_owner, x, y, z, yaw, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `place_bag` to run as soon as possible,
@@ -65,6 +68,7 @@ pub trait place_bag {
         &self,
         place: u8,
         seat: u8,
+        cart_owner: u64,
         x: f32,
         y: f32,
         z: f32,
@@ -81,6 +85,7 @@ impl place_bag for super::RemoteReducers {
         &self,
         place: u8,
         seat: u8,
+        cart_owner: u64,
         x: f32,
         y: f32,
         z: f32,
@@ -94,6 +99,7 @@ impl place_bag for super::RemoteReducers {
             PlaceBagArgs {
                 place,
                 seat,
+                cart_owner,
                 x,
                 y,
                 z,

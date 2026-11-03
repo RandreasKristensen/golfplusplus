@@ -99,6 +99,8 @@ std::optional<course_definition> parse_course_from_text(const std::string& text)
     course.sky = *sky;
     course.air = *air;
     course.green_stimp_feet = *stimp;
+    course.practice = json_bool(*root, "practice").value_or(false);
+    course.carts = json_bool(*root, "carts").value_or(true);
     for (const json& hole : *holes) {
         if (!hole.is_string() || hole.get<std::string>().empty()) {
             return std::nullopt;

@@ -8,7 +8,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[sats(crate = __lib)]
 pub struct HoleScoreRow {
     pub id: u64,
-    pub account_id: u64,
+    pub golfer_id: u64,
     pub course_id: String,
     pub hole_index: i32,
     pub strokes: i32,
@@ -25,7 +25,7 @@ impl __sdk::InModule for HoleScoreRow {
 /// Provides typed access to columns for query building.
 pub struct HoleScoreRowCols {
     pub id: __sdk::__query_builder::Col<HoleScoreRow, u64>,
-    pub account_id: __sdk::__query_builder::Col<HoleScoreRow, u64>,
+    pub golfer_id: __sdk::__query_builder::Col<HoleScoreRow, u64>,
     pub course_id: __sdk::__query_builder::Col<HoleScoreRow, String>,
     pub hole_index: __sdk::__query_builder::Col<HoleScoreRow, i32>,
     pub strokes: __sdk::__query_builder::Col<HoleScoreRow, i32>,
@@ -38,7 +38,7 @@ impl __sdk::__query_builder::HasCols for HoleScoreRow {
     fn cols(table_name: &'static str) -> Self::Cols {
         HoleScoreRowCols {
             id: __sdk::__query_builder::Col::new(table_name, "id"),
-            account_id: __sdk::__query_builder::Col::new(table_name, "account_id"),
+            golfer_id: __sdk::__query_builder::Col::new(table_name, "golfer_id"),
             course_id: __sdk::__query_builder::Col::new(table_name, "course_id"),
             hole_index: __sdk::__query_builder::Col::new(table_name, "hole_index"),
             strokes: __sdk::__query_builder::Col::new(table_name, "strokes"),
@@ -52,7 +52,7 @@ impl __sdk::__query_builder::HasCols for HoleScoreRow {
 ///
 /// Provides typed access to indexed columns for query building.
 pub struct HoleScoreRowIxCols {
-    pub account_id: __sdk::__query_builder::IxCol<HoleScoreRow, u64>,
+    pub golfer_id: __sdk::__query_builder::IxCol<HoleScoreRow, u64>,
     pub id: __sdk::__query_builder::IxCol<HoleScoreRow, u64>,
 }
 
@@ -60,7 +60,7 @@ impl __sdk::__query_builder::HasIxCols for HoleScoreRow {
     type IxCols = HoleScoreRowIxCols;
     fn ix_cols(table_name: &'static str) -> Self::IxCols {
         HoleScoreRowIxCols {
-            account_id: __sdk::__query_builder::IxCol::new(table_name, "account_id"),
+            golfer_id: __sdk::__query_builder::IxCol::new(table_name, "golfer_id"),
             id: __sdk::__query_builder::IxCol::new(table_name, "id"),
         }
     }

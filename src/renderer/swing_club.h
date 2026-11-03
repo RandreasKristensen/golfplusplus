@@ -18,6 +18,18 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+// Where a club model's head is from its grip, from its points: the face's
+// middle down the shaft, out from the shaft's line and ahead of it, and the
+// sole's heel end, which rests on the ground at address.
+struct club_fit {
+    float shaft_length = 0.0f;
+    float face_from_shaft = 0.0f;
+    float face_ahead = 0.0f;
+    glm::vec3 sole{0.0f};  // from the grip, in the model's frame
+};
+
+club_fit club_fit_of(const prop_model& club);
+
 struct render_club_pose {
     glm::vec3 ball_position{0.0f};  // the drawn ball's centre, its bottom on the ground
     float aim_angle = 0.0f;         // the path (world yaw)
@@ -27,6 +39,7 @@ struct render_club_pose {
     bool left_handed = false;
     bool putt = false;
     std::string club_model;
+    club_fit fit;  // club_model's
 };
 
 // Where the golfer's hands hold the club now.

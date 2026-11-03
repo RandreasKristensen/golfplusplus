@@ -1,7 +1,8 @@
 #include "play_rules.h"
 
+#include "account_rules.h"
 #include "game/shot_ability.h"
-#include "physics/flight_model.h"
+#include "physics/det_math.h"
 #include "physics/vector_math.h"
 #include "game/server_errors.h"
 
@@ -10,12 +11,6 @@
 
 #include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
-
-namespace {
-bool is_mode(const std::uint8_t mode, const motion_mode wanted) {
-    return mode == static_cast<std::uint8_t>(wanted);
-}
-}
 
 std::optional<std::uint64_t> choose_room(const std::vector<room_candidate>& rooms, const int capacity) {
     std::optional<room_candidate> best;
@@ -34,18 +29,20 @@ std::optional<std::uint64_t> choose_room(const std::vector<room_candidate>& room
 movement_limits movement_limits_for(const game_tuning& tuning, const cart_spec& cart,
                                     const std::vector<active_effect>& effects, const std::int64_t now_ms) {
     movement_limits limits;
-    limits.walk_speed = effective_value(tuning.player.walk_speed, effect_target_walk_speed, effects, now_ms);
+    limits.foot_speed =
+        effective_value(tuning.player.walk_speed, effect_target_walk_speed, effects, now_ms) * tuning.player.run_factor;
     cart_spec moving = cart;
     moving.top_speed_mps = effective_value(cart.top_speed_mps, effect_target_cart_top_speed, effects, now_ms);
     const float top_speed = game_top_speed(moving, tuning.cart);
     limits.cart_speed = top_speed / tuning.scale.meters_per_world_unit;
-    const float cart_turn = top_speed * std::tan(glm::radians(cart.max_steer_degrees)) / cart.wheelbase_m;
+    const float lock = glm::radians(cart.max_steer_degrees);
+    const float cart_turn = top_speed * det_sin(lock) / det_cos(lock) / cart.wheelbase_m;
     limits.turn_rate = std::max(tuning.player.turn_rate, cart_turn);
     return limits;
 }
 
 float mode_speed(const std::uint8_t mode, const movement_limits& limits) {
-    return in_cart(static_cast<motion_mode>(mode)) ? limits.cart_speed : limits.walk_speed;
+    return in_cart(static_cast<motion_mode>(mode)) ? limits.cart_speed : limits.foot_speed;
 }
 
 motion_check check_motion(const net_motion& previous,
@@ -68,28 +65,19 @@ motion_check check_motion(const net_motion& previous,
     check.allowed = beyond_speed <= slack_left;
     const float slack = tuning.server.motion_distance_slack;
     check.slack_left = std::min(slack, std::max(0.0f, slack_left - beyond_speed) + slack * elapsed);
-    // The stretch was walked or driven as `previous` said: when it ended where
-    // that motion leads, its path (turns included, as offline counts every
-    // frame) is what was covered; otherwise only the straight line is known.
-    const float path = std::abs(previous.speed) * elapsed;
-    const float tolerance = tuning.net.motion_correction_distance + tuning.server.motion_distance_slack;
-    const bool as_predicted = horizontal_distance(extrapolate_motion(previous, elapsed), to) <= tolerance;
-    const float covered = as_predicted ? std::max(path, distance) : distance;
-    check.earned_distance = check.allowed ? std::min(covered, mode_speed(previous_mode, limits) * elapsed) : 0.0f;
     return check;
-}
-
-movement_earnings movement_earns(const std::uint8_t mode, const bool on_road) {
-    movement_earnings earnings;
-    earnings.walking = is_mode(mode, motion_mode::walk);
-    earnings.cart = is_mode(mode, motion_mode::cart) && on_road;
-    return earnings;
 }
 
 float clamp_motion_speed(const std::uint8_t mode, const float speed, const movement_limits& limits,
                          const server_tuning& tuning) {
     const float limit = mode_speed(mode, limits) * tuning.motion_speed_scale;
     return std::clamp(speed, -limit, limit);
+}
+
+bool ride_motion_plausible(const glm::vec3& last, const float seconds, const glm::vec3& to, const movement_limits& limits,
+                           const server_tuning& tuning) {
+    const float gap = std::clamp(seconds, 0.0f, tuning.max_motion_gap_seconds);
+    return horizontal_distance(last, to) <= limits.cart_speed * tuning.motion_speed_scale * gap + tuning.motion_distance_slack;
 }
 
 float clamp_turn_rate(const float turn_rate, const movement_limits& limits) {
@@ -103,25 +91,6 @@ bool within_interact_reach(const glm::vec3& position, const glm::vec3& target, c
 
 bool within_seat_reach(const cart_pose& cart, const cart_seat seat, const glm::vec3& position, const game_tuning& tuning) {
     return within_interact_reach(position, seat_position(cart, seat, tuning.cart), tuning.cart.board_reach, tuning.server);
-}
-
-bool overturn_plausible(const cart_condition to, const cart_ground& ground, const float yaw, const float speed,
-                        const float turn_rate, const cart_spec& cart, const server_tuning& tuning) {
-    const float share = 1.0f - tuning.cart_condition_slack;
-    if (to == cart_condition::sunk) {
-        return ground.water_depth >= cart.wade_depth_m * share;
-    }
-    if (!cart_tipped(to)) {
-        return false;
-    }
-    // The side slope across its heading, and the pull that lifts its wheels.
-    const glm::vec3 normal = ground_normal(ground.normal);
-    const glm::vec3 left = yaw_left(yaw_direction(yaw));
-    const float rise = -glm::dot(normal, left) / std::max(normal.y, 0.05f);
-    const float side_cosine = 1.0f / std::sqrt(1.0f + rise * rise);
-    const float g = gravity_meters_per_second2;
-    const float pull = std::abs(speed * turn_rate) + g * std::abs(rise) * side_cosine;
-    return pull >= cart_stability(cart) * g * side_cosine * share;
 }
 
 std::size_t free_parking_slot(const std::vector<glm::vec3>& carts, const glm::vec3& start, const glm::vec3& pin,
@@ -203,6 +172,7 @@ shot_check check_shot(const shot_request& request,
     input.face_open = request.face_open;
     input.ball_position = request.ball_position;
     input.backswing = request.backswing;
+    input.strike_timing = request.strike_timing;
     input.hand = golfer.golfer.hand;
     input.shot_at = request.shot_at;
     // Aim comes wrapped (wrap_angle), so the server and every client take
@@ -215,7 +185,8 @@ shot_check check_shot(const shot_request& request,
     const bool dials_ok = within(request.aim_angle, -glm::pi<float>(), glm::pi<float>()) &&
         within(request.face_open, limits.face_open_min, limits.face_open_max) &&
         within(request.ball_position, limits.ball_position_min, limits.ball_position_max) &&
-        within(request.backswing, limits.backswing_step, limits.backswing_max);
+        within(request.backswing, limits.backswing_min, limits.backswing_max) &&
+        within(request.strike_timing, -1.0f, 1.0f);
     if (!dials_ok || request.shot_at < earliest_shot_at || request.shot_at > now_unix_ms + slack) {
         check.error = error_invalid_shot;
         return check;
@@ -224,13 +195,14 @@ shot_check check_shot(const shot_request& request,
     return check;
 }
 
-std::uint64_t server_shot_seed(const std::int64_t timestamp_micros, const std::uint64_t account_id, const int stroke) {
-    return round_shot_seed(static_cast<std::uint64_t>(timestamp_micros) ^ (account_id * 0xD6E8FEB86659FD93ull),
-                           stroke);
+std::uint64_t server_shot_seed(const std::string& secret, const std::int64_t timestamp_micros, const std::uint64_t account_id,
+                               const int stroke) {
+    return round_shot_seed(keyed_hash(secret, std::to_string(timestamp_micros) + ":" + std::to_string(account_id)), stroke);
 }
 
-std::string check_bag_move(const bag_place& from, const bag_place& to, const glm::vec3& player, const cart_pose& cart,
-                           const game_tuning& tuning) {
+std::string check_bag_move(const bag_place& from, const bag_place& to, const glm::vec3& player,
+                           const std::optional<cart_pose>& from_cart, const std::optional<cart_pose>& to_cart,
+                           const bool to_spot_taken, const game_tuning& tuning) {
     const float reach = tuning.player.bag_reach;
     const auto reaches = [&](const glm::vec3& target) { return within_interact_reach(player, target, reach, tuning.server); };
     const bool finite = std::isfinite(to.position.x) && std::isfinite(to.position.y) && std::isfinite(to.position.z) &&
@@ -238,10 +210,16 @@ std::string check_bag_move(const bag_place& from, const bag_place& to, const glm
     if (!finite) {
         return error_invalid_motion;
     }
+    if ((!from_cart && from.where == bag_where::on_cart) || (!to_cart && to.where == bag_where::on_cart)) {
+        return error_bag_out_of_reach;
+    }
     if (from.where == bag_where::on_back) {
         switch (to.where) {
         case bag_where::on_cart:
-            return reaches(bag_spot(cart, to.seat, tuning.cart)) ? std::string() : std::string(error_bag_out_of_reach);
+            if (to_spot_taken) {
+                return error_bag_spot_taken;
+            }
+            return reaches(bag_spot(*to_cart, to.seat, tuning.cart)) ? std::string() : std::string(error_bag_out_of_reach);
         case bag_where::on_ground:
             return reaches(to.position) ? std::string() : std::string(error_bag_out_of_reach);
         case bag_where::on_back:
@@ -252,19 +230,24 @@ std::string check_bag_move(const bag_place& from, const bag_place& to, const glm
     if (to.where != bag_where::on_back) {
         return error_invalid_motion;
     }
-    return reaches(bag_at(from, cart, player, tuning.cart)) ? std::string() : std::string(error_bag_out_of_reach);
+    return reaches(bag_at(from, from_cart.value_or(cart_pose{}), player, tuning.cart)) ? std::string()
+                                                                                         : std::string(error_bag_out_of_reach);
 }
 
-std::string check_take_club(const std::string& club_id, const bag_place& bag, const glm::vec3& player, const cart_pose& cart,
-                            const server_content& content) {
+std::string check_take_club(const std::string& club_id, const bag_place& bag, const glm::vec3& player,
+                            const std::optional<cart_pose>& cart, const server_content& content) {
     if (find_club(content.clubs, club_id) == nullptr) {
         return error_unknown_club;
     }
     if (bag.where == bag_where::on_back) {
         return error_bag_on_back;
     }
+    if (bag.where == bag_where::on_cart && !cart) {
+        return error_bag_out_of_reach;
+    }
     const game_tuning& tuning = content.tuning;
-    return within_interact_reach(player, bag_at(bag, cart, player, tuning.cart), tuning.player.bag_reach, tuning.server)
+    return within_interact_reach(player, bag_at(bag, cart.value_or(cart_pose{}), player, tuning.cart), tuning.player.bag_reach,
+                                 tuning.server)
         ? std::string()
         : std::string(error_bag_out_of_reach);
 }

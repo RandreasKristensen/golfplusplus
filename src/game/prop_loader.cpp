@@ -16,7 +16,7 @@
 namespace {
 // The objects a variant merges into its base's by name; anything else it
 // names replaces the base's.
-const std::vector<std::string> merged_keys{"colors", "points", "mounts"};
+const std::vector<std::string> merged_keys{"colors", "paint", "points", "mounts"};
 
 bool is_color(const glm::vec3& color) {
     return !glm::any(glm::lessThan(color, glm::vec3(0.0f))) && !glm::any(glm::greaterThan(color, glm::vec3(1.0f)));
@@ -43,7 +43,8 @@ std::optional<prop_shape> parse_shape(const std::string& name) {
     return std::nullopt;
 }
 
-std::optional<prop_part> parse_part(const json& object, const std::map<std::string, glm::vec3>& colors) {
+std::optional<prop_part> parse_part(const json& object, const std::map<std::string, glm::vec3>& colors,
+                                   const std::map<std::string, float>& paint) {
     const std::optional<std::string> shape_name = json_string(object, "shape");
     const std::optional<prop_shape> shape = shape_name ? parse_shape(*shape_name) : std::nullopt;
     const std::optional<std::string> color = json_string(object, "color");
@@ -53,6 +54,9 @@ std::optional<prop_part> parse_part(const json& object, const std::map<std::stri
     prop_part part;
     part.shape = *shape;
     part.color = colors.at(*color);
+    if (const auto share = paint.find(*color); share != paint.end()) {
+        part.paint_share = share->second;
+    }
     part.glow = json_string(object, "glow").value_or("");
     part.tag = json_string(object, "tag").value_or("");
     part.turn_degrees = json_vec3(object, "turn").value_or(glm::vec3(0.0f));
@@ -141,6 +145,18 @@ std::optional<prop_model> parse_prop(const json& root) {
         }
         model.colors[name] = *color;
     }
+    if (const json* paint = json_object(root, "paint")) {
+        for (const auto& item : paint->items()) {
+            const std::string& name = item.key();
+            const std::optional<float> share = json_float(*paint, name.c_str());
+            if (!share || !(*share > 0.0f) || model.colors.count(name) == 0) {
+                return std::nullopt;
+            }
+            model.paint[name] = *share;
+        }
+    } else if (root.contains("paint")) {
+        return std::nullopt;
+    }
     const json* parts = json_array(root, "parts");
     const json* points = json_object(root, "points");
     const json* mounts = json_object(root, "mounts");
@@ -150,7 +166,7 @@ std::optional<prop_model> parse_prop(const json& root) {
     }
     if (parts != nullptr) {
         for (const json& object : *parts) {
-            std::optional<prop_part> part = object.is_object() ? parse_part(object, model.colors) : std::nullopt;
+            std::optional<prop_part> part = object.is_object() ? parse_part(object, model.colors, model.paint) : std::nullopt;
             if (!part) {
                 return std::nullopt;
             }

@@ -14,6 +14,7 @@
 #include <glm/mat4x4.hpp>
 
 #include "game/lighting_loader.h"
+#include "game/look_reload.h"
 #include "game/prop_loader.h"
 #include "game/picture_loader.h"
 #include "game/text_assets.h"
@@ -27,6 +28,7 @@
 #include "renderer/gl_timer.h"
 #include "renderer/fence_renderer.h"
 #include "renderer/floodlight_renderer.h"
+#include "renderer/lamp_shadow_pass.h"
 #include "renderer/hole_sign_renderer.h"
 #include "renderer/lighting_uniforms.h"
 #include "renderer/water_renderer.h"
@@ -38,6 +40,7 @@
 #include "renderer/render_data.h"
 #include "renderer/shader.h"
 #include "renderer/shadow_map_pass.h"
+#include "renderer/sun_shaft_pass.h"
 #include "renderer/eyepiece_pass.h"
 #include "renderer/tape_pass.h"
 #include "renderer/terrain_renderer.h"
@@ -64,6 +67,9 @@ public:
               const lighting_palette& palette,
               const prop_catalog& props);
     void shutdown();
+    // A reloaded look (game/look_reload.h), `asset_root` as init's: every
+    // pass a changed section feeds is made again; the rest keep theirs.
+    bool set_look(const std::string& asset_root, const look& next, const look_changes& changes);
     // `profile` may be null (profiling off).
     void render(const render_data& data, const text_assets& text, frame_profile* profile = nullptr);
     // The loading title card, drawn before any content is loaded (no scene).
@@ -79,6 +85,10 @@ private:
         unsigned int vbo = 0;
         int vertex_count = 0;
     };
+
+    static constexpr int shadow_map_unit = 4;
+    static constexpr int lamp_map_unit = 5;
+    static std::string shader_path(const std::string& asset_root, const char* name);
 
     bool init_geometry();
     bool ensure_framebuffer_size(int screen_width, int screen_height);
@@ -120,6 +130,8 @@ private:
     prop_renderer prop_renderer_;
     blob_shadow_renderer blob_shadow_renderer_;
     shadow_map_pass shadow_map_pass_;
+    lamp_shadow_pass lamp_shadow_pass_;
+    sun_shaft_pass sun_shaft_pass_;
     // Rebuilt every frame; members so their vectors keep their capacity.
     world_marker_batch world_marker_batch_;
     world_marker_batch shadow_casters_;

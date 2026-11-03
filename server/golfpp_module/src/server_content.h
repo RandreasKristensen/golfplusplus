@@ -6,6 +6,7 @@
 // the game builds from the same files.
 
 #include "game/club_definition.h"
+#include "game/content_hash.h"
 #include "game/course_definition.h"
 #include "game/course_world_definition.h"
 #include "game/game_tuning.h"
@@ -16,25 +17,23 @@
 #include "game/play_area.h"
 #include "game/reward_rules.h"
 #include "game/shot_simulation.h"
+#include "game/skill_catalog.h"
 #include "physics/tree_body.h"
 
 #include <cstddef>
 #include <cstdint>
-#include <map>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
-
-// Relative path ("world/courses/x/holes/h01.json") -> file text.
-using content_files = std::map<std::string, std::string_view>;
 
 // Everything but the courses' terrain, which build_server_course makes on
 // demand.
 struct server_content {
+    std::uint64_t content_hash = 0;
     game_tuning tuning;
     std::vector<club_definition> clubs;
     reward_rules rewards;
+    skill_catalog skills;
     item_catalog items;
     loadout default_loadout;  // fits `items`
     pixel_font_data font;

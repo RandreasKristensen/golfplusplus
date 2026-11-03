@@ -21,33 +21,36 @@ std::vector<interactable> interactables_in_reach(const game_state& state) {
         const float distance = horizontal_distance(me, state.ball->position);
         if (distance <= state.tuning.player.ball_interact_radius) {
             const bool in_cup = state.ball->place == ball_place::in_cup;
-            found.push_back(interactable{in_cup ? interactable_kind::cup_ball : interactable_kind::ball, 0, distance, {}, {}});
+            found.push_back(interactable{in_cup ? interactable_kind::cup_ball : interactable_kind::ball, 0, distance, {}});
         }
     }
     const std::vector<course_world_collectible>& collectibles = state.world.collectibles;
     for (std::size_t i = 0; i < collectibles.size(); ++i) {
         const float distance = horizontal_distance(me, collectibles[i].position);
         if (distance <= collectibles[i].interaction_radius &&
-            collectible_available(active_progress(state), collectibles[i]) && !claim_pending(state, collectibles[i].id)) {
-            found.push_back(interactable{interactable_kind::collectible, i, distance, {}, {}});
+            collectible_available(active_progress(state), collectibles[i], state.skills) && !claim_pending(state, collectibles[i].id)) {
+            found.push_back(interactable{interactable_kind::collectible, i, distance, {}});
         }
     }
     const std::vector<course_world_hole_start>& starts = state.world.hole_starts;
     for (std::size_t i = 0; i < starts.size() && i < state.holes.size(); ++i) {
         const float distance = horizontal_distance(me, starts[i].position);
         const bool my_balls_hole = state.ball && state.ball->hole == i;
-        if (distance <= starts[i].interaction_radius && !hole_played(state.round, i) && !my_balls_hole) {
-            found.push_back(interactable{interactable_kind::tee, i, distance, {}, {}});
+        // Not while my ball still moves: it is played only once it rests.
+        const bool open = !shot_playing(state) &&
+            (state.course.practice || (!hole_played(state.round, i) && !my_balls_hole));
+        if (distance <= starts[i].interaction_radius && open) {
+            found.push_back(interactable{interactable_kind::tee, i, distance, {}});
         }
     }
     if (const std::optional<float> bag = bag_in_reach(state)) {
-        found.push_back(interactable{interactable_kind::bag, 0, *bag, {}, {}});
+        found.push_back(interactable{interactable_kind::bag, 0, *bag, {}});
     }
-    if (const std::optional<reachable_seat> seat = nearest_seat(state)) {
-        found.push_back(interactable{interactable_kind::seat, 0, seat->distance, *seat, {}});
+    if (const std::optional<float> bag = bag_on_fallen_cart_in_reach(state)) {
+        found.push_back(interactable{interactable_kind::fallen_bag, 0, *bag, {}});
     }
     if (const std::optional<reachable_tipped_cart> tipped = nearest_tipped_cart(state)) {
-        found.push_back(interactable{interactable_kind::tipped_cart, 0, tipped->distance, {}, *tipped});
+        found.push_back(interactable{interactable_kind::tipped_cart, 0, tipped->distance, *tipped});
     }
     return found;
 }

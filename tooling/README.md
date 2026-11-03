@@ -8,12 +8,14 @@ local multiplayer server.
 | `hole_editor/hole-editor.html` | Browser-based editor for holes and course worlds |
 | `osm_import/` | Converts real courses from OpenStreetMap into hole/course/world JSON |
 | `art/make_art.py` | Draws the rough's grass texture and every course's sky and land backdrop panoramas |
+| `practice_ground/make_practice_ground.py` | Writes the made-up practice ground: a driving range and a putting and chipping green |
 | `audio/make_thunder.py` | Draws the thunder heard after lightning, close and far, from seeded noise |
 | `audio/make_placeholders.py` | A short silence for each placeholder sound in the manifest that has none yet |
 | `gb.cmd` / `gb.ps1` | Windows release build helper, and local multiplayer testing (see below) |
-| `release/build_release.ps1` | What players download: the installer and the zip (see below) |
+| `release/build_release.ps1` | What Windows players download: the installer and the zip; the server package (see below) |
+| `release/build_release.sh`, `release/build_deps.sh` | What macOS and Linux players download: the .dmg and the .tar.gz (see below) |
 | `net/dev.ps1` | The local SpacetimeDB server on demand: start, publish, anonymous logins, stop |
-| `net/check_determinism.ps1` | Golden shots natively and in the server's WASM |
+| `net/check_determinism.ps1` | Golden shots, drives and walks natively and in the server's WASM |
 | `shot_lab/` | Hits the bag through the game's simulation and prints carry, apex, landing and curve (its README) |
 | `net/online_check/` | A headless client that checks a running server's answers (its README) |
 
@@ -46,6 +48,21 @@ imports) get a default parkland one. Run it after importing a course;
 
 ```
 python tooling/art/make_art.py
+```
+
+## practice_ground/make_practice_ground.py
+
+Writes `assets/world/courses/practice_ground/` (`course.json`, `world.json`,
+`holes/`) from code, the same every run: not a real place, so not an import.
+Every hole is a practice station (`"practice": true`, no carts): six range
+bays on tee boxes, each aimed at its own target green inside a ball-stop net,
+and six stations dropped round one green with no tee box (`"tee_box": false`):
+two putts, a chip off the apron, a chip out of the rough and two bunker shots.
+Change the layout in the script and rerun it, then `art/make_art.py` for its
+backdrops; never edit its output.
+
+```
+python tooling/practice_ground/make_practice_ground.py
 ```
 
 ## audio/make_thunder.py
@@ -138,11 +155,49 @@ settings (`%APPDATA%\golfplusplus`) and the stored login alone. Neither the
 installer nor the game is signed, so Windows SmartScreen says "Windows protected your PC": "More info",
 then "Run anyway". There is no updater: players run the next installer.
 
+### macOS and Linux
+
+`.github/workflows/release.yml` builds them on GitHub's runners (macOS 14 and
+Ubuntu 22.04), by hand from the Actions tab or on pushing a tag `alpha-v*`,
+which attaches them to that tag's GitHub release (a draft when there is
+none). Each runs
+
+```bash
+tooling/release/build_deps.sh build/deps        # SDL2, SDL2_mixer, GLM from pinned sources
+tooling/release/build_release.sh build/deps
+```
+
+`build_deps.sh` builds SDL2 and SDL2_mixer (MP3, OGG and WAV only) as static
+libraries, so players need neither installed, and the GLM headers, each with
+its licence in `build/deps/share/licenses`; on macOS, set
+`CMAKE_OSX_ARCHITECTURES="arm64;x86_64"` and `CMAKE_OSX_DEPLOYMENT_TARGET=11.0`
+first. `build_release.sh` runs the tests, builds the release in
+`build/installer`, stages it with `cmake --install` and writes
+`THIRD_PARTY.txt` like the Windows build, then packs:
+
+- macOS: `build/dist/golfpp-<version>-macos.dmg`, `golf++.app` (Apple Silicon
+  and Intel, macOS 11 or newer, `assets/` in its `Contents/Resources`) next
+  to an Applications link to drag it onto. The app is signed ad hoc, not
+  notarized, so the first launch says Apple cannot check it: the player
+  opens System Settings, Privacy & Security, "Open Anyway". The save and
+  settings are in `~/Library/Application Support/golfplusplus/golf++`, the
+  login in the Keychain.
+- Linux: `build/dist/golfpp-<version>-linux-x86_64.tar.gz`, a folder with
+  `golf++`, `assets/` and `THIRD_PARTY.txt`: unpack anywhere and run
+  `./golf++`. It needs glibc 2.35 or newer (Ubuntu 22.04, Fedora 36, Debian
+  12), OpenGL 3.3, OpenSSL 3 and D-Bus, which every desktop has. The save
+  and settings are in `~/.local/share/golfplusplus/golf++`, the login in
+  the Secret Service (GNOME Keyring, KWallet); without one, sign-in asks
+  for the browser every time.
+
 A release: bump the version, publish the module to Maincloud
-(`server/README.md`, Maincloud), then build and hand out the installer and
-the server package from the same commit. Before handing it out, install it on a PC without MSYS2, Rust
-or the SpacetimeDB CLI (a missing DLL only shows there), sign in and play a
-hole online, and check it plays offline with no network.
+(`server/README.md`, Maincloud), push the commit and its tag `alpha-v<version>`
+(the workflow attaches the macOS and Linux packages to a draft release),
+build the installer and the server package from the same commit and attach
+them, then publish the release. Before handing it out, install it on a PC
+without MSYS2, Rust or the SpacetimeDB CLI (a missing DLL only shows there),
+sign in and play a hole online, and check it plays offline with no network;
+on a Mac and a Linux PC, check it starts, plays a hole and signs in.
 
 ---
 
@@ -328,7 +383,7 @@ coarse: `elevation.terrarium.ground_cell_size` metres (20).
 
 Both are downloaded once: every later import, moved hole or new ground grid in
 the same area reads the cache with no network at all. Both require
-attribution: see `docs/launch_todo.md`.
+attribution: see `docs/todo/launch_todo.md`.
 
 The `ground` grid covers every hole plus `ground.margin`, with heights
 relative to hole 1's start: each hole's tee height above sea level goes in
@@ -524,13 +579,57 @@ case.
 
 A hole whose pin has no green in OSM gets a circle at the pin
 (`source.made_green`, a `GREEN_MADE` warning). A hole with no fairway polygon
-gets one from `generated_fairway`'s design numbers, which name their sources:
-it starts 100 yd out (the middle tees' carry), is 40 yd wide in the landing
-area for a par 4 and 35 yd for a par 5, narrows from 200 yd out to 25 yd at
-the green, and a par 3 gets only 30 yd of approach (`source.fairway`
+takes its fairway from the aerial photos where an area's source covers the
+course (below), else one from `generated_fairway`'s design numbers, which name their sources:
+it runs from the tee to the pin, 40 yd wide for a par 4 and 35 yd for a par 5,
+narrowing from 200 yd out to 25 yd at the green, and a par 3 is 25 yd wide all
+the way. The course's mapped rough (`golf=rough`) is cut out of it, which can
+leave it in pieces; a piece off the hole's line is dropped (`source.fairway`
 `"generated"`, a `FAIRWAY_GENERATED` note: map the fairway in OSM). The game
 paints fairway only inside a hole's fairway zones then, rough everywhere else
 on its ribbon.
+
+### Ground cover from aerial photos
+
+Where an area's aerial source covers the course, the importer reads what
+OSM leaves out from photos and heights (`osm_aerial.py`, the `aerial`
+config): a hole's fairway when OSM maps none (`source.fairway` `"aerial"`),
+bunkers and ponds clear of OSM's (`source.aerial_bunkers`,
+`source.aerial_waters`), and every tree, each at its measured height and
+crown in place of trees planted through OSM's woods. OSM's layout (hole
+lines, tees, greens) always comes first; mapping a fairway in OSM still beats
+the photo's.
+
+The reading calibrates itself on each course. The hole lines run down the
+fairways, so the photo along them (short of tees and greens) is the course's
+mown grass: its colour and near infrared make a signature, fitted to the
+lines' most alike pixels so carries over rough drop out. A hole's fairway is
+the ground within `mown.corridor_meters` of its line that matches it, closed,
+its small holes filled, in pieces that come within `mown.line_reach_meters`
+of the line (mapped lines run straight from tee to green, cutting a dogleg's
+corner through trees). When too little of a line is near that grass
+(`mown.least_line_share`) the photo is no use there and the design numbers
+make the fairway. Sand is ground brighter than nearly all the rough near the
+hole lines (`sand.rough_percentile`) and much less green than the grass,
+compact (not a path) and cut into it: a course whose rough is as pale as its
+sand loses bunkers rather than gaining false ones. Water is ground far darker
+in the infrared than the grass and not green (a shadow on grass is dark but
+green), each pond found whole over the course; a tree stands at each top of
+the surface above the terrain, with flat roofs left out.
+
+| Area | Source | Data |
+|---|---|---|
+| Denmark | `aerial_dk.py` | GeoDanmark's spring orthophoto, colour and colour infrared (`orto_foraar`, flown before the rough greens up), and the Danish Elevation Model's terrain and surface; the Dataforsyningen token. |
+
+A new area is a source module with the same interface (`NAME`,
+`DESCRIPTION`, `in_coverage`, `available`, `layers` returning
+`osm_aerial.Layers`) in `AERIAL_SOURCES` of `osm_golf_convert.py`, and its
+own numbers, where it needs them, under `aerial.sources.<NAME>` in the
+config. Its photos need a near-infrared band and its heights a surface model,
+and their licence must allow derived data in the game, credited. Every
+square is cached in `.osm_cache/aerial_<area>/`. `--no-aerial` imports
+without it. The reading needs `numpy` and `scipy` (and Denmark's source
+`Pillow`): `py -3 -m pip install numpy scipy pillow`.
 
 A green under half of a real one (`checks.green_reference_m2`, 525 m², the
 USGA's average) is a `GREEN_SMALL` note: OSM's outline is worth checking

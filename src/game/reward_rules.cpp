@@ -24,25 +24,6 @@ std::optional<movement_xp_rate> movement_rate_from_json(const json& movement, co
 }
 }
 
-std::optional<std::vector<skill_definition>> parse_skills_from_text(const std::string& text) {
-    const std::optional<json> root = parse_json(text);
-    const json* skills = root ? json_array(*root, "skills") : nullptr;
-    if (skills == nullptr) {
-        return std::nullopt;
-    }
-
-    std::vector<skill_definition> result;
-    for (const json& value : *skills) {
-        const std::optional<std::string> id = json_string(value, "id");
-        const std::optional<std::string> icon = json_string(value, "icon");
-        if (!id || id->empty() || !icon) {
-            return std::nullopt;
-        }
-        result.push_back(skill_definition{*id, *icon});
-    }
-    return result;
-}
-
 std::optional<reward_rules> parse_rewards_from_text(const std::string& text) {
     const std::optional<json> root = parse_json(text);
     const json* movement = root ? json_object(*root, "movement_xp") : nullptr;

@@ -239,6 +239,26 @@ TEST_CASE("weather thickens the haze and greys it; wet ground darkens and shines
     CHECK(make_render_sky_weather(shown_weather{1.0f, 0.0f, 0.0f, 0.0f, 0.0f}, style).mottle > 0.0f);
 }
 
+TEST_CASE("the air scatters as thick as its visibility says: faint when clear, thick in fog") {
+    const weather_style& style = fixture_palette().weather;
+    const air_scattering clear = scattering_under_weather(style, shown_weather{});
+    CHECK(near(clear.per_meter, 3.912f / style.clear_visibility_meters, 1.0e-7f));
+    CHECK(near(clear.forwardness, style.clear_forwardness));
+    const air_scattering pouring = scattering_under_weather(style, shown_weather{1.0f, 1.0f, 0.0f, 0.0f, 0.0f});
+    const air_scattering fog = scattering_under_weather(style, shown_weather{0.0f, 0.0f, 1.0f, 0.0f, 0.0f});
+    CHECK(pouring.per_meter > clear.per_meter * 10.0f);
+    CHECK(near(fog.per_meter, 3.912f / style.clear_visibility_meters + 3.912f / style.fog_visibility_meters, 1.0e-6f));
+    CHECK(fog.per_meter > pouring.per_meter);
+    // Fog's own forwardness wins over the thin clear air's.
+    CHECK(near(fog.forwardness, style.fog_forwardness, 0.01f));
+    const render_sky_weather foggy = make_render_sky_weather(shown_weather{0.0f, 0.0f, 1.0f, 0.0f, 0.0f}, style);
+    CHECK(foggy.scatter_per_meter == fog.per_meter);
+    CHECK(foggy.scatter_forwardness == fog.forwardness);
+    CHECK(foggy.sun_glow == style.sun_glow);
+    CHECK(foggy.sun_forwardness == style.sun_forwardness);
+    CHECK(foggy.mist == style.mist);
+}
+
 TEST_CASE("the weather's numbers stay in range: a rainbow inside its secondary, flags calm below full") {
     const std::string text = *read_text_file(fixture_root() + "/" + lighting_path);
     const json shipped = *parse_json(text);

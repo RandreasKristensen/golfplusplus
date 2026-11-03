@@ -1,5 +1,8 @@
 {
   "net": {
+    "cart_reconcile_distance": 0.03,
+    "cart_reconcile_yaw": 0.01,
+    "max_unacked_seconds": 3.0,
     "motion_heartbeat_seconds": 2.0,
     "motion_min_interval_seconds": 0.25,
     "motion_correction_distance": 1.0,
@@ -10,9 +13,12 @@
     "shot_correction_seconds": 0.3,
     "remote_trail_fade_seconds": 1.5,
     "group_join_distance": 3.0,
-    "notice_seconds": 3.0
+    "notice_seconds": 3.0,
+    "ride_motion_interval_seconds": 0.05,
+    "ride_correction_seconds": 0.12
   },
   "server": {
+    "motion_cell_meters": 100.0,
     "room_capacity": 40,
     "group_capacity": 4,
     "name_min_length": 3,
@@ -26,6 +32,10 @@
     "interact_slack": 2.0,
     "shot_time_slack_seconds": 2.0,
     "timing_slack_seconds": 0.25,
-    "cart_condition_slack": 0.2
+    "step_start_tolerance": 0.5,
+    "walk_xp_meters_per_hour": 20000.0,
+    "cart_xp_meters_per_hour": 20000.0,
+    "xp_award_keep_days": 90,
+    "xp_rollup_interval_hours": 24.0
   }
 }

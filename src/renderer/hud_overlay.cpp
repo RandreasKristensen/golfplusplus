@@ -9,10 +9,12 @@
 #include "renderer/pixel_font.h"
 #include "renderer/rangefinder_overlay.h"
 #include "renderer/scorecard_overlay.h"
+#include "renderer/shot_number_overlay.h"
 #include "renderer/ui_rect.h"
 #include "renderer/vcr_overlay.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <array>
 #include <cmath>
 #include <optional>
@@ -30,11 +32,12 @@ void draw_fps_counter(overlay_batch& batch, const text_assets& text, const std::
 }
 
 // Developer diagnostics: the lines come from profiling, not the string table.
-void draw_profile_overlay(overlay_batch& batch, const text_assets& text, const frame_profile& profile) {
+void draw_profile_overlay(overlay_batch& batch, const text_assets& text, const frame_profile& profile, const std::uint64_t sync_breaches) {
     std::string lines;
     for (const std::string& line : format_profile_overlay_lines(profile)) {
         lines += lines.empty() ? line : "\n" + line;
     }
+    lines += "\nSync breaches " + std::to_string(sync_breaches);
     draw_label(batch, text.font, find_text_style(text, style_debug_profile), lines, rect_from_edges(-0.97f, -0.95f, 0.95f, 0.85f));
 }
 
@@ -53,35 +56,6 @@ void draw_club_label(overlay_batch& batch, const text_assets& text, const std::s
 // Top centre, clear of the stroke ticks, cart panel, club and XP drops. Empty offline.
 void draw_mode_label(overlay_batch& batch, const text_assets& text, const std::string& label) {
     draw_label(batch, text.font, find_text_style(text, style_hud_mode), label, rect_from_edges(-0.27f, 0.85f, 0.27f, 0.97f));
-}
-
-// Thin corner brackets round what the wheel would change, where it is on screen.
-void draw_setup_outline(overlay_batch& batch, const std::vector<glm::vec3>& points, const glm::mat4& view_proj) {
-    glm::vec2 low(1.0f);
-    glm::vec2 high(-1.0f);
-    for (const glm::vec3& point : points) {
-        const std::optional<glm::vec2> projected = project_to_screen(view_proj, point);
-        if (!projected) {
-            return;
-        }
-        low = glm::min(low, *projected);
-        high = glm::max(high, *projected);
-    }
-    if (points.empty()) {
-        return;
-    }
-    const float x_per_y = batch.grid.width > 0 ? static_cast<float>(batch.grid.height) / static_cast<float>(batch.grid.width) : 1.0f;
-    const glm::vec2 margin(0.035f * x_per_y, 0.035f);
-    low -= margin;
-    high += margin;
-    const glm::vec2 arm = glm::min((high - low) * 0.35f, glm::vec2(0.06f * x_per_y, 0.06f));
-    constexpr float line = 0.006f;
-    const glm::vec3 color(0.96f, 0.94f, 0.86f);
-    for (const glm::vec2& corner : {low, high, glm::vec2(low.x, high.y), glm::vec2(high.x, low.y)}) {
-        const glm::vec2 inward(corner.x == low.x ? 1.0f : -1.0f, corner.y == low.y ? 1.0f : -1.0f);
-        draw_overlay_segment(batch, corner, corner + glm::vec2(arm.x * inward.x, 0.0f), line, color, 0.9f);
-        draw_overlay_segment(batch, corner, corner + glm::vec2(0.0f, arm.y * inward.y), line, color, 0.9f);
-    }
 }
 
 void draw_skills_panel(overlay_batch& batch, const text_assets& text, const std::vector<render_skill_progress>& skills) {
@@ -125,8 +99,8 @@ void draw_skills_panel(overlay_batch& batch, const text_assets& text, const std:
         draw_overlay_quad(batch, band.center, band.half_size, row_color, 0.74f);
         draw_label(batch, text.font, value, skill.label, cell(band, 0));
         draw_label(batch, text.font, value, std::to_string(std::max(1, skill.level)), cell(band, 1));
-        draw_label(batch, text.font, value, std::to_string(std::max(0, skill.xp)), cell(band, 2));
-        draw_label(batch, text.font, value, std::to_string(std::max(0, skill.xp_to_next)), cell(band, 3));
+        draw_label(batch, text.font, value, std::to_string(std::max<std::int64_t>(0, skill.xp)), cell(band, 2));
+        draw_label(batch, text.font, value, std::to_string(std::max<std::int64_t>(0, skill.xp_to_next)), cell(band, 3));
     }
 
 }
@@ -234,7 +208,7 @@ void draw_xp_drops(overlay_batch& batch, const text_assets& text, const std::vec
         draw_button_outline(batch, center, row_half, outline_color, 0.42f * alpha);
         draw_xp_icon(batch, drop.icon, center + glm::vec2(-0.105f, 0.0f), alpha);
 
-        const std::string label = format_text(text, text_hud_xp_drop, {{"xp", std::to_string(std::max(0, drop.xp))}});
+        const std::string label = format_text(text, text_hud_xp_drop, {{"xp", std::to_string(std::max<std::int64_t>(0, drop.xp))}});
         draw_label(batch,
                    text.font,
                    with_color(label_style, label_style.color * alpha),
@@ -298,11 +272,18 @@ void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& 
     draw_mode_label(batch, text, data.mode_label);
     draw_club_label(batch, text, data.selected_club_label, data.selected_club_name);
     draw_xp_drops(batch, text, data.xp_drops);
-    draw_setup_outline(batch, data.setup_outline, view_proj);
+    if (data.shot_number) {
+        draw_shot_number(batch, text, *data.shot_number, view_proj);
+    }
+    if (data.pace_number) {
+        draw_shot_number(batch, text, *data.pace_number, view_proj);
+    }
+    draw_green_read(batch, data.green_read_dots, view_proj);
     draw_world_segments(batch, data.solid_outlines, view_proj);
     draw_shot_preview(batch, data, view_proj);
     if (data.show_swing_clock) {
-        draw_swing_clock(batch, text, data.swing_backswing, data.swing_backswing_max);
+        draw_swing_clock(batch, text, data.swing_backswing, data.swing_backswing_max, data.swing_meter,
+                         data.swing_mistimed);
         draw_setup_word(batch, text, data.setup_word);
     }
     if (data.bag_shown) {
@@ -310,8 +291,8 @@ void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& 
     }
     if (data.club_picker) {
         draw_club_picker(batch, text, *data.club_picker);
-    } else if (data.show_address_hints) {
-        draw_address_hints(batch, text);
+    } else if (data.key_hints != nullptr) {
+        draw_key_hints(batch, text, data.key_hints);
     } else if (data.show_bag_hints) {
         draw_bag_hints(batch, text);
     }
@@ -325,5 +306,5 @@ void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& 
 
 void draw_debug_text(overlay_batch& batch, const text_assets& text, const render_data& data) {
     draw_fps_counter(batch, text, data.fps_label);
-    draw_profile_overlay(batch, text, data.profile_summary);
+    draw_profile_overlay(batch, text, data.profile_summary, data.sync_breaches);
 }

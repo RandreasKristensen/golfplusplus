@@ -439,12 +439,19 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
 
     // The cells over a bunker or pond, and a cell beyond, so the carve is
     // nothing at their outer edges: only their corners are carved, and when
-    // they are split finer they meet their neighbours without a step.
+    // they are split finer they meet their neighbours without a step. Only
+    // those within the carve's slope of the edge (a bunker's lip, a pond's
+    // bank and shore) are split: past it the bottom is flat.
     std::vector<bool> near_zone(cell_count, false);
+    std::vector<bool> near_edge(cell_count, false);
+    const float cell_diagonal = std::sqrt(step_x * step_x + step_z * step_z);
     for (const material_zone& zone : zones) {
         if (zone.type != material_zone_type::bunker && zone.type != material_zone_type::water) {
             continue;
         }
+        const float slope = zone.type == material_zone_type::bunker
+            ? settings.zones.bunker_lip_meters
+            : std::max(settings.zones.water_bank_meters, settings.zones.water_shore_meters);
         const glm::vec2 half = zone_half_extent(zone);
         const auto cells = [](const float from, const float to, const float origin, const float step, const int count) {
             return std::pair<int, int>(std::clamp(static_cast<int>(std::floor((from - origin) / step)) - 1, 0, count - 1),
@@ -454,7 +461,13 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
         const auto [first_row, last_row] = cells(zone.center.z - half.y, zone.center.z + half.y, low.z, step_z, cell_rows);
         for (int row = first_row; row <= last_row; ++row) {
             for (int column = first_column; column <= last_column; ++column) {
-                near_zone[static_cast<std::size_t>(row * cell_columns + column)] = true;
+                const std::size_t cell_index = static_cast<std::size_t>(row * cell_columns + column);
+                near_zone[cell_index] = true;
+                const glm::vec3 middle(low.x + (static_cast<float>(column) + 0.5f) * step_x, 0.0f,
+                                       low.z + (static_cast<float>(row) + 0.5f) * step_z);
+                if (!near_edge[cell_index] && zone_edge_distance(zone, middle) <= slope + cell_diagonal) {
+                    near_edge[cell_index] = true;
+                }
             }
         }
     }
@@ -487,7 +500,7 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
                 const terrain_material material = materials[static_cast<std::size_t>(corner)];
                 fairway = fairway || material == terrain_material::fairway || material == terrain_material::green;
             }
-            cell_split[cell_index] = near_zone[cell_index] ? lattice : (fairway ? fairway_split : 1);
+            cell_split[cell_index] = near_edge[cell_index] ? lattice : (fairway ? fairway_split : 1);
         }
     }
 

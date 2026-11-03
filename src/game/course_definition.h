@@ -65,4 +65,11 @@ struct course_definition {
     course_air air;
     // How fast its greens roll, as a stimpmeter reading in feet.
     float green_stimp_feet = 0.0f;
+    // A practice ground (course.json "practice", default false): every hole
+    // is a station where F drops a fresh ball any time, nothing is scored or
+    // rewarded and no round is played (game/course_session.h).
+    bool practice = false;
+    // Whether golfers get a cart here (course.json "carts", default true);
+    // without one the bag starts on the back.
+    bool carts = true;
 };

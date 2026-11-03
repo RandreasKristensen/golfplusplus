@@ -10,7 +10,7 @@ pub(super) struct AdminSetConfigArgs {
     pub auth_issuer: String,
     pub auth_audience: String,
     pub allow_anonymous: bool,
-    pub link_secret: String,
+    pub server_secret: String,
 }
 
 impl From<AdminSetConfigArgs> for super::Reducer {
@@ -19,7 +19,7 @@ impl From<AdminSetConfigArgs> for super::Reducer {
             auth_issuer: args.auth_issuer,
             auth_audience: args.auth_audience,
             allow_anonymous: args.allow_anonymous,
-            link_secret: args.link_secret,
+            server_secret: args.server_secret,
         }
     }
 }
@@ -44,13 +44,13 @@ pub trait admin_set_config {
         auth_issuer: String,
         auth_audience: String,
         allow_anonymous: bool,
-        link_secret: String,
+        server_secret: String,
     ) -> __sdk::Result<()> {
         self.admin_set_config_then(
             auth_issuer,
             auth_audience,
             allow_anonymous,
-            link_secret,
+            server_secret,
             |_, _| {},
         )
     }
@@ -66,7 +66,7 @@ pub trait admin_set_config {
         auth_issuer: String,
         auth_audience: String,
         allow_anonymous: bool,
-        link_secret: String,
+        server_secret: String,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -80,7 +80,7 @@ impl admin_set_config for super::RemoteReducers {
         auth_issuer: String,
         auth_audience: String,
         allow_anonymous: bool,
-        link_secret: String,
+        server_secret: String,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -91,7 +91,7 @@ impl admin_set_config for super::RemoteReducers {
                 auth_issuer,
                 auth_audience,
                 allow_anonymous,
-                link_secret,
+                server_secret,
             },
             callback,
         )

@@ -46,22 +46,14 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
         return &input.key_s;
     case SDL_SCANCODE_D:
         return &input.key_d;
-    case SDL_SCANCODE_E:
-        return &input.key_e;
     case SDL_SCANCODE_F:
         return &input.key_f;
-    case SDL_SCANCODE_Q:
-        return &input.key_q;
     case SDL_SCANCODE_R:
         return &input.key_r;
-    case SDL_SCANCODE_V:
-        return &input.key_v;
-    case SDL_SCANCODE_Z:
-        return &input.key_z;
-    case SDL_SCANCODE_C:
-        return &input.key_c;
     case SDL_SCANCODE_B:
         return &input.key_b;
+    case SDL_SCANCODE_C:
+        return &input.key_c;
     case SDL_SCANCODE_M:
         return &input.key_m;
     case SDL_SCANCODE_1:
@@ -70,12 +62,16 @@ button_state* button_for_scancode(input_state& input, const SDL_Scancode scancod
         return &input.key_2;
     case SDL_SCANCODE_G:
         return &input.key_g;
+    case SDL_SCANCODE_K:
+        return &input.key_k;
     case SDL_SCANCODE_P:
         return &input.key_p;
     case SDL_SCANCODE_T:
         return &input.key_t;
     case SDL_SCANCODE_F1:
         return &input.key_f1;
+    case SDL_SCANCODE_F2:
+        return &input.key_f2;
     default:
         return nullptr;
     }
@@ -113,7 +109,9 @@ input_state poll_events(const input_state& previous) {
             }
             break;
         case SDL_MOUSEWHEEL:
-            input.wheel_steps += event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y;
+            input.wheel_steps += wheel_steps_away(event.wheel.y, event.wheel.preciseX, event.wheel.preciseY,
+                                                  event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED);
+            input.wheel_x += event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.preciseX : event.wheel.preciseX;
             break;
         case SDL_MOUSEBUTTONDOWN:
         case SDL_MOUSEBUTTONUP:

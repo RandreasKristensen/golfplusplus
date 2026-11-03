@@ -44,6 +44,7 @@ impl __sdk::__query_builder::HasCols for RoomMemberRow {
 /// Provides typed access to indexed columns for query building.
 pub struct RoomMemberRowIxCols {
     pub account_id: __sdk::__query_builder::IxCol<RoomMemberRow, u64>,
+    pub group_id: __sdk::__query_builder::IxCol<RoomMemberRow, u64>,
     pub room_id: __sdk::__query_builder::IxCol<RoomMemberRow, u64>,
 }
 
@@ -52,6 +53,7 @@ impl __sdk::__query_builder::HasIxCols for RoomMemberRow {
     fn ix_cols(table_name: &'static str) -> Self::IxCols {
         RoomMemberRowIxCols {
             account_id: __sdk::__query_builder::IxCol::new(table_name, "account_id"),
+            group_id: __sdk::__query_builder::IxCol::new(table_name, "group_id"),
             room_id: __sdk::__query_builder::IxCol::new(table_name, "room_id"),
         }
     }

@@ -343,8 +343,9 @@ TEST_CASE("interacting at a hole's tee tees up and steps up to the ball, so Spac
     REQUIRE(ball_in_play(state));
     CHECK(state.mode == game_mode::addressing);
 
-    // Swing: as from anywhere beside the ball.
-    update_game(state, swing_input(), 0.016f);
+    // Swing, looking down: as from anywhere beside the ball.
+    state.address.look = down_look(state.tuning.camera);
+    start_swing_on_time(state);
     swing_through(state);
     CHECK(state.ball->strokes == 1);
     CHECK(state.ball->place == ball_place::at_rest);
@@ -363,7 +364,11 @@ TEST_CASE("holing out leaves the player where they stand and the ball in the cup
     REQUIRE(state.ball.has_value());
     CHECK(state.ball->place == ball_place::in_cup);
     CHECK(state.ball->hole == 1U);
-    CHECK(near(state.ball->position, cup));
+    // Down in the cup.
+    const ::cup& hole = state.area.cups[1];
+    CHECK(near(horizontal(hole.centre), horizontal(cup)));
+    CHECK(horizontal_distance(state.ball->position, hole.centre) < hole.radius);
+    CHECK(state.ball->position.y < hole.centre.y);
     CHECK(*state.round.strokes[1] == 1);
     CHECK(state.round.current_hole_index == 2);
     CHECK(near(horizontal(state.player.position), horizontal(stance), 0.001f));
@@ -447,7 +452,9 @@ TEST_CASE("the holed ball waits in its cup until it is picked up, and no hole te
     finish_hole(state, 3);
     REQUIRE(state.ball.has_value());
     CHECK(state.ball->place == ball_place::in_cup);
-    CHECK(near(state.ball->position, cup));
+    // On the cup's bottom.
+    const float real = state.tuning.scale.ball_physics_radius_meters / state.tuning.scale.meters_per_world_unit;
+    CHECK(near(state.ball->position, cup_rest(state.area.cups[0], real)));
 
     CHECK(!tee_up(state, 1, true));
     REQUIRE(state.notice.has_value());
@@ -603,18 +610,22 @@ TEST_CASE("the nearest thing in reach is what F acts on") {
     state.cart.pose = cart_around_seat(seat, 0.0f, cart_seat::driver, state.tuning.cart);
     REQUIRE(horizontal_distance(seat_position(state.cart.pose, cart_seat::driver, state.tuning.cart), seat) < 0.001f);
 
-    // Half a metre from my ball, the seat further: the ball.
-    state.player.position = ball + glm::vec3(0.5f, 0.0f, 0.0f);
+    // My bag strapped behind the seat, a step from my ball.
+    const glm::vec3 bag = bag_spot(state.cart.pose, cart_seat::driver, state.tuning.cart);
+
+    // Next to my ball, the bag further: the ball.
+    state.player.position = ball + (bag - ball) * 0.35f;
     REQUIRE(interactables_in_reach(state).size() >= 2U);
     std::optional<interactable> near_me = nearest_interactable(state);
     REQUIRE(near_me.has_value());
     CHECK(near_me->kind == interactable_kind::ball);
 
-    // Next to the seat, my ball further: the seat.
-    state.player.position = ball + glm::vec3(1.8f, 0.0f, 0.0f);
+    // Next to the bag, my ball further: the bag.
+    state.player.position = ball + (bag - ball) * 0.85f;
+    REQUIRE(interactables_in_reach(state).size() >= 2U);
     near_me = nearest_interactable(state);
     REQUIRE(near_me.has_value());
-    CHECK(near_me->kind == interactable_kind::seat);
+    CHECK(near_me->kind == interactable_kind::bag);
 }
 
 TEST_CASE("the cart pulls away quicker on a road and earns road xp only there, with my ball in play too") {

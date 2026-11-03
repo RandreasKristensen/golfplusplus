@@ -43,6 +43,101 @@ std::optional<float> crossing_along(const glm::vec2& a, const glm::vec2& b, cons
     }
     return t;
 }
+
+// Whether the segments from `a` to `b` and from `c` to `d` cross, each
+// passing through the other.
+bool segments_cross(const glm::vec2& a, const glm::vec2& b, const glm::vec2& c, const glm::vec2& d) {
+    const auto side = [](const glm::vec2& p, const glm::vec2& q, const glm::vec2& r) {
+        return (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    };
+    return side(a, b, c) * side(a, b, d) < 0.0f && side(c, d, a) * side(c, d, b) < 0.0f;
+}
+
+// The closed ring's segments (segment i from point i to the next) that cross
+// another, not next to it.
+std::vector<std::size_t> crossing_segments(const std::vector<glm::vec2>& ring) {
+    const std::size_t count = ring.size();
+    std::vector<std::size_t> order(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        order[i] = i;
+    }
+    const auto low_x = [&](const std::size_t i) { return std::min(ring[i].x, ring[(i + 1) % count].x); };
+    const auto high_x = [&](const std::size_t i) { return std::max(ring[i].x, ring[(i + 1) % count].x); };
+    std::sort(order.begin(), order.end(), [&](const std::size_t a, const std::size_t b) { return low_x(a) < low_x(b); });
+    std::vector<std::size_t> crossing;
+    for (std::size_t m = 0; m < count; ++m) {
+        const std::size_t i = order[m];
+        for (std::size_t n = m + 1; n < count && low_x(order[n]) <= high_x(i); ++n) {
+            const std::size_t j = order[n];
+            const std::size_t apart = i > j ? i - j : j - i;
+            if (apart <= 1U || apart == count - 1U) {
+                continue;
+            }
+            if (segments_cross(ring[i], ring[(i + 1) % count], ring[j], ring[(j + 1) % count])) {
+                crossing.push_back(i);
+                crossing.push_back(j);
+            }
+        }
+    }
+    return crossing;
+}
+
+// The point `t` (0 to 1) of the way along the centripetal Catmull–Rom span
+// from p1 to p2, p0 and p3 its neighbours (Barry and Goldman's form).
+glm::vec2 curve_point(const glm::vec2& p0, const glm::vec2& p1, const glm::vec2& p2, const glm::vec2& p3, const float t) {
+    // Knots step by the square root of each chord; a floor keeps repeated points apart.
+    const auto knot = [](const glm::vec2& a, const glm::vec2& b) { return std::max(std::sqrt(glm::length(b - a)), 1e-3f); };
+    const float t1 = knot(p0, p1);
+    const float t2 = t1 + knot(p1, p2);
+    const float t3 = t2 + knot(p2, p3);
+    const float u = t1 + (t2 - t1) * t;
+    const auto blend = [u](const glm::vec2& a, const glm::vec2& b, const float from, const float to) {
+        return (a * (to - u) + b * (u - from)) / (to - from);
+    };
+    const glm::vec2 a1 = blend(p0, p1, 0.0f, t1);
+    const glm::vec2 a2 = blend(p1, p2, t1, t2);
+    const glm::vec2 a3 = blend(p2, p3, t2, t3);
+    return blend(blend(a1, a2, 0.0f, t2), blend(a2, a3, t1, t3), t1, t2);
+}
+}
+
+std::vector<glm::vec2> rounded_outline(const std::vector<glm::vec2>& points, const float tolerance) {
+    const std::size_t count = points.size();
+    if (count < 3U || !(tolerance > 0.0f)) {
+        return points;
+    }
+    // How many straight pieces each span takes: a piece's sag from the curve
+    // falls with the square of how many there are.
+    constexpr int max_pieces = 64;
+    std::vector<int> pieces(count, 1);
+    const auto around = [&](const std::size_t i, const std::size_t step) { return points[(i + step) % count]; };
+    for (std::size_t i = 0; i < count; ++i) {
+        const glm::vec2 middle = curve_point(around(i, count - 1U), points[i], around(i, 1U), around(i, 2U), 0.5f);
+        const float sag = glm::length(middle - (points[i] + around(i, 1U)) * 0.5f);
+        pieces[i] = std::clamp(static_cast<int>(std::ceil(std::sqrt(sag / tolerance))), 1, max_pieces);
+    }
+    // Straightening the spans in a crossing until none is left; the mapped
+    // outline itself is the end of that, so it always stops.
+    while (true) {
+        std::vector<glm::vec2> ring;
+        std::vector<std::size_t> span_of;
+        for (std::size_t i = 0; i < count; ++i) {
+            for (int k = 0; k < pieces[i]; ++k) {
+                ring.push_back(k == 0 ? points[i]
+                                      : curve_point(around(i, count - 1U), points[i], around(i, 1U), around(i, 2U),
+                                                    static_cast<float>(k) / static_cast<float>(pieces[i])));
+                span_of.push_back(i);
+            }
+        }
+        bool straightened = false;
+        for (const std::size_t segment : crossing_segments(ring)) {
+            straightened = straightened || pieces[span_of[segment]] > 1;
+            pieces[span_of[segment]] = 1;
+        }
+        if (!straightened) {
+            return ring;
+        }
+    }
 }
 
 material_zone make_material_zone(const material_zone_type type, std::vector<glm::vec2> outline) {

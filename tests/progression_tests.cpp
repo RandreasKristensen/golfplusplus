@@ -5,26 +5,37 @@
 #include "game/round_state.h"
 #include "game/save_data.h"
 #include "game/save_manager.h"
+#include "game/skill_catalog.h"
 
 #include "test_support.h"
 
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <string>
 
-TEST_CASE("the xp curve rises every level and is front loaded") {
-    CHECK(xp_for_level(1) == 0);
-    CHECK(xp_for_level(skill_max_level) == skill_max_xp);
-    for (int level = 2; level <= skill_max_level; ++level) {
-        CHECK(xp_for_level(level) > xp_for_level(level - 1));
-    }
-    const float level_80_share = static_cast<float>(xp_for_level(80)) / static_cast<float>(skill_max_xp);
-    CHECK(level_80_share > 0.18f);
-    CHECK(level_80_share < 0.22f);
-    CHECK(skill_level(0) == 1);
-    CHECK(skill_level(skill_max_xp) == skill_max_level);
+namespace {
+// Three levels: 100 XP reaches level 2, 250 level 3.
+skill_catalog test_skills() {
+    return *parse_skill_catalog_from_text(R"({"skills": [
+                                                {"id": "fitness", "icon": "fitness", "curve": "short"},
+                                                {"id": "smoking", "icon": "smoking", "curve": "short", "retired": true}]})",
+                                          R"({"curves": {"short": [0, 100, 250]}})");
+}
 }
 
-TEST_CASE("adding xp reports what was applied and stops at the cap") {
+TEST_CASE("a level follows its curve and xp counts on past the top") {
+    const level_curve curve{{0, 100, 250}};
+    CHECK(level_at(curve, 0) == 1);
+    CHECK(level_at(curve, 99) == 1);
+    CHECK(level_at(curve, 100) == 2);
+    CHECK(level_at(curve, 250) == 3);
+    CHECK(level_at(curve, 5000000) == 3);
+    CHECK(xp_to_next_level(curve, 40) == 60);
+    CHECK(xp_to_next_level(curve, 250) == 0);
+}
+
+TEST_CASE("adding xp reports what was applied and never throws xp away") {
     skill_progression skills;
     const add_skill_xp_result nothing = add_skill_xp(skills, "golf_swing", 0);
     CHECK(nothing.applied_xp == 0);
@@ -35,11 +46,46 @@ TEST_CASE("adding xp reports what was applied and stops at the cap") {
     CHECK(new_skill.after_xp == 12);
     CHECK(new_skill.applied_xp == 12);
 
-    skills["smoking"].xp = skill_max_xp - 3;
-    const add_skill_xp_result capped = add_skill_xp(skills, "smoking", 10);
-    CHECK(capped.after_xp == skill_max_xp);
-    CHECK(capped.applied_xp == 3);
-    CHECK(add_skill_xp(skills, "smoking", 10).applied_xp == 0);
+    skills["smoking"].xp = 999999;
+    CHECK(add_skill_xp(skills, "smoking", 10).applied_xp == 10);
+    CHECK(skill_xp(skills, "smoking") == 1000009);
+}
+
+TEST_CASE("the skill catalog gives every skill a rising curve") {
+    const skill_catalog skills = test_skills();
+    REQUIRE(skills.skills.size() == 2U);
+    CHECK(skills.skills[1].retired);
+    save_data save;
+    add_skill_xp(save.skills, "fitness", 120);
+    CHECK(skill_level(skills, save.skills, "fitness") == 2);
+    CHECK(xp_to_next_level(skills, save.skills, "fitness") == 130);
+    CHECK(skill_level(skills, save.skills, "unlisted") == 1);
+    const std::map<std::string, int> levels{{"fitness", 2}, {"smoking", 1}};
+    CHECK(skill_levels(skills, save.skills) == levels);
+
+    const std::string one_skill = R"({"skills": [{"id": "fitness", "icon": "fitness", "curve": "short"}]})";
+    CHECK(parse_skill_catalog_from_text(one_skill, R"({"curves": {"short": [0, 5]}})").has_value());
+    CHECK(!parse_skill_catalog_from_text(one_skill, R"({"curves": {"long": [0, 5]}})").has_value());
+    CHECK(!parse_skill_catalog_from_text(one_skill, R"({"curves": {"short": [0, 5, 5]}})").has_value());
+    CHECK(!parse_skill_catalog_from_text(one_skill, R"({"curves": {"short": [1, 5]}})").has_value());
+    CHECK(!parse_skill_catalog_from_text(one_skill, R"({"curves": {"short": [0, 2.5]}})").has_value());
+    CHECK(!parse_skill_catalog_from_text(
+               R"({"skills": [{"id": "fitness", "icon": "a", "curve": "short"}, {"id": "fitness", "icon": "b", "curve": "short"}]})",
+               R"({"curves": {"short": [0, 5]}})")
+               .has_value());
+}
+
+TEST_CASE("xp paid into a skill not listed, or retired, is refused") {
+    const skill_catalog skills = test_skills();
+    reward_rules rewards;
+    rewards.shot = xp_reward{"fitness", 25};
+    rewards.walking = movement_xp_rate{"fitness", 10.0f};
+    rewards.cart_on_road = movement_xp_rate{"fitness", 20.0f};
+    CHECK(unpayable_skill(skills, rewards, item_catalog{}).empty());
+    rewards.walking.skill_id = "smoking";
+    CHECK(unpayable_skill(skills, rewards, item_catalog{}) == "smoking");
+    rewards.walking.skill_id = "fitnes";
+    CHECK(unpayable_skill(skills, rewards, item_catalog{}) == "fitnes");
 }
 
 TEST_CASE("movement xp carries leftover meters") {
@@ -63,14 +109,14 @@ TEST_CASE("a one-off collectible is claimed once and sets its flag") {
     lost_ball.skill_rewards = {{"fitness", 12}};
 
     save_data save;
-    CHECK(collectible_available(save, lost_ball));
-    const claim_update claim = claim_collectible(save, lost_ball, xp_effects{});
+    CHECK(collectible_available(save, lost_ball, test_skills()));
+    const claim_update claim = claim_collectible(save, lost_ball, test_skills(), xp_effects{});
     CHECK(claim.claimed);
     CHECK(skill_xp(claim.update.progress.skills, "fitness") == 12);
     CHECK(claim.update.progress.collected_ids == std::vector<std::string>{"lost_ball"});
     CHECK(claim.update.progress.world_flags == std::vector<std::string>{"found_lost_ball"});
-    CHECK(!collectible_available(claim.update.progress, lost_ball));
-    CHECK(!claim_collectible(claim.update.progress, lost_ball, xp_effects{}).claimed);
+    CHECK(!collectible_available(claim.update.progress, lost_ball, test_skills()));
+    CHECK(!claim_collectible(claim.update.progress, lost_ball, test_skills(), xp_effects{}).claimed);
 }
 
 TEST_CASE("a repeatable collectible cools down over completed holes, across rounds") {
@@ -82,14 +128,14 @@ TEST_CASE("a repeatable collectible cools down over completed holes, across roun
 
     save_data save;
     save.holes_completed = 7;
-    save = claim_collectible(save, token, xp_effects{}).update.progress;
+    save = claim_collectible(save, token, test_skills(), xp_effects{}).update.progress;
     CHECK(save.repeatable_collectibles["token"].claim_count == 1);
-    CHECK(!collectible_available(save, token));
+    CHECK(!collectible_available(save, token, test_skills()));
 
     save = apply_hole_completed(save);
-    CHECK(!collectible_available(save, token));
+    CHECK(!collectible_available(save, token, test_skills()));
     save = apply_hole_completed(save);
-    CHECK(collectible_available(save, token));
+    CHECK(collectible_available(save, token, test_skills()));
 }
 
 TEST_CASE("collectible requirements check skill level, flags and courses") {
@@ -101,11 +147,11 @@ TEST_CASE("collectible requirements check skill level, flags and courses") {
     cache.requirement.required_completed_course_id = "course_01";
 
     save_data save;
-    add_skill_xp(save.skills, "fitness", xp_for_level(2));
+    add_skill_xp(save.skills, "fitness", 100);
     save.world_flags = {"found_map"};
-    CHECK(!collectible_available(save, cache));
+    CHECK(!collectible_available(save, cache, test_skills()));
     save = apply_course_completed(save, "course_01");
-    CHECK(collectible_available(save, cache));
+    CHECK(collectible_available(save, cache, test_skills()));
     CHECK(apply_course_completed(save, "course_01").completed_course_ids.size() == 1U);
 }
 
@@ -114,6 +160,7 @@ TEST_CASE("save data round trips") {
     save.completed_course_ids = {"course_01"};
     save.holes_completed = 11;
     save.skills["golf_swing"].xp = 125;
+    save.skills["fitness"].xp = 3000000000;
     save.skills["future_skill"].xp = 42;
     save.collected_ids = {"lost_ball"};
     save.repeatable_collectibles["token"] = repeatable_collectible_state{2, 9};
@@ -126,6 +173,7 @@ TEST_CASE("save data round trips") {
     CHECK(parsed->completed_course_ids == save.completed_course_ids);
     CHECK(parsed->holes_completed == 11);
     CHECK(skill_xp(parsed->skills, "golf_swing") == 125);
+    CHECK(skill_xp(parsed->skills, "fitness") == 3000000000);
     CHECK(skill_xp(parsed->skills, "future_skill") == 42);
     CHECK(parsed->collected_ids == save.collected_ids);
     CHECK(parsed->repeatable_collectibles.at("token").claim_count == 2);

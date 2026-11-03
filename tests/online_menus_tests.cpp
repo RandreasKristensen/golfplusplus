@@ -241,6 +241,8 @@ TEST_CASE("joining a course starts it online once the room is there") {
     REQUIRE(state.flow == startup_flow::online_course_picker);
 
     startup_menu_result result = update(state, enter(), named);
+    REQUIRE(state.flow == startup_flow::transport_picker);
+    result = update(state, enter(), named);
     CHECK(requested(result, online_request_type::join_course, "first"));
     CHECK(state.flow == startup_flow::joining);
     CHECK(render(state, named).message == "JOINING First...");
@@ -261,6 +263,7 @@ TEST_CASE("a refused join goes back to the course picker and says why") {
     const online_menu_status named = signed_in_as("ANNA");
     update(state, enter(), named);
     update(state, enter(), named);
+    update(state, enter(), named);
     REQUIRE(state.flow == startup_flow::joining);
 
     online_menu_status refused = named;
@@ -272,6 +275,8 @@ TEST_CASE("a refused join goes back to the course picker and says why") {
 
     // Cancelling a join leaves the room it may have got.
     update(state, enter(), named);
+    update(state, enter(), named);
+    REQUIRE(state.flow == startup_flow::joining);
     input_state escape;
     escape.escape.pressed = true;
     const startup_menu_result result = update(state, escape, named);
@@ -290,7 +295,7 @@ TEST_CASE("losing the connection on an online screen goes back to signing in") {
 
 TEST_CASE("LINK ANOTHER LOGIN shows the code, asking for one only when there is none") {
     startup_flow_state state;
-    state.selection = 2;
+    state.selection = 3;
     online_menu_status online = signed_in_as("ANNA");
     startup_menu_result result = update(state, enter(), online);
     CHECK(state.flow == startup_flow::link_code_show);
@@ -304,7 +309,7 @@ TEST_CASE("LINK ANOTHER LOGIN shows the code, asking for one only when there is 
     CHECK(menu.message == "EXPIRES IN 5 MIN");
 
     return_to_main_menu(state);
-    state.selection = 2;
+    state.selection = 3;
     result = update(state, enter(), online);
     CHECK(state.flow == startup_flow::link_code_show);
     CHECK(result.requests.empty());

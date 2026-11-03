@@ -1,6 +1,6 @@
 #pragma once
 
-// The sign at every hole's tee: a board on two posts on the tee box, at its
+// The sign at every hole's tee box: a board on two posts on the tee box, at its
 // right edge looking down the hole, standing along the hole so its face looks across
 // the tee. Placed at runtime from the hole and its place on the course (no
 // authored data), so every imported course has them. Pure: the server builds

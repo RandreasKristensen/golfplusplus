@@ -18,17 +18,24 @@
 // loaded.
 bool start_course(game_state& state, const course_definition& course);
 
-// Tees my ball up on hole `hole_index`, me behind it facing the pin. False
-// when the index is out of range or the hole was already played this round,
-// and, with a notice, while my ball is in a cup (state.ball in_cup), while it
-// is in play on another hole unless `give_up` (which gives that hole up, with
-// no score), or, online, while another player's ball waits on that tee
-// (tee_in_use).
+// Tees my ball up on hole `hole_index` (on a station without a tee box,
+// drops it there), me behind it facing the pin. False when the index is out
+// of range or the hole was already played this round, and, with a notice,
+// while my ball is in a cup (state.ball in_cup), while it is in play on
+// another hole unless `give_up` (which gives that hole up, with no score),
+// or, online, while another player's ball waits on that tee (tee_in_use).
+// On a practice ground only the range and tee_in_use hold: the fresh ball
+// takes the place of mine wherever it is.
 bool tee_up(game_state& state, std::size_t hole_index, bool give_up);
 
-// Records my ball's hole's strokes; the ball stays in the cup until it is
-// picked up. After the last hole the round is finished.
+// Records my ball's hole's strokes; the ball stays in the cup, where it
+// dropped (lying_in_cup), until it is picked up. After the last hole the round is finished. On a practice
+// ground nothing is recorded: the ball only lies in its cup.
 void complete_current_hole(game_state& state);
+
+// Where a ball holed on `hole` lies: at `near` when that is down in the
+// hole's cup, as the shot left it, else on the cup's bottom.
+glm::vec3 lying_in_cup(const game_state& state, std::size_t hole, const glm::vec3& near);
 
 // Gives up the hole my ball is in play on, with no score: the ball back in my
 // pocket, me where I stand. Online the server gives it up too.

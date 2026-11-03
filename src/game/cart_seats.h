@@ -40,6 +40,13 @@ glm::vec3 bag_spot(const cart_pose& cart, cart_seat seat, const cart_tuning& tun
 solid cart_solid(const cart_pose& pose, const cart_tuning& tuning, float height);
 // Close enough (XZ) to `seat` to step into it.
 bool in_seat_reach(const cart_pose& cart, cart_seat seat, const glm::vec3& position, const cart_tuning& tuning);
+// Outwards from the cart on `seat`'s side.
+glm::vec3 seat_side_direction(const cart_pose& cart, cart_seat seat);
+// Standing at `seat`'s door (XZ): outside the cart's side there, within
+// cart.door_depth of it and cart.door_half_length along it of the seat.
+bool at_seat_door(const cart_pose& cart, cart_seat seat, const glm::vec3& position, const cart_tuning& tuning);
+// The other seat of a cart.
+cart_seat other_seat(cart_seat seat);
 
 // Parking spot `slot` beside the hole whose start is `start`, facing down it
 // towards `pin`: park_ahead_distance down the hole and park_side_distance to

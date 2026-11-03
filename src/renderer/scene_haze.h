@@ -21,6 +21,8 @@ struct scene_haze {
     float far_amount = 0.0f;
     float full_distance = 1.0f;
     glm::vec3 eye{0.0f};
+    // World height the low mist lies on: the area's lowest ground.
+    float mist_floor = 0.0f;
 };
 
 // The haze over `backdrop` seen from `eye`: its colour times the time of

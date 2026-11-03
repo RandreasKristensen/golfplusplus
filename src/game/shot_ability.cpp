@@ -85,15 +85,29 @@ shot_ability ability_for(const shot_setup& setup, const club_definition& club, c
     const setup_limits limits = setup_limits_for(club, tuning.setup);
     const float over = limits.backswing_max > 1.0f ? ramp(setup.backswing, 1.0f, limits.backswing_max) : 0.0f;
     const float overswing = 1.0f + (numbers.overswing_spread - 1.0f) * over;
+    const float early = clamp01(-setup.strike_timing);
+    const float late = clamp01(setup.strike_timing);
+    const float mistimed = 1.0f + (numbers.mistimed_spread - 1.0f) * std::max(early, late);
 
     shot_ability ability;
     ability.limits = limits;
-    ability.spread.speed_share = numbers.speed_share_spread * scale;
+    ability.spread.speed_share = numbers.speed_share_spread * scale * mistimed;
     ability.spread.face = glm::radians(numbers.face_spread_degrees) * scale * overswing;
     ability.spread.path = glm::radians(numbers.path_spread_degrees) * scale;
     ability.spread.strike_toe = numbers.strike_toe_spread_meters * scale * overswing;
-    ability.spread.strike_high = numbers.strike_high_spread_meters * scale * overswing;
+    ability.spread.strike_high = numbers.strike_high_spread_meters * scale * overswing * mistimed;
+    ability.bias.speed_share = -numbers.late_speed_loss * late;
+    ability.bias.strike_high = numbers.late_strike_high_meters * late - numbers.early_strike_low_meters * early;
     return ability;
+}
+
+swing_errors struck_errors(const shot_setup& setup, const std::uint64_t seed, const club_definition& club, const ball_lie lie,
+                           const golfer_profile& golfer, const game_tuning& tuning) {
+    const shot_ability ability = ability_for(setup, club, lie, golfer, tuning);
+    swing_errors errors = rolled_errors(seed, ability.spread);
+    errors.speed_share += ability.bias.speed_share;
+    errors.strike_high += ability.bias.strike_high;
+    return errors;
 }
 
 float natural_face_bias(const club_definition& club, const natural_shape natural, const golfer_tuning& tuning) {

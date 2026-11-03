@@ -20,6 +20,7 @@
     X(PFNGLBINDFRAMEBUFFERPROC, glBindFramebuffer)                  \
     X(PFNGLBINDRENDERBUFFERPROC, glBindRenderbuffer)                \
     X(PFNGLBINDVERTEXARRAYPROC, glBindVertexArray)                  \
+    X(PFNGLBLENDEQUATIONPROC, glBlendEquation)                      \
     X(PFNGLBUFFERDATAPROC, glBufferData)                            \
     X(PFNGLBUFFERSUBDATAPROC, glBufferSubData)                      \
     X(PFNGLCHECKFRAMEBUFFERSTATUSPROC, glCheckFramebufferStatus)    \
@@ -55,6 +56,7 @@
     X(PFNGLLINKPROGRAMPROC, glLinkProgram)                          \
     X(PFNGLRENDERBUFFERSTORAGEPROC, glRenderbufferStorage)          \
     X(PFNGLSHADERSOURCEPROC, glShaderSource)                        \
+    X(PFNGLSTENCILOPSEPARATEPROC, glStencilOpSeparate)              \
     X(PFNGLUNIFORM1FPROC, glUniform1f)                              \
     X(PFNGLUNIFORM1IPROC, glUniform1i)                              \
     X(PFNGLUNIFORM2FVPROC, glUniform2fv)                            \
@@ -82,6 +84,7 @@ bool load_gl_functions();
 #define glBindFramebuffer golfpp_glBindFramebuffer
 #define glBindRenderbuffer golfpp_glBindRenderbuffer
 #define glBindVertexArray golfpp_glBindVertexArray
+#define glBlendEquation golfpp_glBlendEquation
 #define glBufferData golfpp_glBufferData
 #define glBufferSubData golfpp_glBufferSubData
 #define glCheckFramebufferStatus golfpp_glCheckFramebufferStatus
@@ -117,6 +120,7 @@ bool load_gl_functions();
 #define glLinkProgram golfpp_glLinkProgram
 #define glRenderbufferStorage golfpp_glRenderbufferStorage
 #define glShaderSource golfpp_glShaderSource
+#define glStencilOpSeparate golfpp_glStencilOpSeparate
 #define glUniform1f golfpp_glUniform1f
 #define glUniform1i golfpp_glUniform1i
 #define glUniform2fv golfpp_glUniform2fv

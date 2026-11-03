@@ -39,6 +39,12 @@ struct lighting_key {
     glm::vec3 white_balance{0.0f};
     float gain_noise = 0.0f;
     float saturation = 0.0f;
+    // The mist lying low (lighting.glsl's mist_depth): it takes mist_density
+    // of the light per metre on the area's lowest ground (by Koschmieder,
+    // a visibility there of 3.912 / mist_density metres), thinning by e every
+    // mist_height_meters up.
+    float mist_height_meters = 0.0f;
+    float mist_density = 0.0f;
 };
 
 // What the sky shows whatever the light (backdrop.frag): the sun, the moon
@@ -125,7 +131,17 @@ struct sky_style {
 // fog_cover of cloud, adds fog_haze (in which the sky fades), shortens the haze to
 // fog_haze_distance and greys it fog_grey of the way. Soaked ground keeps
 // wet_albedo of its colour and shines with wet_gloss, as sharp as
-// wet_gloss_power.
+// wet_gloss_power. The air scatters the night lights' light towards the
+// eye as thick as its visibility says: clear_visibility_meters in clear
+// air, rain_visibility_meters in the heaviest rain, fog_visibility_meters
+// in the thickest fog, each keeping on forwards as much as its
+// *_forwardness (Henyey-Greenstein's g).
+// The haze glows with the sun looking towards it, sun_glow of the sun's light
+// at Henyey-Greenstein's average, sun_forwardness its g; and there is always
+// some mist: the haze grows with distance from its square (mist 0) towards
+// straight (mist 1), the same at its full distance either way. The thickest
+// fog adds fog_mist_density and the heaviest rain rain_mist_density to the
+// low mist's density on the lowest ground (lighting_key::mist_density).
 struct weather_style {
     float fade_seconds = 0.0f;
     float overcast_sun = 0.0f;
@@ -153,6 +169,17 @@ struct weather_style {
     float wet_albedo = 0.0f;
     float wet_gloss = 0.0f;
     float wet_gloss_power = 0.0f;
+    float clear_visibility_meters = 0.0f;
+    float clear_forwardness = 0.0f;
+    float rain_visibility_meters = 0.0f;
+    float rain_forwardness = 0.0f;
+    float fog_visibility_meters = 0.0f;
+    float fog_forwardness = 0.0f;
+    float sun_glow = 0.0f;
+    float sun_forwardness = 0.0f;
+    float mist = 0.0f;
+    float fog_mist_density = 0.0f;
+    float rain_mist_density = 0.0f;
 };
 
 // Rain as drawn (renderer/weather_renderer.h): up to max_drops streaks in a
@@ -213,13 +240,15 @@ struct ground_colors {
     glm::vec3 underwater{0.0f};  // over the picture seen from under a pond
 };
 
-// The ball, tee boxes, cups and flags, aim dots and collectibles.
+// The ball, tee boxes, cups and flags, aim dots and collectibles: lost balls,
+// most in the ball's white, a share of them in one of the paints.
 struct marker_colors {
     glm::vec3 ball{0.0f};
     glm::vec3 tee_grout{0.0f};
     glm::vec3 tee_tile{0.0f};
     glm::vec3 tee_mat{0.0f};
-    glm::vec3 collectible{0.0f};
+    std::vector<glm::vec3> collectible_paints;
+    float collectible_paint_share = 0.0f;
     glm::vec3 cup{0.0f};
     glm::vec3 pin_pole{0.0f};
     glm::vec3 flag{0.0f};
@@ -229,7 +258,9 @@ struct marker_colors {
 };
 
 // Other players: every figure's clothes, a shirt per player and a cap per
-// group (picked by id), and their balls, tinted towards their shirt.
+// group (picked by id), and their balls, tinted towards their shirt. A
+// golfer's bag and cart are painted alike in their colour
+// (game/gear_paint.h): the bag in a dark shade of it, the cart in a faded one.
 struct figure_colors {
     glm::vec3 trousers{0.0f};
     glm::vec3 skin{0.0f};
@@ -239,6 +270,8 @@ struct figure_colors {
     std::vector<glm::vec3> group_caps;
     glm::vec3 ball{0.0f};
     float ball_shirt_share = 0.0f;
+    std::vector<glm::vec3> bag_paints;   // one per favourite colour
+    std::vector<glm::vec3> cart_paints;  // the same colours' carts
 };
 
 // The least light some things show, 0..1, so they stay readable when the
@@ -301,6 +334,24 @@ struct shadow_style {
     float map_edge_fade = 0.0f;
 };
 
+// The sun's shafts in the haze (renderer/sun_shaft_pass.h): the shadows of
+// trees, floodlights, players and carts on the shadow map take the sun's
+// glow out of the haze they fall through, each ray stepped `steps` times out
+// to reach_meters (the sky's rays and the far ground's end there); the pass
+// is skipped when the most it could take is under min_glow. The same pass
+// steps the beams of the `lamps` floodlights nearest the camera through
+// their own shadow maps of the trees and floodlights (renderer/lamp_shadow_pass.h),
+// lamp_map_resolution texels square, seen from lamp_near_meters out so a
+// lamp's own head casts nothing.
+struct shaft_style {
+    int steps = 0;
+    float reach_meters = 0.0f;
+    float min_glow = 0.0f;
+    int lamps = 0;
+    int lamp_map_resolution = 0;
+    float lamp_near_meters = 0.0f;
+};
+
 // A light after dark: its colour times its intensity (past 1 blooms), and how
 // far it reaches in metres.
 struct night_light {
@@ -312,7 +363,12 @@ struct night_light {
 // The lights that come on after dark (core/light_frame.h): round the ball, a
 // cart's headlight and the floodlights' lamps (game/floodlights.h); the glow
 // floors the ball and the cigarette's ember rise to, and how bright a lamp's
-// face glows in the floodlight's colour, past 1 so the camcorder blooms them.
+// face glows in the floodlight's colour, past 1 so the camcorder blooms and
+// smears them. A surface takes a light as its reach says; the air (and the
+// rain in it) takes it as a real lamp's, by the inverse square of the
+// distance, as bright as a surface's at beam_near_share of its reach and
+// softened over beam_core_meters, the lamp's housing: bright at the lamp,
+// faint down its beam.
 struct night_light_style {
     // The lights come on as the sun sinks from on_deg to full_deg.
     float on_deg = 0.0f;
@@ -330,6 +386,8 @@ struct night_light_style {
     float floodlight_cone_deg = 0.0f;  // half the cone's width, to its edge
     float floodlight_soft_deg = 0.0f;  // how far in from its edge it is full
     float lamp_glow = 0.0f;
+    float beam_near_share = 0.0f;
+    float beam_core_meters = 0.0f;
 };
 
 // Lightning in a thunderstorm (core/lightning_frame.h): strikes_per_minute
@@ -367,6 +425,7 @@ struct lighting_palette {
     sky_style sky;
     scene_colors colors;
     shadow_style shadows;
+    shaft_style shafts;
     night_light_style night_lights;
     weather_style weather;
     rain_style rain;

@@ -1,5 +1,6 @@
 // Reading the shadow map of trees, floodlights, players and carts
-// (renderer/shadow_map_pass.h), for the ground and tee boxes it falls on.
+// (renderer/shadow_map_pass.h), for the ground and tee boxes it falls on and
+// the haze it darkens.
 // x: how much sun their shadow takes away, 0 with no map; y: its taps'
 // spread, in map widths; z: its depth bias; w: the share of the map's
 // half-width its edge fades over.
@@ -20,5 +21,15 @@ float shadow_map_light(vec3 coords) {
                         texture(u_shadow_map, vec3(coords.xy + vec2(1.0, -0.4) * spread, depth)) +
                         texture(u_shadow_map, vec3(coords.xy + vec2(-1.0, 0.4) * spread, depth)) +
                         texture(u_shadow_map, vec3(coords.xy + vec2(0.4, 1.0) * spread, depth)));
+    return 1.0 - u_shadow.x * inside * (1.0 - lit);
+}
+
+// The same in one tap, for what reads the map many times along a ray (the
+// sun shafts, renderer/sun_shaft_pass.h).
+float shadow_map_light_once(vec3 coords) {
+    vec2 from_middle = abs(coords.xy * 2.0 - 1.0);
+    float inside = (1.0 - smoothstep(1.0 - u_shadow.w, 1.0, max(from_middle.x, from_middle.y))) *
+        step(0.0, coords.z) * step(coords.z, 1.0);
+    float lit = texture(u_shadow_map, vec3(coords.xy, coords.z - u_shadow.z));
     return 1.0 - u_shadow.x * inside * (1.0 - lit);
 }

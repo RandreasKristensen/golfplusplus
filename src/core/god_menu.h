@@ -8,8 +8,9 @@
 // (core/sky_frame.h), so it is visual only; the rest is the offline weather
 // override (game_state::weather_override), which online play ignores: the
 // server decides the weather there. GOLFPP_WEATHER starts with the weather
-// held. Its last row draws every solid's outline near the camera, for
-// checking an import. GL-free.
+// held. Its solids row draws every solid's outline near the camera, for
+// checking an import; its profiler row shows the FPS and profiling overlay,
+// the profiler recording only while it is shown. GL-free.
 
 #include "core/input.h"
 #include "core/sky_frame.h"
@@ -34,9 +35,10 @@ enum class god_menu_row : std::size_t {
     wind_speed,
     wind_direction,
     wetness,
-    solids
+    solids,
+    profiler
 };
-inline constexpr std::size_t god_menu_row_count = 10;
+inline constexpr std::size_t god_menu_row_count = 11;
 
 struct god_menu_state {
     bool enabled = false;  // GOLFPP_GOD or --god
@@ -51,7 +53,8 @@ struct god_menu_state {
     std::optional<float> wind_speed;    // m/s at the wind profile's reference height
     std::optional<float> wind_heading;  // radians, the way it blows towards (yaw_direction)
     std::optional<float> wetness;       // 0..1
-    bool show_solids = false;  // every solid's outline drawn
+    bool show_solids = false;    // every solid's outline drawn
+    bool show_profiler = false;  // the FPS and profiling overlay
 };
 
 // What the menu is told each frame, from the keys.

@@ -2,6 +2,7 @@
 
 #include "game/game_state.h"
 #include "game/golf_cart.h"
+#include "game/green_read.h"
 #include "game/mode_dispatch.h"
 #include "game/progress_rules.h"
 #include "game/remote_players.h"
@@ -42,7 +43,7 @@ glm::vec3 nearest_on_flagstick(const glm::vec3& eye, const glm::vec3& look, cons
 }
 
 glm::vec3 first_person_eye(const game_state& state) {
-    return state.player.position + world_up * state.tuning.camera.walking_eye_height;
+    return state.player.position + world_up * my_eye_height(state);
 }
 
 glm::vec3 first_person_look(const game_state& state) {
@@ -121,14 +122,24 @@ rangefinder_reading read_rangefinder(const play_area& area,
     const auto read = [&](const glm::vec3& point) {
         reading.distance_meters = horizontal_distance(player, point) * scale.meters_per_world_unit;
         reading.height_meters = (point.y - ground) * scale.meters_per_world_unit;
+        reading.sight_meters = glm::distance(eye, point) * scale.meters_per_world_unit;
     };
+
+    // Too near to read: the beam's first return comes back too soon.
+    const std::optional<float> ahead = first_hit(look, range);
+    if (ahead && *ahead * scale.meters_per_world_unit < tuning.min_range_meters) {
+        return reading;
+    }
 
     // The flag nearest the reticle that it can see: nothing between the
     // eye and its cloth near the top of the stick.
     std::optional<glm::vec3> locked;
     float locked_angle = glm::radians(tuning.flag_lock_degrees);
     for (const glm::vec3& flag : view.flags) {
-        if (horizontal_distance(player, flag) * scale.meters_per_world_unit > tuning.max_range_meters) {
+        const glm::vec3 cloth = flag + world_up * (view.flag_height * flag_cloth_share);
+        const float cloth_distance = glm::distance(eye, cloth);
+        const float cloth_meters = cloth_distance * scale.meters_per_world_unit;
+        if (cloth_meters < tuning.min_range_meters || cloth_meters > tuning.flag_range_meters) {
             continue;
         }
         const glm::vec3 to_stick = safe_normalize(nearest_on_flagstick(eye, look, flag, view.flag_height) - eye, look);
@@ -136,8 +147,6 @@ rangefinder_reading read_rangefinder(const play_area& area,
         if (angle > locked_angle) {
             continue;
         }
-        const glm::vec3 cloth = flag + world_up * (view.flag_height * flag_cloth_share);
-        const float cloth_distance = glm::distance(eye, cloth);
         const std::optional<float> blocked =
             first_hit(safe_normalize(cloth - eye, look), cloth_distance * (1.0f - flag_sight_slack));
         if (!blocked) {
@@ -150,40 +159,40 @@ rangefinder_reading read_rangefinder(const play_area& area,
         reading.flag = locked;
         return reading;
     }
-    if (const std::optional<float> t = first_hit(look, range)) {
-        read(eye + look * *t);
+    if (ahead) {
+        read(eye + look * *ahead);
     }
     return reading;
 }
 
-rangefinder_reading weathered_reading(const rangefinder_reading& clean, const weather_state& weather,
-                                      const weather_tuning& weather_rules, const rangefinder_tuning& tuning,
+float rangefinder_reach(const weather_state& weather, const rangefinder_tuning& tuning, const float range) {
+    const auto dimming = [&](const float reach) {
+        return reach > 0.0f && tuning.max_range_meters > 0.0f ? 1.0f / reach - 1.0f / tuning.max_range_meters : 0.0f;
+    };
+    const float dim = clamp01(weather.fog) * dimming(tuning.fog_reach_meters) +
+        clamp01(weather.rain) * dimming(tuning.rain_reach_meters);
+    return range > 0.0f ? 1.0f / (1.0f / range + dim) : 0.0f;
+}
+
+rangefinder_reading weathered_reading(const rangefinder_reading& clean, const glm::vec3& look, const float eye_height_meters,
+                                      const weather_state& weather, const rangefinder_tuning& tuning,
                                       const std::uint32_t ping) {
-    const weather_kind rain = rain_kind(weather_rules, weather.rain);
-    const bool blind = rain == weather_kind::rain || rain == weather_kind::heavy_rain ||
-        fog_kind(weather_rules, weather.fog) == weather_kind::fog;
-    if (!blind) {
-        const auto share = [](const float amount, const float full) { return full > 0.0f ? std::min(1.0f, amount / full) : 0.0f; };
-        const float error = std::max(tuning.light_rain_error * share(weather.rain, weather_rules.light_rain),
-                                     tuning.light_fog_error * share(weather.fog, weather_rules.light_fog));
-        rangefinder_reading reading = clean;
-        if (reading.distance_meters) {
-            *reading.distance_meters *= 1.0f + error * (2.0f * ping_roll(ping, 0) - 1.0f);
-        }
-        if (reading.height_meters) {
-            *reading.height_meters *= 1.0f + error * (2.0f * ping_roll(ping, 1) - 1.0f);
-        }
-        return reading;
+    const float reach =
+        rangefinder_reach(weather, tuning, clean.flag ? tuning.flag_range_meters : tuning.max_range_meters);
+    const bool beyond = !clean.sight_meters || *clean.sight_meters > reach;
+    const float droplets = std::min(1.0f, clamp01(weather.rain) * tuning.rain_false_share +
+                                              clamp01(weather.fog) * tuning.fog_false_share);
+    const float false_share = beyond ? droplets : droplets * *clean.sight_meters / std::max(0.0001f, reach);
+    if (ping_roll(ping, 0) >= false_share) {
+        return beyond ? rangefinder_reading{} : clean;
     }
-    rangefinder_reading nonsense;
-    if (ping_roll(ping, 2) < tuning.blank_share) {
-        return nonsense;
-    }
-    const float near = ping_roll(ping, 3);
-    const float distance = tuning.max_range_meters * near * near;
-    nonsense.distance_meters = distance;
-    nonsense.height_meters = distance * tuning.nonsense_slope * (2.0f * ping_roll(ping, 4) - 1.0f);
-    return nonsense;
+    const float farthest = beyond ? tuning.false_return_meters : std::min(tuning.false_return_meters, *clean.sight_meters);
+    const float sight = tuning.min_range_meters + ping_roll(ping, 1) * std::max(0.0f, farthest - tuning.min_range_meters);
+    rangefinder_reading droplet;
+    droplet.distance_meters = sight * glm::length(horizontal(look));
+    droplet.height_meters = eye_height_meters + sight * look.y;
+    droplet.sight_meters = sight;
+    return droplet;
 }
 
 bool rangefinder_raised(const game_state& state, const game_input& input) {
@@ -204,10 +213,12 @@ void update_rangefinder(game_state& state, const game_input& input, const float 
             ++state.rangefinder_ping;
             state.rangefinder_ping_left = std::max(0.0f, state.rangefinder_ping_left + tuning.ping_seconds);
         }
-        const rangefinder_reading clean = read_rangefinder(state.area, rangefinder_view_of(state), state.player.position,
-                                                           first_person_eye(state), first_person_look(state), tuning,
-                                                           state.tuning.scale);
-        state.rangefinder = weathered_reading(clean, state.weather, state.tuning.weather, tuning, state.rangefinder_ping);
+        const glm::vec3 eye = first_person_eye(state);
+        const glm::vec3 look = first_person_look(state);
+        const rangefinder_reading clean =
+            read_rangefinder(state.area, rangefinder_view_of(state), state.player.position, eye, look, tuning, state.tuning.scale);
+        const float eye_height = (eye.y - terrain_height(state.area, state.player.position)) * state.tuning.scale.meters_per_world_unit;
+        state.rangefinder = weathered_reading(clean, look, eye_height, state.weather, tuning, state.rangefinder_ping);
     }
     state.rangefinder_locked_seconds = state.rangefinder.flag ? state.rangefinder_locked_seconds + dt : 0.0f;
 }
@@ -224,6 +235,13 @@ bool rangefinder_lock_lit(const game_state& state) {
 
 float rangefinder_magnification(const game_state& state) {
     return 1.0f + (std::max(1.0f, state.tuning.rangefinder.magnification) - 1.0f) * state.rangefinder_zoom;
+}
+
+std::optional<float> plays_like_meters(const rangefinder_reading& reading) {
+    if (!reading.distance_meters || !reading.height_meters) {
+        return std::nullopt;
+    }
+    return std::max(0.0f, *reading.distance_meters + *reading.height_meters);
 }
 
 int rounded_rangefinder_meters(const float distance_meters) {

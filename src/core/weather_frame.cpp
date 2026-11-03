@@ -109,6 +109,12 @@ render_sky_weather make_render_sky_weather(const shown_weather& shown, const wea
     sky.wet_albedo = glm::mix(1.0f, style.wet_albedo, clamp01(shown.wetness));
     sky.wet_gloss = style.wet_gloss * clamp01(shown.wetness);
     sky.wet_gloss_power = style.wet_gloss_power;
+    const air_scattering air = scattering_under_weather(style, shown);
+    sky.scatter_per_meter = air.per_meter;
+    sky.scatter_forwardness = air.forwardness;
+    sky.sun_glow = style.sun_glow;
+    sky.sun_forwardness = style.sun_forwardness;
+    sky.mist = style.mist;
     return sky;
 }
 
@@ -152,12 +158,12 @@ render_weather make_render_weather(const weather_presentation& state, const weat
 }
 
 weather_presentation update_frame_weather(const weather_presentation& state, const game_state& game,
-                                          const lighting_palette& palette, const render_data& data, const bool playing,
-                                          const float dt) {
+                                          const lighting_palette& palette, const render_data& data, const bool fading,
+                                          const bool strikes, const float dt) {
     weather_presentation running = state;
-    running.started = state.started && playing;
+    running.started = state.started && fading;
     return update_weather_presentation(running, game.weather, palette, game.tuning.wind.profile, data.pin_visual_height_meters, dt,
-                                       playing && game.mode == game_mode::walking);
+                                       strikes && game.mode == game_mode::walking);
 }
 
 render_weather make_frame_weather(const weather_presentation& state, const game_state& game, const lighting_palette& palette,

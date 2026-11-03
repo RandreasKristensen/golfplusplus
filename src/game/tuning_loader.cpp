@@ -4,6 +4,7 @@
 #include "game/sky_clock.h"
 
 #include <cstddef>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -258,6 +259,9 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.swing.downswing_seconds = swing.number("downswing_seconds");
     tuning.swing.putt_backswing_seconds = swing.number("putt_backswing_seconds");
     tuning.swing.putt_downswing_seconds = swing.number("putt_downswing_seconds");
+    tuning.swing.meter_full_seconds = swing.number("meter_full_seconds");
+    tuning.swing.timing_window_seconds = swing.number("timing_window_seconds");
+    tuning.swing.timing_full_seconds = swing.number("timing_full_seconds");
     tuning.swing.speed_share = swing.curve("speed_share");
     tuning.swing.putting_speed_share = swing.curve("putting_speed_share");
     tuning.swing.ball_position_loft_degrees = swing.number("ball_position_loft_degrees");
@@ -268,22 +272,27 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.setup.aim_step_degrees = setup.number("aim_step_degrees");
     tuning.setup.face_step_degrees = setup.number("face_step_degrees");
     tuning.setup.ball_position_step = setup.number("ball_position_step");
-    tuning.setup.backswing_steps = setup.integer("backswing_steps");
-    tuning.setup.putter_backswing_steps = setup.integer("putter_backswing_steps");
+    tuning.setup.backswing_step_short = setup.number("backswing_step_short");
+    tuning.setup.backswing_step_full = setup.number("backswing_step_full");
+    tuning.setup.putter_backswing_step_short = setup.number("putter_backswing_step_short");
+    tuning.setup.putter_backswing_step_full = setup.number("putter_backswing_step_full");
     tuning.setup.overswing_max = setup.number("overswing_max");
     tuning.setup.ball_position_meters = setup.number("ball_position_meters");
     tuning.setup.repeat_delay_seconds = setup.number("repeat_delay_seconds");
     tuning.setup.repeat_rate = setup.number("repeat_rate");
     tuning.setup.repeat_acceleration = setup.number("repeat_acceleration");
     tuning.setup.max_repeat_rate = setup.number("max_repeat_rate");
-    tuning.setup.pointer_radius_degrees = setup.number("pointer_radius_degrees");
     tuning.setup.drag_threshold_counts = setup.integer("drag_threshold_counts");
+    tuning.setup.pull_counts_per_step = setup.integer("pull_counts_per_step");
+    tuning.setup.swipe_drag_counts = setup.integer("swipe_drag_counts");
+    tuning.setup.swipe_wheel_amount = setup.number("swipe_wheel_amount");
     tuning.setup.face_line_half_length_meters = setup.number("face_line_half_length_meters");
     tuning.setup.stick_out_meters = setup.number("stick_out_meters");
     tuning.setup.stick_half_length_meters = setup.number("stick_half_length_meters");
 
     const section_reader player = section("player");
     tuning.player.walk_speed = player.number("walk_speed");
+    tuning.player.run_factor = player.number("run_factor");
     tuning.player.turn_rate = player.number("turn_rate");
     tuning.player.look_pitch_rate = player.number("look_pitch_rate");
     tuning.player.max_look_pitch = player.number("max_look_pitch");
@@ -292,6 +301,8 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.player.flag_reach = player.number("flag_reach");
     tuning.player.bag_reach = player.number("bag_reach");
     tuning.player.bag_set_down_distance = player.number("bag_set_down_distance");
+    tuning.player.bag_handle_seconds = player.number("bag_handle_seconds");
+    tuning.player.club_swap_seconds = player.number("club_swap_seconds");
     tuning.player.ball_stand_off_distance = player.number("ball_stand_off_distance");
     tuning.player.jump_speed = player.number("jump_speed");
     tuning.player.jump_gravity = player.number("jump_gravity");
@@ -304,6 +315,12 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.cart.seat_offset = cart.number("seat_offset");
     tuning.cart.bag_behind_seat = cart.number("bag_behind_seat");
     tuning.cart.board_reach = cart.number("board_reach");
+    tuning.cart.door_depth = cart.number("door_depth");
+    tuning.cart.door_half_length = cart.number("door_half_length");
+    tuning.cart.door_push_share = cart.number("door_push_share");
+    tuning.cart.door_push_seconds = cart.number("door_push_seconds");
+    tuning.cart.scoot_seconds = cart.number("scoot_seconds");
+    tuning.cart.fall_restitution = cart.number("fall_restitution");
     tuning.cart.step_out_distance = cart.number("step_out_distance");
     tuning.cart.step_seconds = cart.number("step_seconds");
     tuning.cart.park_ahead_distance = cart.number("park_ahead_distance");
@@ -339,6 +356,7 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.camera.follow_back_distance = camera.number("follow_back_distance");
     tuning.camera.follow_eye_height = camera.number("follow_eye_height");
     tuning.camera.follow_look_height = camera.number("follow_look_height");
+    tuning.camera.follow_roll_meters = camera.number("follow_roll_meters");
     tuning.camera.transition_seconds = camera.number("transition_seconds");
     tuning.camera.transition_jump_distance = camera.number("transition_jump_distance");
     tuning.camera.viewmodel_fov_degrees = camera.number("viewmodel_fov_degrees");
@@ -346,6 +364,8 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     const section_reader rangefinder = section("rangefinder");
     tuning.rangefinder.magnification = rangefinder.number("magnification");
     tuning.rangefinder.raise_seconds = rangefinder.number("raise_seconds");
+    tuning.rangefinder.min_range_meters = rangefinder.number("min_range_meters");
+    tuning.rangefinder.flag_range_meters = rangefinder.number("flag_range_meters");
     tuning.rangefinder.max_range_meters = rangefinder.number("max_range_meters");
     tuning.rangefinder.march_step_meters = rangefinder.number("march_step_meters");
     tuning.rangefinder.refine_steps = rangefinder.integer("refine_steps");
@@ -357,13 +377,31 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.rangefinder.person_height = rangefinder.number("person_height");
     tuning.rangefinder.cart_height = rangefinder.number("cart_height");
     tuning.rangefinder.ping_seconds = rangefinder.number("ping_seconds");
-    tuning.rangefinder.light_rain_error = rangefinder.number("light_rain_error");
-    tuning.rangefinder.light_fog_error = rangefinder.number("light_fog_error");
-    tuning.rangefinder.blank_share = rangefinder.number("blank_share");
-    tuning.rangefinder.nonsense_slope = rangefinder.number("nonsense_slope");
+    tuning.rangefinder.fog_reach_meters = rangefinder.number("fog_reach_meters");
+    tuning.rangefinder.rain_reach_meters = rangefinder.number("rain_reach_meters");
+    tuning.rangefinder.fog_false_share = rangefinder.number("fog_false_share");
+    tuning.rangefinder.rain_false_share = rangefinder.number("rain_false_share");
+    tuning.rangefinder.false_return_meters = rangefinder.number("false_return_meters");
+
+    const section_reader pacing = section("pacing");
+    tuning.pacing.pace_meters = pacing.number("pace_meters");
+    tuning.pacing.popup_ahead_meters = pacing.number("popup_ahead_meters");
+    tuning.pacing.popup_drop_meters = pacing.number("popup_drop_meters");
+
+    const section_reader green_read = section("green_read");
+    tuning.green_read.eye_height = green_read.number("eye_height");
+    tuning.green_read.crouch_seconds = green_read.number("crouch_seconds");
+    tuning.green_read.spacing_meters = green_read.number("spacing_meters");
+    tuning.green_read.radius_meters = green_read.number("radius_meters");
+    tuning.green_read.edge_fade_meters = green_read.number("edge_fade_meters");
+    tuning.green_read.clear_meters = green_read.number("clear_meters");
+    tuning.green_read.drift_meters = green_read.number("drift_meters");
+    tuning.green_read.drift_speed_per_percent = green_read.number("drift_speed_per_percent");
+    tuning.green_read.level_percent = green_read.number("level_percent");
 
     const section_reader shot_preview = section("shot_preview");
     tuning.shot_preview.step_seconds = shot_preview.number("step_seconds");
+    tuning.shot_preview.start_line_meters = shot_preview.number("start_line_meters");
     tuning.shot_preview.putt_line_meters = shot_preview.number("putt_line_meters");
     tuning.shot_preview.putt_line_step_meters = shot_preview.number("putt_line_step_meters");
 
@@ -378,7 +416,22 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.xp_drops.lifetime_seconds = xp_drops.number("lifetime_seconds");
     tuning.xp_drops.min_visible_xp = xp_drops.integer("min_visible_xp");
 
+    const section_reader shot_numbers = section("shot_numbers");
+    tuning.shot_numbers.crit_share = shot_numbers.number("crit_share");
+    tuning.shot_numbers.lifetime_seconds = shot_numbers.number("lifetime_seconds");
+    tuning.shot_numbers.rise = shot_numbers.number("rise");
+    tuning.shot_numbers.fade_share = shot_numbers.number("fade_share");
+    tuning.shot_numbers.half_height = shot_numbers.number("half_height");
+    tuning.shot_numbers.long_half_height = shot_numbers.number("long_half_height");
+    tuning.shot_numbers.long_meters = shot_numbers.number("long_meters");
+    tuning.shot_numbers.crit_size = shot_numbers.number("crit_size");
+    tuning.shot_numbers.crit_pop_size = shot_numbers.number("crit_pop_size");
+    tuning.shot_numbers.crit_pop_seconds = shot_numbers.number("crit_pop_seconds");
+
     const section_reader net = section("net");
+    tuning.net.cart_reconcile_distance = net.number("cart_reconcile_distance");
+    tuning.net.cart_reconcile_yaw = net.number("cart_reconcile_yaw");
+    tuning.net.max_unacked_seconds = net.number("max_unacked_seconds");
     tuning.net.motion_heartbeat_seconds = net.number("motion_heartbeat_seconds");
     tuning.net.motion_min_interval_seconds = net.number("motion_min_interval_seconds");
     tuning.net.motion_correction_distance = net.number("motion_correction_distance");
@@ -390,8 +443,14 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.net.remote_trail_fade_seconds = net.number("remote_trail_fade_seconds");
     tuning.net.group_join_distance = net.number("group_join_distance");
     tuning.net.notice_seconds = net.number("notice_seconds");
+    tuning.net.ride_motion_interval_seconds = net.number("ride_motion_interval_seconds");
+    tuning.net.ride_correction_seconds = net.number("ride_correction_seconds");
 
     const section_reader server = section("server");
+    tuning.server.motion_cell_meters = server.number("motion_cell_meters");
+    if (!(tuning.server.motion_cell_meters > 0.0f) || !std::isfinite(tuning.server.motion_cell_meters)) {
+        missing.push_back("server.motion_cell_meters (positive)");
+    }
     tuning.server.room_capacity = server.integer("room_capacity");
     tuning.server.group_capacity = server.integer("group_capacity");
     tuning.server.name_min_length = server.integer("name_min_length");
@@ -405,7 +464,14 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.server.interact_slack = server.number("interact_slack");
     tuning.server.shot_time_slack_seconds = server.number("shot_time_slack_seconds");
     tuning.server.timing_slack_seconds = server.number("timing_slack_seconds");
-    tuning.server.cart_condition_slack = server.number("cart_condition_slack");
+    tuning.server.step_start_tolerance = server.number("step_start_tolerance");
+    tuning.server.walk_xp_meters_per_hour = server.number("walk_xp_meters_per_hour");
+    tuning.server.cart_xp_meters_per_hour = server.number("cart_xp_meters_per_hour");
+    tuning.server.xp_award_keep_days = server.integer("xp_award_keep_days");
+    tuning.server.xp_rollup_interval_hours = server.number("xp_rollup_interval_hours");
+    if (tuning.server.xp_award_keep_days <= 0 || !(tuning.server.xp_rollup_interval_hours > 0.0f)) {
+        missing.push_back("server.xp_award_keep_days and xp_rollup_interval_hours (positive)");
+    }
 
     const section_reader hole_sign = section("hole_sign");
     tuning.hole_sign.edge_inset = hole_sign.number("edge_inset");
@@ -479,6 +545,10 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.golfer.strike_high_spread_meters = golfer.number("strike_high_spread_meters");
     tuning.golfer.spread_at_level_one = golfer.number("spread_at_level_one");
     tuning.golfer.overswing_spread = golfer.number("overswing_spread");
+    tuning.golfer.mistimed_spread = golfer.number("mistimed_spread");
+    tuning.golfer.early_strike_low_meters = golfer.number("early_strike_low_meters");
+    tuning.golfer.late_speed_loss = golfer.number("late_speed_loss");
+    tuning.golfer.late_strike_high_meters = golfer.number("late_strike_high_meters");
     tuning.golfer.natural_shape_spread = golfer.number("natural_shape_spread");
     tuning.golfer.natural_face_bias_degrees = golfer.number("natural_face_bias_degrees");
     tuning.golfer.curve_full_degrees = golfer.number("curve_full_degrees");

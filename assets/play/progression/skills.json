@@ -1,8 +1,8 @@
 {
   "skills": [
-    { "id": "golf_swing", "icon": "golf_swing" },
-    { "id": "smoking", "icon": "smoking" },
-    { "id": "fitness", "icon": "fitness" },
-    { "id": "cart_driving", "icon": "generic" }
+    { "id": "golf_swing", "icon": "golf_swing", "curve": "standard" },
+    { "id": "smoking", "icon": "smoking", "curve": "standard" },
+    { "id": "fitness", "icon": "fitness", "curve": "standard" },
+    { "id": "cart_driving", "icon": "generic", "curve": "standard" }
   ]
 }

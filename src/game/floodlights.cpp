@@ -138,8 +138,8 @@ void place_hole_floodlights(std::vector<floodlight>& lights, const play_area& ar
     };
 
     // The tee's, out past the tee box's left edge (its sign stands on the right).
-    if (area_hole < area.tee_boxes.size()) {
-        const tee_box& box = area.tee_boxes[area_hole];
+    if (const tee_box* tee_box_here = hole_tee_box(area.tee_boxes, area_hole)) {
+        const tee_box& box = *tee_box_here;
         const glm::vec3 left = -right_of(box.down_hole);
         add(pole_near(box.center + left * (box.half_width + rules.tee_offset), left, box.down_hole, box.center, area_hole,
                       floodlight_target::tee, at));

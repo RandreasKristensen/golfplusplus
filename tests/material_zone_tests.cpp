@@ -6,9 +6,11 @@
 #include "physics/terrain.h"
 #include "test_support.h"
 
+#include <algorithm>
 #include <cmath>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <glm/trigonometric.hpp>
 
@@ -97,16 +99,86 @@ TEST_CASE("a placed hole moves and turns its zones with it") {
           terrain_material::green);
 }
 
-TEST_CASE("holes read outline zones") {
+TEST_CASE("holes read outline zones, each edge the curve through its mapped points") {
     const std::optional<hole_data> hole =
         hole_with_zone(R"({ "type": "fairway", "outline": [[0, 10], [6, 10], [6, 30], [0, 30]] })");
     REQUIRE(hole.has_value());
     REQUIRE(hole->material_zones.size() == 1U);
     const material_zone& fairway = hole->material_zones[0];
     CHECK(fairway.type == material_zone_type::fairway);
-    CHECK(near(zone_area(fairway), 120.0f));
+    CHECK(fairway.outline.size() > 4U);
+    CHECK(zone_area(fairway) > 120.0f);  // rounded out past the straight sides
+    CHECK(zone_contains(fairway, glm::vec3(6.5f, 0.0f, 20.0f)));
     CHECK(zone_contains(fairway, glm::vec3(3.0f, 0.0f, 20.0f)));
     CHECK(zone_material_at(hole->material_zones, glm::vec3(3.0f, 0.0f, 20.0f)) == terrain_material::fairway);
+}
+
+namespace {
+// Whether any two of the closed ring's sides that don't meet cross.
+bool crosses_itself(const std::vector<glm::vec2>& ring) {
+    const auto side = [](const glm::vec2& p, const glm::vec2& q, const glm::vec2& r) {
+        return (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    };
+    const std::size_t count = ring.size();
+    for (std::size_t i = 0; i < count; ++i) {
+        for (std::size_t j = i + 2U; j < count; ++j) {
+            if (i == 0U && j == count - 1U) {
+                continue;
+            }
+            const glm::vec2 &a = ring[i], &b = ring[(i + 1U) % count], &c = ring[j], &d = ring[(j + 1U) % count];
+            if (side(a, b, c) * side(a, b, d) < 0.0f && side(c, d, a) * side(c, d, b) < 0.0f) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+}
+
+TEST_CASE("a zone's edge is a smooth curve through every mapped point, bulging round its corners") {
+    const std::vector<glm::vec2> square{{0.0f, 0.0f}, {10.0f, 0.0f}, {10.0f, 10.0f}, {0.0f, 10.0f}};
+    const std::vector<glm::vec2> edge = rounded_outline(square, 0.05f);
+    CHECK(edge.size() > square.size());
+    std::size_t next = 0;
+    for (const glm::vec2& point : edge) {
+        if (next < square.size() && point == square[next]) {
+            ++next;
+        }
+    }
+    CHECK(next == square.size());  // every mapped point, in order
+    const material_zone zone = make_material_zone(material_zone_type::bunker, edge);
+    CHECK(zone_contains(zone, glm::vec3(5.0f, 0.0f, -0.8f)));  // past the straight side's middle
+    CHECK(!zone_contains(zone, glm::vec3(5.0f, 0.0f, -1.5f)));
+    CHECK(!crosses_itself(edge));
+    // A finer tolerance cuts the curve into more, shorter pieces.
+    CHECK(rounded_outline(square, 0.01f).size() > edge.size());
+}
+
+TEST_CASE("three or more mapped points in a line keep a zone's side straight") {
+    // A 30 by 10 m box, each side a run of four points, its corners rounded.
+    const std::vector<glm::vec2> box{{1.0f, 0.0f},   {2.0f, 0.0f},  {28.0f, 0.0f}, {29.0f, 0.0f},  {30.0f, 1.0f},
+                                     {30.0f, 2.0f},  {30.0f, 8.0f}, {30.0f, 9.0f}, {29.0f, 10.0f}, {28.0f, 10.0f},
+                                     {2.0f, 10.0f},  {1.0f, 10.0f}, {0.0f, 9.0f},  {0.0f, 8.0f},   {0.0f, 2.0f},
+                                     {0.0f, 1.0f}};
+    const std::vector<glm::vec2> edge = rounded_outline(box, 0.05f);
+    const auto at = std::find(edge.begin(), edge.end(), glm::vec2(2.0f, 0.0f));
+    REQUIRE(at != edge.end());
+    REQUIRE(at + 1 != edge.end());
+    CHECK(*(at + 1) == glm::vec2(28.0f, 0.0f));  // nothing between: the side is one straight piece
+    const material_zone zone = make_material_zone(material_zone_type::fairway, edge);
+    CHECK(!zone_contains(zone, glm::vec3(15.0f, 0.0f, -0.05f)));
+    CHECK(zone_area(zone) < 302.0f);
+}
+
+TEST_CASE("a zone's neck narrower than its curve's bulge stays straight rather than crossing itself") {
+    // Two 10 m squares joined by a neck 0.4 m wide and 2 m long.
+    const std::vector<glm::vec2> neck{{0.0f, 0.0f},  {10.0f, 0.0f},  {10.0f, 4.8f},  {12.0f, 4.8f},
+                                      {12.0f, 0.0f}, {22.0f, 0.0f},  {22.0f, 10.0f}, {12.0f, 10.0f},
+                                      {12.0f, 5.2f}, {10.0f, 5.2f},  {10.0f, 10.0f}, {0.0f, 10.0f}};
+    const std::vector<glm::vec2> edge = rounded_outline(neck, 0.05f);
+    CHECK(edge.size() > neck.size());
+    CHECK(!crosses_itself(edge));
+    CHECK(zone_contains(make_material_zone(material_zone_type::fairway, edge), glm::vec3(11.0f, 0.0f, 5.0f)));
 }
 
 TEST_CASE("holes with a malformed zone fail to load") {
@@ -130,7 +202,7 @@ TEST_CASE("a hole with a fairway outline has fairway only inside it") {
 
     // A fairway starting 100 m out, rough after the tee.
     hole.material_zones = {make_material_zone(material_zone_type::fairway, {{-15.0f, 100.0f}, {15.0f, 100.0f}, {12.0f, 290.0f}, {-12.0f, 290.0f}})};
-    REQUIRE(has_fairway_outline(hole));
+    REQUIRE(!ribbon_paints_fairway(hole));
     const play_area outlined = hole_area(hole, shipped_content().tuning);
     CHECK(sample_area(outlined, glm::vec3(0.0f, 0.0f, 40.0f)).material == terrain_material::rough);
     CHECK(sample_area(outlined, glm::vec3(0.0f, 0.0f, 150.0f)).material == terrain_material::fairway);

@@ -12,6 +12,7 @@
 #include "game/item_catalog.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -19,6 +20,9 @@
 
 // The whole file, byte for byte (binary files too).
 std::optional<std::string> read_text_file(const std::filesystem::path& path);
+
+// When `path` was last written; nullopt when it is missing or unreadable.
+std::optional<std::filesystem::file_time_type> file_write_time(const std::filesystem::path& path);
 
 // Writes `text` to `path` (creating its directory) through a temporary
 // file, so a crash never leaves a half-written file. False on failure.
@@ -31,6 +35,10 @@ std::vector<std::filesystem::path> json_files_in_directory(const std::filesystem
 std::vector<std::string> json_texts_in_directory(const std::filesystem::path& directory);
 // Every *.json file in `directory` and the folders in it, sorted by path.
 std::vector<std::filesystem::path> json_files_under(const std::filesystem::path& directory);
+
+// The server's simulation content fingerprint, or nullopt if a folder is
+// empty/missing or a file cannot be read.
+std::optional<std::uint64_t> load_simulation_content_hash(const std::string& asset_root);
 
 // Every item under `asset_root`'s items_path (parse_item_catalog).
 item_catalog_load_result load_items(const std::string& asset_root);

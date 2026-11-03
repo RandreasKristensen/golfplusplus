@@ -197,6 +197,10 @@ void draw_rangefinder(overlay_batch& batch, const text_assets& text, const rende
     draw_lcd_label(batch, text, find_text_style(text, style_rangefinder_height), data.rangefinder_height_label,
                    view.box(glm::vec2(0.0f, -0.63f), glm::vec2(0.14f, 0.05f)));
 
+    // What the slope makes it play like, under that.
+    draw_lcd_label(batch, text, find_text_style(text, style_rangefinder_height), data.rangefinder_plays_like_label,
+                   view.box(glm::vec2(0.0f, -0.75f), glm::vec2(0.20f, 0.05f)));
+
     // The wind, lower left in the field like a status icon.
     draw_wind_arrow(batch, view.box(glm::vec2(-0.62f, -0.32f), glm::vec2(0.05f, 0.05f)), data.rangefinder_wind_angle);
     draw_lcd_label(batch, text, find_text_style(text, style_rangefinder_wind), data.rangefinder_wind_label,

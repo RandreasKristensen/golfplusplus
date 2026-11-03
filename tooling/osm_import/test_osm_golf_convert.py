@@ -804,21 +804,49 @@ class ZoneTests(unittest.TestCase):
         self.assertGreater(abs(osm_outline.polygon_area(one)), 2 * abs(osm_outline.polygon_area(left)))
         self.assertIn(far, joined)
 
-    def test_a_generated_fairway_starts_past_the_carry_and_narrows_to_the_green(self):
+    def test_a_generated_fairway_runs_from_the_tee_and_narrows_to_the_green(self):
         design = conv.DEFAULT_CONFIG["generated_fairway"]
         line = [(0.0, 0.0), (0.0, -400.0)]
 
-        fairway = osm_outline.generated_fairway(line, 4, design)
-        par3 = osm_outline.generated_fairway([(0.0, 0.0), (0.0, -150.0)], 3, design)
+        [fairway] = osm_outline.generated_fairway(line, 4, design)
+        [par3] = osm_outline.generated_fairway([(0.0, 0.0), (0.0, -150.0)], 3, design)
 
-        zs = [-p[1] for p in fairway]
-        self.assertAlmostEqual(design["start_meters"], min(zs), delta=5.0)
+        self.assertTrue(osm_outline.point_in_polygon((0.0, -1.0), fairway))  # the tee sits on it
+        self.assertTrue(osm_outline.point_in_polygon((0.0, -1.0), par3))
+        self.assertTrue(osm_outline.point_in_polygon((0.0, -149.0), par3))
         def width_at(z, ring=fairway):
             xs = [p[0] for p in ring if abs(-p[1] - z) < 3.0]
             return max(xs) - min(xs)
         self.assertAlmostEqual(design["landing_width_meters"]["4"], width_at(150.0), delta=0.5)
         self.assertLess(width_at(395.0), design["landing_width_meters"]["4"] - 8.0)
-        self.assertAlmostEqual(150.0 - design["par3_approach_meters"], min(-p[1] for p in par3), delta=5.0)
+        self.assertAlmostEqual(design["approach_width_meters"], width_at(75.0, par3), delta=0.5)
+
+    def test_a_generated_fairway_goes_round_mapped_rough(self):
+        design = conv.DEFAULT_CONFIG["generated_fairway"]
+        line = [(0.0, 0.0), (0.0, -300.0)]
+        # Rough mapped across the hole in front of the tee, and again across its middle.
+        in_front = [(-40.0, 5.0), (40.0, 5.0), (40.0, -60.0), (-40.0, -60.0)]
+        across = [(-40.0, -150.0), (40.0, -150.0), (40.0, -170.0), (-40.0, -170.0)]
+        beside = [(100.0, -50.0), (120.0, -50.0), (120.0, -70.0), (100.0, -70.0)]
+        # Rough over the line further on, and round a patch of fairway left
+        # of it, cutting the patch off from the line.
+        over_line = [(-5.0, -200.0), (20.0, -200.0), (20.0, -260.0), (-5.0, -260.0)]
+        above = [(-20.0, -200.0), (-5.0, -200.0), (-5.0, -205.0), (-20.0, -205.0)]
+        below = [(-20.0, -255.0), (-5.0, -255.0), (-5.0, -260.0), (-20.0, -260.0)]
+
+        pieces = osm_outline.generated_fairway(line, 4, design, [in_front, across, beside, over_line, above, below])
+
+        self.assertEqual(3, len(pieces))
+        self.assertFalse(any(osm_outline.point_in_polygon((-12.0, -230.0), piece) for piece in pieces))
+        def on_fairway(z):
+            return any(osm_outline.point_in_polygon((0.0, -z), piece) for piece in pieces)
+        self.assertFalse(on_fairway(30.0))
+        self.assertTrue(on_fairway(62.0))
+        self.assertTrue(on_fairway(145.0))
+        self.assertFalse(on_fairway(160.0))
+        self.assertTrue(on_fairway(175.0))
+        self.assertFalse(on_fairway(230.0))
+        self.assertTrue(on_fairway(298.0))
 
     def test_hole_zones_are_outlines_and_a_missing_fairway_is_generated(self):
         lat, lon = 56.0, 10.0
@@ -1540,6 +1568,72 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(conv._as_water_hazard(pond)["tags"]["golf"], "water_hazard")
         tagged = box(601, {"natural": "water", "golf": "lateral_water_hazard"}, self.LAT, self.lon(0))
         self.assertEqual(conv._as_water_hazard(tagged)["tags"]["golf"], "lateral_water_hazard")
+
+
+class AerialTests(unittest.TestCase):
+    """The aerial reading on a made scene: a hole running north up x = 0 from
+    a tee at the origin, rough everywhere but what is drawn on it."""
+
+    @staticmethod
+    def scene():
+        import numpy as np
+        import osm_aerial
+        x0, z0, cell = -60.0, -300.0, 1.0
+        rows, columns = 310, 130
+        z, x = np.meshgrid(z0 + (np.arange(rows) + 0.5) * cell, x0 + (np.arange(columns) + 0.5) * cell, indexing="ij")
+        rng = np.random.default_rng(7)
+        rgb = np.empty((rows, columns, 3)); nir = np.empty((rows, columns)); red = np.empty((rows, columns))
+        height = np.zeros((rows, columns))
+
+        def paint(where, colour, infrared, r):
+            rgb[where] = colour; nir[where] = infrared; red[where] = r
+
+        paint(np.ones((rows, columns), bool), (0.60, 0.58, 0.50), 0.60, 0.55)              # dead rough
+        paint((abs(x) < 15) & (z < -80) & (z > -270), (0.45, 0.55, 0.40), 0.75, 0.50)      # the fairway, past a carry
+        paint(np.hypot(x - 15, z + 150) < 4, (0.85, 0.82, 0.75), 0.65, 0.80)               # a bunker at its edge
+        paint(np.hypot(x - 35, z + 50) < 4, (0.85, 0.82, 0.75), 0.65, 0.80)                # sand out in the rough
+        paint((abs(x - 27) < 1) & (z < -100) & (z > -250), (0.85, 0.82, 0.75), 0.65, 0.80)  # a sand path
+        paint(np.hypot(x + 30, z + 200) < 12, (0.20, 0.25, 0.25), 0.08, 0.20)              # a pond
+        rgb += rng.normal(0, 0.01, rgb.shape); nir += rng.normal(0, 0.01, nir.shape); red += rng.normal(0, 0.01, red.shape)
+        for tx, tz, top in ((40.5, -119.5, 9.0), (-44.5, -59.5, 6.0)):                       # two trees, tops on cells
+            height = np.maximum(height, top - 1.5 * np.hypot(x - tx, z - tz))
+        height[(abs(x - 45) < 5) & (abs(z + 240) < 5)] = 5.0                                 # a flat roof
+        layers = osm_aerial.Layers(x0=x0, z0=z0, cell=cell, rgb=rgb.astype("float32"), nir=nir.astype("float32"),
+                                   red=red.astype("float32"), height=np.clip(height, 0, None).astype("float32"),
+                                   source="test")
+        rules = conv.DEFAULT_CONFIG["aerial"]
+        return osm_aerial.Cover(layers, rules, [[(0.0, 0.0), (0.0, -280.0)]]), rules
+
+    def test_the_hole_reads_its_fairway_bunker_and_pond_off_the_courses_grass(self):
+        import osm_aerial
+        cover, rules = self.scene()
+
+        found = osm_aerial.hole_cover(cover, [(0.0, 0.0), (0.0, -280.0)], rules)
+
+        def inside(rings, x, z):
+            return any(osm_outline.point_in_polygon((x, z), ring) for ring in rings)
+        self.assertTrue(inside(found["fairways"], 0.0, -150.0))
+        self.assertTrue(inside(found["fairways"], 10.0, -250.0))
+        self.assertFalse(inside(found["fairways"], 0.0, -40.0))   # the carry is rough
+        self.assertFalse(inside(found["fairways"], 25.0, -120.0))
+        self.assertTrue(inside(found["bunkers"], 16.0, -150.0))
+        self.assertFalse(inside(found["bunkers"], 35.0, -50.0))   # sand away from the grass
+        self.assertFalse(inside(found["bunkers"], 27.0, -200.0))  # a path is no bunker
+        self.assertTrue(inside(found["waters"], -30.0, -200.0))
+
+    def test_trees_stand_at_each_top_and_a_roof_is_no_tree(self):
+        import osm_aerial
+        cover, rules = self.scene()
+
+        trees = osm_aerial.trees(cover, rules)
+
+        def near(x, z):
+            return [t for t in trees if math.hypot(t[0] - x, t[1] - z) < 2.0]
+        [tall], [short] = near(40.0, -120.0), near(-45.0, -60.0)
+        self.assertAlmostEqual(9.0, tall[2], delta=0.6)
+        self.assertAlmostEqual(6.0, short[2], delta=0.6)
+        self.assertGreater(tall[3], short[3])
+        self.assertEqual(2, len(trees))
 
 
 if __name__ == "__main__":

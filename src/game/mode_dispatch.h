@@ -33,11 +33,11 @@ golfer_profile my_golfer(const game_state& state);
 bool natural_shape_picked(const game_state& state);
 
 // I picked my natural shape. Offline: the save's, written at the next save.
-// Online: set_golfer, with my hand.
+// Online: set_golfer, with my hand and favourite colour.
 void record_natural_shape(game_state& state, natural_shape shape);
 
-// Online, my player row keeps my hand as my settings have it: set_golfer
-// when it differs (once per change). Offline nothing.
+// Online, my player row keeps my hand and favourite colour as my settings
+// have them: set_golfer when they differ (once per change). Offline nothing.
 void sync_golfer(game_state& state);
 
 // The dice of the shot I hit next offline: the round's next (round_shot_seed).
@@ -99,11 +99,10 @@ void record_hole_given_up(game_state& state);
 void record_cart_boarded(game_state& state, std::uint64_t owner);
 void record_cart_left(game_state& state);
 
-// My cart tipped onto a side or sank under me, and someone's tipped cart
-// (`owner`, 0 mine) was stood back up. Online: overturn_cart and
-// right_cart, which the server checks plausible where it has the cart.
-// Offline the game does it all: nothing.
-void record_cart_overturned(game_state& state, cart_condition condition);
+// Someone's tipped cart (`owner`, 0 mine) was stood back up. Online:
+// right_cart, which the server checks where it has the cart. Offline the
+// game does it all: nothing. (A cart tipping or sinking under its driver
+// the server's own steps decide.)
 void record_cart_righted(game_state& state, std::uint64_t owner);
 
 // G: join the group of the nearest player (net.group_join_distance) when it

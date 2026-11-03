@@ -16,8 +16,9 @@ void add_xp(progress_update& update, const std::string& skill_id, const int xp, 
     }
 }
 
-bool requirement_met(const save_data& progress, const course_world_collectible_requirement& requirement) {
-    if (!requirement.skill_id.empty() && skill_level(skill_xp(progress.skills, requirement.skill_id)) < requirement.min_level) {
+bool requirement_met(const save_data& progress, const course_world_collectible_requirement& requirement,
+                     const skill_catalog& skills) {
+    if (!requirement.skill_id.empty() && skill_level(skills, progress.skills, requirement.skill_id) < requirement.min_level) {
         return false;
     }
     if (!requirement.required_world_flag.empty() && !contains(progress.world_flags, requirement.required_world_flag)) {
@@ -55,8 +56,8 @@ bool owns_rangefinder(const save_data&) {
     return true;
 }
 
-bool collectible_available(const save_data& progress, const course_world_collectible& collectible) {
-    if (!requirement_met(progress, collectible.requirement)) {
+bool collectible_available(const save_data& progress, const course_world_collectible& collectible, const skill_catalog& skills) {
+    if (!requirement_met(progress, collectible.requirement, skills)) {
         return false;
     }
     if (!collectible.repeatable) {
@@ -70,10 +71,10 @@ bool collectible_available(const save_data& progress, const course_world_collect
     return progress.holes_completed - *it->second.claimed_at_holes_completed >= collectible.repeatable_cooldown_holes;
 }
 
-claim_update claim_collectible(const save_data& progress, const course_world_collectible& collectible,
+claim_update claim_collectible(const save_data& progress, const course_world_collectible& collectible, const skill_catalog& skills,
                                const xp_effects& boosts) {
     claim_update result{false, {progress, {}}};
-    if (!collectible_available(progress, collectible)) {
+    if (!collectible_available(progress, collectible, skills)) {
         return result;
     }
 

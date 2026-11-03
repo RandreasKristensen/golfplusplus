@@ -37,12 +37,22 @@ bool framebuffer::init(const int width, const int height, const framebuffer_form
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_tex_, 0);
 
-    if (format.depth) {
+    if (format.depth == framebuffer_depth::drawn) {
         glGenRenderbuffers(1, &depth_rbo_);
         glBindRenderbuffer(GL_RENDERBUFFER, depth_rbo_);
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width_, height_);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depth_rbo_);
+    } else if (format.depth == framebuffer_depth::sampled) {
+        glGenTextures(1, &depth_tex_);
+        glBindTexture(GL_TEXTURE_2D, depth_tex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width_, height_, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, depth_tex_, 0);
     }
+    glBindTexture(GL_TEXTURE_2D, 0);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         SDL_Log("A %dx%d framebuffer is incomplete.", width_, height_);
@@ -59,6 +69,11 @@ void framebuffer::shutdown() {
     if (depth_rbo_ != 0) {
         glDeleteRenderbuffers(1, &depth_rbo_);
         depth_rbo_ = 0;
+    }
+
+    if (depth_tex_ != 0) {
+        glDeleteTextures(1, &depth_tex_);
+        depth_tex_ = 0;
     }
 
     if (color_tex_ != 0) {

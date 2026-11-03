@@ -45,10 +45,10 @@ render_datestamp make_datestamp(const text_assets& text, const double game_day, 
 render_vcr make_render_vcr(const text_assets& text, const game_state& game, const sky_controls& controls,
                            const std::int64_t local_unix_ms, const vcr_signals& signals) {
     render_vcr vcr;
-    vcr.tag = signals.in_menu ? vcr_tag::play : signals.paused ? vcr_tag::pause : vcr_tag::none;
+    vcr.tag = signals.in_menu || signals.touring ? vcr_tag::play : signals.paused ? vcr_tag::pause : vcr_tag::none;
     vcr.still_frame = !signals.in_menu && signals.paused;
     vcr.show_datestamp = !signals.in_menu && signals.datestamp;
-    vcr.show_offline = !signals.in_menu && !is_online(game);
+    vcr.show_offline = !signals.in_menu && !signals.touring && !is_online(game);
     if (vcr.show_datestamp) {
         vcr.datestamp = make_datestamp(text, course_game_day(game, controls, local_unix_ms),
                                        static_cast<double>(game.course.sky.utc_offset_hours));

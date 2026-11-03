@@ -44,10 +44,10 @@ struct play_area {
     std::vector<float> water_levels;
     terrain_mesh ground;            // the one surface (physics/ground_mesh.h)
     terrain_mesh material_overlay;  // render-only zone shapes draped over the ground
-    // A flat tee box at each hole's tee, standing on the ground; as solids,
-    // their tops are walkable.
+    // A flat tee box at each hole's tee that has one (hole_data::tee_box),
+    // standing on the ground; as solids, their tops are walkable.
     std::vector<tee_box> tee_boxes;
-    // A sign at every hole's tee.
+    // A sign at every tee box.
     std::vector<hole_sign> signs;
     // The course world's fences, their poles on the ground.
     std::vector<course_world_fence> fences;

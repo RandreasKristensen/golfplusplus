@@ -1,6 +1,8 @@
 #include "core/render_frame.h"
 
+#include "core/render_gear.h"
 #include "core/render_online.h"
+#include "core/render_putting.h"
 
 #include <glm/trigonometric.hpp>
 #include "game/address_play.h"
@@ -13,6 +15,7 @@
 #include "game/play_area.h"
 #include "game/progress_rules.h"
 #include "game/rangefinder.h"
+#include "game/gear_paint.h"
 #include "game/golf_cart.h"
 #include "game/group_round.h"
 #include "game/scorecard.h"
@@ -25,9 +28,11 @@
 #include "physics/vector_math.h"
 #include "renderer/cart_batch.h"
 #include "renderer/remote_avatar_batch.h"
+#include "renderer/world_marker_batch.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <optional>
@@ -67,11 +72,6 @@ std::optional<render_item_use> shown_use(const game_state& game, const std::opti
     return use ? std::optional<render_item_use>(render_item_use{item_model(game, use->item), use->elapsed}) : std::nullopt;
 }
 
-// My bag's model.
-std::string my_bag_model(const game_state& game) {
-    return item_model(game, equipped_loadout(game).bag);
-}
-
 // My figure as others see me, stood to my setup holding the club while I
 // address my ball, else carrying it, my bag on my back when it is there.
 render_remote_avatar my_figure(const game_state& game, const render_data& data) {
@@ -79,46 +79,67 @@ render_remote_avatar my_figure(const game_state& game, const render_data& data) 
     me.position = game.player.position;
     me.yaw = game.player.yaw;
     me.left_handed = game.hand == handedness::left;
+    me.crouch = game.crouch;
     if (data.my_club) {
         me.swing = data.my_club;
-        me.yaw = address_facing_yaw(game.address.setup);
+        me.yaw = stance_at_address(game.area, game.address.setup, game.tuning).facing;
     } else if (const club_definition* club = club_in_hand(game)) {
         me.carried_club_model = club->model;
     }
     if (bag_on_back(game)) {
-        me.bag_model = my_bag_model(game);
+        me.bag_model = bag_model_of(game, 0);
+        me.bag_paint = gear_paint_of(game, 0);
     }
     return me;
 }
 
-std::vector<render_skill_progress> skill_rows(const save_data& save,
-                                              const std::vector<skill_definition>& skills,
-                                              const text_assets& text) {
+std::vector<render_skill_progress> skill_rows(const save_data& save, const skill_catalog& skills, const text_assets& text) {
     std::vector<render_skill_progress> rows;
-    for (const skill_definition& skill : skills) {
+    for (const skill_definition& skill : skills.skills) {
         render_skill_progress row;
         row.label = lookup_text(text, skill_text_key(skill.id).c_str());
         row.xp = skill_xp(save.skills, skill.id);
-        row.level = skill_level(row.xp);
-        row.xp_to_next = xp_to_next_level(save.skills, skill.id);
+        row.level = skill_level(skills, save.skills, skill.id);
+        row.xp_to_next = xp_to_next_level(skills, save.skills, skill.id);
         rows.push_back(row);
     }
     return rows;
 }
 
-std::vector<render_xp_drop> xp_drop_rows(const game_state& game, const std::vector<skill_definition>& skills) {
+std::vector<render_xp_drop> xp_drop_rows(const game_state& game, const skill_catalog& skills) {
     std::vector<render_xp_drop> rows;
     const float lifetime = std::max(0.001f, game.tuning.xp_drops.lifetime_seconds);
     for (const xp_drop& drop : game.xp_drops) {
-        const auto skill = std::find_if(skills.begin(), skills.end(),
-                                        [&drop](const skill_definition& definition) { return definition.id == drop.skill_id; });
+        const skill_definition* skill = find_skill(skills, drop.skill_id);
         render_xp_drop row;
-        row.icon = skill_icon_from_name(skill != skills.end() ? skill->icon : std::string());
+        row.icon = skill_icon_from_name(skill ? skill->icon : std::string());
         row.xp = drop.xp;
         row.progress = drop.age / lifetime;
         rows.push_back(row);
     }
     return rows;
+}
+
+// My shot's number over my drawn ball: rising, fading over its last
+// part, a crit bigger, bigger still as it pops up.
+render_shot_number shot_number_row(const game_state& game, const shot_number_popup& popup, const glm::vec3& ball,
+                                   const text_assets& text) {
+    const shot_number_tuning& tuning = game.tuning.shot_numbers;
+    const float progress = clamp01(popup.age / std::max(0.001f, tuning.lifetime_seconds));
+    const float length = clamp01(popup.number.meters / std::max(1.0f, tuning.long_meters));
+    float half_height = tuning.half_height + (tuning.long_half_height - tuning.half_height) * length;
+    if (popup.number.crit) {
+        half_height *= popup.age < tuning.crit_pop_seconds ? tuning.crit_pop_size : tuning.crit_size;
+    }
+    render_shot_number row;
+    row.position = ball;
+    row.label = format_text(text, text_hud_shot_number, {{"meters", std::to_string(std::lround(popup.number.meters))}});
+    row.crit = popup.number.crit;
+    row.half_height = half_height;
+    row.rise = tuning.rise * progress;
+    const float fade_from = 1.0f - tuning.fade_share;
+    row.alpha = progress > fade_from ? clamp01((1.0f - progress) / std::max(0.001f, tuning.fade_share)) : 1.0f;
+    return row;
 }
 
 // Every hole's pin but the one my ball is in play on, which is drawn as `pin_position`.
@@ -163,6 +184,10 @@ void add_rangefinder(render_data& data, const game_state& game, const text_asset
                                                     {{"sign", meters != 0 ? lookup_text(text, sign) : ""},
                                                      {"meters", std::to_string(std::abs(meters))}});
     }
+    if (const std::optional<float> plays_like = plays_like_meters(reading)) {
+        data.rangefinder_plays_like_label = format_text(
+            text, text_hud_rangefinder_plays_like, {{"meters", std::to_string(rounded_rangefinder_meters(*plays_like))}});
+    }
     data.rangefinder_flag = reading.flag;
     data.rangefinder_lock_lit = rangefinder_lock_lit(game);
     const rangefinder_tuning& tuning = game.tuning.rangefinder;
@@ -177,15 +202,17 @@ void add_rangefinder(render_data& data, const game_state& game, const text_asset
     }
 }
 
-// Standing over my ball: my club at it, the setup on the ground, the
-// outline round what the wheel would change, the OSD's preview and setup
-// word, the swing clock and the key hints.
-void add_address(render_data& data, const game_state& game, const club_definition& club, const text_assets& text) {
+// Standing over my ball: my club at it, the setup on the ground, the OSD's
+// preview and setup word, the swing clock and the key hints.
+void add_address(render_data& data, const game_state& game, const club_definition& club, const text_assets& text,
+                 const prop_catalog& props) {
     const address_state& address = game.address;
-    const float raise = address.swing_elapsed
+    const float raise = address.meter_elapsed
+        ? swing_meter_at(*address.meter_elapsed, address.setup.backswing, game.tuning.swing)
+        : address.swing_elapsed
         ? swing_club_raise(*address.swing_elapsed, address.setup.backswing, swing_tempo_for(club, game.tuning.swing))
         : 0.0f;
-    data.my_club = club_pose_at(game, address.setup, raise, club.model);
+    data.my_club = club_pose_at(game, address.setup, raise, club.model, props);
 
     const address_marks marks = my_address_marks(game);
     render_address_marks shown;
@@ -198,27 +225,13 @@ void add_address(render_data& data, const game_state& game, const club_definitio
     shown.trail_foot = marks.trail_foot;
     shown.ball = marks.ball;
     data.address_marks = shown;
-    if (!address.swing_elapsed) {
-        switch (my_pointed_part(game)) {
-        case setup_part::face:
-            data.setup_outline = {marks.face_heel, marks.face_toe};
-            break;
-        case setup_part::ball:
-            data.setup_outline = {data.ball_position};
-            break;
-        case setup_part::stance:
-            data.setup_outline = {marks.stick_back, marks.stick_front};
-            break;
-        case setup_part::none:
-            break;
-        }
-        data.show_address_hints = true;
+    const bool swinging = address.swing_elapsed || address.meter_elapsed;
+    if (!swinging) {
+        data.key_hints = text_hud_address_hints;
     }
 
-    if (address.preview && !address.swing_elapsed) {
+    if (address.preview && !swinging) {
         data.osd_line = address.preview->line;
-        data.osd_landing = address.preview->landing;
-        data.osd_rest = address.preview->rest;
     }
     const golfer_tuning& golfer = game.tuning.golfer;
     const setup_word word =
@@ -229,15 +242,21 @@ void add_address(render_data& data, const game_state& game, const club_definitio
         : lookup_text(text, word.height ? word.height : word.curve ? word.curve : text_hud_setup_word_stock);
     data.show_swing_clock = true;
     data.swing_backswing = address.setup.backswing;
+    if (address.meter_elapsed) {
+        data.swing_meter = swing_meter_rise(*address.meter_elapsed, game.tuning.swing);
+        data.swing_mistimed = strike_timing_at(*address.meter_elapsed, address.setup.backswing, game.tuning.swing) > 0.0f;
+    } else if (address.swing_elapsed) {
+        data.swing_mistimed = address.setup.strike_timing != 0.0f;
+    }
     data.swing_backswing_max = setup_limits_for(club, game.tuning.setup).backswing_max;
 }
 
-void add_collectible_markers(render_data& data, const game_state& game) {
+void add_collectibles(render_data& data, const game_state& game) {
     const static_anchor_cache& anchors = game.static_anchors;
     const std::vector<course_world_collectible>& collectibles = game.world.collectibles;
     for (std::size_t i = 0; i < collectibles.size() && i < anchors.collectibles.size(); ++i) {
-        if (collectible_available(active_progress(game), collectibles[i])) {
-            data.collectible_markers.push_back(anchors.collectibles[i]);
+        if (collectible_available(active_progress(game), collectibles[i], game.skills)) {
+            data.collectibles.push_back(render_collectible{anchors.collectibles[i], static_cast<std::uint32_t>(i)});
         }
     }
 }
@@ -304,8 +323,32 @@ glm::vec3 drawn_ball_center(const glm::vec3& physics_center, const world_scale_t
         world_up * ((scale.ball_visual_radius_meters - scale.ball_physics_radius_meters) / scale.meters_per_world_unit);
 }
 
-render_club_pose club_pose_at(const game_state& game, const shot_setup& setup, const float raise,
-                              const std::string& club_model) {
+glm::vec3 drawn_ball_center(const glm::vec3& physics_center, const world_scale_tuning& scale, const std::vector<cup>& cups) {
+    glm::vec3 drawn = drawn_ball_center(physics_center, scale);
+    const float radius = scale.ball_visual_radius_meters / scale.meters_per_world_unit;
+    for (const cup& hole : cups) {
+        const glm::vec3 off = horizontal(drawn - hole.centre);
+        const float reach = glm::length(off);
+        if (reach >= hole.radius) {
+            continue;
+        }
+        // How wide the drawn ball is where the rim cuts it.
+        const float sunk = std::clamp(hole.centre.y - (drawn.y - radius), 0.0f, radius);
+        const float room = hole.radius - std::sqrt(sunk * (2.0f * radius - sunk));
+        if (reach > room) {
+            drawn -= off * (1.0f - room / reach);
+        }
+        break;
+    }
+    return drawn;
+}
+
+std::optional<render_club_pose> club_pose_at(const game_state& game, const shot_setup& setup, const float raise,
+                                             const std::string& club_model, const prop_catalog& props) {
+    const auto model = props.find(club_model);
+    if (model == props.end()) {
+        return std::nullopt;
+    }
     render_club_pose pose;
     pose.ball_position = drawn_ball_center(setup.ball_start, game.tuning.scale);
     pose.aim_angle = setup.aim_angle;
@@ -318,6 +361,7 @@ render_club_pose club_pose_at(const game_state& game, const shot_setup& setup, c
     pose.raise = raise;
     pose.left_handed = setup.hand == handedness::left;
     pose.club_model = club_model;
+    pose.fit = club_fit_of(model->second);
     return pose;
 }
 
@@ -326,14 +370,14 @@ std::vector<hole_sign_text> hole_sign_texts(const game_state& game) {
     for (const hole_sign& sign : game.area.signs) {
         const int par = sign.area_hole < game.course_holes.size() ? game.course_holes[sign.area_hole].par : 0;
         const int meters = rounded_rangefinder_meters(sign.length * game.tuning.scale.meters_per_world_unit);
-        texts.push_back(hole_sign_text{static_cast<int>(sign.area_hole) + 1, par, meters});
+        texts.push_back(hole_sign_text{static_cast<int>(sign.area_hole) + 1, par, meters, game.course.practice});
     }
     return texts;
 }
 
 render_data make_render_data(const game_state& game,
                              const text_assets& text,
-                             const std::vector<skill_definition>& skills,
+                             const skill_catalog& skills,
                              const render_meshes& meshes,
                              const prop_catalog& props,
                              const float fov_degrees,
@@ -361,13 +405,12 @@ render_data make_render_data(const game_state& game,
     data.player_position = game.player.position;
     data.ball_visual_radius_meters = scale.ball_visual_radius_meters;
     data.cup_radius_meters = game.tuning.cup.radius_meters * game.tuning.cup.leniency;
+    data.cup_depth_meters = game.tuning.cup.depth_meters;
     data.pin_visual_height_meters = scale.pin_visual_height_meters;
     data.show_ball = game.ball.has_value();
     data.show_hole = ball_in_play(game);
     if (game.ball) {
-        // Sitting in the cup: its centre at the rim, the top showing.
-        const bool in_cup = game.ball->place == ball_place::in_cup;
-        data.ball_position = in_cup ? game.ball->position : drawn_ball_center(game.ball->position, scale);
+        data.ball_position = drawn_ball_center(game.ball->position, scale, game.area.cups);
         data.tee_position = tee_anchor_position(game, game.ball->hole);
         data.pin_position = pin_anchor_position(game, game.ball->hole);
     }
@@ -383,11 +426,11 @@ render_data make_render_data(const game_state& game,
             data.lying_flags.emplace_back(stick.base, stick.end);
         }
     }
-    add_collectible_markers(data, game);
+    add_collectibles(data, game);
 
     const club_definition* club = club_in_hand(game);
     if (game.mode == game_mode::addressing && game.ball && club != nullptr) {
-        add_address(data, game, *club, text);
+        add_address(data, game, *club, text, props);
     }
 
     data.show_flight_path = game.mode == game_mode::following_shot && !game.flight_path_points.empty();
@@ -396,47 +439,26 @@ render_data make_render_data(const game_state& game,
     data.flight_path_alpha = game.tuning.flight_path.alpha;
     data.flight_path_width = game.tuning.flight_path.line_width;
 
-    for (const cart_in_world& cart : carts_in_world(game)) {
-        const auto model = props.find(item_model(game, cart.item));
-        if (model == props.end()) {
-            continue;
-        }
-        render_cart drawn = cart_tipped(cart.condition)
-            ? cart_on_side(cart.pose.position, cart.pose.yaw, cart.condition == cart_condition::on_left_side, model->second,
-                           terrain_height(game.area, cart.pose.position))
-            : cart_on_ground(cart.pose.position, cart.pose.yaw, model->second,
-                             [&](const glm::vec3& point) { return terrain_height(game.area, point); });
-        drawn.driven = cart.driven;
-        drawn.steer = cart.steer;
-        drawn.model = model->first;
-        const auto mount = [](const cart_seat seat) { return seat == cart_seat::driver ? "driver_bag" : "passenger_bag"; };
-        if (cart.owner == 0 && game.bag.where == bag_where::on_cart) {
-            drawn.bags[mount(game.bag.seat)] = my_bag_model(game);
-        }
-        if (const std::optional<shown_bag> theirs = cart.owner != 0 ? remote_bag(game, cart.owner) : std::nullopt;
-            theirs && theirs->place.where == bag_where::on_cart) {
-            drawn.bags[mount(theirs->place.seat)] = theirs->model;
-        }
-        data.carts.push_back(drawn);
-    }
     if (course_started(game)) {
         data.bag_shown = game.bag.where == bag_where::on_cart ? bag_pictogram::cart
             : game.bag.where == bag_where::on_back            ? bag_pictogram::back
                                                               : bag_pictogram::ground;
     }
-    if (game.bag.where == bag_where::on_ground) {
-        data.ground_bags.push_back(render_ground_bag{my_bag_model(game), game.bag.position, game.bag.yaw});
-    }
     data.avatar_eye_height = game.tuning.camera.walking_eye_height;
     if (on_foot(game)) {
         data.my_figure = my_figure(game, data);
     }
+    add_carts_and_bags(data, game, props, data.my_figure ? &*data.my_figure : nullptr);
     data.smoking = shown_use(game, game.smoking);
     data.drinking = shown_use(game, game.drinking);
 
     data.mode_label = mode_label(game, text);
     data.show_interact_prompt = interact_prompt && interact_available(game);
     data.show_bag_hints = interact_available(game) && nearest_interactable(game)->kind == interactable_kind::bag;
+    // At a seat's door: walking in sits me down, at the wheel or beside it.
+    if (const std::optional<seat_door> door = data.key_hints == nullptr ? seat_door_at(game) : std::nullopt) {
+        data.key_hints = door->owner == 0 ? text_hud_seat_door_drive : text_hud_seat_door_ride;
+    }
     if (game.picker) {
         render_club_picker picker{{}, game.picker->highlighted, game.selected_club};
         for (const club_definition& each : game.clubs) {
@@ -474,6 +496,10 @@ render_data make_render_data(const game_state& game,
     if (!data.show_course_results) {
         data.xp_drops = xp_drop_rows(game, skills);
     }
-    add_online_render_data(data, game, text);
+    if (game.shot_number && game.ball) {
+        data.shot_number = shot_number_row(game, *game.shot_number, data.ball_position, text);
+    }
+    add_putting_read(data, game, text);
+    add_online_render_data(data, game, text, props);
     return data;
 }

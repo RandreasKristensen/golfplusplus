@@ -69,6 +69,19 @@ TEST_CASE("a pond is shallow at its edge and deepest past its bank") {
                0.5f * (tuning.water_min_depth + tuning.water_max_depth), 0.15f));
 }
 
+TEST_CASE("a lake is split finer only along its banks, its flat middle carved to full depth") {
+    const terrain_zone_tuning& tuning = zone_tuning();
+    const glm::vec3 centre(0.0f, 0.0f, 150.0f);
+    const std::size_t dry = flat_area({}).ground.indices.size();
+    const play_area small = flat_area({circle_zone(material_zone_type::water, centre, 20.0f)});
+    const play_area large = flat_area({circle_zone(material_zone_type::water, centre, 40.0f)});
+    // Twice the radius is twice the bank but four times the water.
+    const float grown = static_cast<float>(large.ground.indices.size() - dry) / static_cast<float>(small.ground.indices.size() - dry);
+    CHECK(grown < 2.6f);
+    CHECK(near(large.water_levels[0] - terrain_height(large, centre), tuning.water_max_depth, 0.05f));
+    CHECK(near(large.water_levels[0] - terrain_height(large, centre + glm::vec3(25.0f, 0.0f, 3.0f)), tuning.water_max_depth, 0.05f));
+}
+
 TEST_CASE("the ground has no step where a bowl's finer cells meet the rest") {
     const glm::vec3 centre(0.0f, 0.0f, 100.0f);
     const play_area area = flat_area({circle_zone(material_zone_type::bunker, centre, 5.0f)});

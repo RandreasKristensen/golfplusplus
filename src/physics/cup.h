@@ -41,3 +41,6 @@ cup_step cup_contact(const ball_state& in, const cup& hole, const cup_contact_tu
 
 // Down in the hole: inside it and wholly below its rim.
 bool in_cup(const ball_state& ball, const cup& hole);
+
+// Where a ball of `radius` rests on the bottom of the hole, on its axis.
+glm::vec3 cup_rest(const cup& hole, float radius);

@@ -1,0 +1,44 @@
+{
+  "id": "practice_ground_green_3",
+  "name": "Chipping 3",
+  "par": 3,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    18.0,
+    0.0,
+    3.5
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        9.0,
+        0.0,
+        1.75
+      ],
+      [
+        18.0,
+        0.0,
+        3.5
+      ]
+    ],
+    "width": 1.0,
+    "rough_width": 5.0
+  },
+  "ribbon_fairway": false,
+  "material_zones": [],
+  "trees": [],
+  "source": {
+    "type": "generated",
+    "tool": "tooling/practice_ground/make_practice_ground.py"
+  },
+  "tee_box": false
+}

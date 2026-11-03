@@ -8,7 +8,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[sats(crate = __lib)]
 pub struct CollectedRow {
     pub id: u64,
-    pub account_id: u64,
+    pub golfer_id: u64,
     pub collectible_id: String,
     pub repeatable: bool,
     pub claim_count: i32,
@@ -24,7 +24,7 @@ impl __sdk::InModule for CollectedRow {
 /// Provides typed access to columns for query building.
 pub struct CollectedRowCols {
     pub id: __sdk::__query_builder::Col<CollectedRow, u64>,
-    pub account_id: __sdk::__query_builder::Col<CollectedRow, u64>,
+    pub golfer_id: __sdk::__query_builder::Col<CollectedRow, u64>,
     pub collectible_id: __sdk::__query_builder::Col<CollectedRow, String>,
     pub repeatable: __sdk::__query_builder::Col<CollectedRow, bool>,
     pub claim_count: __sdk::__query_builder::Col<CollectedRow, i32>,
@@ -36,7 +36,7 @@ impl __sdk::__query_builder::HasCols for CollectedRow {
     fn cols(table_name: &'static str) -> Self::Cols {
         CollectedRowCols {
             id: __sdk::__query_builder::Col::new(table_name, "id"),
-            account_id: __sdk::__query_builder::Col::new(table_name, "account_id"),
+            golfer_id: __sdk::__query_builder::Col::new(table_name, "golfer_id"),
             collectible_id: __sdk::__query_builder::Col::new(table_name, "collectible_id"),
             repeatable: __sdk::__query_builder::Col::new(table_name, "repeatable"),
             claim_count: __sdk::__query_builder::Col::new(table_name, "claim_count"),
@@ -52,7 +52,7 @@ impl __sdk::__query_builder::HasCols for CollectedRow {
 ///
 /// Provides typed access to indexed columns for query building.
 pub struct CollectedRowIxCols {
-    pub account_id: __sdk::__query_builder::IxCol<CollectedRow, u64>,
+    pub golfer_id: __sdk::__query_builder::IxCol<CollectedRow, u64>,
     pub id: __sdk::__query_builder::IxCol<CollectedRow, u64>,
 }
 
@@ -60,7 +60,7 @@ impl __sdk::__query_builder::HasIxCols for CollectedRow {
     type IxCols = CollectedRowIxCols;
     fn ix_cols(table_name: &'static str) -> Self::IxCols {
         CollectedRowIxCols {
-            account_id: __sdk::__query_builder::IxCol::new(table_name, "account_id"),
+            golfer_id: __sdk::__query_builder::IxCol::new(table_name, "golfer_id"),
             id: __sdk::__query_builder::IxCol::new(table_name, "id"),
         }
     }

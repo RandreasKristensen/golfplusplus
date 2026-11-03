@@ -887,19 +887,22 @@ struct overlay_point {
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
 };
 
-// `polygon` cut to the side of the line from `a` to `b` (in XZ) that `inside`
-// is on. A polygon wholly on that side, as most are against most of a zone's
-// edges, comes back as it is without being copied.
-std::vector<overlay_point> clip_to_edge(std::vector<overlay_point> polygon,
+// Which side of the line from `a` to `b` (in XZ) `point` is on, signed.
+float side_of_line(const glm::vec2& a, const glm::vec2& b, const glm::vec2& point) {
+    const glm::vec2 edge = b - a;
+    const glm::vec2 offset = point - a;
+    return edge.x * offset.y - edge.y * offset.x;
+}
+
+// `polygon` cut to the side of the line from `a` to `b` (in XZ) whose
+// side_of_line has the sign of `inside_sign`. A polygon wholly on that side,
+// as most are against most of a zone's edges, comes back as it is without
+// being copied.
+std::vector<overlay_point> clip_to_side(std::vector<overlay_point> polygon,
                                         const glm::vec2& a,
                                         const glm::vec2& b,
-                                        const glm::vec2& inside) {
-    const glm::vec2 edge = b - a;
-    const auto side = [&](const glm::vec2& point) {
-        const glm::vec2 offset = point - a;
-        return edge.x * offset.y - edge.y * offset.x;
-    };
-    const float inside_sign = side(inside) >= 0.0f ? 1.0f : -1.0f;
+                                        const float inside_sign) {
+    const auto side = [&](const glm::vec2& point) { return side_of_line(a, b, point); };
     if (std::all_of(polygon.begin(), polygon.end(), [&](const overlay_point& point) {
             return side(glm::vec2(point.position.x, point.position.z)) * inside_sign >= 0.0f;
         })) {
@@ -921,6 +924,140 @@ std::vector<overlay_point> clip_to_edge(std::vector<overlay_point> polygon,
     }
     return clipped;
 }
+
+// `polygon` cut to the side of the line from `a` to `b` that `inside` is on.
+std::vector<overlay_point> clip_to_edge(std::vector<overlay_point> polygon,
+                                        const glm::vec2& a,
+                                        const glm::vec2& b,
+                                        const glm::vec2& inside) {
+    return clip_to_side(std::move(polygon), a, b, side_of_line(a, b, inside) >= 0.0f ? 1.0f : -1.0f);
+}
+
+// Convex `polygon` without what triangle `cut` covers: up to three convex
+// pieces, each the part beyond one of its edges of what the edges before
+// left.
+std::vector<std::vector<overlay_point>> outside_triangle(std::vector<overlay_point> polygon,
+                                                         const std::array<glm::vec2, 3>& cut) {
+    const glm::vec2 middle = (cut[0] + cut[1] + cut[2]) / 3.0f;
+    std::vector<std::vector<overlay_point>> pieces;
+    for (std::size_t edge = 0; edge < 3U && polygon.size() >= 3U; ++edge) {
+        const glm::vec2& a = cut[edge];
+        const glm::vec2& b = cut[(edge + 1U) % 3U];
+        const float inside_sign = side_of_line(a, b, middle) >= 0.0f ? 1.0f : -1.0f;
+        std::vector<overlay_point> beyond = clip_to_side(polygon, a, b, -inside_sign);
+        if (beyond.size() >= 3U) {
+            pieces.push_back(std::move(beyond));
+        }
+        polygon = clip_to_side(std::move(polygon), a, b, inside_sign);
+    }
+    return pieces;
+}
+
+// `polygon` without what any triangle of `cuts` covers.
+std::vector<std::vector<overlay_point>> outside_triangles(const std::vector<overlay_point>& polygon,
+                                                          const std::vector<std::array<glm::vec2, 3>>& cuts) {
+    std::vector<std::vector<overlay_point>> pieces{polygon};
+    for (const std::array<glm::vec2, 3>& cut : cuts) {
+        const glm::vec2 cut_low = glm::min(cut[0], glm::min(cut[1], cut[2]));
+        const glm::vec2 cut_high = glm::max(cut[0], glm::max(cut[1], cut[2]));
+        std::vector<std::vector<overlay_point>> kept;
+        for (std::vector<overlay_point>& piece : pieces) {
+            glm::vec2 low(std::numeric_limits<float>::max());
+            glm::vec2 high(std::numeric_limits<float>::lowest());
+            for (const overlay_point& point : piece) {
+                low = glm::min(low, glm::vec2(point.position.x, point.position.z));
+                high = glm::max(high, glm::vec2(point.position.x, point.position.z));
+            }
+            if (high.x <= cut_low.x || low.x >= cut_high.x || high.y <= cut_low.y || low.y >= cut_high.y) {
+                kept.push_back(std::move(piece));
+                continue;
+            }
+            for (std::vector<overlay_point>& outside : outside_triangle(std::move(piece), cut)) {
+                kept.push_back(std::move(outside));
+            }
+        }
+        pieces = std::move(kept);
+    }
+    return pieces;
+}
+
+// A box in XZ: its low and high corners.
+using flat_box = std::array<glm::vec2, 2>;
+
+flat_box triangle_box(const std::array<glm::vec2, 3>& triangle) {
+    return {glm::min(triangle[0], glm::min(triangle[1], triangle[2])), glm::max(triangle[0], glm::max(triangle[1], triangle[2]))};
+}
+
+// Boxes bucketed on a grid over them all, so the ones that meet a box are
+// found without looking at the rest. Any cell size finds the same ones.
+class box_grid {
+public:
+    explicit box_grid(std::vector<flat_box> boxes) : boxes_(std::move(boxes)) {
+        if (boxes_.empty()) {
+            return;
+        }
+        low_ = boxes_.front()[0];
+        glm::vec2 high = boxes_.front()[1];
+        for (const flat_box& box : boxes_) {
+            low_ = glm::min(low_, box[0]);
+            high = glm::max(high, box[1]);
+        }
+        constexpr float most_cells_a_side = 64.0f;
+        cell_ = std::max({1.0f, (high.x - low_.x) / most_cells_a_side, (high.y - low_.y) / most_cells_a_side});
+        columns_ = cell_at(high.x - low_.x) + 1;
+        rows_ = cell_at(high.y - low_.y) + 1;
+        cells_.resize(static_cast<std::size_t>(columns_ * rows_));
+        for (std::size_t i = 0; i < boxes_.size(); ++i) {
+            for (const std::size_t cell : cells_under(boxes_[i][0], boxes_[i][1])) {
+                cells_[cell].push_back(i);
+            }
+        }
+    }
+
+    // The indices of the boxes that meet [low, high] (touching counts),
+    // ascending.
+    std::vector<std::size_t> meeting(const glm::vec2& low, const glm::vec2& high) const {
+        std::vector<std::size_t> found;
+        for (const std::size_t cell : cells_under(low, high)) {
+            for (const std::size_t i : cells_[cell]) {
+                const flat_box& box = boxes_[i];
+                if (box[0].x <= high.x && box[1].x >= low.x && box[0].y <= high.y && box[1].y >= low.y) {
+                    found.push_back(i);
+                }
+            }
+        }
+        std::sort(found.begin(), found.end());
+        found.erase(std::unique(found.begin(), found.end()), found.end());
+        return found;
+    }
+
+private:
+    int cell_at(const float offset) const {
+        return static_cast<int>(std::floor(offset / cell_));
+    }
+
+    // The grid cells [low, high] covers.
+    std::vector<std::size_t> cells_under(const glm::vec2& low, const glm::vec2& high) const {
+        std::vector<std::size_t> cells;
+        const int x0 = std::max(0, cell_at(low.x - low_.x));
+        const int x1 = std::min(columns_ - 1, cell_at(high.x - low_.x));
+        const int z0 = std::max(0, cell_at(low.y - low_.y));
+        const int z1 = std::min(rows_ - 1, cell_at(high.y - low_.y));
+        for (int z = z0; z <= z1; ++z) {
+            for (int x = x0; x <= x1; ++x) {
+                cells.push_back(static_cast<std::size_t>(z * columns_ + x));
+            }
+        }
+        return cells;
+    }
+
+    std::vector<flat_box> boxes_;
+    glm::vec2 low_{0.0f};
+    float cell_ = 1.0f;
+    int columns_ = 0;
+    int rows_ = 0;
+    std::vector<std::vector<std::size_t>> cells_;
+};
 
 // The ground triangles in the index cells that [low, high] (XZ) covers,
 // ascending; every triangle when the index is stale.
@@ -963,7 +1100,20 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground, const std::
     }
     mesh.width = ground.width;
 
+    std::vector<std::vector<std::array<glm::vec2, 3>>> zone_pieces;
     for (const material_zone& zone : zones) {
+        zone_pieces.push_back(material_from_zone(zone.type) ? zone_triangles(zone) : std::vector<std::array<glm::vec2, 3>>{});
+    }
+    const auto boxes_of = [](const std::vector<std::array<glm::vec2, 3>>& triangles) {
+        std::vector<flat_box> boxes;
+        for (const std::array<glm::vec2, 3>& triangle : triangles) {
+            boxes.push_back(triangle_box(triangle));
+        }
+        return boxes;
+    };
+
+    for (std::size_t zone_index = 0; zone_index < zones.size(); ++zone_index) {
+        const material_zone& zone = zones[zone_index];
         const std::optional<terrain_material> material = material_from_zone(zone.type);
         if (!material || zone.outline.size() < 3U) {
             continue;
@@ -971,69 +1121,97 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground, const std::
         const glm::vec2 centre(zone.center.x, zone.center.z);
         const glm::vec2 low = centre - zone.half_size;
         const glm::vec2 high = centre + zone.half_size;
-        const std::vector<std::array<glm::vec2, 3>> pieces = zone_triangles(zone);
-        // The zones that can win anywhere under this one: those whose boxes meet its box.
-        std::vector<material_zone> overlapping;
-        for (const material_zone& other : zones) {
+        const std::vector<std::array<glm::vec2, 3>>& pieces = zone_pieces[zone_index];
+        const box_grid piece_grid(boxes_of(pieces));
+        std::vector<flat_box> edge_boxes;
+        for (std::size_t i = 0; i < zone.outline.size(); ++i) {
+            const glm::vec2& a = zone.outline[i];
+            const glm::vec2& b = zone.outline[(i + 1U) % zone.outline.size()];
+            edge_boxes.push_back({glm::min(a, b), glm::max(a, b)});
+        }
+        const box_grid edge_grid(std::move(edge_boxes));
+        // The triangles of the zones that beat this one (zone_material_at)
+        // where their boxes meet its box: its pieces are cut out of them, so
+        // no two zones' pieces lie on the same ground, where they would fight
+        // over which shows.
+        std::vector<std::array<glm::vec2, 3>> beaten_by;
+        for (std::size_t other_index = 0; other_index < zones.size(); ++other_index) {
+            const material_zone& other = zones[other_index];
+            const std::optional<terrain_material> other_material = material_from_zone(other.type);
             const glm::vec2 reach = zone_half_extent(other);
-            if (other.center.x + reach.x >= low.x && other.center.x - reach.x <= high.x &&
+            if (other_material && material_priority(*other_material) > material_priority(*material) &&
+                other.outline.size() >= 3U && other.center.x + reach.x >= low.x && other.center.x - reach.x <= high.x &&
                 other.center.z + reach.y >= low.y && other.center.z - reach.y <= high.y) {
-                overlapping.push_back(other);
+                beaten_by.insert(beaten_by.end(), zone_pieces[other_index].begin(), zone_pieces[other_index].end());
             }
         }
+        const box_grid beaten_grid(boxes_of(beaten_by));
 
         // Each ground triangle under the zone, cut to its outline's
-        // triangles. The pieces lie in the ground's own triangles, so the
+        // triangles and out of the zones that beat it, each piece wholly
+        // this zone's. The pieces lie in the ground's own triangles, so the
         // shape is exactly on the drawn ground (and on what physics samples)
-        // with nothing lifted. Where zones overlap, every piece there shows
-        // the zone that wins.
-        const auto add_polygon = [&](const std::vector<overlay_point>& polygon) {
-            if (polygon.size() < 3U) {
+        // with nothing lifted.
+        const auto add_polygon = [&](const std::vector<overlay_point>& cut) {
+            if (cut.size() < 3U) {
                 return;
             }
-            const std::uint32_t first = static_cast<std::uint32_t>(mesh.vertices.size());
-            for (const overlay_point& point : polygon) {
-                terrain_vertex vertex;
-                vertex.position = point.position;
-                vertex.normal = safe_normalize(point.normal, world_up);
-                vertex.material = zone_material_at(overlapping, point.position).value_or(*material);
-                mesh.vertices.push_back(vertex);
+            glm::vec2 cut_low(std::numeric_limits<float>::max());
+            glm::vec2 cut_high(std::numeric_limits<float>::lowest());
+            for (const overlay_point& point : cut) {
+                cut_low = glm::min(cut_low, glm::vec2(point.position.x, point.position.z));
+                cut_high = glm::max(cut_high, glm::vec2(point.position.x, point.position.z));
             }
-            for (std::uint32_t i = 1U; i + 1U < static_cast<std::uint32_t>(polygon.size()); ++i) {
-                mesh.indices.insert(mesh.indices.end(), {first, first + i, first + i + 1U});
+            std::vector<std::array<glm::vec2, 3>> near_cuts;
+            for (const std::size_t i : beaten_grid.meeting(cut_low, cut_high)) {
+                near_cuts.push_back(beaten_by[i]);
+            }
+            for (const std::vector<overlay_point>& polygon : outside_triangles(cut, near_cuts)) {
+                const std::uint32_t first = static_cast<std::uint32_t>(mesh.vertices.size());
+                for (const overlay_point& point : polygon) {
+                    terrain_vertex vertex;
+                    vertex.position = point.position;
+                    vertex.normal = safe_normalize(point.normal, world_up);
+                    vertex.material = *material;
+                    mesh.vertices.push_back(vertex);
+                }
+                for (std::uint32_t i = 1U; i + 1U < static_cast<std::uint32_t>(polygon.size()); ++i) {
+                    mesh.indices.insert(mesh.indices.end(), {first, first + i, first + i + 1U});
+                }
             }
         };
         for (const int triangle : ground_triangles_near(ground, low, high)) {
             std::vector<overlay_point> polygon;
             glm::vec2 triangle_low(std::numeric_limits<float>::max());
             glm::vec2 triangle_high(std::numeric_limits<float>::lowest());
+            glm::vec2 middle(0.0f);
             for (std::size_t corner = 0; corner < 3U; ++corner) {
                 const terrain_vertex& vertex = triangle_vertex(ground, triangle, corner);
                 polygon.push_back(overlay_point{vertex.position, vertex.normal});
-                triangle_low = glm::min(triangle_low, glm::vec2(vertex.position.x, vertex.position.z));
-                triangle_high = glm::max(triangle_high, glm::vec2(vertex.position.x, vertex.position.z));
+                const glm::vec2 flat(vertex.position.x, vertex.position.z);
+                triangle_low = glm::min(triangle_low, flat);
+                triangle_high = glm::max(triangle_high, flat);
+                middle += flat / 3.0f;
             }
             if (triangle_high.x < low.x || triangle_low.x > high.x || triangle_high.y < low.y || triangle_low.y > high.y) {
                 continue;
             }
-            // Wholly inside when every corner is further in than the
-            // triangle is wide: no edge can cross it.
-            const float span = glm::length(triangle_high - triangle_low);
-            const bool inside = std::all_of(polygon.begin(), polygon.end(), [&](const overlay_point& point) {
-                const std::optional<float> depth = zone_depth_inside(zone, point.position);
-                return depth && *depth > span;
-            });
-            if (inside) {
-                add_polygon(polygon);
+            // No edge near: wholly inside or wholly outside, as its middle is.
+            if (edge_grid.meeting(triangle_low, triangle_high).empty()) {
+                const std::vector<std::size_t> under = piece_grid.meeting(middle, middle);
+                if (std::any_of(under.begin(), under.end(), [&](const std::size_t i) {
+                        const std::array<glm::vec2, 3>& piece = pieces[i];
+                        const float ab = side_of_line(piece[0], piece[1], middle);
+                        const float bc = side_of_line(piece[1], piece[2], middle);
+                        const float ca = side_of_line(piece[2], piece[0], middle);
+                        return (ab >= 0.0f && bc >= 0.0f && ca >= 0.0f) || (ab <= 0.0f && bc <= 0.0f && ca <= 0.0f);
+                    })) {
+                    add_polygon(polygon);
+                }
                 continue;
             }
-            for (const std::array<glm::vec2, 3>& piece : pieces) {
-                const glm::vec2 piece_low = glm::min(piece[0], glm::min(piece[1], piece[2]));
-                const glm::vec2 piece_high = glm::max(piece[0], glm::max(piece[1], piece[2]));
-                if (piece_high.x < triangle_low.x || piece_low.x > triangle_high.x || piece_high.y < triangle_low.y ||
-                    piece_low.y > triangle_high.y) {
-                    continue;
-                }
+            for (const std::size_t i : piece_grid.meeting(triangle_low, triangle_high)) {
+                const std::array<glm::vec2, 3>& piece = pieces[i];
                 const glm::vec2 piece_middle = (piece[0] + piece[1] + piece[2]) / 3.0f;
                 std::vector<overlay_point> cut = polygon;
                 for (std::size_t edge = 0; edge < 3U && cut.size() >= 3U; ++edge) {

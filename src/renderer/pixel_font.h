@@ -57,9 +57,10 @@ text_layout layout_text(const pixel_font_data& font,
                         const ui_rect& box,
                         const overlay_grid& grid);
 
-// Appends one quad per lit font pixel; a truncated layout also counts in
-// batch.truncated_text_count.
-void draw_text_layout(overlay_batch& batch, const pixel_font_data& font, const text_layout& layout, glm::vec3 color);
+// Appends one quad per lit font pixel at `alpha`; a truncated layout also
+// counts in batch.truncated_text_count.
+void draw_text_layout(overlay_batch& batch, const pixel_font_data& font, const text_layout& layout, glm::vec3 color,
+                      float alpha = 1.0f);
 // layout_text on the batch's grid, in the style's colour. The usual way to
 // draw any overlay text.
 void draw_label(overlay_batch& batch,

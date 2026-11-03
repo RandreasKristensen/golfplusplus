@@ -482,8 +482,8 @@ TEST_CASE("a setup is held within its club's limits") {
     const club_definition& club = club_named(state, "seven_iron");
     const setup_limits limits = setup_limits_for(club, state.tuning.setup);
     // No shorter than one step; past full an overswing, as far as its limit.
-    CHECK(speed(club, 0.0f) == speed(club, limits.backswing_step));
-    CHECK(speed(club, 0.7f) > speed(club, limits.backswing_step));
+    CHECK(speed(club, 0.0f) == speed(club, limits.backswing_min));
+    CHECK(speed(club, 0.7f) > speed(club, limits.backswing_min));
     CHECK(limits.backswing_max > 1.0f);
     CHECK(speed(club, limits.backswing_max) > speed(club, 1.0f));
     CHECK(speed(club, 3.0f) == speed(club, limits.backswing_max));
@@ -498,7 +498,34 @@ TEST_CASE("a setup is held within its club's limits") {
     };
     CHECK(start(glm::radians(90.0f)) == start(glm::radians(club.spec.max_face_open_degrees)));
     CHECK(start(glm::radians(-90.0f)) == start(glm::radians(-club.spec.max_face_closed_degrees)));
-    CHECK(speed(club, std::nanf("")) == speed(club, limits.backswing_step));
+    CHECK(speed(club, std::nanf("")) == speed(club, limits.backswing_min));
+}
+
+TEST_CASE("the backswing dial steps finer the shorter the swing, so a chip is as easy to adjust as a full shot") {
+    game_state state = started_hole();
+    const club_definition& wedge = club_named(state, "lob_wedge");
+    const setup_limits limits = setup_limits_for(wedge, state.tuning.setup);
+    const auto speed = [&](const float backswing) {
+        return glm::length(launch_ball(wedge, stock_swing(wedge, state.tuning, backswing), ball_on_lie{}, state.tuning).velocity);
+    };
+    // One step's change in ball speed, as a share of the speed.
+    const auto step_share = [&](const float backswing) {
+        return speed(stepped_backswing(backswing, 1, limits)) / speed(backswing) - 1.0f;
+    };
+    const float chip = 0.1f;
+    CHECK(step_share(chip) > 0.0f);
+    CHECK(step_share(chip) < 2.0f * step_share(0.9f));
+    CHECK(stepped_backswing(chip, 1, limits) - chip < (stepped_backswing(1.0f, 1, limits) - 1.0f) / 3.0f);
+    // A step down undoes a step up, below full, across it and past it.
+    for (const float backswing : {limits.backswing_min, chip, 0.99f, 1.0f, 1.05f}) {
+        CHECK(near(stepped_backswing(stepped_backswing(backswing, 3, limits), -3, limits), backswing, 1.0e-5f));
+    }
+    // The dial still runs from the shortest swing to full in a handful of key repeats.
+    int steps = 0;
+    for (float backswing = limits.backswing_min; backswing < 1.0f; backswing = stepped_backswing(backswing, 1, limits)) {
+        ++steps;
+    }
+    CHECK(steps < 100);
 }
 
 TEST_CASE("more loft launches the ball higher") {
@@ -975,7 +1002,7 @@ TEST_CASE("a well-paced putt drops, a hard one stays out and a short one stops a
     // A flat green, one running downhill to the cup and one uphill.
     for (const float pin_height : {0.0f, -1.0f, 1.0f}) {
         game_state state = started_hole();
-        const float least = setup_limits_for(putter_of(state), state.tuning.setup).backswing_step;
+        const float least = setup_limits_for(putter_of(state), state.tuning.setup).backswing_min;
         const glm::vec3 pin(0.0f, pin_height, 20.0f);
         hole_data hole = straight_hole(glm::vec3(0.0f), pin, 20.0f);
         hole.material_zones.push_back(circle_zone(material_zone_type::green, pin, 12.0f));
@@ -1083,7 +1110,10 @@ TEST_CASE("holing the last hole finishes the round and completes the course") {
     CHECK(state.save.holes_completed == 1);
     REQUIRE(state.ball.has_value());
     CHECK(state.ball->place == ball_place::in_cup);
-    CHECK(near(state.ball->position, pin));
+    // Down in the cup, where it dropped.
+    const cup& hole = state.area.cups[0];
+    CHECK(horizontal_distance(state.ball->position, hole.centre) < hole.radius);
+    CHECK(state.ball->position.y < hole.centre.y);
 }
 
 namespace {

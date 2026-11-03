@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
 struct render_fences;  // renderer/fence_batch.h
@@ -32,8 +33,8 @@ struct render_hole_signs;  // renderer/hole_sign_batch.h
 struct render_skill_progress {
     std::string label;
     int level = 1;
-    int xp = 0;
-    int xp_to_next = 0;
+    std::int64_t xp = 0;
+    std::int64_t xp_to_next = 0;
 };
 
 enum class skill_icon_id {
@@ -48,8 +49,26 @@ skill_icon_id skill_icon_from_name(const std::string& name);
 
 struct render_xp_drop {
     skill_icon_id icon = skill_icon_id::generic;
-    int xp = 0;
+    std::int64_t xp = 0;
     float progress = 0.0f;  // 0 when it appears, 1 when it disappears
+};
+
+// My shot's number over my ball (game/shot_number.h): `label` in a box
+// `half_height` high (overlay clip units), `rise` above where the ball is
+// seen, at `alpha`; a crit in the crit's colour.
+struct render_shot_number {
+    glm::vec3 position{0.0f};
+    std::string label;
+    bool crit = false;
+    float half_height = 0.0f;
+    float rise = 0.0f;
+    float alpha = 1.0f;
+};
+
+// A dot of the green's read, at `alpha` (renderer/osd_overlay.h).
+struct render_read_dot {
+    glm::vec3 position{0.0f};
+    float alpha = 0.0f;
 };
 
 // A name over another player's head (world position of the tag), coloured
@@ -74,6 +93,19 @@ struct render_ground_bag {
     std::string model;
     glm::vec3 position{0.0f};
     float yaw = 0.0f;
+    gear_paint paint;  // its owner's
+};
+
+// A bag or club being handled (game/bag_handling.h): its model on its way
+// from one frame to another, `t` (0 to 1, eased) of the way along, lifted
+// `arc` over the straight way at the middle.
+struct render_handled_prop {
+    std::string model;
+    std::optional<gear_paint> paint;  // a bag's owner's; none for a club
+    glm::mat4 from{1.0f};
+    glm::mat4 to{1.0f};
+    float t = 0.0f;
+    float arc = 0.0f;
 };
 
 struct render_name_tag {
@@ -115,6 +147,7 @@ struct render_light {
     glm::vec3 direction{0.0f};
     float cone_edge_cos = -2.0f;
     float cone_full_cos = -1.0f;
+    bool fixed_lamp = false;  // a floodlight's: it never moves, so its beam takes shadows (lamp_shadow_pass.h)
 };
 
 // A soft dark ellipse on the ground (blob_shadow.vert): its middle at
@@ -142,6 +175,13 @@ struct render_sky_weather {
     float wet_albedo = 1.0f;  // the ground's colour kept
     float wet_gloss = 0.0f;
     float wet_gloss_power = 1.0f;
+    // How the air scatters the night lights (air_scattering in game/weather_lighting.h).
+    float scatter_per_meter = 0.0f;
+    float scatter_forwardness = 0.0f;
+    // The haze's glow towards the sun and its mist (weather_style's).
+    float sun_glow = 0.0f;
+    float sun_forwardness = 0.0f;
+    float mist = 0.0f;
 };
 
 // The scene's light this frame, from the sky clock and the lighting palette
@@ -163,6 +203,11 @@ struct render_lighting {
     render_shadows shadows;
     float night_lights = 0.0f;  // how far the night lights are on, 0..1 (night_light_share)
     glm::vec3 lamp_glow{0.0f};  // a floodlight lamp's face: past 1 when on, none by day
+    float beam_near_share = 0.0f;  // night_light_style's
+    float beam_core_meters = 0.0f;
+    // The mist lying low, under the weather (lighting_key's).
+    float mist_height_meters = 0.0f;
+    float mist_density = 0.0f;
     // The camcorder's (renderer/camcorder_pass.h).
     float exposure = 0.0f;
     glm::vec3 white_balance{0.0f};
@@ -245,6 +290,10 @@ struct render_vcr {
     render_datestamp datestamp;
     // Offline play, whatever the datestamp setting: which progress the round is for.
     bool show_offline = false;
+    // The visual tour's stop, superimposed like a camcorder's title, and its
+    // keys along the bottom; empty when none.
+    std::string title;
+    std::string keys;
 };
 
 // The rangefinder's eyepiece (renderer/eyepiece_pass.h): the scene drawn
@@ -298,7 +347,9 @@ struct render_data {
     glm::vec3 ball_position{0.0f};  // the drawn ball's centre (drawn_ball_center)
     glm::vec3 player_position{0.0f};
     float ball_visual_radius_meters = 0.0f;
+    // Every cup is a hole cut into its green this wide and deep.
     float cup_radius_meters = 0.0f;
+    float cup_depth_meters = 0.0f;
     float pin_visual_height_meters = 0.0f;
     // The hole my ball is in play on (its cup and flag; its tee for the
     // course map); unset while my ball is in my pocket or a cup.
@@ -315,22 +366,18 @@ struct render_data {
     std::vector<glm::vec3> flags_out;
     std::vector<std::pair<glm::vec3, glm::vec3>> lying_flags;
     // The collectibles that can be claimed now.
-    std::vector<glm::vec3> collectible_markers;
+    std::vector<render_collectible> collectibles;
 
     // Over my ball, on the OSD (renderer/osd_overlay.h): what my setup would
-    // do (game/address_play.h preview_shot), its flight to the landing
-    // bracket and the rest tick; a putt only its start line. The setup's
-    // shape in a word, empty for the stock shot.
+    // do (game/address_play.h preview_shot), only its start line. The
+    // setup's shape in a word, empty for the stock shot.
     std::vector<glm::vec3> osd_line;
-    std::optional<glm::vec3> osd_landing;
-    std::optional<glm::vec3> osd_rest;
     std::string setup_word;
     // Over my ball: the club in my hands at it, the setup on the ground
     // (the alignment stick, the face's line, my shoes), and what the wheel
     // would change, outlined on the overlay round these points.
     std::optional<render_club_pose> my_club;
     std::optional<render_address_marks> address_marks;
-    std::vector<glm::vec3> setup_outline;
 
     bool show_flight_path = false;
     const std::vector<glm::vec3>* flight_path_points = nullptr;
@@ -343,6 +390,7 @@ struct render_data {
     std::vector<render_cart> carts;
     // Bags set down on the ground (renderer/bag_batch.h).
     std::vector<render_ground_bag> ground_bags;
+    std::vector<render_handled_prop> handled_props;
     // The god menu's view of what is solid near me (renderer/solid_outline.h).
     std::vector<std::pair<glm::vec3, glm::vec3>> solid_outlines;
     // What I smoke and drink while I use it, held before my eyes.
@@ -359,17 +407,24 @@ struct render_data {
     std::vector<render_name_tag> name_tags;
     float avatar_eye_height = 0.0f;
 
-    // HUD.
+    // HUD. The visual tour shows none of it.
+    bool show_hud = true;
     // Which progress this round plays for: offline, or the online room.
     std::string mode_label;
-    // Over the ball: the swing clock shows, its hand at the setup's
-    // backswing, and until the swing the strip of setup keys.
+    // Over the ball: the swing clock shows the setup's backswing, its hand
+    // there or, while the swipe's meter rises, at the meter, on past the
+    // top; red once the swipe left is late, and through a downswing started
+    // early or late. Until the swing, the strip of setup keys (a text id).
     bool show_swing_clock = false;
     float swing_backswing = 0.0f;
     float swing_backswing_max = 1.0f;  // past 1, the overswing band
+    std::optional<float> swing_meter;
+    bool swing_mistimed = false;
     // Where my bag is, as the OSD's pictogram shows it; none before a course.
     std::optional<bag_pictogram> bag_shown;
-    bool show_address_hints = false;
+    // The strip of keys at the bottom (a text id): at address, the setup's;
+    // at a cart seat's door, walking in to sit.
+    const char* key_hints = nullptr;
     // At my bag: its keys, and with its picker open the picker and its keys.
     bool show_bag_hints = false;
     std::optional<render_club_picker> club_picker;
@@ -386,6 +441,7 @@ struct render_data {
     bool show_rangefinder = false;
     std::string rangefinder_distance_label;    // "152", or dashes at the sky
     std::string rangefinder_height_label;      // "+4M", "-7M", "0M"; empty at the sky
+    std::string rangefinder_plays_like_label;  // "PLAYS 156M"; empty at the sky
     std::optional<glm::vec3> rangefinder_flag;  // the flagstick's foot, while locked onto it
     bool rangefinder_lock_lit = false;         // the lock ring round the reticle, flashing at first
     render_eyepiece rangefinder_eyepiece;
@@ -405,9 +461,18 @@ struct render_data {
     bool show_course_results = false;
     scorecard_data scorecard;
     std::string notice_label;  // a refusal from the server, for a moment
+    // Why lighting.json or picture.json is not shown (core/look_tuning.h),
+    // drawn as the notice with or without the HUD.
+    std::string look_notice;
     bool show_skills_panel = false;
     std::vector<render_skill_progress> skills;
     std::vector<render_xp_drop> xp_drops;
+    std::optional<render_shot_number> shot_number;
+    // The paces counted so far, popped up ahead of my eyes as a shot's
+    // number is (game/pacing.h).
+    std::optional<render_shot_number> pace_number;
+    // Crouched on a green: its slope's dots on the OSD (game/green_read.h).
+    std::vector<render_read_dot> green_read_dots;
     render_startup_menu startup_menu;
 
     // The tape (renderer/tape_pass.h); looks only, never read by gameplay.
@@ -419,4 +484,5 @@ struct render_data {
     bool show_fps = false;
     std::string fps_label;
     frame_profile profile_summary;
+    std::uint64_t sync_breaches = 0;
 };

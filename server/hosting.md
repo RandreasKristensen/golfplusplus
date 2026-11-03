@@ -72,7 +72,7 @@ A new database lets no game in until the owner sets it up with
 | `auth_issuer` | The sign-in provider whose logins count as accounts (`""`: none) |
 | `auth_audience` | The game's client id at that provider |
 | `allow_anonymous` | `true`: any game may connect without signing in |
-| `link_secret` | Keys the link codes that join two logins into one account: at least 32 characters, kept private (it never leaves the server). `""` turns linking off |
+| `server_secret` | Keys the link codes that join two logins into one account, and the dice of every shot: at least 32 characters, kept private (it never leaves the server). `""` turns linking off and lets anyone work out a shot's dice |
 
 **Friends, no sign-in** (simplest for a private server): anonymous logins on.
 Make a secret first:
@@ -110,9 +110,10 @@ Any of these:
 
 - **Command line**: `golf++ --server http://<host>:3000 --db golfpp`, plus
   `--anonymous` to connect without signing in. A Windows shortcut can carry them
-  (Properties, Target).
+  (Properties, Target); on macOS, `open -a golf++ --args --server …`.
 - **Environment**: `GOLFPP_SERVER` and `GOLFPP_DB` (with `--anonymous` as above).
-- **The game's settings file**: `assets/play/online.json` next to the game:
+- **The game's settings file**: `assets/play/online.json` next to the game
+  (on macOS, in `golf++.app/Contents/Resources`):
   `server_uri`, `database`, and the sign-in provider (step 6). Every launch then
   uses your server.
 

@@ -30,14 +30,17 @@ unsigned int compile_stage(unsigned int type, const char* source, const char* la
     return shader;
 }
 
-// The file's source with its includes, read from the shader's own folder.
-std::optional<std::string> read_shader_source(const std::string& path) {
+// The file's source with its includes, read from the shader's own folder,
+// and `defines`.
+std::optional<std::string> read_shader_source(const std::string& path, const std::string& defines) {
     const std::optional<std::string> source = read_text_file(path);
     if (!source) {
         return std::nullopt;
     }
     const std::filesystem::path folder = std::filesystem::path(path).parent_path();
-    return expand_shader_includes(*source, [&folder](const std::string& name) { return read_text_file(folder / name); });
+    const std::optional<std::string> expanded =
+        expand_shader_includes(*source, [&folder](const std::string& name) { return read_text_file(folder / name); });
+    return expanded ? std::optional<std::string>(with_defines(*expanded, defines)) : std::nullopt;
 }
 
 bool link_program(unsigned int program) {
@@ -56,11 +59,12 @@ bool link_program(unsigned int program) {
 }
 }
 
-bool shader_program::load_from_files(const std::string& vertex_path, const std::string& fragment_path) {
+bool shader_program::load_from_files(const std::string& vertex_path, const std::string& fragment_path,
+                                     const std::string& defines) {
     shutdown();
 
-    const std::optional<std::string> vertex_source = read_shader_source(vertex_path);
-    const std::optional<std::string> fragment_source = read_shader_source(fragment_path);
+    const std::optional<std::string> vertex_source = read_shader_source(vertex_path, defines);
+    const std::optional<std::string> fragment_source = read_shader_source(fragment_path, defines);
     if (!vertex_source || !fragment_source) {
         SDL_Log("Failed to read shader: %s", (!vertex_source ? vertex_path : fragment_path).c_str());
         return false;

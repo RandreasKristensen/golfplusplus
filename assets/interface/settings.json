@@ -90,6 +90,17 @@
       "step": 1,
       "default": 1,
       "golfer": true
+    },
+    {
+      "id": "favourite_colour",
+      "label": "menu.settings.favourite_colour",
+      "values": ["menu.settings.colour_any", "menu.settings.colour_red", "menu.settings.colour_blue",
+                 "menu.settings.colour_green", "menu.settings.colour_yellow", "menu.settings.colour_purple",
+                 "menu.settings.colour_orange", "menu.settings.colour_teal", "menu.settings.colour_black"],
+      "min": 0,
+      "max": 8,
+      "step": 1,
+      "default": 0
     }
   ]
 }

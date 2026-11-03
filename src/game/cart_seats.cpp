@@ -2,6 +2,11 @@
 
 #include "physics/vector_math.h"
 
+#include <cmath>
+
+#include <glm/geometric.hpp>
+#include <glm/vec2.hpp>
+
 namespace {
 // Towards `seat`'s side of the cart.
 glm::vec3 seat_side(const cart_pose& cart, const cart_seat seat) {
@@ -44,6 +49,23 @@ solid cart_solid(const cart_pose& pose, const cart_tuning& tuning, const float h
     cart.stops_walker = true;
     cart.stops_cart = true;
     return cart;
+}
+
+glm::vec3 seat_side_direction(const cart_pose& cart, const cart_seat seat) {
+    return seat_side(cart, seat);
+}
+
+bool at_seat_door(const cart_pose& cart, const cart_seat seat, const glm::vec3& position, const cart_tuning& tuning) {
+    const glm::vec3 offset = position - cart.position;
+    const float out = glm::dot(glm::vec2(offset.x, offset.z), glm::vec2(seat_side(cart, seat).x, seat_side(cart, seat).z));
+    const glm::vec3 forward = yaw_direction(cart.yaw);
+    const float along = offset.x * forward.x + offset.z * forward.z;
+    return out >= tuning.body_half_width && out <= tuning.body_half_width + tuning.door_depth &&
+        std::abs(along) <= tuning.door_half_length;
+}
+
+cart_seat other_seat(const cart_seat seat) {
+    return seat == cart_seat::driver ? cart_seat::passenger : cart_seat::driver;
 }
 
 bool in_seat_reach(const cart_pose& cart, const cart_seat seat, const glm::vec3& position, const cart_tuning& tuning) {

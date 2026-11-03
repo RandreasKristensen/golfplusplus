@@ -72,6 +72,12 @@ stdb_event server_protocol_event(const std::uint32_t version) {
     return row_event(STDB_TABLE_SERVER_PROTOCOL, STDB_ROW_INSERT, row);
 }
 
+stdb_event server_content_event(const std::uint64_t hash) {
+    stdb_row row{};
+    row.server_content.hash = hash;
+    return row_event(STDB_TABLE_SERVER_CONTENT_HASH, STDB_ROW_INSERT, row);
+}
+
 stdb_string fake_text(const std::string& text) {
     const std::string& kept = fake_bridge().texts.emplace_back(text);
     return stdb_string{kept.data(), kept.size()};
@@ -146,8 +152,9 @@ void stdb_claim_name(stdb_client*, const char* name, const size_t len) {
     record("stdb_claim_name", text_of(name, len));
 }
 
-void stdb_join_course(stdb_client*, const char* course_id, const size_t len) {
+void stdb_join_course(stdb_client*, const char* course_id, const size_t len, const bool takes_cart) {
     record("stdb_join_course", text_of(course_id, len));
+    fake_bridge().calls.back().flag = takes_cart;
 }
 
 void stdb_leave_room(stdb_client*) {
@@ -166,8 +173,16 @@ void stdb_leave_group(stdb_client*) {
     record("stdb_leave_group");
 }
 
-void stdb_update_motion(stdb_client*, const stdb_motion* motion) {
+bool stdb_update_motion(stdb_client*, const stdb_motion* motion, const stdb_steps* steps) {
     record("stdb_update_motion");
+    fake_bridge().calls.back().motion = *motion;
+    fake_bridge().calls.back().first_step = steps->first_step;
+    fake_bridge().calls.back().runs.assign(steps->runs, steps->runs + steps->run_count);
+    return fake_bridge().connected;
+}
+
+void stdb_update_ride(stdb_client*, const stdb_motion* motion) {
+    record("stdb_update_ride");
     fake_bridge().calls.back().motion = *motion;
 }
 
@@ -184,16 +199,15 @@ void stdb_pick_up_ball(stdb_client*) {
     record("stdb_pick_up_ball");
 }
 
+void stdb_take_wheel(stdb_client*) { record("stdb_take_wheel"); }
+void stdb_leave_wheel(stdb_client*) { record("stdb_leave_wheel"); }
+
 void stdb_board_cart(stdb_client*, const uint64_t owner) {
     record("stdb_board_cart", {}, static_cast<std::int64_t>(owner));
 }
 
 void stdb_leave_cart(stdb_client*) {
     record("stdb_leave_cart");
-}
-
-void stdb_overturn_cart(stdb_client*, const uint8_t condition) {
-    record("stdb_overturn_cart", {}, condition);
 }
 
 void stdb_right_cart(stdb_client*, const uint64_t owner) {
@@ -212,10 +226,11 @@ void stdb_set_flag(stdb_client*, const int32_t hole, const bool out) {
     fake_bridge().calls.back().flag = out;
 }
 
-void stdb_place_bag(stdb_client*, const uint8_t place, const uint8_t seat, const float x, const float y, const float z,
-                    const float yaw) {
+void stdb_place_bag(stdb_client*, const uint8_t place, const uint8_t seat, const uint64_t cart_owner, const float x, const float y,
+                    const float z, const float yaw) {
     record("stdb_place_bag", {}, place * 256 + seat);
     fake_stdb_bridge::call& call = fake_bridge().calls.back();
+    call.extra = cart_owner;
     call.position[0] = x;
     call.position[1] = y;
     call.position[2] = z;
@@ -226,8 +241,9 @@ void stdb_take_club(stdb_client*, const char* club_id, const size_t len) {
     record("stdb_take_club", text_of(club_id, len));
 }
 
-void stdb_set_golfer(stdb_client*, const uint8_t hand, const uint8_t natural_shape) {
+void stdb_set_golfer(stdb_client*, const uint8_t hand, const uint8_t natural_shape, const uint8_t favourite_colour) {
     record("stdb_set_golfer", {}, hand * 256 + natural_shape);
+    fake_bridge().calls.back().extra = favourite_colour;
 }
 
 void stdb_use_item(stdb_client*, const char* item_id, const size_t len) {

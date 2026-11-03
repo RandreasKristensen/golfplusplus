@@ -31,7 +31,7 @@
 #include <glm/vec3.hpp>
 
 // What the weather looks like at a glance, read off its numbers
-// (weather_kind_of): the god menu's presets and the rangefinder's limits.
+// (weather_kind_of): the god menu's presets.
 enum class weather_kind : std::uint8_t {
     clear,
     cloudy,

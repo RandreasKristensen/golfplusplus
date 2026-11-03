@@ -43,6 +43,9 @@ struct prop_part {
     std::string glow;
     // What the code does with it ("ember": flickers), empty for nothing.
     std::string tag;
+    // Painted in its owner's colour (the model's `paint`): that colour times
+    // this share; nullopt keeps `color`.
+    std::optional<float> paint_share;
 };
 
 // Where another model hangs on this one, in this one's frame: the hung
@@ -56,6 +59,10 @@ struct prop_mount {
 struct prop_model {
     std::string kind;
     std::map<std::string, glm::vec3> colors;
+    // Colours painted in the owner's colour, by name: the share of it each
+    // shows (a pocket a shade darker than the body). Its `colors` entry is
+    // how it shows unpainted.
+    std::map<std::string, float> paint;
     std::vector<prop_part> parts;
     std::map<std::string, glm::vec3> points;
     std::map<std::string, prop_mount> mounts;
@@ -70,7 +77,7 @@ struct prop_model {
 using prop_catalog = std::map<std::string, prop_model>;
 
 // One model with no base: nullopt when a colour is not three numbers in
-// 0..1, a part's shape, sizes or colour name is wrong, a glow is not a glow
+// 0..1, a paint share names no colour or is not positive, a part's shape, sizes or colour name is wrong, a glow is not a glow
 // floor, a mount's sides are not perpendicular, or its kind is unknown or
 // lacks what that kind needs (model_kinds.h).
 std::optional<prop_model> parse_prop_from_text(const std::string& text);

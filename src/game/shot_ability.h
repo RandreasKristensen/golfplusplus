@@ -13,6 +13,8 @@
 #include "game/shot_setup.h"
 #include "physics/launch.h"
 
+#include <cstdint>
+
 // How much of each shape a setup is, 0..1 each, in the golfer's own hand:
 // a face open to the path fades, closed draws; the ball back of the club's
 // stock punches, forward goes high; a wedge's face opened wide flops; from
@@ -42,15 +44,24 @@ setup_word setup_word_for(const shape_weights& shape, const golfer_tuning& tunin
 
 struct shot_ability {
     swing_errors spread;  // one deviation of each channel
+    // What a mistimed strike adds to every roll: too early the club comes
+    // in high and catches the ball thin, low on the face; too late it
+    // bottoms out behind the ball and loses speed in the turf (fat).
+    swing_errors bias;
     setup_limits limits;
 };
 
 // `golfer` playing `setup` with `club` from `lie`: the club's skill and
 // the shapes' skills blended by the setup's shape weights, wider below
 // the top level, narrower playing the golfer's natural shape, wider
-// still in overswing.
+// still in overswing, and wider and biased as the strike is mistimed.
 shot_ability ability_for(const shot_setup& setup, const club_definition& club, ball_lie lie, const golfer_profile& golfer,
                          const game_tuning& tuning);
+
+// How far `golfer`'s swing at `setup` strays with the shot's dice `seed`:
+// the ability's spread rolled, plus its bias.
+swing_errors struck_errors(const shot_setup& setup, std::uint64_t seed, const club_definition& club, ball_lie lie,
+                           const golfer_profile& golfer, const game_tuning& tuning);
 
 // How far a golfer's stock face leans to their natural shape (radians,
 // open positive): none for a putter.

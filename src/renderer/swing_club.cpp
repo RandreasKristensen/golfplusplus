@@ -10,17 +10,8 @@
 #include <glm/trigonometric.hpp>
 
 namespace {
-// From the grip down the shaft to the head, from the shaft's line out to
-// the face's middle, and the head's heel past the shaft's line, as the club
-// models are drawn.
-constexpr float club_shaft_length = 1.10f;
-constexpr float club_face_from_shaft = 0.10f;
-constexpr float club_heel_past_shaft = 0.03f;
-constexpr float club_face_ahead_of_shaft = 0.026f;
 // The shaft's lean from straight up towards the golfer at address.
 constexpr float club_address_angle_degrees = 12.0f;
-// Half the head's height: at address its bottom rests on the ground under the ball.
-constexpr float club_head_half_height = 0.045f;
 // The arms swing about the chest, this far up the shaft's line from the
 // hands; at a full swing they turn arm_degrees and the wrists hinge the
 // club hinge_degrees more. A putt rocks the shoulders only: at its longest
@@ -47,19 +38,19 @@ club_address address_of(const render_club_pose& pose, const float ball_visual_ra
     const glm::mat4 square = posed_model(glm::vec3(0.0f), shaft, forward, glm::vec3(pose.left_handed ? -1.0f : 1.0f, 1.0f, 1.0f));
     const glm::mat4 turned = glm::rotate(glm::mat4(1.0f), pose.face_turn, shaft) * square;
     const glm::vec3 face_normal = glm::normalize(glm::vec3(turned * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)));
+    const club_fit& fit = pose.fit;
     const float radius = std::max(0.02f, ball_visual_radius_meters);
-    glm::vec3 face_at = pose.ball_position - horizontal(face_normal) * radius;
-    face_at.y = pose.ball_position.y - radius + club_head_half_height;
+    const glm::vec3 face_at = pose.ball_position - horizontal(face_normal) * radius;
 
     club_address out;
     const glm::vec3 heel = glm::normalize(glm::vec3(turned * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f)));
-    out.grip = face_at + heel * club_face_from_shaft + shaft * club_shaft_length;
-    // Its heel soled on the ground, the toe lifting as the shaft leans.
-    out.grip.y = face_at.y + shaft.y * club_shaft_length + club_heel_past_shaft * std::sin(lean);
+    out.grip = face_at + heel * fit.face_from_shaft + shaft * fit.shaft_length;
+    // The sole's heel on the ground under the ball, the toe lifting as the shaft leans.
+    out.grip.y = pose.ball_position.y - radius - glm::vec3(turned * glm::vec4(fit.sole, 0.0f)).y;
     // Moved back along the ground until the face's plane just touches the
     // ball, however it is turned and leant: the head is never in the ball.
     const glm::vec3 face_middle =
-        out.grip - heel * club_face_from_shaft - shaft * club_shaft_length + face_normal * club_face_ahead_of_shaft;
+        out.grip - heel * fit.face_from_shaft - shaft * fit.shaft_length + face_normal * fit.face_ahead;
     const glm::vec3 level = safe_normalize(horizontal(face_normal), forward);
     const float gap = glm::dot(pose.ball_position - face_middle, face_normal) - radius;
     out.grip += level * (gap / std::max(0.1f, glm::dot(level, face_normal)));
@@ -84,6 +75,12 @@ glm::mat4 swung(const club_address& address, const float raise, const bool putt)
     const glm::vec3 hands = glm::vec3(arms * glm::vec4(address.grip, 1.0f));
     return turned_about(hands, address.swing_axis, glm::radians(hinge_degrees) * raise) * arms;
 }
+}
+
+club_fit club_fit_of(const prop_model& club) {
+    const glm::vec3 grip = club.point("grip");
+    const glm::vec3 face = club.point("face");
+    return club_fit{grip.y - face.y, grip.x - face.x, face.z - grip.z, club.point("sole") - grip};
 }
 
 glm::vec3 swing_club_grip(const render_club_pose& pose, const float ball_visual_radius_meters) {

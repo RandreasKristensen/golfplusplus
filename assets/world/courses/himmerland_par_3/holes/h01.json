@@ -249,9 +249,84 @@
           27.5
         ]
       ]
+    },
+    {
+      "type": "water",
+      "outline": [
+        [
+          -24.87,
+          -27.66
+        ],
+        [
+          -27.87,
+          -23.66
+        ],
+        [
+          -34.87,
+          -24.66
+        ],
+        [
+          -38.87,
+          -20.66
+        ],
+        [
+          -48.87,
+          -21.66
+        ],
+        [
+          -50.87,
+          -17.66
+        ],
+        [
+          -38.87,
+          -15.66
+        ],
+        [
+          -22.87,
+          -16.66
+        ],
+        [
+          -20.87,
+          -23.66
+        ]
+      ]
     }
   ],
-  "trees": [],
+  "trees": [
+    {
+      "position": [
+        28.63,
+        0.0,
+        -12.16
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 4.54,
+      "leaf_radius": 6.1,
+      "leaf_height": 5.55
+    },
+    {
+      "position": [
+        46.63,
+        0.0,
+        -62.16
+      ],
+      "trunk_radius": 0.54,
+      "trunk_height": 1.75,
+      "leaf_radius": 3.83,
+      "leaf_height": 2.14
+    },
+    {
+      "position": [
+        -41.37,
+        0.0,
+        -71.16
+      ],
+      "trunk_radius": 0.66,
+      "trunk_height": 4.67,
+      "leaf_radius": 4.69,
+      "leaf_height": 5.71
+    }
+  ],
   "source": {
     "type": "osm",
     "tee_latlon": [
@@ -267,6 +342,9 @@
     "tee_elevation": 20.07,
     "hole_way": "way/1565793223",
     "fairway": "osm",
+    "aerial": "dk",
+    "aerial_bunkers": 0,
+    "aerial_waters": 1,
     "made_green": false
   }
 }

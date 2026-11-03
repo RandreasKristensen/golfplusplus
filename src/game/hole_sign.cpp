@@ -81,7 +81,8 @@ hole_sign place_hole_sign(const play_area& area,
     const glm::vec3 behind = -sign.face_normal * (sign.board_thickness * 0.5f + sign.post_radius);
 
     // On the tee box's tiles, just inside its right edge.
-    const float box_edge = area_hole < area.tee_boxes.size() ? area.tee_boxes[area_hole].half_width : 0.0f;
+    const tee_box* box = hole_tee_box(area.tee_boxes, area_hole);
+    const float box_edge = box != nullptr ? box->half_width : 0.0f;
     const glm::vec3 center =
         tee + sign.down_hole * tuning.forward_offset + right * std::max(0.0f, box_edge - tuning.edge_inset);
     sign.post_feet = {center - sign.down_hole * post_reach + behind, center + sign.down_hole * post_reach + behind};
@@ -100,7 +101,9 @@ std::vector<hole_sign> place_hole_signs(const play_area& area,
     std::vector<hole_sign> signs;
     signs.reserve(holes.size());
     for (std::size_t i = 0; i < holes.size(); ++i) {
-        signs.push_back(place_hole_sign(area, holes[i], i, tuning));
+        if (holes[i].tee_box) {
+            signs.push_back(place_hole_sign(area, holes[i], i, tuning));
+        }
     }
     return signs;
 }

@@ -50,6 +50,14 @@ struct bounded_field {
     float high;
 };
 
+// Per metre: 1 hides a dark thing 4 m off.
+inline constexpr float max_mist_density = 1.0f;
+
+inline constexpr bounded_field<lighting_key> key_bounded_fields[] = {
+    {"mist_height_meters", &lighting_key::mist_height_meters, 1.0f, 500.0f},
+    {"mist_density", &lighting_key::mist_density, 0.0f, max_mist_density},
+};
+
 inline constexpr float max_frequency_hz = 100.0f;
 
 inline constexpr bounded_field<sky_style> sky_fields[] = {
@@ -120,6 +128,18 @@ inline constexpr bounded_field<shadow_style> shadow_fields[] = {
 inline constexpr int min_shadow_map_resolution = 64;
 inline constexpr int max_shadow_map_resolution = 4096;
 
+inline constexpr bounded_field<shaft_style> shaft_fields[] = {
+    {"reach_meters", &shaft_style::reach_meters, 1.0f, 2000.0f},
+    {"min_glow", &shaft_style::min_glow, 0.0f, 1.0f},
+    {"lamp_near_meters", &shaft_style::lamp_near_meters, 0.01f, 10.0f},
+};
+
+inline constexpr int min_shaft_steps = 1;
+inline constexpr int max_shaft_steps = 64;
+inline constexpr int max_shaft_lamps = 8;
+inline constexpr int min_lamp_map_resolution = 16;
+inline constexpr int max_lamp_map_resolution = 512;
+
 inline constexpr bounded_field<night_light_style> night_light_fields[] = {
     {"on_deg", &night_light_style::on_deg, -90.0f, 90.0f},
     {"full_deg", &night_light_style::full_deg, -90.0f, 90.0f},
@@ -133,10 +153,15 @@ inline constexpr bounded_field<night_light_style> night_light_fields[] = {
     {"floodlight_cone_deg", &night_light_style::floodlight_cone_deg, 1.0f, 89.0f},
     {"floodlight_soft_deg", &night_light_style::floodlight_soft_deg, 0.0f, 89.0f},
     {"lamp_glow", &night_light_style::lamp_glow, 0.0f, max_glow},
+    {"beam_near_share", &night_light_style::beam_near_share, 0.01f, 1.0f},
+    {"beam_core_meters", &night_light_style::beam_core_meters, 0.01f, max_caster_metres},
 };
 
 inline constexpr float max_fade_seconds = 120.0f;
 inline constexpr float max_gloss_power = 256.0f;
+inline constexpr float max_visibility_meters = 100000.0f;
+// Below 1: all forwards is no scattering at all.
+inline constexpr float max_forwardness = 0.95f;
 
 inline constexpr bounded_field<weather_style> weather_fields[] = {
     {"fade_seconds", &weather_style::fade_seconds, 0.0f, max_fade_seconds},
@@ -164,6 +189,17 @@ inline constexpr bounded_field<weather_style> weather_fields[] = {
     {"wet_albedo", &weather_style::wet_albedo, 0.0f, 1.0f},
     {"wet_gloss", &weather_style::wet_gloss, 0.0f, 1.0f},
     {"wet_gloss_power", &weather_style::wet_gloss_power, 1.0f, max_gloss_power},
+    {"clear_visibility_meters", &weather_style::clear_visibility_meters, 1.0f, max_visibility_meters},
+    {"clear_forwardness", &weather_style::clear_forwardness, 0.0f, max_forwardness},
+    {"rain_visibility_meters", &weather_style::rain_visibility_meters, 1.0f, max_visibility_meters},
+    {"rain_forwardness", &weather_style::rain_forwardness, 0.0f, max_forwardness},
+    {"fog_visibility_meters", &weather_style::fog_visibility_meters, 1.0f, max_visibility_meters},
+    {"fog_forwardness", &weather_style::fog_forwardness, 0.0f, max_forwardness},
+    {"sun_glow", &weather_style::sun_glow, 0.0f, 1.0f},
+    {"sun_forwardness", &weather_style::sun_forwardness, 0.0f, max_forwardness},
+    {"mist", &weather_style::mist, 0.0f, 1.0f},
+    {"fog_mist_density", &weather_style::fog_mist_density, 0.0f, max_mist_density},
+    {"rain_mist_density", &weather_style::rain_mist_density, 0.0f, max_mist_density},
 };
 
 inline constexpr int max_weather_streaks = 20000;
@@ -248,7 +284,6 @@ inline constexpr color_field<marker_colors> marker_fields[] = {
     {"tee_grout", &marker_colors::tee_grout},
     {"tee_tile", &marker_colors::tee_tile},
     {"tee_mat", &marker_colors::tee_mat},
-    {"collectible", &marker_colors::collectible},
     {"cup", &marker_colors::cup},
     {"pin_pole", &marker_colors::pin_pole},
     {"flag", &marker_colors::flag},

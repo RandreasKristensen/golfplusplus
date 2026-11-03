@@ -93,7 +93,9 @@ TEST_CASE("a hole sign faces along the hole's line near the tee, not the pin") {
     // A dogleg: straight up +Z for 100, then hard to +X.
     hole.spline.control_points = {glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 100.0f), glm::vec3(100.0f, 0.0f, 100.0f)};
     hole.pin_position = glm::vec3(100.0f, 0.0f, 100.0f);
-    const hole_sign& sign = area_for(hole).signs.front();
+    const play_area area = area_for(hole);
+    REQUIRE(area.signs.size() == 1U);
+    const hole_sign& sign = area.signs.front();
     CHECK(near(sign.down_hole, glm::vec3(0.0f, 0.0f, 1.0f), 0.0001f));
     CHECK(near(sign.length, 200.0f, 0.001f));
 }
@@ -178,7 +180,7 @@ TEST_CASE("a hole sign's face shows the hole in map inks and its labels fit") {
     const text_assets& text = shipped_text_assets();
 
     overlay_batch batch;
-    draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 18, 5, 999), area, area.signs.front(),
+    draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 18, 5, 999, false), area, area.signs.front(),
                         test_scene_colors().ground);
     CHECK(batch.truncated_text_count == 0U);
     const rgba_image face = rasterize_overlay_batch(batch, test_props().at("hole_sign").color("board"));
@@ -312,7 +314,7 @@ TEST_CASE("a hole sign's map is framed on its hole alone and shows the whole cou
 
     const text_assets& text = shipped_text_assets();
     overlay_batch batch;
-    draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 4, 120), crowded, sign, test_scene_colors().ground);
+    draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 4, 120, true), crowded, sign, test_scene_colors().ground);
     const rgba_image drawn = rasterize_overlay_batch(batch, test_props().at("hole_sign").color("board"));
     CHECK(count_texels(drawn, course_map_material_ink(test_scene_colors().ground, terrain_material::bunker)) > 0U);
     CHECK(count_texels(drawn, course_map_tree_ink) == 1U);

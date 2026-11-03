@@ -44,6 +44,10 @@ const glm::vec3 seated_foot(0.07f, 0.30f, 0.27f);
 const glm::vec3 seated_shoe(0.07f, 0.30f, 0.31f);
 const glm::vec3 wheel_hand(0.08f, 0.57f, 0.22f);
 const glm::vec3 lap_hand(0.12f, 0.48f, 0.18f);
+// Crouched (handling a bag, reading the green): this far down at full bend
+// (of the height), the knees out ahead of the feet by this much.
+constexpr float crouch_drop = 0.2f;
+constexpr float crouch_knee_ahead = 0.16f;
 constexpr float leg_radius = 0.06f;
 constexpr float arm_radius = 0.045f;
 constexpr float shoe_radius = 0.05f;
@@ -127,7 +131,11 @@ std::size_t remote_seated_vertex_count() {
 void append_remote_avatar(world_marker_batch& batch, const render_remote_avatar& avatar, const float eye_height,
                           const float ball_radius, const scene_colors& colors) {
     const figure_colors& clothes = colors.figures;
-    const figure_painter figure(batch, avatar.position, avatar.yaw, eye_height * figure_height_scale);
+    const float h = eye_height * figure_height_scale;
+    // Crouching, all above the knees comes down.
+    const float drop = avatar.seated ? 0.0f : crouch_drop * glm::clamp(avatar.crouch, 0.0f, 1.0f);
+    const figure_painter feet(batch, avatar.position, avatar.yaw, h);
+    const figure_painter figure(batch, avatar.position - world_up * (drop * h), avatar.yaw, h);
     const glm::vec3 shirt = remote_tint(clothes, avatar.player_id);
     const glm::vec3 cap = avatar.group_id != 0 ? group_highlight(clothes, avatar.group_id) : clothes.cap;
     append_upper_body(figure, shirt, cap, clothes.skin);
@@ -146,10 +154,26 @@ void append_remote_avatar(world_marker_batch& batch, const render_remote_avatar&
 
     for (const bool right : {false, true}) {
         const auto side = [right](const glm::vec3& left) { return right ? mirrored(left) : left; };
-        figure.limb(side(hip), side(foot), leg_radius, clothes.trousers);
-        figure.sphere(side(shoe), shoe_radius, clothes.shoes);
+        const glm::vec3 lowered_hip = side(hip) - glm::vec3(0.0f, drop, 0.0f);
+        if (drop > 0.0f) {
+            // The knee out ahead, halfway down.
+            const glm::vec3 knee = 0.5f * (lowered_hip + side(foot)) + glm::vec3(0.0f, 0.0f, crouch_knee_ahead * drop / crouch_drop);
+            feet.limb(lowered_hip, knee, leg_radius, clothes.trousers);
+            feet.limb(knee, side(foot), leg_radius, clothes.trousers);
+        } else {
+            feet.limb(side(hip), side(foot), leg_radius, clothes.trousers);
+        }
+        feet.sphere(side(shoe), shoe_radius, clothes.shoes);
     }
-    if (avatar.swing) {
+    if (avatar.reach) {
+        // The golfer's hand out to it, the other hanging.
+        const glm::vec3 hand = figure.local(*avatar.reach);
+        if (avatar.left_handed) {
+            append_arms(figure, hand, mirrored(hanging_hand), shirt);
+        } else {
+            append_arms(figure, hanging_hand, hand, shirt);
+        }
+    } else if (avatar.swing) {
         // Both hands on the club's grip.
         const glm::vec3 grip = figure.local(swing_club_grip(*avatar.swing, ball_radius));
         append_arms(figure, grip, grip, shirt);

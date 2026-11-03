@@ -26,3 +26,18 @@ float swing_club_raise(const float elapsed, const float backswing, const swing_t
     // Gathering speed all the way down.
     return backswing * (1.0f - down * down);
 }
+
+float swing_meter_rise(const float elapsed, const swing_tuning& tuning) {
+    return std::max(0.0f, elapsed / tuning.meter_full_seconds);
+}
+
+float swing_meter_at(const float elapsed, const float cap, const swing_tuning& tuning) {
+    return std::min(swing_meter_rise(elapsed, tuning), cap);
+}
+
+float strike_timing_at(const float elapsed, const float cap, const swing_tuning& tuning) {
+    const float off = elapsed - cap * tuning.meter_full_seconds;
+    const float beyond = std::max(0.0f, std::abs(off) - tuning.timing_window_seconds);
+    const float share = std::min(1.0f, beyond / tuning.timing_full_seconds);
+    return off < 0.0f ? -share : share;
+}

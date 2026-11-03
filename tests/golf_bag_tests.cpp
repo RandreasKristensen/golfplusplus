@@ -46,12 +46,14 @@ TEST_CASE("B unstraps my bag onto my back, sets it down at my feet, shoulders it
     game_state state = started_hole();
     stand_by_bag(state, 0.5f);
     update_game(state, pressing_b(), 0.016f);
+    finish_handling(state);
     REQUIRE(state.bag.where == bag_where::on_back);
 
     // Away from the cart, B sets it down beside me.
     const glm::vec3 cart_spot = bag_spot(state.cart.pose, cart_seat::driver, state.tuning.cart);
     state.player.position = cart_spot + glm::vec3(0.0f, 0.0f, 10.0f);
     update_game(state, pressing_b(), 0.016f);
+    finish_handling(state);
     REQUIRE(state.bag.where == bag_where::on_ground);
     CHECK(near(horizontal_distance(state.bag.position, state.player.position), state.tuning.player.bag_set_down_distance,
                0.01f));
@@ -60,14 +62,17 @@ TEST_CASE("B unstraps my bag onto my back, sets it down at my feet, shoulders it
     const glm::vec3 set_down = state.bag.position;
     state.player.position = set_down + glm::vec3(state.tuning.player.bag_reach + 1.0f, 0.0f, 0.0f);
     update_game(state, pressing_b(), 0.016f);
+    finish_handling(state);
     CHECK(state.bag.where == bag_where::on_ground);
     state.player.position = set_down + glm::vec3(0.5f, 0.0f, 0.0f);
     update_game(state, pressing_b(), 0.016f);
+    finish_handling(state);
     REQUIRE(state.bag.where == bag_where::on_back);
 
     // Back at the cart, B straps it on behind the nearer seat.
     state.player.position = bag_spot(state.cart.pose, cart_seat::passenger, state.tuning.cart);
     update_game(state, pressing_b(), 0.016f);
+    finish_handling(state);
     CHECK(state.bag.where == bag_where::on_cart);
     CHECK(state.bag.seat == cart_seat::passenger);
 }
@@ -82,6 +87,8 @@ TEST_CASE("with my bag on my back F at my ball is refused with a hint; set down,
     CHECK(lookup_text(shipped_text_assets(), text_hud_bag_on_back) == "SET YOUR BAG DOWN (B)");
 
     update_game(state, pressing_b(), 0.016f);
+
+    finish_handling(state);
     REQUIRE(state.bag.where == bag_where::on_ground);
     // F at my bag opens its picker; a step nearer my ball than my bag, F addresses it.
     update_game(state, interact_input(), 0.016f);
@@ -127,11 +134,23 @@ TEST_CASE("clubs change only at my bag, within reach, in its picker: up the list
     walk.forward_held = true;
     update_game(state, walk, 0.1f);
     CHECK(horizontal_distance(state.player.position, standing) < 0.001f);
+    // Nor the arrows: they pick, the view stays where it was.
+    const float yaw = state.player.yaw;
+    const float pitch = state.look.pitch;
+    for (const auto arrow : {&game_input::turn_left_held, &game_input::turn_right_held, &game_input::look_up_held,
+                             &game_input::look_down_held}) {
+        game_input held;
+        held.*arrow = true;
+        update_game(state, held, 0.1f);
+    }
+    CHECK(state.player.yaw == yaw);
+    CHECK(state.look.pitch == pitch);
 
     update_game(state, picker_steps(-3), 0.016f);
     update_game(state, interact_input(), 0.016f);
     CHECK(!state.picker);
     CHECK(club_label(state) == "4H");
+    finish_handling(state);
 
     // Escape closes it with the club in hand kept.
     update_game(state, interact_input(), 0.016f);
@@ -148,8 +167,10 @@ TEST_CASE("my bag stays where I set it down through holing out and the next hole
     game_state state = started_hole();
     stand_by_bag(state, 0.5f);
     update_game(state, pressing_b(), 0.016f);
+    finish_handling(state);
     state.player.position = state.ball->position + glm::vec3(1.0f, 0.0f, 0.0f);
     update_game(state, pressing_b(), 0.016f);
+    finish_handling(state);
     REQUIRE(state.bag.where == bag_where::on_ground);
     const glm::vec3 set_down = state.bag.position;
 

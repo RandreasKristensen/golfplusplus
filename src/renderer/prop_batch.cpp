@@ -7,6 +7,7 @@
 
 #include <iterator>
 
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat3x3.hpp>
@@ -73,11 +74,16 @@ std::size_t prop_model_vertex_count(const prop_model& model) {
     return count;
 }
 
+glm::vec3 painted_color(const prop_part& part, const std::optional<glm::vec3>& paint) {
+    return paint && part.paint_share ? glm::min(*paint * *part.paint_share, glm::vec3(1.0f)) : part.color;
+}
+
 void append_prop_model(prop_batch& batch, const prop_model& model, const glm::mat4& frame, const glow_floors& glow,
-                       const std::optional<glm::vec3>& ember_color) {
+                       const std::optional<glm::vec3>& ember_color, const std::optional<glm::vec3>& paint) {
     for (const prop_piece& piece : prop_pieces(model, frame)) {
         const bool ember = ember_color && piece.part->tag == "ember";
-        batch.append(piece.mesh, piece.model, ember ? *ember_color : piece.color, glow_floor(glow, piece.part->glow));
+        const glm::vec3 color = ember ? *ember_color : painted_color(*piece.part, paint);
+        batch.append(piece.mesh, piece.model, color, glow_floor(glow, piece.part->glow));
     }
 }
 

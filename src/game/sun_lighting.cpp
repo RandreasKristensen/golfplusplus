@@ -38,6 +38,9 @@ lighting_key lighting_at(const lighting_palette& palette, const float sun_elevat
             for (const share_field<lighting_key>& field : key_share_fields) {
                 key.*field.member = glm::mix(low.*field.member, high.*field.member, t);
             }
+            for (const bounded_field<lighting_key>& field : key_bounded_fields) {
+                key.*field.member = glm::mix(low.*field.member, high.*field.member, t);
+            }
             return key;
         }
     }

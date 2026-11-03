@@ -407,9 +407,9 @@ shot_result simulate_struck_shot(const shot_record& record,
     if (club == nullptr) {
         return simulate_shot(record.setup, seeded, tuning, clubs);
     }
-    const shot_ability ability =
-        ability_for(record.setup, *club, lie_at(course.area, record.setup.ball_start), golfer, tuning);
-    return simulate_shot(record.setup, seeded, tuning, clubs, rolled_errors(record.seed, ability.spread));
+    const swing_errors errors =
+        struck_errors(record.setup, record.seed, *club, lie_at(course.area, record.setup.ball_start), golfer, tuning);
+    return simulate_shot(record.setup, seeded, tuning, clubs, errors);
 }
 
 glm::vec3 shot_position_at(const shot_result& result, const float time) {
@@ -427,4 +427,25 @@ glm::vec3 shot_position_at(const shot_result& result, const float time) {
     const float end = index + 1 == last ? result.duration : start + interval;
     const float t = end > start ? clamp01((time - start) / (end - start)) : 1.0f;
     return points[index] + (points[index + 1] - points[index]) * t;
+}
+
+float shot_rolled_at(const shot_result& result, const float distance) {
+    float from = 0.0f;
+    for (const shot_event& event : result.events) {
+        if (event.kind == shot_event_kind::land) {
+            from = event.time;
+        }
+    }
+    const float interval = trajectory_point_seconds();
+    const std::vector<glm::vec3>& points = result.trajectory;
+    glm::vec3 previous = shot_position_at(result, from);
+    float rolled = 0.0f;
+    for (std::size_t i = static_cast<std::size_t>(std::ceil(from / interval)); i < points.size(); ++i) {
+        rolled += glm::length(points[i] - previous);
+        previous = points[i];
+        if (rolled >= distance) {
+            return std::min(static_cast<float>(i) * interval, result.duration);
+        }
+    }
+    return result.duration;
 }

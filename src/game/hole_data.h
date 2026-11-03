@@ -32,11 +32,19 @@ struct hole_data {
     hole_spline spline;
     std::vector<material_zone> material_zones;
     std::vector<tree_instance> trees;
+    // A tee box (game/tee_box.h) and its sign at the tee; without one the
+    // ball is dropped on the ground there and plays from its lie (a
+    // practice station by a green).
+    bool tee_box = true;
+    // Whether the ribbon's middle may be fairway (hole.json "ribbon_fairway",
+    // default true): false keeps the ribbon rough, the zones deciding the rest.
+    bool ribbon_fairway = true;
 };
 
-// Whether the hole's fairway is its fairway outlines, so its ribbon paints
-// none: else the ribbon's middle `spline.width` is fairway.
-inline bool has_fairway_outline(const hole_data& hole) {
-    return std::any_of(hole.material_zones.begin(), hole.material_zones.end(),
-                       [](const material_zone& zone) { return zone.type == material_zone_type::fairway; });
+// Whether the ribbon's middle `spline.width` is fairway: not when the hole's
+// fairway is its fairway outlines, nor when the hole says its ribbon has none.
+inline bool ribbon_paints_fairway(const hole_data& hole) {
+    return hole.ribbon_fairway &&
+        std::none_of(hole.material_zones.begin(), hole.material_zones.end(),
+                     [](const material_zone& zone) { return zone.type == material_zone_type::fairway; });
 }

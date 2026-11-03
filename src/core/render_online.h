@@ -5,6 +5,7 @@
 // "waiting for group". Nothing is added offline. GL-free.
 
 #include "game/game_state.h"
+#include "game/prop_loader.h"
 #include "game/text_assets.h"
 #include "renderer/render_data.h"
 
@@ -12,7 +13,7 @@
 #include <optional>
 #include <string>
 
-void add_online_render_data(render_data& data, const game_state& game, const text_assets& text);
+void add_online_render_data(render_data& data, const game_state& game, const text_assets& text, const prop_catalog& props);
 
 // Another player's bag where their player_bag row has it, and its model
 // (their loadout's bag); none online without a row, or offline.

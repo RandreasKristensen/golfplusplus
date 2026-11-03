@@ -180,7 +180,8 @@ glm::vec2 push_clear(const body_obstacles& obstacles, const std::vector<std::uin
 // How far the body reaches from its position, and its narrowest half.
 float body_reach(const ground_body& body) {
     return body.shape == body_shape::circle ? body.radius
-                                            : std::abs(body.centre_ahead) + std::hypot(body.half_length, body.half_width);
+                                            : std::abs(body.centre_ahead) +
+                                                  std::sqrt(body.half_length * body.half_length + body.half_width * body.half_width);
 }
 
 float body_narrowest(const ground_body& body) {

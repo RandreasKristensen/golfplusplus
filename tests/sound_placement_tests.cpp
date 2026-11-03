@@ -120,6 +120,10 @@ TEST_CASE("my own strike is heard at full level, another player's 100 m away far
     other.player.position = tee + yaw_left(yaw_direction(input.aim_angle)) * 100.0f;
     other.player.yaw = yaw_towards(other.player.position, tee);
     start_remote_shot(other, played_shot(2, 0, 1, input, tee, false));
+    // Struck once their club comes down.
+    for (int frame = 0; frame < 100 && !first_event(other.audio_events, audio_event_type::club_hit); ++frame) {
+        update_remote_players(other, 0.02f);
+    }
     const std::optional<audio_event> theirs = first_event(other.audio_events, audio_event_type::club_hit);
     REQUIRE(theirs.has_value());
     CHECK(near(theirs->position, tee));

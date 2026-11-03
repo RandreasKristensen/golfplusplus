@@ -5,9 +5,11 @@
 #include "game/address_play.h"
 #include "game/area_solids.h"
 #include "game/game_state.h"
+#include "game/movement_step.h"
 #include "game/golf_cart.h"
 #include "game/player_jump.h"
 #include "game/rangefinder.h"
+#include "game/shot_ability.h"
 #include "game/tee_box.h"
 #include "physics/vector_math.h"
 
@@ -20,11 +22,20 @@
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/trigonometric.hpp>
 
 namespace {
-// The right button's drag threshold the tests bind with.
-constexpr int drag = 6;
+// The setup's numbers the tests bind keys with.
+setup_tuning bound_setup() {
+    setup_tuning setup;
+    setup.drag_threshold_counts = 6;
+    setup.pull_counts_per_step = 10;
+    setup.swipe_drag_counts = 100;
+    setup.swipe_wheel_amount = 2.0f;
+    return setup;
+}
+const setup_tuning bound = bound_setup();
 
 input_state held(button_state input_state::*key) {
     input_state keys;
@@ -42,20 +53,20 @@ glm::vec3 step_of(game_state& state, const game_input& input, const float dt) {
 }
 
 TEST_CASE("WASD walk, the arrow keys look, M holds up the course map and Enter does nothing in play") {
-    CHECK(game_input_from_keys(held(&input_state::key_w), 0.0f, drag).forward_held);
-    CHECK(game_input_from_keys(held(&input_state::key_s), 0.0f, drag).back_held);
-    CHECK(game_input_from_keys(held(&input_state::key_a), 0.0f, drag).strafe_left_held);
-    CHECK(game_input_from_keys(held(&input_state::key_d), 0.0f, drag).strafe_right_held);
-    CHECK(game_input_from_keys(held(&input_state::left), 0.0f, drag).turn_left_held);
-    CHECK(game_input_from_keys(held(&input_state::right), 0.0f, drag).turn_right_held);
-    CHECK(game_input_from_keys(held(&input_state::up), 0.0f, drag).look_up_held);
-    CHECK(game_input_from_keys(held(&input_state::down), 0.0f, drag).look_down_held);
-    CHECK(game_input_from_keys(held(&input_state::key_m), 0.0f, drag).course_map_held);
+    CHECK(game_input_from_keys(held(&input_state::key_w), 0.0f, bound).forward_held);
+    CHECK(game_input_from_keys(held(&input_state::key_s), 0.0f, bound).back_held);
+    CHECK(game_input_from_keys(held(&input_state::key_a), 0.0f, bound).strafe_left_held);
+    CHECK(game_input_from_keys(held(&input_state::key_d), 0.0f, bound).strafe_right_held);
+    CHECK(game_input_from_keys(held(&input_state::left), 0.0f, bound).turn_left_held);
+    CHECK(game_input_from_keys(held(&input_state::right), 0.0f, bound).turn_right_held);
+    CHECK(game_input_from_keys(held(&input_state::up), 0.0f, bound).look_up_held);
+    CHECK(game_input_from_keys(held(&input_state::down), 0.0f, bound).look_down_held);
+    CHECK(game_input_from_keys(held(&input_state::key_m), 0.0f, bound).course_map_held);
     // B moves the bag; a left click takes a club in the picker.
-    CHECK(game_input_from_keys(held(&input_state::key_b), 0.0f, drag).move_bag);
-    CHECK(game_input_from_keys(held(&input_state::mouse_left), 0.0f, drag).take_club);
+    CHECK(game_input_from_keys(held(&input_state::key_b), 0.0f, bound).move_bag);
+    CHECK(game_input_from_keys(held(&input_state::mouse_left), 0.0f, bound).take_club);
 
-    const game_input enter = game_input_from_keys(held(&input_state::enter), 0.0f, drag);
+    const game_input enter = game_input_from_keys(held(&input_state::enter), 0.0f, bound);
     CHECK(!enter.course_map_held);
     CHECK(!enter.interact);
     CHECK(!enter.swing);
@@ -63,60 +74,75 @@ TEST_CASE("WASD walk, the arrow keys look, M holds up the course map and Enter d
 }
 
 TEST_CASE("the picker steps up the bag by W, up and the wheel away from me, down by S, down and the wheel back; walking the wheel changes nothing") {
-    CHECK(game_input_from_keys(held(&input_state::key_w), 0.0f, drag).picker_steps == 1);
-    CHECK(game_input_from_keys(held(&input_state::up), 0.0f, drag).picker_steps == 1);
-    CHECK(game_input_from_keys(held(&input_state::key_s), 0.0f, drag).picker_steps == -1);
-    CHECK(game_input_from_keys(held(&input_state::down), 0.0f, drag).picker_steps == -1);
+    CHECK(game_input_from_keys(held(&input_state::key_w), 0.0f, bound).picker_steps == 1);
+    CHECK(game_input_from_keys(held(&input_state::up), 0.0f, bound).picker_steps == 1);
+    CHECK(game_input_from_keys(held(&input_state::key_s), 0.0f, bound).picker_steps == -1);
+    CHECK(game_input_from_keys(held(&input_state::down), 0.0f, bound).picker_steps == -1);
     input_state keys;
     keys.wheel_steps = 2;
-    CHECK(game_input_from_keys(keys, 0.0f, drag).picker_steps == 2);
+    CHECK(game_input_from_keys(keys, 0.0f, bound).picker_steps == 2);
     keys.wheel_steps = -1;
-    CHECK(game_input_from_keys(keys, 0.0f, drag).picker_steps == -1);
+    CHECK(game_input_from_keys(keys, 0.0f, bound).picker_steps == -1);
     CHECK(next_frame_input(keys).wheel_steps == 0);
 
     game_state state = started_hole();
     state.selected_club = 2;
     input_state notch;
     notch.wheel_steps = 1;
-    update_game(state, game_input_from_keys(notch, 0.0f, drag), 0.016f);
+    update_game(state, game_input_from_keys(notch, 0.0f, bound), 0.016f);
     CHECK(state.selected_club == 2);
 
     enter_addressing(state);
     REQUIRE(state.mode == game_mode::addressing);
-    update_game(state, game_input_from_keys(notch, 0.0f, drag), 0.016f);
+    update_game(state, game_input_from_keys(notch, 0.0f, bound), 0.016f);
     CHECK(state.selected_club == 2);
 }
 
-TEST_CASE("F steps up to the ball and away; Space swings over it and jumps walking") {
-    const game_input f = game_input_from_keys(held(&input_state::key_f), 0.0f, drag);
+TEST_CASE("F steps up to the ball and then looks down at it, never up; Esc steps away; Space swings over it and jumps walking") {
+    const game_input f = game_input_from_keys(held(&input_state::key_f), 0.0f, bound);
     CHECK(f.interact);
     CHECK(!f.swing);
-    const game_input space = game_input_from_keys(held(&input_state::space), 0.0f, drag);
+    const game_input space = game_input_from_keys(held(&input_state::space), 0.0f, bound);
     CHECK(space.swing);
     CHECK(space.jump);
     CHECK(!space.interact);
-    // E and Q no longer swing, and a left click no longer addresses the ball.
-    CHECK(!game_input_from_keys(held(&input_state::key_e), 0.0f, drag).swing);
-    CHECK(!game_input_from_keys(held(&input_state::key_q), 0.0f, drag).swing);
-    const game_input click = game_input_from_keys(held(&input_state::mouse_left), 0.0f, drag);
+    // A left click does not address the ball or swing.
+    const game_input click = game_input_from_keys(held(&input_state::mouse_left), 0.0f, bound);
     CHECK(!click.interact);
     CHECK(!click.swing);
 
-    // Space beside the ball does not take it up; F does, and F again steps away.
+    // Space beside the ball does not take it up; F does, and F again looks
+    // down at it and stays there; only Esc steps away.
     game_state state = started_hole();
-    update_game(state, game_input_from_keys(held(&input_state::space), 0.0f, drag), 0.016f);
+    const camera_tuning& camera = state.tuning.camera;
+    update_game(state, game_input_from_keys(held(&input_state::space), 0.0f, bound), 0.016f);
     CHECK(state.mode == game_mode::walking);
-    update_game(state, game_input_from_keys(held(&input_state::mouse_left), 0.0f, drag), 0.016f);
+    update_game(state, game_input_from_keys(held(&input_state::mouse_left), 0.0f, bound), 0.016f);
     CHECK(state.mode == game_mode::walking);
-    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f, drag), 0.016f);
+    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f, bound), 0.016f);
     REQUIRE(state.mode == game_mode::addressing);
-    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f, drag), 0.016f);
+    REQUIRE(!looking_down(state.address.look, camera));
+    for (int press = 0; press < 3; ++press) {
+        update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f, bound), 0.016f);
+        CHECK(state.mode == game_mode::addressing);
+        for (int i = 0; i < 60; ++i) {
+            update_game(state, game_input{}, 0.016f);
+        }
+        CHECK(looking_down(state.address.look, camera));
+        CHECK(near(state.address.look.pitch, down_look(camera).pitch, 0.0001f));
+    }
+    update_game(state, game_input_from_keys(held(&input_state::escape), 0.0f, bound), 0.016f);
     CHECK(state.mode == game_mode::walking);
-    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f, drag), 0.016f);
+    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f, bound), 0.016f);
     REQUIRE(state.mode == game_mode::addressing);
 
-    // Space swings, and the ball is struck at impact.
-    update_game(state, game_input_from_keys(held(&input_state::space), 0.0f, drag), 0.016f);
+    // Looking down at it, Space takes the club back, Space again brings it
+    // down, and the ball is struck at impact.
+    state.address.look = down_look(camera);
+    update_game(state, game_input_from_keys(held(&input_state::space), 0.0f, bound), 0.016f);
+    REQUIRE(state.address.meter_elapsed.has_value());
+    update_game(state, game_input{}, 0.5f);
+    update_game(state, game_input_from_keys(held(&input_state::space), 0.0f, bound), 0.016f);
     REQUIRE(state.address.swing_elapsed.has_value());
     CHECK(state.ball->strokes == 0);
     swing_through(state);
@@ -124,24 +150,25 @@ TEST_CASE("F steps up to the ball and away; Space swings over it and jumps walki
     CHECK(shot_playing(state));
 }
 
-TEST_CASE("over the ball Q/E turn the face, Z/C move the ball, W/S the backswing and A/D the stance, each its own way") {
+TEST_CASE("looking down at the ball the arrows pull the face and the ball, W/S the backswing and A/D the stance; Backspace resets") {
     game_state state = started_hole();
-    enter_addressing(state);
+    address_looking_down(state);
     const shot_setup stock = state.address.setup;
     const setup_tuning& tuning = state.tuning.setup;
     const auto press = [&](button_state input_state::*key) {
-        update_game(state, game_input_from_keys(held(key), 0.0f, drag), 0.016f);
+        update_game(state, game_input_from_keys(held(key), 0.0f, bound), 0.016f);
         update_game(state, game_input{}, 0.016f);
     };
-    press(&input_state::key_q);
+    press(&input_state::up);
     CHECK(near(state.address.setup.face_open, stock.face_open + glm::radians(tuning.face_step_degrees), 0.0001f));
-    press(&input_state::key_e);
-    press(&input_state::key_e);
+    press(&input_state::down);
+    press(&input_state::down);
     CHECK(near(state.address.setup.face_open, stock.face_open - glm::radians(tuning.face_step_degrees), 0.0001f));
-    press(&input_state::key_c);
+    // A right-hander's lead side is on the screen's left looking down: the ball goes forward.
+    press(&input_state::left);
     CHECK(near(state.address.setup.ball_position, stock.ball_position + tuning.ball_position_step, 0.0001f));
-    press(&input_state::key_z);
-    press(&input_state::key_z);
+    press(&input_state::right);
+    press(&input_state::right);
     CHECK(near(state.address.setup.ball_position, stock.ball_position - tuning.ball_position_step, 0.0001f));
     press(&input_state::key_s);
     CHECK(state.address.setup.backswing < stock.backswing);
@@ -150,13 +177,13 @@ TEST_CASE("over the ball Q/E turn the face, Z/C move the ball, W/S the backswing
     CHECK(state.address.setup.backswing > stock.backswing);
     press(&input_state::key_a);
     CHECK(near(wrap_angle(state.address.setup.aim_angle - stock.aim_angle), glm::radians(tuning.aim_step_degrees), 0.0001f));
-    press(&input_state::right);
-    press(&input_state::right);
+    press(&input_state::key_d);
+    press(&input_state::key_d);
     CHECK(near(wrap_angle(state.address.setup.aim_angle - stock.aim_angle), -glm::radians(tuning.aim_step_degrees), 0.0001f));
-    // None of them walks me away from the ball, and R puts the stock setup back, keeping the aim.
+    // None of them walks me away from the ball, and Backspace puts the stock setup back, keeping the aim.
     CHECK(state.mode == game_mode::addressing);
     const float aim = state.address.setup.aim_angle;
-    press(&input_state::key_r);
+    press(&input_state::backspace);
     CHECK(state.address.setup.face_open == stock.face_open);
     CHECK(state.address.setup.ball_position == stock.ball_position);
     CHECK(state.address.setup.backswing == stock.backswing);
@@ -165,57 +192,117 @@ TEST_CASE("over the ball Q/E turn the face, Z/C move the ball, W/S the backswing
     CHECK(near(state.player.position, address_stance_position(state.area, state.address.setup, state.tuning), 0.0001f));
 }
 
-TEST_CASE("every mouse action has a key that does the same") {
+TEST_CASE("looking up the arrows and a left-drag leave the face and ball be; A/D still turn the stance") {
+    game_state state = started_hole();
+    enter_addressing(state);
+    REQUIRE(!looking_down(state.address.look, state.tuning.camera));
+    const shot_setup stock = state.address.setup;
+    for (button_state input_state::*key : {&input_state::up, &input_state::down, &input_state::left, &input_state::right}) {
+        update_game(state, game_input_from_keys(held(key), 0.0f, bound), 0.016f);
+        update_game(state, game_input{}, 0.016f);
+    }
+    game_input pull;
+    pull.pull_x = 500.0f;
+    pull.pull_y = 500.0f;
+    update_game(state, pull, 0.016f);
+    CHECK(state.address.setup.face_open == stock.face_open);
+    CHECK(state.address.setup.ball_position == stock.ball_position);
+    update_game(state, game_input_from_keys(held(&input_state::key_a), 0.0f, bound), 0.016f);
+    CHECK(wrap_angle(state.address.setup.aim_angle - stock.aim_angle) > 0.0f);
+}
+
+TEST_CASE("looking down, the ball moves on the screen the way the arrow or the pull goes, for either hand") {
+    for (const handedness hand : {handedness::right, handedness::left}) {
+        game_state state = started_hole();
+        state.hand = hand;
+        address_looking_down(state);
+        const setup_tuning& tuning = state.tuning.setup;
+        // Where the ball sits across my view as I look down at it: + on the screen's right.
+        const auto ball_on_screen = [&state]() -> float {
+            const eye_view eye = my_address_eye(state);
+            const glm::mat4 view = glm::lookAt(eye.position, eye.position + eye.direction, glm::vec3(0.0f, 1.0f, 0.0f));
+            const glm::vec4 clip = glm::perspective(glm::radians(60.0f), 16.0f / 9.0f, 0.05f, 100.0f) * view *
+                glm::vec4(state.address.setup.ball_start, 1.0f);
+            CHECK(clip.w > 0.0f);
+            return clip.x / clip.w;
+        };
+        const float start = ball_on_screen();
+        update_game(state, game_input_from_keys(held(&input_state::left), 0.0f, bound), 0.016f);
+        update_game(state, game_input{}, 0.016f);
+        const float after_left = ball_on_screen();
+        CHECK(after_left < start);
+        // A left-drag right, a step's counts and more, moves it back right.
+        game_input pull;
+        pull.pull_x = static_cast<float>(tuning.pull_counts_per_step) * 2.5f;
+        update_game(state, pull, 0.016f);
+        CHECK(ball_on_screen() > after_left);
+        // A pull up opens the face; down closes it.
+        const float face = state.address.setup.face_open;
+        pull = game_input{};
+        pull.pull_y = -static_cast<float>(tuning.pull_counts_per_step);
+        update_game(state, pull, 0.016f);
+        CHECK(state.address.setup.face_open > face);
+    }
+}
+
+TEST_CASE("a mouse wheel rolled away and a touchpad's fingers pushed up are both away from me: more backswing") {
+    // A wheel's click away scrolls up.
+    CHECK(wheel_steps_away(1, 0.0f, 1.0f, false) == 1);
+    CHECK(wheel_steps_away(-2, 0.0f, -2.0f, false) == -2);
+    // Fingers pushed up the touchpad scroll the page down, in fractions of a notch.
+    CHECK(wheel_steps_away(-1, 0.0f, -1.25f, false) == 1);
+    CHECK(wheel_steps_away(0, 0.1f, -0.4f, false) == 0);
+    CHECK(wheel_steps_away(1, 0.0f, 0.75f, false) == -1);
+    // A system that flips the wheel has it turned back first.
+    CHECK(wheel_steps_away(-1, 0.0f, -1.0f, true) == 1);
+    CHECK(wheel_steps_away(1, 0.0f, 1.25f, true) == 1);
+}
+
+TEST_CASE("a left-drag pulls instead of looking; the wheel sets the backswing; R and Backspace look and reset") {
+    input_state keys;
+    keys.mouse_left.is_down = true;
+    keys.mouse_dx = 7;
+    keys.mouse_dy = -3;
+    const game_input pulling = game_input_from_keys(keys, 0.01f, bound);
+    CHECK(pulling.pull_x == 7.0f);
+    CHECK(pulling.pull_y == -3.0f);
+    CHECK(pulling.look_yaw == 0.0f);
+    CHECK(pulling.look_pitch == 0.0f);
     input_state wheel_up;
     wheel_up.wheel_steps = 1;
-    // Shift, Ctrl and Alt with the wheel turn the stance, the face and the ball, as A, Q and C do.
-    input_state shift = wheel_up;
-    shift.left_shift.is_down = true;
-    CHECK(game_input_from_keys(shift, 0.0f, drag).aim_steps == 1);
-    input_state ctrl = wheel_up;
-    ctrl.ctrl.is_down = true;
-    CHECK(game_input_from_keys(ctrl, 0.0f, drag).face_steps == 1);
-    input_state alt = wheel_up;
-    alt.alt.is_down = true;
-    CHECK(game_input_from_keys(alt, 0.0f, drag).ball_steps == 1);
-    CHECK(game_input_from_keys(wheel_up, 0.0f, drag).look_target_wheel_steps == 1);
-    CHECK(game_input_from_keys(shift, 0.0f, drag).look_target_wheel_steps == 0);
-    // Middle-click resets as R does; a right-click aims at the view as T does.
-    CHECK(game_input_from_keys(held(&input_state::mouse_middle), 0.0f, drag).reset_setup);
-    CHECK(game_input_from_keys(held(&input_state::key_r), 0.0f, drag).reset_setup);
-    CHECK(game_input_from_keys(held(&input_state::key_t), 0.0f, drag).aim_at_view);
+    CHECK(game_input_from_keys(wheel_up, 0.0f, bound).backswing_steps == 1);
+    CHECK(game_input_from_keys(held(&input_state::key_r), 0.0f, bound).snap_view);
+    CHECK(!game_input_from_keys(held(&input_state::key_r), 0.0f, bound).reset_setup);
+    CHECK(game_input_from_keys(held(&input_state::backspace), 0.0f, bound).reset_setup);
+    CHECK(game_input_from_keys(held(&input_state::mouse_middle), 0.0f, bound).reset_setup);
+    CHECK(game_input_from_keys(held(&input_state::key_t), 0.0f, bound).aim_at_view);
     input_state right_click;
     right_click.mouse_right.released = true;
-    CHECK(game_input_from_keys(right_click, 0.0f, drag).aim_at_view);
-    CHECK(game_input_from_keys(held(&input_state::key_v), 0.0f, drag).snap_view);
+    CHECK(game_input_from_keys(right_click, 0.0f, bound).aim_at_view);
 
-    // The same steps whichever way they come.
+    // The wheel and W/S make the same steps, from either look.
     game_state by_key = started_hole();
     game_state by_wheel = started_hole();
     enter_addressing(by_key);
     enter_addressing(by_wheel);
-    for (const auto& [key, wheel] : {std::pair{&input_state::key_a, shift}, std::pair{&input_state::key_q, ctrl},
-                                     std::pair{&input_state::key_c, alt}}) {
-        update_game(by_key, game_input_from_keys(held(key), 0.0f, drag), 0.016f);
-        update_game(by_key, game_input{}, 0.016f);
-        update_game(by_wheel, game_input_from_keys(wheel, 0.0f, drag), 0.016f);
-    }
-    CHECK(near(by_key.address.setup.aim_angle, by_wheel.address.setup.aim_angle, 0.0001f));
-    CHECK(near(by_key.address.setup.face_open, by_wheel.address.setup.face_open, 0.0001f));
-    CHECK(near(by_key.address.setup.ball_position, by_wheel.address.setup.ball_position, 0.0001f));
+    update_game(by_key, game_input_from_keys(held(&input_state::key_w), 0.0f, bound), 0.016f);
+    update_game(by_wheel, game_input_from_keys(wheel_up, 0.0f, bound), 0.016f);
+    CHECK(near(by_key.address.setup.backswing, by_wheel.address.setup.backswing, 0.0001f));
 }
 
-TEST_CASE("a right-drag past the threshold turns the stance and never also aims; a click aims") {
+TEST_CASE("a right-drag past the threshold turns the stance (looking up) or swipes, and never also aims; a click aims") {
     input_state keys;
     keys.mouse_right.is_down = true;
     keys.mouse_dx = 4;
-    keys.right_drag_counts = drag;
-    const game_input small = game_input_from_keys(keys, 0.01f, drag);
+    keys.right_drag_counts = bound.drag_threshold_counts;
+    const game_input small = game_input_from_keys(keys, 0.01f, bound);
     CHECK(small.stance_drag_yaw == 0.0f);
+    CHECK(small.swipe == 0.0f);
     CHECK(near(small.look_yaw, -0.04f));
-    keys.right_drag_counts = drag + 1;
-    const game_input dragging = game_input_from_keys(keys, 0.01f, drag);
+    keys.right_drag_counts = bound.drag_threshold_counts + 1;
+    const game_input dragging = game_input_from_keys(keys, 0.01f, bound);
     CHECK(near(dragging.stance_drag_yaw, -0.04f));
+    CHECK(near(dragging.swipe, 4.0f / static_cast<float>(bound.swipe_drag_counts)));
     CHECK(dragging.look_yaw == 0.0f);
     CHECK(dragging.look_pitch == 0.0f);
     CHECK(!dragging.aim_at_view);
@@ -223,10 +310,17 @@ TEST_CASE("a right-drag past the threshold turns the stance and never also aims;
     keys.mouse_right.is_down = false;
     keys.mouse_right.released = true;
     keys.mouse_dx = 0;
-    CHECK(!game_input_from_keys(keys, 0.01f, drag).aim_at_view);
+    CHECK(!game_input_from_keys(keys, 0.01f, bound).aim_at_view);
     keys.right_drag_counts = 0;
-    CHECK(game_input_from_keys(keys, 0.01f, drag).aim_at_view);
-    // A drag turns the stance by its yaw, and the look not at all.
+    CHECK(game_input_from_keys(keys, 0.01f, bound).aim_at_view);
+    // A touchpad's two fingers across swipe too: to the right they scroll
+    // left, and swipe right.
+    input_state fingers;
+    fingers.wheel_x = -bound.swipe_wheel_amount;
+    CHECK(near(game_input_from_keys(fingers, 0.0f, bound).swipe, 1.0f));
+    CHECK(next_frame_input(fingers).wheel_x == 0.0f);
+
+    // Looking up a drag turns the stance by its yaw, and the look not at all.
     game_state state = started_hole();
     enter_addressing(state);
     const shot_setup before = state.address.setup;
@@ -236,6 +330,11 @@ TEST_CASE("a right-drag past the threshold turns the stance and never also aims;
     update_game(state, turn, 0.016f);
     CHECK(near(wrap_angle(state.address.setup.aim_angle - before.aim_angle), 0.02f, 0.0001f));
     CHECK(state.address.look.yaw == look.yaw);
+    // Looking down it does not.
+    state.address.look = down_look(state.tuning.camera);
+    const float aim = state.address.setup.aim_angle;
+    update_game(state, turn, 0.016f);
+    CHECK(state.address.setup.aim_angle == aim);
 }
 
 TEST_CASE("right-click aims the path at the spot under the view and keeps the shape") {
@@ -245,6 +344,7 @@ TEST_CASE("right-click aims the path at the spot under the view and keeps the sh
     const float shape = state.address.setup.face_open;
     // Look off to the side, along the ground some way out.
     state.address.look = clamped_look(address_look{glm::radians(60.0f), glm::radians(-8.0f)}, state.tuning.camera);
+    REQUIRE(!looking_down(state.address.look, state.tuning.camera));
     const eye_view eye = my_address_eye(state);
     const std::optional<glm::vec3> spot = ground_hit(state.area, eye.position, eye.direction, state.tuning.rangefinder,
                                                      state.tuning.scale);
@@ -256,51 +356,16 @@ TEST_CASE("right-click aims the path at the spot under the view and keeps the sh
     CHECK(state.address.setup.face_open == shape);
 }
 
-TEST_CASE("look-and-scroll picks the part under the view's centre, and the wheel turns it") {
-    game_state state = started_hole();
-    enter_addressing(state);
-    const address_marks marks = my_address_marks(state);
-    const eye_view eye = my_address_eye(state);
-    const auto look_at = [&](const glm::vec3& point) {
-        const glm::vec3 to = point - eye.position;
-        const float yaw = wrap_angle(yaw_towards(eye.position, point) - address_facing_yaw(state.address.setup));
-        const float pitch = std::atan2(to.y, glm::length(horizontal(to)));
-        state.address.look = address_look{hand_sign(state.address.setup.hand) * yaw, pitch};
-        REQUIRE(near(my_address_eye(state).direction, glm::normalize(to), 0.001f));
-    };
-    look_at(marks.ball);
-    CHECK(my_pointed_part(state) == setup_part::ball);
-    look_at(0.5f * (marks.face_heel + marks.face_toe));
-    CHECK(my_pointed_part(state) == setup_part::face);
-    look_at(marks.stick_front);
-    CHECK(my_pointed_part(state) == setup_part::stance);
-    state.address.look = target_look(state.tuning.camera);
-    CHECK(my_pointed_part(state) == setup_part::none);
-
-    // Looking at the face, a notch opens it; at the sky, it lengthens the backswing.
-    look_at(0.5f * (marks.face_heel + marks.face_toe));
-    const shot_setup before = state.address.setup;
-    game_input notch;
-    notch.look_target_wheel_steps = 1;
-    update_game(state, notch, 0.016f);
-    CHECK(state.address.setup.face_open > before.face_open);
-    CHECK(state.address.setup.backswing == before.backswing);
-    state.address.look = target_look(state.tuning.camera);
-    notch.look_target_wheel_steps = -1;
-    update_game(state, notch, 0.016f);
-    CHECK(state.address.setup.backswing < before.backswing);
-}
-
-TEST_CASE("V turns my head to the other framed view over the snap time, with no frame where the view jumps") {
+TEST_CASE("R turns my head between looking up and down over the snap time, with no frame where the view jumps") {
     game_state state = started_hole();
     enter_addressing(state);
     const camera_tuning& camera = state.tuning.camera;
     const address_look target = target_look(camera);
     const address_look down = down_look(camera);
     REQUIRE(near(state.address.look.yaw, target.yaw, 0.0001f));
-    game_input v;
-    v.snap_view = true;
-    update_game(state, v, 0.016f);
+    game_input r;
+    r.snap_view = true;
+    update_game(state, r, 0.016f);
     // The turn's length in yaw and pitch: no frame turns the view more than an eased share of it.
     const float total = std::abs(target.yaw - down.yaw) + std::abs(target.pitch - down.pitch);
     constexpr float dt = 1.0f / 60.0f;
@@ -321,21 +386,138 @@ TEST_CASE("V turns my head to the other framed view over the snap time, with no 
     CHECK(near(elapsed, camera.address_snap_seconds, 2.0f * dt));
     CHECK(near(state.address.look.yaw, down.yaw, 0.0001f));
     CHECK(near(state.address.look.pitch, down.pitch, 0.0001f));
+    CHECK(looking_down(state.address.look, camera));
     // And back.
-    update_game(state, v, dt);
+    update_game(state, r, dt);
     for (int i = 0; i < 60 && state.address.snap; ++i) {
         update_game(state, game_input{}, dt);
     }
     CHECK(near(state.address.look.yaw, target.yaw, 0.0001f));
+    // R again mid-turn turns back the other way.
+    update_game(state, r, dt);
+    update_game(state, game_input{}, dt);
+    update_game(state, r, dt);
+    REQUIRE(state.address.snap.has_value());
+    CHECK(near(state.address.snap->to.pitch, target.pitch, 0.0001f));
+}
+
+TEST_CASE("the swing starts only looking down at the ball") {
+    for (const bool space : {false, true}) {
+        game_state state = started_hole();
+        enter_addressing(state);
+        game_input start;
+        start.swing = space;
+        start.swipe = space ? 0.0f : 1.0f;
+        update_game(state, start, 0.016f);
+        CHECK(!state.address.meter_elapsed);
+        state.address.look = down_look(state.tuning.camera);
+        update_game(state, start, 0.016f);
+        CHECK(state.address.meter_elapsed.has_value());
+        CHECK(!state.address.swing_elapsed);
+    }
+}
+
+TEST_CASE("swipe: a swipe right takes the club back slowly to the dialled top, a swipe left strikes from as far as it got") {
+    const game_tuning tuning = started_hole().tuning;
+    // Slower than the club goes back on its tempo.
+    CHECK(swing_meter_at(tuning.swing.backswing_seconds, 1.0f, tuning.swing) < 1.0f);
+    CHECK(swing_meter_at(100.0f, 0.7f, tuning.swing) == 0.7f);
+    const float top = 0.7f * tuning.swing.meter_full_seconds;
+    CHECK(strike_timing_at(top, 0.7f, tuning.swing) == 0.0f);
+    CHECK(strike_timing_at(top - 0.5f * tuning.swing.timing_window_seconds, 0.7f, tuning.swing) == 0.0f);
+    CHECK(strike_timing_at(top - tuning.swing.timing_window_seconds - 0.1f, 0.7f, tuning.swing) < 0.0f);
+    CHECK(strike_timing_at(top + tuning.swing.timing_window_seconds + 0.1f, 0.7f, tuning.swing) > 0.0f);
+    CHECK(strike_timing_at(0.0f, 0.7f, tuning.swing) == -1.0f);
+    CHECK(strike_timing_at(100.0f, 0.7f, tuning.swing) == 1.0f);
+
+    constexpr float dt = 1.0f / 60.0f;
+    const auto swiped_left_after = [&](const float seconds) -> shot_setup {
+        game_state state = started_hole();
+        address_looking_down(state);
+        state.address.setup.backswing = 0.7f;
+        // Two half swipes right make a whole one.
+        game_input half;
+        half.swipe = 0.5f;
+        update_game(state, half, dt);
+        CHECK(!state.address.meter_elapsed);
+        update_game(state, half, dt);
+        CHECK(state.address.meter_elapsed.has_value());
+        for (float elapsed = 0.0f; elapsed + dt <= seconds; elapsed += dt) {
+            update_game(state, game_input{}, dt);
+        }
+        CHECK(!state.address.swing_elapsed);
+        game_input left;
+        left.swipe = -1.0f;
+        update_game(state, left, dt);
+        CHECK(state.address.swing_elapsed.has_value());
+        CHECK(state.ball->strokes == 0);
+        const shot_setup hit = state.address.setup;
+        swing_through(state);
+        CHECK(state.ball->strokes == 1);
+        return hit;
+    };
+    const shot_setup early = swiped_left_after(0.3f * tuning.swing.meter_full_seconds);
+    CHECK(early.backswing < 0.7f);
+    CHECK(early.strike_timing < 0.0f);
+    const shot_setup on_time = swiped_left_after(top);
+    CHECK(near(on_time.backswing, 0.7f, 0.02f));
+    CHECK(on_time.strike_timing == 0.0f);
+    const shot_setup late = swiped_left_after(top + 1.0f);
+    CHECK(late.backswing == 0.7f);
+    CHECK(late.strike_timing > 0.0f);
+}
+
+TEST_CASE("swipe: Space goes back and Space comes down; Esc stops the backswing without leaving the ball") {
+    game_state state = started_hole();
+    address_looking_down(state);
+    update_game(state, swing_input(), 0.016f);
+    REQUIRE(state.address.meter_elapsed.has_value());
+    game_input esc;
+    esc.cancel = true;
+    update_game(state, esc, 0.016f);
+    CHECK(!state.address.meter_elapsed);
+    CHECK(state.mode == game_mode::addressing);
+    update_game(state, swing_input(), 0.016f);
+    update_game(state, game_input{}, 0.5f);
+    update_game(state, swing_input(), 0.016f);
+    CHECK(state.address.swing_elapsed.has_value());
+    swing_through(state);
+    CHECK(state.ball->strokes == 1);
+}
+
+TEST_CASE("a mistimed strike goes shorter: early thin, late fat, on the same dice") {
+    game_state state = started_hole();
+    const club_definition& club = state.clubs[state.selected_club];
+    shot_record record{stock_swing(club, state.tuning), 1234, {}};
+    record.setup.ball_start = state.ball->position;
+    const auto carry = [&](const float timing) {
+        shot_record timed = record;
+        timed.setup.strike_timing = timing;
+        const shot_result result = simulate_struck_shot(timed, my_golfer(state), current_shot_course(state), state.tuning,
+                                                        state.clubs);
+        return horizontal_distance(result.rest_position, record.setup.ball_start);
+    };
+    const float on_time = carry(0.0f);
+    CHECK(carry(-1.0f) < on_time);
+    CHECK(carry(1.0f) < on_time);
+    const shot_ability on_time_ability = ability_for(record.setup, club, ball_lie::tee, my_golfer(state), state.tuning);
+    shot_setup thin = record.setup;
+    thin.strike_timing = -1.0f;
+    shot_setup fat = record.setup;
+    fat.strike_timing = 1.0f;
+    CHECK(ability_for(thin, club, ball_lie::tee, my_golfer(state), state.tuning).bias.strike_high < 0.0f);
+    CHECK(ability_for(fat, club, ball_lie::tee, my_golfer(state), state.tuning).bias.speed_share < 0.0f);
+    CHECK(ability_for(fat, club, ball_lie::tee, my_golfer(state), state.tuning).spread.strike_high >
+          on_time_ability.spread.strike_high);
 }
 
 TEST_CASE("Space at the wheel does not jump or step out of the cart; F steps out") {
     game_state state = started_hole();
     sit_in_cart(state);
-    update_game(state, game_input_from_keys(held(&input_state::space), 0.0f, drag), 0.016f);
+    update_game(state, game_input_from_keys(held(&input_state::space), 0.0f, bound), 0.016f);
     CHECK(driving_cart(state));
     CHECK(state.player.vertical.grounded);
-    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f, drag), 0.016f);
+    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f, bound), 0.016f);
     CHECK(!driving_cart(state));
 }
 
@@ -410,13 +592,29 @@ TEST_CASE("the mouse turns the look by its counts: right and down turn right and
     input_state keys;
     keys.mouse_dx = 10;
     keys.mouse_dy = -4;
-    const game_input input = game_input_from_keys(keys, 0.01f, drag);
+    const game_input input = game_input_from_keys(keys, 0.01f, bound);
     CHECK(near(input.look_yaw, -0.1f));
     CHECK(near(input.look_pitch, 0.04f));
 
-    const game_input uncaptured = game_input_from_keys(keys, 0.0f, drag);
+    const game_input uncaptured = game_input_from_keys(keys, 0.0f, bound);
     CHECK(uncaptured.look_yaw == 0.0f);
     CHECK(uncaptured.look_pitch == 0.0f);
+}
+
+TEST_CASE("Shift runs, either Shift; Ctrl holds the rangefinder up") {
+    CHECK(game_input_from_keys(held(&input_state::left_shift), 0.0f, bound).run_held);
+    CHECK(game_input_from_keys(held(&input_state::right_shift), 0.0f, bound).run_held);
+    CHECK(!game_input_from_keys(held(&input_state::left_shift), 0.0f, bound).rangefinder_held);
+    CHECK(game_input_from_keys(held(&input_state::ctrl), 0.0f, bound).rangefinder_held);
+    CHECK(!game_input_from_keys(held(&input_state::ctrl), 0.0f, bound).run_held);
+
+    game_state state = started_hole();
+    state.player.yaw = 0.3f;
+    game_input run = game_input_from_keys(held(&input_state::left_shift), 0.0f, bound);
+    run.forward_held = true;
+    const float running = state.tuning.player.walk_speed * state.tuning.player.run_factor * 0.05f;
+    CHECK(state.tuning.player.run_factor > 1.0f);
+    CHECK(near(step_of(state, run, 0.05f), yaw_direction(0.3f) * running, 0.0001f));
 }
 
 TEST_CASE("A and D step sideways without turning, W walks where I look") {
@@ -486,7 +684,7 @@ TEST_CASE("the arrow keys and the mouse pitch the walking camera, as far as the 
     CHECK(near(std::asin(look.y), -max_pitch, 0.0001f));
 }
 
-TEST_CASE("over the ball the mouse and up and down look freely within the clamp, never turning the stance") {
+TEST_CASE("over the ball the mouse looks freely within the clamp, never turning the stance") {
     game_state state = started_hole();
     enter_addressing(state);
     const camera_tuning& camera = state.tuning.camera;
@@ -503,10 +701,8 @@ TEST_CASE("over the ball the mouse and up and down look freely within the clamp,
     CHECK(state.address.setup.aim_angle == aim);
 
     game_input down;
-    down.look_down_held = true;
-    for (int i = 0; i < 200; ++i) {
-        update_game(state, down, 0.05f);
-    }
+    down.look_pitch = -10.0f;
+    update_game(state, down, 0.016f);
     CHECK(near(state.address.look.pitch, glm::radians(camera.address_min_pitch_degrees), 0.0001f));
     mouse.look_yaw = 50.0f;
     update_game(state, mouse, 0.016f);
@@ -539,6 +735,10 @@ TEST_CASE("jumping onto a tee box the hop keeps its arc over the box's edge and 
         return tuning.jump_speed * seconds - 0.5f * tuning.jump_gravity * seconds * seconds;
     };
 
+    // Walking moves in fixed steps: the hop has risen as far as the steps so far take it.
+    const auto stepped = [](const float seconds) {
+        return std::floor(seconds / move_step_seconds + 0.001f) * move_step_seconds;
+    };
     game_input jump;
     jump.jump = true;
     jump.forward_held = true;
@@ -546,7 +746,7 @@ TEST_CASE("jumping onto a tee box the hop keeps its arc over the box's edge and 
     float elapsed = 0.02f;
     bool crossed = false;
     for (; !state.player.vertical.grounded && elapsed < 5.0f; elapsed += 0.02f) {
-        CHECK(near(state.player.position.y, takeoff + rise(elapsed), 0.0001f));
+        CHECK(near(state.player.position.y, takeoff + rise(stepped(elapsed)), 0.0005f));
         crossed = crossed || on_tee_box(box, state.player.position);
         game_input walk;
         walk.forward_held = true;

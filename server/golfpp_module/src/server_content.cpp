@@ -33,6 +33,7 @@ std::vector<std::string> files_in(const content_files& files, const std::string&
 server_content_load_result parse_server_content(const content_files& files) {
     server_content_load_result result;
     server_content content;
+    content.content_hash = simulation_content_hash(files);
 
     const std::vector<std::string> tuning_texts = files_in(files, tuning_path);
     if (tuning_texts.empty()) {
@@ -74,6 +75,20 @@ server_content_load_result parse_server_content(const content_files& files) {
         return result;
     }
     content.default_loadout = *defaults;
+
+    const std::optional<std::string> skills_text = file_text(files, skills_path);
+    const std::optional<std::string> curves_text = file_text(files, curves_path);
+    std::optional<skill_catalog> skills =
+        skills_text && curves_text ? parse_skill_catalog_from_text(*skills_text, *curves_text) : std::nullopt;
+    if (!skills) {
+        result.error = std::string("cannot load ") + skills_path + " with " + curves_path;
+        return result;
+    }
+    content.skills = std::move(*skills);
+    if (const std::string unlisted = unpayable_skill(content.skills, content.rewards, content.items); !unlisted.empty()) {
+        result.error = "XP paid into " + unlisted + ", which " + skills_path + " does not list as earned";
+        return result;
+    }
     content.clubs = clubs_of(content.items);
     if (content.clubs.empty()) {
         result.error = std::string("no clubs in ") + items_path;

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(golfpp VERSION 0.2.0 LANGUAGES CXX)
+project(golfpp VERSION 0.2.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,6 +17,14 @@ option(GOLFPP_NO_CONSOLE "Build golf++ without a console window (Windows)" OFF)
 
 find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
+
+# macOS and Linux releases link SDL2 and SDL2_mixer statically
+# (tooling/release/build_deps.sh), so players need neither installed.
+if (TARGET SDL2::SDL2)
+    set(GOLFPP_SDL2 SDL2::SDL2)
+else()
+    set(GOLFPP_SDL2 SDL2::SDL2-static)
+endif()
 
 find_package(SDL2_mixer QUIET)
 if (TARGET SDL2_mixer::SDL2_mixer)
@@ -39,11 +47,16 @@ add_library(golfpp-third-party INTERFACE)
 target_include_directories(golfpp-third-party SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 target_link_libraries(golfpp-third-party INTERFACE glm::glm)
 
+# The test preset makes warnings errors, so the build stays warning-free on
+# every compiler a release is built with; other builds only warn, so a newer
+# compiler's new warning never stops one.
+option(GOLFPP_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 add_library(golfpp-warnings INTERFACE)
 if (MSVC)
-    target_compile_options(golfpp-warnings INTERFACE /W4)
+    target_compile_options(golfpp-warnings INTERFACE /W4 $<$<BOOL:${GOLFPP_WARNINGS_AS_ERRORS}>:/WX>)
 else()
-    target_compile_options(golfpp-warnings INTERFACE -Wall -Wextra -Wpedantic -Wshadow)
+    target_compile_options(golfpp-warnings INTERFACE -Wall -Wextra -Wpedantic -Wshadow
+        $<$<BOOL:${GOLFPP_WARNINGS_AS_ERRORS}>:-Werror>)
 endif()
 
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/assets" GOLFPP_ASSETS_DIR)
@@ -80,6 +93,7 @@ golfpp_library(golfpp-physics
     src/physics/terrain.cpp
     src/physics/body_collision.cpp
     src/physics/cart_dynamics.cpp
+    src/physics/cart_rollover.cpp
     src/physics/solid.cpp
     src/physics/wind.cpp
 )
@@ -95,6 +109,7 @@ golfpp_library(golfpp-game
     src/game/bag_place.cpp
     src/game/cart_seats.cpp
     src/game/content_files.cpp
+    src/game/content_hash.cpp
     src/game/course_loader.cpp
     src/game/course_session.cpp
     src/game/course_world_loader.cpp
@@ -105,11 +120,14 @@ golfpp_library(golfpp-game
     src/game/interactables.cpp
     src/game/body_contact.cpp
     src/game/golf_cart.cpp
+    src/game/bag_handling.cpp
     src/game/golf_bag.cpp
+    src/game/gear_paint.cpp
     src/game/golfer.cpp
     src/game/group_round.cpp
     src/game/hole_loader.cpp
     src/game/item_catalog.cpp
+    src/game/json_edit.cpp
     src/game/loadout.cpp
     src/game/model_kinds.cpp
     src/game/floodlights.cpp
@@ -117,28 +135,39 @@ golfpp_library(golfpp-game
     src/game/tee_box.cpp
     src/game/json_util.cpp
     src/game/lighting_loader.cpp
+    src/game/lighting_numbers.cpp
+    src/game/look_reload.cpp
     src/game/sun_lighting.cpp
     src/game/mode_dispatch.cpp
     src/game/online_play.cpp
     src/game/motion_sync.cpp
+    src/game/movement_step.cpp
+    src/game/sent_setup.cpp
+    src/game/sync_reconciliation.cpp
+    src/game/cart_prediction.cpp
     src/game/picture_loader.cpp
+    src/game/visual_tour_loader.cpp
     src/game/pixel_font_data.cpp
     src/game/area_solids.cpp
     src/game/play_area.cpp
     src/game/progress_rules.cpp
     src/game/progression.cpp
     src/game/rangefinder.cpp
+    src/game/green_read.cpp
+    src/game/pacing.cpp
     src/game/sight_line.cpp
     src/game/remote_players.cpp
+    src/game/ride_sync.cpp
     src/game/reward_rules.cpp
+    src/game/skill_catalog.cpp
     src/game/round_state.cpp
     src/game/save_data.cpp
     src/game/save_manager.cpp
     src/game/settings.cpp
     src/game/scorecard.cpp
-    src/game/setup_pointer.cpp
     src/game/shot_ability.cpp
     src/game/shot_dice.cpp
+    src/game/shot_number.cpp
     src/game/shot_setup.cpp
     src/game/shot_simulation.cpp
     src/game/shot_snapshot.cpp
@@ -151,7 +180,9 @@ golfpp_library(golfpp-game
     src/game/prop_loader.cpp
     src/game/text_style.cpp
     src/game/tuning_loader.cpp
+    src/game/tuning_panel.cpp
     src/game/utf8.cpp
+    src/game/walking.cpp
     src/game/world_sounds.cpp
 )
 target_link_libraries(golfpp-game PUBLIC golfpp-physics golfpp-profiling)
@@ -171,6 +202,7 @@ golfpp_library(golfpp-render-data
     src/renderer/held_props.cpp
     src/renderer/prop_batch.cpp
     src/renderer/prop_light.cpp
+    src/renderer/scattered_light.cpp
     src/renderer/prop_pieces.cpp
     src/renderer/frustum.cpp
     src/renderer/fence_batch.cpp
@@ -180,6 +212,7 @@ golfpp_library(golfpp-render-data
     src/renderer/hole_sign_face.cpp
     src/renderer/god_menu_overlay.cpp
     src/renderer/hud_overlay.cpp
+    src/renderer/shot_number_overlay.cpp
     src/renderer/osd_overlay.cpp
     src/renderer/solid_outline.cpp
     src/renderer/hud_panel.cpp
@@ -195,6 +228,7 @@ golfpp_library(golfpp-render-data
     src/renderer/remote_avatar_batch.cpp
     src/renderer/render_tree.cpp
     src/renderer/scene_lights.cpp
+    src/renderer/lamp_shadows.cpp
     src/renderer/scorecard_overlay.cpp
     src/renderer/shadow_casters.cpp
     src/renderer/shadow_map_fit.cpp
@@ -223,20 +257,44 @@ if (GOLFPP_NET)
     find_program(GOLFPP_CARGO cargo REQUIRED)
     set(GOLFPP_BRIDGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/net/client_bridge")
     set(GOLFPP_BRIDGE_TARGET_DIR "${CMAKE_BINARY_DIR}/client_bridge")
-    # MinGW builds link the GNU Rust target; other toolchains use cargo's default.
+    set(GOLFPP_BRIDGE_CARGO_BUILD "${GOLFPP_CARGO}" build --release --manifest-path "${GOLFPP_BRIDGE_DIR}/Cargo.toml"
+        --target-dir "${GOLFPP_BRIDGE_TARGET_DIR}")
+    # MinGW builds link the GNU Rust target; a macOS build links one library
+    # for each of CMAKE_OSX_ARCHITECTURES, joined by lipo; other toolchains
+    # use cargo's default.
     if (MINGW)
         set(GOLFPP_BRIDGE_RUST_TARGET x86_64-pc-windows-gnu)
         set(GOLFPP_BRIDGE_LIBRARY "${GOLFPP_BRIDGE_TARGET_DIR}/${GOLFPP_BRIDGE_RUST_TARGET}/release/libgolfpp_client_bridge.a")
-        set(GOLFPP_BRIDGE_TARGET_ARGS --target ${GOLFPP_BRIDGE_RUST_TARGET})
+        set(GOLFPP_BRIDGE_COMMANDS COMMAND ${GOLFPP_BRIDGE_CARGO_BUILD} --target ${GOLFPP_BRIDGE_RUST_TARGET})
+    elseif (APPLE AND CMAKE_OSX_ARCHITECTURES)
+        set(GOLFPP_BRIDGE_LIBRARY "${GOLFPP_BRIDGE_TARGET_DIR}/universal/libgolfpp_client_bridge.a")
+        set(GOLFPP_BRIDGE_COMMANDS)
+        set(GOLFPP_BRIDGE_ARCH_LIBRARIES)
+        set(GOLFPP_BRIDGE_ENV)
+        if (CMAKE_OSX_DEPLOYMENT_TARGET)
+            set(GOLFPP_BRIDGE_ENV "MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+        endif()
+        foreach (arch IN LISTS CMAKE_OSX_ARCHITECTURES)
+            if (arch STREQUAL "arm64")
+                set(rust_target aarch64-apple-darwin)
+            else()
+                set(rust_target ${arch}-apple-darwin)
+            endif()
+            list(APPEND GOLFPP_BRIDGE_COMMANDS COMMAND "${CMAKE_COMMAND}" -E env ${GOLFPP_BRIDGE_ENV}
+                ${GOLFPP_BRIDGE_CARGO_BUILD} --target ${rust_target})
+            list(APPEND GOLFPP_BRIDGE_ARCH_LIBRARIES "${GOLFPP_BRIDGE_TARGET_DIR}/${rust_target}/release/libgolfpp_client_bridge.a")
+        endforeach()
+        list(APPEND GOLFPP_BRIDGE_COMMANDS
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${GOLFPP_BRIDGE_TARGET_DIR}/universal"
+            COMMAND lipo -create -output "${GOLFPP_BRIDGE_LIBRARY}" ${GOLFPP_BRIDGE_ARCH_LIBRARIES})
     else()
         set(GOLFPP_BRIDGE_LIBRARY "${GOLFPP_BRIDGE_TARGET_DIR}/release/${CMAKE_STATIC_LIBRARY_PREFIX}golfpp_client_bridge${CMAKE_STATIC_LIBRARY_SUFFIX}")
-        set(GOLFPP_BRIDGE_TARGET_ARGS)
+        set(GOLFPP_BRIDGE_COMMANDS COMMAND ${GOLFPP_BRIDGE_CARGO_BUILD})
     endif()
     file(GLOB_RECURSE GOLFPP_BRIDGE_SOURCES CONFIGURE_DEPENDS "${GOLFPP_BRIDGE_DIR}/src/*.rs")
     add_custom_command(
         OUTPUT "${GOLFPP_BRIDGE_LIBRARY}"
-        COMMAND "${GOLFPP_CARGO}" build --release --manifest-path "${GOLFPP_BRIDGE_DIR}/Cargo.toml"
-                --target-dir "${GOLFPP_BRIDGE_TARGET_DIR}" ${GOLFPP_BRIDGE_TARGET_ARGS}
+        ${GOLFPP_BRIDGE_COMMANDS}
         # cargo leaves an unchanged library's time alone; touch it so this
         # step does not run again on every build.
         COMMAND "${CMAKE_COMMAND}" -E touch "${GOLFPP_BRIDGE_LIBRARY}"
@@ -252,6 +310,15 @@ if (GOLFPP_NET)
         # What the Rust standard library, tokio, rustls and keyring need.
         set_property(TARGET golfpp-client-bridge PROPERTY INTERFACE_LINK_LIBRARIES
             ws2_32 userenv bcrypt ntdll secur32 crypt32 ncrypt advapi32 ole32 oleaut32 propsys runtimeobject credui)
+    elseif (APPLE)
+        set_property(TARGET golfpp-client-bridge PROPERTY INTERFACE_LINK_LIBRARIES
+            "-framework CoreFoundation" "-framework Security" iconv)
+    else()
+        # TLS (OpenSSL) and the Secret Service (D-Bus).
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(GOLFPP_BRIDGE_SYSTEM REQUIRED IMPORTED_TARGET openssl dbus-1)
+        set_property(TARGET golfpp-client-bridge PROPERTY INTERFACE_LINK_LIBRARIES
+            PkgConfig::GOLFPP_BRIDGE_SYSTEM pthread dl m)
     endif()
 endif()
 
@@ -263,13 +330,17 @@ golfpp_library(golfpp-app-logic
     src/core/input.cpp
     src/core/key_bindings.cpp
     src/core/light_frame.cpp
+    src/core/look_tuning.cpp
     src/core/menu_controls.cpp
     src/core/online_menus.cpp
     src/core/render_frame.cpp
+    src/core/render_gear.cpp
     src/core/render_online.cpp
+    src/core/render_putting.cpp
     src/core/settings_menu.cpp
     src/core/sky_frame.cpp
     src/core/startup_flow.cpp
+    src/core/visual_tour.cpp
     src/core/startup_options.cpp
     src/core/tape_tracking.cpp
     src/core/vcr_frame.cpp
@@ -293,6 +364,7 @@ target_link_libraries(golfpp-online-session PUBLIC golfpp-app-logic golfpp-net)
 add_executable(golfpp
     src/audio/audio_engine.cpp
     src/core/app.cpp
+    src/core/app_look.cpp
     src/core/event_loop.cpp
     src/core/main.cpp
     src/core/screenshot.cpp
@@ -313,8 +385,11 @@ add_executable(golfpp
     src/renderer/overlay_pass.cpp
     src/renderer/prop_renderer.cpp
     src/renderer/renderer.cpp
+    src/renderer/renderer_look.cpp
     src/renderer/shader.cpp
     src/renderer/shadow_map_pass.cpp
+    src/renderer/lamp_shadow_pass.cpp
+    src/renderer/sun_shaft_pass.cpp
     src/renderer/tape_pass.cpp
     src/renderer/terrain_renderer.cpp
     src/renderer/texture.cpp
@@ -328,7 +403,7 @@ target_compile_definitions(golfpp PRIVATE SDL_MAIN_HANDLED)
 target_link_libraries(golfpp PRIVATE
     golfpp-app-logic
     golfpp-warnings
-    SDL2::SDL2
+    ${GOLFPP_SDL2}
     ${GOLFPP_SDL2_MIXER}
     OpenGL::GL
 )
@@ -337,6 +412,34 @@ if (WIN32)
 endif()
 if (WIN32 AND GOLFPP_NO_CONSOLE)
     set_target_properties(golfpp PROPERTIES WIN32_EXECUTABLE ON)
+endif()
+if (APPLE)
+    # golf++.app. Its icon is the window icon, made into an .icns by macOS's
+    # own sips and iconutil.
+    set(GOLFPP_ICON_BMP "${CMAKE_CURRENT_SOURCE_DIR}/assets/interface/icons/golfpp-icon.bmp")
+    set(GOLFPP_ICONSET "${CMAKE_BINARY_DIR}/golfpp.iconset")
+    set(GOLFPP_ICNS "${CMAKE_BINARY_DIR}/golfpp.icns")
+    set(GOLFPP_ICON_COMMANDS COMMAND "${CMAKE_COMMAND}" -E make_directory "${GOLFPP_ICONSET}")
+    foreach (icon IN ITEMS 16x16:16 16x16@2x:32 32x32:32 32x32@2x:64 128x128:128 128x128@2x:256 256x256:256)
+        string(REPLACE ":" ";" icon_parts "${icon}")
+        list(GET icon_parts 0 icon_name)
+        list(GET icon_parts 1 icon_pixels)
+        list(APPEND GOLFPP_ICON_COMMANDS COMMAND sips -s format png -z ${icon_pixels} ${icon_pixels}
+            "${GOLFPP_ICON_BMP}" --out "${GOLFPP_ICONSET}/icon_${icon_name}.png")
+    endforeach()
+    add_custom_command(
+        OUTPUT "${GOLFPP_ICNS}"
+        ${GOLFPP_ICON_COMMANDS}
+        COMMAND iconutil -c icns -o "${GOLFPP_ICNS}" "${GOLFPP_ICONSET}"
+        DEPENDS "${GOLFPP_ICON_BMP}"
+        VERBATIM)
+    target_sources(golfpp PRIVATE "${GOLFPP_ICNS}")
+    set_source_files_properties("${GOLFPP_ICNS}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+    set_target_properties(golfpp PROPERTIES
+        MACOSX_BUNDLE ON
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/macos/Info.plist.in"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
 endif()
 if (GOLFPP_NET)
     # The bridge after golfpp-net, which calls it: static libraries link in order.
@@ -357,21 +460,31 @@ if (GOLFPP_NET)
     target_compile_definitions(golfpp-online-check PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
 endif()
 
-# `cmake --install <build> --prefix <dir>`: everything a player's PC needs
-# to run the game from <dir>, which tooling/release/build_release.ps1 packs.
-# The DLLs are whichever the exe loads from outside Windows, found at install
-# time next to the compiler (MinGW's runtime, SDL2, SDL2_mixer and its codecs).
-if (POLICY CMP0207)
-    cmake_policy(SET CMP0207 NEW)  # match the DLLs' paths with forward slashes
+# `cmake --install <build> --prefix <dir>`: everything a player's computer
+# needs to run the game from <dir>, which tooling/release packs.
+if (APPLE)
+    # golf++.app, with assets/ in its Resources, where SDL_GetBasePath points.
+    install(TARGETS golfpp BUNDLE DESTINATION .)
+    install(DIRECTORY assets DESTINATION golf++.app/Contents/Resources)
+elseif (WIN32)
+    # The DLLs are whichever the exe loads from outside Windows, found at
+    # install time next to the compiler (MinGW's runtime, SDL2, SDL2_mixer
+    # and its codecs).
+    if (POLICY CMP0207)
+        cmake_policy(SET CMP0207 NEW)  # match the DLLs' paths with forward slashes
+    endif()
+    get_filename_component(GOLFPP_TOOLCHAIN_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    install(TARGETS golfpp RUNTIME_DEPENDENCY_SET golfpp-runtime RUNTIME DESTINATION .)
+    install(RUNTIME_DEPENDENCY_SET golfpp-runtime
+        DIRECTORIES "${GOLFPP_TOOLCHAIN_BIN}"
+        PRE_EXCLUDE_REGEXES "^api-ms-" "^ext-ms-"
+        POST_EXCLUDE_REGEXES "/[Ww][Ii][Nn][Dd][Oo][Ww][Ss]/"
+        DESTINATION .)
+    install(DIRECTORY assets DESTINATION .)
+else()
+    install(TARGETS golfpp RUNTIME DESTINATION .)
+    install(DIRECTORY assets DESTINATION .)
 endif()
-get_filename_component(GOLFPP_TOOLCHAIN_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
-install(TARGETS golfpp RUNTIME_DEPENDENCY_SET golfpp-runtime RUNTIME DESTINATION .)
-install(RUNTIME_DEPENDENCY_SET golfpp-runtime
-    DIRECTORIES "${GOLFPP_TOOLCHAIN_BIN}"
-    PRE_EXCLUDE_REGEXES "^api-ms-" "^ext-ms-"
-    POST_EXCLUDE_REGEXES "/[Ww][Ii][Nn][Dd][Oo][Ww][Ss]/"
-    DESTINATION .)
-install(DIRECTORY assets DESTINATION .)
 
 if (GOLFPP_BUILD_TESTS)
     # The server module's plain C++ (server/golfpp_module/src), without the
@@ -379,6 +492,9 @@ if (GOLFPP_BUILD_TESTS)
     add_library(golfpp-server-rules STATIC
         server/golfpp_module/src/account_rules.cpp
         server/golfpp_module/src/play_rules.cpp
+        server/golfpp_module/src/cart_rules.cpp
+        server/golfpp_module/src/movement_rules.cpp
+        server/golfpp_module/src/progress_rollup.cpp
         server/golfpp_module/src/server_content.cpp
     )
     target_include_directories(golfpp-server-rules PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/server/golfpp_module/src)
@@ -389,12 +505,15 @@ if (GOLFPP_BUILD_TESTS)
         tests/audio_manifest_tests.cpp
         tests/sound_placement_tests.cpp
         tests/shot_ability_tests.cpp
+        tests/shot_number_tests.cpp
         tests/golf_bag_tests.cpp
+        tests/practice_tests.cpp
         tests/osd_tests.cpp
         tests/shot_snapshot_tests.cpp
         tests/camera_transition_tests.cpp
         tests/cart_dynamics_tests.cpp
         tests/cart_tests.cpp
+        tests/shared_carts_tests.cpp
         tests/content_tests.cpp
         tests/prop_tests.cpp
         tests/controls_tests.cpp
@@ -415,11 +534,16 @@ if (GOLFPP_BUILD_TESTS)
         tests/tee_box_tests.cpp
         tests/light_frame_tests.cpp
         tests/material_zone_tests.cpp
+        tests/movement_tests.cpp
         tests/fake_stdb_bridge.cpp
         tests/mode_dispatch_tests.cpp
         tests/net_client_tests.cpp
+        tests/interest_rules_tests.cpp
+        tests/progress_rollup_tests.cpp
         tests/online_menus_tests.cpp
         tests/online_play_tests.cpp
+        tests/sync_harness.cpp
+        tests/sync_tests.cpp
         tests/online_session_tests.cpp
         tests/overlay_batch_tests.cpp
         tests/play_rules_tests.cpp
@@ -427,10 +551,14 @@ if (GOLFPP_BUILD_TESTS)
         tests/profiling_tests.cpp
         tests/progression_tests.cpp
         tests/rangefinder_tests.cpp
+        tests/putting_read_tests.cpp
         tests/render_culling_tests.cpp
         tests/render_frame_tests.cpp
         tests/server_content_tests.cpp
         tests/shader_tests.cpp
+        tests/scattered_light_tests.cpp
+        tests/lamp_shadow_tests.cpp
+        tests/look_tuning_tests.cpp
         tests/shadow_map_tests.cpp
         tests/shot_simulation_tests.cpp
         tests/sky_clock_tests.cpp
@@ -439,6 +567,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/sky_visibility_tests.cpp
         tests/settings_tests.cpp
         tests/startup_flow_tests.cpp
+        tests/visual_tour_tests.cpp
         tests/startup_options_tests.cpp
         tests/text_assets_tests.cpp
         tests/text_input_tests.cpp

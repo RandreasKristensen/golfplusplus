@@ -21,7 +21,7 @@ render_hole_preview make_hole_preview(const hole_data& hole) {
     preview.tee_position = hole.tee_position;
     preview.pin_position = hole.pin_position;
     preview.control_points = hole.spline.control_points;
-    preview.fairway_width = has_fairway_outline(hole) ? 0.0f : hole.spline.width;
+    preview.fairway_width = ribbon_paints_fairway(hole) ? hole.spline.width : 0.0f;
     preview.material_zones = hole.material_zones;
     return preview;
 }
@@ -42,6 +42,25 @@ startup_course_option make_course_option(const std::string& asset_root, const co
     return option;
 }
 
+// The transport picker's tiles, top to bottom.
+constexpr int transport_cart = 0;
+constexpr int transport_carry = 1;
+
+// Offline: starts `course`. Online: joins its room, with a cart or not as
+// picked, and waits there.
+void begin_course(startup_flow_state& state, const course_definition& course, const play_mode play,
+                  startup_menu_result& result) {
+    if (play == play_mode::offline) {
+        result.action = startup_action::start_course;
+        result.course = course;
+        result.play = play;
+        return;
+    }
+    result.requests.push_back(online_request{online_request_type::join_course, course.id, state.takes_cart});
+    open_screen(state, startup_flow::joining);
+    state.joining_course = course;
+}
+
 startup_menu_screen screen_for_flow(const startup_flow flow) {
     switch (flow) {
     case startup_flow::main:
@@ -50,6 +69,7 @@ startup_menu_screen screen_for_flow(const startup_flow flow) {
     case startup_flow::help:
         return startup_menu_screen::help;
     case startup_flow::course_picker:
+    case startup_flow::tour_picker:
     case startup_flow::online_course_picker:
         return startup_menu_screen::course_picker;
     case startup_flow::online_login:
@@ -60,7 +80,9 @@ startup_menu_screen screen_for_flow(const startup_flow flow) {
         return startup_menu_screen::form;
     case startup_flow::exit_prompt:
     case startup_flow::natural_shape_picker:
+    case startup_flow::transport_picker:
         return startup_menu_screen::confirm;
+    case startup_flow::touring:
     case startup_flow::playing:
         return startup_menu_screen::none;
     }
@@ -69,7 +91,7 @@ startup_menu_screen screen_for_flow(const startup_flow flow) {
 
 // The main menu's items for how online play is going.
 std::vector<main_menu_item> main_menu_items(const online_menu_status& online) {
-    std::vector<main_menu_item> items{main_menu_item::play_online, main_menu_item::play_offline};
+    std::vector<main_menu_item> items{main_menu_item::play_online, main_menu_item::play_offline, main_menu_item::visual_tour};
     if (signed_in(online)) {
         if (!online.guest) {
             items.push_back(main_menu_item::link_login);
@@ -88,6 +110,8 @@ std::pair<const char*, const char*> main_menu_text(const main_menu_item item) {
         return {text_menu_main_play_online, text_menu_main_play_online_hint};
     case main_menu_item::play_offline:
         return {text_menu_main_play_offline, text_menu_main_play_offline_hint};
+    case main_menu_item::visual_tour:
+        return {text_menu_main_visual_tour, text_menu_main_visual_tour_hint};
     case main_menu_item::link_login:
         return {text_menu_main_link_login, text_menu_main_link_login_hint};
     case main_menu_item::sign_out:
@@ -107,11 +131,14 @@ int item_count(const startup_flow flow, const startup_catalog& catalog, const on
     case startup_flow::main:
         return static_cast<int>(main_menu_items(online).size());
     case startup_flow::course_picker:
+    case startup_flow::tour_picker:
         return static_cast<int>(catalog.courses.size());
     case startup_flow::exit_prompt:
         return 2;
     case startup_flow::natural_shape_picker:
         return 3;
+    case startup_flow::transport_picker:
+        return 2;
     default:
         return 0;
     }
@@ -124,6 +151,9 @@ void accept_main_menu(startup_flow_state& state, const online_menu_status& onlin
         break;
     case main_menu_item::play_offline:
         open_screen(state, startup_flow::course_picker);
+        break;
+    case main_menu_item::visual_tour:
+        open_screen(state, startup_flow::tour_picker);
         break;
     case main_menu_item::link_login:
         open_link_code_show(state, online, result);
@@ -186,15 +216,18 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
     }
 
     const int count = item_count(state.flow, catalog, online);
-    const bool picker = state.flow == startup_flow::course_picker;
-    const int hit = select_with_input(screen_for_flow(state.flow), picker ? picker_columns : 1, state.selection, count, input,
-                                      pointer, result.sounds);
+    const int hit = state.flow == startup_flow::course_picker || state.flow == startup_flow::tour_picker
+        ? select_course(state.selection, state.picker_top_row, count, input, pointer, result.sounds)
+        : select_with_input(screen_for_flow(state.flow), 1, state.selection, count, input, pointer, result.sounds);
 
     if (input.escape.pressed) {
         result.sounds.push_back(ui_sound::back);
         if (state.flow == startup_flow::main) {
             open_screen(state, startup_flow::exit_prompt);
             state.selection = exit_no;
+        } else if (state.flow == startup_flow::transport_picker) {
+            open_screen(state, state.picking_for_play == play_mode::online ? startup_flow::online_course_picker
+                                                                           : startup_flow::course_picker);
         } else if (state.flow == startup_flow::natural_shape_picker) {
             // Online the room is joined already: a shape must be picked.
             if (state.picking_for_play == play_mode::offline) {
@@ -216,7 +249,14 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
         accept_main_menu(state, online, result);
         break;
     case startup_flow::course_picker:
-        result.action = startup_action::start_course;
+        pick_transport(state, catalog.courses[selected].course, play_mode::offline, result);
+        break;
+    case startup_flow::transport_picker:
+        state.takes_cart = state.selection == transport_cart;
+        begin_course(state, state.picking_for_course, state.picking_for_play, result);
+        break;
+    case startup_flow::tour_picker:
+        result.action = startup_action::start_tour;
         result.course = catalog.courses[selected].course;
         break;
     case startup_flow::exit_prompt:
@@ -238,6 +278,19 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
     return result;
 }
 
+void pick_transport(startup_flow_state& state, const course_definition& course, const play_mode play,
+                    startup_menu_result& result) {
+    if (!course.carts) {
+        state.takes_cart = false;
+        begin_course(state, course, play, result);
+        return;
+    }
+    open_screen(state, startup_flow::transport_picker);
+    state.selection = transport_cart;
+    state.picking_for_course = course;
+    state.picking_for_play = play;
+}
+
 void open_natural_shape_picker(startup_flow_state& state, const course_definition& course, const play_mode play) {
     open_screen(state, startup_flow::natural_shape_picker);
     state.selection = natural_shape_index(natural_shape::neutral);
@@ -247,6 +300,10 @@ void open_natural_shape_picker(startup_flow_state& state, const course_definitio
 
 void enter_playing(startup_flow_state& state) {
     state.flow = startup_flow::playing;
+}
+
+void enter_touring(startup_flow_state& state) {
+    state.flow = startup_flow::touring;
 }
 
 void return_to_main_menu(startup_flow_state& state) {
@@ -345,6 +402,14 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
         add_tile(menu, lookup_text(text, text_menu_confirm_yes), "", selected(exit_yes));
         add_tile(menu, lookup_text(text, text_menu_confirm_no), "", selected(exit_no));
         break;
+    case startup_flow::transport_picker:
+        menu.title = lookup_text(text, text_menu_transport_title);
+        menu.subtitle = lookup_text(text, text_menu_transport_subtitle);
+        add_tile(menu, lookup_text(text, text_menu_transport_cart), lookup_text(text, text_menu_transport_cart_hint),
+                 selected(static_cast<std::size_t>(transport_cart)));
+        add_tile(menu, lookup_text(text, text_menu_transport_carry), lookup_text(text, text_menu_transport_carry_hint),
+                 selected(static_cast<std::size_t>(transport_carry)));
+        break;
     case startup_flow::natural_shape_picker:
         menu.title = lookup_text(text, text_menu_natural_shape_title);
         menu.subtitle = lookup_text(text, text_menu_natural_shape_subtitle);
@@ -365,7 +430,13 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
         menu.title = lookup_text(text, text_menu_course_picker_title);
         menu.subtitle = lookup_text(text, text_menu_course_picker_subtitle);
         menu.footer = lookup_text(text, text_menu_course_picker_footer);
-        add_course_tiles(menu, catalog, text, state.selection);
+        add_course_tiles(menu, catalog, text, state.selection, state.picker_top_row);
+        break;
+    case startup_flow::tour_picker:
+        menu.title = lookup_text(text, text_menu_tour_picker_title);
+        menu.subtitle = lookup_text(text, text_menu_tour_picker_subtitle);
+        menu.footer = lookup_text(text, text_menu_tour_picker_footer);
+        add_course_tiles(menu, catalog, text, state.selection, state.picker_top_row);
         break;
     default:
         break;

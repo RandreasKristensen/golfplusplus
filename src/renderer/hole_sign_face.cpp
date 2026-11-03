@@ -214,10 +214,11 @@ glm::vec3 hole_sign_map_ink(const ground_colors& ground, const hole_sign_map_spo
     return spot.own_hole ? ink : course_map_other_hole_ink(ink);
 }
 
-hole_sign_labels make_hole_sign_labels(const text_assets& text, const int hole_number, const int par, const int meters) {
+hole_sign_labels make_hole_sign_labels(const text_assets& text, const int hole_number, const int par, const int meters,
+                                       const bool practice) {
     return hole_sign_labels{
-        format_text(text, text_hole_sign_number, {{"hole", std::to_string(hole_number)}}),
-        format_text(text, text_hole_sign_par, {{"par", std::to_string(par)}}),
+        format_text(text, practice ? text_hole_sign_bay : text_hole_sign_number, {{"hole", std::to_string(hole_number)}}),
+        practice ? lookup_text(text, text_hole_sign_target) : format_text(text, text_hole_sign_par, {{"par", std::to_string(par)}}),
         format_text(text, text_hole_sign_length, {{"meters", std::to_string(meters)}}),
     };
 }

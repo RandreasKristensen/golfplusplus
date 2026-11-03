@@ -31,7 +31,7 @@ online_menu_status online_session::menu_status(const game_state& state, const st
     }
     status.account_id = state.online.account_id;
     status.name = state.online.display_name;
-    if (state.online.room) {
+    if (state.online.room && state.online.room_ready) {
         status.room_course_id = state.online.room->course_id;
     }
     if (const std::optional<link_code_info>& code = net_.link_code()) {
@@ -75,7 +75,7 @@ void online_session::carry_out(const std::vector<online_request>& requests, game
             net_.create_link_code();
             break;
         case online_request_type::join_course:
-            net_.join_course(request.text);
+            net_.join_course(request.text, request.takes_cart);
             break;
         case online_request_type::leave_room:
             net_.leave_room();
@@ -113,12 +113,12 @@ online_round_status online_session::watch_round(const game_state& state) {
         rejoining_ = false;
         return {online_round_event::lost, text_online_room_lost};
     }
-    if (in_course_room && rejoin_sent_) {
+    if (in_course_room && state.online.room_ready && rejoin_sent_) {
         rejoining_ = false;
         return {online_round_event::restart, {}};
     }
     if (!rejoin_sent_ && state.online.account_id != 0) {
-        net_.join_course(state.course.id);
+        net_.join_course(state.course.id, state.takes_cart && state.course.carts);
         rejoin_sent_ = true;
     }
     return {};

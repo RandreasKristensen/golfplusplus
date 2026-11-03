@@ -2,7 +2,8 @@
 
 // What the camcorder and the VCR add to a frame (render_vcr): the
 // datestamp burned in from the sky clock's date and time on the course, with
-// OFFLINE over it in offline play, the VCR's PLAY tag in the menus and PAUSE
+// OFFLINE over it in offline play, the VCR's PLAY tag in the menus and the
+// visual tour and PAUSE
 // tag with a still frame while the game is paused. Looks only; nothing in the
 // game reads it. GL-free.
 
@@ -21,6 +22,7 @@ struct vcr_signals {
     bool in_menu = false;    // the startup menus
     bool paused = false;     // the pause menu or the round's results
     bool datestamp = false;  // the setting
+    bool touring = false;    // the visual tour: PLAY over the course, no OFFLINE
 };
 
 // `local_unix_ms` is this machine's UTC clock.

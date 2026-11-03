@@ -227,7 +227,7 @@ TEST_CASE("F near the ball steps up to it at the club's stock setup, looking at 
     CHECK(!state.address.swing_elapsed.has_value());
 }
 
-TEST_CASE("Space swings: the ball is struck at impact, on the club's tempo, not before") {
+TEST_CASE("the downswing strikes the ball at impact, on the club's tempo, not before") {
     for (const bool putter : {false, true}) {
         game_state state = started_hole();
         if (putter) {
@@ -235,9 +235,9 @@ TEST_CASE("Space swings: the ball is struck at impact, on the club's tempo, not 
             REQUIRE(state.clubs[state.selected_club].club_class == "putter");
         }
         const club_definition& club = state.clubs[state.selected_club];
-        const float impact = swing_impact_seconds(swing_tempo_for(club, state.tuning.swing));
-        enter_addressing(state);
-        update_game(state, swing_input(), 0.016f);
+        const float impact = swing_tempo_for(club, state.tuning.swing).down_seconds;
+        address_looking_down(state);
+        start_swing_on_time(state);
         REQUIRE(state.address.swing_elapsed.has_value());
 
         float elapsed = 0.0f;
@@ -314,9 +314,9 @@ TEST_CASE("a held dial key steps once, then repeats faster the longer it is held
     // Let go and pressed again: a single step again.
     update_game(state, game_input{}, 0.01f);
     CHECK(near(turned_over(0.01f), step, 0.0001f));
-    // The arrows turn it as A and D do; D the other way.
+    // D turns it the other way.
     game_input right;
-    right.turn_right_held = true;
+    right.strafe_right_held = true;
     const float before = state.address.setup.aim_angle;
     update_game(state, game_input{}, 0.01f);
     update_game(state, right, 0.01f);
@@ -350,6 +350,67 @@ TEST_CASE("hitting launches the ball, counts a stroke and awards swing xp once")
     const glm::vec3 launched = state.ball->position;
     update_game(state, game_input{}, 0.016f);
     CHECK(glm::length(state.ball->position - launched) > 0.0f);
+}
+
+TEST_CASE("the camera lets go once the ball has rolled a little, and the moving ball can't be played") {
+    // The fixture's drive stops within the roll of where it lands: followed to the end.
+    game_state drive = started_hole();
+    hit_selected_club(drive);
+    REQUIRE(drive.shot.has_value());
+    CHECK(drive.shot->follow_seconds == drive.shot->result.duration);
+
+    // A shot that hops once and rolls on 8 m along the ground.
+    game_state state = started_hole();
+    const float per_meter = 1.0f / state.tuning.scale.meters_per_world_unit;
+    const float roll = state.tuning.camera.follow_roll_meters * per_meter;
+    const glm::vec3 start = state.ball->position;
+    const float interval = static_cast<float>(shot_steps_per_trajectory_point) * shot_step_seconds;
+    const float bounce = 0.5f;
+    const float stops = 2.0f;
+    shot_result result;
+    for (float time = 0.0f; time <= stops + 0.5f * interval; time += interval) {
+        const float hop = time < bounce ? time * (bounce - time) * 4.0f : 0.0f;
+        const float left = time < bounce ? 1.0f : 1.0f - (time - bounce) / (stops - bounce);
+        const float rolling = 1.0f - left * left;
+        result.trajectory.push_back(start + glm::vec3(0.0f, hop * per_meter, (2.0f * time + 8.0f * rolling) * per_meter));
+    }
+    result.duration = static_cast<float>(result.trajectory.size() - 1) * interval;
+    result.rest_position = result.trajectory.back();
+    result.events.push_back(shot_event{bounce, shot_event_kind::land, terrain_material::fairway});
+    play_shot(state, result);
+    REQUIRE(state.shot.has_value());
+    CHECK(state.shot->follow_seconds > bounce);
+    CHECK(state.shot->follow_seconds < result.duration);
+    const float rolled = horizontal_distance(shot_position_at(result, state.shot->follow_seconds),
+                                             shot_position_at(result, bounce));
+    CHECK(rolled >= roll);
+    CHECK(rolled <= roll * 1.2f);
+
+    while (state.mode == game_mode::following_shot) {
+        update_game(state, game_input{}, 0.02f);
+    }
+    REQUIRE(state.shot.has_value());
+    CHECK(state.shot->elapsed >= state.shot->follow_seconds);
+
+    // Walking again while it rolls: I move, but standing over it does nothing.
+    const glm::vec3 stood = state.player.position;
+    game_input forward;
+    forward.forward_held = true;
+    update_game(state, forward, 0.02f);
+    CHECK(horizontal_distance(state.player.position, stood) > 0.0f);
+    state.player.position = state.ball->position;
+    game_input press;
+    press.interact = true;
+    update_game(state, press, 0.02f);
+    CHECK(state.mode == game_mode::walking);
+    CHECK(state.shot.has_value());
+
+    while (state.shot) {
+        update_game(state, game_input{}, 0.02f);
+    }
+    state.player.position = state.ball->position;
+    update_game(state, press, 0.02f);
+    CHECK(state.mode == game_mode::addressing);
 }
 
 TEST_CASE("overlays show only while held, and the rangefinder only on foot") {

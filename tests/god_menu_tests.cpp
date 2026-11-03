@@ -39,7 +39,7 @@ TEST_CASE("the god menu opens only when enabled, and its rows wrap") {
     REQUIRE(menu.open);
     god_menu_keys up;
     up.up = true;
-    CHECK(update_god_menu(menu, sky_controls{}, up, breezy(), 12.0f).menu.row == god_menu_row::solids);
+    CHECK(update_god_menu(menu, sky_controls{}, up, breezy(), 12.0f).menu.row == god_menu_row::profiler);
 }
 
 TEST_CASE("changing a live row starts from the live value, and backspace lets it run live again") {
@@ -145,6 +145,20 @@ TEST_CASE("run_god_menu puts the held weather into play offline") {
     CHECK(!state.weather_override.has_value());
 }
 
+TEST_CASE("the god menu shows the profiler overlay, and hides it again") {
+    god_menu_state menu;
+    menu.enabled = true;
+    menu.open = true;
+    menu.row = god_menu_row::profiler;
+    CHECK(!menu.show_profiler);
+    menu = update_god_menu(menu, sky_controls{}, pressed_right(), breezy(), 12.0f).menu;
+    CHECK(menu.show_profiler);
+    god_menu_keys live;
+    live.live = true;
+    menu = update_god_menu(menu, sky_controls{}, live, breezy(), 12.0f).menu;
+    CHECK(!menu.show_profiler);
+}
+
 TEST_CASE("the god menu shows every solid near me as outlines, and hides them again") {
     god_menu_state menu;
     menu.enabled = true;
@@ -196,3 +210,5 @@ TEST_CASE("a solid's outline: a box its twelve edges, an upright cylinder its tw
     const std::vector<world_segment> cone = solid_outline(leaves);
     CHECK(near(cone.back().second, glm::vec3(0.0f, 4.0f, 0.0f)));
 }
+
+

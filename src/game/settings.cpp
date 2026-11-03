@@ -76,6 +76,7 @@ bool has_applied_settings(const std::vector<setting_definition>& definitions) {
         find_setting(definitions, setting_datestamp) != nullptr &&
         find_setting(definitions, setting_interact_prompt) != nullptr &&
         find_setting(definitions, setting_handedness) != nullptr &&
+        find_setting(definitions, setting_favourite_colour) != nullptr &&
         find_setting(definitions, setting_natural_shape) != nullptr;
 }
 

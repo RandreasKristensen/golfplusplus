@@ -9,6 +9,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub(super) struct SetGolferArgs {
     pub hand: u8,
     pub natural: u8,
+    pub colour: u8,
 }
 
 impl From<SetGolferArgs> for super::Reducer {
@@ -16,6 +17,7 @@ impl From<SetGolferArgs> for super::Reducer {
         Self::SetGolfer {
             hand: args.hand,
             natural: args.natural,
+            colour: args.colour,
         }
     }
 }
@@ -35,8 +37,8 @@ pub trait set_golfer {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`set_golfer:set_golfer_then`] to run a callback after the reducer completes.
-    fn set_golfer(&self, hand: u8, natural: u8) -> __sdk::Result<()> {
-        self.set_golfer_then(hand, natural, |_, _| {})
+    fn set_golfer(&self, hand: u8, natural: u8, colour: u8) -> __sdk::Result<()> {
+        self.set_golfer_then(hand, natural, colour, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `set_golfer` to run as soon as possible,
@@ -49,6 +51,7 @@ pub trait set_golfer {
         &self,
         hand: u8,
         natural: u8,
+        colour: u8,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -61,12 +64,19 @@ impl set_golfer for super::RemoteReducers {
         &self,
         hand: u8,
         natural: u8,
+        colour: u8,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
-        self.imp
-            .invoke_reducer_with_callback(SetGolferArgs { hand, natural }, callback)
+        self.imp.invoke_reducer_with_callback(
+            SetGolferArgs {
+                hand,
+                natural,
+                colour,
+            },
+            callback,
+        )
     }
 }

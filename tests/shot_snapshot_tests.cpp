@@ -163,12 +163,12 @@ TEST_CASE("offline my shot meets my cart where it stands") {
     const glm::vec3 forward = yaw_direction(state.player.yaw);
     state.cart.pose.position = on_ground(state, ball + forward * 4.0f);
     state.cart.pose.yaw = state.player.yaw + glm::half_pi<float>();
-    enter_addressing(state);
+    address_looking_down(state);
     REQUIRE(state.mode == game_mode::addressing);
     state.address.setup.aim_angle = state.player.yaw;
     state.address.setup.face_open = 0.0f;
     state.address.setup.backswing = 0.8f;
-    update_game(state, swing_input(), 0.016f);
+    start_swing_on_time(state);
     swing_through(state);
     REQUIRE(state.shot.has_value());
     CHECK(has_event(state.shot->result, shot_event_kind::board_hit));

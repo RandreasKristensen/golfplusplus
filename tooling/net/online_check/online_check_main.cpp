@@ -15,6 +15,8 @@
 #include "net/online_config.h"
 #include "game/content_files.h"
 #include "game/course_session.h"
+#include "game/golf_bag.h"
+#include "game/save_data.h"
 #include "game/mode_dispatch.h"
 #include "game/remote_players.h"
 #include "game/motion_sync.h"
@@ -22,6 +24,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <functional>
@@ -48,6 +51,19 @@ public:
             std::this_thread::sleep_for(poll_interval);
         }
         return false;
+    }
+
+    // Real frames at real elapsed time, so server speed budgets see the same clock.
+    void play_for(const float seconds, const game_input& input = {}) {
+        const auto end = std::chrono::steady_clock::now() + std::chrono::duration<float>(seconds);
+        auto previous = std::chrono::steady_clock::now();
+        while (std::chrono::steady_clock::now() < end) {
+            std::this_thread::sleep_for(poll_interval);
+            const auto now = std::chrono::steady_clock::now();
+            update_game(state_, input, std::chrono::duration<float>(now - previous).count());
+            previous = now;
+            client_.update(state_);
+        }
     }
 
     // The next refusal of `reducer`, when one arrives.
@@ -98,7 +114,7 @@ void check_items(checker& run) {
 
     const item_definition& smokable = *state.items.find(state.default_loadout.smokable);
     const xp_reward earned = *smokable.use->xp_per_use;
-    const int before = skill_xp(state.online.progress.skills, earned.skill_id);
+    const std::int64_t before = skill_xp(state.online.progress.skills, earned.skill_id);
     run.send(use(smokable.id));
     run.check("using what I smoke earns its XP", run.until([&](const game_state& s) {
         return skill_xp(s.online.progress.skills, earned.skill_id) >= before + earned.xp;
@@ -111,8 +127,8 @@ void check_items(checker& run) {
     run.check("an unknown item is refused", run.refusal_of(reducer_use_item) == error_unknown_item);
 }
 
-// My cart, parked on the ground: the server will not have it tip or sink
-// there, nor right it while it stands.
+// My cart, parked on the ground: steps at its wheel before the server gives
+// it to me are refused, and it will not right a cart on its wheels.
 void check_carts(checker& run) {
     game_state& state = run.state();
     const std::uint64_t me = state.online.account_id;
@@ -120,19 +136,85 @@ void check_carts(checker& run) {
         const auto cart = s.online.carts.find(me);
         return cart != s.online.carts.end() && cart->second.condition == cart_condition::upright;
     }));
-    for (const cart_condition over : {cart_condition::on_left_side, cart_condition::sunk}) {
-        net_command overturn;
-        overturn.type = net_command_type::overturn_cart;
-        overturn.overturned_to = over;
-        run.send(overturn);
-        run.check(over == cart_condition::sunk ? "it does not sink where it is parked" : "it does not tip where it is parked",
-                  run.refusal_of(reducer_overturn_cart) == error_cart_steady);
-    }
+    net_command drive;
+    drive.type = net_command_type::motion;
+    drive.motion = current_motion(state);
+    drive.motion.mode = motion_mode::cart;
+    move_input pedal;
+    pedal.kind = move_kind::cart;
+    pedal.forward = 1;
+    drive.first_step = state.motion_sync.step + 1;
+    drive.runs = {move_run{pedal, 30}};
+    state.motion_sync.step += 30;
+    run.send(drive);
+    run.check("steps at a wheel the server has not given me are refused",
+              run.refusal_of(reducer_update_motion) == error_not_in_cart);
     net_command right;
     right.type = net_command_type::right_cart;
     right.cart_owner = me;
     run.send(right);
     run.check("a cart on its wheels is not righted", run.refusal_of(reducer_right_cart) == error_cart_upright);
+}
+
+// Walking is the server's: it plays my steps to where I am.
+void check_walking(checker& run) {
+    game_state& state = run.state();
+    game_input forward;
+    forward.forward_held = true;
+    run.play_for(1.0f, forward);
+    run.play_for(0.5f);
+    const std::uint64_t me = state.online.account_id;
+    run.check("the server's steps leave me where mine did", run.until([me](const game_state& s) {
+        const auto self = s.online.players.find(me);
+        return self != s.online.players.end() && self->second.motion &&
+            glm::length(self->second.motion->position - s.player.position) <= s.tuning.net.cart_reconcile_distance;
+    }));
+    run.check("walking caused no sync breach", state.motion_sync.breaches == 0);
+}
+
+// Enter through the door, drive, stop, step out; both clients must use the
+// row left behind, even after the final driving motion has been acknowledged.
+void check_cart_sync(checker& run) {
+    game_state& state = run.state();
+    game_input forward;
+    forward.forward_held = true;
+    for (int i = 0; i < 500 && on_foot(state); ++i) {
+        const auto cart = shown_cart(state, 0);
+        if (!cart) { break; }
+        const glm::vec3 door = seat_position(*cart, cart_seat::driver, state.tuning.cart);
+        state.player.yaw = yaw_towards(state.player.position, door);
+        run.play_for(0.02f, forward);
+    }
+    run.play_for(state.tuning.cart.step_seconds + 0.4f);
+    run.check("the server confirms my wheel before driving", driving_cart(state) && state.ride->confirmed);
+    if (!driving_cart(state)) { return; }
+    run.play_for(0.8f, forward);
+    run.play_for(0.5f);
+    game_input out;
+    out.interact = true;
+    run.play_for(0.02f, out);
+    run.play_for(state.tuning.cart.step_seconds + state.tuning.net.remote_correction_seconds + 0.4f);
+    const std::uint64_t me = state.online.account_id;
+    run.check("stepping out releases the server's wheel", run.until([me](const game_state& s) {
+        const auto cart = s.online.carts.find(me);
+        return cart != s.online.carts.end() && cart->second.driver == 0;
+    }));
+    const auto row = state.online.carts.find(me);
+    const auto shown = shown_cart(state, 0);
+    run.check("the parked cart equals its server row", row != state.online.carts.end() && shown &&
+        glm::length(row->second.position - shown->position) <= state.tuning.net.cart_reconcile_distance &&
+        std::abs(wrap_angle(row->second.yaw - shown->yaw)) <= state.tuning.net.cart_reconcile_yaw);
+    run.check("driving and stepping out caused no sync breach", state.motion_sync.breaches == 0);
+}
+
+// A course without carts: none of mine, my bag on my back.
+void check_no_cart(checker& run) {
+    const std::uint64_t me = run.state().online.account_id;
+    run.check("my bag arrives on my back", run.until([me](const game_state& s) {
+        const auto bag = s.online.bags.find(me);
+        return bag != s.online.bags.end() && bag->second.place.where == bag_where::on_back;
+    }));
+    run.check("no cart of mine is parked", run.state().online.carts.count(me) == 0);
 }
 }
 
@@ -177,6 +259,29 @@ void check_shot(checker& run) {
     std::printf("      server rest (%.3f, %.3f, %.3f), here (%.3f, %.3f, %.3f)\n", played.rest.x, played.rest.y, played.rest.z,
                 here.rest_position.x, here.rest_position.y, here.rest_position.z);
     run.check("the server's rest is this client's own", glm::length(played.rest - here.rest_position) < 0.001f);
+    run.check("the shot carries my level in every listed skill", played.golfer.levels.size() == state.skills.skills.size());
+}
+
+// Off a practice ground, the shot pays its XP into my skill (and its award
+// into the server's ledger).
+void check_shot_xp(checker& run, const std::int64_t xp_before) {
+    const xp_reward& earned = run.state().rewards.shot;
+    run.check("the shot earns its XP", run.until([&](const game_state& s) {
+        return skill_xp(s.online.progress.skills, earned.skill_id) >= xp_before + earned.xp;
+    }));
+}
+
+// On a practice ground: the shot earned nothing, and the same station drops
+// a fresh ball again at once.
+void check_practice(checker& run, const std::string& progress_before) {
+    game_state& state = run.state();
+    const std::uint64_t me = state.online.account_id;
+    run.check("practice earns no XP", save_data_to_json(active_progress(state)) == progress_before);
+    run.check("tees up the same station again", tee_up(state, 0, false));
+    run.check("the server drops a fresh ball there", run.until([me](const game_state& s) {
+        const auto ball = s.online.balls.find(me);
+        return ball != s.online.balls.end() && ball->second.stroke_count == 0;
+    }));
 }
 
 int main(int argc, char** argv) {
@@ -192,7 +297,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "cannot load content: %s\n", content.error.c_str());
         return 2;
     }
-    std::optional<net_client> client = net_client::create(with_overrides(*config, argv[1], argv[2], true), "", "");
+    std::optional<net_client> client = net_client::create(with_overrides(*config, argv[1], argv[2], true), "", "", content.content->content_hash);
     if (!client) {
         std::fprintf(stderr, "the client bridge does not match src/net/stdb_bridge.h\n");
         return 2;
@@ -213,18 +318,55 @@ int main(int argc, char** argv) {
     run.client().claim_name("CHECK" + std::to_string(run.state().online.account_id % 10000));
     run.check("claims a name", run.until([](const game_state& s) { return !s.online.display_name.empty(); }));
     const std::string course = argc > 3 ? argv[3] : "marienlyst_golfklub";
-    run.client().join_course(course);
-    run.check("joins a room on the course", run.until([](const game_state& s) { return s.online.room.has_value(); }));
+    run.client().join_course(course, true);
+    run.check("joins a room on the course", run.until([](const game_state& s) { return s.online.room.has_value() && s.online.room_ready; }));
 
     check_items(run);
-    check_carts(run);
     const std::vector<course_definition>& courses = content.content->courses;
     const auto played = std::find_if(courses.begin(), courses.end(),
                                      [&course](const course_definition& each) { return each.id == course; });
+    if (played != courses.end() && !played->carts) {
+        check_no_cart(run);
+    } else {
+        check_carts(run);
+    }
     const bool started = played != courses.end() && start_course(run.state(), *played);
     run.check("plays the room's course here too", started);
+    if (started && !played->carts) {
+        // Off my back before I can hit: B at my feet, as the server allows it.
+        move_bag(run.state());
+        const std::uint64_t me = run.state().online.account_id;
+        run.check("sets my bag down", run.until([me](const game_state& s) {
+            const auto bag = s.online.bags.find(me);
+            return bag != s.online.bags.end() && bag->second.place.where == bag_where::on_ground;
+        }));
+    }
     if (started) {
+        check_walking(run);
+    }
+    if (started && played->carts) {
+        check_cart_sync(run);
+        // Driving ends away from the tee. Rejoin for the shot scenario,
+        // also proving that the motion views deliver a fresh room snapshot.
+        run.client().leave_room();
+        run.check("leaves the driving room", run.until([](const game_state& s) { return !s.online.room; }));
+        run.client().join_course(course, true);
+        run.check("rejoins with a complete motion snapshot", run.until([](const game_state& s) {
+            const auto self = s.online.players.find(s.online.account_id);
+            return s.online.room && s.online.room_ready && self != s.online.players.end() && self->second.motion &&
+                s.online.carts.count(s.online.account_id) == 1;
+        }));
+        run.check("starts the shot scenario at its tee", start_course(run.state(), *played));
+    }
+    if (started) {
+        const std::string progress_before = save_data_to_json(active_progress(run.state()));
+        const std::int64_t xp_before = skill_xp(active_progress(run.state()).skills, run.state().rewards.shot.skill_id);
         check_shot(run);
+        if (played->practice) {
+            check_practice(run, progress_before);
+        } else {
+            check_shot_xp(run, xp_before);
+        }
     }
 
     run.client().leave_room();

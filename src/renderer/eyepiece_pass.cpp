@@ -46,8 +46,8 @@ bool eyepiece_pass::ensure_size(const int width, const int height) {
     if (target_.width() == width && target_.height() == height) {
         return true;
     }
-    return target_.init(width, height, framebuffer_format{framebuffer_color::hdr, false, false, false}) &&
-        zoom_.init(width, height, framebuffer_format{framebuffer_color::hdr, true, false, false});
+    return target_.init(width, height, framebuffer_format{framebuffer_color::hdr, framebuffer_depth::none, false, false}) &&
+        zoom_.init(width, height, framebuffer_format{framebuffer_color::hdr, framebuffer_depth::drawn, false, false});
 }
 
 void eyepiece_pass::begin_zoom(const glm::vec3& clear) {
@@ -57,7 +57,7 @@ void eyepiece_pass::begin_zoom(const glm::vec3& clear) {
     glEnable(GL_SCISSOR_TEST);
     glScissor(zoom_.width() / 2 - radius, zoom_.height() / 2 - radius, 2 * radius, 2 * radius);
     glClearColor(clear.r, clear.g, clear.b, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 }
 
 void eyepiece_pass::end_zoom() {

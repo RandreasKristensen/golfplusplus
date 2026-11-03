@@ -6,15 +6,17 @@
 // the frame it is pressed.
 struct game_input {
     // Walking relative to where I look; at the wheel, throttle and reverse;
-    // at address, a longer or shorter backswing.
+    // at address, a longer or shorter cap on the backswing.
     bool forward_held = false;
+    bool run_held = false;
     bool back_held = false;
     // Stepping sideways on foot; at the wheel, steering; at address,
-    // turning the stance (the aim).
+    // turning the stance (the aim), looking up or down.
     bool strafe_left_held = false;
     bool strafe_right_held = false;
     // Turning where I look at a steady rate, and looking up or down; at
-    // address, turning the stance as A and D do.
+    // address looking down at the ball, up and down open and close the
+    // face, left and right move the ball in the stance that way on screen.
     bool turn_left_held = false;
     bool turn_right_held = false;
     bool look_up_held = false;
@@ -35,30 +37,27 @@ struct game_input {
     // the cup, claim a collectible, step into or out of a cart; at address,
     // step away from the ball.
     bool interact = false;
-    // At address, the setup's dials (game/shot_setup.h): held keys repeat
-    // their steps. Q opens the face, E closes it; Z plays the ball back in
-    // the stance, C forward.
-    bool face_open_held = false;
-    bool face_close_held = false;
-    bool ball_back_held = false;
-    bool ball_forward_held = false;
-    // Steps of a dial this frame from the wheel with a modifier, whatever
-    // the view is on: positive left, open, forward and longer.
-    int aim_steps = 0;
-    int face_steps = 0;
-    int ball_steps = 0;
+    // At address, steps of the backswing's cap this frame by the wheel:
+    // positive longer.
     int backswing_steps = 0;
-    // The plain wheel at address: steps of whatever the view's centre is on
-    // (game/setup_pointer.h), else the backswing.
-    int look_target_wheel_steps = 0;
-    // Turn the stance so the path points at the ground under the view's
-    // centre (a right-click, or T).
+    // A left-drag this frame, mouse counts, right and down positive: at
+    // address looking down, pulling the face (up and down) and the ball
+    // (across) as the arrows do.
+    float pull_x = 0.0f;
+    float pull_y = 0.0f;
+    // At address looking up, turn the stance so the path points at the
+    // ground under the view's centre (a right-click, or T).
     bool aim_at_view = false;
-    // A fine turn of the stance by a right-drag, radians, positive left.
+    // At address looking up, a fine turn of the stance by a right-drag,
+    // radians, positive left.
     float stance_drag_yaw = 0.0f;
-    bool reset_setup = false;  // back to the club's stock setup (R, middle-click)
-    bool snap_view = false;    // turn my head to the other framed view (V)
-    // At address, swing: the setup is committed and the club goes back.
+    // How far a swipe went across this frame, in whole swipes, right
+    // positive: a right-drag, or a touchpad's two fingers (game/swing.h).
+    float swipe = 0.0f;
+    bool reset_setup = false;  // back to the club's stock setup (Backspace, middle-click)
+    bool snap_view = false;    // turn my head between looking down and up (R)
+    // At address looking down, Space: the swipe right, and once the club is
+    // going back the swipe left.
     bool swing = false;
     bool jump = false;  // on foot
     bool cancel = false;  // step away from the ball
@@ -71,6 +70,10 @@ struct game_input {
     bool course_map_held = false;
     bool scorecard_held = false;
     bool skills_panel_held = false;
+    // Start pacing a distance off on foot, or stop (game/pacing.h).
+    bool toggle_pacing = false;
+    // Crouch on foot to read the green (game/green_read.h).
+    bool crouch_held = false;
     bool group = false;        // join the nearest player's group, or start one
     bool leave_group = false;
 };

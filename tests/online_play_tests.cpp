@@ -27,6 +27,8 @@
 #include <string>
 #include <vector>
 
+#include <glm/trigonometric.hpp>
+
 namespace {
 // `seconds` as server time (microseconds).
 std::int64_t server_micros(const double seconds) {
@@ -50,6 +52,7 @@ game_state online_hub() {
     self.motion = current_motion(state);
     self.motion_at = start_time;
     state.online.players[me] = self;
+    state.online.carts[me] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
     return state;
 }
 
@@ -100,10 +103,15 @@ void park_other_cart(game_state& state, const glm::vec3& offset) {
 }
 
 // Stood beside the passenger seat of the other player's cart.
+// At the other's cart's passenger door, facing in.
 void beside_other_seat(game_state& state) {
-    const cart_pose cart = *shown_cart(state, other);
-    state.player.position =
-        anchor_on_terrain(state.area, step_out_position(cart, cart_seat::passenger, state.tuning.cart));
+    stand_at_door(state, *shown_cart(state, other), cart_seat::passenger);
+}
+
+// Walks into the other's cart through its passenger door.
+void board_other_cart(game_state& state) {
+    beside_other_seat(state);
+    walk_in(state);
 }
 
 void play_cart_step(game_state& state) {
@@ -189,8 +197,8 @@ TEST_CASE("an online shot tells the server where the player stands first, at the
 TEST_CASE("my swing waits at its top for the server's answer, and the shot ends where it says") {
     game_state state = online_hub();
     on_hole(state);
-    enter_addressing(state);
-    update_game(state, swing_input(), 0.016f);
+    address_looking_down(state);
+    start_swing_on_time(state);
     REQUIRE(state.address.swing_elapsed.has_value());
     const club_definition& club = state.clubs[state.selected_club];
     const float top = swing_tempo_for(club, state.tuning.swing).back_seconds;
@@ -274,8 +282,8 @@ TEST_CASE("a refused setup ends the swing over the ball and says why") {
     on_hole(state);
     const glm::vec3 tee = state.ball->position;
     state.online.balls[me] = room_ball{0, tee, 0};
-    enter_addressing(state);
-    update_game(state, swing_input(), 0.016f);
+    address_looking_down(state);
+    start_swing_on_time(state);
     REQUIRE(state.address.swing_elapsed.has_value());
     refuse(state, "take_shot", "club_not_in_hand");
     CHECK(!shot_playing(state));
@@ -582,50 +590,82 @@ TEST_CASE("another player's item use from the server plays on their avatar, as m
     CHECK(!state.remote_avatars.at(other).drinking.has_value());
 }
 
-TEST_CASE("another player addresses their ball and swings with their meter, their shot leaving as it arrives") {
+TEST_CASE("another player addresses their ball as set up, waits at the top for their shot, then strikes it") {
     game_state state = online_hub();
     add_other(state, glm::vec3(3.0f, 0.0f, 0.0f), 0);
     state.online.item_uses.push_back(room_item_use{other, state.default_loadout.drinkable});
     update_game(state, game_input{}, 0.0f);
     REQUIRE(state.remote_avatars.at(other).drinking.has_value());
     const course_hole& marker = state.holes[0];
+    const club_definition& club = state.clubs.front();
     shot_setup input;
     input.ball_start = resting_ball_position(state.area, marker.tee_position, state.tuning.scale.ball_physics_radius_meters);
     input.aim_angle = yaw_towards(marker.tee_position, marker.pin_position);
-    input.club_id = state.clubs.front().id;
+    input.club_id = club.id;
     input = stocked(input, state, 0.8f);
+    input.face_open = glm::radians(3.0f);
     state.online.balls[other] = room_ball{0, input.ball_start, 0};
+    state.online.bags[other] = room_bag{bag_place{}, club.id};
     room_player& player = state.online.players.at(other);
     player.motion->yaw = input.aim_angle;
+    player.motion->setup = sent_setup_of(input);
     CHECK(!remote_address_pose(state, other).has_value());  // walking
-    // Addressing it: the club down at the ball.
+    // Addressing it: stood to their setup, the club down at the ball.
     player.motion->mode = motion_mode::address;
     std::optional<remote_address> address = remote_address_pose(state, other);
     REQUIRE(address.has_value());
-    CHECK(near(address->ball_position, input.ball_start));
-    CHECK(address->aim_angle == input.aim_angle);
+    CHECK(near(address->setup.ball_start, input.ball_start));
+    CHECK(address->setup.club_id == club.id);
+    CHECK(near(address->setup.aim_angle, input.aim_angle, 0.0001f));
+    CHECK(near(address->setup.face_open, input.face_open, 0.0001f));
+    CHECK(near(address->setup.ball_position, input.ball_position, 0.01f));
+    CHECK(near(address->setup.backswing, input.backswing, 0.0001f));
     CHECK(address->club_raise == 0.0f);
 
-    // Swinging: the club goes back on a full swing's tempo from when the server heard it.
+    // Swinging: the club goes back on their club's tempo from when the server heard it...
     player.motion->mode = motion_mode::swing;
     player.motion_at = state.online.server_now;
     state.online.server_now += server_micros(0.3);
     address = remote_address_pose(state, other);
     REQUIRE(address.has_value());
-    const swing_tempo tempo{state.tuning.swing.backswing_seconds, state.tuning.swing.downswing_seconds};
-    CHECK(near(address->club_raise, swing_club_raise(0.3f, 1.0f, tempo), 0.001f));
+    const swing_tempo tempo = swing_tempo_for(club, state.tuning.swing);
+    CHECK(near(address->club_raise, swing_club_raise(0.3f, input.backswing, tempo), 0.001f));
     CHECK(address->club_raise > 0.1f);
+    // ...and waits at the top of their backswing for their shot.
+    state.online.server_now += server_micros(5.0);
+    address = remote_address_pose(state, other);
+    REQUIRE(address.has_value());
+    CHECK(near(address->club_raise, input.backswing, 0.001f));
 
-    // The shot leaves as it arrives, and its swing is over.
+    // Their shot arrives: the club comes down, and the ball leaves at impact.
     const glm::vec3 rest = input.ball_start + glm::vec3(3.0f, 0.0f, 3.0f);
     state.online.balls[other].position = rest;
     state.online.shots.push_back(played_shot(other, 0, 1, input, rest, false));
+    state.audio_events.clear();
     update_game(state, game_input{}, 0.0f);
+    CHECK(std::none_of(state.audio_events.begin(), state.audio_events.end(),
+                       [](const audio_event& event) { return event.type == audio_event_type::club_hit; }));
+    address = remote_address_pose(state, other);
+    REQUIRE(address.has_value());
+    CHECK(near(address->club_raise, input.backswing, 0.001f));
+    wait(state, 0.5f * tempo.down_seconds);
+    address = remote_address_pose(state, other);
+    REQUIRE(address.has_value());
+    CHECK(address->club_raise < input.backswing - 0.05f);
+    CHECK(address->club_raise > 0.0f);
+    std::vector<shown_ball> balls = remote_balls(state);
+    REQUIRE(balls.size() == 1U);
+    CHECK(near(balls[0].position, input.ball_start, 0.001f));
+
+    state.audio_events.clear();
+    wait(state, 0.5f * tempo.down_seconds + 0.02f);
+    CHECK(std::any_of(state.audio_events.begin(), state.audio_events.end(),
+                      [](const audio_event& event) { return event.type == audio_event_type::club_hit; }));
     CHECK(!remote_address_pose(state, other).has_value());
     // Hitting it doesn't end their emotes: the server and their own game don't either.
     CHECK(state.remote_avatars.at(other).drinking.has_value());
     wait(state, 0.1f);
-    std::vector<shown_ball> balls = remote_balls(state);
+    balls = remote_balls(state);
     REQUIRE(balls.size() == 1U);
     CHECK(!near(balls[0].position, input.ball_start, 0.01f));
 
@@ -635,14 +675,100 @@ TEST_CASE("another player addresses their ball and swings with their meter, thei
     CHECK(remote_address_pose(state, other).has_value());
 }
 
+TEST_CASE("at my ball every turn of a dial goes to the server, no more often than the motion interval") {
+    game_state state = online_hub();
+    on_hole(state);
+    address_looking_down(state);
+    REQUIRE(state.mode == game_mode::addressing);
+    const float interval = state.tuning.net.motion_min_interval_seconds;
+    game_input left;
+    left.strafe_left_held = true;
+    const auto press = [&](const game_input& input) {
+        state.net_commands.clear();
+        update_game(state, input, 0.016f);
+        update_game(state, game_input{}, 0.0f);  // let go
+    };
+    const auto sent_setup_now = [&]() -> std::optional<sent_setup> {
+        const net_command* sent = find_command(state, net_command_type::motion);
+        return sent != nullptr && sent->motion.mode == motion_mode::address ? std::optional<sent_setup>(sent->motion.setup)
+                                                                            : std::nullopt;
+    };
+    // The steps that brought me here go first.
+    wait(state, 2.0f * interval);
+    // The aim turned a step at a time, far less than a correction's turn: every step is sent.
+    for (int turn = 0; turn < 4; ++turn) {
+        wait(state, interval);
+        const float before = state.address.setup.aim_angle;
+        press(left);
+        REQUIRE(std::abs(wrap_angle(state.address.setup.aim_angle - before)) > 0.0f);
+        REQUIRE(std::abs(wrap_angle(state.address.setup.aim_angle - before)) < state.tuning.net.motion_correction_yaw);
+        CHECK(sent_setup_now() == sent_setup_of(state.address.setup));
+    }
+    // Another within the interval waits for it, then goes.
+    press(left);
+    CHECK(!sent_setup_now().has_value());
+    state.net_commands.clear();
+    wait(state, interval);
+    CHECK(sent_setup_now() == sent_setup_of(state.address.setup));
+}
+
+TEST_CASE("crouched reading the green my motion says so; others go down and stand up as I do") {
+    game_state state = online_hub();
+    on_hole(state);
+    game_input crouching;
+    crouching.crouch_held = true;
+    const float interval = state.tuning.net.motion_min_interval_seconds;
+    const auto last_motion = [&]() -> std::optional<net_motion> {
+        for (auto command = state.net_commands.rbegin(); command != state.net_commands.rend(); ++command) {
+            if (command->type == net_command_type::motion) {
+                return command->motion;
+            }
+        }
+        return std::nullopt;
+    };
+    wait(state, 2.0f * interval);
+    state.net_commands.clear();
+    for (float held = 0.0f; held < interval + 0.05f; held += 0.02f) {
+        update_game(state, crouching, 0.02f);
+    }
+    REQUIRE(last_motion().has_value());
+    CHECK(last_motion()->crouched);
+    CHECK(last_motion()->mode == motion_mode::idle);
+    state.net_commands.clear();
+    wait(state, interval + 0.05f);
+    REQUIRE(last_motion().has_value());
+    CHECK(!last_motion()->crouched);
+
+    // Another player's crouch, as their motion has it.
+    add_other(state, glm::vec3(3.0f, 0.0f, 0.0f), 0);
+    room_player& player = state.online.players.at(other);
+    player.motion->crouched = true;
+    const float seconds = state.tuning.green_read.crouch_seconds;
+    wait(state, 0.5f * seconds);
+    const float halfway = state.remote_avatars.at(other).crouch;
+    CHECK(halfway > 0.2f);
+    CHECK(halfway < 0.8f);
+    wait(state, seconds);
+    CHECK(near(state.remote_avatars.at(other).crouch, 1.0f));
+    player.motion->crouched = false;
+    wait(state, seconds + 0.05f);
+    CHECK(near(state.remote_avatars.at(other).crouch, 0.0f));
+    // In a cart nobody crouches.
+    player.motion->crouched = true;
+    player.motion->mode = motion_mode::ride;
+    wait(state, seconds + 0.05f);
+    CHECK(near(state.remote_avatars.at(other).crouch, 0.0f));
+}
+
 TEST_CASE("my swing tells the server it started, where I stand, then my setup") {
     game_state state = online_hub();
     on_hole(state);
-    enter_addressing(state);
+    address_looking_down(state);
     REQUIRE(state.mode == game_mode::addressing);
     CHECK(current_motion(state).mode == motion_mode::address);
     CHECK(current_motion(state).turn_rate == 0.0f);
 
+    swing_back_to_top(state);
     state.net_commands.clear();
     update_game(state, swing_input(), 0.0f);
     REQUIRE(state.address.swing_elapsed.has_value());
@@ -880,19 +1006,19 @@ TEST_CASE("online a tee-up refused for the ball in the cup puts it back there") 
     CHECK(state.notice->text_key == text_ball_in_cup);
 }
 
-TEST_CASE("online my cart moves to where the server parks it, once") {
+TEST_CASE("online my idle cart always follows its server row") {
     game_state state = online_hub();
     const glm::vec3 parked = state.player.position + glm::vec3(20.0f, 0.0f, 4.0f);
     state.online.carts[me] = room_cart{parked, 1.0f, 0};
     update_game(state, game_input{}, 0.02f);
     CHECK(near(horizontal(state.cart.pose.position), horizontal(parked), 0.0001f));
     CHECK(near(state.cart.pose.yaw, 1.0f));
-    CHECK(state.cart.placed_by_server);
 
-    // From then on my cart is where I leave it, whatever my row says.
+
+    // A later correction remains authoritative while I am on foot.
     state.online.carts[me].position = parked + glm::vec3(5.0f, 0.0f, 0.0f);
     update_game(state, game_input{}, 0.02f);
-    CHECK(near(horizontal(state.cart.pose.position), horizontal(parked), 0.0001f));
+    CHECK(near(horizontal(state.cart.pose.position), horizontal(state.online.carts.at(me).position), 0.0001f));
 }
 
 TEST_CASE("online I ride in another's free passenger seat with the server, sat where their cart is shown, and step out") {
@@ -902,20 +1028,20 @@ TEST_CASE("online I ride in another's free passenger seat with the server, sat w
     beside_other_seat(state);
     state.net_commands.clear();
 
-    const std::optional<reachable_seat> seat = nearest_seat(state);
-    REQUIRE(seat.has_value());
-    CHECK(seat->owner == other);
-    CHECK(seat->seat == cart_seat::passenger);
+    const std::optional<seat_door> door = seat_door_at(state);
+    REQUIRE(door.has_value());
+    CHECK(door->owner == other);
+    CHECK(door->seat == cart_seat::passenger);
 
-    update_game(state, interact_input(), 0.02f);
+    walk_in(state);
     REQUIRE(state.ride.has_value());
     CHECK(state.ride->owner == other);
     // Where I stand first, then the seat: the server checks the reach.
-    REQUIRE(state.net_commands.size() >= 2U);
-    CHECK(state.net_commands[0].type == net_command_type::motion);
     const net_command* board = find_command(state, net_command_type::board_cart);
     REQUIRE(board != nullptr);
     CHECK(board->cart_owner == other);
+    REQUIRE(board != &state.net_commands.front());
+    CHECK((board - 1)->type == net_command_type::motion);
 
     state.online.carts[other].passenger = me;
     play_cart_step(state);
@@ -929,6 +1055,7 @@ TEST_CASE("online I ride in another's free passenger seat with the server, sat w
 
     // Its driver takes the wheel and drives it on: I go with it.
     room_player& driver = state.online.players[other];
+    state.online.carts[other].driver = other;
     driver.motion->mode = motion_mode::cart;
     driver.motion->position = seat_position(cart, cart_seat::driver, state.tuning.cart) + glm::vec3(0.0f, 0.0f, 6.0f);
     driver.motion_at = state.online.server_now + 1;
@@ -948,28 +1075,43 @@ TEST_CASE("online I ride in another's free passenger seat with the server, sat w
     CHECK(on_foot(state));
 }
 
-TEST_CASE("online a taken passenger seat is not offered, nor my own cart's") {
+TEST_CASE("online a taken passenger seat says so; through another's driver door I scoot to their passenger seat") {
     game_state state = online_hub();
     park_other_cart(state, glm::vec3(30.0f, 0.0f, 0.0f));
-    beside_other_seat(state);
-    REQUIRE(nearest_seat(state).has_value());
     state.online.carts[other].passenger = 3;
-    CHECK(!nearest_seat(state).has_value());
+    board_other_cart(state);
+    CHECK(on_foot(state));
+    REQUIRE(state.notice.has_value());
+    CHECK(state.notice->text_key == text_hud_seat_taken);
 
-    // My own cart in my room: only its wheel, never its passenger seat.
-    state.online.carts[me] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
-    state.player.position = anchor_on_terrain(state.area, step_out_position(state.cart.pose, cart_seat::passenger, state.tuning.cart));
-    const std::optional<reachable_seat> mine = nearest_seat(state);
-    REQUIRE(mine.has_value());
-    CHECK(mine->owner == 0U);
-    CHECK(mine->seat == cart_seat::driver);
+    state.online.carts[other].passenger = 0;
+    state.notice.reset();
+    stand_at_door(state, *shown_cart(state, other), cart_seat::driver);
+    const std::optional<seat_door> door = seat_door_at(state);
+    REQUIRE(door.has_value());
+    CHECK(door->door == cart_seat::driver);
+    CHECK(door->seat == cart_seat::passenger);
+    walk_in(state);
+    REQUIRE(state.ride.has_value());
+    CHECK(state.ride->owner == other);
+    CHECK(state.ride->seat == cart_seat::passenger);
+    CHECK(!state.notice.has_value());
+    CHECK(has_command(state, net_command_type::board_cart));
+
+    // My own cart in my room: either door takes me to its wheel.
+    game_state mine = online_hub();
+    mine.online.carts[me] = room_cart{mine.cart.pose.position, mine.cart.pose.yaw, 0};
+    stand_at_door(mine, mine.cart.pose, cart_seat::passenger);
+    const std::optional<seat_door> my_door = seat_door_at(mine);
+    REQUIRE(my_door.has_value());
+    CHECK(my_door->owner == 0U);
+    CHECK(my_door->seat == cart_seat::driver);
 }
 
 TEST_CASE("online a refused seat stands me up and says why") {
     game_state state = online_hub();
     park_other_cart(state, glm::vec3(30.0f, 0.0f, 0.0f));
-    beside_other_seat(state);
-    update_game(state, interact_input(), 0.02f);
+    board_other_cart(state);
     REQUIRE(state.ride.has_value());
 
     refuse(state, reducer_board_cart, error_seat_taken);
@@ -981,8 +1123,7 @@ TEST_CASE("online a refused seat stands me up and says why") {
 TEST_CASE("online I am out of another's cart once the server no longer seats me there") {
     game_state state = online_hub();
     park_other_cart(state, glm::vec3(30.0f, 0.0f, 0.0f));
-    beside_other_seat(state);
-    update_game(state, interact_input(), 0.02f);
+    board_other_cart(state);
     state.online.carts[other].passenger = me;
     play_cart_step(state);
     REQUIRE(state.ride.has_value());
@@ -996,7 +1137,7 @@ TEST_CASE("online I am out of another's cart once the server no longer seats me 
     CHECK(!has_command(state, net_command_type::leave_cart));
 }
 
-TEST_CASE("online my cart going over tells the server where and how, and a refusal stands it back on its wheels") {
+TEST_CASE("online my cart going over sends my steps up to it, and the server's row decides it stays sunk") {
     game_state state = online_hub();
     state.online.carts[me] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
     sit_in_cart(state);
@@ -1005,30 +1146,27 @@ TEST_CASE("online my cart going over tells the server where and how, and a refus
     state.area.zones.push_back(circle_zone(material_zone_type::water, state.cart.pose.position, 6.0f));
     state.area.water_levels.push_back(state.cart.pose.position.y + 2.0f * my_cart_spec(state).wade_depth_m);
     update_game(state, game_input{}, 0.05f);
-    REQUIRE(state.cart.motion.condition == cart_condition::sunk);
-    CHECK(on_foot(state));
-    // Where it went in first (its last motion at the wheel), then what happened.
+    REQUIRE(on_foot(state));
+    CHECK(cart_condition_of(state, 0) == cart_condition::upright);
+    // The steps that sank it go out at the wheel; the server's own steps sink it.
     const net_command* motion = find_command(state, net_command_type::motion);
-    const net_command* overturn = find_command(state, net_command_type::overturn_cart);
     REQUIRE(motion != nullptr);
-    REQUIRE(overturn != nullptr);
-    CHECK(motion < overturn);
     CHECK(motion->motion.mode == motion_mode::cart);
-    CHECK(overturn->overturned_to == cart_condition::sunk);
+    REQUIRE(!motion->runs.empty());
+    CHECK(motion->runs.front().input.kind == move_kind::cart);
+    state.online.carts[me].condition = cart_condition::sunk;
+    state.online.carts[me].driver = 0;
     // Online the server tows it, not the game.
     for (int i = 0; i < static_cast<int>(my_cart_spec(state).tow_seconds / 0.05f) + 10; ++i) {
         update_game(state, game_input{}, 0.05f);
     }
     CHECK(state.cart.motion.condition == cart_condition::sunk);
-
-    refuse(state, reducer_overturn_cart, error_cart_steady);
-    CHECK(state.cart.motion.condition == cart_condition::upright);
 }
 
 TEST_CASE("online my cart stands up again where the server tows it, and another's tipped cart is righted through the server") {
     game_state state = online_hub();
     state.online.carts[me] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0, cart_condition::sunk};
-    state.cart.placed_by_server = true;
+
     state.cart.motion.condition = cart_condition::sunk;
     update_game(state, game_input{}, 0.02f);
     CHECK(state.cart.motion.condition == cart_condition::sunk);
@@ -1042,7 +1180,7 @@ TEST_CASE("online my cart stands up again where the server tows it, and another'
     park_other_cart(state, glm::vec3(30.0f, 0.0f, 0.0f));
     state.online.carts[other].condition = cart_condition::on_left_side;
     beside_other_seat(state);
-    CHECK(!nearest_seat(state).has_value());
+    CHECK(!seat_door_at(state).has_value());
     const std::optional<interactable> near_me = nearest_interactable(state);
     REQUIRE(near_me.has_value());
     REQUIRE(near_me->kind == interactable_kind::tipped_cart);
@@ -1058,18 +1196,19 @@ TEST_CASE("online my cart stands up again where the server tows it, and another'
     CHECK(right->cart_owner == other);
 }
 
-TEST_CASE("online the server refusing my wheel stands me up beside my cart") {
+TEST_CASE("online a refused driving motion restores the confirmed cart and seat") {
     game_state state = online_hub();
     sit_in_cart(state);
     refuse(state, reducer_update_motion, error_too_far);
-    CHECK(on_foot(state));
+    CHECK(driving_cart(state));
+    CHECK(near(state.player.position, seat_position(*shown_cart(state, 0), cart_seat::driver, state.tuning.cart)));
 }
 
 TEST_CASE("another player riding in my cart sits in its passenger seat as I drive it") {
     game_state state = online_hub();
     add_other(state, glm::vec3(3.0f, 0.0f, 0.0f), 0);
     sit_in_cart(state);
-    state.online.carts[me] = room_cart{state.cart.pose.position, state.cart.pose.yaw, other};
+    state.online.carts[me] = room_cart{state.cart.pose.position, state.cart.pose.yaw, other, cart_condition::upright, me};
     room_player& rider = state.online.players[other];
     rider.motion->mode = motion_mode::ride;
     rider.motion_at = state.online.server_now + 1;
@@ -1106,8 +1245,8 @@ TEST_CASE("online every green's flag is the room's: P asks the server, and the r
     // And my next swing sends the flags as I have them.
     state.net_commands.clear();
     state.player.position = state.ball->position;
-    enter_addressing(state);
-    update_game(state, swing_input(), 0.016f);
+    address_looking_down(state);
+    start_swing_on_time(state);
     const net_command* shot = find_command(state, net_command_type::take_shot);
     REQUIRE(shot != nullptr);
     CHECK((shot->flags_out == std::vector<int>{0}));
@@ -1117,7 +1256,7 @@ TEST_CASE("online my bag and club start as my row has them; moves and clubs are 
     game_state state = online_hub();
     const club_definition& iron = *std::find_if(state.clubs.begin(), state.clubs.end(),
                                                 [](const club_definition& club) { return club.label == "7I"; });
-    state.online.bags[me] = room_bag{bag_place{bag_where::on_cart, cart_seat::driver, glm::vec3(0.0f), 0.0f}, iron.id};
+    state.online.bags[me] = room_bag{bag_place{bag_where::on_cart, cart_seat::driver, 0, glm::vec3(0.0f), 0.0f}, iron.id};
     update_game(state, game_input{}, 0.016f);
     CHECK(state.clubs[state.selected_club].id == iron.id);
     CHECK(state.bag.where == bag_where::on_cart);
@@ -1134,6 +1273,7 @@ TEST_CASE("online my bag and club start as my row has them; moves and clubs are 
 
     refuse(state, "place_bag", "bag_out_of_reach");
     CHECK(state.bag.where == bag_where::on_cart);
+    CHECK(!state.handling.has_value());
     REQUIRE(state.notice.has_value());
     CHECK(state.notice->text_key == "online.error.bag_out_of_reach");
 
@@ -1150,17 +1290,18 @@ TEST_CASE("online my bag and club start as my row has them; moves and clubs are 
     CHECK(taken->club_id == state.clubs[state.selected_club].id);
     refuse(state, "take_club", "bag_out_of_reach");
     CHECK(state.clubs[state.selected_club].id == iron.id);
+    CHECK(!state.handling.has_value());
 }
 
-TEST_CASE("online my player row keeps my hand and natural shape, each change sent once") {
+TEST_CASE("online my player row keeps my hand, natural shape and favourite colour, each change sent once") {
     game_state state = online_hub();
     state.online.players[me].natural_shape = natural_shape_unset;
     CHECK(!natural_shape_picked(state));
     record_natural_shape(state, natural_shape::draw);
     const net_command* picked = find_command(state, net_command_type::set_golfer);
     REQUIRE(picked != nullptr);
-    CHECK(picked->natural == static_cast<std::uint8_t>(natural_shape_index(natural_shape::draw)));
-    state.online.players[me].natural_shape = picked->natural;
+    CHECK(picked->golfer.natural == static_cast<std::uint8_t>(natural_shape_index(natural_shape::draw)));
+    state.online.players[me].natural_shape = picked->golfer.natural;
     CHECK(natural_shape_picked(state));
     CHECK(my_golfer(state).natural == natural_shape::draw);
 
@@ -1169,11 +1310,19 @@ TEST_CASE("online my player row keeps my hand and natural shape, each change sen
     update_game(state, game_input{}, 0.016f);
     const net_command* hand = find_command(state, net_command_type::set_golfer);
     REQUIRE(hand != nullptr);
-    CHECK(hand->hand == handedness::left);
-    CHECK(hand->natural == state.online.players[me].natural_shape);
+    CHECK(hand->golfer.hand == handedness::left);
+    CHECK(hand->golfer.natural == state.online.players[me].natural_shape);
+    state.online.players[me].hand = handedness::left;
     state.net_commands.clear();
     update_game(state, game_input{}, 0.016f);
     CHECK(find_command(state, net_command_type::set_golfer) == nullptr);
+
+    state.favourite_colour = 3;
+    update_game(state, game_input{}, 0.016f);
+    const net_command* colour = find_command(state, net_command_type::set_golfer);
+    REQUIRE(colour != nullptr);
+    CHECK(colour->golfer.colour == 3U);
+    CHECK(colour->golfer.hand == handedness::left);
 }
 
 TEST_CASE("a room shot replays here bit for bit as the server played it") {

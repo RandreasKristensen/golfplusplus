@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-inline constexpr int current_save_version = 8;
+inline constexpr int current_save_version = 9;
 
 struct repeatable_collectible_state {
     int claim_count = 0;
@@ -27,7 +27,7 @@ struct save_data {
     std::vector<std::string> completed_course_ids;
     // Holes finished over the save's lifetime; the clock for collectible cooldowns.
     int holes_completed = 0;
-    skill_progression skills;
+    skill_progression skills;  // uncapped XP (v9); older saves read as they are
     std::vector<std::string> collected_ids;
     std::map<std::string, repeatable_collectible_state> repeatable_collectibles;
     std::vector<std::string> world_flags;

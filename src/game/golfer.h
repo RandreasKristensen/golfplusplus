@@ -1,8 +1,9 @@
 #pragma once
 
-// Who swings: their level in each skill, the shape their shots lean to and
-// their hand. Every level reads golfer_top_level until the skill plan fills
-// them (skill_level). Pure.
+// Who swings: their level in each listed skill (skill_catalog.h
+// skill_levels), the shape their shots lean to and their hand. A skill not
+// listed reads golfer_top_level: shot ability's club and shape skills, until
+// the level system lists them. Pure.
 
 #include "game/shot_setup.h"
 

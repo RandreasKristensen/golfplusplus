@@ -80,6 +80,15 @@ spacetime generate --lang rust --bin-path server/golfpp_module/build/lib.wasm --
 
 then rebuild the game. Players need the build that matches the server.
 
+The next check is `server_content_hash`, a separate view so `server_protocol`
+stays readable by older games. Before account or room subscriptions, the game
+compares its startup gameplay fingerprint with the module's embedded content.
+Different tuning, progression, items, fonts or course JSON shows "THIS SERVER
+USES DIFFERENT CONTENT" and disconnects. CRLF and LF agree. Republish the
+module after changing gameplay content and give players the same files;
+restart the game after editing them. Presentation assets and `online.json`
+do not affect compatibility; offline play does not need a matching server.
+
 ## For golf++ development
 
 `.\tooling\gb -m` starts a local server, publishes the module with anonymous

@@ -1,6 +1,7 @@
 #include "renderer/cart_batch.h"
 
 #include <glm/common.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
@@ -10,6 +11,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <vector>
 
 #include "physics/vector_math.h"
 #include "renderer/camera_local.h"
@@ -59,7 +61,7 @@ std::size_t cart_vertex_count(const prop_model& model) {
 
 glm::mat4 cart_frame(const render_cart& cart) {
     const glm::vec3 up = safe_normalize(cart.up, world_up);
-    const glm::vec3 heading = yaw_direction(cart.yaw);
+    const glm::vec3 heading = cart.forward.value_or(yaw_direction(cart.yaw));
     const glm::vec3 forward = safe_normalize(heading - up * glm::dot(heading, up), heading);
     glm::mat4 frame(1.0f);
     frame[0] = glm::vec4(glm::normalize(glm::cross(up, forward)), 0.0f);
@@ -133,26 +135,51 @@ render_cart cart_on_ground(const glm::vec3& position, const float yaw, const pro
     return cart;
 }
 
-render_cart cart_on_side(const glm::vec3& position, const float yaw, const bool on_left_side, const prop_model& model,
-                         const float ground) {
-    // Rolled about the line its wheels on that side touch the ground along:
-    // its middle ends up as far over that line as the wheels were out from it.
+render_cart cart_rolled(const glm::vec3& position, const float yaw, const bool on_left_side, const float angle,
+                        const prop_model& model, const std::function<float(const glm::vec3&)>& ground_height) {
+    const render_cart standing = cart_on_ground(position, yaw, model, ground_height);
+    const glm::mat4 frame = cart_frame(standing);
+    // About the line under its outer tyres on that side, along its length:
+    // turning its roof towards that side (its +x is its left).
     const float half_track = std::abs(model.point(wheel_points[1]).x) + 0.5f * tyre_width;
-    const glm::vec3 side = yaw_left(yaw_direction(yaw)) * (on_left_side ? 1.0f : -1.0f);
+    const float side = on_left_side ? 1.0f : -1.0f;
+    const glm::vec3 pivot(side * half_track, 0.0f, 0.0f);
+    const glm::mat4 turn = glm::translate(glm::mat4(1.0f), pivot) *
+        glm::rotate(glm::mat4(1.0f), -side * angle, glm::vec3(0.0f, 0.0f, 1.0f)) * glm::translate(glm::mat4(1.0f), -pivot);
+    const glm::mat4 rolled = frame * turn;
+
     render_cart cart;
     cart.yaw = yaw;
-    cart.up = side;
-    cart.position = glm::vec3(position.x, ground + half_track, position.z) + side * half_track;
+    cart.up = glm::vec3(rolled[1]);
+    cart.forward = glm::vec3(rolled[2]);
+    cart.position = glm::vec3(rolled[3]);
+    // Its lowest point, of everything drawn of it, onto the ground.
+    prop_batch drawn;
+    append_cart_model(drawn, cart, model, scene_colors{});
+    float lift = -std::numeric_limits<float>::max();
+    for (const prop_vertex& vertex : drawn.opaque()) {
+        lift = std::max(lift, ground_height(vertex.position) + tyre_least_clearance - vertex.position.y);
+    }
+    cart.position += world_up * lift;
     return cart;
 }
 
-void append_cart_model(prop_batch& batch, const render_cart& cart, const prop_model& model, const glow_floors& glow) {
+glm::vec3 bag_paint_color(const figure_colors& colors, const gear_paint& paint) {
+    return colors.bag_paints.empty() ? glm::vec3(1.0f) : colors.bag_paints[gear_paint_index(paint, colors.bag_paints.size())];
+}
+
+glm::vec3 cart_paint_color(const figure_colors& colors, const gear_paint& paint) {
+    return colors.cart_paints.empty() ? glm::vec3(1.0f) : colors.cart_paints[gear_paint_index(paint, colors.cart_paints.size())];
+}
+
+void append_cart_model(prop_batch& batch, const render_cart& cart, const prop_model& model, const scene_colors& colors) {
+    const glow_floors& glow = colors.glow;
     // Built in the cart's frame (x towards its left, y up, z forward, world
     // units), under the middle of its seat at the bottom of its wheels, then
     // set in the world by cart_frame: its model's parts, then the wheels and
     // the steering wheel, which turn.
     const glm::mat4 frame = cart_frame(cart);
-    append_prop_model(batch, model, frame, glow);
+    append_prop_model(batch, model, frame, glow, std::nullopt, cart_paint_color(colors.figures, cart.paint));
     const glm::vec3 feet(0.0f);
     const glm::vec3 facing(0.0f, 0.0f, 1.0f);
     const glm::vec3 rubber = model.color("rubber");

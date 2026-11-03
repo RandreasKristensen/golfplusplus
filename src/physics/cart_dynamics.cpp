@@ -1,5 +1,6 @@
 #include "physics/cart_dynamics.h"
 
+#include "physics/det_math.h"
 #include "physics/flight_model.h"
 #include "physics/vector_math.h"
 
@@ -14,11 +15,11 @@ namespace {
 constexpr float still_speed = 0.05f;
 
 glm::vec2 heading(const float yaw) {
-    return glm::vec2(std::sin(yaw), std::cos(yaw));
+    return glm::vec2(det_sin(yaw), det_cos(yaw));
 }
 
 glm::vec2 left_of(const float yaw) {
-    return glm::vec2(std::cos(yaw), -std::sin(yaw));
+    return glm::vec2(det_cos(yaw), -det_sin(yaw));
 }
 
 float sign_of(const float value) {
@@ -129,7 +130,7 @@ cart_motion step_cart(const cart_motion& in, const cart_controls& controls, cons
     // The steering asks for a turn; the tyres give it as far as their grip goes.
     const float grip = std::max(ground.grip, 0.0f) * g * side.cosine;
     const float wheels = std::clamp(controls.steer, -1.0f, 1.0f) * glm::radians(spec.max_steer_degrees);
-    float yaw_rate = speed * std::tan(wheels) / std::max(spec.wheelbase_m, 0.1f);
+    float yaw_rate = speed * det_sin(wheels) / det_cos(wheels) / std::max(spec.wheelbase_m, 0.1f);
     const float turning = std::abs(yaw_rate * speed);
     if (turning > grip) {
         yaw_rate *= grip / turning;

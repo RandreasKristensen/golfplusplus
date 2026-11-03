@@ -1,5 +1,6 @@
 #include "game/weather_lighting.h"
 
+#include "game/lighting_fields.h"
 #include "physics/vector_math.h"
 
 #include <algorithm>
@@ -8,6 +9,10 @@
 #include <glm/geometric.hpp>
 
 namespace {
+// Koschmieder's law: air in which a dark thing fades to the 2% contrast an
+// eye just sees at `visibility` metres takes -ln 0.02 / visibility per metre.
+constexpr float koschmieder_contrast = 3.912f;
+
 float luminance(const glm::vec3& color) {
     return glm::dot(color, glm::vec3(0.2126f, 0.7152f, 0.0722f));
 }
@@ -43,6 +48,8 @@ lighting_key weathered_lighting(const lighting_key& clear, const weather_style& 
     key.exposure = clear.exposure * glm::mix(1.0f, style.overcast_exposure, cloud);
     key.saturation = clear.saturation * glm::mix(1.0f, style.overcast_saturation, cloud);
     key.gain_noise = std::min(1.0f, clear.gain_noise + style.rain_gain_noise * rain);
+    key.mist_density = std::min(max_mist_density, clear.mist_density + style.fog_mist_density * clamp01(weather.fog) +
+                                                      style.rain_mist_density * rain);
     return key;
 }
 
@@ -60,6 +67,17 @@ weather_haze haze_under_weather(const weather_style& style, const shown_weather&
         glm::mix(1.0f, style.fog_haze_distance, fog);
     haze.grey = std::max(style.overcast_grey * cloud, style.fog_grey * fog);
     return haze;
+}
+
+air_scattering scattering_under_weather(const weather_style& style, const shown_weather& weather) {
+    const float clear = koschmieder_contrast / style.clear_visibility_meters;
+    const float rain = clamp01(weather.rain) * koschmieder_contrast / style.rain_visibility_meters;
+    const float fog = clamp01(weather.fog) * koschmieder_contrast / style.fog_visibility_meters;
+    air_scattering air;
+    air.per_meter = clear + rain + fog;
+    air.forwardness =
+        (clear * style.clear_forwardness + rain * style.rain_forwardness + fog * style.fog_forwardness) / air.per_meter;
+    return air;
 }
 
 float overcast_mottle(const weather_style& style, const shown_weather& weather) {

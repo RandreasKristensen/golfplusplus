@@ -28,9 +28,11 @@ game_content_load_result load_game_content(const std::string& asset_root) {
     content.tuning = *tuning.tuning;
 
     const std::optional<std::string> skills_text = read_text_file(root / skills_path);
-    std::optional<std::vector<skill_definition>> skills = skills_text ? parse_skills_from_text(*skills_text) : std::nullopt;
+    const std::optional<std::string> curves_text = read_text_file(root / curves_path);
+    std::optional<skill_catalog> skills =
+        skills_text && curves_text ? parse_skill_catalog_from_text(*skills_text, *curves_text) : std::nullopt;
     if (!skills) {
-        return fail(std::string("cannot load ") + skills_path);
+        return fail(std::string("cannot load ") + skills_path + " with " + curves_path);
     }
     content.skills = std::move(*skills);
 
@@ -52,6 +54,9 @@ game_content_load_result load_game_content(const std::string& asset_root) {
         return fail(std::string("cannot load ") + default_loadout_path);
     }
     content.default_loadout = *defaults;
+    if (const std::string unlisted = unpayable_skill(content.skills, content.rewards, content.items); !unlisted.empty()) {
+        return fail("XP paid into " + unlisted + ", which " + skills_path + " does not list as earned");
+    }
 
     const std::optional<std::string> settings_text = read_text_file(root / setting_definitions_path);
     std::optional<std::vector<setting_definition>> settings =
@@ -70,6 +75,11 @@ game_content_load_result load_game_content(const std::string& asset_root) {
         return fail(std::string("no valid courses in ") + courses_path);
     }
 
+    const std::optional<std::uint64_t> hash = load_simulation_content_hash(asset_root);
+    if (!hash) {
+        return fail("cannot fingerprint simulation content");
+    }
+    content.content_hash = *hash;
     result.content = std::move(content);
     return result;
 }

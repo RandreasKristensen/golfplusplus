@@ -7,6 +7,7 @@
 #include "renderer/gl_loader.h"
 #include "renderer/hud_overlay.h"
 #include "renderer/menu_overlay.h"
+#include "renderer/online_overlay.h"
 #include "renderer/primitive_mesh.h"
 #include "renderer/remote_avatar_batch.h"
 #include "renderer/scorecard_overlay.h"
@@ -34,15 +35,10 @@ constexpr std::size_t initial_flight_path_vertices = 128;
 constexpr float backdrop_ground_drop = 2.0f;
 constexpr float flight_path_lift = 0.02f;
 constexpr int grass_texture_unit = 1;
-constexpr int shadow_map_unit = 4;
 constexpr const char* grass_texture_path = "world/ground/rough_grass.bmp";
 constexpr const char* fence_net_texture_path = "world/props/fence_net.bmp";
 constexpr float min_far_plane = 160.0f;
 constexpr float far_plane_extent_scale = 2.5f;
-
-std::string shader_path(const std::string& asset_root, const char* name) {
-    return (std::filesystem::path(asset_root) / "picture" / "shaders" / name).string();
-}
 
 // Draw submissions go through these so draw calls are counted in the profile.
 void draw_arrays(const shader_program& shader, const GLenum mode, const GLint first, const GLsizei count) {
@@ -91,18 +87,20 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
         tape_pass_.init(path("crt.vert"), path("tape.frag"), screen_vao_, picture.tape) &&
         tv_pass_.init(path("crt.vert"), path("crt.frag"), screen_vao_, picture.tv) &&
         tree_renderer_.init(path("tree_instanced.vert"),
-                            path("world_marker.frag"),
+                            path("lit_flat.frag"),
                             tree_renderer::mesh_source{cylinder_.vbo, cylinder_.vertex_count},
                             tree_renderer::mesh_source{cone_.vbo, cone_.vertex_count}) &&
-        world_marker_renderer_.init(path("world_marker.vert"), path("world_marker.frag")) &&
+        world_marker_renderer_.init(path("world_marker.vert"), path("lit_flat.frag")) &&
         tee_box_renderer_.init(path("tee_box.vert"), path("tee_box.frag")) &&
         prop_renderer_.init(path("prop.vert"), path("prop.frag")) &&
         blob_shadow_renderer_.init(path("blob_shadow.vert"), path("blob_shadow.frag")) &&
         shadow_map_pass_.init(path("shadow_map.vert"), path("shadow_map.frag"), palette.shadows) &&
+        lamp_shadow_pass_.init(path("shadow_map.vert"), path("shadow_map.frag"), palette.shafts) &&
+        sun_shaft_pass_.init(path(""), screen_vao_, palette.shafts, shadow_map_unit, lamp_map_unit) &&
         hole_sign_renderer_.init(path("hole_sign.vert"), path("hole_sign.frag")) &&
         fence_renderer_.init(path("fence.vert"), path("fence.frag"),
                              (std::filesystem::path(asset_root) / fence_net_texture_path).string()) &&
-        floodlight_renderer_.init(path("floodlight.vert"), path("world_marker.frag")) &&
+        floodlight_renderer_.init(path("floodlight.vert"), path("lit_flat.frag")) &&
         water_renderer_.init(path("water.vert"), path("water.frag"), path("underwater.vert"), path("underwater.frag"),
                              screen_vao_) &&
         weather_renderer_.init(path("weather_streak.vert"), path("weather_streak.frag"),
@@ -130,6 +128,10 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
     return true;
 }
 
+std::string renderer::shader_path(const std::string& asset_root, const char* name) {
+    return (std::filesystem::path(asset_root) / "picture" / "shaders" / name).string();
+}
+
 void renderer::shutdown() {
     gpu_timers_.shutdown();
     lighting_uniforms_.shutdown();
@@ -139,6 +141,8 @@ void renderer::shutdown() {
     prop_renderer_.shutdown();
     blob_shadow_renderer_.shutdown();
     shadow_map_pass_.shutdown();
+    sun_shaft_pass_.shutdown();
+    lamp_shadow_pass_.shutdown();
     hole_sign_renderer_.shutdown();
     fence_renderer_.shutdown();
     floodlight_renderer_.shutdown();
@@ -182,6 +186,7 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
     tape_pass_.set_profile(profile);
     tv_pass_.set_profile(profile);
     backdrop_pass_.set_profile(profile);
+    sun_shaft_pass_.set_profile(profile);
     gpu_timers_.begin_frame(profile != nullptr);
 
     int screen_width = 0;
@@ -215,8 +220,18 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
         scene_fbo_.bind();
         glViewport(0, 0, picture_.width, picture_.height);
         glClearColor(sky.r, sky.g, sky.b, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
         render_scene(view, proj, data, profile);
+        if (!data.camera_underwater) {
+            const frame_lighting_block& lighting = lighting_uniforms_.block();
+            lamp_shadow_pass_.update(lighting_uniforms_.lights(), glm::vec3(lighting.haze_eye), tree_renderer_,
+                                     data.trees != nullptr ? *data.trees : no_trees, data.trees_revision,
+                                     floodlight_renderer_, data.floodlights, gpu_timers_, profile);
+            sun_shaft_pass_.draw(lighting, shadow_map_pass_, lamp_shadow_pass_, scene_fbo_.depth_texture(), proj * view,
+                                 gpu_timers_);
+            scene_fbo_.bind();
+            glViewport(0, 0, picture_.width, picture_.height);
+        }
         render_viewmodel(view, data);
         if (data.camera_underwater) {
             water_renderer_.draw_underwater(colors_.ground, profile);
@@ -332,8 +347,10 @@ glm::mat4 renderer::scene_projection(const float fov_degrees, const float area_e
 bool renderer::ensure_framebuffer_size(const int screen_width, const int screen_height) {
     picture_ = picture_size_for_window(screen_width, screen_height, picture_style_.target_lines);
     const bool scene_ok = (scene_fbo_.width() == picture_.width && scene_fbo_.height() == picture_.height) ||
-        scene_fbo_.init(picture_.width, picture_.height, framebuffer_format{framebuffer_color::hdr, true, false, false});
-    return scene_ok && camcorder_pass_.ensure_size(picture_.width, picture_.height) &&
+        scene_fbo_.init(picture_.width, picture_.height,
+                        framebuffer_format{framebuffer_color::hdr, framebuffer_depth::sampled, false, false});
+    return scene_ok && sun_shaft_pass_.ensure_size(picture_.width, picture_.height, scene_fbo_.color_texture()) &&
+        camcorder_pass_.ensure_size(picture_.width, picture_.height) &&
         eyepiece_pass_.ensure_size(picture_.width, picture_.height) &&
         tape_pass_.ensure_size(picture_.width, picture_.height);
 }
@@ -342,8 +359,12 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     const glm::mat4 view_proj = proj * view;
 
     gpu_timers_.begin(gpu_profile_stage::terrain);
+    const float lowest_terrain = data.terrain_mesh != nullptr && data.terrain_mesh->bounds.valid
+        ? data.terrain_mesh->bounds.min.y
+        : data.area_center.y;
     const render_sky_weather& weather = data.lighting.weather;
-    const scene_haze haze = backdrop_pass_.prepare(data.backdrop, data.camera_position, data.area_extent, data.lighting.haze_tint);
+    scene_haze haze = backdrop_pass_.prepare(data.backdrop, data.camera_position, data.area_extent, data.lighting.haze_tint);
+    haze.mist_floor = lowest_terrain;
     lighting_uniforms_.upload(data.lighting,
                               weathered_haze(haze, weather_haze{weather.haze_gain, weather.haze_distance_share, weather.haze_grey}),
                               data.lights, profile);
@@ -353,9 +374,6 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     shadow_map_pass_.bind(terrain_shader_, shadow_map_unit);
 
     // Backdrop ground under the whole area so the horizon is never empty.
-    const float lowest_terrain = data.terrain_mesh != nullptr && data.terrain_mesh->bounds.valid
-        ? data.terrain_mesh->bounds.min.y
-        : data.area_center.y;
     const float ground_extent = std::max(1.0f, data.area_extent * 2.0f);
     const glm::mat4 ground_model = glm::scale(
         glm::translate(glm::mat4(1.0f), glm::vec3(data.area_center.x, lowest_terrain - backdrop_ground_drop, data.area_center.z)),
@@ -393,10 +411,14 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     markers.pin_markers = &data.pin_markers;
     markers.flags_out = &data.flags_out;
     markers.lying_flags = &data.lying_flags;
-    markers.collectible_markers = &data.collectible_markers;
+    markers.collectibles = &data.collectibles;
     markers.cup_radius_meters = data.cup_radius_meters;
+    markers.cup_depth_meters = data.cup_depth_meters;
     markers.pin_visual_height_meters = data.pin_visual_height_meters;
     markers.flag = flag_pose{data.weather.flag_wind, data.weather.flag_lift, data.weather.flag_phase, data.weather.flag_flap};
+    markers.camera_position = data.camera_position;
+    markers.pixel_per_meter = 2.0f * std::tan(glm::radians(std::max(1.0f, data.camera_fov_degrees)) * 0.5f) /
+        static_cast<float>(picture_.height);
     markers.address_marks = data.address_marks ? &*data.address_marks : nullptr;
     markers.ball_visual_radius_meters = data.ball_visual_radius_meters;
     markers.remote_avatars = &data.remote_avatars;
@@ -461,7 +483,7 @@ void renderer::build_prop_batch(const render_data& data) {
         const auto found = props_.find(id);
         return found != props_.end() ? &found->second : nullptr;
     };
-    append_carts_and_bags(prop_batch_, data, props_, colors_.glow);
+    append_carts_and_bags(prop_batch_, data, props_, colors_);
     if (data.my_club) {
         if (const prop_model* club = model(data.my_club->club_model)) {
             append_swing_club(prop_batch_, *data.my_club, data.ball_visual_radius_meters, *club, colors_.glow);
@@ -476,7 +498,7 @@ void renderer::build_prop_batch(const render_data& data) {
         if (const std::optional<prop_holder> holder = remote_prop_holder(avatar, data.avatar_eye_height, props_)) {
             append_held_props(prop_batch_, *holder, colors_.glow);
         }
-        append_figure_gear(prop_batch_, avatar, data.avatar_eye_height, props_, colors_.glow);
+        append_figure_gear(prop_batch_, avatar, data.avatar_eye_height, props_, colors_);
     }
 }
 
@@ -563,14 +585,18 @@ void renderer::render_overlay(const glm::mat4& view_proj, const render_data& dat
         if (data.show_course_map) {
             render_course_map(data, text);
         }
-        draw_hud(overlay_pass_.batch(), text, data, view_proj);
+        if (data.show_hud) {
+            draw_hud(overlay_pass_.batch(), text, data, view_proj);
+        }
         if (data.god_menu) {
             draw_god_menu(overlay_pass_.batch(), text, *data.god_menu);
         }
         draw_datestamp(overlay_pass_.batch(), text, data.vcr);
+        draw_vcr_title(overlay_pass_.batch(), text, data.vcr);
         draw_startup_menu(overlay_pass_.batch(), text, data.startup_menu, colors_.ground);
     }
     draw_vcr_tag(overlay_pass_.batch(), text, data.vcr);
+    draw_notice(overlay_pass_.batch(), text, data.look_notice);
     if (data.show_fps) {
         render_debug_overlay(data, text, profile);
     }

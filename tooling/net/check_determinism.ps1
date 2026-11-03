@@ -1,10 +1,11 @@
 <#
-Builds the golden shots (tests/fixtures/golden_shots) twice, natively and to
-WASM with Emscripten, runs both, and reports how far apart the results are.
+Builds the golden shots (tests/fixtures/golden_shots), golden cart drives and
+walks and drives over the fixture course twice, natively and to WASM with
+Emscripten, runs both, and reports how far apart the results are.
 
-The server simulates shots in WASM and clients natively, so any difference
-means visible corrections for players. Differences are reported, not fatal:
-the server is the authority and clients blend to its result.
+The server simulates shots and steps every player's walking and driving
+inputs in WASM, and clients predict both natively, bit for bit, so any
+difference fails (exit 1).
 
 Needs: CMake, Ninja, a GCC or Clang native compiler (the build uses
 -ffp-contract=off, as the game does), the Emscripten SDK (EMSDK set, or
@@ -70,27 +71,35 @@ if ($LASTEXITCODE -ne 0) { throw 'The WASM golden shots failed to run.' }
 $worst = 0.0
 $mismatches = 0
 for ($i = 0; $i -lt $native.Count; $i++) {
+    # "shot <i> <x> <y> <z> <holed> <duration> <events>",
+    # "cart <i> <x> <yaw> <z> <condition> <speed> <fall angle>",
+    # "walk <hole> <x> <y> <z> <grounded> <speed> <vertical speed>" or
+    # "drive <hole> <x> <y> <z> <condition> <yaw> <speed>".
     $a = $native[$i] -split ' '
     $b = if ($i -lt $wasm.Count) { $wasm[$i] -split ' ' } else { @() }
-    if ($b.Count -ne $a.Count) {
-        Write-Host "shot $i`: missing from the WASM run"
+    $name = '{0} {1}' -f $a[0], $a[1]
+    if ($b.Count -ne $a.Count -or $b[0] -ne $a[0]) {
+        Write-Host "$name`: missing from the WASM run"
         $mismatches++
         continue
     }
-    $dx = [double]$a[1] - [double]$b[1]
-    $dy = [double]$a[2] - [double]$b[2]
-    $dz = [double]$a[3] - [double]$b[3]
+    $dx = [double]$a[2] - [double]$b[2]
+    $dy = if ($a[0] -ne 'cart') { [double]$a[3] - [double]$b[3] } else { 0.0 }
+    $dz = [double]$a[4] - [double]$b[4]
     $distance = [math]::Sqrt($dx * $dx + $dy * $dy + $dz * $dz)
     $worst = [math]::Max($worst, $distance)
     $same = $native[$i] -eq $wasm[$i]
     if (-not $same) { $mismatches++ }
-    $verdict = if ($same) { 'identical' } else { 'differs: rest {0:N6} m apart, holed {1}/{2}, duration {3}/{4} s, events {5}/{6}' -f $distance, $a[4], $b[4], $a[5], $b[5], $a[6], $b[6] }
-    Write-Host ("shot {0}: {1}" -f $i, $verdict)
+    $verdict = if ($same) { 'identical' }
+        elseif ($a[0] -eq 'shot') { 'differs: rest {0:N6} m apart, holed {1}/{2}, duration {3}/{4} s, events {5}/{6}' -f $distance, $a[5], $b[5], $a[6], $b[6], $a[7], $b[7] }
+        else { 'differs: {0:N6} m apart, then {1}/{2}, {3}/{4}, {5}/{6}' -f $distance, $a[5], $b[5], $a[6], $b[6], $a[7], $b[7] }
+    Write-Host ("{0}: {1}" -f $name, $verdict)
 }
 
 Write-Host ''
 if ($mismatches -eq 0) {
-    Write-Host "All $($native.Count) golden shots are bit-identical natively and in WASM."
+    Write-Host "All $($native.Count) golden shots, drives and walks are bit-identical natively and in WASM."
 } else {
-    Write-Host ("{0} of {1} golden shots differ; the largest rest difference is {2:N6} m." -f $mismatches, $native.Count, $worst)
+    Write-Host ("{0} of {1} golden results differ; the largest position difference is {2:N6} m." -f $mismatches, $native.Count, $worst)
+    exit 1
 }

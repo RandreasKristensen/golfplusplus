@@ -34,6 +34,14 @@ struct material_zone {
 // The zone of `type` round `outline`, its box worked out.
 material_zone make_material_zone(material_zone_type type, std::vector<glm::vec2> outline);
 
+// The edge a real course has through mapped `points` (round a zone, either
+// way): a smooth closed curve through every one of them (centripetal
+// Catmull–Rom, so no loops or cusps), as straight pieces none of which
+// strays more than about `tolerance` metres from it. A span whose curve
+// would make the edge cross itself (a neck narrower than its bulge) stays
+// straight.
+std::vector<glm::vec2> rounded_outline(const std::vector<glm::vec2>& points, float tolerance);
+
 // Whether `position` (ignoring height) is inside the outline.
 bool zone_contains(const material_zone& zone, const glm::vec3& position);
 

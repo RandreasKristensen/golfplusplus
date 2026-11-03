@@ -72,10 +72,10 @@ void draw_hole_number(overlay_batch& batch, const text_assets& text, const ui_re
     draw_text_layout(batch, text.font, number, style.color);
 }
 
-// What the numbers keep clear of: the player, my bag and, on a hole, its tee, ball,
-// pin and flag.
+// What the numbers keep clear of: my bag and, on a hole, its tee, ball, pin
+// and flag. Not me: walking about never moves a number; I am drawn under them.
 std::vector<ui_rect> marks_kept_clear(const course_map_layout& layout, const render_data& data) {
-    std::vector<ui_rect> marks{{map_point(layout, data.player_position), glm::vec2(player_mark_radius)}};
+    std::vector<ui_rect> marks;
     if (data.map_bag_position) {
         marks.push_back({map_point(layout, *data.map_bag_position), glm::vec2(bag_mark_radius)});
     }

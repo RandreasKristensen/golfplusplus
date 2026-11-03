@@ -27,6 +27,10 @@ namespace {
 // it would show.
 game_state in_mode(game_state state, const play_mode play) {
     state.play = play;
+    if (play == play_mode::online) {
+        state.online.account_id = 1;
+        state.online.carts[1] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
+    }
     add_skill_xp(state.save.skills, "fitness", 7);
     return state;
 }
@@ -259,6 +263,8 @@ TEST_CASE("each mode shows and checks its own progress") {
     CHECK(&active_progress(state) == &state.save);
     CHECK(collectible_in_reach());
     state.play = play_mode::online;
+    state.online.account_id = 1;
+    state.online.carts[1] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
     CHECK(&active_progress(state) == &state.online.progress);
     CHECK(!collectible_in_reach());
 }
@@ -299,6 +305,8 @@ TEST_CASE("online progress from the server shows gained xp as drops and leaves t
 TEST_CASE("turning the stance at address is sent as motion") {
     game_state state = started_hole();
     state.play = play_mode::online;
+    state.online.account_id = 1;
+    state.online.carts[1] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
     enter_addressing(state);
     for (int i = 0; i < 10; ++i) {
         update_game(state, game_input{}, 0.05f);
@@ -306,7 +314,7 @@ TEST_CASE("turning the stance at address is sent as motion") {
     const std::size_t before = state.net_commands.size();
 
     game_input left;
-    left.turn_left_held = true;
+    left.strafe_left_held = true;
     for (int i = 0; i < 100 && state.net_commands.size() == before; ++i) {
         update_game(state, left, 0.05f);
     }
@@ -327,6 +335,8 @@ TEST_CASE("offline play never sends motion") {
 TEST_CASE("online motion is sent on intent changes, not every frame") {
     game_state state = started_hole();
     state.play = play_mode::online;
+    state.online.account_id = 1;
+    state.online.carts[1] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
 
     update_game(state, game_input{}, 0.016f);
     REQUIRE(command_types(state) == std::vector<net_command_type>{net_command_type::motion});
@@ -358,6 +368,8 @@ TEST_CASE("online motion is sent on intent changes, not every frame") {
 TEST_CASE("online motion never goes faster than the minimum interval") {
     game_state state = started_hole();
     state.play = play_mode::online;
+    state.online.account_id = 1;
+    state.online.carts[1] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
     game_input left;
     left.turn_left_held = true;
     game_input right;
@@ -421,6 +433,8 @@ TEST_CASE("extrapolated motion follows the yaw convention, straight and turning"
 TEST_CASE("online, the server hears where the player stands right before teeing up") {
     game_state state = started_game(fixture_hub_course());
     state.play = play_mode::online;
+    state.online.account_id = 1;
+    state.online.carts[1] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
     const glm::vec3 start = anchor_on_terrain(state.area, state.world.hole_starts[1].position);
     state.player.position = start;
     state.net_commands.clear();
@@ -435,6 +449,8 @@ TEST_CASE("online, the server hears where the player stands right before teeing 
 TEST_CASE("online motion pauses while a shot plays") {
     game_state state = started_hole();
     state.play = play_mode::online;
+    state.online.account_id = 1;
+    state.online.carts[1] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
     hit_selected_club(state);
     REQUIRE(state.shot.has_value());
     state.net_commands.clear();
@@ -450,17 +466,21 @@ TEST_CASE("online motion pauses while a shot plays") {
     }
 }
 
-TEST_CASE("nothing is used while a shot plays (the server refuses it then too)") {
+TEST_CASE("I can light up while my shot plays, and the server hears it") {
     game_state state = started_hole();
     state.play = play_mode::online;
+    state.online.account_id = 1;
+    state.online.carts[1] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
     hit_selected_club(state);
     REQUIRE(state.shot.has_value());
     state.net_commands.clear();
     game_input smoke;
     smoke.use_smokable = true;
     update_game(state, smoke, 0.016f);
-    CHECK(!state.smoking.has_value());
-    CHECK(gameplay_commands(state).empty());
+    CHECK(state.smoking.has_value());
+    const std::vector<net_command> sent = gameplay_commands(state);
+    REQUIRE(sent.size() == 1);
+    CHECK(sent[0].type == net_command_type::use_item);
 }
 
 TEST_CASE("a cart getting onto a road is an intent change") {
@@ -480,6 +500,8 @@ TEST_CASE("a cart getting onto a road is an intent change") {
 TEST_CASE("online stepping sideways is sent along the way I go, so others carry me on that way") {
     game_state state = started_hole();
     state.play = play_mode::online;
+    state.online.account_id = 1;
+    state.online.carts[1] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
     state.player.yaw = 0.4f;
     for (int i = 0; i < 10; ++i) {
         update_game(state, game_input{}, 0.05f);
@@ -505,6 +527,8 @@ TEST_CASE("online stepping sideways is sent along the way I go, so others carry 
 TEST_CASE("online turning with the mouse while standing still is sent once it is off far enough") {
     game_state state = started_hole();
     state.play = play_mode::online;
+    state.online.account_id = 1;
+    state.online.carts[1] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
     for (int i = 0; i < 10; ++i) {
         update_game(state, game_input{}, 0.05f);
     }

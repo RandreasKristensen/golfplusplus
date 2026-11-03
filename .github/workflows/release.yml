@@ -1,0 +1,103 @@
+# Builds what macOS and Linux players download (tooling/release/build_release.sh)
+# on GitHub's runners. Run it by hand from the Actions tab (the packages are
+# then the run's artifacts), or push a release tag (alpha-v<version>): the
+# packages are then attached to that tag's GitHub release, made as a draft
+# when there is none. Windows' installer and the server package are built
+# locally (tooling/release/build_release.ps1).
+name: Release (macOS, Linux)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["alpha-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: macos
+          # The oldest glibc a player's Linux needs is the one built on.
+          - os: ubuntu-22.04
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install build tools (Linux)
+        if: matrix.platform == 'linux'
+        # SDL2's development files are only for building it: it loads them
+        # at run time.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config libssl-dev libdbus-1-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libdecor-0-dev \
+            libdrm-dev libgbm-dev libasound2-dev libpulse-dev libpipewire-0.3-dev libudev-dev
+
+      - name: Install build tools (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          brew install ninja
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Cache the native libraries
+        id: deps-cache
+        uses: actions/cache@v6
+        with:
+          path: build/deps
+          key: deps-${{ matrix.os }}-${{ hashFiles('tooling/release/build_deps.sh') }}
+
+      - name: Build the native libraries
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        env:
+          CMAKE_OSX_ARCHITECTURES: ${{ matrix.platform == 'macos' && 'arm64;x86_64' || '' }}
+          CMAKE_OSX_DEPLOYMENT_TARGET: ${{ matrix.platform == 'macos' && '11.0' || '' }}
+        run: bash tooling/release/build_deps.sh build/deps
+
+      - name: Build the release
+        run: bash tooling/release/build_release.sh build/deps
+
+      - name: Show what the game loads from the system
+        run: |
+          if [ "${{ matrix.platform }}" = macos ]; then
+            otool -L build/dist/golfpp-*/golf++.app/Contents/MacOS/golf++
+            lipo -info build/dist/golfpp-*/golf++.app/Contents/MacOS/golf++
+          else
+            ldd build/dist/golfpp-*/golf++
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: golfpp-${{ matrix.platform }}
+          path: |
+            build/dist/*.dmg
+            build/dist/*.tar.gz
+          if-no-files-found: error
+
+  attach:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Attach the packages to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" --draft --verify-tag --title "Alpha v${TAG#alpha-v}" --notes ""
+          fi
+          gh release upload "$TAG" dist/* --clobber

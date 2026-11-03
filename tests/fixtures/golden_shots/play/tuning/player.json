@@ -1,6 +1,7 @@
 {
   "player": {
     "walk_speed": 7.0,
+    "run_factor": 1.6,
     "turn_rate": 1.8,
     "look_pitch_rate": 1.2,
     "max_look_pitch": 1.2,
@@ -9,6 +10,8 @@
     "flag_reach": 2.5,
     "bag_reach": 1.6,
     "bag_set_down_distance": 0.7,
+    "bag_handle_seconds": 0.7,
+    "club_swap_seconds": 0.9,
     "ball_stand_off_distance": 2.0,
     "jump_speed": 3.5,
     "jump_gravity": 14.0,
@@ -33,13 +36,32 @@
     "follow_back_distance": 0.7,
     "follow_eye_height": 2.0,
     "follow_look_height": 0.25,
+    "follow_roll_meters": 2.0,
     "transition_seconds": 0.55,
     "transition_jump_distance": 1.5,
     "viewmodel_fov_degrees": 60.0
   },
+  "pacing": {
+    "pace_meters": 1.0,
+    "popup_ahead_meters": 3.0,
+    "popup_drop_meters": 0.6
+  },
+  "green_read": {
+    "eye_height": 0.6,
+    "crouch_seconds": 0.3,
+    "spacing_meters": 1.0,
+    "radius_meters": 7.0,
+    "edge_fade_meters": 2.0,
+    "clear_meters": 0.5,
+    "drift_meters": 0.6,
+    "drift_speed_per_percent": 0.12,
+    "level_percent": 0.4
+  },
   "rangefinder": {
     "magnification": 3.0,
     "raise_seconds": 0.15,
+    "min_range_meters": 4.6,
+    "flag_range_meters": 450.0,
     "max_range_meters": 600.0,
     "march_step_meters": 2.0,
     "refine_steps": 10,
@@ -51,9 +73,10 @@
     "person_height": 1.8,
     "cart_height": 2.0,
     "ping_seconds": 0.4,
-    "light_rain_error": 0.1,
-    "light_fog_error": 0.2,
-    "blank_share": 0.35,
-    "nonsense_slope": 0.15
+    "fog_reach_meters": 70.0,
+    "rain_reach_meters": 250.0,
+    "fog_false_share": 0.6,
+    "rain_false_share": 0.5,
+    "false_return_meters": 25.0
   }
 }

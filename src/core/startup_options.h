@@ -2,6 +2,7 @@
 
 #include "game/weather.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -37,6 +38,9 @@
 //                     m/s blowing north
 //                     and the ground's wetness (0 to 1), for screenshots.
 //   GOLFPP_GOD=1      the god menu (F1) can be opened, as with --god.
+//   GOLFPP_TOUR=n     start the visual tour (core/visual_tour.h) at its
+//                     n-th stop, from 1, on GOLFPP_COURSE or the first
+//                     course, for screenshots of each.
 //   GOLFPP_SERVER=uri, GOLFPP_DB=name
 //                     connect online play to another server or database
 //                     than assets/play/online.json says (a local or self-hosted
@@ -63,6 +67,8 @@ struct startup_options {
     std::optional<float> wind_speed;  // m/s
     std::optional<float> wetness;     // 0..1
     bool god_menu = false;
+    // GOLFPP_TOUR: the visual tour's stop to start at, from 0; none: no tour.
+    std::optional<std::size_t> tour_stop;
 };
 
 // Pure: no environment access, no I/O, no globals. `vsync_value` and
@@ -92,6 +98,10 @@ startup_options with_game_time(startup_options options, const char* game_time_va
 // else holds nothing. The god menu is on for "1", "on", "yes" or "true".
 startup_options with_weather_options(startup_options options, const char* weather_value, const char* god_value);
 
+// Adds the visual tour's start. Pure, like parse_startup_options: the raw
+// environment string or null. A whole number from 1 (surrounding whitespace
+// trimmed); anything else starts no tour.
+startup_options with_tour_option(startup_options options, const char* tour_value);
 // Adds the online options. Pure, like parse_startup_options: `server_value`
 // and `database_value` are the raw environment strings or null, `arguments`
 // the command line without the program name. --god turns the god menu on.

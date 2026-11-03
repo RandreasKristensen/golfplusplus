@@ -52,6 +52,8 @@ TEST_CASE("the server loads the content it needs and only courses with a world")
     CHECK(loaded.error.empty());
     CHECK(loaded.content->clubs.size() == shipped_content().clubs.size());
     CHECK(loaded.content->font.glyphs.size() > 26U);
+    REQUIRE(loaded.content->skills.skills.size() == shipped_content().skills.skills.size());
+    CHECK(loaded.content->skills.curves.size() == shipped_content().skills.curves.size());
     REQUIRE(loaded.content->courses.size() == 1U);
     CHECK(loaded.content->courses[0].id == fixture_hub_course().id);
     CHECK(find_server_course(*loaded.content, "missing") == nullptr);
@@ -68,10 +70,67 @@ TEST_CASE("missing server content is reported, not filled in") {
     CHECK(loaded.error.find(tuning_path) != std::string::npos);
 
     fixture = fixture_content_files();
+    fixture.files.erase(curves_path);
+    const server_content_load_result without_curves = parse_server_content(fixture.files);
+    CHECK(!without_curves.content.has_value());
+    CHECK(without_curves.error.find(curves_path) != std::string::npos);
+
+    fixture = fixture_content_files();
     const server_content content = *parse_server_content(fixture.files).content;
     fixture.files.erase(std::string(fixture_hub_folder) + "/holes/test2.json");
     CHECK(!build_server_course(fixture.files, content, fixture_hub_course().id).has_value());
     CHECK(!build_server_course(fixture.files, content, "missing").has_value());
+}
+
+TEST_CASE("content hash: shipped files match the server and game fingerprints") {
+    content_fixture fixture;
+    for (const char* folder : simulation_content_folders) {
+        add_content_folder(fixture, asset_root(), folder);
+    }
+    for (const auto& [path, text] : fixture.texts) {
+        fixture.files.emplace(path, text);
+    }
+    const server_content_load_result loaded = parse_server_content(fixture.files);
+    REQUIRE(loaded.content);
+    CHECK(loaded.content->content_hash == shipped_content().content_hash);
+    CHECK(!load_simulation_content_hash(fixture_root()));
+}
+
+TEST_CASE("content hash: rules, equipment, progression, fonts and every course file matter") {
+    content_files files{{"play/tuning/ball.json", "{}"}, {"play/progression/skills.json", "[]"},
+                        {"play/items/default_loadout.json", "{}"}, {"play/items/club/driver.json", "{}"},
+                        {"interface/fonts/font.json", "{}"}, {"world/courses/test/course.json", "{}"},
+                        {"world/courses/test/world.json", "{}"}, {"world/courses/test/holes/h01.json", "{}"}};
+    const std::uint64_t hash = simulation_content_hash(files);
+    for (const auto& [path, text] : files) {
+        content_files changed = files;
+        changed[path] = "{\"changed\":true}";
+        CHECK(simulation_content_hash(changed) != hash);
+        changed = files;
+        changed.erase(path);
+        CHECK(simulation_content_hash(changed) != hash);
+        changed.emplace(path + ".json", text);
+        CHECK(simulation_content_hash(changed) != hash);
+    }
+    files.emplace("world/courses/added/holes/h01.json", "{}");
+    CHECK(simulation_content_hash(files) != hash);
+    files.erase("world/courses/added/holes/h01.json");
+    for (const char* path : {"picture/lighting.json", "sound/sounds.json", "interface/text/en.json", "play/online.json",
+                             "world/courses/test/backdrops/a.png", "world/courses_extra/test.json"}) {
+        files.emplace(path, "ignored");
+    }
+    CHECK(simulation_content_hash(files) == hash);
+}
+
+TEST_CASE("content hash: line endings agree and paths and file boundaries are framed") {
+    CHECK(simulation_content_hash({{"play/tuning/a.json", "{\n}\n"}}) ==
+          simulation_content_hash({{"play/tuning/a.json", "{\r\n}\r\n"}}));
+    CHECK(simulation_content_hash({{"play/tuning/a.json", "\r"}}) !=
+          simulation_content_hash({{"play/tuning/a.json", ""}}));
+    CHECK(simulation_content_hash({{"play/tuning/a.json", "b"}}) !=
+          simulation_content_hash({{"play/tuning/b.json", "a"}}));
+    CHECK(simulation_content_hash({{"play/tuning/a.json", "play/tuning/b.json"}}) !=
+          simulation_content_hash({{"play/tuning/a.json", ""}, {"play/tuning/b.json", ""}}));
 }
 
 // Both sides run natively here, so this proves the server builds the same

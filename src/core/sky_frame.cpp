@@ -60,6 +60,8 @@ render_lighting make_render_lighting(const game_state& game, const lighting_pale
     lighting.haze_tint = light.haze_tint;
     lighting.horizon_glow = light.horizon_glow;
     lighting.horizon_glow_strength = light.horizon_glow_strength;
+    lighting.mist_height_meters = light.mist_height_meters;
+    lighting.mist_density = light.mist_density;
     lighting.moon_direction = sky.moon_direction;
     lighting.moon_phase = sky.moon_phase;
     lighting.star_visibility = star_visibility(palette.sky, sun_elevation_deg);

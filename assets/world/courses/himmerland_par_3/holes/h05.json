@@ -502,7 +502,74 @@
       ]
     }
   ],
-  "trees": [],
+  "trees": [
+    {
+      "position": [
+        -21.7,
+        0.0,
+        -5.69
+      ],
+      "trunk_radius": 0.42,
+      "trunk_height": 1.7,
+      "leaf_radius": 2.99,
+      "leaf_height": 2.08
+    },
+    {
+      "position": [
+        -9.7,
+        0.0,
+        -27.69
+      ],
+      "trunk_radius": 0.62,
+      "trunk_height": 2.28,
+      "leaf_radius": 4.44,
+      "leaf_height": 2.79
+    },
+    {
+      "position": [
+        99.3,
+        0.0,
+        -56.69
+      ],
+      "trunk_radius": 0.83,
+      "trunk_height": 2.76,
+      "leaf_radius": 5.92,
+      "leaf_height": 3.37
+    },
+    {
+      "position": [
+        75.3,
+        0.0,
+        -12.69
+      ],
+      "trunk_radius": 0.71,
+      "trunk_height": 2.36,
+      "leaf_radius": 5.08,
+      "leaf_height": 2.88
+    },
+    {
+      "position": [
+        72.3,
+        0.0,
+        -5.69
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 2.47,
+      "leaf_radius": 4.62,
+      "leaf_height": 3.02
+    },
+    {
+      "position": [
+        69.3,
+        0.0,
+        1.31
+      ],
+      "trunk_radius": 0.73,
+      "trunk_height": 2.44,
+      "leaf_radius": 5.2,
+      "leaf_height": 2.98
+    }
+  ],
   "source": {
     "type": "osm",
     "tee_latlon": [
@@ -518,6 +585,9 @@
     "tee_elevation": 18.89,
     "hole_way": "way/1565793222",
     "fairway": "osm",
+    "aerial": "dk",
+    "aerial_bunkers": 0,
+    "aerial_waters": 0,
     "made_green": false
   }
 }

@@ -20,6 +20,8 @@ rangefinder_tuning test_rangefinder() {
     rangefinder_tuning tuning;
     tuning.magnification = 3.0f;
     tuning.raise_seconds = 0.15f;
+    tuning.min_range_meters = 4.6f;
+    tuning.flag_range_meters = 450.0f;
     tuning.max_range_meters = 600.0f;
     tuning.march_step_meters = 2.0f;
     tuning.refine_steps = 12;
@@ -195,6 +197,32 @@ TEST_CASE("the rangefinder's frame signs the height up or down hill") {
     CHECK(label(-0.3f) == "0M");
 }
 
+TEST_CASE("the rangefinder shows what the slope makes it play like: longer uphill, shorter down") {
+    rangefinder_reading reading;
+    CHECK(!plays_like_meters(reading));
+    reading.distance_meters = 146.4f;
+    CHECK(!plays_like_meters(reading));
+    reading.height_meters = 33.4f;
+    CHECK(near(*plays_like_meters(reading), 179.8f, 0.001f));
+    reading.height_meters = -12.0f;
+    CHECK(near(*plays_like_meters(reading), 134.4f, 0.001f));
+    reading.distance_meters = 5.0f;
+    reading.height_meters = -9.0f;
+    CHECK(near(*plays_like_meters(reading), 0.0f));
+
+    game_state state = dry_hole();
+    raise_rangefinder(state);
+    state.rangefinder.distance_meters = 150.0f;
+    state.rangefinder.height_meters = 6.4f;
+    const auto label = [&] {
+        return make_render_data(state, shipped_text_assets(), shipped_content().skills, render_meshes{}, test_props(), 70.0f, false)
+            .rangefinder_plays_like_label;
+    };
+    CHECK(label() == "PLAYS 156M");
+    state.rangefinder = rangefinder_reading{};
+    CHECK(label().empty());
+}
+
 TEST_CASE("the rangefinder's flag reading shrinks walking towards the pin") {
     game_state state = dry_hole();
     const glm::vec3 pin = pin_anchor_position(state, state.ball->hole);
@@ -314,56 +342,132 @@ TEST_CASE("the rangefinder meets carts and people standing in its way") {
     CHECK(!standing_hit(scene, eye, ahead, 4.0f));
 }
 
-TEST_CASE("the rangefinder reads true in the dry, wanders in light rain and mist, and reads nonsense in rain and fog") {
+TEST_CASE("the rangefinder reads nothing nearer than its minimum range") {
+    const game_tuning& tuning = shipped_content().tuning;
+    const play_area area = flat_area(tuning);
+    const glm::vec3 player(0.0f, 0.0f, 100.0f);
+    const glm::vec3 eye = player + world_up * 1.65f;
+    const rangefinder_tuning rangefinder = test_rangefinder();
+    const float units = 1.0f / tuning.scale.meters_per_world_unit;
+
+    // The ground at my feet.
+    CHECK(!read_rangefinder(area, view_of(), player, eye, look_along_z(-60.0f), rangefinder, tuning.scale).distance_meters);
+
+    // A tree trunk just in front blinds it, even with a flag beside the reticle.
+    play_area wooded = area;
+    solid stem = test_post(glm::vec3(0.0f, 0.0f, 100.0f + 3.0f * units), 0.3f, 3.0f);
+    stem.kind = solid_kind::trunk;
+    set_solids(wooded, {stem});
+    const glm::vec3 flag(0.5f, 0.0f, 250.0f);
+    const rangefinder_reading blinded =
+        read_rangefinder(area, view_of({flag}, &wooded), player, eye, look_along_z(0.0f), rangefinder, tuning.scale);
+    CHECK(!blinded.distance_meters);
+    CHECK(!blinded.flag);
+
+    // Further back the same trunk reads.
+    const glm::vec3 back(0.0f, 0.0f, 100.0f - 10.0f * units);
+    const rangefinder_reading trunk = read_rangefinder(area, view_of({}, &wooded), back, back + world_up * 1.65f,
+                                                       look_along_z(0.0f), rangefinder, tuning.scale);
+    REQUIRE(trunk.distance_meters.has_value());
+    CHECK(*trunk.distance_meters > rangefinder.min_range_meters);
+
+    // A flag closer than that never locks.
+    const glm::vec3 close_flag = player + glm::vec3(0.0f, 0.0f, 3.0f * units);
+    const glm::vec3 to_close = close_flag + world_up - eye;
+    const glm::vec3 look = safe_normalize(to_close, look_along_z(0.0f));
+    CHECK(!read_rangefinder(area, view_of({close_flag}), player, eye, look, rangefinder, tuning.scale).flag);
+}
+
+TEST_CASE("the rangefinder locks onto flags no further than its flag range") {
+    const game_tuning& tuning = shipped_content().tuning;
+    const play_area area = flat_area(tuning);
+    const glm::vec3 player(0.0f, 0.0f, 100.0f);
+    const glm::vec3 eye = player + world_up * 1.65f;
+    const glm::vec3 flag(0.0f, 0.0f, 250.0f);
+    rangefinder_tuning rangefinder = test_rangefinder();
+    CHECK(read_rangefinder(area, view_of({flag}), player, eye, look_along_z(0.0f), rangefinder, tuning.scale).flag);
+    rangefinder.flag_range_meters = 100.0f * tuning.scale.meters_per_world_unit;
+    CHECK(!read_rangefinder(area, view_of({flag}), player, eye, look_along_z(0.0f), rangefinder, tuning.scale).flag);
+}
+
+TEST_CASE("fog and rain shorten the rangefinder's reach, fog far more") {
     const rangefinder_tuning& tuning = shipped_content().tuning.rangefinder;
     const weather_tuning& rules = shipped_content().tuning.weather;
     const auto in = [&](const weather_kind kind) { return with_weather_kind(weather_state{}, kind, rules); };
+    CHECK(near(rangefinder_reach(in(weather_kind::clear), tuning, tuning.flag_range_meters), tuning.flag_range_meters, 0.01f));
+    REQUIRE(rules.fog == 1.0f);
+    CHECK(near(rangefinder_reach(in(weather_kind::fog), tuning, tuning.max_range_meters), tuning.fog_reach_meters, 0.01f));
+    float previous = tuning.flag_range_meters;
+    for (const weather_kind kind : {weather_kind::light_rain, weather_kind::rain, weather_kind::heavy_rain}) {
+        const float reach = rangefinder_reach(in(kind), tuning, tuning.flag_range_meters);
+        CHECK(reach < previous);
+        previous = reach;
+    }
+    CHECK(rangefinder_reach(in(weather_kind::light_fog), tuning, tuning.flag_range_meters) < previous);
+    CHECK(rangefinder_reach(in(weather_kind::fog), tuning, tuning.flag_range_meters) < 100.0f);
+}
+
+TEST_CASE("the rangefinder reads true in the dry, and in rain and fog reads droplets short or nothing") {
+    const rangefinder_tuning& tuning = shipped_content().tuning.rangefinder;
+    const weather_tuning& rules = shipped_content().tuning.weather;
+    const auto in = [&](const weather_kind kind) { return with_weather_kind(weather_state{}, kind, rules); };
+    const glm::vec3 look = look_along_z(0.0f);
     rangefinder_reading clean;
     clean.distance_meters = 150.0f;
     clean.height_meters = 4.0f;
+    clean.sight_meters = 150.0f;
     clean.flag = glm::vec3(1.0f);
     for (const weather_kind dry : {weather_kind::clear, weather_kind::cloudy}) {
-        CHECK(*weathered_reading(clean, in(dry), rules, tuning, 7).distance_meters == 150.0f);
-    }
-    const auto spread = [&](const weather_kind kind) {
-        float low = 1.0e9f;
-        float high = 0.0f;
-        for (std::uint32_t ping = 0; ping < 200; ++ping) {
-            const rangefinder_reading reading = weathered_reading(clean, in(kind), rules, tuning, ping);
-            CHECK(reading.flag.has_value());
-            CHECK(reading.distance_meters.has_value());
-            if (!reading.distance_meters) {
-                continue;
-            }
-            low = std::min(low, *reading.distance_meters);
-            high = std::max(high, *reading.distance_meters);
+        for (std::uint32_t ping = 0; ping < 50; ++ping) {
+            const rangefinder_reading reading = weathered_reading(clean, look, 1.65f, in(dry), tuning, ping);
+            CHECK(*reading.distance_meters == 150.0f);
+            CHECK(reading.flag);
         }
-        return std::make_pair(low, high);
+    }
+    struct tally {
+        int clean = 0;
+        int droplets = 0;
+        int blank = 0;
     };
-    const auto [rain_low, rain_high] = spread(weather_kind::light_rain);
-    CHECK(rain_low >= 150.0f * (1.0f - tuning.light_rain_error) - 0.01f);
-    CHECK(rain_high <= 150.0f * (1.0f + tuning.light_rain_error) + 0.01f);
-    CHECK(rain_high - rain_low > 150.0f * tuning.light_rain_error);
-    const auto [mist_low, mist_high] = spread(weather_kind::light_fog);
-    CHECK(mist_low >= 150.0f * (1.0f - tuning.light_fog_error) - 0.01f);
-    CHECK(mist_high <= 150.0f * (1.0f + tuning.light_fog_error) + 0.01f);
-    CHECK(mist_high - mist_low > 150.0f * tuning.light_rain_error * 2.0f);
-
-    for (const weather_kind blind : {weather_kind::rain, weather_kind::heavy_rain, weather_kind::fog}) {
-        int blanks = 0;
-        int far_off = 0;
-        for (std::uint32_t ping = 0; ping < 200; ++ping) {
-            const rangefinder_reading reading = weathered_reading(clean, in(blind), rules, tuning, ping);
-            CHECK(!reading.flag);
+    const auto count = [&](const weather_kind kind, const rangefinder_reading& target) {
+        tally seen;
+        for (std::uint32_t ping = 0; ping < 400; ++ping) {
+            const rangefinder_reading reading = weathered_reading(target, look, 1.65f, in(kind), tuning, ping);
             if (!reading.distance_meters) {
-                ++blanks;
-            } else if (std::abs(*reading.distance_meters - 150.0f) > 150.0f * tuning.light_fog_error) {
-                ++far_off;
+                ++seen.blank;
+            } else if (*reading.distance_meters == *target.distance_meters) {
+                CHECK(reading.flag == target.flag);
+                ++seen.clean;
+            } else {
+                CHECK(!reading.flag);
+                CHECK(*reading.distance_meters >= tuning.min_range_meters - 0.001f);
+                CHECK(*reading.distance_meters <= tuning.false_return_meters + 0.001f);
+                CHECK(near(*reading.height_meters, 1.65f, 0.001f));
+                ++seen.droplets;
             }
         }
-        CHECK(blanks > 0);
-        CHECK(far_off > 100);
+        return seen;
+    };
+    // In rain the flag at 150 m mostly reads true, now and then a droplet.
+    for (const weather_kind kind : {weather_kind::light_rain, weather_kind::heavy_rain}) {
+        const tally seen = count(kind, clean);
+        CHECK(seen.blank == 0);
+        CHECK(seen.droplets > 0);
+        CHECK(seen.clean > seen.droplets);
     }
+    CHECK(count(weather_kind::light_rain, clean).droplets < count(weather_kind::heavy_rain, clean).droplets);
+    // In fog it is out of reach: droplets or nothing, never the flag.
+    const tally fog = count(weather_kind::fog, clean);
+    CHECK(fog.clean == 0);
+    CHECK(fog.blank > 0);
+    CHECK(fog.droplets > 0);
+    // At the sky fog still sends some back.
+    CHECK(count(weather_kind::fog, rangefinder_reading{}).droplets > 0);
+    // A flag well within fog's reach reads true.
+    rangefinder_reading close = clean;
+    close.distance_meters = 20.0f;
+    close.sight_meters = 20.0f;
+    CHECK(count(weather_kind::fog, close).clean > 200);
 }
 
 TEST_CASE("held up the rangefinder takes a new reading every ping") {

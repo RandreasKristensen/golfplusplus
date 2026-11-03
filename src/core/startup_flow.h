@@ -1,7 +1,7 @@
 #pragma once
 
 // Menu flow: main menu, help, settings (core/settings_menu.h), the offline
-// course picker, the online screens (core/online_menus.h) and the in-round "leave
+// course picker, the visual tour's (core/visual_tour.h), the online screens (core/online_menus.h) and the in-round "leave
 // the round?" menu, which also opens settings. Turns input
 // into state changes plus actions, online requests and UI sounds for app to
 // carry out, and builds the menu render data. No SDL and no network: app
@@ -57,6 +57,9 @@ enum class startup_flow {
     joining,               // join_course sent, waiting for the room
     exit_prompt,           // Escape on the main menu: quit the game? Opens on NO
     natural_shape_picker,  // before a save's first round: its golfer's natural shot
+    transport_picker,      // before a round on a course with carts: take one, or carry my bag
+    tour_picker,           // VISUAL TOUR: the course to fly round
+    touring,               // the visual tour, until Escape
     playing
 };
 
@@ -65,6 +68,7 @@ enum class startup_flow {
 enum class main_menu_item {
     play_online,
     play_offline,
+    visual_tour,
     link_login,
     sign_out,
     help,
@@ -114,6 +118,8 @@ bool signed_in(const online_menu_status& online);
 struct startup_flow_state {
     startup_flow flow = startup_flow::main;
     int selection = 0;
+    // The course pickers' first row shown (core/menu_controls.h select_course).
+    int picker_top_row = 0;
     bool confirm_active = false;
     // 0 = YES, 1 = NO, 2 = SETTINGS, 3 = GIVE UP HOLE (while there is one to
     // give up). Opens on NO so a stray key press never quits a round.
@@ -123,7 +129,7 @@ struct startup_flow_state {
     // The in-round menu shows settings instead.
     bool confirm_settings = false;
     // The settings screen's, from the main menu or the in-round menu.
-    settings_view settings_view;
+    ::settings_view settings_view;
     // The player's settings: app loads them, applies them when a menu
     // reports settings_changed, and saves them. Kept across every screen.
     settings_values settings;
@@ -139,9 +145,12 @@ struct startup_flow_state {
     std::uint64_t account_at_submit = 0;
     std::uint64_t link_results_at_submit = 0;
     course_definition joining_course;
-    // The course the natural shot picker starts once a shape is picked, and how.
+    // The course the natural shot and transport pickers start once picked, and how.
     course_definition picking_for_course;
     play_mode picking_for_play = play_mode::offline;
+    // Whether the round starts with my cart (the transport picker's
+    // answer; a course without carts has none): app gives it to the game.
+    bool takes_cart = true;
     double clock_seconds = 0.0;
 };
 
@@ -154,7 +163,8 @@ enum class ui_sound {
 enum class startup_action {
     none,
     quit,
-    start_course
+    start_course,
+    start_tour
 };
 
 // What app asks of net_client for the online screens.
@@ -173,12 +183,14 @@ enum class online_request_type {
 struct online_request {
     online_request_type type = online_request_type::begin_login;
     std::string text;  // claim_name: the name; redeem_link_code: the code; join_course: the course id
+    bool takes_cart = false;  // join_course: with a cart of my own
 };
 
 struct startup_menu_result {
     startup_action action = startup_action::none;
-    // Set for start_course. The flow stays in the menu until app has started
-    // it (see enter_playing), so a course that fails to load keeps the menu.
+    // Set for start_course and start_tour. The flow stays in the menu until
+    // app has started it (see enter_playing, enter_touring), so a course that
+    // fails to load keeps the menu.
     course_definition course;
     play_mode play = play_mode::offline;
     // Picked before the course starts (the natural shot picker): app keeps it with progress.
@@ -206,9 +218,14 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
                                         const startup_catalog& catalog,
                                         const online_menu_status& online = {});
 void enter_playing(startup_flow_state& state);
+void enter_touring(startup_flow_state& state);
 // Asks for the golfer's natural shot, then starts `course` as `play`
 // says; offline Escape goes back to the course picker.
 void open_natural_shape_picker(startup_flow_state& state, const course_definition& course, play_mode play);
+// `course` picked to play as `play`: where it has carts, asks first whether
+// to take one or carry my bag (Escape back to that course picker); then
+// starts it offline, or online joins its room.
+void pick_transport(startup_flow_state& state, const course_definition& course, play_mode play, startup_menu_result& result);
 void return_to_main_menu(startup_flow_state& state);
 // Back to the online sign-in screen, which shows how the connection is.
 void open_online_login(startup_flow_state& state);

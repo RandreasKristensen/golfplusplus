@@ -5,9 +5,12 @@
 // native tests check; this file only reads and writes rows.
 //
 // Accounts are not logins: every login identity maps to one account
-// (account_login), and all progress is keyed by account_id.
+// (account_login). Progress is a golfer's: an account's in one scope
+// (golfer). Every progress table is Private and read through a my_* view.
 
 #include "account_rules.h"
+#include "cart_rules.h"
+#include "interest_rules.h"
 #include "game/net_types.h"
 #include "game/play_area.h"
 #include "game/progress_rules.h"
@@ -16,9 +19,12 @@
 #include "game/save_data.h"
 #include "game/shot_simulation.h"
 #include "game/shot_snapshot.h"
+#include "game/weather.h"
 #include "module_cache.h"
+#include "movement_rules.h"
 #include "physics/vector_math.h"
 #include "play_rules.h"
+#include "progress_rollup.h"
 #include "game/server_errors.h"
 
 #include <spacetimedb.h>
@@ -48,29 +54,32 @@ struct server_config_row {
     std::string auth_issuer;
     std::string auth_audience;
     bool allow_anonymous;
-    std::string link_secret;  // keys link codes (make_link_code); empty: linking is off
+    // Keys link codes (make_link_code) and shot seeds (server_shot_seed);
+    // empty: linking is off and seeds can be worked out.
+    std::string server_secret;
 };
-SPACETIMEDB_STRUCT(server_config_row, id, owner, auth_issuer, auth_audience, allow_anonymous, link_secret)
+SPACETIMEDB_STRUCT(server_config_row, id, owner, auth_issuer, auth_audience, allow_anonymous, server_secret)
 SPACETIMEDB_TABLE(server_config_row, server_config, Private)
 FIELD_PrimaryKey(server_config, id)
 
 // An account. display_name is empty until claimed; name_key is its
 // case-folded form, unique among named accounts. As a golfer (set_golfer):
-// their hand (handedness) and natural shape (game/golfer.h natural_shape,
-// natural_shape_unset until picked).
+// their hand (handedness), natural shape (game/golfer.h natural_shape,
+// natural_shape_unset until picked) and favourite colour (game/gear_paint.h,
+// 0 for none).
 struct player_row {
     std::uint64_t account_id;
     std::string display_name;
     std::string name_key;
     bool online;
-    std::int32_t holes_completed;  // the clock for collectible cooldowns, as in save_data
     Timestamp created_at;
     Timestamp last_login;
     std::uint8_t hand;
     std::uint8_t natural_shape;
+    std::uint8_t favourite_colour;
 };
-SPACETIMEDB_STRUCT(player_row, account_id, display_name, name_key, online, holes_completed, created_at, last_login, hand,
-                   natural_shape)
+SPACETIMEDB_STRUCT(player_row, account_id, display_name, name_key, online, created_at, last_login, hand, natural_shape,
+                   favourite_colour)
 SPACETIMEDB_TABLE(player_row, player, Public)
 FIELD_PrimaryKeyAutoInc(player, account_id)
 FIELD_Index(player, name_key)
@@ -145,67 +154,132 @@ SPACETIMEDB_STRUCT(link_attempt_row, identity, window_start, failures, last_resu
 SPACETIMEDB_TABLE(link_attempt_row, link_attempt, Private)
 FIELD_PrimaryKey(link_attempt, identity)
 
-// Progress, mirroring save_data so progress_rules runs on the server unchanged.
-struct player_skill_row {
-    std::uint64_t id;
+// A golfer's progress: an account's in one scope. Scope 0
+// (permanent_scope) is the account's own; a season will be a scope of its
+// own. Its tables below, keyed by golfer_id,
+// mirror save_data so progress_rules runs on the server unchanged.
+// holes_completed is the clock for collectible cooldowns, as in save_data.
+struct golfer_progress_row {
+    std::uint64_t golfer_id;
     std::uint64_t account_id;
-    std::string skill_id;
-    std::int32_t xp;
+    std::uint32_t scope_id;
+    std::int32_t holes_completed;
+    Timestamp created_at;
 };
-SPACETIMEDB_STRUCT(player_skill_row, id, account_id, skill_id, xp)
-SPACETIMEDB_TABLE(player_skill_row, player_skill, Public)
-FIELD_PrimaryKeyAutoInc(player_skill, id)
-FIELD_Index(player_skill, account_id)
+SPACETIMEDB_STRUCT(golfer_progress_row, golfer_id, account_id, scope_id, holes_completed, created_at)
+SPACETIMEDB_TABLE(golfer_progress_row, golfer_progress, Private)
+FIELD_PrimaryKeyAutoInc(golfer_progress, golfer_id)
+FIELD_Index(golfer_progress, account_id)
+
+// A skill's XP: the sum of its xp_award and xp_rollup rows. No level: that
+// follows from the skill's curve (game/skill_catalog.h).
+struct golfer_skill_row {
+    std::uint64_t id;
+    std::uint64_t golfer_id;
+    std::string skill_id;
+    std::int64_t xp;
+};
+SPACETIMEDB_STRUCT(golfer_skill_row, id, golfer_id, skill_id, xp)
+SPACETIMEDB_TABLE(golfer_skill_row, golfer_skill, Private)
+FIELD_PrimaryKeyAutoInc(golfer_skill, id)
+FIELD_Index(golfer_skill, golfer_id)
+
+// Every XP award, never changed: what earned it (`source`) and the event it
+// came from (`dedupe_key`, unique, so one event pays once). A correction is
+// another award, negative if need be. Kept server.xp_award_keep_days, then
+// summed into xp_rollup (roll_up_xp): by then no request can come again,
+// and a one-off collectible stays claimed by its collected row.
+struct xp_award_row {
+    std::uint64_t id;
+    std::string dedupe_key;
+    std::uint64_t golfer_id;
+    std::string skill_id;
+    std::int64_t amount;
+    std::string source;  // award_source_*
+    Timestamp at;
+};
+SPACETIMEDB_STRUCT(xp_award_row, id, dedupe_key, golfer_id, skill_id, amount, source, at)
+SPACETIMEDB_TABLE(xp_award_row, xp_award, Private)
+FIELD_PrimaryKeyAutoInc(xp_award, id)
+FIELD_Unique(xp_award, dedupe_key)
+FIELD_Index(xp_award, golfer_id)
+FIELD_Index(xp_award, at)
+
+// A golfer's awards of a skill in a calendar month (UTC, yyyymm), summed
+// once they are older than server.xp_award_keep_days (progress_rollup.h).
+struct xp_rollup_row {
+    std::uint64_t id;
+    std::string key;  // rollup_key
+    std::uint64_t golfer_id;
+    std::string skill_id;
+    std::int32_t month;
+    std::int64_t amount;
+};
+SPACETIMEDB_STRUCT(xp_rollup_row, id, key, golfer_id, skill_id, month, amount)
+SPACETIMEDB_TABLE(xp_rollup_row, xp_rollup, Private)
+FIELD_PrimaryKeyAutoInc(xp_rollup, id)
+FIELD_Unique(xp_rollup, key)
+FIELD_Index(xp_rollup, golfer_id)
+
+// Runs roll_up_xp every server.xp_rollup_interval_hours: one row.
+struct xp_rollup_run_row {
+    std::uint64_t scheduled_id;
+    ScheduleAt scheduled_at;
+};
+SPACETIMEDB_STRUCT(xp_rollup_run_row, scheduled_id, scheduled_at)
+SPACETIMEDB_TABLE(xp_rollup_run_row, xp_rollup_run, Private)
+FIELD_PrimaryKeyAutoInc(xp_rollup_run, scheduled_id)
+SPACETIMEDB_SCHEDULE(xp_rollup_run, 1, roll_up_xp)
 
 struct hole_score_row {
     std::uint64_t id;
-    std::uint64_t account_id;
+    std::uint64_t golfer_id;
     std::string course_id;
     std::int32_t hole_index;
     std::int32_t strokes;
     std::int32_t par;
     Timestamp at;
 };
-SPACETIMEDB_STRUCT(hole_score_row, id, account_id, course_id, hole_index, strokes, par, at)
-SPACETIMEDB_TABLE(hole_score_row, hole_score, Public)
+SPACETIMEDB_STRUCT(hole_score_row, id, golfer_id, course_id, hole_index, strokes, par, at)
+SPACETIMEDB_TABLE(hole_score_row, hole_score, Private)
 FIELD_PrimaryKeyAutoInc(hole_score, id)
-FIELD_Index(hole_score, account_id)
+FIELD_Index(hole_score, golfer_id)
 
 struct completed_course_row {
     std::uint64_t id;
-    std::uint64_t account_id;
+    std::uint64_t golfer_id;
     std::string course_id;
     Timestamp at;
 };
-SPACETIMEDB_STRUCT(completed_course_row, id, account_id, course_id, at)
-SPACETIMEDB_TABLE(completed_course_row, completed_course, Public)
+SPACETIMEDB_STRUCT(completed_course_row, id, golfer_id, course_id, at)
+SPACETIMEDB_TABLE(completed_course_row, completed_course, Private)
 FIELD_PrimaryKeyAutoInc(completed_course, id)
-FIELD_Index(completed_course, account_id)
+FIELD_Index(completed_course, golfer_id)
 
 // A claimed collectible. Repeatable ones keep their claim count and the
-// account's holes_completed at the last claim (-1: never).
+// golfer's holes_completed at the last claim (-1: never).
 struct collected_row {
     std::uint64_t id;
-    std::uint64_t account_id;
+    std::uint64_t golfer_id;
     std::string collectible_id;
     bool repeatable;
     std::int32_t claim_count;
     std::int32_t claimed_at_holes_completed;
 };
-SPACETIMEDB_STRUCT(collected_row, id, account_id, collectible_id, repeatable, claim_count, claimed_at_holes_completed)
-SPACETIMEDB_TABLE(collected_row, collected, Public)
+SPACETIMEDB_STRUCT(collected_row, id, golfer_id, collectible_id, repeatable, claim_count, claimed_at_holes_completed)
+SPACETIMEDB_TABLE(collected_row, collected, Private)
 FIELD_PrimaryKeyAutoInc(collected, id)
-FIELD_Index(collected, account_id)
+FIELD_Index(collected, golfer_id)
 
 struct world_flag_row {
     std::uint64_t id;
-    std::uint64_t account_id;
+    std::uint64_t golfer_id;
     std::string flag;
 };
-SPACETIMEDB_STRUCT(world_flag_row, id, account_id, flag)
-SPACETIMEDB_TABLE(world_flag_row, world_flag, Public)
+SPACETIMEDB_STRUCT(world_flag_row, id, golfer_id, flag)
+SPACETIMEDB_TABLE(world_flag_row, world_flag, Private)
 FIELD_PrimaryKeyAutoInc(world_flag, id)
-FIELD_Index(world_flag, account_id)
+FIELD_Index(world_flag, golfer_id)
 
 // A course's room: up to server.room_capacity players walking and playing
 // the same course together.
@@ -232,6 +306,7 @@ SPACETIMEDB_STRUCT(room_member_row, account_id, room_id, group_id, round_strokes
 SPACETIMEDB_TABLE(room_member_row, room_member, Public)
 FIELD_PrimaryKey(room_member, account_id)
 FIELD_Index(room_member, room_id)
+FIELD_Index(room_member, group_id)
 
 // Players who share a scorecard, up to server.group_capacity.
 struct golf_group_row {
@@ -258,12 +333,24 @@ struct avatar_motion_row {
     float speed;
     float turn_rate;
     double client_time;  // the sender's clock, seconds
+    // At their ball: the setup they stand to (game/sent_setup.h), inside
+    // the club in hand's limits.
+    std::uint16_t setup_aim;
+    std::int16_t setup_face_open;
+    std::int8_t setup_ball_position;
+    std::uint16_t setup_backswing;
+    bool crouched;  // on foot: crouched reading the green
     Timestamp server_time;
+    std::int32_t area_x;
+    std::int32_t area_z;
+    std::string area_key;
 };
-SPACETIMEDB_STRUCT(avatar_motion_row, account_id, room_id, mode, x, y, z, yaw, speed, turn_rate, client_time, server_time)
-SPACETIMEDB_TABLE(avatar_motion_row, avatar_motion, Public)
+SPACETIMEDB_STRUCT(avatar_motion_row, account_id, room_id, mode, x, y, z, yaw, speed, turn_rate, client_time, setup_aim,
+                   setup_face_open, setup_ball_position, setup_backswing, crouched, server_time, area_x, area_z, area_key)
+SPACETIMEDB_TABLE(avatar_motion_row, avatar_motion, Private)
 FIELD_PrimaryKey(avatar_motion, account_id)
 FIELD_Index(avatar_motion, room_id)
+FIELD_Index(avatar_motion, area_key)
 
 // A player's ball, as game_state::ball offline: in play on its hole, or
 // in_cup (the cup's centre on the ground, with the strokes it was holed in)
@@ -292,9 +379,9 @@ FIELD_Index(ball, room_id)
 // room: parked beside hole 1 when they join (free_parking_slot), then where
 // their last motion at its wheel left it (x, y, z the ground under the
 // middle of its seat). `passenger` rides in its other seat (board_cart).
-// `condition` is a cart_condition (physics/cart_dynamics.h): its driver
-// says when it tips or sinks (overturn_cart), anyone beside it rights it
-// (right_cart), and a sunk one is towed back (tow_cart).
+// `condition` is a cart_condition (physics/cart_dynamics.h): the server's
+// steps of its driver tip or sink it (update_motion), anyone beside it
+// rights it (right_cart), and a sunk one is towed back (tow_cart).
 struct golf_cart_row {
     std::uint64_t owner;
     std::uint64_t room_id;
@@ -304,11 +391,18 @@ struct golf_cart_row {
     float yaw;
     std::uint64_t passenger;  // 0: nobody
     std::uint8_t condition;
+    std::uint64_t driver;
+    double motion_id;
+    std::int32_t area_x;
+    std::int32_t area_z;
+    std::string area_key;
 };
-SPACETIMEDB_STRUCT(golf_cart_row, owner, room_id, x, y, z, yaw, passenger, condition)
-SPACETIMEDB_TABLE(golf_cart_row, golf_cart, Public)
+SPACETIMEDB_STRUCT(golf_cart_row, owner, room_id, x, y, z, yaw, passenger, condition, driver, motion_id, area_x, area_z, area_key)
+SPACETIMEDB_TABLE(golf_cart_row, golf_cart, Private)
 FIELD_PrimaryKey(golf_cart, owner)
 FIELD_Index(golf_cart, room_id)
+FIELD_Index(golf_cart, passenger)
+FIELD_Index(golf_cart, area_key)
 
 // Tows `owner`'s sunk cart back beside hole 1, its spec's tow_seconds after it sank.
 struct cart_tow_row {
@@ -321,10 +415,13 @@ SPACETIMEDB_TABLE(cart_tow_row, cart_tow, Private)
 FIELD_PrimaryKeyAutoInc(cart_tow, scheduled_id)
 SPACETIMEDB_SCHEDULE(cart_tow, 1, tow_cart)
 
-// The server's view of a player's movement: the last accepted position and
-// mode, the motion slack left (check_motion), and the movement XP meters not
-// yet earned.
-struct motion_budget_row {
+// The server's view of a player's movement (movement_rules.h mover_state):
+// where its steps have them and how they move up and down, the last step
+// played and the last motion accepted, the time saved up for more steps,
+// the claimed-move slack (check_motion), their cart's motion while they
+// drive it, and their movement XP: meters not yet earned, and earned this
+// hour (from hour_started).
+struct motion_state_row {
     std::uint64_t account_id;
     float x;
     float y;
@@ -334,11 +431,27 @@ struct motion_budget_row {
     float slack_left;
     float walk_meters_pending;
     float cart_meters_pending;
+    std::uint64_t step;
+    float credit_seconds;
+    double client_time;
+    float vertical_speed;
+    bool grounded;
+    float cart_velocity_x;
+    float cart_velocity_z;
+    float cart_yaw_rate;
+    float cart_lift_seconds;
+    float cart_vertical_speed;
+    bool cart_grounded;
+    Timestamp hour_started;
+    float walk_meters_this_hour;
+    float cart_meters_this_hour;
 };
-SPACETIMEDB_STRUCT(motion_budget_row, account_id, x, y, z, mode, server_time, slack_left, walk_meters_pending,
-                   cart_meters_pending)
-SPACETIMEDB_TABLE(motion_budget_row, motion_budget, Private)
-FIELD_PrimaryKey(motion_budget, account_id)
+SPACETIMEDB_STRUCT(motion_state_row, account_id, x, y, z, mode, server_time, slack_left, walk_meters_pending,
+                   cart_meters_pending, step, credit_seconds, client_time, vertical_speed, grounded, cart_velocity_x,
+                   cart_velocity_z, cart_yaw_rate, cart_lift_seconds, cart_vertical_speed, cart_grounded, hour_started,
+                   walk_meters_this_hour, cart_meters_this_hour)
+SPACETIMEDB_TABLE(motion_state_row, motion_state, Private)
+FIELD_PrimaryKey(motion_state, account_id)
 
 // What moved that a shot could meet, as it stood when it was hit
 // (game/shot_snapshot.h snapshot_entry).
@@ -351,6 +464,13 @@ struct snapshot_row_entry {
     bool shooter;
 };
 SPACETIMEDB_STRUCT(snapshot_row_entry, kind, x, y, z, yaw, shooter)
+
+// A golfer's level in a skill, as a shot used it.
+struct skill_level_entry {
+    std::string skill_id;
+    std::int32_t level;
+};
+SPACETIMEDB_STRUCT(skill_level_entry, skill_id, level)
 
 // A shot someone in the room hit, with everything needed to simulate it
 // again (shot_record: the setup, the dice the server rolled for it and its
@@ -368,11 +488,13 @@ struct shot_event_row {
     float face_open;
     float ball_position;
     float backswing;
+    float strike_timing;
     std::uint8_t hand;
-    // The golfer as the server played them: their natural shape and the
-    // spread their items gave them (game/golfer.h).
+    // The golfer as the server played them: their natural shape, the spread
+    // their items gave them and their levels before the shot (game/golfer.h).
     std::uint8_t natural_shape;
     float spread_scale;
+    std::vector<skill_level_entry> levels;
     std::string club_id;
     std::int64_t shot_at;  // UTC milliseconds: the weather it was played in
     std::uint64_t seed;
@@ -384,7 +506,8 @@ struct shot_event_row {
     bool holed;
 };
 SPACETIMEDB_STRUCT(shot_event_row, room_id, account_id, hole, stroke, start_x, start_y, start_z, aim_angle, face_open,
-                   ball_position, backswing, hand, natural_shape, spread_scale, club_id, shot_at, seed, flags_out, snapshot,
+                   ball_position, backswing, strike_timing, hand, natural_shape, spread_scale, levels, club_id, shot_at, seed,
+                   flags_out, snapshot,
                    rest_x, rest_y, rest_z, holed)
 SPACETIMEDB_TABLE(shot_event_row, shot_event, Public, true)
 FIELD_Index(shot_event, room_id)
@@ -422,23 +545,48 @@ SPACETIMEDB_TABLE(player_loadout_row, player_loadout, Public)
 FIELD_PrimaryKey(player_loadout, account_id)
 
 // A player's bag in their room (game/bag_place.h) and the club in their
-// hand: on their cart behind its driver's seat with the first club in hand
-// when they join; moved by place_bag, a club taken from it by take_club.
+// hand: on their cart behind its driver's seat (or on their back without
+// one) with the first club in hand when they join; moved by place_bag, a
+// club taken from it by take_club. Strapped on a cart that leaves the room
+// or is towed back, it is set down where the cart was.
 struct player_bag_row {
     std::uint64_t account_id;
     std::uint64_t room_id;
     std::uint8_t place;  // bag_where
     std::uint8_t seat;   // cart_seat, on_cart
+    std::uint64_t cart_owner;  // on_cart: whose cart, 0 their own
     float x;             // on_ground
     float y;
     float z;
     float yaw;
     std::string club_in_hand;
 };
-SPACETIMEDB_STRUCT(player_bag_row, account_id, room_id, place, seat, x, y, z, yaw, club_in_hand)
+SPACETIMEDB_STRUCT(player_bag_row, account_id, room_id, place, seat, cart_owner, x, y, z, yaw, club_in_hand)
 SPACETIMEDB_TABLE(player_bag_row, player_bag, Public)
 FIELD_PrimaryKey(player_bag, account_id)
 FIELD_Index(player_bag, room_id)
+
+// The cart a rider sits in as its driver drives it, for the rider alone
+// (they subscribe to their own row): the driver's motion at its wheel,
+// sent far more often than avatar_motion while someone rides with them
+// (update_ride, game/ride_sync.h). There while they ride.
+struct ride_motion_row {
+    std::uint64_t rider;
+    std::uint64_t owner;
+    std::uint8_t mode;  // motion_mode, cart
+    float x;
+    float y;
+    float z;
+    float yaw;
+    float speed;
+    float turn_rate;
+    double client_time;
+    Timestamp server_time;
+};
+SPACETIMEDB_STRUCT(ride_motion_row, rider, owner, mode, x, y, z, yaw, speed, turn_rate, client_time, server_time)
+SPACETIMEDB_TABLE(ride_motion_row, ride_motion, Public)
+FIELD_PrimaryKey(ride_motion, rider)
+FIELD_Index(ride_motion, owner)
 
 // A green whose flag is out in a room (set_flag): there while it is out,
 // for everyone on that green, until someone puts it back.
@@ -506,12 +654,18 @@ struct server_protocol_info {
 };
 SPACETIMEDB_STRUCT(server_protocol_info, version)
 
+struct server_content_info {
+    std::uint64_t hash;
+};
+SPACETIMEDB_STRUCT(server_content_info, hash)
+
 // =============================================================================
 // Helpers
 // =============================================================================
 
 namespace {
 constexpr std::uint32_t config_id = 0;
+constexpr std::uint32_t permanent_scope = 0;
 constexpr std::int64_t micros_per_second = 1000000;
 constexpr std::int64_t micros_per_hour = 3600 * micros_per_second;
 constexpr std::int64_t micros_per_millisecond = 1000;
@@ -552,17 +706,56 @@ caller_result caller(ReducerContext& ctx) {
     return {account, account ? std::string() : std::string(error_not_signed_in)};
 }
 
+// --- Golfers: an account's progress, by scope.
+
+// Every table of a golfer's progress, as its rows of the golfer and the
+// table by primary key: has_progress and delete_account go through this one
+// list, so a table added here is in both.
+template <typename Visit>
+void each_golfer_table(ReducerContext& ctx, const std::uint64_t golfer_id, Visit&& visit) {
+    visit(ctx.db[golfer_skill_golfer_id].filter(golfer_id), ctx.db[golfer_skill_id]);
+    visit(ctx.db[xp_award_golfer_id].filter(golfer_id), ctx.db[xp_award_id]);
+    visit(ctx.db[xp_rollup_golfer_id].filter(golfer_id), ctx.db[xp_rollup_id]);
+    visit(ctx.db[hole_score_golfer_id].filter(golfer_id), ctx.db[hole_score_id]);
+    visit(ctx.db[completed_course_golfer_id].filter(golfer_id), ctx.db[completed_course_id]);
+    visit(ctx.db[collected_golfer_id].filter(golfer_id), ctx.db[collected_id]);
+    visit(ctx.db[world_flag_golfer_id].filter(golfer_id), ctx.db[world_flag_id]);
+}
+
+// The account's golfer in `scope`, if it has one.
+template <typename Context>
+std::optional<golfer_progress_row> golfer_in(const Context& ctx, const std::uint64_t account_id, const std::uint32_t scope) {
+    for (const golfer_progress_row& golfer : ctx.db[golfer_progress_account_id].filter(account_id)) {
+        if (golfer.scope_id == scope) {
+            return golfer;
+        }
+    }
+    return std::nullopt;
+}
+
+// The account's permanent golfer, made with no progress when it has none.
+golfer_progress_row permanent_golfer(ReducerContext& ctx, const std::uint64_t account_id) {
+    if (const std::optional<golfer_progress_row> found = golfer_in(ctx, account_id, permanent_scope)) {
+        return *found;
+    }
+    return ctx.db[golfer_progress].insert(golfer_progress_row{0, account_id, permanent_scope, 0, ctx.timestamp});
+}
+
 bool has_progress(ReducerContext& ctx, const player_row& player) {
-    const std::uint64_t id = player.account_id;
-    const auto any = [](auto&& rows) { return rows.begin() != rows.end(); };
-    return !player.display_name.empty() || player.holes_completed > 0 || any(ctx.db[player_skill_account_id].filter(id)) ||
-        any(ctx.db[hole_score_account_id].filter(id)) || any(ctx.db[completed_course_account_id].filter(id)) ||
-        any(ctx.db[collected_account_id].filter(id)) || any(ctx.db[world_flag_account_id].filter(id));
+    if (!player.display_name.empty()) {
+        return true;
+    }
+    bool any = false;
+    for (const golfer_progress_row& each : ctx.db[golfer_progress_account_id].filter(player.account_id)) {
+        any = any || each.holes_completed > 0;
+        each_golfer_table(ctx, each.golfer_id, [&any](auto&& rows, auto&&) { any = any || rows.begin() != rows.end(); });
+    }
+    return any;
 }
 
 
-glm::vec3 position_of(const motion_budget_row& budget) {
-    return glm::vec3(budget.x, budget.y, budget.z);
+glm::vec3 position_of(const motion_state_row& mover) {
+    return glm::vec3(mover.x, mover.y, mover.z);
 }
 
 cart_pose pose_of(const golf_cart_row& cart) {
@@ -579,6 +772,7 @@ bool leave_passenger_seat(ReducerContext& ctx, const std::uint64_t room_id, cons
             left = true;
         }
     }
+    ctx.db[ride_motion_rider].delete_by_key(account);
     return left;
 }
 
@@ -587,21 +781,76 @@ float seconds_between(const Timestamp& earlier, const Timestamp& later) {
                               static_cast<double>(micros_per_second));
 }
 
+mover_state mover_of(const motion_state_row& row) {
+    mover_state mover;
+    mover.mode = static_cast<motion_mode>(row.mode);
+    mover.position = position_of(row);
+    mover.vertical = vertical_body{row.y, row.vertical_speed, row.grounded};
+    mover.step = row.step;
+    mover.credit_seconds = row.credit_seconds;
+    mover.slack_left = row.slack_left;
+    mover.client_time = row.client_time;
+    mover.cart_velocity = glm::vec2(row.cart_velocity_x, row.cart_velocity_z);
+    mover.cart_yaw_rate = row.cart_yaw_rate;
+    mover.cart_lift_seconds = row.cart_lift_seconds;
+    mover.cart_vertical = vertical_body{0.0f, row.cart_vertical_speed, row.cart_grounded};
+    return mover;
+}
+
+void write_mover(motion_state_row& row, const mover_state& mover) {
+    row.mode = static_cast<std::uint8_t>(mover.mode);
+    row.x = mover.position.x;
+    row.y = mover.position.y;
+    row.z = mover.position.z;
+    row.vertical_speed = mover.vertical.speed;
+    row.grounded = mover.vertical.grounded;
+    row.step = mover.step;
+    row.credit_seconds = mover.credit_seconds;
+    row.slack_left = mover.slack_left;
+    row.client_time = mover.client_time;
+    row.cart_velocity_x = mover.cart_velocity.x;
+    row.cart_velocity_z = mover.cart_velocity.y;
+    row.cart_yaw_rate = mover.cart_yaw_rate;
+    row.cart_lift_seconds = mover.cart_lift_seconds;
+    row.cart_vertical_speed = mover.cart_vertical.speed;
+    row.cart_grounded = mover.cart_vertical.grounded;
+}
+
+// A player just in the room at `spawn`: a full slack and time saved up.
+motion_state_row joined_motion_state(const std::uint64_t account, const glm::vec3& spawn, const Timestamp& now) {
+    const server_tuning& tuning = cached_content()->tuning.server;
+    motion_state_row row{account, spawn.x, spawn.y, spawn.z, static_cast<std::uint8_t>(motion_mode::idle), now,
+                         tuning.motion_distance_slack, 0.0f, 0.0f, 0, tuning.max_motion_gap_seconds, 0.0, 0.0f, true,
+                         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, now, 0.0f, 0.0f};
+    return row;
+}
+
+// Puts the mover standing at `position` now, the time since saved up for
+// its steps.
+void place_mover(motion_state_row& row, const glm::vec3& position, const Timestamp& now) {
+    mover_state mover = mover_of(row);
+    mover.credit_seconds = std::min(cached_content()->tuning.server.max_motion_gap_seconds,
+                                    mover.credit_seconds + std::max(0.0f, seconds_between(row.server_time, now)));
+    mover = placed_mover(mover, position);
+    mover.mode = motion_mode::idle;
+    mover.slack_left = cached_content()->tuning.server.motion_distance_slack;
+    write_mover(row, mover);
+    row.server_time = now;
+}
+
 // --- Progress: the account's rows as a save_data, so progress_rules runs on
 // the server exactly as offline, and back.
 
-save_data load_progress(ReducerContext& ctx, const std::uint64_t account_id) {
+save_data load_progress(ReducerContext& ctx, const golfer_progress_row& owner) {
     save_data progress;
-    if (const std::optional<player_row> account = ctx.db[player_account_id].find(account_id)) {
-        progress.holes_completed = account->holes_completed;
-    }
-    for (const player_skill_row& skill : ctx.db[player_skill_account_id].filter(account_id)) {
+    progress.holes_completed = owner.holes_completed;
+    for (const golfer_skill_row& skill : ctx.db[golfer_skill_golfer_id].filter(owner.golfer_id)) {
         progress.skills[skill.skill_id].xp = skill.xp;
     }
-    for (const completed_course_row& course : ctx.db[completed_course_account_id].filter(account_id)) {
+    for (const completed_course_row& course : ctx.db[completed_course_golfer_id].filter(owner.golfer_id)) {
         progress.completed_course_ids.push_back(course.course_id);
     }
-    for (const collected_row& claim : ctx.db[collected_account_id].filter(account_id)) {
+    for (const collected_row& claim : ctx.db[collected_golfer_id].filter(owner.golfer_id)) {
         if (!claim.repeatable) {
             progress.collected_ids.push_back(claim.collectible_id);
             continue;
@@ -612,7 +861,7 @@ save_data load_progress(ReducerContext& ctx, const std::uint64_t account_id) {
             state.claimed_at_holes_completed = claim.claimed_at_holes_completed;
         }
     }
-    for (const world_flag_row& flag : ctx.db[world_flag_account_id].filter(account_id)) {
+    for (const world_flag_row& flag : ctx.db[world_flag_golfer_id].filter(owner.golfer_id)) {
         progress.world_flags.push_back(flag.flag);
     }
     return progress;
@@ -622,40 +871,56 @@ bool contains(const std::vector<std::string>& values, const std::string& value) 
     return std::find(values.begin(), values.end(), value) != values.end();
 }
 
-// Writes what changed between `before` and `after` (progress_rules only ever
-// adds) to the account's rows.
-void store_progress(ReducerContext& ctx, const std::uint64_t account_id, const save_data& before, const save_data& after) {
-    if (after.holes_completed != before.holes_completed) {
-        if (std::optional<player_row> account = ctx.db[player_account_id].find(account_id)) {
-            account->holes_completed = after.holes_completed;
-            ctx.db[player_account_id].update(*account);
+// What earned an award (xp_award_row::source).
+constexpr const char* award_source_shot = "shot";
+constexpr const char* award_source_movement = "movement";
+constexpr const char* award_source_item = "item";
+constexpr const char* award_source_collectible = "collectible";
+
+// The event awards come from: what it was and a key naming it, unique to it.
+struct award_event {
+    const char* source;
+    std::string key;
+};
+
+// Pays one award into the golfer's skill and records it, unless its event
+// already paid that skill.
+void pay_award(ReducerContext& ctx, const std::uint64_t golfer_id, const awarded_xp& award, const award_event& event) {
+    const std::string dedupe_key = event.key + ":" + award.skill_id;
+    if (award.xp == 0 || ctx.db[xp_award_dedupe_key].find(dedupe_key)) {
+        return;
+    }
+    ctx.db[xp_award].insert(xp_award_row{0, dedupe_key, golfer_id, award.skill_id, award.xp, event.source, ctx.timestamp});
+    for (golfer_skill_row skill : ctx.db[golfer_skill_golfer_id].filter(golfer_id)) {
+        if (skill.skill_id == award.skill_id) {
+            skill.xp += award.xp;
+            ctx.db[golfer_skill_id].update(skill);
+            return;
         }
     }
-    for (const auto& [skill_id, skill] : after.skills) {
-        if (skill_xp(before.skills, skill_id) == skill.xp) {
-            continue;
-        }
-        std::optional<player_skill_row> existing;
-        for (const player_skill_row& row : ctx.db[player_skill_account_id].filter(account_id)) {
-            if (row.skill_id == skill_id) {
-                existing = row;
-            }
-        }
-        if (existing) {
-            existing->xp = skill.xp;
-            ctx.db[player_skill_id].update(*existing);
-        } else {
-            ctx.db[player_skill].insert(player_skill_row{0, account_id, skill_id, skill.xp});
-        }
+    ctx.db[golfer_skill].insert(golfer_skill_row{0, golfer_id, award.skill_id, award.xp});
+}
+
+// Writes what progress_rules changed from `before` (it only ever adds) to
+// the golfer's rows. XP goes in only as `update`'s awards, from `event`.
+void store_progress(ReducerContext& ctx, golfer_progress_row owner, const save_data& before, const progress_update& update,
+                    const award_event& event) {
+    const save_data& after = update.progress;
+    for (const awarded_xp& award : update.awarded) {
+        pay_award(ctx, owner.golfer_id, award, event);
+    }
+    if (after.holes_completed != before.holes_completed) {
+        owner.holes_completed = after.holes_completed;
+        ctx.db[golfer_progress_golfer_id].update(owner);
     }
     for (const std::string& course_id : after.completed_course_ids) {
         if (!contains(before.completed_course_ids, course_id)) {
-            ctx.db[completed_course].insert(completed_course_row{0, account_id, course_id, ctx.timestamp});
+            ctx.db[completed_course].insert(completed_course_row{0, owner.golfer_id, course_id, ctx.timestamp});
         }
     }
     for (const std::string& collectible_id : after.collected_ids) {
         if (!contains(before.collected_ids, collectible_id)) {
-            ctx.db[collected].insert(collected_row{0, account_id, collectible_id, false, 1, -1});
+            ctx.db[collected].insert(collected_row{0, owner.golfer_id, collectible_id, false, 1, -1});
         }
     }
     for (const auto& [collectible_id, state] : after.repeatable_collectibles) {
@@ -663,10 +928,10 @@ void store_progress(ReducerContext& ctx, const std::uint64_t account_id, const s
         if (earlier != before.repeatable_collectibles.end() && earlier->second.claim_count == state.claim_count) {
             continue;
         }
-        const collected_row row{0, account_id, collectible_id, true, state.claim_count,
+        const collected_row row{0, owner.golfer_id, collectible_id, true, state.claim_count,
                                 state.claimed_at_holes_completed.value_or(-1)};
         std::optional<collected_row> existing;
-        for (const collected_row& claim : ctx.db[collected_account_id].filter(account_id)) {
+        for (const collected_row& claim : ctx.db[collected_golfer_id].filter(owner.golfer_id)) {
             if (claim.collectible_id == collectible_id) {
                 existing = claim;
             }
@@ -681,7 +946,7 @@ void store_progress(ReducerContext& ctx, const std::uint64_t account_id, const s
     }
     for (const std::string& flag : after.world_flags) {
         if (!contains(before.world_flags, flag)) {
-            ctx.db[world_flag].insert(world_flag_row{0, account_id, flag});
+            ctx.db[world_flag].insert(world_flag_row{0, owner.golfer_id, flag});
         }
     }
 }
@@ -733,6 +998,30 @@ void leave_group_state(ReducerContext& ctx, room_member_row& member) {
 
 // Takes the account out of its room: group, avatar, ball (abandoning the
 // hole, so no score) and membership; an empty room closes.
+// Every bag strapped on `owner`'s cart set down on the ground beside where
+// it stands (`cart`), at its driver's door.
+void set_down_bags_from(ReducerContext& ctx, const std::uint64_t room_id, const std::uint64_t owner, const cart_pose& cart,
+                        const server_course& course) {
+    const cart_tuning& tuning = cached_content()->tuning.cart;
+    std::vector<player_bag_row> strapped;
+    for (const player_bag_row& bag : ctx.db[player_bag_room_id].filter(room_id)) {
+        const std::uint64_t on = bag.cart_owner != 0 ? bag.cart_owner : bag.account_id;
+        if (bag.place == static_cast<std::uint8_t>(bag_where::on_cart) && on == owner) {
+            strapped.push_back(bag);
+        }
+    }
+    for (player_bag_row bag : strapped) {
+        const glm::vec3 at = anchor_on_terrain(course.area, step_out_position(cart, static_cast<cart_seat>(bag.seat), tuning));
+        bag.place = static_cast<std::uint8_t>(bag_where::on_ground);
+        bag.cart_owner = 0;
+        bag.x = at.x;
+        bag.y = at.y;
+        bag.z = at.z;
+        bag.yaw = cart.yaw;
+        ctx.db[player_bag_account_id].update(bag);
+    }
+}
+
 void leave_room_state(ReducerContext& ctx, const std::uint64_t account_id) {
     std::optional<room_member_row> member = ctx.db[room_member_account_id].find(account_id);
     if (!member) {
@@ -740,11 +1029,19 @@ void leave_room_state(ReducerContext& ctx, const std::uint64_t account_id) {
     }
     leave_group_state(ctx, *member);
     leave_passenger_seat(ctx, member->room_id, account_id);
+    if (const std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(account_id)) {
+        if (const server_course* course = member_course(ctx, *member)) {
+            set_down_bags_from(ctx, member->room_id, account_id, pose_of(*cart), *course);
+        }
+        if (cart->passenger != 0) {
+            leave_passenger_seat(ctx, member->room_id, cart->passenger);
+        }
+    }
     ctx.db[golf_cart_owner].delete_by_key(account_id);
     ctx.db[player_bag_account_id].delete_by_key(account_id);
     ctx.db[avatar_motion_account_id].delete_by_key(account_id);
     ctx.db[ball_account_id].delete_by_key(account_id);
-    ctx.db[motion_budget_account_id].delete_by_key(account_id);
+    ctx.db[motion_state_account_id].delete_by_key(account_id);
     ctx.db[room_member_account_id].delete_by_key(account_id);
     if (std::optional<room_row> joined = ctx.db[room_room_id].find(member->room_id)) {
         joined->player_count -= 1;
@@ -757,19 +1054,26 @@ void leave_room_state(ReducerContext& ctx, const std::uint64_t account_id) {
     }
 }
 
+// Only accepted positions choose interest cells. This is presentation;
+// collision and shot snapshots still read every row in the room.
+template <typename Row>
+void index_motion(Row& row) {
+    const game_tuning& tuning = cached_content()->tuning;
+    const float width = tuning.server.motion_cell_meters / tuning.scale.meters_per_world_unit;
+    const motion_cell area = motion_area(glm::vec3(row.x, row.y, row.z), width);
+    row.area_x = area.x;
+    row.area_z = area.z;
+    row.area_key = motion_area_key(row.room_id, area);
+}
+
 // Puts the player at `position` (course coordinates) at once, as the
 // server's last accepted position and the avatar others see, standing: as
 // teeing up stands them behind the ball offline. Nothing else of theirs
 // changes (an item in use, its effects, the meters not yet earned).
 void place_player(ReducerContext& ctx, const room_member_row& member, const glm::vec3& position) {
-    if (std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(member.account_id)) {
-        budget->x = position.x;
-        budget->y = position.y;
-        budget->z = position.z;
-        budget->mode = static_cast<std::uint8_t>(motion_mode::idle);
-        budget->server_time = ctx.timestamp;
-        budget->slack_left = cached_content()->tuning.server.motion_distance_slack;
-        ctx.db[motion_budget_account_id].update(*budget);
+    if (std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(member.account_id)) {
+        place_mover(*mover, position, ctx.timestamp);
+        ctx.db[motion_state_account_id].update(*mover);
     }
     if (std::optional<avatar_motion_row> avatar = ctx.db[avatar_motion_account_id].find(member.account_id)) {
         avatar->mode = static_cast<std::uint8_t>(motion_mode::idle);
@@ -778,7 +1082,9 @@ void place_player(ReducerContext& ctx, const room_member_row& member, const glm:
         avatar->z = position.z;
         avatar->speed = 0.0f;
         avatar->turn_rate = 0.0f;
+        avatar->crouched = false;
         avatar->server_time = ctx.timestamp;
+        index_motion(*avatar);
         ctx.db[avatar_motion_account_id].update(*avatar);
     }
 }
@@ -964,7 +1270,7 @@ cart_pose free_parking(ReducerContext& ctx, const std::uint64_t room_id, const s
 }
 
 // Deletes the account and everything keyed by it: its room state, session,
-// logins, link rows and progress.
+// logins, link rows and every golfer's progress.
 void delete_account(ReducerContext& ctx, const std::uint64_t account_id) {
     leave_room_state(ctx, account_id);
     ctx.db[session_account_id].delete_by_key(account_id);
@@ -978,11 +1284,14 @@ void delete_account(ReducerContext& ctx, const std::uint64_t account_id) {
         ctx.db[link_attempt_identity].delete_by_key(identity);
         ctx.db[account_login_identity].delete_by_key(identity);
     }
-    delete_rows(ctx.db[player_skill_account_id].filter(account_id), ctx.db[player_skill_id]);
-    delete_rows(ctx.db[hole_score_account_id].filter(account_id), ctx.db[hole_score_id]);
-    delete_rows(ctx.db[completed_course_account_id].filter(account_id), ctx.db[completed_course_id]);
-    delete_rows(ctx.db[collected_account_id].filter(account_id), ctx.db[collected_id]);
-    delete_rows(ctx.db[world_flag_account_id].filter(account_id), ctx.db[world_flag_id]);
+    std::vector<std::uint64_t> golfers;
+    for (const golfer_progress_row& each : ctx.db[golfer_progress_account_id].filter(account_id)) {
+        golfers.push_back(each.golfer_id);
+    }
+    for (const std::uint64_t golfer_id : golfers) {
+        each_golfer_table(ctx, golfer_id, [](auto&& rows, auto&& by_id) { delete_rows(rows, by_id); });
+        ctx.db[golfer_progress_golfer_id].delete_by_key(golfer_id);
+    }
     delete_rows(ctx.db[item_use_account_id].filter(account_id), ctx.db[item_use_id]);
     delete_rows(ctx.db[running_effect_account_id].filter(account_id), ctx.db[running_effect_id]);
     ctx.db[player_loadout_account_id].delete_by_key(account_id);
@@ -995,21 +1304,47 @@ bag_place bag_of(const player_bag_row& row) {
     bag_place bag;
     bag.where = static_cast<bag_where>(row.place);
     bag.seat = static_cast<cart_seat>(row.seat);
+    bag.cart_owner = row.cart_owner;
     bag.position = glm::vec3(row.x, row.y, row.z);
     bag.yaw = row.yaw;
     return bag;
 }
 
-// The account's own cart where its row has it; at the origin without one.
-cart_pose own_cart_pose(ReducerContext& ctx, const std::uint64_t account_id) {
-    const std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(account_id);
-    return cart ? pose_of(*cart) : cart_pose{};
+// The cart `account_id`'s bag at `place` names (on_cart): its own, or the
+// owner's it is strapped to, in their room.
+std::optional<golf_cart_row> bag_cart(ReducerContext& ctx, const bag_place& place, const std::uint64_t account_id,
+                                      const std::uint64_t room_id) {
+    if (place.where != bag_where::on_cart) {
+        return std::nullopt;
+    }
+    std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(place.cart_owner != 0 ? place.cart_owner : account_id);
+    return cart && cart->room_id == room_id ? cart : std::nullopt;
+}
+
+std::optional<cart_pose> bag_cart_pose(ReducerContext& ctx, const bag_place& place, const std::uint64_t account_id,
+                                       const std::uint64_t room_id) {
+    const std::optional<golf_cart_row> cart = bag_cart(ctx, place, account_id, room_id);
+    return cart ? std::optional<cart_pose>(pose_of(*cart)) : std::nullopt;
+}
+
+// Whether a bag other than `account_id`'s is strapped behind `seat` of `owner`'s cart.
+bool bag_spot_taken(ReducerContext& ctx, const std::uint64_t room_id, const std::uint64_t owner, const cart_seat seat,
+                    const std::uint64_t account_id) {
+    for (const player_bag_row& other : ctx.db[player_bag_room_id].filter(room_id)) {
+        const std::uint64_t on = other.cart_owner != 0 ? other.cart_owner : other.account_id;
+        if (other.account_id != account_id && other.place == static_cast<std::uint8_t>(bag_where::on_cart) && on == owner &&
+            other.seat == static_cast<std::uint8_t>(seat)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // The account as a golfer: its hand and natural shape from its row, the
-// spread its items give it now.
-golfer_profile golfer_of(ReducerContext& ctx, const player_row& player) {
+// spread its items give it now and its levels in `progress`.
+golfer_profile golfer_of(ReducerContext& ctx, const player_row& player, const save_data& progress) {
     golfer_profile golfer;
+    golfer.levels = skill_levels(cached_content()->skills, progress.skills);
     golfer.hand = player.hand == static_cast<std::uint8_t>(handedness::left) ? handedness::left : handedness::right;
     golfer.natural = natural_shape_from_index(player.natural_shape).value_or(natural_shape::neutral);
     golfer.spread_scale =
@@ -1083,11 +1418,52 @@ void record_link_attempt(ReducerContext& ctx, link_attempt_row attempt, const st
 // Writes the default config with the publisher as owner, and refuses to
 // publish a module whose embedded content does not load (as the game refuses
 // to start without its content). Real logins need admin_set_config.
+// The rollup's run, unless the database has it already.
+void schedule_xp_rollup(ReducerContext& ctx) {
+    if (ctx.db[xp_rollup_run].count() != 0) {
+        return;
+    }
+    const double hours = static_cast<double>(cached_content()->tuning.server.xp_rollup_interval_hours);
+    const TimeDuration every = TimeDuration::from_micros(static_cast<std::int64_t>(hours * 3600.0 * 1000000.0));
+    ctx.db[xp_rollup_run].insert(xp_rollup_run_row{0, ScheduleAt::interval(every)});
+}
+
 SPACETIMEDB_INIT(init, ReducerContext ctx) {
     if (cached_content() == nullptr) {
         return Err("embedded content does not load: " + content_error());
     }
     ctx.db[server_config].insert(server_config_row{config_id, ctx.sender(), "", "", false, ""});
+    schedule_xp_rollup(ctx);
+    return Ok();
+}
+
+// Sums every award older than server.xp_award_keep_days into its golfer's
+// rollup for that skill and month, and deletes it. Skill totals don't change.
+SPACETIMEDB_REDUCER(roll_up_xp, ReducerContext ctx, xp_rollup_run_row run) {
+    static_cast<void>(run);
+    if (ctx.sender() != ctx.database_identity()) {
+        return Err(error_internal_only);
+    }
+    const Timestamp cutoff = Timestamp::from_micros_since_epoch(
+        rollup_cutoff_micros(ctx.timestamp.micros_since_epoch(), cached_content()->tuning.server.xp_award_keep_days));
+    std::vector<rolled_award> expired;
+    std::vector<std::uint64_t> ids;
+    for (const xp_award_row& award : ctx.db[xp_award_at].filter(range_to(cutoff))) {
+        expired.push_back(rolled_award{award.golfer_id, award.skill_id, award.amount, award.at.micros_since_epoch()});
+        ids.push_back(award.id);
+    }
+    for (const std::uint64_t id : ids) {
+        ctx.db[xp_award_id].delete_by_key(id);
+    }
+    for (const rollup_sum& sum : rolled_up(expired)) {
+        const std::string key = rollup_key(sum.golfer_id, sum.skill_id, sum.month);
+        if (std::optional<xp_rollup_row> row = ctx.db[xp_rollup_key].find(key)) {
+            row->amount += sum.amount;
+            ctx.db[xp_rollup_id].update(*row);
+        } else {
+            ctx.db[xp_rollup].insert(xp_rollup_row{0, key, sum.golfer_id, sum.skill_id, sum.month, sum.amount});
+        }
+    }
     return Ok();
 }
 
@@ -1145,12 +1521,15 @@ SPACETIMEDB_CLIENT_CONNECTED(client_connected, ReducerContext ctx) {
     std::optional<account_login_row> login = ctx.db[account_login_identity].find(ctx.sender());
     if (!login) {
         const player_row created =
-            ctx.db[player].insert(player_row{0, "", "", false, 0, ctx.timestamp, ctx.timestamp,
-                                             static_cast<std::uint8_t>(handedness::right), natural_shape_unset});
+            ctx.db[player].insert(player_row{0, "", "", false, ctx.timestamp, ctx.timestamp,
+                                             static_cast<std::uint8_t>(handedness::right), natural_shape_unset, 0});
         login = account_login_row{ctx.sender(), created.account_id, login_method_name(*method), ctx.timestamp};
         ctx.db[account_login].insert(*login);
     }
     start_session(ctx, login->account_id);
+    permanent_golfer(ctx, login->account_id);
+    // A database made before the rollup existed gets its run here.
+    schedule_xp_rollup(ctx);
     return Ok();
 }
 
@@ -1185,18 +1564,18 @@ SPACETIMEDB_REDUCER(admin_set_config,
                     std::string auth_issuer,
                     std::string auth_audience,
                     bool allow_anonymous,
-                    std::string link_secret) {
+                    std::string server_secret) {
     std::optional<server_config_row> config = ctx.db[server_config_id].find(config_id);
     if (!config || ctx.sender() != config->owner) {
         return Err(error_owner_only);
     }
-    if (!link_secret.empty() && link_secret.size() < min_link_secret_length) {
+    if (!server_secret.empty() && server_secret.size() < min_server_secret_length) {
         return Err(error_invalid_config);
     }
     config->auth_issuer = auth_issuer;
     config->auth_audience = auth_audience;
     config->allow_anonymous = allow_anonymous;
-    config->link_secret = link_secret;
+    config->server_secret = server_secret;
     ctx.db[server_config_id].update(*config);
     return Ok();
 }
@@ -1241,7 +1620,7 @@ SPACETIMEDB_REDUCER(create_link_code, ReducerContext ctx) {
         return Err(error_guest_cannot_link);
     }
     const std::optional<server_config_row> config = ctx.db[server_config_id].find(config_id);
-    if (!config || config->link_secret.size() < min_link_secret_length) {
+    if (!config || config->server_secret.size() < min_server_secret_length) {
         return Err(error_linking_off);
     }
     const server_tuning& tuning = cached_content()->tuning.server;
@@ -1263,9 +1642,9 @@ SPACETIMEDB_REDUCER(create_link_code, ReducerContext ctx) {
     delete_link_code(ctx, account);
     const std::string nonce = std::to_string(ctx.timestamp.micros_since_epoch()) + ":" + std::to_string(account) + ":" +
         caller_connection(ctx).id.to_string() + ":";
-    std::string code = make_link_code(config->link_secret, nonce + "0");
+    std::string code = make_link_code(config->server_secret, nonce + "0");
     for (int attempt = 1; ctx.db[link_code_code].find(code); ++attempt) {
-        code = make_link_code(config->link_secret, nonce + std::to_string(attempt));
+        code = make_link_code(config->server_secret, nonce + std::to_string(attempt));
     }
     const Timestamp expires_at = ctx.timestamp + TimeDuration::from_micros(minutes_in_micros(tuning.link_code_minutes));
     ctx.db[link_code].insert(link_code_row{code, account, expires_at});
@@ -1295,7 +1674,7 @@ SPACETIMEDB_REDUCER(redeem_link_code, ReducerContext ctx, std::string typed_code
         return Err(error_guest_cannot_link);
     }
     const std::optional<server_config_row> config = ctx.db[server_config_id].find(config_id);
-    if (!config || config->link_secret.size() < min_link_secret_length) {
+    if (!config || config->server_secret.size() < min_server_secret_length) {
         return Err(error_linking_off);
     }
     const server_tuning& tuning = cached_content()->tuning.server;
@@ -1356,8 +1735,9 @@ SPACETIMEDB_REDUCER(redeem_link_code, ReducerContext ctx, std::string typed_code
 // =============================================================================
 
 // Joins the fullest room of the course with space, or opens one, standing at
-// hole 1's start with no ball out, as offline.
-SPACETIMEDB_REDUCER(join_course, ReducerContext ctx, std::string course_id) {
+// hole 1's start with no ball out, as offline; with a cart of my own when I
+// take one and the course has carts.
+SPACETIMEDB_REDUCER(join_course, ReducerContext ctx, std::string course_id, bool takes_cart) {
     const caller_result me = caller(ctx);
     if (!me.player) {
         return Err(me.error);
@@ -1390,19 +1770,26 @@ SPACETIMEDB_REDUCER(join_course, ReducerContext ctx, std::string course_id) {
     const glm::vec3 spawn = anchor_on_terrain(course->area, course->world.hole_starts.front().position);
     const std::vector<std::int32_t> unplayed(course->holes.size(), 0);
     ctx.db[room_member].insert(room_member_row{account, joined->room_id, 0, unplayed});
-    ctx.db[motion_budget].insert(motion_budget_row{account, spawn.x, spawn.y, spawn.z,
-                                                   static_cast<std::uint8_t>(motion_mode::idle), ctx.timestamp,
-                                                   cached_content()->tuning.server.motion_distance_slack, 0.0f, 0.0f});
-    ctx.db[avatar_motion].insert(avatar_motion_row{account, joined->room_id, static_cast<std::uint8_t>(motion_mode::idle),
-                                                   spawn.x, spawn.y, spawn.z, 0.0f, 0.0f, 0.0f, 0.0, ctx.timestamp});
+    ctx.db[motion_state].insert(joined_motion_state(account, spawn, ctx.timestamp));
+    avatar_motion_row avatar{account, joined->room_id, static_cast<std::uint8_t>(motion_mode::idle),
+                             spawn.x, spawn.y, spawn.z, 0.0f, 0.0f, 0.0f, 0.0, 0, 0, 0, 0, false, ctx.timestamp, 0, 0, {}};
+    index_motion(avatar);
+    ctx.db[avatar_motion].insert(avatar);
 
-    // A cart of their own, parked beside hole 1 next to the others in the room.
-    const cart_pose cart = free_parking(ctx, joined->room_id, *course);
-    ctx.db[golf_cart].insert(golf_cart_row{account, joined->room_id, cart.position.x, cart.position.y, cart.position.z, cart.yaw, 0,
-                                           static_cast<std::uint8_t>(cart_condition::upright)});
-    // Their bag on it, the longest club in hand.
-    ctx.db[player_bag].insert(player_bag_row{account, joined->room_id, static_cast<std::uint8_t>(bag_where::on_cart),
-                                             static_cast<std::uint8_t>(cart_seat::driver), 0.0f, 0.0f, 0.0f, 0.0f,
+    // A cart of their own, parked beside hole 1 next to the others in the
+    // room, their bag on it; carrying it, or where the course has no carts,
+    // the bag on their back. The longest club in hand.
+    bag_where bag = bag_where::on_back;
+    if (course->course.carts && takes_cart) {
+        const cart_pose cart = free_parking(ctx, joined->room_id, *course);
+        golf_cart_row row{account, joined->room_id, cart.position.x, cart.position.y, cart.position.z,
+                          cart.yaw, 0, static_cast<std::uint8_t>(cart_condition::upright), 0, 0.0, 0, 0, {}};
+        index_motion(row);
+        ctx.db[golf_cart].insert(row);
+        bag = bag_where::on_cart;
+    }
+    ctx.db[player_bag].insert(player_bag_row{account, joined->room_id, static_cast<std::uint8_t>(bag),
+                                             static_cast<std::uint8_t>(cart_seat::driver), 0, 0.0f, 0.0f, 0.0f, 0.0f,
                                              cached_content()->clubs.front().id});
     return Ok();
 }
@@ -1468,9 +1855,149 @@ SPACETIMEDB_REDUCER(leave_group, ReducerContext ctx) {
 // Playing
 // =============================================================================
 
-// The client moved. Positions are the client's; the server only checks they
-// are possible and earns the movement XP, as offline. A refused move leaves
-// avatar_motion at the last accepted one.
+// The client moved: its fixed steps since its last motion are played from
+// the server's own state (movement_rules.h play_move), and they decide where
+// it is, its cart, and the movement XP, as offline. A refused motion leaves
+// every row as it was.
+namespace {
+room_cart cart_value(const golf_cart_row& row) {
+    return {glm::vec3(row.x, row.y, row.z), row.yaw, row.passenger,
+            static_cast<cart_condition>(row.condition), row.driver, row.motion_id};
+}
+void write_cart(golf_cart_row& row, const room_cart& cart) {
+    row.x = cart.position.x; row.y = cart.position.y; row.z = cart.position.z;
+    row.yaw = cart.yaw; row.passenger = cart.passenger;
+    row.condition = static_cast<std::uint8_t>(cart.condition);
+    row.driver = cart.driver; row.motion_id = cart.motion_id;
+}
+
+// Each green's flag in its cup but those out in the room.
+std::vector<bool> room_flags_in(ReducerContext& ctx, const std::uint64_t room_id, const std::size_t holes) {
+    std::vector<bool> flags_in(holes, true);
+    for (const int out : room_flags_out(ctx, room_id)) {
+        if (out >= 0 && static_cast<std::size_t>(out) < holes) {
+            flags_in[static_cast<std::size_t>(out)] = false;
+        }
+    }
+    return flags_in;
+}
+
+// What `member`'s steps meet in its room now, and what its items do.
+move_world room_move_world(ReducerContext& ctx, const room_member_row& member, const server_course& course) {
+    const server_content& content = *cached_content();
+    const std::uint64_t account = member.account_id;
+    const std::int64_t now = now_unix_ms(ctx);
+    const std::vector<active_effect> effects = account_effects(ctx, account);
+    const cart_spec& spec = account_cart_spec(ctx, account);
+    move_world world{course.area, course.world.cart_roads, content.tuning};
+    world.walk_speed = effective_value(content.tuning.player.walk_speed, effect_target_walk_speed, effects, now);
+    world.spec = effective_cart_spec(spec, effects, now);
+    world.grip_scale = cart_grip_scale(effects, now);
+    world.wetness = weather_at(content.tuning.weather, content.tuning.wind, content.tuning.sky_clock, course.course, now).wetness;
+    world.limits = movement_limits_for(content.tuning, spec, effects, now);
+    std::vector<cart_pose> carts;
+    std::vector<cart_pose> others;
+    for (const golf_cart_row& cart : ctx.db[golf_cart_room_id].filter(member.room_id)) {
+        carts.push_back(pose_of(cart));
+        if (cart.owner != account) {
+            others.push_back(pose_of(cart));
+        }
+    }
+    std::vector<glm::vec3> people;
+    for (const avatar_motion_row& avatar : ctx.db[avatar_motion_room_id].filter(member.room_id)) {
+        const motion_mode mode = static_cast<motion_mode>(avatar.mode);
+        if (avatar.account_id != account && (mode == motion_mode::walk || mode == motion_mode::idle)) {
+            people.push_back(glm::vec3(avatar.x, avatar.y, avatar.z));
+        }
+    }
+    const std::vector<bool> flags_in = room_flags_in(ctx, member.room_id, course.area.cups.size());
+    world.walker_obstacles = walker_obstacles(carts, course.area.cups, flags_in, content.tuning);
+    world.cart_obstacles = cart_obstacles_of(others, people, course.area.cups, flags_in, content.tuning);
+    const std::optional<ball_row> own_ball = ctx.db[ball_account_id].find(account);
+    if (own_ball && !own_ball->in_cup && shot_has_played(*own_ball, ctx.timestamp, content.tuning.server)) {
+        world.own_ball = glm::vec3(own_ball->x, own_ball->y, own_ball->z);
+    }
+    return world;
+}
+
+// A sunk cart is towed back after its spec's tow_seconds.
+void schedule_tow(ReducerContext& ctx, const std::uint64_t owner) {
+    const cart_spec& spec = account_cart_spec(ctx, owner);
+    const std::int64_t tow_micros =
+        static_cast<std::int64_t>(static_cast<double>(spec.tow_seconds) * static_cast<double>(micros_per_second));
+    const Timestamp towed_at = ctx.timestamp + TimeDuration::from_micros(tow_micros);
+    ctx.db[cart_tow].insert(cart_tow_row{0, ScheduleAt::time(towed_at), owner});
+}
+
+// Takes `rider` out of `cart`'s passenger seat, standing beside it.
+void put_out_rider(ReducerContext& ctx, const std::uint64_t rider, const cart_pose& cart, const server_course& course) {
+    ctx.db[ride_motion_rider].delete_by_key(rider);
+    if (const std::optional<room_member_row> member = ctx.db[room_member_account_id].find(rider)) {
+        const glm::vec3 out = step_out_position(cart, cart_seat::passenger, cached_content()->tuning.cart);
+        place_player(ctx, *member, glm::vec3(out.x, terrain_height(course.area, out), out.z));
+    }
+}
+
+// Movement XP for the meters walked and driven on roads, as offline, for
+// at most server.walk_xp_meters_per_hour and cart_xp_meters_per_hour an hour.
+void pay_movement(ReducerContext& ctx, motion_state_row& mover, const std::uint64_t account, const float walked,
+                  const float driven) {
+    const server_content& content = *cached_content();
+    constexpr float seconds_per_hour = 3600.0f;
+    if (seconds_between(mover.hour_started, ctx.timestamp) >= seconds_per_hour) {
+        mover.hour_started = ctx.timestamp;
+        mover.walk_meters_this_hour = 0.0f;
+        mover.cart_meters_this_hour = 0.0f;
+    }
+    const reward_rules& rewards = content.rewards;
+    struct earning {
+        float meters;
+        const movement_xp_rate* rate;
+        float* pending;
+    };
+    const earning earnings[] = {
+        {earning_meters(walked, mover.walk_meters_this_hour, content.tuning.server.walk_xp_meters_per_hour), &rewards.walking,
+         &mover.walk_meters_pending},
+        {earning_meters(driven, mover.cart_meters_this_hour, content.tuning.server.cart_xp_meters_per_hour),
+         &rewards.cart_on_road, &mover.cart_meters_pending}};
+    const bool xp_due = std::any_of(std::begin(earnings), std::end(earnings), [](const earning& e) {
+        return e.meters > 0.0f && *e.pending + e.meters >= e.rate->meters_per_xp;
+    });
+    if (!xp_due) {
+        for (const earning& e : earnings) {
+            *e.pending += e.meters;
+        }
+        return;
+    }
+    const golfer_progress_row owner = permanent_golfer(ctx, account);
+    const save_data before = load_progress(ctx, owner);
+    const xp_effects boosts = account_xp_effects(ctx, account);
+    progress_update earned{before, {}};
+    for (const earning& e : earnings) {
+        const movement_xp_update update = award_movement_xp(earned.progress, *e.rate, *e.pending, e.meters, boosts);
+        earned.progress = update.update.progress;
+        earned.awarded.insert(earned.awarded.end(), update.update.awarded.begin(), update.update.awarded.end());
+        *e.pending = update.remainder_meters;
+    }
+    store_progress(ctx, owner, before, earned,
+                   award_event{award_source_movement, "movement:" + std::to_string(owner.golfer_id) + ":" +
+                                                          std::to_string(ctx.timestamp.micros_since_epoch())});
+}
+}
+
+// One run of fixed steps with the same input (game/movement_step.h move_run).
+struct move_run_row {
+    std::uint8_t kind;  // move_kind
+    std::uint16_t steps;
+    std::int8_t forward;
+    std::int8_t side;
+    bool run;
+    bool jump;
+    std::uint16_t yaw;
+    std::int16_t steer;
+};
+SPACETIMEDB_STRUCT(move_run_row, kind, steps, forward, side, run, jump, yaw, steer)
+
 SPACETIMEDB_REDUCER(update_motion,
                     ReducerContext ctx,
                     std::uint8_t mode,
@@ -1480,138 +2007,146 @@ SPACETIMEDB_REDUCER(update_motion,
                     float yaw,
                     float speed,
                     float turn_rate,
-                    double client_time) {
+                    double client_time,
+                    std::uint64_t first_step,
+                    float start_x,
+                    float start_y,
+                    float start_z,
+                    std::vector<move_run_row> runs,
+                    std::uint16_t setup_aim,
+                    std::int16_t setup_face_open,
+                    std::int8_t setup_ball_position,
+                    std::uint16_t setup_backswing,
+                    bool crouched) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
-    const bool finite = std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(yaw) &&
-        std::isfinite(speed) && std::isfinite(turn_rate) && std::isfinite(client_time);
-    if (mode >= motion_mode_count || !finite) {
+    if (mode >= motion_mode_count) {
         return Err(error_invalid_motion);
     }
-    std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(me.member->account_id);
+    const std::uint64_t account = me.member->account_id;
+    std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(account);
     const server_course* course = member_course(ctx, *me.member);
-    if (!budget || course == nullptr) {
+    if (!mover || course == nullptr) {
         return Err(error_not_in_room);
-    }
-    const server_content& content = *cached_content();
-    const glm::vec3 from = position_of(*budget);
-    const glm::vec3 to(x, y, z);
-    // The last accepted motion: where this stretch started and how it went.
-    const std::optional<avatar_motion_row> last = ctx.db[avatar_motion_account_id].find(me.member->account_id);
-    net_motion previous;
-    previous.mode = static_cast<motion_mode>(budget->mode);
-    previous.position = from;
-    previous.yaw = last ? last->yaw : 0.0f;
-    previous.speed = last ? last->speed : 0.0f;
-    previous.turn_rate = last ? last->turn_rate : 0.0f;
-    const movement_limits moving = movement_limits_for(content.tuning, account_cart_spec(ctx, me.member->account_id),
-                                                       account_effects(ctx, me.member->account_id), now_unix_ms(ctx));
-    motion_check move = check_motion(previous, to, seconds_between(budget->server_time, ctx.timestamp), mode,
-                                     budget->slack_left, moving, content.tuning);
-    // Addressing the ball steps the player around it at once (address
-    // position), as offline does from beside a ball at rest: allowed from and
-    // to within reach of their own ball once its shot has played. It earns
-    // nothing.
-    if (!move.allowed && at_ball(static_cast<motion_mode>(mode))) {
-        const std::optional<ball_row> own_ball = ctx.db[ball_account_id].find(me.member->account_id);
-        const float reach = content.tuning.player.ball_interact_radius;
-        if (own_ball && !own_ball->in_cup && shot_has_played(*own_ball, ctx.timestamp, content.tuning.server)) {
-            const glm::vec3 ball_at(own_ball->x, own_ball->y, own_ball->z);
-            if (within_interact_reach(from, ball_at, reach, content.tuning.server) &&
-                within_interact_reach(to, ball_at, reach, content.tuning.server)) {
-                move = motion_check{true, budget->slack_left, 0.0f};
-            }
-        }
-    }
-    if (!move.allowed) {
-        return Err(error_too_fast);
-    }
-    // Into the driver's seat from beside it; into the passenger's only by
-    // board_cart.
-    const bool driving = mode == static_cast<std::uint8_t>(motion_mode::cart);
-    std::optional<golf_cart_row> own_cart = ctx.db[golf_cart_owner].find(me.member->account_id);
-    if (driving && own_cart && own_cart->condition != static_cast<std::uint8_t>(cart_condition::upright)) {
-        return Err(error_cart_overturned);
-    }
-    if (driving && budget->mode != mode) {
-        if (!own_cart) {
-            return Err(error_unknown_cart);
-        }
-        if (!within_seat_reach(pose_of(*own_cart), cart_seat::driver, to, content.tuning)) {
-            return Err(error_too_far);
-        }
     }
     if (mode == static_cast<std::uint8_t>(motion_mode::ride)) {
         bool riding = false;
         for (const golf_cart_row& cart : ctx.db[golf_cart_room_id].filter(me.member->room_id)) {
-            riding = riding || cart.passenger == me.member->account_id;
+            riding = riding || cart.passenger == account;
         }
         if (!riding) {
             return Err(error_not_in_cart);
         }
     }
-
-    // Movement XP as offline, for the stretch since the last update in the
-    // mode it was covered in (an update is sent when the mode changes, so
-    // the new mode starts here). Progress is only read when a rate has
-    // gathered enough meters for XP.
-    const float meters = move.earned_distance * content.tuning.scale.meters_per_world_unit;
-    const bool on_road = on_cart_road(course->world.cart_roads, from, content.tuning.cart);
-    const movement_earnings earns = movement_earns(budget->mode, on_road);
-    const reward_rules& rewards = content.rewards;
-    struct earning {
-        bool earns;
-        const movement_xp_rate* rate;
-        float* pending;
-    };
-    const earning earnings[] = {{earns.walking, &rewards.walking, &budget->walk_meters_pending},
-                                {earns.cart, &rewards.cart_on_road, &budget->cart_meters_pending}};
-    const bool xp_due = std::any_of(std::begin(earnings), std::end(earnings), [meters](const earning& e) {
-        return e.earns && *e.pending + meters >= e.rate->meters_per_xp;
-    });
-    if (xp_due) {
-        const save_data before = load_progress(ctx, me.member->account_id);
-        const xp_effects boosts = account_xp_effects(ctx, me.member->account_id);
-        save_data after = before;
-        for (const earning& e : earnings) {
-            if (e.earns) {
-                const movement_xp_update update = award_movement_xp(after, *e.rate, *e.pending, meters, boosts);
-                after = update.update.progress;
-                *e.pending = update.remainder_meters;
-            }
-        }
-        store_progress(ctx, me.member->account_id, before, after);
-    } else {
-        for (const earning& e : earnings) {
-            if (e.earns) {
-                *e.pending += meters;
-            }
-        }
+    move_request request;
+    request.motion = net_motion{static_cast<motion_mode>(mode), glm::vec3(x, y, z), yaw, speed, turn_rate, false, client_time};
+    request.motion.crouched = crouched;
+    request.first_step = first_step;
+    request.start = glm::vec3(start_x, start_y, start_z);
+    request.runs.reserve(runs.size());
+    for (const move_run_row& run : runs) {
+        request.runs.push_back(move_run{move_input{static_cast<move_kind>(run.kind), run.forward, run.side, run.run, run.jump,
+                                                   run.yaw, run.steer},
+                                        run.steps});
     }
-
-    budget->x = x;
-    budget->y = y;
-    budget->z = z;
-    budget->mode = mode;
-    budget->slack_left = move.slack_left;
-    budget->server_time = ctx.timestamp;
-    ctx.db[motion_budget_account_id].update(*budget);
-    // Others carry the avatar on with these: only what the game can produce.
-    const float shown_speed = clamp_motion_speed(mode, speed, moving, content.tuning.server);
-    const float shown_turn_rate = clamp_turn_rate(turn_rate, moving);
-    ctx.db[avatar_motion_account_id].update(avatar_motion_row{me.member->account_id, me.member->room_id, mode, x, y, z, yaw,
-                                                              shown_speed, shown_turn_rate, client_time, ctx.timestamp});
-    // The cart goes where its driver takes it.
-    if (driving && own_cart) {
-        const cart_pose cart = cart_around_seat(to, yaw, cart_seat::driver, content.tuning.cart);
-        own_cart->x = cart.position.x;
-        own_cart->y = cart.position.y;
-        own_cart->z = cart.position.z;
-        own_cart->yaw = cart.yaw;
+    std::optional<golf_cart_row> own_cart = ctx.db[golf_cart_owner].find(account);
+    const std::optional<room_cart> cart = own_cart ? std::optional<room_cart>(cart_value(*own_cart)) : std::nullopt;
+    const move_outcome moved = play_move(mover_of(*mover), cart, account, request,
+                                         seconds_between(mover->server_time, ctx.timestamp),
+                                         room_move_world(ctx, *me.member, *course));
+    if (moved.repeated) {
+        return Ok();
+    }
+    if (!moved.error.empty()) {
+        return Err(moved.error);
+    }
+    if (own_cart && moved.cart) {
+        const std::uint64_t rider = own_cart->passenger;
+        const bool had_wheel = own_cart->driver == account;
+        write_cart(*own_cart, *moved.cart);
+        if (rider != 0 && own_cart->passenger == 0) {
+            put_out_rider(ctx, rider, pose_of(*own_cart), *course);
+        } else if (had_wheel && own_cart->driver != account) {
+            ctx.db[ride_motion_rider].delete_by_key(rider);
+        }
+        if (moved.overturned && own_cart->condition == static_cast<std::uint8_t>(cart_condition::sunk)) {
+            schedule_tow(ctx, account);
+        }
+        index_motion(*own_cart);
         ctx.db[golf_cart_owner].update(*own_cart);
     }
+    write_mover(*mover, moved.mover);
+    mover->server_time = ctx.timestamp;
+    pay_movement(ctx, *mover, account, moved.walked_meters, moved.road_meters);
+    ctx.db[motion_state_account_id].update(*mover);
+    const net_motion& shown = moved.shown;
+    const std::optional<player_bag_row> bag = ctx.db[player_bag_account_id].find(account);
+    const club_definition* club = bag ? find_club(cached_content()->clubs, bag->club_in_hand) : nullptr;
+    const sent_setup setup = at_ball(shown.mode) && club != nullptr
+        ? clamped_sent_setup(sent_setup{setup_aim, setup_face_open, setup_ball_position, setup_backswing}, *club,
+                             cached_content()->tuning.setup)
+        : sent_setup{};
+    avatar_motion_row avatar{account, me.member->room_id, static_cast<std::uint8_t>(shown.mode), shown.position.x,
+                             shown.position.y, shown.position.z, shown.yaw, shown.speed, shown.turn_rate, client_time,
+                             setup.aim, setup.face_open, setup.ball_position, setup.backswing,
+                             shown.crouched && (shown.mode == motion_mode::walk || shown.mode == motion_mode::idle),
+                             ctx.timestamp, 0, 0, {}};
+    index_motion(avatar);
+    ctx.db[avatar_motion_account_id].update(avatar);
+    return Ok();
+}
+
+// Out of `seat` of the cart at `cart`: the player's steps go on from beside
+// its door, where the game stands them.
+void stand_out_of(ReducerContext& ctx, const std::uint64_t account, const cart_pose& cart, const cart_seat seat,
+                  const room_member_row& member) {
+    std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(account);
+    const server_course* course = member_course(ctx, member);
+    if (!mover || course == nullptr) {
+        return;
+    }
+    const glm::vec3 out = step_out_position(cart, seat, cached_content()->tuning.cart);
+    place_mover(*mover, glm::vec3(out.x, terrain_height(course->area, out), out.z), ctx.timestamp);
+    ctx.db[motion_state_account_id].update(*mover);
+}
+
+SPACETIMEDB_REDUCER(take_wheel, ReducerContext ctx) {
+    const member_result me = caller_member(ctx);
+    if (!me.member) { return refused(me); }
+    const std::uint64_t account = me.member->account_id;
+    std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(account);
+    std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(account);
+    if (!cart) { return Err(error_unknown_cart); }
+    if (!mover) { return Err(error_not_in_room); }
+    const cart_decision decision = take_wheel_rule(cart_value(*cart), account, position_of(*mover), cached_content()->tuning);
+    if (!decision.cart) { return Err(decision.error); }
+    leave_passenger_seat(ctx, me.member->room_id, account);
+    write_cart(*cart, *decision.cart);
+    ctx.db[golf_cart_owner].update(*cart);
+    // It starts standing, as the game takes it from its row.
+    mover->cart_velocity_x = 0.0f;
+    mover->cart_velocity_z = 0.0f;
+    mover->cart_yaw_rate = 0.0f;
+    mover->cart_lift_seconds = 0.0f;
+    mover->cart_vertical_speed = 0.0f;
+    mover->cart_grounded = true;
+    ctx.db[motion_state_account_id].update(*mover);
+    return Ok();
+}
+
+SPACETIMEDB_REDUCER(leave_wheel, ReducerContext ctx) {
+    const member_result me = caller_member(ctx);
+    if (!me.member) { return refused(me); }
+    std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(me.member->account_id);
+    if (!cart) { return Err(error_unknown_cart); }
+    const cart_decision decision = leave_wheel_rule(cart_value(*cart), me.member->account_id);
+    if (!decision.cart) { return Err(decision.error); }
+    write_cart(*cart, *decision.cart);
+    ctx.db[golf_cart_owner].update(*cart);
+    ctx.db[ride_motion_rider].delete_by_key(cart->passenger);
+    stand_out_of(ctx, me.member->account_id, pose_of(*cart), cart_seat::driver, *me.member);
     return Ok();
 }
 
@@ -1632,11 +2167,11 @@ SPACETIMEDB_REDUCER(board_cart, ReducerContext ctx, std::uint64_t owner) {
     if (cart->condition != static_cast<std::uint8_t>(cart_condition::upright)) {
         return Err(error_cart_overturned);
     }
-    const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(me.member->account_id);
-    if (!budget) {
+    const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(me.member->account_id);
+    if (!mover) {
         return Err(error_not_in_room);
     }
-    if (!within_seat_reach(pose_of(*cart), cart_seat::passenger, position_of(*budget), cached_content()->tuning)) {
+    if (!within_seat_reach(pose_of(*cart), cart_seat::passenger, position_of(*mover), cached_content()->tuning)) {
         return Err(error_too_far);
     }
     leave_passenger_seat(ctx, me.member->room_id, me.member->account_id);
@@ -1651,53 +2186,65 @@ SPACETIMEDB_REDUCER(leave_cart, ReducerContext ctx) {
     if (!me.member) {
         return refused(me);
     }
+    std::optional<cart_pose> riding;
+    for (const golf_cart_row& cart : ctx.db[golf_cart_room_id].filter(me.member->room_id)) {
+        if (cart.passenger == me.member->account_id) {
+            riding = pose_of(cart);
+        }
+    }
     if (!leave_passenger_seat(ctx, me.member->room_id, me.member->account_id)) {
         return Err(error_not_in_cart);
     }
+    stand_out_of(ctx, me.member->account_id, *riding, cart_seat::passenger, *me.member);
     return Ok();
 }
 
-// My cart went over under me where the server has it (my last motion at
-// its wheel): onto a side, or sunk. Checked plausible there with how I was
-// last driving (overturn_plausible); whoever rode in it is out of their
-// seat, and a sunk cart is towed back after its tow_seconds.
-SPACETIMEDB_REDUCER(overturn_cart, ReducerContext ctx, std::uint8_t condition) {
+// My seat at my cart's wheel for the one riding with me (ride_motion):
+// only while the server has me driving with them aboard, and no further
+// from my last accepted motion than my cart could have gone since
+// (ride_motion_plausible). Presentation only: it moves nothing.
+SPACETIMEDB_REDUCER(update_ride,
+                    ReducerContext ctx,
+                    float x,
+                    float y,
+                    float z,
+                    float yaw,
+                    float speed,
+                    float turn_rate,
+                    double client_time) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    const bool finite = std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(yaw) &&
+        std::isfinite(speed) && std::isfinite(turn_rate) && std::isfinite(client_time);
+    if (!finite) {
+        return Err(error_invalid_motion);
+    }
     const std::uint64_t account = me.member->account_id;
-    std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(account);
-    const server_course* course = member_course(ctx, *me.member);
-    if (!cart || course == nullptr) {
-        return Err(error_unknown_cart);
+    const std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(account);
+    const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(account);
+    if (!cart || !mover || cart->driver != account || mover->mode != static_cast<std::uint8_t>(motion_mode::cart)) {
+        return Err(error_not_in_cart);
     }
-    if (cart->condition != static_cast<std::uint8_t>(cart_condition::upright)) {
-        return Err(error_cart_overturned);
+    if (cart->passenger == 0) {
+        return Ok();
     }
-    const std::optional<cart_condition> to = cart_condition_from_number(condition);
     const server_content& content = *cached_content();
-    const std::optional<avatar_motion_row> motion = ctx.db[avatar_motion_account_id].find(account);
-    const bool was_driving = motion && motion->mode == static_cast<std::uint8_t>(motion_mode::cart);
-    // The cart's physics runs cart.time_scale faster than the motion it sent.
-    const float cart_time = content.tuning.cart.time_scale;
-    const float speed = was_driving ? motion->speed * content.tuning.scale.meters_per_world_unit / cart_time : 0.0f;
-    const float turn_rate = was_driving ? motion->turn_rate / cart_time : 0.0f;
-    const cart_spec& spec = account_cart_spec(ctx, account);
-    // Wetness changes neither the slope nor the water.
-    const cart_ground ground =
-        cart_ground_at(course->area, course->world.cart_roads, content.tuning, 0.0f, pose_of(*cart).position);
-    if (!to || !overturn_plausible(*to, ground, cart->yaw, speed, turn_rate, spec, content.tuning.server)) {
-        return Err(error_cart_steady);
+    const movement_limits moving = movement_limits_for(content.tuning, account_cart_spec(ctx, account),
+                                                       account_effects(ctx, account), now_unix_ms(ctx));
+    const glm::vec3 to(x, y, z);
+    if (!ride_motion_plausible(position_of(*mover), seconds_between(mover->server_time, ctx.timestamp), to, moving,
+                               content.tuning.server)) {
+        return Err(error_too_fast);
     }
-    cart->condition = condition;
-    cart->passenger = 0;
-    ctx.db[golf_cart_owner].update(*cart);
-    if (*to == cart_condition::sunk) {
-        const std::int64_t tow_micros =
-            static_cast<std::int64_t>(static_cast<double>(spec.tow_seconds) * static_cast<double>(micros_per_second));
-        const Timestamp towed_at = ctx.timestamp + TimeDuration::from_micros(tow_micros);
-        ctx.db[cart_tow].insert(cart_tow_row{0, ScheduleAt::time(towed_at), account});
+    const ride_motion_row row{cart->passenger, account, static_cast<std::uint8_t>(motion_mode::cart), x, y, z, yaw,
+                              clamp_motion_speed(static_cast<std::uint8_t>(motion_mode::cart), speed, moving, content.tuning.server),
+                              clamp_turn_rate(turn_rate, moving), client_time, ctx.timestamp};
+    if (ctx.db[ride_motion_rider].find(cart->passenger)) {
+        ctx.db[ride_motion_rider].update(row);
+    } else {
+        ctx.db[ride_motion].insert(row);
     }
     return Ok();
 }
@@ -1712,19 +2259,13 @@ SPACETIMEDB_REDUCER(right_cart, ReducerContext ctx, std::uint64_t owner) {
     if (!cart || cart->room_id != me.member->room_id) {
         return Err(error_unknown_cart);
     }
-    const std::optional<cart_condition> lying = cart_condition_from_number(cart->condition);
-    if (!lying || !cart_tipped(*lying)) {
-        return Err(error_cart_upright);
-    }
-    const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(me.member->account_id);
-    if (!budget) {
+    const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(me.member->account_id);
+    if (!mover) {
         return Err(error_not_in_room);
     }
-    const game_tuning& tuning = cached_content()->tuning;
-    if (!within_interact_reach(position_of(*budget), pose_of(*cart).position, tuning.cart.board_reach, tuning.server)) {
-        return Err(error_too_far);
-    }
-    cart->condition = static_cast<std::uint8_t>(cart_condition::upright);
+    const cart_decision decision = right_cart_rule(cart_value(*cart), position_of(*mover), cached_content()->tuning);
+    if (!decision.cart) { return Err(decision.error); }
+    write_cart(*cart, *decision.cart);
     ctx.db[golf_cart_owner].update(*cart);
     return Ok();
 }
@@ -1740,12 +2281,11 @@ SPACETIMEDB_REDUCER(tow_cart, ReducerContext ctx, cart_tow_row tow) {
     if (!cart || course == nullptr || cart->condition != static_cast<std::uint8_t>(cart_condition::sunk)) {
         return Ok();
     }
+    set_down_bags_from(ctx, cart->room_id, tow.owner, pose_of(*cart), *course);
     const cart_pose parked = free_parking(ctx, cart->room_id, *course);
-    cart->x = parked.position.x;
-    cart->y = parked.position.y;
-    cart->z = parked.position.z;
-    cart->yaw = parked.yaw;
-    cart->condition = static_cast<std::uint8_t>(cart_condition::upright);
+    const cart_decision decision = tow_cart_rule(cart_value(*cart), parked);
+    write_cart(*cart, *decision.cart);
+    index_motion(*cart);
     ctx.db[golf_cart_owner].update(*cart);
     return Ok();
 }
@@ -1766,18 +2306,21 @@ SPACETIMEDB_REDUCER(tee_up, ReducerContext ctx, std::int32_t hole_index, bool gi
     const std::size_t index = static_cast<std::size_t>(hole_index);
     // A republished course may have another hole count than this round.
     me.member->round_strokes.resize(course->holes.size(), 0);
-    if (hole_played(current_round(*me.member), index)) {
+    // On a practice ground every station drops a fresh ball any time, in
+    // place of the last wherever it is (game/course_session.h tee_up).
+    const bool practice = course->course.practice;
+    if (!practice && hole_played(current_round(*me.member), index)) {
         return Err(error_hole_played);
     }
     const std::uint64_t account = me.member->account_id;
     const std::optional<ball_row> own = ctx.db[ball_account_id].find(account);
-    if (own && own->in_cup) {
+    if (!practice && own && own->in_cup) {
         return Err(error_ball_in_cup);
     }
-    if (own && own->hole == hole_index) {
+    if (!practice && own && own->hole == hole_index) {
         return Err(error_ball_in_play);  // that hole's ball is played where it lies
     }
-    if (own && !give_up) {
+    if (!practice && own && !give_up) {
         return Err(error_ball_in_play);
     }
     std::map<std::uint64_t, room_ball> room_balls;
@@ -1789,8 +2332,8 @@ SPACETIMEDB_REDUCER(tee_up, ReducerContext ctx, std::int32_t hole_index, bool gi
         return Err(error_tee_in_use);
     }
     const course_world_hole_start& start = course->world.hole_starts[index];
-    const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(account);
-    if (!budget || !within_interact_reach(position_of(*budget), start.position, start.interaction_radius,
+    const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(account);
+    if (!mover || !within_interact_reach(position_of(*mover), start.position, start.interaction_radius,
                                           cached_content()->tuning.server)) {
         return Err(error_too_far);
     }
@@ -1838,6 +2381,7 @@ SPACETIMEDB_REDUCER(take_shot,
                     float face_open,
                     float ball_position,
                     float backswing,
+                    float strike_timing,
                     std::string club_id,
                     std::int64_t shot_at,
                     std::vector<std::int32_t> flags_out) {
@@ -1853,18 +2397,20 @@ SPACETIMEDB_REDUCER(take_shot,
     std::optional<ball_row>& ball_now = on.ball;
     const server_content& content = *cached_content();
     const std::uint64_t account = me.member->account_id;
-    const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(account);
-    const glm::vec3 player_position = budget ? position_of(*budget) : glm::vec3(ball_now->x, ball_now->y, ball_now->z);
+    const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(account);
+    const glm::vec3 player_position = mover ? position_of(*mover) : glm::vec3(ball_now->x, ball_now->y, ball_now->z);
     if (!shot_has_played(*ball_now, ctx.timestamp, content.tuning.server)) {
         return Err(error_too_soon);
     }
     const std::optional<player_bag_row> bag = ctx.db[player_bag_account_id].find(account);
-    const server_golfer golfer{golfer_of(ctx, *me.player), bag ? bag->club_in_hand : std::string(),
+    const golfer_progress_row owner = permanent_golfer(ctx, account);
+    const save_data before = load_progress(ctx, owner);
+    const server_golfer golfer{golfer_of(ctx, *me.player, before), bag ? bag->club_in_hand : std::string(),
                                bag && bag->place == static_cast<std::uint8_t>(bag_where::on_back),
                                room_flags_out(ctx, me.member->room_id)};
     const glm::vec3 from(ball_now->x, ball_now->y, ball_now->z);
     const shot_check check =
-        check_shot(shot_request{stroke, aim_angle, face_open, ball_position, backswing, club_id, shot_at,
+        check_shot(shot_request{stroke, aim_angle, face_open, ball_position, backswing, strike_timing, club_id, shot_at,
                                 std::vector<int>(flags_out.begin(), flags_out.end())},
                    server_ball{from, ball_now->stroke_count, ball_now->last_shot_at, lie_at(course->area, from)},
                    player_position, golfer, now_unix_ms(ctx), content);
@@ -1873,18 +2419,29 @@ SPACETIMEDB_REDUCER(take_shot,
     }
     const std::size_t hole = static_cast<std::size_t>(ball_now->hole);
     const shot_setup& input = *check.input;
-    const shot_record record{input, server_shot_seed(ctx.timestamp.micros_since_epoch(), account, stroke),
+    const std::optional<server_config_row> config = ctx.db[server_config_id].find(config_id);
+    const std::string secret = config ? config->server_secret : std::string();
+    const shot_record record{input, server_shot_seed(secret, ctx.timestamp.micros_since_epoch(), account, stroke),
                              room_snapshot(ctx, me.member->room_id, account)};
     const shot_result result =
         simulate_struck_shot(record, golfer.golfer, server_shot_course(*course, hole, input.shot_at, golfer.flags_out, content),
                              content.tuning, content.clubs);
 
-    const save_data before = load_progress(ctx, account);
-    save_data after = award_xp(before, content.rewards.shot, account_xp_effects(ctx, account)).progress;
+    // Practice earns nothing: no XP, no score, no completion.
+    const bool practice = course->course.practice;
+    progress_update update =
+        practice ? progress_update{before, {}} : award_xp(before, content.rewards.shot, account_xp_effects(ctx, account));
+    const award_event event{award_source_shot, "shot:" + std::to_string(owner.golfer_id) + ":" +
+                                                   std::to_string(ctx.timestamp.micros_since_epoch())};
+    std::vector<skill_level_entry> levels;
+    for (const auto& [skill_id, level] : golfer.golfer.levels) {
+        levels.push_back(skill_level_entry{skill_id, level});
+    }
     ctx.db[shot_event].insert(shot_event_row{
         me.member->room_id, account, ball_now->hole, stroke, input.ball_start.x, input.ball_start.y, input.ball_start.z,
-        input.aim_angle, input.face_open, input.ball_position, input.backswing, static_cast<std::uint8_t>(input.hand),
-        static_cast<std::uint8_t>(natural_shape_index(golfer.golfer.natural)), golfer.golfer.spread_scale, input.club_id,
+        input.aim_angle, input.face_open, input.ball_position, input.backswing, input.strike_timing,
+        static_cast<std::uint8_t>(input.hand),
+        static_cast<std::uint8_t>(natural_shape_index(golfer.golfer.natural)), golfer.golfer.spread_scale, levels, input.club_id,
         input.shot_at, record.seed,
         std::vector<std::int32_t>(golfer.flags_out.begin(), golfer.flags_out.end()), snapshot_rows(record.snapshot),
         result.rest_position.x, result.rest_position.y, result.rest_position.z, result.holed});
@@ -1900,23 +2457,24 @@ SPACETIMEDB_REDUCER(take_shot,
         ball_now->rests_at = ctx.timestamp + TimeDuration::from_micros(static_cast<std::int64_t>(
                                                  static_cast<double>(result.duration) * static_cast<double>(micros_per_second)));
         ctx.db[ball_account_id].update(*ball_now);
-        store_progress(ctx, account, before, after);
+        store_progress(ctx, owner, before, update, event);
         return Ok();
     }
 
-    ctx.db[hole_score].insert(hole_score_row{0, account, course->course.id, ball_now->hole, strokes,
-                                             course->holes[hole].par, ctx.timestamp});
-    after = apply_hole_completed(after);
-    me.member->round_strokes.resize(course->holes.size(), 0);
-    me.member->round_strokes[hole] = strokes;
-    if (round_finished(current_round(*me.member))) {
-        // Rooms are courses with a world, never practice holes, so the round
-        // always completes the course. A new round starts.
-        after = apply_course_completed(after, course->course.id);
-        std::fill(me.member->round_strokes.begin(), me.member->round_strokes.end(), 0);
+    if (!practice) {
+        ctx.db[hole_score].insert(hole_score_row{0, owner.golfer_id, course->course.id, ball_now->hole, strokes,
+                                                 course->holes[hole].par, ctx.timestamp});
+        update.progress = apply_hole_completed(update.progress);
+        me.member->round_strokes.resize(course->holes.size(), 0);
+        me.member->round_strokes[hole] = strokes;
+        if (round_finished(current_round(*me.member))) {
+            // The round completed the course. A new round starts.
+            update.progress = apply_course_completed(update.progress, course->course.id);
+            std::fill(me.member->round_strokes.begin(), me.member->round_strokes.end(), 0);
+        }
+        store_progress(ctx, owner, before, update, event);
+        ctx.db[room_member_account_id].update(*me.member);
     }
-    store_progress(ctx, account, before, after);
-    ctx.db[room_member_account_id].update(*me.member);
     // The ball stays in the cup until it is picked up, as offline; the player
     // stays where they holed out from.
     const glm::vec3 cup = course->area.cups[hole].centre;
@@ -1941,9 +2499,9 @@ SPACETIMEDB_REDUCER(set_flag, ReducerContext ctx, std::int32_t hole, bool out) {
     if (course == nullptr || hole < 0 || static_cast<std::size_t>(hole) >= course->area.cups.size()) {
         return Err(error_unknown_hole);
     }
-    const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(me.member->account_id);
+    const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(me.member->account_id);
     const game_tuning& tuning = cached_content()->tuning;
-    if (!budget || !within_interact_reach(position_of(*budget), course->area.cups[static_cast<std::size_t>(hole)].centre,
+    if (!mover || !within_interact_reach(position_of(*mover), course->area.cups[static_cast<std::size_t>(hole)].centre,
                                           tuning.player.flag_reach, tuning.server)) {
         return Err(error_too_far);
     }
@@ -1962,28 +2520,40 @@ SPACETIMEDB_REDUCER(set_flag, ReducerContext ctx, std::int32_t hole, bool out) {
 }
 
 // Moves my bag (check_bag_move): `place` a bag_where, `seat` a cart_seat
-// (onto my cart), the rest where it is set down.
-SPACETIMEDB_REDUCER(place_bag, ReducerContext ctx, std::uint8_t place, std::uint8_t seat, float x, float y, float z, float yaw) {
+// and `cart_owner` whose cart (0 mine) onto a cart standing on its wheels,
+// the rest where it is set down.
+SPACETIMEDB_REDUCER(place_bag, ReducerContext ctx, std::uint8_t place, std::uint8_t seat, std::uint64_t cart_owner, float x,
+                    float y, float z, float yaw) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
     std::optional<player_bag_row> bag = ctx.db[player_bag_account_id].find(me.member->account_id);
-    const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(me.member->account_id);
-    if (!bag || !budget) {
+    const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(me.member->account_id);
+    if (!bag || !mover) {
         return Err(error_not_in_room);
     }
     if (place > static_cast<std::uint8_t>(bag_where::on_ground) || seat > static_cast<std::uint8_t>(cart_seat::passenger)) {
         return Err(error_invalid_motion);
     }
-    const bag_place to{static_cast<bag_where>(place), static_cast<cart_seat>(seat), glm::vec3(x, y, z), yaw};
-    const std::string error = check_bag_move(bag_of(*bag), to, position_of(*budget),
-                                             own_cart_pose(ctx, me.member->account_id), cached_content()->tuning);
+    const std::uint64_t account = me.member->account_id;
+    const std::uint64_t room_id = me.member->room_id;
+    const bag_place to{static_cast<bag_where>(place), static_cast<cart_seat>(seat), cart_owner == account ? 0 : cart_owner,
+                       glm::vec3(x, y, z), yaw};
+    const std::optional<golf_cart_row> onto = bag_cart(ctx, to, account, room_id);
+    if (onto && onto->condition != static_cast<std::uint8_t>(cart_condition::upright)) {
+        return Err(error_cart_overturned);
+    }
+    const bool taken = onto && bag_spot_taken(ctx, room_id, onto->owner, to.seat, account);
+    const std::string error =
+        check_bag_move(bag_of(*bag), to, position_of(*mover), bag_cart_pose(ctx, bag_of(*bag), account, room_id),
+                       onto ? std::optional<cart_pose>(pose_of(*onto)) : std::nullopt, taken, cached_content()->tuning);
     if (!error.empty()) {
         return Err(error);
     }
     bag->place = place;
     bag->seat = seat;
+    bag->cart_owner = to.cart_owner;
     bag->x = x;
     bag->y = y;
     bag->z = z;
@@ -2000,12 +2570,13 @@ SPACETIMEDB_REDUCER(take_club, ReducerContext ctx, std::string club_id) {
         return refused(me);
     }
     std::optional<player_bag_row> bag = ctx.db[player_bag_account_id].find(me.member->account_id);
-    const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(me.member->account_id);
-    if (!bag || !budget) {
+    const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(me.member->account_id);
+    if (!bag || !mover) {
         return Err(error_not_in_room);
     }
-    const std::string error = check_take_club(club_id, bag_of(*bag), position_of(*budget),
-                                              own_cart_pose(ctx, me.member->account_id), *cached_content());
+    const std::string error =
+        check_take_club(club_id, bag_of(*bag), position_of(*mover),
+                        bag_cart_pose(ctx, bag_of(*bag), me.member->account_id, me.member->room_id), *cached_content());
     if (!error.empty()) {
         return Err(error);
     }
@@ -2014,8 +2585,9 @@ SPACETIMEDB_REDUCER(take_club, ReducerContext ctx, std::string club_id) {
     return Ok();
 }
 
-// My hand and natural shape as a golfer (game/golfer.h), as my settings have them.
-SPACETIMEDB_REDUCER(set_golfer, ReducerContext ctx, std::uint8_t hand, std::uint8_t natural) {
+// My hand, natural shape (game/golfer.h) and favourite colour
+// (game/gear_paint.h) as a golfer, as my settings have them.
+SPACETIMEDB_REDUCER(set_golfer, ReducerContext ctx, std::uint8_t hand, std::uint8_t natural, std::uint8_t colour) {
     caller_result me = caller(ctx);
     if (!me.player) {
         return Err(me.error);
@@ -2026,6 +2598,7 @@ SPACETIMEDB_REDUCER(set_golfer, ReducerContext ctx, std::uint8_t hand, std::uint
     }
     me.player->hand = hand;
     me.player->natural_shape = natural;
+    me.player->favourite_colour = colour;
     ctx.db[player_account_id].update(*me.player);
     return Ok();
 }
@@ -2046,8 +2619,8 @@ SPACETIMEDB_REDUCER(pick_up_ball, ReducerContext ctx) {
         return Err(error_ball_in_play);
     }
     const server_content& content = *cached_content();
-    const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(me.member->account_id);
-    if (!budget || !within_interact_reach(position_of(*budget), glm::vec3(in_cup->x, in_cup->y, in_cup->z),
+    const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(me.member->account_id);
+    if (!mover || !within_interact_reach(position_of(*mover), glm::vec3(in_cup->x, in_cup->y, in_cup->z),
                                           content.tuning.player.ball_interact_radius, content.tuning.server)) {
         return Err(error_too_far);
     }
@@ -2057,8 +2630,7 @@ SPACETIMEDB_REDUCER(pick_up_ball, ReducerContext ctx) {
 
 // Uses an item the caller has equipped (what they smoke or drink), as
 // offline: its XP per use and its timed effects, by the server's clock; not
-// again while a use plays, nor while the caller's shot plays. Everyone in the
-// room sees it.
+// again while a use plays. Everyone in the room sees it.
 SPACETIMEDB_REDUCER(use_item, ReducerContext ctx, std::string item_id) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
@@ -2066,10 +2638,6 @@ SPACETIMEDB_REDUCER(use_item, ReducerContext ctx, std::string item_id) {
     }
     const std::uint64_t account = me.member->account_id;
     const server_content& content = *cached_content();
-    const std::optional<ball_row> own_ball = ctx.db[ball_account_id].find(account);
-    if (own_ball && !shot_has_played(*own_ball, ctx.timestamp, content.tuning.server)) {
-        return Err(error_too_soon);
-    }
     const std::int64_t now = now_unix_ms(ctx);
     std::optional<item_use_row> last;
     for (const item_use_row& use : ctx.db[item_use_account_id].filter(account)) {
@@ -2090,8 +2658,11 @@ SPACETIMEDB_REDUCER(use_item, ReducerContext ctx, std::string item_id) {
 
     const item_definition& item = *content.items.find(item_id);
     if (item.use->xp_per_use) {
-        const save_data before = load_progress(ctx, account);
-        store_progress(ctx, account, before, award_xp(before, *item.use->xp_per_use, account_xp_effects(ctx, account)).progress);
+        const golfer_progress_row owner = permanent_golfer(ctx, account);
+        const save_data before = load_progress(ctx, owner);
+        store_progress(ctx, owner, before, award_xp(before, *item.use->xp_per_use, account_xp_effects(ctx, account)),
+                       award_event{award_source_item, "item:" + std::to_string(owner.golfer_id) + ":" + item_id + ":" +
+                                                          std::to_string(now)});
     }
     // The timed effects as effects_after_use leaves them, ended ones dropped.
     std::vector<active_effect> running;
@@ -2131,17 +2702,24 @@ SPACETIMEDB_REDUCER_NAMED(claim_collectible_reducer, "claim_collectible", Reduce
     if (found == collectibles.end()) {
         return Err(error_unknown_collectible);
     }
-    const std::optional<motion_budget_row> budget = ctx.db[motion_budget_account_id].find(me.member->account_id);
-    if (!budget || !within_interact_reach(position_of(*budget), found->position, found->interaction_radius,
+    const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(me.member->account_id);
+    if (!mover || !within_interact_reach(position_of(*mover), found->position, found->interaction_radius,
                                           cached_content()->tuning.server)) {
         return Err(error_too_far);
     }
-    const save_data before = load_progress(ctx, me.member->account_id);
-    const claim_update claim = claim_collectible(before, *found, account_xp_effects(ctx, me.member->account_id));
+    const golfer_progress_row owner = permanent_golfer(ctx, me.member->account_id);
+    const save_data before = load_progress(ctx, owner);
+    const claim_update claim =
+        claim_collectible(before, *found, cached_content()->skills, account_xp_effects(ctx, me.member->account_id));
     if (!claim.claimed) {
         return Err(error_not_available);
     }
-    store_progress(ctx, me.member->account_id, before, claim.update.progress);
+    // A one-off claim pays once ever; a repeatable one once per claim.
+    std::string key = "collectible:" + std::to_string(owner.golfer_id) + ":" + found->id;
+    if (found->repeatable) {
+        key += ":" + std::to_string(claim.update.progress.repeatable_collectibles.at(found->id).claim_count);
+    }
+    store_progress(ctx, owner, before, claim.update, award_event{award_source_collectible, key});
     return Ok();
 }
 
@@ -2155,6 +2733,12 @@ SPACETIMEDB_REDUCER_NAMED(claim_collectible_reducer, "claim_collectible", Reduce
 SPACETIMEDB_VIEW(std::optional<server_protocol_info>, server_protocol, Public, AnonymousViewContext ctx) {
     (void)ctx;
     return server_protocol_info{protocol_version};
+}
+
+SPACETIMEDB_VIEW(std::optional<server_content_info>, server_content_hash, Public, AnonymousViewContext ctx) {
+    (void)ctx;
+    const server_content* content = cached_content();
+    return content ? std::optional<server_content_info>({content->content_hash}) : std::nullopt;
 }
 
 // What only the caller may see.
@@ -2173,7 +2757,88 @@ SPACETIMEDB_VIEW(std::optional<link_code_view>, my_link_code, Public, ViewContex
     return code ? std::optional<link_code_view>(link_code_view{code->code, code->expires_at}) : std::nullopt;
 }
 
+// The caller's permanent golfer and its progress rows.
+
+namespace {
+std::optional<golfer_progress_row> viewer_golfer(const ViewContext& ctx) {
+    const std::optional<account_login_row> login = ctx.db[account_login_identity].find(ctx.sender());
+    return login ? golfer_in(ctx, login->account_id, permanent_scope) : std::nullopt;
+}
+
+// `table`'s rows of the caller's permanent golfer.
+template <typename Row, typename ByGolfer>
+std::vector<Row> viewer_rows(const ViewContext& ctx, ByGolfer&& by_golfer) {
+    std::vector<Row> rows;
+    if (const std::optional<golfer_progress_row> mine = viewer_golfer(ctx)) {
+        for (const Row& row : by_golfer.filter(mine->golfer_id)) {
+            rows.push_back(row);
+        }
+    }
+    return rows;
+}
+}
+
+SPACETIMEDB_VIEW(std::optional<golfer_progress_row>, my_golfer_progress, Public, ViewContext ctx) {
+    return viewer_golfer(ctx);
+}
+
+SPACETIMEDB_VIEW(std::vector<golfer_skill_row>, my_skills, Public, ViewContext ctx) {
+    return viewer_rows<golfer_skill_row>(ctx, ctx.db[golfer_skill_golfer_id]);
+}
+
+SPACETIMEDB_VIEW(std::vector<completed_course_row>, my_completed_courses, Public, ViewContext ctx) {
+    return viewer_rows<completed_course_row>(ctx, ctx.db[completed_course_golfer_id]);
+}
+
+SPACETIMEDB_VIEW(std::vector<collected_row>, my_collected, Public, ViewContext ctx) {
+    return viewer_rows<collected_row>(ctx, ctx.db[collected_golfer_id]);
+}
+
+SPACETIMEDB_VIEW(std::vector<world_flag_row>, my_world_flags, Public, ViewContext ctx) {
+    return viewer_rows<world_flag_row>(ctx, ctx.db[world_flag_golfer_id]);
+}
+
 SPACETIMEDB_VIEW(std::optional<link_status>, my_link_status, Public, ViewContext ctx) {
     const std::optional<link_attempt_row> attempt = ctx.db[link_attempt_identity].find(ctx.sender());
     return attempt ? std::optional<link_status>(link_status{attempt->last_result, attempt->last_at}) : std::nullopt;
+}
+
+
+namespace {
+// The group and occupied seats stay visible even across distant areas.
+std::set<std::uint64_t> retained_motion_accounts(const ViewContext& ctx, const room_member_row& member) {
+    return ::retained_motion_accounts(member.account_id, member.room_id, member.group_id,
+        [&](const std::uint64_t group) { return ctx.db[room_member_group_id].filter(group); },
+        [&](const std::uint64_t account) { return ctx.db[golf_cart_owner].find(account); },
+        [&](const std::uint64_t account) { return ctx.db[golf_cart_passenger].filter(account); });
+}
+
+std::optional<room_member_row> viewer_member(const ViewContext& ctx) {
+    const auto login = ctx.db[account_login_identity].find(ctx.sender());
+    return login ? ctx.db[room_member_account_id].find(login->account_id) : std::nullopt;
+}
+}
+
+// Stable subscriptions: changes to area, group or seats change the view's
+// rows in the same transaction. Deletions mean visibility ended, not a leave.
+SPACETIMEDB_VIEW(std::vector<avatar_motion_row>, my_avatar_motion, Public, ViewContext ctx) {
+    const auto member = viewer_member(ctx);
+    if (!member) { return std::vector<avatar_motion_row>{}; }
+    const auto own = ctx.db[avatar_motion_account_id].find(member->account_id);
+    if (!own) { return std::vector<avatar_motion_row>{}; }
+    return visible_motion_rows<avatar_motion_row>(member->room_id, motion_cell{own->area_x, own->area_z}, retained_motion_accounts(ctx, *member),
+        [&](const motion_cell area) { return ctx.db[avatar_motion_area_key].filter(motion_area_key(member->room_id, area)); },
+        [&](const std::uint64_t account) { return ctx.db[avatar_motion_account_id].find(account); },
+        [](const avatar_motion_row& row) { return row.account_id; });
+}
+
+SPACETIMEDB_VIEW(std::vector<golf_cart_row>, my_golf_carts, Public, ViewContext ctx) {
+    const auto member = viewer_member(ctx);
+    if (!member) { return std::vector<golf_cart_row>{}; }
+    const auto own = ctx.db[avatar_motion_account_id].find(member->account_id);
+    if (!own) { return std::vector<golf_cart_row>{}; }
+    return visible_motion_rows<golf_cart_row>(member->room_id, motion_cell{own->area_x, own->area_z}, retained_motion_accounts(ctx, *member),
+        [&](const motion_cell area) { return ctx.db[golf_cart_area_key].filter(motion_area_key(member->room_id, area)); },
+        [&](const std::uint64_t account) { return ctx.db[golf_cart_owner].find(account); },
+        [](const golf_cart_row& row) { return row.owner; });
 }

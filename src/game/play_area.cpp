@@ -96,12 +96,16 @@ play_area with_ground(play_area area, const height_grid* land, const float margi
     return area;
 }
 
-// The area with a tee box at each hole's tee, over its finished ground. Each
-// faces the way its sign does.
+// The area with a tee box at each hole's tee that has one, over its
+// finished ground. Each faces the way its sign does.
 play_area with_tee_boxes(play_area area, const std::vector<hole_data>& holes, const game_tuning& tuning) {
     std::vector<tee_box> boxes;
-    for (const hole_data& hole : holes) {
-        boxes.push_back(place_tee_box(area, hole, down_hole_at_tee(hole, tuning.hole_sign.look_ahead), tuning.tee_box));
+    for (std::size_t i = 0; i < holes.size(); ++i) {
+        if (!holes[i].tee_box) {
+            continue;
+        }
+        boxes.push_back(place_tee_box(area, holes[i], down_hole_at_tee(holes[i], tuning.hole_sign.look_ahead), tuning.tee_box));
+        boxes.back().hole = i;
     }
     area.tee_boxes = std::move(boxes);
     // Their tops are the surface for what is placed on the ground next;
@@ -143,7 +147,7 @@ terrain_mesh build_hole_mesh(const hole_data& hole, const game_tuning& tuning) {
     spline.bank = hole.spline.bank;
     spline.width = ribbon_width(hole);
     spline.fairway_width = hole.spline.width;
-    spline.paints_fairway = !has_fairway_outline(hole);
+    spline.paints_fairway = ribbon_paints_fairway(hole);
     spline.sample_count = tuning.terrain.min_sections;
     return build_terrain_mesh(spline);
 }

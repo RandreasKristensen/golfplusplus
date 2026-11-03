@@ -27,9 +27,11 @@ constexpr float tee_side_bury = 0.2f;
 // The mat's share of the box's top, across and along the hole.
 constexpr float tee_mat_share_across = 0.7f;
 constexpr float tee_mat_share_along = 0.75f;
-constexpr float collectible_scale = 1.2f;
-// The flagstick as drawn: thicker than a real one so it reads at a distance.
+// The flagstick as drawn: thicker than a real one so it reads at a distance,
+// and further off at least this many scene pixels across: seen corner on,
+// its two crossed panels still cover a whole pixel in every row.
 constexpr float pole_half_width = 0.028f;
+constexpr float pole_min_half_pixels = 0.75f;
 // A flag: its length out from the pole and half its height; in calm it
 // hangs this far from straight down; how much of a wave runs along it, and
 // how far its wave's phase moves per metre across the course.
@@ -43,6 +45,11 @@ constexpr float flag_hang_radians = 0.35f;
 constexpr float flag_waves = 0.75f;
 constexpr float flag_phase_per_metre = 0.37f;
 constexpr float no_glow = 0.0f;
+// A cup's hole: its round in this many sides; the cylinder that finds its
+// opening reaches this far over and under its centre, more than a green
+// rises or falls across a cup.
+constexpr int cup_hole_segments = 24;
+constexpr float cup_cut_reach = 0.05f;
 
 float axis_x_yaw_radians(const glm::vec3& axis) {
     glm::vec3 flat(axis.x, 0.0f, axis.z);
@@ -94,6 +101,7 @@ world_marker_batch::world_marker_batch()
 void world_marker_batch::clear() {
     vertices_.clear();
     runs_.clear();
+    layer_ = 0;
 }
 
 void world_marker_batch::append_disc(const glm::mat4& model,
@@ -133,13 +141,7 @@ void world_marker_batch::append_triangles(const std::vector<glm::vec3>& local_po
         return;
     }
 
-    if (runs_.empty() || runs_.back().depth_write != depth_write) {
-        world_marker_run run;
-        run.depth_write = depth_write;
-        run.first = vertices_.size();
-        runs_.push_back(run);
-    }
-
+    world_marker_run& run = run_for(depth_write, marker_stencil::none);
     for (const glm::vec3& local : local_positions) {
         world_marker_vertex vertex;
         vertex.position = glm::vec3(model * glm::vec4(local, 1.0f));
@@ -147,31 +149,41 @@ void world_marker_batch::append_triangles(const std::vector<glm::vec3>& local_po
         vertex.glow = glow;
         vertices_.push_back(vertex);
     }
-    runs_.back().count += local_positions.size();
+    run.count += local_positions.size();
 }
 
 void world_marker_batch::append_world_quad(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& d,
                                            const glm::vec3& color, const float glow, const bool depth_write) {
-    if (runs_.empty() || runs_.back().depth_write != depth_write) {
-        world_marker_run run;
-        run.depth_write = depth_write;
-        run.first = vertices_.size();
-        runs_.push_back(run);
-    }
+    world_marker_run& run = run_for(depth_write, marker_stencil::none);
     for (const glm::vec3& position : {a, b, c, a, c, d}) {
         vertices_.push_back(world_marker_vertex{position, color, glow});
     }
-    runs_.back().count += 6;
+    run.count += 6;
 }
 
-glm::mat4 ground_marker_model(const glm::vec3& position, const float scale) {
-    return glm::scale(glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 0.01f, 0.0f)),
-                      glm::vec3(scale, 1.0f, scale));
+void world_marker_batch::append_world_triangles(const std::vector<glm::vec3>& corners, const glm::vec3& color,
+                                                const float glow, const marker_stencil stencil) {
+    if (corners.empty()) {
+        return;
+    }
+    world_marker_run& run = run_for(stencil != marker_stencil::mark_holes, stencil);
+    for (const glm::vec3& position : corners) {
+        vertices_.push_back(world_marker_vertex{position, color, glow});
+    }
+    run.count += corners.size();
 }
 
-glm::mat4 pin_cup_model(const glm::vec3& position, const float cup_scale) {
-    return glm::scale(glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 0.09f, 0.0f)),
-                      glm::vec3(cup_scale, 1.0f, cup_scale));
+world_marker_run& world_marker_batch::run_for(const bool depth_write, const marker_stencil stencil) {
+    if (runs_.empty() || runs_.back().depth_write != depth_write || runs_.back().stencil != stencil ||
+        runs_.back().layer != layer_) {
+        world_marker_run run;
+        run.depth_write = depth_write;
+        run.stencil = stencil;
+        run.layer = layer_;
+        run.first = vertices_.size();
+        runs_.push_back(run);
+    }
+    return runs_.back();
 }
 
 glm::mat4 panel_model(const glm::vec3& center, const float yaw_degrees, const glm::vec3& scale) {
@@ -190,11 +202,24 @@ glm::mat4 world_panel_model(const glm::vec3& center,
     return glm::scale(model, glm::vec3(half_size, 1.0f));
 }
 
-void append_ground_marker(world_marker_batch& batch,
-                          const glm::vec3& position,
-                          const float scale,
-                          const glm::vec3& color) {
-    batch.append_disc(ground_marker_model(position, scale), color, no_glow, true);
+namespace {
+glm::vec3 collectible_color(const std::uint32_t index, const marker_colors& colors) {
+    // Knuth's multiplicative hash: its top bits spread neighbouring indices
+    // evenly over 0..1, so about the paint share of a course is painted.
+    const std::uint32_t hash = index * 2654435761u;
+    const float pick = static_cast<float>(hash >> 8) / 16777216.0f;
+    if (pick >= colors.collectible_paint_share || colors.collectible_paints.empty()) {
+        return colors.ball;
+    }
+    return colors.collectible_paints[(hash >> 4) % colors.collectible_paints.size()];
+}
+}
+
+void append_collectible(world_marker_batch& batch, const render_collectible& collectible, const float radius,
+                        const marker_colors& colors, const float glow) {
+    const glm::vec3 centre = collectible.position + world_up * radius;
+    batch.append_sphere(glm::scale(glm::translate(glm::mat4(1.0f), centre), glm::vec3(radius)),
+                        collectible_color(collectible.index, colors), glow, true);
 }
 
 glm::mat4 ground_rect_model(const glm::vec3& center, const glm::vec3& down_hole, const glm::vec2& half_size) {
@@ -208,10 +233,34 @@ glm::mat4 ground_rect_model(const glm::vec3& center, const glm::vec3& down_hole,
     return model;
 }
 
-void append_tee_box(world_marker_batch& batch, const tee_box& box, const marker_colors& colors) {
+namespace {
+void append_tee_box_layer(world_marker_batch& batch, const tee_box& box, const marker_colors& colors,
+                          const tee_box_layer layer) {
     const glm::vec3 along = box.down_hole;
     const glm::vec3 across = glm::normalize(glm::cross(along, world_up));
     const glm::vec2 half(box.half_width, box.half_length);
+    batch.set_layer(static_cast<int>(layer));
+    if (layer == tee_box_layer::mat) {
+        const glm::vec2 mat_half(half.x * tee_mat_share_across, half.y * tee_mat_share_along);
+        batch.append_quad(ground_rect_model(box.center + world_up * tee_mat_lift, along, mat_half), colors.tee_mat, no_glow, true);
+        return;
+    }
+    if (layer == tee_box_layer::tiles) {
+        // Whole tiles across the top, as near tee_tile_size as fits.
+        const int tiles_across = std::max(1, static_cast<int>(std::lround(2.0f * half.x / tee_tile_size)));
+        const int tiles_along = std::max(1, static_cast<int>(std::lround(2.0f * half.y / tee_tile_size)));
+        const glm::vec2 tile(2.0f * half.x / static_cast<float>(tiles_across), 2.0f * half.y / static_cast<float>(tiles_along));
+        const glm::vec2 tile_half = glm::max(tile * 0.5f - glm::vec2(tee_grout_gap * 0.5f), glm::vec2(0.0f));
+        for (int row = 0; row < tiles_along; ++row) {
+            for (int column = 0; column < tiles_across; ++column) {
+                const float x = (static_cast<float>(column) + 0.5f) * tile.x - half.x;
+                const float y = (static_cast<float>(row) + 0.5f) * tile.y - half.y;
+                const glm::vec3 center = box.center + across * x + along * y + world_up * tee_tile_lift;
+                batch.append_quad(ground_rect_model(center, along, tile_half), colors.tee_tile, no_glow, true);
+            }
+        }
+        return;
+    }
 
     // The top in grout colour, and the four sides down into the ground.
     batch.append_quad(ground_rect_model(box.center, along, half), colors.tee_grout, no_glow, true);
@@ -225,36 +274,53 @@ void append_tee_box(world_marker_batch& batch, const tee_box& box, const marker_
                                             glm::vec2(half.y, side_half_height)),
                           colors.tee_grout, no_glow, true);
     }
-
-    // Whole tiles across the top, as near tee_tile_size as fits.
-    const int tiles_across = std::max(1, static_cast<int>(std::lround(2.0f * half.x / tee_tile_size)));
-    const int tiles_along = std::max(1, static_cast<int>(std::lround(2.0f * half.y / tee_tile_size)));
-    const glm::vec2 tile(2.0f * half.x / static_cast<float>(tiles_across), 2.0f * half.y / static_cast<float>(tiles_along));
-    const glm::vec2 tile_half = glm::max(tile * 0.5f - glm::vec2(tee_grout_gap * 0.5f), glm::vec2(0.0f));
-    for (int row = 0; row < tiles_along; ++row) {
-        for (int column = 0; column < tiles_across; ++column) {
-            const float x = (static_cast<float>(column) + 0.5f) * tile.x - half.x;
-            const float y = (static_cast<float>(row) + 0.5f) * tile.y - half.y;
-            const glm::vec3 center = box.center + across * x + along * y + world_up * tee_tile_lift;
-            batch.append_quad(ground_rect_model(center, along, tile_half), colors.tee_tile, no_glow, true);
-        }
-    }
-
-    const glm::vec2 mat_half(half.x * tee_mat_share_across, half.y * tee_mat_share_along);
-    batch.append_quad(ground_rect_model(box.center + world_up * tee_mat_lift, along, mat_half), colors.tee_mat, no_glow, true);
+}
 }
 
-void append_pin_cup(world_marker_batch& batch, const glm::vec3& position, const float cup_radius_meters,
-                    const marker_colors& colors, const glow_floors& glow) {
-    // The cup never writes depth so the ball and flagstick stay visible through it.
-    batch.append_disc(pin_cup_model(position, cup_radius_meters * 2.0f), colors.cup, glow.cup, false);
+void append_tee_box(world_marker_batch& batch, const tee_box& box, const marker_colors& colors) {
+    for (const tee_box_layer layer : {tee_box_layer::grout, tee_box_layer::tiles, tee_box_layer::mat}) {
+        append_tee_box_layer(batch, box, colors, layer);
+    }
+    batch.set_layer(0);
+}
+
+void append_cup_holes(world_marker_batch& batch, const std::vector<glm::vec3>& centres, const float radius,
+                      const float depth, const marker_colors& colors, const glow_floors& glow) {
+    // Round a cup's axis, `height` over its centre.
+    const auto rim = [radius](const glm::vec3& centre, const int side, const float height) {
+        const float angle = glm::two_pi<float>() * static_cast<float>(side) / static_cast<float>(cup_hole_segments);
+        return centre + glm::vec3(std::cos(angle) * radius, height, std::sin(angle) * radius);
+    };
+    std::vector<glm::vec3> marks;
+    std::vector<glm::vec3> insides;
+    for (const glm::vec3& centre : centres) {
+        const glm::vec3 top = centre + world_up * cup_cut_reach;
+        const glm::vec3 under = centre - world_up * cup_cut_reach;
+        const glm::vec3 bottom = centre - world_up * depth;
+        for (int side = 0; side < cup_hole_segments; ++side) {
+            const glm::vec3 low0 = rim(centre, side, -cup_cut_reach);
+            const glm::vec3 low1 = rim(centre, side + 1, -cup_cut_reach);
+            const glm::vec3 high0 = rim(centre, side, cup_cut_reach);
+            const glm::vec3 high1 = rim(centre, side + 1, cup_cut_reach);
+            // The marking cylinder, every face turned outwards.
+            marks.insert(marks.end(), {low0, high1, low1, low0, high0, high1, top, high1, high0, under, low0, low1});
+            // The wall turned in, from the bottom up past the ground, and the bottom turned up.
+            const glm::vec3 deep0 = rim(centre, side, -depth);
+            const glm::vec3 deep1 = rim(centre, side + 1, -depth);
+            insides.insert(insides.end(), {deep0, deep1, high1, deep0, high1, high0, bottom, deep1, deep0});
+        }
+    }
+    batch.append_world_triangles(marks, colors.cup, glow.cup, marker_stencil::mark_holes);
+    batch.append_world_triangles(insides, colors.cup, glow.cup, marker_stencil::hole_insides);
 }
 
 void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, const float pin_visual_height_meters,
-                          const marker_colors& colors, const glow_floors& glow, const flag_pose& flag) {
+                          const marker_colors& colors, const glow_floors& glow, const flag_pose& flag,
+                          const float pixel_meters) {
     const float pin_height = std::max(0.1f, pin_visual_height_meters);
     const glm::vec3 pin_base = position + glm::vec3(0.0f, pin_height * 0.5f, 0.0f);
-    const glm::vec3 pole_scale(pole_half_width, pin_height * 0.5f, 1.0f);
+    const float half_width = std::max(pole_half_width, pixel_meters * pole_min_half_pixels);
+    const glm::vec3 pole_scale(half_width, pin_height * 0.5f, 1.0f);
     batch.append_quad(panel_model(pin_base, 0.0f, pole_scale), colors.pin_pole, glow.pin_pole, true);
     batch.append_quad(panel_model(pin_base, 90.0f, pole_scale), colors.pin_pole, glow.pin_pole, true);
 
@@ -330,10 +396,13 @@ void append_address_marks(world_marker_batch& batch, const render_address_marks&
 void build_tee_box_batch(world_marker_batch& batch, const std::vector<tee_box>* boxes, const marker_colors& colors) {
     batch.clear();
     if (boxes != nullptr) {
-        for (const tee_box& box : *boxes) {
-            append_tee_box(batch, box, colors);
+        for (const tee_box_layer layer : {tee_box_layer::grout, tee_box_layer::tiles, tee_box_layer::mat}) {
+            for (const tee_box& box : *boxes) {
+                append_tee_box_layer(batch, box, colors, layer);
+            }
         }
     }
+    batch.set_layer(0);
 }
 
 void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors) {
@@ -348,10 +417,20 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
         const std::vector<glm::vec3>& out = markers(scene.flags_out);
         return std::find(out.begin(), out.end(), cup) != out.end();
     };
+    // How wide a scene pixel is at a flagstick's middle.
+    const auto pixel_at = [&scene](const glm::vec3& pin) {
+        const glm::vec3 middle = pin + world_up * (scene.pin_visual_height_meters * 0.5f);
+        return glm::length(middle - scene.camera_position) * scene.pixel_per_meter;
+    };
+    std::vector<glm::vec3> cups = markers(scene.pin_markers);
     if (scene.show_hole) {
-        append_pin_cup(batch, scene.pin_position, scene.cup_radius_meters, marks, colors.glow);
+        cups.push_back(scene.pin_position);
+    }
+    append_cup_holes(batch, cups, scene.cup_radius_meters, scene.cup_depth_meters, marks, colors.glow);
+    if (scene.show_hole) {
         if (!flag_out(scene.pin_position)) {
-            append_pin_flagstick(batch, scene.pin_position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag);
+            append_pin_flagstick(batch, scene.pin_position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag,
+                                 pixel_at(scene.pin_position));
         }
     }
     if (scene.lying_flags != nullptr) {
@@ -360,16 +439,15 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
         }
     }
 
-    for (const glm::vec3& position : markers(scene.collectible_markers)) {
-        append_ground_marker(batch, position, collectible_scale, marks.collectible);
+    if (scene.collectibles != nullptr) {
+        for (const render_collectible& collectible : *scene.collectibles) {
+            append_collectible(batch, collectible, scene.ball_visual_radius_meters, marks, colors.glow.ball);
+        }
     }
-    const std::vector<glm::vec3>& pins = markers(scene.pin_markers);
-    for (const glm::vec3& position : pins) {
-        append_pin_cup(batch, position, scene.cup_radius_meters, marks, colors.glow);
-    }
-    for (const glm::vec3& position : pins) {
+    for (const glm::vec3& position : markers(scene.pin_markers)) {
         if (!flag_out(position)) {
-            append_pin_flagstick(batch, position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag);
+            append_pin_flagstick(batch, position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag,
+                                 pixel_at(position));
         }
     }
 

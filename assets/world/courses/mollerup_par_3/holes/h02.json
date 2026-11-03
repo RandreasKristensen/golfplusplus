@@ -199,80 +199,58 @@
   "trees": [
     {
       "position": [
-        18.35,
+        18.85,
         0.0,
-        100.66
+        113.29
       ],
-      "trunk_radius": 0.65,
-      "trunk_height": 5.0,
-      "leaf_radius": 4.7,
-      "leaf_height": 6.0
+      "trunk_radius": 0.54,
+      "trunk_height": 3.13,
+      "leaf_radius": 3.83,
+      "leaf_height": 3.83
     },
     {
       "position": [
-        -14.12,
+        16.85,
         0.0,
-        -2.21
+        118.29
       ],
-      "trunk_radius": 0.65,
-      "trunk_height": 5.0,
-      "leaf_radius": 4.7,
-      "leaf_height": 6.0
+      "trunk_radius": 0.5,
+      "trunk_height": 3.17,
+      "leaf_radius": 3.57,
+      "leaf_height": 3.87
     },
     {
       "position": [
-        -10.82,
+        -13.15,
         0.0,
-        14.49
+        28.29
       ],
-      "trunk_radius": 0.65,
-      "trunk_height": 5.0,
-      "leaf_radius": 4.7,
-      "leaf_height": 6.0
+      "trunk_radius": 0.51,
+      "trunk_height": 3.49,
+      "leaf_radius": 3.66,
+      "leaf_height": 4.26
     },
     {
       "position": [
-        14.1,
+        101.85,
         0.0,
-        110.06
+        36.29
       ],
-      "trunk_radius": 0.65,
-      "trunk_height": 5.0,
-      "leaf_radius": 4.7,
-      "leaf_height": 6.0
+      "trunk_radius": 0.32,
+      "trunk_height": 2.28,
+      "leaf_radius": 2.26,
+      "leaf_height": 2.79
     },
     {
       "position": [
-        -17.18,
+        105.85,
         0.0,
-        -0.28
+        27.29
       ],
-      "trunk_radius": 0.65,
-      "trunk_height": 5.0,
-      "leaf_radius": 4.7,
-      "leaf_height": 6.0
-    },
-    {
-      "position": [
-        15.2,
-        0.0,
-        122.31
-      ],
-      "trunk_radius": 0.65,
-      "trunk_height": 5.0,
-      "leaf_radius": 4.7,
-      "leaf_height": 6.0
-    },
-    {
-      "position": [
-        95.5,
-        0.0,
-        45.97
-      ],
-      "trunk_radius": 0.65,
-      "trunk_height": 5.0,
-      "leaf_radius": 4.7,
-      "leaf_height": 6.0
+      "trunk_radius": 0.43,
+      "trunk_height": 2.54,
+      "leaf_radius": 3.04,
+      "leaf_height": 3.11
     }
   ],
   "source": {
@@ -290,6 +268,9 @@
     "tee_elevation": 14.05,
     "hole_way": "way/1565386483",
     "fairway": "osm",
+    "aerial": "dk",
+    "aerial_bunkers": 0,
+    "aerial_waters": 0,
     "made_green": false
   }
 }

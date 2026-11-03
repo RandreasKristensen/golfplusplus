@@ -11,6 +11,9 @@
 #include "game/prop_loader.h"
 
 #include "core/god_menu.h"
+#include "core/light_frame.h"
+#include "core/look_tuning.h"
+#include "core/weather_frame.h"
 #include "core/startup_flow.h"
 #include "core/vcr_frame.h"
 #include "game/content_files.h"
@@ -24,6 +27,7 @@
 #include "game/net_types.h"
 #include "game/picture_loader.h"
 #include "game/reward_rules.h"
+#include "game/skill_catalog.h"
 #include "game/scorecard.h"
 #include "game/shot_simulation.h"
 #include "game/sky_clock.h"
@@ -39,11 +43,16 @@
 #include "renderer/course_map_overlay.h"
 #include "renderer/hole_sign_face.h"
 #include "renderer/hud_overlay.h"
+#include "renderer/lighting_uniforms.h"
 #include "renderer/menu_overlay.h"
+#include "renderer/online_overlay.h"
 #include "renderer/overlay_batch.h"
 #include "renderer/overlay_raster.h"
 #include "renderer/picture_size.h"
 #include "renderer/pixel_font.h"
+#include "renderer/scattered_light.h"
+#include "renderer/scene_haze.h"
+#include "renderer/scene_lights.h"
 #include "renderer/scorecard_overlay.h"
 #include "renderer/ui_rect.h"
 #include "renderer/vcr_overlay.h"
@@ -72,7 +81,7 @@ TEST_CASE("the shipped content loads") {
     REQUIRE(result.content.has_value());
     CHECK(result.error.empty());
     CHECK(!result.content->courses.empty());
-    CHECK(!result.content->skills.empty());
+    CHECK(!result.content->skills.skills.empty());
 }
 
 TEST_CASE("missing content is reported, not filled in") {
@@ -197,6 +206,33 @@ TEST_CASE("the shipped lighting loads, and its daylight shows the scene as it wa
     CHECK(palette->sky.sun_brightness > 1.0f);
 }
 
+TEST_CASE("the shipped mist lies over the course at dawn, thickens in fog and is gone by noon") {
+    const std::optional<lighting_palette> palette = load_lighting(asset_root());
+    REQUIRE(palette.has_value());
+    // How much of the ground 200 m off the mist hides from a golfer's eye on
+    // the lowest ground, and of a tree top 20 m up as far off.
+    const auto hidden = [](const lighting_key& key, const float height) {
+        render_lighting lighting;
+        lighting.mist_height_meters = key.mist_height_meters;
+        lighting.mist_density = key.mist_density;
+        scene_haze haze;
+        haze.full_distance = 1000.0f;
+        haze.eye = glm::vec3(0.0f, 1.6f, 0.0f);
+        const frame_lighting_block block = make_frame_lighting_block(lighting, haze, {});
+        return haze_at(block, glm::vec3(0.0f, height, 200.0f));
+    };
+    const lighting_key dawn = lighting_at(*palette, 2.0f);
+    const lighting_key noon = lighting_at(*palette, 50.0f);
+    CHECK(noon.mist_density == 0.0f);
+    CHECK(hidden(noon, 0.0f) == 0.0f);
+    CHECK(hidden(dawn, 0.0f) > 0.5f);
+    CHECK(hidden(dawn, 20.0f) < hidden(dawn, 0.0f) - 0.2f);
+    const lighting_key foggy = weathered_lighting(noon, palette->weather, shown_weather{0.0f, 0.0f, 1.0f, 0.0f, 0.0f});
+    const lighting_key rainy = weathered_lighting(noon, palette->weather, shown_weather{1.0f, 1.0f, 0.0f, 0.0f, 1.0f});
+    CHECK(hidden(foggy, 0.0f) > 0.5f);
+    CHECK(rainy.mist_density > noon.mist_density);
+}
+
 namespace {
 // The brighter's luminance over the darker's, each with a little flare.
 float luminance_contrast(const glm::vec3& a, const glm::vec3& b) {
@@ -301,6 +337,66 @@ TEST_CASE("at night the ball glows past white and the green's floodlights lift t
     }
 }
 
+TEST_CASE("in fog and rain at night the ball on a floodlit green stands out, looking at it through the lamps' beams") {
+    constexpr float min_readable_contrast = 1.6f;
+    const std::optional<lighting_palette> palette = load_lighting(asset_root());
+    REQUIRE(palette.has_value());
+    const scene_colors& colors = palette->colors;
+    const lighting_key night = lighting_at(*palette, -90.0f);
+    const glow_floors glow = night_glow_floors(colors.glow, palette->night_lights, 1.0f);
+    game_state game = started_game(fixture_hub_course());
+    refresh_static_anchor_cache(game);
+    REQUIRE(game.static_anchors.pins.size() == game.course_holes.size());
+    const course_backdrop& backdrop = shipped_content().courses.front().backdrop;
+    // The heaviest rain on soaked ground, and the thickest fog.
+    for (const shown_weather& weather : {shown_weather{1.0f, 1.0f, 0.0f, 0.0f, 1.0f}, shown_weather{0.0f, 0.0f, 1.0f, 0.0f, 0.0f}}) {
+        const lighting_key key = weathered_lighting(night, palette->weather, weather);
+        for (std::size_t hole = 0; hole < game.course_holes.size(); ++hole) {
+            const glm::vec3 pin = game.static_anchors.pins[hole];
+            const auto lamp = std::find_if(game.area.floodlights.begin(), game.area.floodlights.end(), [hole](const floodlight& light) {
+                return light.area_hole == hole && light.target == floodlight_target::green;
+            });
+            REQUIRE(lamp != game.area.floodlights.end());
+            // Standing 25 m back from the pin, looking past it towards the
+            // lamp, into the beam's forward glow.
+            const glm::vec3 back = safe_normalize(horizontal(pin - lamp->lamp), glm::vec3(0.0f, 0.0f, 1.0f));
+            const glm::vec3 eye = pin + back * 25.0f + world_up * 1.6f;
+            render_data data;
+            data.lighting.ambient_sky = key.ambient_sky;
+            data.lighting.night_lights = 1.0f;
+            add_frame_lights(data, game, *palette, tree_shadow_cache{});
+            data.lighting.weather = make_render_sky_weather(weather, palette->weather);
+            data.lighting.mist_height_meters = key.mist_height_meters;
+            data.lighting.mist_density = key.mist_density;
+            scene_haze haze = weathered_haze(make_scene_haze(backdrop, 1.0f, eye, 0.0f, key.haze_tint),
+                                             haze_under_weather(palette->weather, weather));
+            // At its thickest: the green in the course's lowest hollow.
+            haze.mist_floor = pin.y;
+            const frame_lighting_block block = make_frame_lighting_block(data.lighting, haze, nearest_scene_lights(data.lights, eye));
+            // As lighting.glsl's hazed: faded into the haze, the beams' glow over it.
+            const auto seen = [&block, &eye](const glm::vec3& color, const glm::vec3& at) {
+                return glm::mix(color, haze_toward(block, glm::normalize(at - eye)), haze_at(block, at)) + scattered_light(block, at);
+            };
+            // The ball short of the pin takes the lamps' light unlit
+            // (world_marker.vert); the green past it, facing up.
+            const glm::vec3 ball_at = pin + back * 0.3f + world_up * 0.02f;
+            const glm::vec3 green_at = pin - back * 1.5f;
+            glm::vec3 on_ball(0.0f);
+            glm::vec3 on_green(0.0f);
+            for (std::size_t i = 0; i < max_scene_lights; ++i) {
+                on_ball += light_reaching(block, i, ball_at).light;
+                const reaching_light reaching = light_reaching(block, i, green_at);
+                on_green += reaching.light * std::max((reaching.towards.y + 0.25f) / 1.25f, 0.0f);
+            }
+            const glm::vec3 sky = glm::min(key.ambient_sky, glm::vec3(1.0f));
+            const glm::vec3 ball = colors.markers.ball * (glm::max(sky, glm::vec3(glow.ball)) + on_ball);
+            const float wet = glm::mix(1.0f, palette->weather.wet_albedo, weather.wetness);
+            const glm::vec3 green = colors.ground.green * wet * (key.ambient_sky + on_green);
+            CHECK(luminance_contrast(seen(ball, ball_at), seen(green, green_at)) >= min_readable_contrast);
+        }
+    }
+}
+
 TEST_CASE("the shipped bag is fourteen clubs, longest first, each faster off the face than the next") {
     const game_content& content = shipped_content();
     const std::vector<club_definition>& clubs = content.clubs;
@@ -381,21 +477,48 @@ TEST_CASE("the shipped clubs' labels are unique and can't be misread as each oth
     }
 }
 
+TEST_CASE("the favourite colour setting offers any, and one tile per bag and cart paint") {
+    const setting_definition* colour = find_setting(shipped_content().settings, setting_favourite_colour);
+    REQUIRE(colour != nullptr);
+    const std::optional<lighting_palette> palette = load_lighting(asset_root());
+    REQUIRE(palette.has_value());
+    const figure_colors& figures = palette->colors.figures;
+    CHECK(colour->min == 0);
+    CHECK(static_cast<std::size_t>(colour->max) == figures.bag_paints.size());
+    CHECK(colour->value_keys.size() == figures.bag_paints.size() + 1);
+    CHECK(figures.cart_paints.size() == figures.bag_paints.size());
+    // Every bag a darker shade of its cart's colour.
+    for (std::size_t i = 0; i < figures.bag_paints.size(); ++i) {
+        CHECK(luminance(figures.bag_paints[i]) < luminance(figures.cart_paints[i]));
+    }
+}
+
 TEST_CASE("every reward pays into a listed skill") {
     const game_content& content = shipped_content();
-    const auto listed = [&content](const std::string& id) {
-        return std::any_of(content.skills.begin(), content.skills.end(), [&id](const skill_definition& skill) { return skill.id == id; });
-    };
-    const reward_rules& rewards = content.rewards;
-    for (const std::string& skill : {rewards.shot.skill_id, rewards.walking.skill_id, rewards.cart_on_road.skill_id}) {
-        CHECK(listed(skill));
-    }
-    for (const auto& [id, item] : content.items.items) {
-        if (item.use && item.use->xp_per_use) {
-            CHECK(listed(item.use->xp_per_use->skill_id));
+    CHECK(unpayable_skill(content.skills, content.rewards, content.items).empty());
+    CHECK(!parse_rewards_from_text("{}").has_value());
+}
+
+// The last shipped curves (tests/fixtures/progression/shipped_curves.json):
+// a curve is never removed and never asks more XP for a level than it did,
+// so no player loses a level they reached. Raising one is an owner's
+// decision, made by updating that copy with it.
+TEST_CASE("no shipped curve takes a level away") {
+    const skill_catalog& shipped = shipped_content().skills;
+    const std::optional<std::string> skills_text = read_text_file(asset_root() + "/" + skills_path);
+    const std::optional<std::string> frozen_text = read_text_file(fixture_root() + "/progression/shipped_curves.json");
+    REQUIRE(skills_text.has_value());
+    REQUIRE(frozen_text.has_value());
+    const std::optional<skill_catalog> frozen = parse_skill_catalog_from_text(*skills_text, *frozen_text);
+    REQUIRE(frozen.has_value());
+    for (const auto& [id, before] : frozen->curves) {
+        REQUIRE(shipped.curves.count(id) == 1U);
+        const level_curve& now = shipped.curves.at(id);
+        CHECK(now.level_xp.size() >= before.level_xp.size());
+        for (std::size_t level = 0; level < before.level_xp.size() && level < now.level_xp.size(); ++level) {
+            CHECK(now.level_xp[level] <= before.level_xp[level]);
         }
     }
-    CHECK(!parse_rewards_from_text("{}").has_value());
 }
 
 TEST_CASE("every shipped item looks like a model of its kind, plays a sound there is and is named in the string table") {
@@ -944,7 +1067,7 @@ online_menu_status busy_online(const std::size_t name_length) {
 
 // Every online status the sign-in screen tells apart.
 std::vector<online_menu_status> login_statuses() {
-    std::vector<online_menu_status> statuses(6);
+    std::vector<online_menu_status> statuses(7);
     statuses[1].available = true;
     statuses[2].available = true;
     statuses[2].status = net_status::failed;
@@ -955,6 +1078,9 @@ std::vector<online_menu_status> login_statuses() {
     statuses[4].status = net_status::signing_in;
     statuses[5].available = true;
     statuses[5].status = net_status::connecting;
+    statuses[6].available = true;
+    statuses[6].status = net_status::failed;
+    statuses[6].failure_id = net_failure_content_mismatch;
     return statuses;
 }
 
@@ -987,7 +1113,7 @@ render_data busy_hud(const text_assets& text, const club_definition& club) {
                                    {"capacity", std::to_string(shipped_content().tuning.server.room_capacity)}});
     data.show_swing_clock = true;
     data.swing_backswing = 1.0f;
-    data.show_address_hints = true;
+    data.key_hints = text_hud_address_hints;
     data.setup_word = format_text(text, text_hud_setup_word_pair,
                                   {{"height", lookup_text(text, text_hud_setup_word_punch)},
                                    {"curve", lookup_text(text, text_hud_setup_word_flop)}});
@@ -996,16 +1122,19 @@ render_data busy_hud(const text_assets& text, const club_definition& club) {
     data.selected_club_label = club.label;
     data.selected_club_name = lookup_text(text, club.name.c_str());
     data.show_skills_panel = true;
-    for (const skill_definition& skill : shipped_content().skills) {
+    for (const skill_definition& skill : shipped_content().skills.skills) {
         data.skills.push_back(render_skill_progress{lookup_text(text, skill_text_key(skill.id).c_str()), 99, 9999999, 9999999});
     }
     data.xp_drops.push_back(render_xp_drop{skill_icon_id::generic, 99999, 0.5f});
+    const shot_number_tuning& numbers = shipped_content().tuning.shot_numbers;
+    data.shot_number = render_shot_number{glm::vec3(0.0f), "999", true, numbers.long_half_height * numbers.crit_pop_size, numbers.rise, 1.0f};
     data.show_rangefinder = true;
     data.rangefinder_distance_label = format_text(text, text_hud_rangefinder, {{"meters", "999"}});
     data.rangefinder_flag = glm::vec3(0.0f);
     data.rangefinder_lock_lit = true;
     data.rangefinder_height_label =
         format_text(text, text_hud_rangefinder_height, {{"sign", lookup_text(text, text_hud_rangefinder_downhill)}, {"meters", "99"}});
+    data.rangefinder_plays_like_label = format_text(text, text_hud_rangefinder_plays_like, {{"meters", "999"}});
     data.rangefinder_wind_label = format_text(text, text_hud_rangefinder_wind, {{"speed", "19.5"}});
     data.rangefinder_wind_angle = 0.0f;
 
@@ -1121,7 +1250,10 @@ TEST_CASE("every shipped course's map numbers each hole in the middle of the hol
                 low = glm::min(low, point - reach);
                 high = glm::max(high, point + reach);
             }
-            data.map_holes.push_back(render_map_hole{std::to_string(i + 1), line});
+            // Numbered as their signs are: a practice station by a green has none.
+            if (hole->tee_box) {
+                data.map_holes.push_back(render_map_hole{std::to_string(i + 1), line});
+            }
         }
         data.course_map_low = low;
         data.course_map_high = high;
@@ -1164,7 +1296,7 @@ TEST_CASE("every shipped hole sign fits its number, par and a four-digit length"
             const std::optional<hole_data> hole = load_hole_from_file(course_hole_path(shipped_content().asset_root, course, i));
             REQUIRE(hole.has_value());
             overlay_batch batch;
-            draw_hole_sign_face(batch, text, make_hole_sign_labels(text, static_cast<int>(i) + 1, hole->par, 9999), area,
+            draw_hole_sign_face(batch, text, make_hole_sign_labels(text, static_cast<int>(i) + 1, hole->par, 9999, course.practice), area,
                                 area.signs.front(), test_scene_colors().ground);
             CHECK(batch.truncated_text_count == 0U);
         }
@@ -1196,7 +1328,8 @@ TEST_CASE("every shipped hole sign's map frames its hole and shows what lies on 
             placed.push_back(place_hole(holes[i], world->hole_starts[i]));
         }
         area.signs = place_hole_signs(area, placed, content.tuning.hole_sign);
-        REQUIRE(area.signs.size() == holes.size());
+        REQUIRE(area.signs.size() ==
+                static_cast<std::size_t>(std::count_if(holes.begin(), holes.end(), [](const hole_data& hole) { return hole.tee_box; })));
         for (const hole_sign& sign : area.signs) {
             // The pin is on the hole's own ground, and so is its line of play.
             for (const glm::vec3& point : {point_along(sign.line_of_play, sign.length * 0.5f), sign.line_of_play.back()}) {
@@ -1238,7 +1371,7 @@ TEST_CASE("every shipped hole sign's map frames its hole and shows what lies on 
             // Every green, bunker and pond on the hole's corridor is on the map
             // in its own ink, whichever hole it was mapped with.
             overlay_batch batch;
-            draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 3, 100), area, sign, ground);
+            draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 3, 100, false), area, sign, ground);
             const rgba_image face = rasterize_overlay_batch(batch, test_props().at("hole_sign").color("board"));
             const auto drawn = [&](const glm::vec3& ink) {
                 for (std::size_t i = 0; i + 3 < face.pixels.size(); i += 4) {
@@ -1285,8 +1418,8 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
     const online_menu_status online = busy_online(catalog.name_max_length);
     for (const overlay_grid& grid : shipped_grids()) {
         for (const startup_flow flow : {startup_flow::main, startup_flow::help, startup_flow::course_picker, startup_flow::exit_prompt,
-                                        startup_flow::natural_shape_picker, startup_flow::link_code_show,
-                                        startup_flow::online_course_picker}) {
+                                        startup_flow::natural_shape_picker, startup_flow::transport_picker,
+                                        startup_flow::link_code_show, startup_flow::online_course_picker}) {
             startup_flow_state state;
             state.flow = flow;
             check_fits(grid, text, state, catalog, online_menu_status{});
@@ -1364,10 +1497,21 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
             CHECK(batch.truncated_text_count == 0U);
         }
 
+        // The swing's keys, its meter partway up.
+        {
+            render_data data = busy_hud(text, longest_named_club());
+            data.key_hints = text_hud_address_hints;
+            data.swing_meter = 0.4f;
+            overlay_batch batch;
+            batch.grid = grid;
+            draw_hud(batch, text, data, glm::mat4(1.0f));
+            CHECK(batch.truncated_text_count == 0U);
+        }
+
         // At my bag, its keys; its picker open on every club, and my bag on my back.
         {
             render_data data = busy_hud(text, longest_named_club());
-            data.show_address_hints = false;
+            data.key_hints = nullptr;
             data.show_bag_hints = true;
             overlay_batch batch;
             batch.grid = grid;
@@ -1392,6 +1536,8 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
         std::vector<std::string> notices = online_messages(text);
         notices.push_back(text_scorecard_waiting_for_group);
         notices.push_back(text_hud_bag_on_back);
+        notices.push_back(text_hud_seat_taken);
+        notices.push_back(text_hud_bag_spot_taken);
         for (const std::string& message : notices) {
             render_data data = busy_hud(text, longest_named_club());
             data.notice_label = lookup_text(text, message.c_str());
@@ -1461,10 +1607,46 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
             }
         }
 
+        // The look tuning panel at every palette key, and every notice it gives.
+        const lighting_palette palette = *load_lighting(asset_root());
+        look_tuning_state tuning;
+        tuning.entries = *load_tuning_panel(asset_root(), palette);
+        tuning.open = true;
+        for (const lighting_key& key : palette.keys) {
+            tuning.sun_elevation_deg = key.sun_elevation_deg;
+            overlay_batch batch;
+            batch.grid = grid;
+            draw_god_menu(batch, text, look_tuning_view(tuning, palette, text));
+            CHECK(batch.truncated_text_count == 0U);
+        }
+        for (const char* file : {lighting_path, picture_style_path}) {
+            for (const look_problem problem : {look_problem::unreadable, look_problem::not_json, look_problem::not_valid}) {
+                tuning.watch.error = look_error{file, problem};
+                overlay_batch batch;
+                batch.grid = grid;
+                draw_notice(batch, text, look_notice(tuning, text));
+                CHECK(batch.truncated_text_count == 0U);
+            }
+        }
+        tuning.watch.error.reset();
+        tuning.unwritten = true;
+        overlay_batch unwritten;
+        unwritten.grid = grid;
+        draw_notice(unwritten, text, look_notice(tuning, text));
+        CHECK(unwritten.truncated_text_count == 0U);
+
         overlay_batch loading;
         loading.grid = grid;
         draw_loading_screen(loading, text);
         CHECK(loading.truncated_text_count == 0U);
+    }
+}
+
+TEST_CASE("the shipped look tuning panel lists ranged numbers of lighting.json, each labelled in the string table") {
+    const std::optional<std::vector<tuning_entry>> entries = load_tuning_panel(asset_root(), *load_lighting(asset_root()));
+    REQUIRE(entries.has_value());
+    for (const tuning_entry& entry : *entries) {
+        CHECK(shipped_text_assets().strings.entries.count(entry.label) == 1U);
     }
 }
 
@@ -1548,5 +1730,55 @@ TEST_CASE("every shipped pond's water lies on ground under its level") {
     CHECK(dry.empty());
     for (const std::string& where : dry) {
         std::fprintf(stderr, "water above its level: %s\n", where.c_str());
+    }
+}
+
+TEST_CASE("the shipped practice ground: six bays on tee boxes clear of each other, and a green's stations on the lies they are named for") {
+    const game_content& content = shipped_content();
+    const auto found = std::find_if(content.courses.begin(), content.courses.end(),
+                                    [](const course_definition& course) { return course.practice; });
+    REQUIRE(found != content.courses.end());
+    CHECK(!found->carts);
+    game_state state = make_game_state(content, save_data{});
+    REQUIRE(start_course(state, *found));
+
+    const std::vector<tee_box>& boxes = state.area.tee_boxes;
+    REQUIRE(boxes.size() == 6U);
+    for (std::size_t i = 0; i < boxes.size(); ++i) {
+        for (std::size_t j = 0; j < i; ++j) {
+            // Side by side along the tee line: further apart than either's width.
+            CHECK(horizontal_distance(boxes[i].center, boxes[j].center) > boxes[i].half_width + boxes[j].half_width);
+        }
+    }
+    const auto lie_named = [](const std::string& name) {
+        return name.rfind("Putting", 0) == 0 ? std::vector<ball_lie>{ball_lie::green}
+            : name.rfind("Bunker", 0) == 0   ? std::vector<ball_lie>{ball_lie::bunker}
+            : name.rfind("Chipping", 0) == 0 ? std::vector<ball_lie>{ball_lie::fairway, ball_lie::rough}
+                                             : std::vector<ball_lie>{ball_lie::tee};
+    };
+    std::vector<ball_lie> chips;
+    for (std::size_t i = 0; i < state.course_holes.size(); ++i) {
+        const glm::vec3 drop = state.holes[i].tee_position;
+        const std::vector<ball_lie> named = lie_named(state.course_holes[i].name);
+        const ball_lie lie = lie_at(state.area, drop);
+        CHECK(std::find(named.begin(), named.end(), lie) != named.end());
+        if (state.course_holes[i].name.rfind("Chipping", 0) == 0) {
+            chips.push_back(lie);
+        }
+        // Every station's cup is on a green.
+        CHECK(lie_at(state.area, state.area.cups[i].centre) == ball_lie::green);
+    }
+    // One chip off the apron, one out of the rough.
+    CHECK(std::find(chips.begin(), chips.end(), ball_lie::fairway) != chips.end());
+    CHECK(std::find(chips.begin(), chips.end(), ball_lie::rough) != chips.end());
+}
+
+
+TEST_CASE("motion interest needs a positive finite cell width") {
+    for (const char* value : {"0.0", "-1.0", "1e100"}) {
+        const auto result = parse_game_tuning_from_texts(shipped_tuning_with(
+            "\"motion_cell_meters\": 100.0", std::string("\"motion_cell_meters\": ") + value));
+        CHECK(!result.tuning);
+        CHECK(result.error.find("server.motion_cell_meters") != std::string::npos);
     }
 }

@@ -1,7 +1,7 @@
 #pragma once
 
 // Standing over my ball (game_mode::addressing): where I stand for a setup,
-// where my eyes are and which way they look, the two framed looks V turns
+// where my eyes are and which way they look, the two framed looks R turns
 // between, and the setup as it shows on the ground at my feet. One place
 // for all of it, so others see me stand where I stand. Pure.
 
@@ -24,7 +24,7 @@ address_look target_look(const camera_tuning& tuning);
 address_look down_look(const camera_tuning& tuning);
 address_look clamped_look(const address_look& look, const camera_tuning& tuning);
 
-// V turning my head from one look to a framed one, eased in and out over
+// R turning my head from one look to a framed one, eased in and out over
 // address_snap_seconds.
 struct look_snap {
     address_look from;
@@ -32,8 +32,12 @@ struct look_snap {
     float elapsed = 0.0f;
 };
 
-// The framed look V turns to from `look`: the down view from anywhere
-// nearer the target view, else the target view.
+// Whether `look` is nearer the down view than the target view: looking
+// down at the ball, where the setup is pulled and the swing starts.
+bool looking_down(const address_look& look, const camera_tuning& tuning);
+
+// The framed look R turns to from `look`: the target view looking down,
+// else the down view.
 address_look snap_destination(const address_look& look, const camera_tuning& tuning);
 address_look snap_look_at(const look_snap& snap, const camera_tuning& tuning);
 bool snap_done(const look_snap& snap, const camera_tuning& tuning);
@@ -46,6 +50,15 @@ glm::vec3 address_stance_position(const play_area& area, const shot_setup& setup
 
 // The way I face at address: across the line, at the ball (world yaw).
 float address_facing_yaw(const shot_setup& setup);
+
+// A golfer stood to `setup`: me addressing my ball (game state and my
+// figure), and others at theirs as they are shown, so the two agree.
+struct address_stance {
+    glm::vec3 position{0.0f};  // address_stance_position
+    float facing = 0.0f;       // address_facing_yaw
+};
+address_stance stance_at_address(const play_area& area, const shot_setup& setup, const game_tuning& tuning,
+                                 frame_profile* profile = nullptr);
 // The world yaw `look` turns my head to.
 float address_view_yaw(const shot_setup& setup, const address_look& look);
 

@@ -25,12 +25,6 @@ const glm::vec3 overswing_warning(0.92f, 0.22f, 0.14f);
 constexpr overlay_grid fallback_grid{320, 240};
 // A segment reaching further off screen than this (clip units) is not drawn.
 constexpr float far_off_screen = 4.0f;
-// The landing bracket's half width, its arms' drop and its gap over the
-// landing; the rest tick's half height. In target pixels.
-constexpr int bracket_half_width = 5;
-constexpr int bracket_drop = 2;
-constexpr int bracket_rise = 3;
-constexpr int tick_half_height = 2;
 
 overlay_grid grid_of(const overlay_batch& batch) {
     return batch.grid.width > 0 && batch.grid.height > 0 ? batch.grid : fallback_grid;
@@ -68,8 +62,9 @@ std::vector<glm::ivec2> line_pixels(const glm::ivec2 a, const glm::ivec2 b) {
     return pixels;
 }
 
-// Edge first, then the line over it, so the edge never covers the line.
-void draw_pixels(overlay_batch& batch, const std::vector<glm::ivec2>& pixels) {
+// Edge first, then the line over it, so the edge never covers the line;
+// each pixel at its `alphas` (all opaque when none).
+void draw_pixels(overlay_batch& batch, const std::vector<glm::ivec2>& pixels, const std::vector<float>& alphas = {}) {
     const overlay_grid grid = grid_of(batch);
     const glm::vec2 pixel(2.0f / static_cast<float>(grid.width), 2.0f / static_cast<float>(grid.height));
     const auto centre = [&](const glm::ivec2 at) {
@@ -78,14 +73,15 @@ void draw_pixels(overlay_batch& batch, const std::vector<glm::ivec2>& pixels) {
     const auto on_target = [&](const glm::ivec2 at) {
         return at.x >= -1 && at.y >= -1 && at.x <= grid.width && at.y <= grid.height;
     };
-    for (const glm::ivec2 at : pixels) {
-        if (on_target(at)) {
-            draw_overlay_quad(batch, centre(at), pixel * 1.5f, osd_black, 1.0f);
+    const auto alpha = [&](const std::size_t i) { return i < alphas.size() ? alphas[i] : 1.0f; };
+    for (std::size_t i = 0; i < pixels.size(); ++i) {
+        if (on_target(pixels[i]) && alpha(i) > 0.0f) {
+            draw_overlay_quad(batch, centre(pixels[i]), pixel * 1.5f, osd_black, alpha(i));
         }
     }
-    for (const glm::ivec2 at : pixels) {
-        if (on_target(at)) {
-            draw_overlay_quad(batch, centre(at), pixel * 0.5f, osd_white, 1.0f);
+    for (std::size_t i = 0; i < pixels.size(); ++i) {
+        if (on_target(pixels[i]) && alpha(i) > 0.0f) {
+            draw_overlay_quad(batch, centre(pixels[i]), pixel * 0.5f, osd_white, alpha(i));
         }
     }
 }
@@ -147,42 +143,42 @@ void draw_world_segments(overlay_batch& batch, const std::vector<std::pair<glm::
     }
 }
 
+void draw_green_read(overlay_batch& batch, const std::vector<render_read_dot>& dots, const glm::mat4& view_proj) {
+    std::vector<glm::ivec2> pixels;
+    std::vector<float> alphas;
+    const overlay_grid grid = grid_of(batch);
+    for (const render_read_dot& dot : dots) {
+        const std::optional<glm::vec2> projected = project_to_screen(view_proj, dot.position);
+        if (projected && glm::all(glm::lessThanEqual(glm::abs(*projected), glm::vec2(far_off_screen)))) {
+            pixels.push_back(to_pixel(grid, *projected));
+            alphas.push_back(dot.alpha);
+        }
+    }
+    draw_pixels(batch, pixels, alphas);
+}
+
 void draw_shot_preview(overlay_batch& batch, const render_data& data, const glm::mat4& view_proj) {
     std::vector<glm::ivec2> pixels;
+    std::vector<float> alphas;
     const overlay_grid grid = grid_of(batch);
+    const std::vector<glm::vec3>& line = data.osd_line;
+    const float last = static_cast<float>(std::max<std::size_t>(1, line.size() - 1));
     std::optional<glm::vec2> previous;
-    for (const glm::vec3& point : data.osd_line) {
-        const std::optional<glm::vec2> projected = project_to_screen(view_proj, point);
+    for (std::size_t i = 0; i < line.size(); ++i) {
+        const std::optional<glm::vec2> projected = project_to_screen(view_proj, line[i]);
         if (projected && previous && glm::all(glm::lessThanEqual(glm::abs(*projected), glm::vec2(far_off_screen))) &&
             glm::all(glm::lessThanEqual(glm::abs(*previous), glm::vec2(far_off_screen)))) {
             const std::vector<glm::ivec2> step = line_pixels(to_pixel(grid, *previous), to_pixel(grid, *projected));
-            pixels.insert(pixels.end(), step.begin(), step.end());
+            // Fading out along the way: where it starts, not where it ends.
+            for (std::size_t k = 0; k < step.size(); ++k) {
+                const float along = (static_cast<float>(i - 1) + static_cast<float>(k) / static_cast<float>(step.size())) / last;
+                pixels.push_back(step[k]);
+                alphas.push_back(1.0f - along);
+            }
         }
         previous = projected;
     }
-    // The landing bracket, its arms down either side over where the ball lands.
-    if (data.osd_landing) {
-        if (const std::optional<glm::vec2> landing = project_to_screen(view_proj, *data.osd_landing)) {
-            const glm::ivec2 at = to_pixel(grid, *landing) + glm::ivec2(0, bracket_rise);
-            for (const int side : {-1, 1}) {
-                const glm::ivec2 outer = at + glm::ivec2(side * bracket_half_width, 0);
-                const std::vector<glm::ivec2> bar = line_pixels(at + glm::ivec2(side * 2, 0), outer);
-                const std::vector<glm::ivec2> arm = line_pixels(outer, outer - glm::ivec2(0, bracket_drop));
-                pixels.insert(pixels.end(), bar.begin(), bar.end());
-                pixels.insert(pixels.end(), arm.begin(), arm.end());
-            }
-        }
-    }
-    // The rest tick, upright where it stops.
-    if (data.osd_rest) {
-        if (const std::optional<glm::vec2> rest = project_to_screen(view_proj, *data.osd_rest)) {
-            const glm::ivec2 at = to_pixel(grid, *rest);
-            const std::vector<glm::ivec2> tick =
-                line_pixels(at - glm::ivec2(0, tick_half_height), at + glm::ivec2(0, tick_half_height));
-            pixels.insert(pixels.end(), tick.begin(), tick.end());
-        }
-    }
-    draw_pixels(batch, pixels);
+    draw_pixels(batch, pixels, alphas);
 }
 
 void draw_setup_word(overlay_batch& batch, const text_assets& text, const std::string& word) {
@@ -193,8 +189,10 @@ void draw_setup_word(overlay_batch& batch, const text_assets& text, const std::s
     draw_label(batch, text.font, style, word, rect_from_edges(0.40f, -0.34f, 0.95f, -0.24f));
 }
 
-void draw_swing_clock(overlay_batch& batch, const text_assets& text, const float backswing, const float backswing_max) {
+void draw_swing_clock(overlay_batch& batch, const text_assets& text, const float backswing, const float backswing_max,
+                      const std::optional<float> meter, const bool mistimed) {
     const float power = std::clamp(backswing, 0.0f, std::max(1.0f, backswing_max));
+    const float hand = std::clamp(meter.value_or(power), 0.0f, std::max(1.0f, backswing_max));
     const float x_per_y = batch.grid.width > 0 ? static_cast<float>(batch.grid.height) / static_cast<float>(batch.grid.width) : 1.0f;
     const swing_clock clock{glm::vec2(0.89f, -0.84f), 0.46f, x_per_y};
     const swing_clock shadow{clock.pivot + glm::vec2(0.012f, -0.014f), clock.radius, x_per_y};
@@ -233,10 +231,10 @@ void draw_swing_clock(overlay_batch& batch, const text_assets& text, const float
 
     // The club: its shaft from the pivot, its head on the track, trailing
     // towards 6 (or leading, at address, so it stays on the dial).
-    const glm::vec3 club_color(0.98f, 0.80f, 0.24f);
+    const glm::vec3 club_color = mistimed ? overswing_warning : glm::vec3(0.98f, 0.80f, 0.24f);
     constexpr float head_share = 0.07f;
-    const float head_from = std::max(0.0f, power - head_share);
-    draw_overlay_segment(batch, clock.pivot, clock.point(power, 0.74f), 0.010f, club_color, 0.96f);
+    const float head_from = std::max(0.0f, hand - head_share);
+    draw_overlay_segment(batch, clock.pivot, clock.point(hand, 0.74f), 0.010f, club_color, 0.96f);
     draw_clock_ring(batch, clock, 0.63f, 0.77f, head_from, head_from + head_share, club_color, 0.96f);
 }
 

@@ -12,6 +12,39 @@ constexpr GLuint position_location = 0;
 constexpr GLuint color_location = 1;
 constexpr GLuint glow_location = 2;
 
+// The GL state a run's stencil use needs (world_marker_batch.h); none puts
+// back what every other pass expects.
+void use_stencil(const marker_stencil stencil) {
+    switch (stencil) {
+    case marker_stencil::none:
+        glDisable(GL_STENCIL_TEST);
+        glDisable(GL_CULL_FACE);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDepthFunc(GL_LESS);
+        break;
+    case marker_stencil::mark_holes:
+        glEnable(GL_STENCIL_TEST);
+        glStencilFunc(GL_ALWAYS, 0, 0xFF);
+        glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_KEEP, GL_INCR_WRAP);
+        glStencilOpSeparate(GL_BACK, GL_KEEP, GL_KEEP, GL_DECR_WRAP);
+        glDisable(GL_CULL_FACE);
+        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+        glDepthFunc(GL_LESS);
+        break;
+    case marker_stencil::hole_insides:
+        // A cup is convex: of its faces turned towards the camera only one
+        // is on any pixel, so they need no depth test among themselves.
+        glEnable(GL_STENCIL_TEST);
+        glStencilFunc(GL_NOTEQUAL, 0, 0xFF);
+        glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDepthFunc(GL_ALWAYS);
+        break;
+    }
+}
+
 // Covers an 18-hole course's tee boxes (~280 vertices each), its cups and
 // flagsticks, aim dots and club without growing on early frames; a room's
 // carts and players grow it.
@@ -105,10 +138,19 @@ void world_marker_renderer::draw(const world_marker_batch& batch,
         if (run.count == 0) {
             continue;
         }
+        use_stencil(run.stencil);
         glDepthMask(run.depth_write ? GL_TRUE : GL_FALSE);
+        if (run.layer > 0) {
+            glEnable(GL_POLYGON_OFFSET_FILL);
+            glPolygonOffset(-static_cast<float>(run.layer), -static_cast<float>(run.layer));
+        } else {
+            glDisable(GL_POLYGON_OFFSET_FILL);
+        }
         glDrawArrays(GL_TRIANGLES, static_cast<GLint>(run.first), static_cast<GLsizei>(run.count));
         record_draw_call(profile);
     }
+    use_stencil(marker_stencil::none);
     glDepthMask(GL_TRUE);
+    glDisable(GL_POLYGON_OFFSET_FILL);
     glBindVertexArray(0);
 }

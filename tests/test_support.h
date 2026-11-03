@@ -27,6 +27,7 @@
 #include "physics/terrain.h"
 #include "physics/vector_math.h"
 
+#include <algorithm>
 #include <cmath>
 #include <optional>
 #include <string>
@@ -157,7 +158,11 @@ inline void sit_in_cart(game_state& state) {
     state.cart.pose.position = anchor_on_terrain(state.area, state.cart.pose.position);
     state.cart.motion = cart_motion{state.cart.pose.yaw};
     state.cart.vertical = vertical_body{state.cart.pose.position.y, 0.0f, true};
-    state.ride = cart_ride{0, cart_seat::driver, std::nullopt, false};
+    state.ride = cart_ride{0, cart_seat::driver, std::nullopt, is_online(state)};
+    if (is_online(state)) {
+        state.online.carts[state.online.account_id] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0,
+            cart_condition::upright, state.online.account_id};
+    }
 }
 
 // `club`'s stock setup, right-handed, for a ball at the origin lying on
@@ -196,14 +201,49 @@ inline shot_setup stocked(const shot_setup& setup, const game_state& state, cons
     return stock;
 }
 
-// F: interact with what is in reach; at address, step away from the ball.
+// F: interact with what is in reach; at address, look down at the ball.
 inline game_input interact_input() {
     game_input input;
     input.interact = true;
     return input;
 }
 
-// Space over the ball: swing the setup.
+// Plays my bag or club being handled to its end (game/bag_handling.h).
+inline void finish_handling(game_state& state) {
+    for (int i = 0; i < 100 && state.handling; ++i) {
+        update_game(state, game_input{}, 0.05f);
+    }
+}
+
+// Stood outside `door` of the cart at `cart`, facing straight into it.
+inline void stand_at_door(game_state& state, const cart_pose& cart, const cart_seat door) {
+    const cart_tuning& tuning = state.tuning.cart;
+    state.player.position = anchor_on_terrain(state.area, step_out_position(cart, door, tuning));
+    state.player.yaw = yaw_towards(state.player.position, seat_position(cart, door, tuning));
+    state.player.vertical = vertical_body{state.player.position.y, 0.0f, true};
+}
+
+// W held, walking straight on, for up to `seconds` or until I am in a seat.
+inline void walk_in(game_state& state, const float seconds = 1.0f) {
+    game_input forward;
+    forward.forward_held = true;
+    for (float t = 0.0f; t < seconds && on_foot(state); t += 0.02f) {
+        update_game(state, forward, 0.02f);
+    }
+}
+
+// Walks into my cart through `door` and plays the step (and any scoot)
+// into my seat at its wheel.
+inline void sit_in_my_cart(game_state& state, const cart_seat door = cart_seat::driver) {
+    stand_at_door(state, state.cart.pose, door);
+    walk_in(state);
+    for (int i = 0; i < 100 && state.ride && state.ride->step; ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
+}
+
+// Space over the ball looking down: the swipe right, and once the club is
+// going back the swipe left.
 inline game_input swing_input() {
     game_input input;
     input.swing = true;
@@ -213,6 +253,31 @@ inline game_input swing_input() {
 // F at my ball: standing over it at the club's stock setup.
 inline void enter_addressing(game_state& state) {
     update_game(state, interact_input(), 0.016f);
+}
+
+// F at my ball, then looking down at it, where the swing starts.
+inline void address_looking_down(game_state& state) {
+    enter_addressing(state);
+    state.address.look = down_look(state.tuning.camera);
+}
+
+// Space over the ball looking down, the club taken back until the meter
+// reaches the dialled top.
+inline void swing_back_to_top(game_state& state) {
+    update_game(state, swing_input(), 0.016f);
+    if (!state.address.meter_elapsed) {
+        return;
+    }
+    const float top = state.address.setup.backswing * state.tuning.swing.meter_full_seconds;
+    while (*state.address.meter_elapsed < top) {
+        update_game(state, game_input{}, std::min(0.016f, top - *state.address.meter_elapsed));
+    }
+}
+
+// The club taken back to the dialled top and started down there, on time.
+inline void start_swing_on_time(game_state& state) {
+    swing_back_to_top(state);
+    update_game(state, swing_input(), 0.0f);
 }
 
 // Plays the swing on until the ball is struck (or the address ends).
@@ -234,8 +299,8 @@ inline void answer_my_swing(game_state& state, const std::optional<glm::vec3>& r
 // Steps up to the ball, swings the stock setup and strikes it (online, the
 // server answering it as set up).
 inline void hit_selected_club(game_state& state) {
-    enter_addressing(state);
-    update_game(state, swing_input(), 0.016f);
+    address_looking_down(state);
+    start_swing_on_time(state);
     if (is_online(state) && state.address.swing_elapsed) {
         answer_my_swing(state);
     }

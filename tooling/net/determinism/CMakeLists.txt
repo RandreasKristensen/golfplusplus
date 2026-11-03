@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(golfpp_golden_shots LANGUAGES CXX)
 
-# golden_shots_main.cpp with the game's shot code, built the way the server
-# module builds it (no FMA fusing, -O2). check_determinism.ps1 configures this
-# once natively and once with emcmake (run under node with NODERAWFS).
+# golden_shots_main.cpp with the game's shot and cart code, built the way the
+# server module builds it (no FMA fusing, -O2). check_determinism.ps1
+# configures this once natively and once with emcmake (run under node with
+# NODERAWFS).
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +26,8 @@ set(sources
   server/golfpp_module/src/server_content.cpp
   src/physics/ball_physics.cpp
   src/physics/body_collision.cpp
+  src/physics/cart_dynamics.cpp
+  src/physics/cart_rollover.cpp
   src/physics/impact.cpp
   src/physics/land_relief.cpp
   src/physics/launch.cpp
@@ -41,6 +44,7 @@ set(sources
   src/physics/wind.cpp
   src/game/area_solids.cpp
   src/game/content_files.cpp
+  src/game/content_hash.cpp
   src/game/course_loader.cpp
   src/game/course_world_loader.cpp
   src/game/delivery.cpp
@@ -54,12 +58,15 @@ set(sources
   src/game/hole_loader.cpp
   src/game/item_catalog.cpp
   src/game/loadout.cpp
+  src/game/movement_step.cpp
   src/game/floodlights.cpp
   src/game/hole_sign.cpp
   src/game/json_util.cpp
   src/game/pixel_font_data.cpp
   src/game/play_area.cpp
   src/game/reward_rules.cpp
+  src/game/skill_catalog.cpp
+  src/game/progression.cpp
   src/game/shot_simulation.cpp
   src/game/tee_box.cpp
   src/game/sky_clock.cpp

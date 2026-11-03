@@ -175,6 +175,10 @@ const char* gpu_profile_stage_label(const gpu_profile_stage stage) {
         return "SKY";
     case gpu_profile_stage::weather:
         return "WTR";
+    case gpu_profile_stage::shafts:
+        return "SHF";
+    case gpu_profile_stage::lamp_shadows:
+        return "LMAP";
     case gpu_profile_stage::eyepiece:
         return "EYE";
     case gpu_profile_stage::zoom:
@@ -241,10 +245,11 @@ std::vector<std::string> format_profile_overlay_lines(const frame_profile& profi
                     " TREE " + std::string(profile.trees_visible ? "ON" : "OFF"));
 
     if (profile.gpu_timers_available) {
-        lines.push_back("GPU " + gpu(gpu_profile_stage::shadow_map) + " " + gpu(gpu_profile_stage::terrain) + " " +
-                        gpu(gpu_profile_stage::shadows));
+        lines.push_back("GPU " + gpu(gpu_profile_stage::shadow_map) + " " + gpu(gpu_profile_stage::lamp_shadows) + " " +
+                        gpu(gpu_profile_stage::terrain) + " " + gpu(gpu_profile_stage::shadows));
         lines.push_back("GPU " + gpu(gpu_profile_stage::trees) + " " + gpu(gpu_profile_stage::props) + " " +
-                        gpu(gpu_profile_stage::sky) + " " + gpu(gpu_profile_stage::weather));
+                        gpu(gpu_profile_stage::sky) + " " + gpu(gpu_profile_stage::weather) + " " +
+                        gpu(gpu_profile_stage::shafts));
         lines.push_back("GPU " + gpu(gpu_profile_stage::bloom) + " " + gpu(gpu_profile_stage::smear) + " " +
                         gpu(gpu_profile_stage::camcorder) + " " +
                         gpu(gpu_profile_stage::eyepiece));

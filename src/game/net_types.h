@@ -7,8 +7,11 @@
 #include "game/bag_place.h"
 #include "game/effects.h"
 #include "game/golfer.h"
+#include "game/golf_cart.h"
 #include "game/loadout.h"
+#include "game/movement_step.h"
 #include "game/save_data.h"
+#include "game/sent_setup.h"
 #include "game/shot_simulation.h"
 #include "physics/cart_dynamics.h"
 #include "physics/vector_math.h"
@@ -60,6 +63,9 @@ struct net_motion {
     // Not sent: getting on or off a cart road changes the intent, so the
     // server judges each stretch's road XP on one kind of ground.
     bool on_road = false;
+    double client_time = 0.0;  // monotonic motion id, echoed by the server
+    sent_setup setup;          // at_ball: the setup they stand to; else none
+    bool crouched = false;     // on foot: crouched reading the green (game/green_read.h)
 };
 
 // Where `motion` carries a player after `seconds` at its speed and turn
@@ -89,12 +95,14 @@ enum class net_command_type {
     give_up_hole,
     board_cart,
     leave_cart,
-    overturn_cart,
     right_cart,
     set_flag,
     place_bag,
     take_club,
-    set_golfer
+    set_golfer,
+    ride_motion,
+    take_wheel,
+    leave_wheel
 };
 
 // The server's reducers that net_commands call, by name: a refusal
@@ -109,19 +117,44 @@ inline constexpr const char* reducer_give_up_hole = "give_up_hole";
 inline constexpr const char* reducer_create_group = "create_group";
 inline constexpr const char* reducer_join_group = "join_group";
 inline constexpr const char* reducer_leave_group = "leave_group";
+inline constexpr const char* reducer_take_wheel = "take_wheel";
+inline constexpr const char* reducer_leave_wheel = "leave_wheel";
 inline constexpr const char* reducer_board_cart = "board_cart";
 inline constexpr const char* reducer_leave_cart = "leave_cart";
-inline constexpr const char* reducer_overturn_cart = "overturn_cart";
 inline constexpr const char* reducer_right_cart = "right_cart";
 inline constexpr const char* reducer_set_flag = "set_flag";
 inline constexpr const char* reducer_place_bag = "place_bag";
 inline constexpr const char* reducer_take_club = "take_club";
 inline constexpr const char* reducer_set_golfer = "set_golfer";
+inline constexpr const char* reducer_update_ride = "update_ride";
+
+// A golfer as their player row has them (set_golfer): their hand, natural
+// shape (natural_shape_unset until picked) and favourite colour (the
+// favourite_colour setting's value: 0 picks one by account, game/gear_paint.h).
+struct golfer_row {
+    handedness hand = handedness::right;
+    std::uint8_t natural = natural_shape_unset;
+    std::uint8_t colour = 0;
+};
+inline bool operator==(const golfer_row& a, const golfer_row& b) {
+    return a.hand == b.hand && a.natural == b.natural && a.colour == b.colour;
+}
+inline bool operator!=(const golfer_row& a, const golfer_row& b) {
+    return !(a == b);
+}
 
 // One outbound intent. Only the fields named for its type are meaningful.
 struct net_command {
     net_command_type type = net_command_type::motion;
-    net_motion motion;           // motion
+    // motion: the fixed steps taken since the last (first_step on, the first
+    // on foot from `start`), and where they leave me (`motion`).
+    std::vector<move_run> runs;
+    std::uint64_t first_step = 0;
+    glm::vec3 start{0.0f};
+    std::uint64_t last_step = 0;  // local only: my last fixed step at this motion
+    glm::vec3 placed{0.0f};       // local only: predicted_motion::placed
+    std::optional<cart_state> cart_prediction;  // local only: the state when this motion was queued
+    net_motion motion;           // motion; ride_motion: my cart's driver's seat as I drive it
     shot_setup shot;             // take_shot
     int stroke = 0;              // take_shot: the stroke this shot is, from 1
     std::vector<int> flags_out;  // take_shot: the holes whose flag I have out
@@ -129,14 +162,12 @@ struct net_command {
     bool flag_out = false;       // set_flag
     bag_place bag;               // place_bag: where to
     std::string club_id;         // take_club
-    handedness hand = handedness::right;  // set_golfer
-    std::uint8_t natural = natural_shape_unset;  // set_golfer
+    golfer_row golfer;           // set_golfer
     bool give_up = false;        // tee_up: giving up the hole my ball is in play on
     std::string collectible_id;  // claim_collectible
     std::string item_id;         // use_item
     std::uint64_t group_id = 0;  // join_group
     std::uint64_t cart_owner = 0;  // board_cart: whose cart's passenger seat; right_cart: whose cart
-    cart_condition overturned_to = cart_condition::upright;  // overturn_cart: on which side, or sunk
 };
 
 // Where the connection to the server is.
@@ -154,7 +185,7 @@ enum class net_status {
 // only on a server with the same, else asks for an update
 // (net_failure_outdated_game). Bump it with every change to the module's
 // tables, views or reducers; the server_protocol view itself never changes.
-inline constexpr std::uint32_t protocol_version = 7;
+inline constexpr std::uint32_t protocol_version = 19;
 
 // The failure ids the bridge and the client give (src/net/stdb_bridge.h,
 // net_client), besides the server's (server_errors.h). One per line: a test
@@ -171,6 +202,7 @@ inline constexpr const char* net_failure_connection_lost = "connection_lost";
 inline constexpr const char* net_failure_subscription_failed = "subscription_failed";
 inline constexpr const char* net_failure_request_failed = "request_failed";
 inline constexpr const char* net_failure_outdated_game = "outdated_game";
+inline constexpr const char* net_failure_content_mismatch = "content_mismatch";
 
 // A reducer the server refused, with its server_errors.h id.
 struct reducer_failure {
@@ -207,9 +239,11 @@ inline float server_seconds_between(const std::int64_t earlier, const std::int64
 // avatar_motion rows.
 struct room_player {
     std::string name;
-    // As a golfer (their player row): their hand and natural shape, unset until picked.
+    // As a golfer (their player row): their hand, natural shape (unset
+    // until picked) and favourite colour.
     handedness hand = handedness::right;
     std::uint8_t natural_shape = natural_shape_unset;
+    std::uint8_t favourite_colour = 0;
     std::uint64_t group_id = 0;  // 0: none
     std::vector<int> round_strokes;    // per hole this round, 0: not played
     // Where the server last accepted them, and when (server time).
@@ -260,12 +294,23 @@ struct room_bag {
 
 // A player's golf cart in my room (a golf_cart row), mine included: where
 // it was parked or last driven (game/golf_cart.h cart_pose), and who rides
-// in its passenger seat.
+// in either seat, and which motion placed it.
 struct room_cart {
     glm::vec3 position{0.0f};
     float yaw = 0.0f;
     std::uint64_t passenger = 0;  // 0: nobody
     cart_condition condition = cart_condition::upright;
+    std::uint64_t driver = 0;
+    double motion_id = 0.0;
+};
+
+// The cart I ride in as its driver drives it, for me alone (my ride_motion
+// row): their motion at its wheel, sent far more often than their room
+// motion, and when the server had it.
+struct room_ride {
+    std::uint64_t owner = 0;
+    net_motion motion;
+    std::int64_t motion_at = 0;
 };
 
 // A golf_cart row's condition as sent (cart_condition's number), or nullopt
@@ -290,6 +335,7 @@ struct online_view {
     std::uint64_t account_id = 0;  // 0 until my account arrives
     std::string display_name;      // empty until claimed
     std::optional<online_room> room;
+    bool room_ready = false;  // the current room subscription has applied
     // Everyone in my room by account id, me included; their balls; how many
     // players each group has; their carts.
     std::map<std::uint64_t, room_player> players;
@@ -298,6 +344,7 @@ struct online_view {
     std::map<std::uint64_t, room_cart> carts;  // by owner
     std::map<std::uint64_t, loadout> loadouts;  // by account, as their player_loadout rows have it
     std::map<std::uint64_t, room_bag> bags;     // by account
+    std::optional<room_ride> ride;              // riding in another's cart: its driver's ride_motion to me
     std::vector<int> flags_out;                 // the holes whose flag is out in my room
     // Shots, others' item uses and refused gameplay reducers that arrived
     // and the game has not taken yet, oldest first.

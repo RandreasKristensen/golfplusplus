@@ -17,20 +17,26 @@ data is OpenStreetMap's, under the ODbL.
 
 Needs CMake 3.25+, Ninja, SDL2, SDL2_mixer, OpenGL and GLM, and Rust for
 online play (the build compiles its client bridge with cargo; with MinGW, add
-the `x86_64-pc-windows-gnu` target). `-DGOLFPP_NET=OFF` builds without it,
-offline only.
+the `x86_64-pc-windows-gnu` target; on Linux, OpenSSL's and D-Bus's
+development files). `-DGOLFPP_NET=OFF` builds without it, offline only. On
+macOS and Linux, `tooling/release/build_deps.sh build/deps` builds SDL2,
+SDL2_mixer and GLM; pass `-DCMAKE_PREFIX_PATH=$PWD/build/deps` to the
+configure.
 
 ```bash
 cmake --preset release && cmake --build build/release && ./build/release/golf++
 cmake --preset test && cmake --build build/test && ./build/test/golf++-tests
 ```
 
+On macOS the game is `build/release/golf++.app`.
+
 On Windows, `.\tooling\gb -r` builds the release preset and launches it, and
 `.\tooling\gb -m` starts a local server and two clients on it for testing
 online play ([tooling/README.md](tooling/README.md)). The server itself builds
 with the SpacetimeDB CLI and the Emscripten SDK ([server/README.md](server/README.md)).
 `.\tooling\release\build_release.ps1` builds the Windows installer players
-download and the server package owners run their own server from
+download and the server package owners run their own server from; GitHub
+Actions builds the macOS .dmg and the Linux .tar.gz
 ([tooling/README.md](tooling/README.md), [server/hosting.md](server/hosting.md)).
 
 `golf++-tests <text>` runs only the tests whose name contains `<text>`.

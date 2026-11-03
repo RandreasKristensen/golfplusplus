@@ -4,6 +4,7 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
+use super::skill_level_entry_type::SkillLevelEntry;
 use super::snapshot_row_entry_type::SnapshotRowEntry;
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
@@ -20,9 +21,11 @@ pub struct ShotEventRow {
     pub face_open: f32,
     pub ball_position: f32,
     pub backswing: f32,
+    pub strike_timing: f32,
     pub hand: u8,
     pub natural_shape: u8,
     pub spread_scale: f32,
+    pub levels: Vec<SkillLevelEntry>,
     pub club_id: String,
     pub shot_at: i64,
     pub seed: u64,
@@ -53,9 +56,11 @@ pub struct ShotEventRowCols {
     pub face_open: __sdk::__query_builder::Col<ShotEventRow, f32>,
     pub ball_position: __sdk::__query_builder::Col<ShotEventRow, f32>,
     pub backswing: __sdk::__query_builder::Col<ShotEventRow, f32>,
+    pub strike_timing: __sdk::__query_builder::Col<ShotEventRow, f32>,
     pub hand: __sdk::__query_builder::Col<ShotEventRow, u8>,
     pub natural_shape: __sdk::__query_builder::Col<ShotEventRow, u8>,
     pub spread_scale: __sdk::__query_builder::Col<ShotEventRow, f32>,
+    pub levels: __sdk::__query_builder::Col<ShotEventRow, Vec<SkillLevelEntry>>,
     pub club_id: __sdk::__query_builder::Col<ShotEventRow, String>,
     pub shot_at: __sdk::__query_builder::Col<ShotEventRow, i64>,
     pub seed: __sdk::__query_builder::Col<ShotEventRow, u64>,
@@ -82,9 +87,11 @@ impl __sdk::__query_builder::HasCols for ShotEventRow {
             face_open: __sdk::__query_builder::Col::new(table_name, "face_open"),
             ball_position: __sdk::__query_builder::Col::new(table_name, "ball_position"),
             backswing: __sdk::__query_builder::Col::new(table_name, "backswing"),
+            strike_timing: __sdk::__query_builder::Col::new(table_name, "strike_timing"),
             hand: __sdk::__query_builder::Col::new(table_name, "hand"),
             natural_shape: __sdk::__query_builder::Col::new(table_name, "natural_shape"),
             spread_scale: __sdk::__query_builder::Col::new(table_name, "spread_scale"),
+            levels: __sdk::__query_builder::Col::new(table_name, "levels"),
             club_id: __sdk::__query_builder::Col::new(table_name, "club_id"),
             shot_at: __sdk::__query_builder::Col::new(table_name, "shot_at"),
             seed: __sdk::__query_builder::Col::new(table_name, "seed"),

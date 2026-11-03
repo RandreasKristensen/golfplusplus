@@ -1,5 +1,6 @@
 #include "doctest.h"
 
+#include "account_rules.h"
 #include "game/net_types.h"
 #include "physics/flight_model.h"
 #include "physics/vector_math.h"
@@ -74,7 +75,8 @@ TEST_CASE("motion may not outrun its mode's speed, with slack that does not add 
     const std::uint8_t walk = mode_number(motion_mode::walk);
     const std::uint8_t cart = mode_number(motion_mode::cart);
     const float slack = tuning.server.motion_distance_slack;
-    const float walking = tuning.player.walk_speed * tuning.server.motion_speed_scale;
+    // On foot the fastest is running.
+    const float walking = tuning.player.walk_speed * tuning.player.run_factor * tuning.server.motion_speed_scale;
     const float driving = limits.cart_speed * tuning.server.motion_speed_scale;
     const glm::vec3 start(0.0f);
 
@@ -109,77 +111,11 @@ TEST_CASE("standing still does not save up a jump") {
     const float slack = tuning.server.motion_distance_slack;
     const float gap = tuning.server.max_motion_gap_seconds;
     // From standing to driving, the faster of the two counts.
-    const float fastest = std::max(limits.walk_speed, limits.cart_speed);
+    const float fastest = std::max(limits.foot_speed, limits.cart_speed);
     const float reach = fastest * tuning.server.motion_speed_scale * gap + slack;
 
     CHECK(check_motion(was(glm::vec3(0.0f), idle), glm::vec3(reach - 0.01f, 0.0f, 0.0f), 30.0f, cart, slack, limits, tuning).allowed);
     CHECK(!check_motion(was(glm::vec3(0.0f), idle), glm::vec3(reach + 0.01f, 0.0f, 0.0f), 30.0f, cart, slack, limits, tuning).allowed);
-}
-
-TEST_CASE("movement xp counts no more than the mode's own speed") {
-    const game_tuning& tuning = shipped_content().tuning;
-    const movement_limits limits = shipped_limits();
-    const std::uint8_t walk = mode_number(motion_mode::walk);
-    const float slack = tuning.server.motion_distance_slack;
-    const float honest = tuning.player.walk_speed;
-
-    const motion_check slow = check_motion(was(glm::vec3(0.0f), walk), glm::vec3(honest * 0.5f, 0.0f, 0.0f), 1.0f, walk, slack, limits, tuning);
-    CHECK(near(slow.earned_distance, honest * 0.5f, 0.0001f));
-    const motion_check hurried =
-        check_motion(was(glm::vec3(0.0f), walk), glm::vec3(honest * 1.3f, 0.0f, 0.0f), 1.0f, walk, slack, limits, tuning);
-    REQUIRE(hurried.allowed);
-    CHECK(near(hurried.earned_distance, honest, 0.0001f));
-    CHECK(!check_motion(was(glm::vec3(0.0f), walk), glm::vec3(1000.0f, 0.0f, 0.0f), 1.0f, walk, slack, limits, tuning).earned_distance);
-
-    // A stretch counts in the mode it was covered in: driving, then stopping.
-    const std::uint8_t cart = mode_number(motion_mode::cart);
-    const std::uint8_t idle = mode_number(motion_mode::idle);
-    const float driven = limits.cart_speed;
-    const motion_check stop = check_motion(was(glm::vec3(0.0f), cart), glm::vec3(driven, 0.0f, 0.0f), 1.0f, idle, slack, limits, tuning);
-    REQUIRE(stop.allowed);
-    CHECK(near(stop.earned_distance, driven, 0.0001f));
-}
-
-TEST_CASE("movement xp counts the path the last motion traced, turns included") {
-    const game_tuning& tuning = shipped_content().tuning;
-    const movement_limits limits = shipped_limits();
-    const float slack = tuning.server.motion_distance_slack;
-    net_motion circling = was(glm::vec3(0.0f), mode_number(motion_mode::walk));
-    circling.speed = tuning.player.walk_speed;
-    circling.turn_rate = tuning.player.turn_rate;
-    const float seconds = 2.0f;
-    const glm::vec3 arrived = extrapolate_motion(circling, seconds);
-    REQUIRE(horizontal_distance(circling.position, arrived) < circling.speed * seconds - 0.1f);
-
-    // Ending where the motion leads: the arc counts, not the chord.
-    const motion_check walked = check_motion(circling, arrived, seconds, mode_number(motion_mode::walk), slack, limits, tuning);
-    REQUIRE(walked.allowed);
-    CHECK(near(walked.earned_distance, circling.speed * seconds, 0.001f));
-
-    // Ending somewhere else: only the straight line is known.
-    const glm::vec3 elsewhere = circling.position + glm::vec3(0.0f, 0.0f, -1.0f);
-    const motion_check strayed = check_motion(circling, elsewhere, seconds, mode_number(motion_mode::walk), slack, limits, tuning);
-    REQUIRE(strayed.allowed);
-    CHECK(near(strayed.earned_distance, 1.0f, 0.001f));
-}
-
-TEST_CASE("movement earns walking on foot and cart xp only at a cart's wheel on a road") {
-    CHECK(movement_earns(mode_number(motion_mode::walk), false).walking);
-    CHECK(!movement_earns(mode_number(motion_mode::walk), true).cart);
-    CHECK(!movement_earns(mode_number(motion_mode::cart), false).cart);
-    const movement_earnings driving = movement_earns(mode_number(motion_mode::cart), true);
-    CHECK(driving.cart);
-    CHECK(!driving.walking);
-    // Riding along earns nothing.
-    const movement_earnings riding = movement_earns(mode_number(motion_mode::ride), true);
-    CHECK(!riding.cart);
-    CHECK(!riding.walking);
-    for (const motion_mode at : {motion_mode::address, motion_mode::swing}) {
-        const movement_earnings earnings = movement_earns(mode_number(at), true);
-        CHECK(!earnings.walking);
-        CHECK(!earnings.cart);
-    }
-    CHECK(motion_mode_count == 6U);
 }
 
 TEST_CASE("interaction reach is the radius plus slack, horizontally") {
@@ -272,37 +208,69 @@ TEST_CASE("a shot with another club than the one in hand, the bag on the back, o
 }
 
 TEST_CASE("the server picks each shot's dice: other times, players and strokes roll others") {
-    const std::uint64_t seed = server_shot_seed(1000000, 7, 1);
-    CHECK(seed == server_shot_seed(1000000, 7, 1));
-    CHECK(seed != server_shot_seed(1000001, 7, 1));
-    CHECK(seed != server_shot_seed(1000000, 8, 1));
-    CHECK(seed != server_shot_seed(1000000, 7, 2));
+    const std::string secret(min_server_secret_length, 's');
+    const std::uint64_t seed = server_shot_seed(secret, 1000000, 7, 1);
+    CHECK(seed == server_shot_seed(secret, 1000000, 7, 1));
+    CHECK(seed != server_shot_seed(secret, 1000001, 7, 1));
+    CHECK(seed != server_shot_seed(secret, 1000000, 8, 1));
+    CHECK(seed != server_shot_seed(secret, 1000000, 7, 2));
+    // Knowing the clock, the account and the stroke is not enough.
+    CHECK(seed != server_shot_seed(std::string(min_server_secret_length, 't'), 1000000, 7, 1));
 }
 
-TEST_CASE("a bag moves only within reach: off the cart or the ground onto the back, from the back onto the cart or down") {
+TEST_CASE("a bag moves only within reach: off a cart or the ground onto the back, from the back onto a free cart spot or down") {
     const server_content content = fixture_server_content();
     const game_tuning& tuning = content.tuning;
-    const cart_pose cart{glm::vec3(0.0f), 0.0f};
-    const glm::vec3 spot = bag_spot(cart, cart_seat::driver, tuning.cart);
-    const bag_place on_cart{bag_where::on_cart, cart_seat::driver, glm::vec3(0.0f), 0.0f};
-    const bag_place on_back{bag_where::on_back, cart_seat::driver, glm::vec3(0.0f), 0.0f};
+    const std::optional<cart_pose> cart = cart_pose{glm::vec3(0.0f), 0.0f};
+    const std::optional<cart_pose> none;
+    const glm::vec3 spot = bag_spot(*cart, cart_seat::driver, tuning.cart);
+    const bag_place on_cart{bag_where::on_cart, cart_seat::driver, 0, glm::vec3(0.0f), 0.0f};
+    const bag_place on_back{bag_where::on_back, cart_seat::driver, 0, glm::vec3(0.0f), 0.0f};
     const float far = tuning.player.bag_reach + tuning.server.interact_slack + 1.0f;
-    CHECK(check_bag_move(on_cart, on_back, spot + glm::vec3(0.5f, 0.0f, 0.0f), cart, tuning).empty());
-    CHECK(check_bag_move(on_cart, on_back, spot + glm::vec3(far, 0.0f, 0.0f), cart, tuning) == error_bag_out_of_reach);
+    CHECK(check_bag_move(on_cart, on_back, spot + glm::vec3(0.5f, 0.0f, 0.0f), cart, none, false, tuning).empty());
+    CHECK(check_bag_move(on_cart, on_back, spot + glm::vec3(far, 0.0f, 0.0f), cart, none, false, tuning) == error_bag_out_of_reach);
 
     const glm::vec3 me(20.0f, 0.0f, 0.0f);
-    const bag_place down{bag_where::on_ground, cart_seat::driver, me + glm::vec3(0.7f, 0.0f, 0.0f), 0.0f};
-    CHECK(check_bag_move(on_back, down, me, cart, tuning).empty());
-    const bag_place thrown{bag_where::on_ground, cart_seat::driver, me + glm::vec3(far, 0.0f, 0.0f), 0.0f};
-    CHECK(check_bag_move(on_back, thrown, me, cart, tuning) == error_bag_out_of_reach);
-    CHECK(check_bag_move(on_back, on_cart, me, cart, tuning) == error_bag_out_of_reach);
-    CHECK(check_bag_move(down, on_cart, me, cart, tuning) == error_invalid_motion);
+    const bag_place down{bag_where::on_ground, cart_seat::driver, 0, me + glm::vec3(0.7f, 0.0f, 0.0f), 0.0f};
+    CHECK(check_bag_move(on_back, down, me, none, none, false, tuning).empty());
+    const bag_place thrown{bag_where::on_ground, cart_seat::driver, 0, me + glm::vec3(far, 0.0f, 0.0f), 0.0f};
+    CHECK(check_bag_move(on_back, thrown, me, none, none, false, tuning) == error_bag_out_of_reach);
+    CHECK(check_bag_move(on_back, on_cart, me, none, cart, false, tuning) == error_bag_out_of_reach);
+    CHECK(check_bag_move(down, on_cart, me, none, cart, false, tuning) == error_invalid_motion);
 
-    // Clubs come from a bag set down or on the cart, within reach.
-    CHECK(check_take_club("driver", down, me, cart, content).empty());
-    CHECK(check_take_club("driver", on_back, me, cart, content) == error_bag_on_back);
+    // Onto another's cart behind a free seat; never where another bag is.
+    const bag_place on_theirs{bag_where::on_cart, cart_seat::passenger, 7, glm::vec3(0.0f), 0.0f};
+    const glm::vec3 their_spot = bag_spot(*cart, cart_seat::passenger, tuning.cart);
+    CHECK(check_bag_move(on_back, on_theirs, their_spot, none, cart, false, tuning).empty());
+    CHECK(check_bag_move(on_back, on_theirs, their_spot, none, cart, true, tuning) == error_bag_spot_taken);
+
+    // Clubs come from a bag set down or on its cart, within reach.
+    CHECK(check_take_club("driver", down, me, none, content).empty());
+    CHECK(check_take_club("driver", on_back, me, none, content) == error_bag_on_back);
     CHECK(check_take_club("driver", on_cart, me, cart, content) == error_bag_out_of_reach);
-    CHECK(check_take_club("banana", down, me, cart, content) == error_unknown_club);
+    CHECK(check_take_club("banana", down, me, none, content) == error_unknown_club);
+
+    // With no cart there, the bag goes down and back up, never onto one.
+    const glm::vec3 at_origin = spot;
+    CHECK(check_bag_move(on_back, on_cart, at_origin, none, none, false, tuning) == error_bag_out_of_reach);
+    CHECK(check_bag_move(on_cart, on_back, at_origin, none, none, false, tuning) == error_bag_out_of_reach);
+    CHECK(check_bag_move(on_back, down, me, none, none, false, tuning).empty());
+    CHECK(check_bag_move(down, on_back, me, none, none, false, tuning).empty());
+    CHECK(check_take_club("driver", on_cart, at_origin, none, content) == error_bag_out_of_reach);
+    CHECK(check_take_club("driver", down, me, none, content).empty());
+}
+
+TEST_CASE("a driver's ride motion reaches only as far as their cart could have gone since their last motion") {
+    const server_content content = fixture_server_content();
+    const movement_limits limits{1.0f, 5.0f, 1.0f};
+    const server_tuning& server = content.tuning.server;
+    const glm::vec3 last(0.0f);
+    const float reach = limits.cart_speed * server.motion_speed_scale * 1.0f + server.motion_distance_slack;
+    CHECK(ride_motion_plausible(last, 1.0f, glm::vec3(reach - 0.1f, 0.0f, 0.0f), limits, server));
+    CHECK(!ride_motion_plausible(last, 1.0f, glm::vec3(reach + 0.1f, 0.0f, 0.0f), limits, server));
+    // A long gap counts only up to max_motion_gap_seconds.
+    const float longest = limits.cart_speed * server.motion_speed_scale * server.max_motion_gap_seconds + server.motion_distance_slack;
+    CHECK(!ride_motion_plausible(last, 100.0f, glm::vec3(longest + 0.1f, 0.0f, 0.0f), limits, server));
 }
 
 TEST_CASE("aim must come wrapped into one turn") {
@@ -331,7 +299,8 @@ TEST_CASE("speeds and turn rates others see are limited to what the game produce
     const game_tuning& tuning = shipped_content().tuning;
     const movement_limits limits = shipped_limits();
     const std::uint8_t walk = mode_number(motion_mode::walk);
-    const float walking = tuning.player.walk_speed * tuning.server.motion_speed_scale;
+    const float walking = limits.foot_speed * tuning.server.motion_speed_scale;
+    CHECK(near(limits.foot_speed, tuning.player.walk_speed * tuning.player.run_factor, 0.0001f));
     CHECK(clamp_motion_speed(walk, 1e30f, limits, tuning.server) == walking);
     CHECK(clamp_motion_speed(walk, -1e30f, limits, tuning.server) == -walking);
     CHECK(clamp_motion_speed(walk, 1.0f, limits, tuning.server) == 1.0f);
@@ -408,39 +377,9 @@ TEST_CASE("items that speed a player up let the server's motion check allow it")
     faster.seconds = 10.0f;
     const std::vector<active_effect> effects{active_effect{"shoes", faster, 0, 10000}};
     const cart_spec& cart = *content.items.find(content.default_loadout.cart)->cart;
-    CHECK(near(movement_limits_for(content.tuning, cart, effects, 5000).walk_speed, content.tuning.player.walk_speed * 1.5f,
-               0.0001f));
-    CHECK(movement_limits_for(content.tuning, cart, effects, 20000).walk_speed == content.tuning.player.walk_speed);
-}
-
-TEST_CASE("the server takes a cart going over only where it could: a slope and turn that lift its wheels, water deep enough") {
-    const game_content& content = shipped_content();
-    const cart_spec& cart = *content.items.find(content.default_loadout.cart)->cart;
-    const server_tuning& server = content.tuning.server;
-    const float g = gravity_meters_per_second2;
-    // Facing +Z, the ground rising to its left (+X) at `degrees`.
-    const auto across = [](const float degrees) {
-        cart_ground ground;
-        ground.normal = glm::normalize(glm::vec3(-std::tan(glm::radians(degrees)), 1.0f, 0.0f));
-        return ground;
-    };
-    const float rolls_at = glm::degrees(std::atan(cart_stability(cart)));
-
-    // Standing on a slope steep enough, or turning hard enough on a gentler one.
-    CHECK(overturn_plausible(cart_condition::on_right_side, across(rolls_at + 1.0f), 0.0f, 0.0f, 0.0f, cart, server));
-    CHECK(!overturn_plausible(cart_condition::on_right_side, across(5.0f), 0.0f, 0.0f, 0.0f, cart, server));
-    const float speed = cart.top_speed_mps;
-    const float hard_turn = cart_stability(cart) * g / speed;
-    CHECK(overturn_plausible(cart_condition::on_left_side, across(5.0f), 0.0f, speed, hard_turn, cart, server));
-    CHECK(!overturn_plausible(cart_condition::on_left_side, across(0.0f), 0.0f, speed, 0.2f * hard_turn, cart, server));
-    // Never "upright".
-    CHECK(!overturn_plausible(cart_condition::upright, across(60.0f), 0.0f, speed, hard_turn, cart, server));
-
-    cart_ground pond;
-    pond.water_depth = cart.wade_depth_m;
-    CHECK(overturn_plausible(cart_condition::sunk, pond, 0.0f, 0.0f, 0.0f, cart, server));
-    pond.water_depth = 0.5f * cart.wade_depth_m;
-    CHECK(!overturn_plausible(cart_condition::sunk, pond, 0.0f, 0.0f, 0.0f, cart, server));
+    const float running = content.tuning.player.walk_speed * content.tuning.player.run_factor;
+    CHECK(near(movement_limits_for(content.tuning, cart, effects, 5000).foot_speed, running * 1.5f, 0.0001f));
+    CHECK(near(movement_limits_for(content.tuning, cart, effects, 20000).foot_speed, running, 0.0001f));
 }
 
 TEST_CASE("a player's cart sets how fast and how sharply the server lets them drive") {

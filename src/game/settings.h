@@ -28,6 +28,8 @@ inline constexpr const char* setting_tape_wear = "tape_wear";    // from a fresh
 inline constexpr const char* setting_datestamp = "datestamp";    // 0 off, 1 the camcorder's date and time in the corner
 inline constexpr const char* setting_interact_prompt = "interact_prompt";  // 0 off, 1 the F key shown when F would act
 inline constexpr const char* setting_handedness = "handedness";  // 0 right-handed, 1 left-handed
+// 0 any, else the paint my bag and cart wear (game/gear_paint.h).
+inline constexpr const char* setting_favourite_colour = "favourite_colour";
 // A golfer setting: game/golfer.h natural_shape by its index.
 inline constexpr const char* setting_natural_shape = "natural_shape";
 

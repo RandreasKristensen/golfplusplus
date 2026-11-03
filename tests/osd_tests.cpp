@@ -44,53 +44,45 @@ game_state addressing(const handedness hand, const float face_degrees) {
 constexpr float aspects[] = {4.0f / 3.0f, 16.0f / 9.0f, 21.0f / 9.0f};
 }
 
-TEST_CASE("in the target view the landing bracket and the rest tick are in view where the simulated ball lands and stops") {
+TEST_CASE("in the target view the start line is in view from the ball, fading out where it ends") {
     for (const handedness hand : {handedness::right, handedness::left}) {
         const game_state state = addressing(hand, 0.0f);
         const render_data data = frame_for(state);
-        REQUIRE(data.osd_landing.has_value());
-        REQUIRE(data.osd_rest.has_value());
+        REQUIRE(data.osd_line.size() > 2U);
         for (const float aspect : aspects) {
             const glm::mat4 view_proj = view_proj_of(data, aspect);
-            for (const glm::vec3& point : {*data.osd_landing, *data.osd_rest}) {
-                const std::optional<glm::vec2> on_screen = project_to_screen(view_proj, point);
-                REQUIRE(on_screen.has_value());
-                CHECK(std::abs(on_screen->x) < 0.9f);
-                CHECK(std::abs(on_screen->y) < 0.9f);
-            }
-            // The bracket stands over the landing: drawn pixels just above it on screen.
+            // The ball is just under the picture; where the line ends is in it.
+            const std::optional<glm::vec2> end = project_to_screen(view_proj, data.osd_line.back());
+            REQUIRE(end.has_value());
+            CHECK(std::abs(end->x) < 0.9f);
+            CHECK(std::abs(end->y) < 0.9f);
             overlay_batch batch;
             batch.grid = overlay_grid{320, 240};
             draw_shot_preview(batch, data, view_proj);
-            CHECK(!batch.vertices.empty());
+            REQUIRE(batch.vertices.size() >= 2U * overlay_vertices_per_quad);
+            // Plain where it comes into the picture, nearly gone at its end.
+            const float first = batch.vertices.front().color.a;
+            const float last = batch.vertices.back().color.a;
+            CHECK(first > 0.5f);
+            CHECK(last < 0.2f);
         }
     }
 }
 
-TEST_CASE("a fade bends the flight line away from the golfer's lead side, a draw towards it, for either hand") {
+TEST_CASE("a fade starts the line away from the golfer's lead side, a draw towards it, for either hand") {
     for (const handedness hand : {handedness::right, handedness::left}) {
         const game_state stock_state = addressing(hand, 0.0f);
         const render_data stock = frame_for(stock_state);
         const render_data fade = frame_for(addressing(hand, 4.0f));
         const render_data draw = frame_for(addressing(hand, -4.0f));
         const glm::mat4 view_proj = view_proj_of(stock, 16.0f / 9.0f);
-        const float stock_x = project_to_screen(view_proj, *stock.osd_landing)->x;
-        const float fade_x = project_to_screen(view_proj, *fade.osd_landing)->x;
-        const float draw_x = project_to_screen(view_proj, *draw.osd_landing)->x;
+        const float stock_x = project_to_screen(view_proj, stock.osd_line.back())->x;
+        const float fade_x = project_to_screen(view_proj, fade.osd_line.back())->x;
+        const float draw_x = project_to_screen(view_proj, draw.osd_line.back())->x;
         // On screen right is the right-hander's fade side, the left-hander's draw side.
         const float fade_side = hand == handedness::right ? 1.0f : -1.0f;
         CHECK((fade_x - stock_x) * fade_side > 0.01f);
         CHECK((draw_x - stock_x) * fade_side < -0.01f);
-        // And the line bends: it leaves the stock line further and further its way.
-        const auto apart = [&](const float share) {
-            const auto at = [share](const std::vector<glm::vec3>& line) {
-                return line[static_cast<std::size_t>(share * static_cast<float>(line.size() - 1))];
-            };
-            return (project_to_screen(view_proj, at(fade.osd_line))->x - project_to_screen(view_proj, at(stock.osd_line))->x) *
-                fade_side;
-        };
-        CHECK(apart(0.5f) < apart(0.75f));
-        CHECK(apart(0.75f) < apart(1.0f));
     }
 }
 
@@ -128,12 +120,12 @@ TEST_CASE("the OSD line is whole target pixels, white over a one-pixel black edg
     CHECK(white.size() == static_cast<std::size_t>(std::round(0.8f / pixel.x)) + 1U);
 }
 
-TEST_CASE("the swing clock turns to its warning tone past 12, and a putter's has no overswing band") {
+TEST_CASE("the swing clock turns to its warning tone past 12 and with a mistimed hand, and a putter's has no overswing band") {
     const text_assets& text = shipped_text_assets();
-    const auto warning_quads = [&](const float backswing, const float backswing_max) {
+    const auto warning_quads = [&](const float backswing, const float backswing_max, const bool mistimed = false) {
         overlay_batch batch;
         batch.grid = overlay_grid{320, 240};
-        draw_swing_clock(batch, text, backswing, backswing_max);
+        draw_swing_clock(batch, text, backswing, backswing_max, std::nullopt, mistimed);
         std::size_t count = 0;
         for (std::size_t i = 0; i < batch.vertices.size(); i += overlay_vertices_per_quad) {
             const glm::vec4 color = batch.vertices[i].color;
@@ -145,6 +137,7 @@ TEST_CASE("the swing clock turns to its warning tone past 12, and a putter's has
     const std::size_t band = warning_quads(1.0f, 1.1f);
     CHECK(band > 0U);
     CHECK(warning_quads(1.1f, 1.1f) > band);
+    CHECK(warning_quads(0.8f, 1.0f, true) > 0U);
 }
 
 TEST_CASE("the OSD shows where my bag is, and the setup word over the ball") {

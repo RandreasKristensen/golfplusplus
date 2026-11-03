@@ -14,10 +14,11 @@ const std::vector<model_kind>& model_kinds() {
          {"driver_bag", "passenger_bag"},
          {}},
         // Held at its grip; its face is what it strikes with.
-        {"club", {}, {"grip", "face"}, {}, {}},
+        {"club", {}, {"grip", "face", "sole"}, {}, {}},
         // Hung at a mount by its hang point.
         {"trinket", {}, {"hang"}, {}, {}},
-        {"bag", {}, {"hang"}, {}, {}},
+        // Its mouth the top its clubs come out of.
+        {"bag", {}, {"hang", "mouth"}, {}, {}},
         // Fitted to the course by the code: colours only.
         {"tree", {"trunk", "leaves"}, {}, {}, {}},
         {"fence", {"post"}, {}, {}, {}},

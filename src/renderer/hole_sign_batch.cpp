@@ -71,6 +71,7 @@ std::vector<hole_sign_source> hole_sign_sources(const play_area& area, const std
 
 bool same_source(const hole_sign_source& a, const hole_sign_source& b) {
     return a.text.number == b.text.number && a.text.par == b.text.par && a.text.meters == b.text.meters &&
+        a.text.practice == b.text.practice &&
         a.board_center == b.board_center;
 }
 }
@@ -113,7 +114,7 @@ render_hole_signs build_render_hole_signs(const play_area& area,
     overlay_batch batch;
     for (std::size_t i = 0; i < area.signs.size() && i < texts.size(); ++i) {
         const hole_sign& sign = area.signs[i];
-        const hole_sign_labels labels = make_hole_sign_labels(text, texts[i].number, texts[i].par, texts[i].meters);
+        const hole_sign_labels labels = make_hole_sign_labels(text, texts[i].number, texts[i].par, texts[i].meters, texts[i].practice);
         clear_overlay_batch(batch);
         draw_hole_sign_face(batch, text, labels, area, sign, colors.ground);
         signs.truncated_text_count += batch.truncated_text_count;

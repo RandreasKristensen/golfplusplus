@@ -44,6 +44,16 @@ void draw_datestamp(overlay_batch& batch, const text_assets& text, const render_
     draw_burned_in(batch, text, find_text_style(text, style_datestamp), lines, datestamp_box());
 }
 
+void draw_vcr_title(overlay_batch& batch, const text_assets& text, const render_vcr& vcr) {
+    if (!vcr.title.empty()) {
+        draw_burned_in(batch, text, find_text_style(text, style_tour_title), vcr.title, rect_from_edges(-0.80f, -0.20f, 0.80f, 0.20f));
+    }
+    if (!vcr.keys.empty()) {
+        const text_style& style = with_align(find_text_style(text, style_datestamp), text_align::center);
+        draw_burned_in(batch, text, style, vcr.keys, rect_from_edges(-0.36f, -0.97f, 0.60f, -0.78f));
+    }
+}
+
 void draw_interact_prompt(overlay_batch& batch, const text_assets& text) {
     const text_style& style = with_align(find_text_style(text, style_datestamp), text_align::center);
     draw_burned_in(batch, text, style, lookup_text(text, text_controls_key_f), ui_rect{glm::vec2(0.0f, -0.32f), glm::vec2(0.10f, 0.05f)});
@@ -57,10 +67,10 @@ void draw_give_up_prompt(overlay_batch& batch, const text_assets& text, const st
     draw_burned_in(batch, text, style, label, ui_rect{glm::vec2(0.0f, -0.30f), glm::vec2(0.42f, 0.10f)});
 }
 
-void draw_address_hints(overlay_batch& batch, const text_assets& text) {
+void draw_key_hints(overlay_batch& batch, const text_assets& text, const char* hints) {
     // Between the datestamp and the swing clock.
     const text_style& style = with_align(find_text_style(text, style_datestamp), text_align::center);
-    draw_burned_in(batch, text, style, lookup_text(text, text_hud_address_hints), rect_from_edges(-0.36f, -0.97f, 0.60f, -0.78f));
+    draw_burned_in(batch, text, style, lookup_text(text, hints), rect_from_edges(-0.36f, -0.97f, 0.60f, -0.78f));
 }
 
 void draw_bag_hints(overlay_batch& batch, const text_assets& text) {

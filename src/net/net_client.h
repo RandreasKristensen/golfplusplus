@@ -7,11 +7,13 @@
 //
 // On connecting, the client first reads the server's protocol (the one-row
 // server_protocol view) and plays on only when it is the game's own
-// (protocol_version), else fails with net_failure_outdated_game and
-// disconnects. Subscriptions are otherwise only ever the caller's own rows
-// or its room's: its own views once the protocol matches, then its own rows
+// (protocol_version), then reads server_content_hash and checks the game's
+// content fingerprint. A mismatch fails and disconnects. Subscriptions are
+// otherwise only the caller's own rows or its room's: its own views once
+// both checks match, then its own rows
 // once the account is known, then the room's rows while in a room
-// (net/room_rows.h). Nothing subscribes to a whole table.
+// (net/room_rows.h). Motion comes through the server's interest views;
+// visibility changes do not replace subscriptions. Nothing subscribes to a whole table.
 //
 // Refused gameplay reducers (what net_commands send) go to the game in
 // game_state::online; the menus' own go to take_reducer_failure.
@@ -52,7 +54,8 @@ public:
     // The pages are what the browser shows after signing in, or failing to.
     static std::optional<net_client> create(const online_config& config,
                                             const std::string& page_signed_in,
-                                            const std::string& page_failed);
+                                            const std::string& page_failed,
+                                            std::uint64_t content_hash);
 
     // Signs in with the stored sign-in, else through the browser.
     void begin_login();
@@ -66,7 +69,7 @@ public:
     // What the menus ask of the server; gameplay goes through net_commands.
     // A refusal arrives as a reducer failure.
     void claim_name(const std::string& name);
-    void join_course(const std::string& course_id);
+    void join_course(const std::string& course_id, bool takes_cart);
     void leave_room();
     void create_link_code();
     void redeem_link_code(const std::string& code);
@@ -101,9 +104,14 @@ private:
         bool repeatable = false;
         int claim_count = 0;
         int claimed_at_holes_completed = -1;
+
+        bool operator==(const collected_state& other) const {
+            return collectible_id == other.collectible_id && repeatable == other.repeatable &&
+                claim_count == other.claim_count && claimed_at_holes_completed == other.claimed_at_holes_completed;
+        }
     };
 
-    explicit net_client(stdb_client* client);
+    explicit net_client(stdb_client* client, std::uint64_t content_hash);
 
     void start_login(bool silent_only);
     // Microseconds on this client's own clock.
@@ -113,8 +121,8 @@ private:
     void handle_row(const stdb_event& event, game_state& state);
     // Gives the game the progress rows changed so far, once complete.
     void deliver_progress(game_state& state);
-    // Disconnects from a server whose protocol is not the game's.
-    void refuse_server(const std::string& detail);
+    // Disconnects from incompatible rules, retaining the reason on disconnect.
+    void refuse_server(const std::string& failure, const std::string& detail, game_state& state);
     void subscribe_self();
     void subscribe_room(std::uint64_t room_id);
     // A new connection or a sign-out: its subscriptions are gone.
@@ -128,7 +136,8 @@ private:
     net_status status_ = net_status::signed_out;
     bool guest_ = false;
     std::string failure_;
-    bool outdated_ = false;  // the server's protocol is not the game's
+    bool server_refused_ = false;
+    std::uint64_t content_hash_;
     std::deque<reducer_failure> reducer_failures_;  // oldest first
     std::optional<link_code_info> link_code_;
     std::string link_result_;
@@ -137,6 +146,11 @@ private:
     std::uint64_t account_id_ = 0;  // 0 until my_account arrives
     std::uint64_t room_id_ = 0;     // 0 outside a room
     std::uint32_t protocol_subscription_ = 0;
+    std::uint32_t content_subscription_ = 0;
+    // The SDK reports a subscription applied before it delivers its rows: an
+    // empty protocol or content view is judged once the update's events are in.
+    bool protocol_applied_ = false;
+    bool content_applied_ = false;
     std::uint32_t self_subscription_ = 0;
     std::uint32_t room_subscription_ = 0;
     room_rows room_;
@@ -146,7 +160,7 @@ private:
 
     // My progress rows, keyed by row id.
     int holes_completed_ = 0;
-    std::map<std::uint64_t, std::pair<std::string, int>> skills_;
+    std::map<std::uint64_t, std::pair<std::string, std::int64_t>> skills_;
     std::map<std::uint64_t, std::string> completed_courses_;
     std::map<std::uint64_t, collected_state> collected_;
     std::map<std::uint64_t, std::string> world_flags_;

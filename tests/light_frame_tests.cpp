@@ -186,6 +186,8 @@ TEST_CASE("after dark the ball, carts' headlights and the floodlights light up, 
     CHECK(night.glow.ball > 1.0f);
     CHECK(night.glow.ember > 1.0f);
     CHECK(near(night.lighting.lamp_glow, style.floodlight.color * style.lamp_glow, 0.0001f));
+    CHECK(night.lighting.beam_near_share == style.beam_near_share);
+    CHECK(night.lighting.beam_core_meters == style.beam_core_meters);
     CHECK(std::max({night.lighting.lamp_glow.r, night.lighting.lamp_glow.g, night.lighting.lamp_glow.b}) > 1.0f);
     const std::vector<floodlight>& lamps = game.area.floodlights;
     REQUIRE(!lamps.empty());

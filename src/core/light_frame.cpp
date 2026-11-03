@@ -94,8 +94,10 @@ std::vector<render_light> night_lights(const render_data& data, const game_state
         }
     }
     for (const floodlight& lamp : game.area.floodlights) {
-        lights.push_back(
-            spot_light(lamp.lamp, lamp.aim, style.floodlight, share, style.floodlight_cone_deg, style.floodlight_soft_deg));
+        render_light light =
+            spot_light(lamp.lamp, lamp.aim, style.floodlight, share, style.floodlight_cone_deg, style.floodlight_soft_deg);
+        light.fixed_lamp = true;
+        lights.push_back(light);
     }
     return lights;
 }
@@ -191,6 +193,8 @@ void add_frame_lights(render_data& data, const game_state& game, const lighting_
     data.glow = night_glow_floors(palette.colors.glow, palette.night_lights, data.lighting.night_lights);
     const night_light_style& style = palette.night_lights;
     data.lighting.lamp_glow = style.floodlight.color * style.lamp_glow * data.lighting.night_lights;
+    data.lighting.beam_near_share = style.beam_near_share;
+    data.lighting.beam_core_meters = style.beam_core_meters;
     if (!course_started(game)) {
         return;
     }

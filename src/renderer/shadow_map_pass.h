@@ -42,6 +42,9 @@ public:
     // Binds the map to `unit` and tells `receiver` (the terrain or tee box
     // shader, in use) how to read it; with no map this frame it shades nothing.
     void bind(const shader_program& receiver, int unit) const;
+    // How much of the sun this frame's map takes away where it shades, 0
+    // with no map.
+    float strength() const { return strength_; }
 
 private:
     void draw_figures(const world_marker_batch& figures, frame_profile* profile);

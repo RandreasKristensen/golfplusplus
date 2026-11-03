@@ -60,3 +60,7 @@ cup_step cup_contact(const ball_state& in, const cup& hole, const cup_contact_tu
 bool in_cup(const ball_state& ball, const cup& hole) {
     return horizontal_distance(ball.position, hole.centre) < hole.radius && ball.position.y + ball.radius < hole.centre.y;
 }
+
+glm::vec3 cup_rest(const cup& hole, const float radius) {
+    return hole.centre - glm::vec3(0.0f, hole.depth - radius, 0.0f);
+}

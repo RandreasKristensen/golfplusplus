@@ -3,27 +3,33 @@
     {"sun_elevation_deg": -18, "sun_color": [0.00, 0.00, 0.00], "ambient_sky": [0.27, 0.30, 0.42], "ambient_ground": [0.13, 0.14, 0.20],
      "sky_zenith": [0.05, 0.07, 0.15], "sky_blend": 0.96, "haze_tint": [0.05, 0.06, 0.10],
      "horizon_glow": [0.10, 0.08, 0.20], "horizon_glow_strength": 0.0,
-     "exposure": 1.0, "white_balance": [0.90, 1.00, 0.86], "gain_noise": 0.7, "saturation": 0.65},
+     "exposure": 1.0, "white_balance": [0.90, 1.00, 0.86], "gain_noise": 0.7, "saturation": 0.65,
+     "mist_height_meters": 6, "mist_density": 0.004},
     {"sun_elevation_deg": -12, "sun_color": [0.00, 0.00, 0.00], "ambient_sky": [0.29, 0.32, 0.46], "ambient_ground": [0.14, 0.15, 0.22],
      "sky_zenith": [0.06, 0.08, 0.20], "sky_blend": 0.95, "haze_tint": [0.06, 0.07, 0.13],
      "horizon_glow": [0.22, 0.14, 0.34], "horizon_glow_strength": 0.2,
-     "exposure": 0.95, "white_balance": [0.92, 1.00, 0.89], "gain_noise": 0.6, "saturation": 0.7},
+     "exposure": 0.95, "white_balance": [0.92, 1.00, 0.89], "gain_noise": 0.6, "saturation": 0.7,
+     "mist_height_meters": 6, "mist_density": 0.005},
     {"sun_elevation_deg": -6, "sun_color": [0.04, 0.02, 0.05], "ambient_sky": [0.32, 0.35, 0.50], "ambient_ground": [0.17, 0.18, 0.24],
      "sky_zenith": [0.10, 0.14, 0.36], "sky_blend": 0.85, "haze_tint": [0.36, 0.40, 0.62],
      "horizon_glow": [0.72, 0.34, 0.30], "horizon_glow_strength": 0.5,
-     "exposure": 0.9, "white_balance": [0.96, 1.00, 0.95], "gain_noise": 0.35, "saturation": 0.8},
+     "exposure": 0.9, "white_balance": [0.96, 1.00, 0.95], "gain_noise": 0.35, "saturation": 0.8,
+     "mist_height_meters": 6, "mist_density": 0.008},
     {"sun_elevation_deg": 0, "sun_color": [0.44, 0.22, 0.10], "ambient_sky": [0.46, 0.42, 0.50], "ambient_ground": [0.30, 0.26, 0.24],
      "sky_zenith": [0.30, 0.36, 0.62], "sky_blend": 0.8, "haze_tint": [1.00, 0.66, 0.46],
      "horizon_glow": [1.00, 0.48, 0.18], "horizon_glow_strength": 0.85,
-     "exposure": 0.8, "white_balance": [1.00, 1.00, 1.00], "gain_noise": 0.2, "saturation": 0.9},
+     "exposure": 0.8, "white_balance": [1.00, 1.00, 1.00], "gain_noise": 0.2, "saturation": 0.9,
+     "mist_height_meters": 8, "mist_density": 0.008},
     {"sun_elevation_deg": 10, "sun_color": [0.46, 0.34, 0.20], "ambient_sky": [0.56, 0.55, 0.60], "ambient_ground": [0.44, 0.42, 0.36],
      "sky_zenith": [0.38, 0.52, 0.76], "sky_blend": 0.45, "haze_tint": [1.00, 0.84, 0.66],
      "horizon_glow": [1.00, 0.70, 0.40], "horizon_glow_strength": 0.5,
-     "exposure": 0.85, "white_balance": [1.00, 1.00, 1.00], "gain_noise": 0.03, "saturation": 1.0},
+     "exposure": 0.85, "white_balance": [1.00, 1.00, 1.00], "gain_noise": 0.03, "saturation": 1.0,
+     "mist_height_meters": 12, "mist_density": 0.003},
     {"sun_elevation_deg": 25, "sun_color": [0.30, 0.30, 0.30], "ambient_sky": [0.70, 0.70, 0.70], "ambient_ground": [0.64, 0.66, 0.60],
      "sky_zenith": [0.36, 0.56, 0.82], "sky_blend": 0.0, "haze_tint": [1.00, 1.00, 1.00],
      "horizon_glow": [1.00, 0.94, 0.84], "horizon_glow_strength": 0.0,
-     "exposure": 1.0, "white_balance": [1.00, 1.00, 1.00], "gain_noise": 0.0, "saturation": 1.0}
+     "exposure": 1.0, "white_balance": [1.00, 1.00, 1.00], "gain_noise": 0.0, "saturation": 1.0,
+     "mist_height_meters": 40, "mist_density": 0}
   ],
   "sky": {
     "sun_radius_deg": 1.4,
@@ -86,6 +92,14 @@
     "map_softness": 1.5,
     "map_edge_fade": 0.2
   },
+  "shafts": {
+    "steps": 16,
+    "reach_meters": 160,
+    "min_glow": 0.002,
+    "lamps": 4,
+    "lamp_map_resolution": 128,
+    "lamp_near_meters": 0.3
+  },
   "night_lights": {
     "on_deg": 2,
     "full_deg": -6,
@@ -101,7 +115,9 @@
     "floodlight": {"color": [1.00, 0.94, 0.80], "intensity": 1.6, "radius": 55.0},
     "floodlight_cone_deg": 38,
     "floodlight_soft_deg": 16,
-    "lamp_glow": 2.5
+    "lamp_glow": 2.5,
+    "beam_near_share": 0.2,
+    "beam_core_meters": 0.5
   },
   "weather": {
     "fade_seconds": 6,
@@ -129,7 +145,18 @@
     "fog_grey": 0.85,
     "wet_albedo": 0.7,
     "wet_gloss": 0.3,
-    "wet_gloss_power": 24
+    "wet_gloss_power": 24,
+    "clear_visibility_meters": 20000,
+    "clear_forwardness": 0.7,
+    "rain_visibility_meters": 1000,
+    "rain_forwardness": 0.85,
+    "fog_visibility_meters": 200,
+    "fog_forwardness": 0.85,
+    "sun_glow": 0.03,
+    "sun_forwardness": 0.7,
+    "mist": 0.5,
+    "fog_mist_density": 0.01,
+    "rain_mist_density": 0.002
   },
   "rain": {
     "max_drops": 6000,
@@ -202,7 +229,11 @@
     "tee_grout": [0.30, 0.30, 0.29],
     "tee_tile": [0.56, 0.56, 0.53],
     "tee_mat": [0.22, 0.66, 0.26],
-    "collectible": [0.36, 0.78, 0.86],
+    "collectible_paints": [
+      [0.95, 0.82, 0.18], [0.94, 0.42, 0.12], [0.88, 0.20, 0.36], [0.98, 0.56, 0.70],
+      [0.30, 0.52, 0.90], [0.44, 0.84, 0.30]
+    ],
+    "collectible_paint_share": 0.2,
     "cup": [0.03, 0.03, 0.035],
     "pin_pole": [0.95, 0.90, 0.68],
     "flag": [0.86, 0.16, 0.12],
@@ -222,6 +253,14 @@
       [0.98, 0.86, 0.18], [0.20, 0.92, 0.96], [0.98, 0.38, 0.74], [0.52, 0.98, 0.30], [0.98, 0.56, 0.16]
     ],
     "ball": [0.86, 0.86, 0.86],
-    "ball_shirt_share": 0.4
+    "ball_shirt_share": 0.4,
+    "bag_paints": [
+      [0.46, 0.09, 0.08], [0.09, 0.17, 0.42], [0.10, 0.30, 0.13], [0.62, 0.45, 0.05],
+      [0.31, 0.11, 0.38], [0.62, 0.25, 0.05], [0.05, 0.33, 0.35], [0.09, 0.09, 0.10]
+    ],
+    "cart_paints": [
+      [0.70, 0.42, 0.37], [0.44, 0.53, 0.66], [0.42, 0.55, 0.38], [0.82, 0.74, 0.47],
+      [0.58, 0.47, 0.62], [0.84, 0.61, 0.41], [0.42, 0.62, 0.62], [0.55, 0.55, 0.53]
+    ]
   }
 }

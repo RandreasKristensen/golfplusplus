@@ -7,6 +7,7 @@
 // it as mine is, their hands on its grip; what they smoke and drink is held
 // at their mouth (held_props.h). GL-free.
 
+#include "game/gear_paint.h"
 #include "renderer/held_props.h"
 #include "renderer/swing_club.h"
 #include "renderer/world_marker_batch.h"
@@ -33,8 +34,14 @@ struct render_remote_avatar {
     // Their bag's model while it is on their back, and the club in their
     // hand (bag_batch.h); empty for none.
     std::string bag_model;
+    gear_paint bag_paint;
     std::string carried_club_model;
     bool left_handed = false;
+    // Handling their bag or a club: their hand reaching to this point.
+    std::optional<glm::vec3> reach;
+    // How far they bend their knees (0 to 1): handling a bag or a club, or
+    // crouched reading the green.
+    float crouch = 0.0f;
 };
 
 struct render_remote_ball {

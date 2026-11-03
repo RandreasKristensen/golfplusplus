@@ -31,6 +31,10 @@ struct shot_setup {
     float face_open = 0.0f;      // radians from square to the path, + open, - closed, in the player's own hand
     float ball_position = 0.0f;  // -1 back in the stance .. +1 forward
     float backswing = 0.0f;      // 0 .. 1 full .. setup_limits::backswing_max (overswing)
+    // When the downswing started against the top of the backswing
+    // (game/swing.h strike_timing_at): -1 far too early .. 0 on time .. +1
+    // far too late. Not a dial; the swing sets it.
+    float strike_timing = 0.0f;
     handedness hand = handedness::right;
     // UTC milliseconds when it was hit, which pick the weather it flies in
     // (shot_course::weather); online the server's clock as I estimate it.
@@ -43,8 +47,11 @@ struct setup_limits {
     float face_open_max = 0.0f;  // radians, the most open
     float ball_position_min = 0.0f;
     float ball_position_max = 0.0f;
-    float backswing_step = 0.0f;  // one step of the dial; also the shortest backswing
-    float backswing_max = 0.0f;   // past 1: overswing
+    float backswing_min = 0.0f;  // the shortest backswing, the dial's first step
+    float backswing_max = 0.0f;  // past 1: overswing
+    // The dial's step at no backswing and at full (setup_tuning).
+    float backswing_step_short = 0.0f;
+    float backswing_step_full = 0.0f;
 };
 
 setup_limits setup_limits_for(const club_definition& club, const setup_tuning& tuning);
@@ -58,6 +65,11 @@ shot_setup stock_setup(const club_definition& club, ball_lie lie, const glm::vec
 
 // `setup` with every dial inside `limits`.
 shot_setup clamped_setup(const shot_setup& setup, const setup_limits& limits);
+
+// `backswing` moved `steps` steps of the dial, each a step up (or, down, its
+// exact undoing) of the step at the shorter end: finer the shorter the
+// backswing, so the same share of a chip's length as of a full swing's.
+float stepped_backswing(float backswing, int steps, const setup_limits& limits);
 
 // Steps of each dial asked for at once: positive turns the aim left (as
 // yaw), opens the face, moves the ball forward and lengthens the backswing.

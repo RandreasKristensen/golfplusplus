@@ -4,6 +4,8 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
+use super::move_run_row_type::MoveRunRow;
+
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct UpdateMotionArgs {
@@ -15,6 +17,16 @@ pub(super) struct UpdateMotionArgs {
     pub speed: f32,
     pub turn_rate: f32,
     pub client_time: f64,
+    pub first_step: u64,
+    pub start_x: f32,
+    pub start_y: f32,
+    pub start_z: f32,
+    pub runs: Vec<MoveRunRow>,
+    pub setup_aim: u16,
+    pub setup_face_open: i16,
+    pub setup_ball_position: i8,
+    pub setup_backswing: u16,
+    pub crouched: bool,
 }
 
 impl From<UpdateMotionArgs> for super::Reducer {
@@ -28,6 +40,16 @@ impl From<UpdateMotionArgs> for super::Reducer {
             speed: args.speed,
             turn_rate: args.turn_rate,
             client_time: args.client_time,
+            first_step: args.first_step,
+            start_x: args.start_x,
+            start_y: args.start_y,
+            start_z: args.start_z,
+            runs: args.runs,
+            setup_aim: args.setup_aim,
+            setup_face_open: args.setup_face_open,
+            setup_ball_position: args.setup_ball_position,
+            setup_backswing: args.setup_backswing,
+            crouched: args.crouched,
         }
     }
 }
@@ -57,8 +79,38 @@ pub trait update_motion {
         speed: f32,
         turn_rate: f32,
         client_time: f64,
+        first_step: u64,
+        start_x: f32,
+        start_y: f32,
+        start_z: f32,
+        runs: Vec<MoveRunRow>,
+        setup_aim: u16,
+        setup_face_open: i16,
+        setup_ball_position: i8,
+        setup_backswing: u16,
+        crouched: bool,
     ) -> __sdk::Result<()> {
-        self.update_motion_then(mode, x, y, z, yaw, speed, turn_rate, client_time, |_, _| {})
+        self.update_motion_then(
+            mode,
+            x,
+            y,
+            z,
+            yaw,
+            speed,
+            turn_rate,
+            client_time,
+            first_step,
+            start_x,
+            start_y,
+            start_z,
+            runs,
+            setup_aim,
+            setup_face_open,
+            setup_ball_position,
+            setup_backswing,
+            crouched,
+            |_, _| {},
+        )
     }
 
     /// Request that the remote module invoke the reducer `update_motion` to run as soon as possible,
@@ -77,6 +129,16 @@ pub trait update_motion {
         speed: f32,
         turn_rate: f32,
         client_time: f64,
+        first_step: u64,
+        start_x: f32,
+        start_y: f32,
+        start_z: f32,
+        runs: Vec<MoveRunRow>,
+        setup_aim: u16,
+        setup_face_open: i16,
+        setup_ball_position: i8,
+        setup_backswing: u16,
+        crouched: bool,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -95,6 +157,16 @@ impl update_motion for super::RemoteReducers {
         speed: f32,
         turn_rate: f32,
         client_time: f64,
+        first_step: u64,
+        start_x: f32,
+        start_y: f32,
+        start_z: f32,
+        runs: Vec<MoveRunRow>,
+        setup_aim: u16,
+        setup_face_open: i16,
+        setup_ball_position: i8,
+        setup_backswing: u16,
+        crouched: bool,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -110,6 +182,16 @@ impl update_motion for super::RemoteReducers {
                 speed,
                 turn_rate,
                 client_time,
+                first_step,
+                start_x,
+                start_y,
+                start_z,
+                runs,
+                setup_aim,
+                setup_face_open,
+                setup_ball_position,
+                setup_backswing,
+                crouched,
             },
             callback,
         )

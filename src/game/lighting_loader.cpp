@@ -96,6 +96,9 @@ std::optional<std::vector<lighting_key>> parse_keys(const json& root) {
             }
             key.*field.member = *share;
         }
+        if (!read_bounded(value, key_bounded_fields, key)) {
+            return std::nullopt;
+        }
         keys.push_back(key);
     }
     return keys;
@@ -151,6 +154,28 @@ std::optional<shadow_style> parse_shadows(const json& root) {
     }
     shadows.map_resolution = *resolution;
     return shadows;
+}
+
+std::optional<shaft_style> parse_shafts(const json& root) {
+    const json* object = json_object(root, "shafts");
+    shaft_style shafts;
+    if (object == nullptr || !read_bounded(*object, shaft_fields, shafts)) {
+        return std::nullopt;
+    }
+    const std::optional<int> steps = json_int(*object, "steps");
+    if (!steps || *steps < min_shaft_steps || *steps > max_shaft_steps) {
+        return std::nullopt;
+    }
+    shafts.steps = *steps;
+    const std::optional<int> lamps = json_int(*object, "lamps");
+    const std::optional<int> resolution = json_int(*object, "lamp_map_resolution");
+    if (!lamps || *lamps < 0 || *lamps > max_shaft_lamps || !resolution || *resolution < min_lamp_map_resolution ||
+        *resolution > max_lamp_map_resolution || (*resolution & (*resolution - 1)) != 0) {
+        return std::nullopt;
+    }
+    shafts.lamps = *lamps;
+    shafts.lamp_map_resolution = *resolution;
+    return shafts;
 }
 
 std::optional<night_light> parse_night_light(const json& object, const char* key) {
@@ -254,6 +279,22 @@ std::optional<wind_style> parse_wind(const json& root) {
     return wind;
 }
 
+std::optional<marker_colors> parse_markers(const json& root) {
+    marker_colors markers;
+    const json* object = json_object(root, "markers");
+    if (object == nullptr || !read_colors(root, "markers", marker_fields, markers)) {
+        return std::nullopt;
+    }
+    std::optional<std::vector<glm::vec3>> paints = read_color_list(*object, "collectible_paints");
+    const std::optional<float> share = read_share(*object, "collectible_paint_share");
+    if (!paints || !share) {
+        return std::nullopt;
+    }
+    markers.collectible_paints = std::move(*paints);
+    markers.collectible_paint_share = *share;
+    return markers;
+}
+
 std::optional<figure_colors> parse_figures(const json& root) {
     figure_colors figures;
     const json* object = json_object(root, "figures");
@@ -263,9 +304,14 @@ std::optional<figure_colors> parse_figures(const json& root) {
     std::optional<std::vector<glm::vec3>> shirts = read_color_list(*object, "shirts");
     std::optional<std::vector<glm::vec3>> group_caps = read_color_list(*object, "group_caps");
     const std::optional<float> share = json_float(*object, "ball_shirt_share");
-    if (!shirts || !group_caps || !share || *share < 0.0f || *share > 1.0f) {
+    std::optional<std::vector<glm::vec3>> bag_paints = read_color_list(*object, "bag_paints");
+    std::optional<std::vector<glm::vec3>> cart_paints = read_color_list(*object, "cart_paints");
+    if (!shirts || !group_caps || !share || *share < 0.0f || *share > 1.0f || !bag_paints || !cart_paints ||
+        bag_paints->size() != cart_paints->size()) {
         return std::nullopt;
     }
+    figures.bag_paints = std::move(*bag_paints);
+    figures.cart_paints = std::move(*cart_paints);
     figures.shirts = std::move(*shirts);
     figures.group_caps = std::move(*group_caps);
     figures.ball_shirt_share = *share;
@@ -283,6 +329,7 @@ std::optional<lighting_palette> parse_lighting_from_text(const std::string& text
     const std::optional<glow_floors> glow = parse_glow(*root);
     const std::optional<sky_style> sky = parse_sky(*root);
     const std::optional<shadow_style> shadows = parse_shadows(*root);
+    const std::optional<shaft_style> shafts = parse_shafts(*root);
     const std::optional<night_light_style> night_lights = parse_night_lights(*root);
     const std::optional<weather_style> weather = parse_weather(*root);
     const std::optional<rain_style> rain = parse_rain(*root);
@@ -290,19 +337,21 @@ std::optional<lighting_palette> parse_lighting_from_text(const std::string& text
     const std::optional<lightning_style> lightning = parse_lightning(*root);
     lighting_palette palette;
     scene_colors& colors = palette.colors;
-    if (!keys || !figures || !glow || !sky || !shadows || !night_lights || !weather || !rain || !wind || !lightning ||
-        !read_colors(*root, "ground", ground_fields, colors.ground) ||
-        !read_colors(*root, "markers", marker_fields, colors.markers)) {
+    std::optional<marker_colors> markers = parse_markers(*root);
+    if (!keys || !markers || !figures || !glow || !sky || !shadows || !shafts || !night_lights || !weather || !rain || !wind ||
+        !lightning || !read_colors(*root, "ground", ground_fields, colors.ground)) {
         return std::nullopt;
     }
     palette.keys = std::move(*keys);
     palette.sky = *sky;
     palette.shadows = *shadows;
+    palette.shafts = *shafts;
     palette.night_lights = *night_lights;
     palette.weather = *weather;
     palette.rain = *rain;
     palette.wind = *wind;
     palette.lightning = *lightning;
+    colors.markers = std::move(*markers);
     colors.figures = std::move(*figures);
     colors.glow = *glow;
     return palette;

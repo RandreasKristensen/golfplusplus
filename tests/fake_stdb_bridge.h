@@ -20,10 +20,13 @@ struct fake_stdb_bridge {
         std::int64_t number = 0;
         bool flag = false;   // its bool argument, if any
         stdb_motion motion{};
+        std::uint64_t first_step = 0;          // update_motion's steps
+        std::vector<stdb_move_run> runs;       // copied
         stdb_shot shot{};
         std::string club_id;          // shot.club_id, copied
         std::vector<int> flags_out;   // shot.flags_out, copied
         float position[4] = {0.0f, 0.0f, 0.0f, 0.0f};  // stdb_place_bag's x, y, z, yaw
+        std::uint64_t extra = 0;  // stdb_place_bag's cart owner, stdb_set_golfer's favourite colour
     };
 
     std::vector<call> calls;
@@ -52,6 +55,7 @@ void queue_event(const stdb_event& event);
 stdb_event row_event(stdb_table table, stdb_row_change change, const stdb_row& row);
 // The server's protocol, as it arrives after connecting.
 stdb_event server_protocol_event(std::uint32_t version);
+stdb_event server_content_event(std::uint64_t hash);
 // A copy of `text` kept by the bridge, so it outlives the poll even when
 // `text` is a temporary.
 stdb_string fake_text(const std::string& text);

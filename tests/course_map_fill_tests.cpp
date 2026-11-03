@@ -188,6 +188,29 @@ TEST_CASE("the course map fits the course's holes to its paper, square on screen
     }
 }
 
+TEST_CASE("walking about the course map never moves a hole's number; I am drawn under them") {
+    render_data data;
+    data.course_map_low = glm::vec3(0.0f);
+    data.course_map_high = glm::vec3(400.0f, 0.0f, 400.0f);
+    for (int i = 0; i < 4; ++i) {
+        const glm::vec3 tee(static_cast<float>(i) * 100.0f, 0.0f, 0.0f);
+        data.map_holes.push_back(render_map_hole{std::to_string(i + 1), {tee, tee + glm::vec3(0.0f, 0.0f, 300.0f)}});
+    }
+    const overlay_grid grid{640, 360};
+    data.player_position = glm::vec3(300.0f, 0.0f, 380.0f);
+    const course_map_layout away = make_course_map_layout(data, grid);
+    const std::vector<ui_rect> before = course_map_number_boxes(away, grid, data);
+    // Standing right on hole 2's number.
+    data.player_position = glm::vec3(100.0f, 0.0f, 150.0f);
+    const course_map_layout layout = make_course_map_layout(data, grid);
+    const std::vector<ui_rect> after = course_map_number_boxes(layout, grid, data);
+    REQUIRE(after.size() == before.size());
+    for (std::size_t i = 0; i < after.size(); ++i) {
+        CHECK(glm::length(after[i].center - before[i].center) < 0.0001f);
+    }
+    CHECK(glm::length(after[1].center - map_point(layout, data.player_position)) < 0.0001f);
+}
+
 TEST_CASE("every hole's number sits in the middle of its hole on the course map, inside the paper and clear of the others") {
     render_data data;
     data.course_map_low = glm::vec3(0.0f);

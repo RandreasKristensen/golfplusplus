@@ -507,6 +507,51 @@ function zoneShape(z) {
   return { pts, x: pts.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : 0,
            z: pts.length ? (Math.min(...zs) + Math.max(...zs)) / 2 : 0 };
 }
+// The edge the game draws through a zone's points (`rounded_outline` in
+// src/physics/material_zone.h): a centripetal Catmull–Rom curve through
+// every point, a span whose curve would cross the edge kept straight. Three
+// or more points in a line keep a side straight.
+const ZONE_CURVE_TOLERANCE = 0.05;
+const roundedCache = new WeakMap();
+function roundedOutline(z) {
+  if (!Array.isArray(z.outline)) return zoneShape(z).pts;
+  if (roundedCache.has(z.outline)) return roundedCache.get(z.outline);
+  const pts = zoneShape(z).pts, n = pts.length;
+  let ring = pts;
+  if (n >= 3) {
+    const knot = (a, b) => Math.max(Math.sqrt(Math.hypot(b.x - a.x, b.z - a.z)), 1e-3);
+    const curve = (i, t) => {
+      const p0 = pts[(i + n - 1) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+      const t1 = knot(p0, p1), t2 = t1 + knot(p1, p2), t3 = t2 + knot(p2, p3), u = t1 + (t2 - t1) * t;
+      const blend = (a, b, from, to) => ({ x: (a.x * (to - u) + b.x * (u - from)) / (to - from),
+                                           z: (a.z * (to - u) + b.z * (u - from)) / (to - from) });
+      const a1 = blend(p0, p1, 0, t1), a2 = blend(p1, p2, t1, t2), a3 = blend(p2, p3, t2, t3);
+      return blend(blend(a1, a2, 0, t2), blend(a2, a3, t1, t3), t1, t2);
+    };
+    const pieces = pts.map((p, i) => {
+      const q = pts[(i + 1) % n], m = curve(i, 0.5);
+      const sag = Math.hypot(m.x - (p.x + q.x) / 2, m.z - (p.z + q.z) / 2);
+      return Math.min(64, Math.max(1, Math.ceil(Math.sqrt(sag / ZONE_CURVE_TOLERANCE))));
+    });
+    const side = (p, q, r) => (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
+    for (;;) {
+      ring = []; const spanOf = [];
+      pts.forEach((p, i) => { for (let k = 0; k < pieces[i]; k++) { ring.push(k ? curve(i, k / pieces[i]) : p); spanOf.push(i); } });
+      const m = ring.length; let straightened = false;
+      for (let i = 0; i < m; i++) for (let j = i + 2; j < m; j++) {
+        if (i === 0 && j === m - 1) continue;
+        const a = ring[i], b = ring[(i + 1) % m], c = ring[j], d = ring[(j + 1) % m];
+        if (Math.max(a.x, b.x) < Math.min(c.x, d.x) || Math.max(c.x, d.x) < Math.min(a.x, b.x)) continue;
+        if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0) {
+          for (const s of [spanOf[i], spanOf[j]]) if (pieces[s] > 1) { pieces[s] = 1; straightened = true; }
+        }
+      }
+      if (!straightened) break;
+    }
+  }
+  roundedCache.set(z.outline, ring);
+  return ring;
+}
 function setZoneOutline(z, pts) {
   z.outline = pts.map(q => [r2(q.x), r2(q.z)]);
 }
@@ -1270,7 +1315,7 @@ function render() {
     const s = zoneShape(z);
     const c = w2c(s.x, s.z);
     ctx.beginPath();
-    s.pts.forEach((q, k) => { const p = w2c(q.x, q.z); k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
+    roundedOutline(z).forEach((q, k) => { const p = w2c(q.x, q.z); k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
     ctx.closePath();
     ctx.fillStyle = col.fill; ctx.fill();
     ctx.strokeStyle = isSel ? '#f0c060' : col.stroke; ctx.stroke();

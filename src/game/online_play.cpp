@@ -1,6 +1,7 @@
 #include "game/online_play.h"
 
 #include "game/course_session.h"
+#include "game/motion_sync.h"
 #include "game/group_round.h"
 #include "game/mode_dispatch.h"
 #include "game/remote_players.h"
@@ -16,16 +17,13 @@ namespace {
 void snap_to(game_state& state, const net_motion& motion) {
     state.player.position = motion.position;
     state.player.yaw = motion.yaw;
-    if (driving_cart(state)) {
-        state.cart.pose = cart_around_seat(motion.position, motion.yaw, cart_seat::driver, state.tuning.cart);
-    }
 }
 
-// A refused seat, or a cart move the server would not take: on foot again.
+// A refused seat change removes its local seat animation.
 bool cart_refused(const reducer_failure& refusal) {
-    return refusal.reducer == reducer_board_cart || refusal.reducer == reducer_leave_cart ||
-        refusal.error == error_unknown_cart || refusal.error == error_seat_taken || refusal.error == error_not_in_cart ||
-        (refusal.reducer == reducer_update_motion && refusal.error == error_too_far);
+    return refusal.reducer == reducer_take_wheel || refusal.reducer == reducer_leave_wheel ||
+        refusal.reducer == reducer_board_cart || refusal.reducer == reducer_leave_cart ||
+        refusal.error == error_unknown_cart || refusal.error == error_seat_taken || refusal.error == error_not_in_cart;
 }
 
 const room_ball* my_server_ball(const game_state& state) {
@@ -61,7 +59,8 @@ void adopt_server_ball(game_state& state) {
     if (!same_hole) {
         state.round.current_hole_index = hole;
     }
-    state.ball = my_ball{hole, server->position, server->stroke_count, place};
+    const glm::vec3 position = server->in_cup ? lying_in_cup(state, hole, server->position) : server->position;
+    state.ball = my_ball{hole, position, server->stroke_count, place};
     state.online_hole = online_hole_state{!server->in_cup};
 }
 
@@ -81,6 +80,7 @@ void adopt_server_bag(game_state& state) {
     }
     state.bag = row->second.place;
     state.picker.reset();
+    state.handling.reset();
     for (std::size_t i = 0; i < state.clubs.size(); ++i) {
         if (state.clubs[i].id == row->second.club_in_hand) {
             state.selected_club = i;
@@ -101,6 +101,11 @@ bool swing_refused(game_state& state, const reducer_failure& refusal) {
 
 void take_refusals(game_state& state) {
     for (const reducer_failure& refusal : state.online.refusals) {
+        // A ride motion is only for my passenger to watch: a late or lost one
+        // is forgotten as the next comes.
+        if (refusal.reducer == reducer_update_ride) {
+            continue;
+        }
         if (swing_refused(state, refusal)) {
             state.notice = game_notice{online_error_text_key(refusal.error), 0.0f};
             continue;
@@ -108,10 +113,23 @@ void take_refusals(game_state& state) {
         if (refusal.reducer == reducer_place_bag || refusal.reducer == reducer_take_club) {
             adopt_server_bag(state);
         }
+        state.motion_sync.last_refusal = refusal.reducer + ":" + refusal.error;
         if (cart_refused(refusal)) {
+            std::optional<cart_step> from;
+            if (state.ride && state.ride->step && state.ride->step->getting_in) {
+                from = *state.ride->step;
+            }
+            adopt_server_cart(state);
             leave_cart_at_once(state);
+            if (refusal.reducer == reducer_take_wheel && from) {
+                state.player.position = from->from;
+                state.player.yaw = from->from_yaw;
+            }
         }
-        if (refusal.reducer == reducer_overturn_cart || refusal.reducer == reducer_right_cart) {
+        if (refusal.reducer == reducer_update_motion) {
+            refuse_motion(state);
+        }
+        if (refusal.reducer == reducer_right_cart) {
             adopt_server_cart(state);
         }
         const bool ball_refused = refusal.reducer == reducer_take_shot || refusal.reducer == reducer_tee_up ||
@@ -120,7 +138,7 @@ void take_refusals(game_state& state) {
             adopt_server_ball(state);
         }
         if (refusal.reducer == reducer_tee_up || refusal.reducer == reducer_claim_collectible ||
-            refusal.reducer == reducer_update_motion) {
+            (refusal.reducer == reducer_update_motion && !driving_cart(state))) {
             return_to_server(state);
         }
         state.notice = game_notice{online_error_text_key(refusal.error), 0.0f};
@@ -242,6 +260,7 @@ void update_online_play(game_state& state, const float dt) {
     sync_golfer(state);
     follow_server_flags(state);
     follow_server_carts(state);
+    reconcile_motion(state, dt);
     take_room_events(state);
     update_ball_correction(state, dt);
     follow_server_hole(state);
@@ -254,5 +273,6 @@ void watch_room(game_state& state, const float dt) {
     }
     take_refusals(state);  // a refused move puts me back
     follow_server_carts(state);
+    reconcile_motion(state, dt);
     take_room_events(state);
 }

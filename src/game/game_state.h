@@ -5,6 +5,7 @@
 // game/course_session.h; this file is the per-frame update.
 
 #include "game/address_view.h"
+#include "game/bag_handling.h"
 #include "game/bag_place.h"
 #include "game/club_definition.h"
 #include "game/course_definition.h"
@@ -21,12 +22,17 @@
 #include "game/play_area.h"
 #include "game/rangefinder.h"
 #include "game/reward_rules.h"
+#include "game/ride_sync.h"
 #include "game/round_state.h"
 #include "game/save_data.h"
+#include "game/pacing.h"
+#include "game/shot_number.h"
 #include "game/shot_setup.h"
 #include "game/shot_simulation.h"
+#include "game/swing.h"
 #include "game/weather.h"
 #include "physics/body_collision.h"
+#include "physics/cart_rollover.h"
 #include "physics/terrain.h"
 #include "physics/tree_body.h"
 #include "profiling/profiling.h"
@@ -60,6 +66,13 @@ struct player_state {
     vertical_body vertical;
     // On foot, pressed against something standing (game/body_contact.h).
     bool against_obstacle = false;
+    // My fixed steps on foot (game/walking.h): the time not stepped yet, a
+    // hop pressed for the next step, and how the last step moved me, which
+    // frames without a step carry on.
+    float unstepped_seconds = 0.0f;
+    bool hop_pending = false;
+    float step_speed = 0.0f;
+    float step_move_angle = 0.0f;
 };
 
 // Where I look beyond my yaw, first person. Presentation, but set from
@@ -109,30 +122,30 @@ struct club_picker {
 };
 
 // How long each dial key has been held at address, seconds; negative while
-// it is up (shot_setup.h dial_steps).
+// it is up (shot_setup.h dial_steps); and a left-drag's counts not yet a
+// step.
 struct dial_holds {
     float aim_left = -1.0f;
     float aim_right = -1.0f;
     float face_open = -1.0f;
     float face_close = -1.0f;
-    float ball_back = -1.0f;
-    float ball_forward = -1.0f;
+    float ball_left = -1.0f;  // on the screen, looking down
+    float ball_right = -1.0f;
     float longer = -1.0f;
     float shorter = -1.0f;
+    float pull_x = 0.0f;
+    float pull_y = 0.0f;
 };
 
 // Standing over my ball (game/address_play.h): the setup, where my head
-// looks, a V turn under way, and the swing once Space commits the setup.
+// looks, an R turn under way, and the swing once it starts.
 // It stays as it was through the shot, which the follow camera watches
 // from where it was hit.
-// What a setup would do, as the OSD shows it at address
-// (game/address_play.h refresh_shot_preview): the flight to where it first
-// lands and where it comes to rest, or for a putt only its start line.
+// How a setup would start, as the OSD shows it at address
+// (game/address_play.h refresh_shot_preview): its start line.
 struct shot_preview {
     shot_setup setup;  // what it previews
     std::vector<glm::vec3> line;
-    std::optional<glm::vec3> landing;  // none for a putt
-    std::optional<glm::vec3> rest;     // none for a putt
 };
 
 struct address_state {
@@ -141,17 +154,26 @@ struct address_state {
     address_look look;
     std::optional<look_snap> snap;
     dial_holds holds;
-    std::optional<float> swing_elapsed;  // seconds since Space
+    // How far a swipe has gone, in whole swipes (right
+    // positive), and seconds since the swipe right took the club back
+    // towards setup.backswing, until the swipe left.
+    float swipe = 0.0f;
+    std::optional<float> meter_elapsed;
+    // Seconds into the swing since the downswing started from the top
+    // (tempo.back_seconds in).
+    std::optional<float> swing_elapsed;
     // Online, the server's answer to my swing: the shot it played, launched
     // at impact. Until it comes the swing holds at its top.
     std::optional<room_shot> answer;
 };
 
-// A simulated shot shown over real time while following it.
+// A simulated shot shown over real time, followed by the camera until the
+// ball has rolled camera.follow_roll_meters; it plays on while I walk.
 struct shot_playback {
     shot_result result;
     float elapsed = 0.0f;
-    std::size_t next_event = 0;  // first of result.events not played yet
+    float follow_seconds = 0.0f;  // when the camera lets go
+    std::size_t next_event = 0;   // first of result.events not played yet
     // Online: where the server says it rests, less where it played to here;
     // blended in over the playback.
     glm::vec3 correction{0.0f};
@@ -188,10 +210,18 @@ struct remote_avatar {
     // Up and down as shown: hopping when a motion of theirs came from the
     // air, falling off what they walk off (game/player_jump.h).
     vertical_body vertical;
+    // Their bag and club as last shown, and them handling either since
+    // their player_bag row changed (game/bag_handling.h).
+    std::optional<room_bag> bag_seen;
+    std::optional<bag_handling> handling;
+    // Crouched reading the green as shown, 0 standing .. 1 down, going down
+    // and up over green_read.crouch_seconds as my own crouch does.
+    float crouch = 0.0f;
 };
 
 // Another player's shot playing back here, from the server's event: the
-// ball leaves as the event arrives, as mine leaves when I hit it.
+// club comes down first (elapsed below zero), and the ball leaves at impact,
+// as mine leaves after the server's answer.
 struct remote_shot {
     shot_setup input;
     shot_result result;
@@ -210,7 +240,14 @@ struct game_notice {
 // A "+XP" popup. Age runs to tuning.xp_drops.lifetime_seconds.
 struct xp_drop {
     std::string skill_id;
-    int xp = 0;
+    std::int64_t xp = 0;
+    float age = 0.0f;
+};
+
+// My shot's number, popped up as it is struck (game/shot_number.h). Age
+// runs to tuning.shot_numbers.lifetime_seconds.
+struct shot_number_popup {
+    shot_number number;
     float age = 0.0f;
 };
 
@@ -260,6 +297,7 @@ struct game_state {
     game_tuning tuning;
     std::vector<club_definition> clubs;
     reward_rules rewards;
+    skill_catalog skills;
     item_catalog items;
     loadout default_loadout;
 
@@ -300,13 +338,23 @@ struct game_state {
 
     // nullopt: in my pocket. Not saved: leaving the course puts it away.
     std::optional<my_ball> ball;
-    std::optional<shot_playback> shot;  // while following_shot
+    std::optional<shot_playback> shot;  // while my ball moves
     // F at an unplayed tee with my ball in play on another hole: that tee,
     // until F gives the hole up there or Esc keeps playing it.
     std::optional<std::size_t> give_up_prompt;
     player_state player;
+    // Whether I take my cart round (where the course has carts): chosen
+    // before a course starts; else I carry my bag.
+    bool takes_cart = true;
     cart_state cart;
     std::optional<cart_ride> ride;  // sat in a cart, or stepping into or out of one
+    std::optional<door_push> door_push;  // walking into a seat's door
+    // Carts going over onto a side and lying there, as shown, by owner (0:
+    // mine): presentation, from when each was seen tipping.
+    std::map<std::uint64_t, cart_fall_shown> cart_falls;
+    // Online, riding in another's cart: their cart as their ride_motion
+    // rows carry it (game/ride_sync.h).
+    std::optional<ride_view> ride_shown;
     std::optional<cart_righting> righting;  // standing a tipped cart back up
     look_state look;
     // What I smoke and drink while I use it; offline, the timed effects of
@@ -318,6 +366,10 @@ struct game_state {
     std::size_t selected_club = 0;  // the club in hand
     bag_place bag;  // not saved: it stays where it is from hole to hole
     std::optional<club_picker> picker;
+    std::optional<bag_handling> handling;  // my bag or club being handled
+    // My favourite colour (a setting, game/settings.h), which app sets
+    // every frame: my bag's and cart's paint (game/gear_paint.h).
+    std::uint8_t favourite_colour = 0;
     address_state address;
     // Which side of the ball I stand (a setting, game/settings.h), which
     // app sets every frame.
@@ -329,9 +381,9 @@ struct game_state {
     // Online: my bag and club have been taken from my player_bag row since
     // the course started (online_play.h); after that mine lead.
     bool server_bag_adopted = false;
-    // Online: the hand and natural shape last sent to my player row
-    // (set_golfer), so a change is sent once.
-    std::optional<std::pair<handedness, std::uint8_t>> golfer_sent;
+    // Online: the hand, natural shape and favourite colour last sent to my
+    // player row (set_golfer), so a change is sent once.
+    std::optional<golfer_row> golfer_sent;
 
     // This machine's UTC clock in milliseconds, which app sets every frame.
     std::int64_t local_unix_ms = 0;
@@ -351,14 +403,22 @@ struct game_state {
     bool course_map_active = false;
     bool scorecard_active = false;
     bool skills_panel_active = false;
+    // Pacing a distance off, and the count shown (game/pacing.h).
+    std::optional<pacing_walk> pacing;
+    std::optional<pace_count> pace_count;
+    // Crouched reading the green, 0 standing .. 1 down, and how long I have
+    // been down: the green's dots' clock (game/green_read.h).
+    float crouch = 0.0f;
+    float green_read_seconds = 0.0f;
 
     // Meters travelled that have not earned movement XP yet.
     float walk_meters_pending = 0.0f;
     float cart_meters_pending = 0.0f;
 
     std::vector<xp_drop> xp_drops;
+    std::optional<shot_number_popup> shot_number;
     // XP gains too small to show yet, per skill (see xp_drop_tuning).
-    std::map<std::string, int> pending_xp_drop_amounts;
+    std::map<std::string, std::int64_t> pending_xp_drop_amounts;
     std::vector<glm::vec3> flight_path_points;
     // Where the ball sat when the current shot was hit (the follow camera
     // stays at the address view of this spot).
@@ -379,6 +439,7 @@ game_state make_game_state(const game_content& content, const save_data& save);
 void update_game(game_state& state, const game_input& input, float dt, frame_profile* profile = nullptr);
 
 void update_xp_drops(game_state& state, float dt);
+void update_shot_number(game_state& state, float dt);
 
 // Where I look, walking or in a cart: my yaw, turned by my head in a cart.
 float view_yaw(const game_state& state);

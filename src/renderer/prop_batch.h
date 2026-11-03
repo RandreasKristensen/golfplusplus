@@ -56,9 +56,14 @@ std::size_t prop_mesh_vertex_count(prop_mesh mesh);
 std::size_t prop_model_vertex_count(const prop_model& model);
 
 // Every part of `model` in `frame` (its own frame in the world), each at
-// the glow floor it names; a part tagged "ember" in `ember_color` when given.
+// the glow floor it names; a part tagged "ember" in `ember_color` when given;
+// its painted parts in `paint` (their share of it) when given.
 void append_prop_model(prop_batch& batch, const prop_model& model, const glm::mat4& frame, const glow_floors& glow,
-                       const std::optional<glm::vec3>& ember_color = std::nullopt);
+                       const std::optional<glm::vec3>& ember_color = std::nullopt,
+                       const std::optional<glm::vec3>& paint = std::nullopt);
+
+// What a painted part of `part` shows in `paint`.
+glm::vec3 painted_color(const prop_part& part, const std::optional<glm::vec3>& paint);
 
 // Where `hung` goes hung at `mount` of a model whose frame is `frame`: its
 // hang point at the mount, its sides along the mount's.

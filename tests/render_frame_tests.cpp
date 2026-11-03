@@ -8,6 +8,7 @@
 #include "game/golf_cart.h"
 #include "game/mode_dispatch.h"
 #include "game/text_assets.h"
+#include "game/text_ids.h"
 #include "physics/vector_math.h"
 #include "renderer/bag_batch.h"
 #include "renderer/cart_batch.h"
@@ -17,6 +18,8 @@
 #include "renderer/shadow_casters.h"
 
 #include "test_support.h"
+
+#include <algorithm>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -77,7 +80,7 @@ TEST_CASE("with my ball in my pocket a frame hides it and shows every tee box, p
     CHECK(data.tee_boxes->size() == 3U);
     CHECK(data.pin_markers.size() == 3U);
     // The fitness cache needs fitness level 2, so two of three are claimable.
-    CHECK(data.collectible_markers.size() == 2U);
+    CHECK(data.collectibles.size() == 2U);
 }
 
 TEST_CASE("with my ball in play every other hole's pin stays up, and the collectibles too") {
@@ -86,7 +89,7 @@ TEST_CASE("with my ball in play every other hole's pin stays up, and the collect
     refresh_static_anchor_cache(state);
     const render_data data = frame_for(state);
     CHECK(data.show_hole);
-    CHECK(data.collectible_markers.size() == 2U);
+    CHECK(data.collectibles.size() == 2U);
     CHECK(data.pin_position == state.static_anchors.pins[1]);
     const std::vector<glm::vec3>& all = state.static_anchors.pins;
     REQUIRE(all.size() == 3U);
@@ -109,7 +112,11 @@ TEST_CASE("a ball left in its cup is drawn there until it is picked up") {
     CHECK(data.show_ball);
     CHECK(!data.show_hole);
     CHECK(data.pin_markers.size() == 3U);  // its own pin among them
-    CHECK(near(data.ball_position, state.ball->position));
+    // Down in its cup, on the bottom, its top just under the rim.
+    const cup& hole = state.area.cups[0];
+    CHECK(near(horizontal(data.ball_position), horizontal(hole.centre), 0.001f));
+    CHECK(near(data.ball_position.y - data.ball_visual_radius_meters, hole.centre.y - hole.depth, 0.0001f));
+    CHECK(data.ball_position.y + data.ball_visual_radius_meters < hole.centre.y);
 
     pick_up_cup_ball(state);
     data = frame_for(state);
@@ -131,10 +138,10 @@ TEST_CASE("the give-up question names the hole my ball is in play on, only while
 TEST_CASE("every camera rig uses the field of view setting") {
     game_state state = started_hole();
     CHECK(frame_for(state, 75.0f).camera_fov_degrees == 75.0f);
-    enter_addressing(state);
+    address_looking_down(state);
     REQUIRE(active_camera_rig(state) == camera_rig::addressing);
     CHECK(live_camera_view(state, 50.0f).fov_degrees == 50.0f);
-    update_game(state, swing_input(), 0.016f);
+    start_swing_on_time(state);
     swing_through(state);
     REQUIRE(active_camera_rig(state) == camera_rig::following_shot);
     CHECK(live_camera_view(state, 90.0f).fov_degrees == 90.0f);
@@ -150,7 +157,8 @@ TEST_CASE("each game mode has its camera rig") {
     CHECK(eyes.position.y > state.ball->position.y + 1.0f);
     CHECK(horizontal_distance(eyes.position, state.ball->position) < 1.0f);
 
-    update_game(state, swing_input(), 0.016f);
+    state.address.look = down_look(state.tuning.camera);
+    start_swing_on_time(state);
     swing_through(state);
     CHECK(active_camera_rig(state) == camera_rig::following_shot);
 
@@ -160,23 +168,28 @@ TEST_CASE("each game mode has its camera rig") {
     CHECK(near(live_camera_view(state, test_fov_degrees).position, follow.position));
 }
 
-TEST_CASE("the preview is the simulated shot in still air: it starts at the ball, lands where the shot first lands and rests where it stops") {
+TEST_CASE("the preview is only the start of the simulated shot in still air: from the ball, start_line_meters out") {
     game_state state = started_hole();
     enter_addressing(state);
     REQUIRE(state.mode == game_mode::addressing);
     const render_data data = frame_for(state);
     REQUIRE(data.osd_line.size() > 2U);
-    REQUIRE(data.osd_landing.has_value());
-    REQUIRE(data.osd_rest.has_value());
-    CHECK(near(data.osd_line.front(), state.address.setup.ball_start, 0.01f));
-    CHECK(near(data.osd_line.back(), *data.osd_landing));
+    const glm::vec3 ball = state.address.setup.ball_start;
+    CHECK(near(data.osd_line.front(), ball, 0.01f));
 
     shot_course course = current_shot_course(state);
     course.weather = course_weather_at(state, shot_unix_ms(state));
     course.weather.wind = glm::vec3(0.0f);
     const shot_result shot = simulate_shot(state.address.setup, course, state.tuning, state.clubs);
-    CHECK(near(*data.osd_rest, shot.rest_position, 0.001f));
-    CHECK(horizontal_distance(*data.osd_landing, state.address.setup.ball_start) > 50.0f);
+    const float step = state.tuning.shot_preview.step_seconds;
+    for (std::size_t i = 0; i < data.osd_line.size(); ++i) {
+        CHECK(near(data.osd_line[i], shot_position_at(shot, static_cast<float>(i) * step), 0.001f));
+    }
+    // It ends just past start_line_meters, nowhere near where the shot lands.
+    const float start_line = state.tuning.shot_preview.start_line_meters / state.tuning.scale.meters_per_world_unit;
+    CHECK(horizontal_distance(data.osd_line.back(), ball) >= start_line);
+    CHECK(horizontal_distance(data.osd_line[data.osd_line.size() - 2], ball) < start_line);
+    CHECK(horizontal_distance(shot.rest_position, ball) > 5.0f * start_line);
 
     // Only a changed setup is simulated again.
     const std::vector<glm::vec3> before = state.address.preview->line;
@@ -185,8 +198,34 @@ TEST_CASE("the preview is the simulated shot in still air: it starts at the ball
     game_input longer;
     longer.backswing_steps = -10;
     update_game(state, longer, 0.016f);
-    CHECK(horizontal_distance(*state.address.preview->landing, state.address.setup.ball_start) <
-          horizontal_distance(*data.osd_landing, state.address.setup.ball_start));
+    CHECK(state.address.preview->line != before);
+}
+
+TEST_CASE("a chip's preview runs to where it first comes down and ends there, fading out over its flight") {
+    game_state state = started_hole();
+    enter_addressing(state);
+    REQUIRE(state.mode == game_mode::addressing);
+    shot_setup chip = state.address.setup;
+    chip.club_id = "lob_wedge";
+    chip.backswing = 0.08f;
+    const shot_preview preview = preview_shot(state, chip);
+    REQUIRE(preview.line.size() > 2U);
+
+    shot_course course = current_shot_course(state);
+    course.weather = course_weather_at(state, shot_unix_ms(state));
+    course.weather.wind = glm::vec3(0.0f);
+    const shot_result shot = simulate_shot(chip, course, state.tuning, state.clubs);
+    const glm::vec3 ball = chip.ball_start;
+    const auto landing = std::find_if(shot.events.begin(), shot.events.end(),
+                                      [](const shot_event& event) { return event.kind == shot_event_kind::land; });
+    REQUIRE(landing != shot.events.end());
+    const glm::vec3 lands = shot_position_at(shot, landing->time);
+    const float start_line = state.tuning.shot_preview.start_line_meters / state.tuning.scale.meters_per_world_unit;
+    REQUIRE(horizontal_distance(lands, ball) < start_line);
+    // It comes down where the shot does, and shows nothing of the roll after.
+    CHECK(near(preview.line.back(), lands, 0.001f));
+    CHECK(preview.line[preview.line.size() / 2].y > ball.y);
+    CHECK(horizontal_distance(preview.line.back(), ball) < horizontal_distance(shot.rest_position, ball));
 }
 
 TEST_CASE("the cart I drive is drawn whole where it stands, the camera at my seat's eyes whichever way I look") {
@@ -229,7 +268,7 @@ TEST_CASE("my figure casts the sun's shadow where I stand, at my ball while I ad
     CHECK(data.carts[0].model == "golf_cart");
     // My cart with my bag strapped on it, and the club in my hand.
     REQUIRE(data.carts[0].bags.size() == 1U);
-    CHECK(data.carts[0].bags.begin()->second == "golf_bag");
+    CHECK(data.carts[0].bags.begin()->second.model == "golf_bag");
     CHECK(models.opaque().size() == data.carts.size() * cart_vertex_count(test_props().at("golf_cart")) +
                                         prop_model_vertex_count(test_props().at("golf_bag")) +
                                         prop_model_vertex_count(test_props().at(data.my_figure->carried_club_model)));
@@ -259,7 +298,8 @@ TEST_CASE("online frames show other players, their tags, balls and trails; offli
     avatar.position = state.player.position + glm::vec3(3.0f, 0.0f, 0.0f);
     avatar.mode = motion_mode::cart;
     state.remote_avatars[2] = avatar;
-    state.online.carts[2] = room_cart{glm::vec3(50.0f, 0.0f, 50.0f), 0.0f, 0};
+    state.online.carts[1] = room_cart{state.cart.pose.position, state.cart.pose.yaw, 0};
+    state.online.carts[2] = room_cart{glm::vec3(50.0f, 0.0f, 50.0f), 0.0f, 0, cart_condition::upright, 2};
     state.online.balls[2] = room_ball{0, glm::vec3(1.0f), 1};
     remote_shot shot;
     shot.result.duration = 1.0f;
@@ -328,6 +368,11 @@ TEST_CASE("another player is drawn smoking, and at their ball addressing it") {
     CHECK(data.remote_avatars[0].smoking->model == state.items.find(state.default_loadout.smokable)->model);
     CHECK(!data.remote_avatars[0].drinking.has_value());
     CHECK(!data.remote_avatars[0].swing.has_value());
+    CHECK(data.remote_avatars[0].crouch == 0.0f);
+    // Crouched reading the green, as their motion has them.
+    state.remote_avatars[2].crouch = 0.75f;
+    CHECK(frame_for(state).remote_avatars[0].crouch == 0.75f);
+    state.remote_avatars[2].crouch = 0.0f;
 
     // Standing by it: turned the way they face, where they stand.
     const glm::vec3 ball = state.player.position + glm::vec3(0.0f, 0.0f, 4.0f);
@@ -346,25 +391,27 @@ TEST_CASE("another player is drawn smoking, and at their ball addressing it") {
     CHECK(data.remote_avatars[0].yaw == aim);
 
     // Addressing it: stood at it holding the club, the club down.
+    shot_setup theirs;
+    theirs.ball_start = ball;
+    theirs.aim_angle = aim;
     net_motion motion;
     motion.mode = motion_mode::address;
     motion.position = avatar.position;
     motion.yaw = aim;
+    motion.setup = sent_setup_of(theirs);
     state.online.players[2].motion = motion;
+    state.online.bags[2] = room_bag{bag_place{}, state.clubs.front().id};
     state.online.players[2].motion_at = 5;
     data = frame_for(state);
     REQUIRE(data.remote_avatars[0].swing.has_value());
     CHECK(data.remote_avatars[0].swing->raise == 0.0f);
     const glm::vec3 drawn_ball = drawn_ball_center(ball, state.tuning.scale);
     CHECK(near(data.remote_avatars[0].swing->ball_position, drawn_ball));
-    CHECK(data.remote_avatars[0].swing->aim_angle == aim);
-    // Where I would stand to their stock setup, side on to it.
-    shot_setup theirs;
-    theirs.ball_start = ball;
-    theirs.aim_angle = aim;
+    CHECK(near(data.remote_avatars[0].swing->aim_angle, aim, 0.0001f));
+    // Where I would stand to their setup, side on to it.
     const glm::vec3 stance = address_stance_position(state.area, theirs, state.tuning);
-    CHECK(near(data.remote_avatars[0].position, stance));
-    CHECK(data.remote_avatars[0].yaw == address_facing_yaw(theirs));
+    CHECK(near(data.remote_avatars[0].position, stance, 0.001f));
+    CHECK(near(data.remote_avatars[0].yaw, address_facing_yaw(theirs), 0.0001f));
     // An arm's length from the ball, facing it.
     CHECK(horizontal_distance(stance, ball) < 1.0f);
     CHECK(near(data.remote_avatars[0].yaw, yaw_towards(stance, ball), 0.3f));
@@ -374,6 +421,101 @@ TEST_CASE("another player is drawn smoking, and at their ball addressing it") {
     data = frame_for(state);
     CHECK(!data.remote_avatars[0].swing.has_value());
     CHECK(data.remote_avatars[0].yaw == aim);
+}
+
+TEST_CASE("another player's club and bag are drawn from their rows, and nothing before them") {
+    game_state state = started_game(fixture_hub_course());
+    refresh_static_anchor_cache(state);
+    state.play = play_mode::online;
+    state.online.account_id = 1;
+    state.online.status = net_status::connected;
+    state.online.players[2] = room_player{};
+    remote_avatar avatar;
+    avatar.position = state.player.position + glm::vec3(6.0f, 0.0f, 0.0f);
+    state.remote_avatars[2] = avatar;
+    render_data data = frame_for(state);
+    REQUIRE(data.remote_avatars.size() == 1U);
+    CHECK(data.remote_avatars[0].carried_club_model.empty());
+    CHECK(data.remote_avatars[0].bag_model.empty());
+
+    // Their bag row: the club in their hand; the bag waits for their loadout row.
+    const club_definition& club = state.clubs.back();
+    state.online.bags[2] = room_bag{bag_place{}, club.id};
+    data = frame_for(state);
+    CHECK(data.remote_avatars[0].carried_club_model == club.model);
+    CHECK(data.remote_avatars[0].bag_model.empty());
+
+    // Their loadout row, its bag slot empty: the default bag, as their own game has it.
+    state.online.loadouts[2] = loadout{};
+    data = frame_for(state);
+    CHECK(data.remote_avatars[0].bag_model == state.items.find(state.default_loadout.bag)->model);
+}
+
+TEST_CASE("another player at their ball is drawn from their row as their own game draws them, setup and all") {
+    // Their game: the driver, the ball forward, the aim turned 10 degrees and the face open.
+    game_state golfer = started_hole();
+    refresh_static_anchor_cache(golfer);
+    const auto driver = std::find_if(golfer.clubs.begin(), golfer.clubs.end(),
+                                     [](const club_definition& club) { return club.club_class == "driver"; });
+    REQUIRE(driver != golfer.clubs.end());
+    golfer.selected_club = static_cast<std::size_t>(driver - golfer.clubs.begin());
+    step_up_to_ball(golfer);
+    REQUIRE(golfer.mode == game_mode::addressing);
+    const shot_setup stock = golfer.address.setup;
+    shot_setup turned = stock;
+    turned.aim_angle = wrap_angle(stock.aim_angle + glm::radians(10.0f));
+    turned.face_open = glm::radians(4.0f);
+    turned.ball_position = 1.0f;
+    golfer.address.setup = clamped_setup(turned, setup_limits_for(*driver, golfer.tuning.setup));
+    REQUIRE(golfer.address.setup.ball_position != stock.ball_position);
+    update_game(golfer, game_input{}, 0.0f);
+    const render_data mine = frame_for(golfer);
+    REQUIRE(mine.my_figure.has_value());
+    REQUIRE(mine.my_figure->swing.has_value());
+
+    // Through their avatar row as the server keeps it, with the bag row's club.
+    net_motion motion = current_motion(golfer);
+    REQUIRE(motion.mode == motion_mode::address);
+    motion.setup = clamped_sent_setup(motion.setup, *driver, golfer.tuning.setup);
+    game_state observer = started_hole();
+    refresh_static_anchor_cache(observer);
+    observer.play = play_mode::online;
+    observer.online.account_id = 1;
+    observer.online.status = net_status::connected;
+    room_player player;
+    player.hand = golfer.hand;
+    player.motion = motion;
+    player.motion_at = 5;
+    observer.online.players[2] = player;
+    observer.online.balls[2] = room_ball{0, golfer.ball->position, 0};
+    observer.online.bags[2] = room_bag{bag_place{}, driver->id};
+    remote_avatar avatar;
+    avatar.position = motion.position;
+    observer.remote_avatars[2] = avatar;
+    const render_data theirs = frame_for(observer);
+    REQUIRE(theirs.remote_avatars.size() == 1U);
+    const render_remote_avatar& shown = theirs.remote_avatars[0];
+    REQUIRE(shown.swing.has_value());
+
+    CHECK(near(shown.position, mine.my_figure->position, 0.001f));
+    CHECK(near(shown.yaw, mine.my_figure->yaw, 0.001f));
+    CHECK(shown.left_handed == mine.my_figure->left_handed);
+    const render_club_pose& club = *shown.swing;
+    const render_club_pose& own = *mine.my_figure->swing;
+    CHECK(club.club_model == own.club_model);
+    CHECK(near(club.ball_position, own.ball_position, 0.001f));
+    CHECK(near(club.aim_angle, own.aim_angle, 0.001f));
+    CHECK(near(club.face_turn, own.face_turn, 0.001f));
+    CHECK(near(club.shaft_lean, own.shaft_lean, 0.001f));
+    CHECK(club.putt == own.putt);
+    CHECK(club.raise == own.raise);
+    // Not the stock setup: the face open (turned right of the path for a
+    // right-hander), the shaft leaning back with the ball forward, the
+    // stance moved.
+    CHECK(club.face_turn < -glm::radians(3.0f));
+    CHECK(club.shaft_lean < 0.0f);
+    CHECK(near(club.aim_angle, golfer.address.setup.aim_angle, 0.001f));
+    CHECK(!near(shown.position, address_stance_position(golfer.area, stock, golfer.tuning), 0.01f));
 }
 
 TEST_CASE("a refusal from the server shows as a notice") {
@@ -602,7 +744,7 @@ TEST_CASE("a tipped cart is seen lying on the side it rolled onto, a sunk one re
         CHECK((side == cart_condition::on_left_side ? roof_x < -0.05f : roof_x > 0.05f));
         // Lying on the ground, not in it nor floating: its lowest point just over it.
         prop_batch batch;
-        append_cart_model(batch, drawn, model, test_scene_colors().glow);
+        append_cart_model(batch, drawn, model, test_scene_colors());
         float lowest = 1000.0f;
         for (const prop_vertex& vertex : batch.opaque()) {
             lowest = std::min(lowest, vertex.position.y - terrain_height(state.area, vertex.position));
@@ -621,7 +763,7 @@ TEST_CASE("a tipped cart is seen lying on the side it rolled onto, a sunk one re
     REQUIRE(data.carts.size() == 1U);
     CHECK(near(data.carts[0].up, world_up, 0.05f));
     prop_batch batch;
-    append_cart_model(batch, data.carts[0], model, test_scene_colors().glow);
+    append_cart_model(batch, data.carts[0], model, test_scene_colors());
     float lowest = 1000.0f;
     float highest = -1000.0f;
     for (const prop_vertex& vertex : batch.opaque()) {
@@ -729,11 +871,13 @@ TEST_CASE("a left-hander stands, looks and opens the face mirrored, and the phys
     CHECK(glm::dot(my_address_eye(left).position - ball, side) < 0.0f);
     // Both target views look the same way down the line.
     CHECK(near(horizontal(my_address_eye(right).direction), horizontal(my_address_eye(left).direction), 0.0001f));
-    // Q opens either face: a right-hander's to the right of the path, a left-hander's to the left.
-    game_input q;
-    q.face_open_held = true;
-    update_game(right, q, 0.016f);
-    update_game(left, q, 0.016f);
+    // Up, looking down, opens either face: a right-hander's to the right of the path, a left-hander's to the left.
+    right.address.look = down_look(right.tuning.camera);
+    left.address.look = down_look(left.tuning.camera);
+    game_input up;
+    up.look_up_held = true;
+    update_game(right, up, 0.016f);
+    update_game(left, up, 0.016f);
     CHECK(wrap_angle(world_face_yaw(right.address.setup) - right.address.setup.aim_angle) < 0.0f);
     CHECK(wrap_angle(world_face_yaw(left.address.setup) - left.address.setup.aim_angle) > 0.0f);
     // The swing's club and figure are drawn mirrored too.
@@ -747,33 +891,54 @@ TEST_CASE("a left-hander stands, looks and opens the face mirrored, and the phys
     CHECK(left_frame.my_club->face_turn > 0.0f);
 }
 
-TEST_CASE("over the ball the frame outlines what the wheel would change, and shows the key hints until the swing") {
+TEST_CASE("over the ball the frame shows the key hints until the swing, then the swipe's meter") {
     game_state state = started_hole();
-    enter_addressing(state);
+    address_looking_down(state);
     render_data data = frame_for(state);
-    CHECK(data.show_address_hints);
+    REQUIRE(data.key_hints != nullptr);
+    CHECK(std::string(data.key_hints) == text_hud_address_hints);
     CHECK(data.show_swing_clock);
     CHECK(data.swing_backswing == state.address.setup.backswing);
-    CHECK(data.setup_outline.empty());  // the target view: the wheel sets the backswing
+    CHECK(!data.swing_meter);
 
-    state.address.look = down_look(state.tuning.camera);
-    const eye_view eye = my_address_eye(state);
-    const glm::vec3 to_ball = state.address.setup.ball_start - eye.position;
-    state.address.look.yaw = wrap_angle(yaw_towards(eye.position, state.address.setup.ball_start) - address_facing_yaw(state.address.setup));
-    state.address.look.pitch = std::atan2(to_ball.y, glm::length(horizontal(to_ball)));
-    data = frame_for(state);
-    REQUIRE(my_pointed_part(state) == setup_part::ball);
-    REQUIRE(data.setup_outline.size() == 1U);
-    CHECK(near(data.setup_outline[0], data.ball_position));
-
+    // The swipe's meter takes the club back slowly, under the dialled top.
     update_game(state, swing_input(), 0.016f);
+    update_game(state, game_input{}, 0.5f);
     data = frame_for(state);
-    CHECK(!data.show_address_hints);
-    CHECK(data.setup_outline.empty());
-    // The club goes back with the swing.
-    update_game(state, game_input{}, 0.3f);
-    REQUIRE(frame_for(state).my_club.has_value());
-    CHECK(frame_for(state).my_club->raise > 0.0f);
+    CHECK(data.key_hints == nullptr);
+    REQUIRE(data.swing_meter.has_value());
+    CHECK(*data.swing_meter > 0.0f);
+    CHECK(*data.swing_meter < data.swing_backswing);
+    REQUIRE(data.my_club.has_value());
+    CHECK(near(data.my_club->raise, *data.swing_meter, 0.0001f));
+    CHECK(!data.swing_mistimed);
+
+    // Waiting at the top, the club holds there but the meter rises on, red;
+    // the downswing started late stays red.
+    const float waited = state.tuning.swing.meter_full_seconds + state.tuning.swing.timing_window_seconds;
+    for (float elapsed = 0.0f; elapsed < waited; elapsed += 0.05f) {
+        update_game(state, game_input{}, 0.05f);
+    }
+    data = frame_for(state);
+    REQUIRE(data.swing_meter.has_value());
+    CHECK(*data.swing_meter > data.swing_backswing);
+    CHECK(data.swing_mistimed);
+    REQUIRE(data.my_club.has_value());
+    CHECK(near(data.my_club->raise, data.swing_backswing, 0.0001f));
+    game_input left;
+    left.swipe = -1.0f;
+    update_game(state, left, 0.016f);
+    REQUIRE(state.address.swing_elapsed.has_value());
+    CHECK(frame_for(state).swing_mistimed);
+
+    // Swiped left early, it is red through the downswing too.
+    game_state early = started_hole();
+    address_looking_down(early);
+    update_game(early, swing_input(), 0.016f);
+    update_game(early, game_input{}, 0.1f);
+    update_game(early, left, 0.016f);
+    REQUIRE(early.address.swing_elapsed.has_value());
+    CHECK(frame_for(early).swing_mistimed);
 }
 
 TEST_CASE("the ball is drawn right over where it is, near a cup too, and the cup as big as it plays") {
@@ -789,8 +954,33 @@ TEST_CASE("the ball is drawn right over where it is, near a cup too, and the cup
     }
     const render_data data = frame_for(state);
     CHECK(near(data.cup_radius_meters, hole.radius * scale.meters_per_world_unit, 0.0001f));
+    CHECK(near(data.cup_depth_meters, hole.depth * scale.meters_per_world_unit, 0.0001f));
     // The drawn ball fits the drawn cup with room to drop, as a real one does.
     CHECK(scale.ball_visual_radius_meters < 0.6f * data.cup_radius_meters);
+    CHECK(2.0f * scale.ball_visual_radius_meters < data.cup_depth_meters);
+
+    // Rolling over the green near the cup, and riding its rim, the drawn
+    // ball is right over the real one.
+    const std::vector<cup>& cups = state.area.cups;
+    const float real = scale.ball_physics_radius_meters / scale.meters_per_world_unit;
+    const float drawn_radius = scale.ball_visual_radius_meters / scale.meters_per_world_unit;
+    for (const glm::vec3& at : {hole.centre + glm::vec3(0.3f, real, 0.0f), hole.centre + glm::vec3(hole.radius, real, 0.0f)}) {
+        CHECK(near(drawn_ball_center(at, scale, cups), drawn_ball_center(at, scale)));
+    }
+    // Sinking down against the wall, what of it is below the rim stays
+    // inside the hole, and it ends on the bottom where the real one does.
+    for (const float sunk : {0.0f, 0.01f, 0.03f, 0.06f, hole.depth - 2.0f * real}) {
+        const glm::vec3 at = hole.centre + glm::vec3(0.0f, real - sunk, hole.radius - real);
+        const glm::vec3 drawn = drawn_ball_center(at, scale, cups);
+        CHECK(near(drawn.y, drawn_ball_center(at, scale).y));
+        const float below = std::clamp(hole.centre.y - (drawn.y - drawn_radius), 0.0f, drawn_radius);
+        const float half_width = std::sqrt(below * (2.0f * drawn_radius - below));
+        CHECK(horizontal_distance(drawn, hole.centre) + half_width <= hole.radius + 0.0001f);
+        CHECK(horizontal_distance(drawn, hole.centre) <= horizontal_distance(at, hole.centre) + 0.0001f);
+    }
+    // Resting on the bottom, the whole drawn ball is inside the wall.
+    const glm::vec3 resting = drawn_ball_center(hole.centre + glm::vec3(0.0f, real - hole.depth, hole.radius - real), scale, cups);
+    CHECK(horizontal_distance(resting, hole.centre) + drawn_radius <= hole.radius + 0.0001f);
 }
 
 TEST_CASE("with the putter the preview is a start line on the green along where the ball starts, not an arc") {
@@ -801,8 +991,6 @@ TEST_CASE("with the putter the preview is a start line on the green along where 
         REQUIRE(state.clubs[state.selected_club].club_class == "putter");
         enter_addressing(state);
         render_data data = frame_for(state);
-        CHECK(!data.osd_landing.has_value());
-        CHECK(!data.osd_rest.has_value());
         const std::vector<glm::vec3>& putt_line = data.osd_line;
         REQUIRE(putt_line.size() >= 2U);
         const shot_setup& setup = state.address.setup;
@@ -818,8 +1006,9 @@ TEST_CASE("with the putter the preview is a start line on the green along where 
         CHECK(near(wrap_angle(square - setup.aim_angle), 0.0f, 0.001f));
 
         // Opened, it starts the way the face points: right for a right-hander, left for a left-hander.
+        state.address.look = down_look(state.tuning.camera);
         game_input open;
-        open.face_open_held = true;
+        open.look_up_held = true;
         for (int i = 0; i < 30; ++i) {
             update_game(state, open, 0.016f);
         }
@@ -828,11 +1017,12 @@ TEST_CASE("with the putter the preview is a start line on the green along where 
         CHECK((hand == handedness::right ? turned < -0.01f : turned > 0.01f));
         CHECK(std::abs(turned) < std::abs(wrap_angle(world_face_yaw(state.address.setup) - state.address.setup.aim_angle)));
     }
-    // Every other club shows its flight to a landing.
+    // Every other club shows the start of its flight, rising off the ground.
     game_state iron = started_hole();
     enter_addressing(iron);
     const render_data data = frame_for(iron);
-    CHECK(data.osd_landing.has_value());
+    REQUIRE(data.osd_line.size() > 2U);
+    CHECK(data.osd_line.back().y > data.osd_line.front().y);
 }
 
 TEST_CASE("my bag is drawn where it is: behind my cart's driver's seat, stood on the ground leant back, on my back, and on the map") {
@@ -843,7 +1033,7 @@ TEST_CASE("my bag is drawn where it is: behind my cart's driver's seat, stood on
     const render_cart& cart = data.carts[0];
     REQUIRE(cart.bags.count("driver_bag") == 1U);
     CHECK(data.my_figure->bag_model.empty());
-    const prop_model& bag = test_props().at(cart.bags.at("driver_bag"));
+    const prop_model& bag = test_props().at(cart.bags.at("driver_bag").model);
     const prop_model& cart_model = test_props().at(cart.model);
     const glm::mat4 strapped = mounted_frame(cart_frame(cart), cart_model.mount("driver_bag"), bag);
     const glm::vec3 bottom(strapped * glm::vec4(bag.point("hang"), 1.0f));
@@ -863,6 +1053,7 @@ TEST_CASE("my bag is drawn where it is: behind my cart's driver's seat, stood on
     b.move_bag = true;
     update_game(state, b, 0.016f);
     REQUIRE(bag_on_back(state));
+    finish_handling(state);
     state.course_map_active = true;
     data = frame_for(state);
     CHECK(data.carts[0].bags.empty());
@@ -878,6 +1069,7 @@ TEST_CASE("my bag is drawn where it is: behind my cart's driver's seat, stood on
     state.player.position.y = terrain_height(state.area, state.player.position);
     update_game(state, b, 0.016f);
     REQUIRE(state.bag.where == bag_where::on_ground);
+    finish_handling(state);
     data = frame_for(state);
     REQUIRE(data.ground_bags.size() == 1U);
     const render_ground_bag& down = data.ground_bags[0];

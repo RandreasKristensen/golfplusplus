@@ -70,19 +70,27 @@ TEST_CASE("a course starts with my cart parked empty beside hole 1, facing down 
     const float apart = horizontal_distance(state.cart.pose.position, start.position);
     CHECK(apart > start.interaction_radius);
     CHECK(apart < 15.0f);
-    CHECK(!nearest_seat(state).has_value());
+    CHECK(!seat_door_at(state).has_value());
     const std::optional<interactable> near_me = nearest_interactable(state);
     REQUIRE(near_me.has_value());
     CHECK(near_me->kind == interactable_kind::tee);
 }
 
-TEST_CASE("walking up to my cart's wheel and interacting steps in over the step, then I drive it") {
+TEST_CASE("walking into my cart's driver door for a moment steps in over the step, then I drive it") {
     game_state state = started_game(fixture_hub_course());
-    stand_beside_my_cart(state);
-    const glm::vec3 beside = state.player.position;
-    REQUIRE(nearest_seat(state).has_value());
+    stand_at_door(state, state.cart.pose, cart_seat::driver);
+    const std::optional<seat_door> door = seat_door_at(state);
+    REQUIRE(door.has_value());
+    CHECK(door->owner == 0U);
+    CHECK(door->seat == cart_seat::driver);
 
-    update_game(state, interact_input(), 0.02f);
+    // A brief nudge into it is not enough: it takes door_push_seconds of walking in.
+    game_input forward;
+    forward.forward_held = true;
+    update_game(state, forward, 0.5f * state.tuning.cart.door_push_seconds);
+    CHECK(on_foot(state));
+    walk_in(state);
+    const glm::vec3 beside = state.ride && state.ride->step ? state.ride->step->from : state.player.position;
     REQUIRE(state.ride.has_value());
     CHECK(state.ride->step.has_value());
     CHECK(!driving_cart(state));
@@ -103,9 +111,7 @@ TEST_CASE("my cart is in the world whether I walk or sit at its wheel, and its s
     std::vector<cart_in_world> carts = carts_in_world(state);
     REQUIRE(carts.size() == 1U);
     CHECK(!carts[0].driven);
-    stand_beside_my_cart(state);
-    update_game(state, interact_input(), 0.02f);
-    play_step(state);
+    sit_in_my_cart(state);
     REQUIRE(driving_cart(state));
     carts = carts_in_world(state);
     REQUIRE(carts.size() == 1U);
@@ -129,8 +135,8 @@ TEST_CASE("my cart is in the world whether I walk or sit at its wheel, and its s
 
 TEST_CASE("the cart engine starts as I sit down at its wheel") {
     game_state state = started_game(fixture_hub_course());
-    stand_beside_my_cart(state);
-    update_game(state, interact_input(), 0.02f);
+    stand_at_door(state, state.cart.pose, cart_seat::driver);
+    walk_in(state);
     state.audio_events.clear();
     for (int i = 0; i < 100 && !driving_cart(state); ++i) {
         update_game(state, game_input{}, 0.02f);
@@ -138,47 +144,66 @@ TEST_CASE("the cart engine starts as I sit down at its wheel") {
     CHECK(has_audio(state, audio_event_type::cart_start));
 }
 
-TEST_CASE("out of reach of the seat, interacting does not step in") {
+TEST_CASE("only walking into a door seats me: not F, not walking along the cart, not walking in at my bag") {
     game_state state = started_game(fixture_hub_course());
     const cart_tuning& tuning = state.tuning.cart;
-    const glm::vec3 seat = seat_position(state.cart.pose, cart_seat::driver, tuning);
-    const glm::vec3 out = yaw_left(yaw_direction(state.cart.pose.yaw));
-    state.player.position = anchor_on_terrain(state.area, seat + out * (tuning.board_reach + 0.5f));
-    CHECK(!nearest_seat(state).has_value());
-    update_game(state, interact_input(), 0.02f);
-    CHECK(on_foot(state));
+
+    // F at the door does nothing to the seat.
+    game_state pressing = state;
+    stand_at_door(pressing, pressing.cart.pose, cart_seat::driver);
+    update_game(pressing, interact_input(), 0.02f);
+    CHECK(on_foot(pressing));
+
+    // Brushing past along its side.
+    game_state passing = state;
+    stand_at_door(passing, passing.cart.pose, cart_seat::driver);
+    passing.player.yaw = passing.cart.pose.yaw;
+    walk_in(passing, 0.5f);
+    CHECK(on_foot(passing));
+
+    // Walking in at the rear, where my bag is strapped, out of the door.
+    game_state at_bag = state;
+    const glm::vec3 out = yaw_left(yaw_direction(at_bag.cart.pose.yaw));
+    const glm::vec3 bag = bag_spot(at_bag.cart.pose, cart_seat::driver, tuning);
+    at_bag.player.position = anchor_on_terrain(at_bag.area, bag + out * (tuning.body_half_width + 0.4f));
+    at_bag.player.yaw = yaw_towards(at_bag.player.position, bag);
+    CHECK(!seat_door_at(at_bag).has_value());
+    walk_in(at_bag, 0.5f);
+    CHECK(on_foot(at_bag));
+
+    // Out beyond the door.
+    game_state far = state;
+    const glm::vec3 seat = seat_position(far.cart.pose, cart_seat::driver, tuning);
+    far.player.position = anchor_on_terrain(far.area, seat + out * (tuning.seat_offset + tuning.body_half_width + tuning.door_depth + 0.5f));
+    CHECK(!seat_door_at(far).has_value());
 }
 
-TEST_CASE("a tee nearer than the seat tees up there; a seat nearer than it is stepped into") {
+TEST_CASE("through the passenger's door of my own cart I scoot across to the wheel") {
     game_state state = started_game(fixture_hub_course());
+    stand_at_door(state, state.cart.pose, cart_seat::passenger);
+    const std::optional<seat_door> door = seat_door_at(state);
+    REQUIRE(door.has_value());
+    CHECK(door->door == cart_seat::passenger);
+    CHECK(door->seat == cart_seat::driver);
+    walk_in(state);
+    REQUIRE(state.ride.has_value());
+    CHECK(state.ride->seat == cart_seat::driver);
+    // Into the passenger's seat first, then across.
     const cart_tuning& tuning = state.tuning.cart;
-    const course_world_hole_start& start = state.world.hole_starts.front();
-    // The cart parked with its wheel just off the start, within both reaches.
-    const glm::vec3 across = glm::vec3(1.0f, 0.0f, 0.0f);
-    state.cart.pose = cart_around_seat(start.position + across * 2.0f, 0.0f, cart_seat::driver, tuning);
-
-    game_state at_start = state;
-    at_start.player.position = anchor_on_terrain(at_start.area, start.position + across * 0.5f);
-    REQUIRE(nearest_seat(at_start).has_value());
-    update_game(at_start, interact_input(), 0.02f);
-    CHECK(ball_in_play(at_start));
-    CHECK(on_foot(at_start));
-
-    game_state at_seat = state;
-    at_seat.player.position = anchor_on_terrain(at_seat.area, start.position + across * 1.7f);
-    const std::vector<interactable> in_reach = interactables_in_reach(at_seat);
-    REQUIRE(std::any_of(in_reach.begin(), in_reach.end(),
-                        [](const interactable& thing) { return thing.kind == interactable_kind::tee; }));
-    update_game(at_seat, interact_input(), 0.02f);
-    CHECK(!at_seat.ball.has_value());
-    CHECK(at_seat.ride.has_value());
+    while (state.ride->step && state.ride->step->elapsed < tuning.step_seconds) {
+        update_game(state, game_input{}, 0.02f);
+    }
+    CHECK(near(horizontal(state.player.position), horizontal(seat_position(state.cart.pose, cart_seat::passenger, tuning)), 0.1f));
+    for (int i = 0; i < 100 && !driving_cart(state); ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
+    CHECK(driving_cart(state));
+    CHECK(near(horizontal(state.player.position), horizontal(seat_position(state.cart.pose, cart_seat::driver, tuning)), 0.0001f));
 }
 
 TEST_CASE("the cart stays where I left it when I tee up and when I give the hole up") {
     game_state state = started_game(fixture_hub_course());
-    stand_beside_my_cart(state);
-    update_game(state, interact_input(), 0.02f);
-    play_step(state);
+    sit_in_my_cart(state);
     REQUIRE(driving_cart(state));
     game_input drive;
     drive.forward_held = true;
@@ -409,8 +434,10 @@ TEST_CASE("walking off a ledge higher than a step I fall, and land on the ground
         airborne += state.player.vertical.grounded ? 0 : 1;
         lowest_speed = std::min(lowest_speed, state.player.vertical.speed);
     }
-    // A fall of this height takes sqrt(2 h / g) seconds.
-    const float fall_seconds = std::sqrt(2.0f * height / state.tuning.player.jump_gravity);
+    // A fall from its top to the ground where I land takes sqrt(2 h / g) seconds.
+    const float drop = solid_top(ledge) - state.player.position.y;
+    REQUIRE(drop >= height);
+    const float fall_seconds = std::sqrt(2.0f * drop / state.tuning.player.jump_gravity);
     CHECK(near(static_cast<float>(airborne) * 0.02f, fall_seconds, 0.03f));
     CHECK(lowest_speed < -0.8f * state.tuning.player.jump_gravity * fall_seconds);
     CHECK(state.player.vertical.grounded);
@@ -470,15 +497,17 @@ TEST_CASE("driving along a fence the cart scrapes nearly to a stop instead of gl
 TEST_CASE("on foot I stop at a cart, and my cart stops at someone on foot") {
     game_state state = started_game(fixture_hub_course());
     set_solids(state.area, {});
-    // Walking at my parked cart's side.
+    // Walking at my parked cart's side by its front wheel, clear of its door.
     const glm::vec3 side = yaw_left(yaw_direction(state.cart.pose.yaw));
-    state.player.position = anchor_on_terrain(state.area, state.cart.pose.position + side * 4.0f);
-    state.player.yaw = yaw_towards(state.player.position, state.cart.pose.position);
+    const glm::vec3 front = state.cart.pose.position + yaw_direction(state.cart.pose.yaw) * 0.9f;
+    state.player.position = anchor_on_terrain(state.area, front + side * 4.0f);
+    state.player.yaw = yaw_towards(state.player.position, front);
     game_input forward;
     forward.forward_held = true;
     for (int i = 0; i < 50; ++i) {
         update_game(state, forward, 0.02f);
     }
+    CHECK(on_foot(state));
     CHECK(glm::dot(state.player.position - state.cart.pose.position, side) >=
           state.tuning.cart.body_half_width + state.tuning.player.body_radius - 0.01f);
     CHECK(has_audio(state, audio_event_type::player_bump));
@@ -552,13 +581,16 @@ TEST_CASE("a hard turn at speed across a steep slope tips my cart over, and I tu
         update_game(state, game_input{}, 0.05f);
     }
     CHECK(near(state.cart.pose.position, lying.position));
-    CHECK(!nearest_seat(state).has_value());
+    stand_at_door(state, state.cart.pose, cart_seat::driver);
+    CHECK(!seat_door_at(state).has_value());
 }
 
 TEST_CASE("F beside a tipped cart stands it back up over its right_seconds, unless I walk away") {
     game_state state = started_game(fixture_hub_course());
     state.cart.motion.condition = cart_condition::on_right_side;
     const float right_seconds = my_cart_spec(state).right_seconds;
+    // My bag on my back: nothing strapped on it nearer than it.
+    state.bag = bag_place{};
     stand_beside_my_cart(state);
     const std::optional<interactable> near_me = nearest_interactable(state);
     REQUIRE(near_me.has_value());
@@ -586,7 +618,8 @@ TEST_CASE("F beside a tipped cart stands it back up over its right_seconds, unle
     }
     CHECK(state.cart.motion.condition == cart_condition::upright);
     CHECK(has_audio(state, audio_event_type::cart_righted));
-    CHECK(nearest_seat(state).has_value());
+    stand_at_door(state, state.cart.pose, cart_seat::driver);
+    CHECK(seat_door_at(state).has_value());
 }
 
 TEST_CASE("driven into a pond deeper than its wade depth my cart sinks, I wade out, and it is towed back to its spot") {
@@ -608,7 +641,8 @@ TEST_CASE("driven into a pond deeper than its wade depth my cart sinks, I wade o
     CHECK(has_audio(state, audio_event_type::cart_sink));
     CHECK(cart_ground_at(state.area, {}, state.tuning, 0.0f, state.cart.pose.position).water_depth >
           my_cart_spec(state).wade_depth_m);
-    CHECK(!nearest_seat(state).has_value());
+    stand_at_door(state, state.cart.pose, cart_seat::driver);
+    CHECK(!seat_door_at(state).has_value());
 
     const int tow_frames = static_cast<int>(my_cart_spec(state).tow_seconds / 0.05f);
     for (int i = 0; i < tow_frames - 10; ++i) {

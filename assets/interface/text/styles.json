@@ -28,6 +28,8 @@
     "god_held": { "fill": 0.70, "max_scale": 1, "color": [0.95, 0.78, 0.28], "align": "right" },
     "god_note": { "fill": 0.70, "max_scale": 1, "color": [0.55, 0.58, 0.54], "align": "center" },
     "xp_drop": { "fill": 1.0, "color": [0.96, 0.86, 0.38], "align": "left" },
+    "shot_number": { "fill": 1.0, "color": [1.0, 1.0, 1.0], "align": "center" },
+    "shot_number_crit": { "fill": 1.0, "color": [1.0, 0.86, 0.10], "align": "center" },
     "rangefinder": { "fill": 0.90, "max_scale": 2, "color": [0.95, 0.78, 0.28], "align": "right" },
     "rangefinder_unit": { "fill": 0.60, "max_scale": 1, "color": [0.95, 0.78, 0.28], "align": "left", "valign": "bottom" },
     "rangefinder_tag": { "fill": 0.80, "max_scale": 1, "color": [0.95, 0.78, 0.28], "align": "center" },
@@ -52,6 +54,7 @@
 
     "datestamp": { "fill": 1.0, "max_scale": 2, "color": [1.0, 0.80, 0.42], "align": "left", "valign": "bottom" },
     "vcr_tag": { "fill": 1.0, "max_scale": 2, "color": [0.88, 0.96, 0.88], "align": "right", "valign": "top" },
+    "tour_title": { "fill": 1.0, "max_scale": 4, "color": [0.96, 0.96, 0.92], "align": "center", "valign": "center" },
     "burn_in_shadow": { "fill": 1.0, "color": [0.04, 0.035, 0.03], "align": "left" },
     "debug_fps": { "fill": 0.65, "color": [0.96, 0.78, 0.18], "align": "left", "valign": "top" },
     "debug_profile": { "fill": 1.0, "max_scale": 1, "color": [0.62, 0.90, 0.72], "align": "left", "valign": "top" }

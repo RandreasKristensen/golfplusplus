@@ -6,6 +6,7 @@
 #include "game/net_types.h"
 #include "game/shot_dice.h"
 #include "game/text_ids.h"
+#include "physics/cup.h"
 #include "physics/vector_math.h"
 
 #include <utility>
@@ -74,6 +75,7 @@ bool start_course(game_state& state, const course_definition& course) {
     state.picker.reset();
     state.server_bag_adopted = false;
     state.xp_drops.clear();
+    state.shot_number.reset();
     state.pending_xp_drop_amounts.clear();
     state.ball.reset();
     end_ball_play(state);
@@ -91,17 +93,18 @@ bool start_course(game_state& state, const course_definition& course) {
 }
 
 bool tee_up(game_state& state, const std::size_t hole_index, const bool give_up) {
-    if (hole_index >= state.holes.size() || hole_played(state.round, hole_index)) {
+    const bool practice = state.course.practice;
+    if (hole_index >= state.holes.size() || (!practice && hole_played(state.round, hole_index))) {
         return false;
     }
-    if (state.ball && state.ball->place == ball_place::in_cup) {
+    if (!practice && state.ball && state.ball->place == ball_place::in_cup) {
         state.notice = game_notice{text_ball_in_cup, 0.0f};
         return false;
     }
-    if (state.ball && state.ball->hole == hole_index) {
+    if (!practice && state.ball && state.ball->hole == hole_index) {
         return false;  // that hole's ball is mine: it is played where it lies
     }
-    if (state.ball && !give_up) {
+    if (!practice && state.ball && !give_up) {
         state.notice = game_notice{text_ball_in_play, 0.0f};
         return false;
     }
@@ -127,12 +130,25 @@ void complete_current_hole(game_state& state) {
         return;
     }
     my_ball& ball = *state.ball;
-    state.round = complete_hole(state.round, ball.hole, ball.strokes);
-    record_hole_completed(state);
+    if (!state.course.practice) {
+        state.round = complete_hole(state.round, ball.hole, ball.strokes);
+        record_hole_completed(state);
+    }
     end_ball_play(state);
     // The ball stays in the cup until it is picked up, into the next round too.
     ball.place = ball_place::in_cup;
-    ball.position = pin_anchor_position(state, ball.hole);
+    ball.position = lying_in_cup(state, ball.hole, ball.position);
+}
+
+glm::vec3 lying_in_cup(const game_state& state, const std::size_t hole, const glm::vec3& near) {
+    if (hole >= state.area.cups.size()) {
+        return near;
+    }
+    const cup& in = state.area.cups[hole];
+    ball_state ball;
+    ball.position = near;
+    ball.radius = state.tuning.scale.ball_physics_radius_meters / state.tuning.scale.meters_per_world_unit;
+    return in_cup(ball, in) ? near : cup_rest(in, ball.radius);
 }
 
 void give_up_hole(game_state& state) {

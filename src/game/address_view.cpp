@@ -40,13 +40,15 @@ address_look clamped_look(const address_look& look, const camera_tuning& tuning)
         std::clamp(look.pitch, glm::radians(tuning.address_min_pitch_degrees), glm::radians(tuning.address_max_pitch_degrees))};
 }
 
-address_look snap_destination(const address_look& look, const camera_tuning& tuning) {
-    const address_look target = target_look(tuning);
-    const address_look down = down_look(tuning);
+bool looking_down(const address_look& look, const camera_tuning& tuning) {
     const auto apart = [&look](const address_look& framed) {
         return std::abs(look.yaw - framed.yaw) + std::abs(look.pitch - framed.pitch);
     };
-    return apart(target) <= apart(down) ? down : target;
+    return apart(down_look(tuning)) < apart(target_look(tuning));
+}
+
+address_look snap_destination(const address_look& look, const camera_tuning& tuning) {
+    return looking_down(look, tuning) ? target_look(tuning) : down_look(tuning);
 }
 
 address_look snap_look_at(const look_snap& snap, const camera_tuning& tuning) {
@@ -70,6 +72,11 @@ glm::vec3 address_stance_position(const play_area& area, const shot_setup& setup
 
 float address_facing_yaw(const shot_setup& setup) {
     return wrap_angle(setup.aim_angle - hand_sign(setup.hand) * glm::half_pi<float>());
+}
+
+address_stance stance_at_address(const play_area& area, const shot_setup& setup, const game_tuning& tuning,
+                                 frame_profile* profile) {
+    return address_stance{address_stance_position(area, setup, tuning, profile), address_facing_yaw(setup)};
 }
 
 float address_view_yaw(const shot_setup& setup, const address_look& look) {
