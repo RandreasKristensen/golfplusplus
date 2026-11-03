@@ -45,8 +45,3 @@ Shot ability reads skills no one has yet: `club.<class>` and
 
 Tests: a retired skill loading, a curve change against old XP, a level-up
 shot replayed by a client, the award sum against `golfer_skill`.
-
-## 4. Decision for the owner
-
-Existing `golf_swing` XP: nothing records which club earned it. In the alpha
-it can be dropped, or spread over the club skills by a rule.
