@@ -45,6 +45,7 @@ void connect(online_session& session, game_state& state) {
     queue_event(fake_event(STDB_EVENT_SIGNED_IN));
     queue_event(fake_event(STDB_EVENT_CONNECTED));
     queue_event(server_protocol_event(protocol_version));
+    queue_event(server_content_event(shipped_content().content_hash));
     queue_event(account_row(my_account, anna));
     session.update(state);
 }
@@ -53,12 +54,16 @@ void join_room(online_session& session, game_state& state, const std::uint64_t r
     queue_event(member_row(room_id, STDB_ROW_INSERT));
     queue_event(room_row(room_id, 2));
     session.update(state);
+    stdb_event applied = fake_event(STDB_EVENT_SUBSCRIPTION_APPLIED);
+    applied.subscription = static_cast<std::uint32_t>(fake_bridge().subscriptions.size());
+    queue_event(applied);
+    session.update(state);
 }
 
 // Signed in as ANNA, in room 3 playing course "first".
 online_session playing_session(game_state& state) {
     fake_bridge().reset();
-    online_session session(*net_client::create(fake_online_config(), "signed in", "failed"));
+    online_session session(*net_client::create(fake_online_config(), "signed in", "failed", shipped_content().content_hash));
     session.carry_out({online_request{online_request_type::begin_silent_login, {}}}, state);
     connect(session, state);
     join_room(session, state, 3);
@@ -198,4 +203,26 @@ TEST_CASE("an online round ends when the room goes or the connection fails") {
     CHECK(round.event == online_round_event::lost);
     CHECK(round.message_key.empty());
     CHECK(session.menu_status(state, std::chrono::system_clock::now()).failure_id == "connection_lost");
+}
+
+TEST_CASE("sync: reconnect restart waits for the complete room subscription") {
+    game_state state = started_hole();
+    online_session session = playing_session(state);
+    stdb_event lost = fake_event(STDB_EVENT_DISCONNECTED);
+    lost.retrying = true;
+    queue_event(lost);
+    session.update(state);
+    CHECK(session.watch_round(state).event == online_round_event::none);
+    connect(session, state);
+    CHECK(session.watch_round(state).event == online_round_event::none);
+    queue_event(member_row(4, STDB_ROW_INSERT));
+    queue_event(room_row(4, 2));
+    session.update(state);
+    CHECK(session.watch_round(state).event == online_round_event::none);
+    CHECK(session.menu_status(state, std::chrono::system_clock::now()).room_course_id.empty());
+    stdb_event applied = fake_event(STDB_EVENT_SUBSCRIPTION_APPLIED);
+    applied.subscription = static_cast<std::uint32_t>(fake_bridge().subscriptions.size());
+    queue_event(applied);
+    session.update(state);
+    CHECK(session.watch_round(state).event == online_round_event::restart);
 }

@@ -79,7 +79,9 @@ private:
 
 class shader_program {
 public:
-    bool load_from_files(const std::string& vertex_path, const std::string& fragment_path);
+    // `defines` (whole #define lines) go into both stages after #version.
+    bool load_from_files(const std::string& vertex_path, const std::string& fragment_path,
+                         const std::string& defines = std::string());
     void shutdown();
     void use() const;
 

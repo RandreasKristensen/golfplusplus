@@ -1,0 +1,17 @@
+{
+  "slope": {
+    "face_turn": { "form": "a ball above the feet points the face left of its loft line by atan(tan(loft) sin(slope)) for a right-hander; more loft turns it more", "source": "geometry of a lofted face on a tilted lie (Jorgensen, The Physics of Golf, 1999)", "checked": true },
+    "up_and_down": "uphill adds loft and shallows the attack; downhill the opposite"
+  },
+  "rough": {
+    "spin_share_flier": { "value": 0.5, "source": "launch-monitor tests from rough (e.g. TrackMan and Golf Digest robot tests): grass between face and ball cuts spin to about half and the ball runs on", "checked": false },
+    "hosel_grab": "long grass slows the club and closes the face, more with more loft"
+  },
+  "sand": {
+    "explosion": "the club enters the sand behind the ball; the ball leaves on a cushion of sand at a fraction of the club's speed with little spin and a high launch; more effective bounce (sole bounce plus face opening) glides, less digs",
+    "source": "Pelz, Short Game Bible (1999); Penner (2003), 'The physics of golf', Rep. Prog. Phys. 66:131-171",
+    "checked": false,
+    "explosion_carry_share": { "value": 0.36, "range": [0.25, 0.45], "source": "a tour player's longest explosion with a sand wedge is about 40 yards (37 m), longer bunker shots being picked clean (Golf Monthly, 'Shane Lowry 40-yard bunker shot'; Titleist, 'The 40-yard bunker shot'), against the bag table's full sand wedge carry from grass (102 m)", "checked": false }
+  },
+  "tee": "a teed ball has no grass between face and ball and allows a rising attack"
+}

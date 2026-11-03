@@ -10,7 +10,8 @@
 #include "renderer/world_marker_batch.h"
 
 // Uploads a world_marker_batch into one dynamic vertex buffer and draws it
-// with one draw call per run and a single uniform set per frame.
+// with one draw call per run and a single uniform set per frame, cutting the
+// cups' holes with the stencil the scene was cleared with.
 //
 // The GPU buffer only ever grows (see renderer/dynamic_buffer.h): a frame that
 // fits the current capacity is streamed with glBufferSubData; a larger frame

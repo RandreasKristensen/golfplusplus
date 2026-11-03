@@ -16,9 +16,12 @@ inline constexpr const char* text_online_browser_failed = "online.browser.failed
 inline constexpr const char* text_online_room_lost = "online.room_lost";
 // The server's tee_in_use refusal, shown before asking when the tee is taken.
 inline constexpr const char* text_online_tee_in_use = "online.error.tee_in_use";
-// Starting a hole with the last holed ball still in its cup, offline and the
-// server's ball_in_cup refusal.
+// Teeing up with my ball still in its cup, offline and the server's
+// ball_in_cup refusal.
 inline constexpr const char* text_ball_in_cup = "online.error.ball_in_cup";
+// Teeing up with my ball in play on another hole, not giving it up, offline
+// and the server's ball_in_play refusal.
+inline constexpr const char* text_ball_in_play = "online.error.ball_in_play";
 
 // Startup menus
 inline constexpr const char* text_menu_loading = "menu.loading";
@@ -33,6 +36,8 @@ inline constexpr const char* text_menu_main_play_online = "menu.main.play_online
 inline constexpr const char* text_menu_main_play_online_hint = "menu.main.play_online.hint";
 inline constexpr const char* text_menu_main_play_offline = "menu.main.play_offline";
 inline constexpr const char* text_menu_main_play_offline_hint = "menu.main.play_offline.hint";
+inline constexpr const char* text_menu_main_visual_tour = "menu.main.visual_tour";
+inline constexpr const char* text_menu_main_visual_tour_hint = "menu.main.visual_tour.hint";
 inline constexpr const char* text_menu_main_link_login = "menu.main.link_login";
 inline constexpr const char* text_menu_main_link_login_hint = "menu.main.link_login.hint";
 inline constexpr const char* text_menu_main_sign_out = "menu.main.sign_out";
@@ -50,12 +55,31 @@ inline constexpr const char* text_menu_course_picker_title = "menu.course_picker
 inline constexpr const char* text_menu_course_picker_subtitle = "menu.course_picker.subtitle";
 inline constexpr const char* text_menu_course_picker_footer = "menu.course_picker.footer";
 inline constexpr const char* text_menu_course_picker_tile = "menu.course_picker.tile";
+inline constexpr const char* text_menu_tour_picker_title = "menu.tour_picker.title";
+inline constexpr const char* text_menu_tour_picker_subtitle = "menu.tour_picker.subtitle";
+inline constexpr const char* text_menu_tour_picker_footer = "menu.tour_picker.footer";
+inline constexpr const char* text_menu_tour_picker_playing = "menu.tour_picker.playing";
 inline constexpr const char* text_menu_online_course_picker_subtitle = "menu.online_course_picker.subtitle";
 inline constexpr const char* text_menu_confirm_title = "menu.confirm.title";
 inline constexpr const char* text_menu_exit_title = "menu.exit.title";
+inline constexpr const char* text_menu_natural_shape_title = "menu.natural_shape.title";
+inline constexpr const char* text_menu_natural_shape_subtitle = "menu.natural_shape.subtitle";
+inline constexpr const char* text_menu_natural_shape_draw = "menu.natural_shape.draw";
+inline constexpr const char* text_menu_natural_shape_draw_hint = "menu.natural_shape.draw_hint";
+inline constexpr const char* text_menu_natural_shape_neutral = "menu.natural_shape.neutral";
+inline constexpr const char* text_menu_natural_shape_neutral_hint = "menu.natural_shape.neutral_hint";
+inline constexpr const char* text_menu_natural_shape_fade = "menu.natural_shape.fade";
+inline constexpr const char* text_menu_natural_shape_fade_hint = "menu.natural_shape.fade_hint";
+inline constexpr const char* text_menu_transport_title = "menu.transport.title";
+inline constexpr const char* text_menu_transport_subtitle = "menu.transport.subtitle";
+inline constexpr const char* text_menu_transport_cart = "menu.transport.cart";
+inline constexpr const char* text_menu_transport_cart_hint = "menu.transport.cart_hint";
+inline constexpr const char* text_menu_transport_carry = "menu.transport.carry";
+inline constexpr const char* text_menu_transport_carry_hint = "menu.transport.carry_hint";
 inline constexpr const char* text_menu_confirm_yes = "menu.confirm.yes";
 inline constexpr const char* text_menu_confirm_no = "menu.confirm.no";
 inline constexpr const char* text_menu_confirm_settings = "menu.confirm.settings";
+inline constexpr const char* text_menu_confirm_give_up = "menu.confirm.give_up";
 inline constexpr const char* text_menu_settings_title = "menu.settings.title";
 inline constexpr const char* text_menu_settings_subtitle = "menu.settings.subtitle";
 inline constexpr const char* text_menu_settings_footer = "menu.settings.footer";
@@ -121,13 +145,16 @@ inline constexpr const char* text_help_escape = "help.escape";
 inline constexpr const char* text_help_key_1 = "help.key_1";
 inline constexpr const char* text_help_key_2 = "help.key_2";
 inline constexpr const char* text_help_key_g = "help.key_g";
+inline constexpr const char* text_help_key_p = "help.key_p";
+inline constexpr const char* text_help_key_k = "help.key_k";
+inline constexpr const char* text_help_key_c = "help.key_c";
 inline constexpr const char* text_controls_key_w = "controls.key_w";
 inline constexpr const char* text_controls_key_a = "controls.key_a";
 inline constexpr const char* text_controls_key_s = "controls.key_s";
 inline constexpr const char* text_controls_key_d = "controls.key_d";
-inline constexpr const char* text_controls_key_e = "controls.key_e";
 inline constexpr const char* text_controls_key_f = "controls.key_f";
-inline constexpr const char* text_controls_key_q = "controls.key_q";
+inline constexpr const char* text_controls_key_r = "controls.key_r";
+inline constexpr const char* text_controls_key_backspace = "controls.key_backspace";
 inline constexpr const char* text_controls_key_m = "controls.key_m";
 inline constexpr const char* text_controls_key_tab = "controls.key_tab";
 inline constexpr const char* text_controls_key_caps_lock = "controls.key_caps_lock";
@@ -135,16 +162,39 @@ inline constexpr const char* text_controls_mouse = "controls.mouse";
 inline constexpr const char* text_controls_key_1 = "controls.key_1";
 inline constexpr const char* text_controls_key_2 = "controls.key_2";
 inline constexpr const char* text_controls_key_g = "controls.key_g";
+inline constexpr const char* text_controls_key_p = "controls.key_p";
+inline constexpr const char* text_controls_key_k = "controls.key_k";
+inline constexpr const char* text_controls_key_c = "controls.key_c";
 inline constexpr const char* text_controls_key_escape = "controls.key_escape";
 
 // HUD
 inline constexpr const char* text_hud_fps = "hud.fps";
 // The swing clock's hours: the backswing from address (6) to the top (12).
+inline constexpr const char* text_hud_address_hints = "hud.address_hints";
+// At my bag: its keys; the picker's keys; why my ball cannot be addressed.
+inline constexpr const char* text_hud_bag_hints = "hud.bag_hints";
+inline constexpr const char* text_hud_picker_hints = "hud.picker_hints";
+inline constexpr const char* text_hud_picker_row = "hud.picker_row";
+inline constexpr const char* text_hud_picker_row_highlighted = "hud.picker_row_highlighted";
+inline constexpr const char* text_hud_picker_row_in_hand = "hud.picker_row_in_hand";
+inline constexpr const char* text_hud_picker_row_both = "hud.picker_row_both";
+inline constexpr const char* text_hud_bag_on_back = "hud.bag_on_back";
+inline constexpr const char* text_hud_seat_door_drive = "hud.seat_door_drive";
+inline constexpr const char* text_hud_seat_door_ride = "hud.seat_door_ride";
+inline constexpr const char* text_hud_seat_taken = "hud.seat_taken";
+inline constexpr const char* text_hud_bag_spot_taken = "hud.bag_spot_taken";
+// The setup's shape at address (game/shot_ability.h setup_word): a height
+// and a curve, or the stock shot.
+inline constexpr const char* text_hud_setup_word_stock = "hud.setup_word.stock";
+inline constexpr const char* text_hud_setup_word_punch = "hud.setup_word.punch";
+inline constexpr const char* text_hud_setup_word_high = "hud.setup_word.high";
+inline constexpr const char* text_hud_setup_word_fade = "hud.setup_word.fade";
+inline constexpr const char* text_hud_setup_word_draw = "hud.setup_word.draw";
+inline constexpr const char* text_hud_setup_word_flop = "hud.setup_word.flop";
+inline constexpr const char* text_hud_setup_word_pair = "hud.setup_word.pair";
 inline constexpr const char* text_hud_swing_six = "hud.swing.six";
 inline constexpr const char* text_hud_swing_nine = "hud.swing.nine";
 inline constexpr const char* text_hud_swing_twelve = "hud.swing.twelve";
-inline constexpr const char* text_hud_cart = "hud.cart";
-inline constexpr const char* text_hud_cart_drive = "hud.cart.drive";
 // The rangefinder: its reading and unit, the reading at the sky, its flag lock and the wind.
 inline constexpr const char* text_hud_rangefinder = "hud.rangefinder";
 inline constexpr const char* text_hud_rangefinder_unit = "hud.rangefinder.unit";
@@ -155,9 +205,16 @@ inline constexpr const char* text_hud_rangefinder_wind = "hud.rangefinder.wind";
 inline constexpr const char* text_hud_rangefinder_height = "hud.rangefinder.height";
 inline constexpr const char* text_hud_rangefinder_uphill = "hud.rangefinder.uphill";
 inline constexpr const char* text_hud_rangefinder_downhill = "hud.rangefinder.downhill";
+// The distance it plays like on the slope.
+inline constexpr const char* text_hud_rangefinder_plays_like = "hud.rangefinder.plays_like";
 inline constexpr const char* text_hud_xp_drop = "hud.xp_drop";
+inline constexpr const char* text_hud_shot_number = "hud.shot_number";
+inline constexpr const char* text_hud_paces = "hud.paces";
 // A shot lost in water, as the ball goes back
 inline constexpr const char* text_hud_water_penalty = "hud.water_penalty";
+inline constexpr const char* text_hud_ball_hit_penalty = "hud.ball_hit_penalty";
+// F at another tee with my ball in play: asks before giving its hole up.
+inline constexpr const char* text_hud_give_up = "hud.give_up";
 inline constexpr const char* text_hud_mode_online = "hud.mode.online";
 inline constexpr const char* text_hud_mode_reconnecting = "hud.mode.reconnecting";
 
@@ -191,11 +248,27 @@ inline constexpr const char* text_god_thunder = "god.thunder";
 inline constexpr const char* text_god_wind = "god.wind";
 inline constexpr const char* text_god_wind_direction = "god.wind_direction";
 inline constexpr const char* text_god_wetness = "god.wetness";
+inline constexpr const char* text_god_solids = "god.solids";
+inline constexpr const char* text_god_profiler = "god.profiler";
+inline constexpr const char* text_god_on = "god.on";
+inline constexpr const char* text_god_off = "god.off";
 inline constexpr const char* text_god_hours = "god.hours";
 inline constexpr const char* text_god_speed = "god.speed";
 inline constexpr const char* text_god_percent = "god.percent";
 inline constexpr const char* text_god_keys = "god.keys";
 inline constexpr const char* text_god_online = "god.online";
+
+// Tuning the look live (core/look_tuning.h); its rows' labels are in
+// assets/picture/tuning_panel.json.
+inline constexpr const char* text_look_title = "look.title";
+inline constexpr const char* text_look_keys = "look.keys";
+inline constexpr const char* text_look_failed = "look.failed";
+inline constexpr const char* text_look_lighting = "look.lighting";
+inline constexpr const char* text_look_picture = "look.picture";
+inline constexpr const char* text_look_unreadable = "look.unreadable";
+inline constexpr const char* text_look_not_json = "look.not_json";
+inline constexpr const char* text_look_not_valid = "look.not_valid";
+inline constexpr const char* text_look_unwritten = "look.unwritten";
 
 // The camcorder's datestamp and the VCR's on-screen display (core/vcr_frame.h)
 inline constexpr const char* text_camcorder_datestamp_time = "camcorder.datestamp.time";
@@ -222,6 +295,8 @@ inline constexpr const char* text_vcr_pause = "vcr.pause";
 inline constexpr const char* text_hole_sign_number = "hole_sign.number";
 inline constexpr const char* text_hole_sign_par = "hole_sign.par";
 inline constexpr const char* text_hole_sign_length = "hole_sign.length";
+inline constexpr const char* text_hole_sign_bay = "hole_sign.bay";
+inline constexpr const char* text_hole_sign_target = "hole_sign.target";
 
 // The course map (held up with M)
 inline constexpr const char* text_course_map_hole_number = "course_map.hole_number";
@@ -275,9 +350,9 @@ inline constexpr const char* style_god_label = "god_label";
 inline constexpr const char* style_god_live = "god_live";
 inline constexpr const char* style_god_held = "god_held";
 inline constexpr const char* style_god_note = "god_note";
-inline constexpr const char* style_cart_label = "cart_label";
-inline constexpr const char* style_cart_drive = "cart_drive";
 inline constexpr const char* style_xp_drop = "xp_drop";
+inline constexpr const char* style_shot_number = "shot_number";
+inline constexpr const char* style_shot_number_crit = "shot_number_crit";
 inline constexpr const char* style_rangefinder = "rangefinder";
 inline constexpr const char* style_rangefinder_unit = "rangefinder_unit";
 inline constexpr const char* style_rangefinder_tag = "rangefinder_tag";
@@ -298,6 +373,7 @@ inline constexpr const char* style_scorecard_total = "scorecard_total";
 inline constexpr const char* style_scorecard_hint = "scorecard_hint";
 inline constexpr const char* style_datestamp = "datestamp";
 inline constexpr const char* style_vcr_tag = "vcr_tag";
+inline constexpr const char* style_tour_title = "tour_title";
 inline constexpr const char* style_burn_in_shadow = "burn_in_shadow";
 inline constexpr const char* style_debug_fps = "debug_fps";
 inline constexpr const char* style_debug_profile = "debug_profile";

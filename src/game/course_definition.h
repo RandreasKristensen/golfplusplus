@@ -39,6 +39,16 @@ struct course_sky {
     float lowest_sun_deg = -90.0f;
 };
 
+// The air over a course: how high it lies (its world origin's height above
+// sea level, EU-DEM) and its climate on its date (DMI's 1991-2020 normals for
+// the Danish courses' midsummer): the day's mean temperature and how far the
+// coldest morning lies below the warmest afternoon, on a clear day.
+struct course_air {
+    float elevation_meters = 0.0f;
+    float mean_temperature_c = 0.0f;
+    float daily_temperature_range_c = 0.0f;
+};
+
 // A course manifest (assets/world/courses/<course>/course.json). Its file
 // references are written relative to its folder; course_in_folder makes
 // them relative to the asset root.
@@ -52,4 +62,14 @@ struct course_definition {
     std::string world;
     course_backdrop backdrop;
     course_sky sky;
+    course_air air;
+    // How fast its greens roll, as a stimpmeter reading in feet.
+    float green_stimp_feet = 0.0f;
+    // A practice ground (course.json "practice", default false): every hole
+    // is a station where F drops a fresh ball any time, nothing is scored or
+    // rewarded and no round is played (game/course_session.h).
+    bool practice = false;
+    // Whether golfers get a cart here (course.json "carts", default true);
+    // without one the bag starts on the back.
+    bool carts = true;
 };

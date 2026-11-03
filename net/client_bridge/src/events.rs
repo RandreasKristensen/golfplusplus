@@ -8,23 +8,29 @@ use std::sync::{Arc, Mutex};
 
 pub enum Row {
     Player(PlayerRow),
-    PlayerSkill(PlayerSkillRow),
-    HoleScore(HoleScoreRow),
-    CompletedCourse(CompletedCourseRow),
-    Collected(CollectedRow),
-    WorldFlag(WorldFlagRow),
+    MySkills(GolferSkillRow),
+    MyGolferProgress(GolferProgressRow),
+    MyCompletedCourses(CompletedCourseRow),
+    MyCollected(CollectedRow),
+    MyWorldFlags(WorldFlagRow),
     Room(RoomRow),
     RoomMember(RoomMemberRow),
     GolfGroup(GolfGroupRow),
     AvatarMotion(AvatarMotionRow),
     Ball(BallRow),
     ShotEvent(ShotEventRow),
-    EmoteEvent(EmoteEventRow),
+    ItemUseEvent(ItemUseEventRow),
+    PlayerLoadout(PlayerLoadoutRow),
+    RunningEffect(RunningEffectRow),
+    PlayerBag(PlayerBagRow),
+    GreenFlag(GreenFlagRow),
     MyAccount(PlayerRow),
     MyLinkCode(LinkCodeView),
     MyLinkStatus(LinkStatus),
     ServerProtocol(ServerProtocolInfo),
+    ServerContentHash(ServerContentInfo),
     GolfCart(GolfCartRow),
+    RideMotion(RideMotionRow),
 }
 
 pub enum Event {
@@ -55,12 +61,18 @@ pub fn push(queue: &EventQueue, event: Event) {
 pub struct Arena {
     strings: Vec<Box<[u8]>>,
     ints: Vec<Box<[i32]>>,
+    mounts: Vec<Box<[StdbLoadoutMount]>>,
+    snapshots: Vec<Box<[StdbSnapshotEntry]>>,
+    levels: Vec<Box<[StdbSkillLevel]>>,
 }
 
 impl Arena {
     pub fn clear(&mut self) {
         self.strings.clear();
         self.ints.clear();
+        self.mounts.clear();
+        self.snapshots.clear();
+        self.levels.clear();
     }
 
     fn text(&mut self, text: &str) -> StdbString {
@@ -68,6 +80,32 @@ impl Arena {
         let string = StdbString { data: bytes.as_ptr() as *const _, len: bytes.len() };
         self.strings.push(bytes);
         string
+    }
+
+    fn mounts(&mut self, mounts: &[LoadoutMount]) -> (*const StdbLoadoutMount, usize) {
+        let owned: Box<[StdbLoadoutMount]> =
+            mounts.iter().map(|m| StdbLoadoutMount { mount: self.text(&m.mount), item_id: self.text(&m.item_id) }).collect();
+        let view = (owned.as_ptr(), owned.len());
+        self.mounts.push(owned);
+        view
+    }
+
+    fn snapshot(&mut self, entries: &[SnapshotRowEntry]) -> (*const StdbSnapshotEntry, usize) {
+        let owned: Box<[StdbSnapshotEntry]> = entries
+            .iter()
+            .map(|e| StdbSnapshotEntry { kind: e.kind, x: e.x, y: e.y, z: e.z, yaw: e.yaw, shooter: e.shooter })
+            .collect();
+        let view = (owned.as_ptr(), owned.len());
+        self.snapshots.push(owned);
+        view
+    }
+
+    fn levels(&mut self, levels: &[SkillLevelEntry]) -> (*const StdbSkillLevel, usize) {
+        let owned: Box<[StdbSkillLevel]> =
+            levels.iter().map(|l| StdbSkillLevel { skill_id: self.text(&l.skill_id), level: l.level }).collect();
+        let view = (owned.as_ptr(), owned.len());
+        self.levels.push(owned);
+        view
     }
 
     fn ints(&mut self, values: &[i32]) -> (*const i32, usize) {
@@ -88,7 +126,9 @@ fn empty_event(kind: StdbEventKind) -> StdbEvent {
         retrying: false,
         table: StdbTable::Player,
         change: StdbRowChange::Insert,
-        row: StdbRow { ball: StdbBall { account_id: 0, room_id: 0, zone: 0, x: 0.0, y: 0.0, z: 0.0, stroke_count: 0, last_shot_at: 0 } },
+        row: StdbRow {
+            ball: StdbBall { account_id: 0, room_id: 0, hole: 0, x: 0.0, y: 0.0, z: 0.0, stroke_count: 0, last_shot_at: 0, in_cup: false },
+        },
     }
 }
 
@@ -97,7 +137,9 @@ fn player(arena: &mut Arena, row: &PlayerRow) -> StdbPlayer {
         account_id: row.account_id,
         display_name: arena.text(&row.display_name),
         online: row.online,
-        holes_completed: row.holes_completed,
+        hand: row.hand,
+        natural_shape: row.natural_shape,
+        favourite_colour: row.favourite_colour,
     }
 }
 
@@ -105,33 +147,31 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
     match row {
         Row::Player(r) => (StdbTable::Player, StdbRow { player: player(arena, r) }),
         Row::MyAccount(r) => (StdbTable::MyAccount, StdbRow { player: player(arena, r) }),
-        Row::PlayerSkill(r) => (
-            StdbTable::PlayerSkill,
-            StdbRow { player_skill: StdbPlayerSkill { id: r.id, account_id: r.account_id, skill_id: arena.text(&r.skill_id), xp: r.xp } },
+        Row::MySkills(r) => (
+            StdbTable::MySkills,
+            StdbRow { golfer_skill: StdbGolferSkill { id: r.id, golfer_id: r.golfer_id, skill_id: arena.text(&r.skill_id), xp: r.xp } },
         ),
-        Row::HoleScore(r) => (
-            StdbTable::HoleScore,
+        Row::MyGolferProgress(r) => (
+            StdbTable::MyGolferProgress,
             StdbRow {
-                hole_score: StdbHoleScore {
-                    id: r.id,
+                golfer_progress: StdbGolferProgress {
+                    golfer_id: r.golfer_id,
                     account_id: r.account_id,
-                    course_id: arena.text(&r.course_id),
-                    hole_index: r.hole_index,
-                    strokes: r.strokes,
-                    par: r.par,
+                    scope_id: r.scope_id,
+                    holes_completed: r.holes_completed,
                 },
             },
         ),
-        Row::CompletedCourse(r) => (
-            StdbTable::CompletedCourse,
-            StdbRow { completed_course: StdbCompletedCourse { id: r.id, account_id: r.account_id, course_id: arena.text(&r.course_id) } },
+        Row::MyCompletedCourses(r) => (
+            StdbTable::MyCompletedCourses,
+            StdbRow { completed_course: StdbCompletedCourse { id: r.id, golfer_id: r.golfer_id, course_id: arena.text(&r.course_id) } },
         ),
-        Row::Collected(r) => (
-            StdbTable::Collected,
+        Row::MyCollected(r) => (
+            StdbTable::MyCollected,
             StdbRow {
                 collected: StdbCollected {
                     id: r.id,
-                    account_id: r.account_id,
+                    golfer_id: r.golfer_id,
                     collectible_id: arena.text(&r.collectible_id),
                     repeatable: r.repeatable,
                     claim_count: r.claim_count,
@@ -139,9 +179,9 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                 },
             },
         ),
-        Row::WorldFlag(r) => (
-            StdbTable::WorldFlag,
-            StdbRow { world_flag: StdbWorldFlag { id: r.id, account_id: r.account_id, flag: arena.text(&r.flag) } },
+        Row::MyWorldFlags(r) => (
+            StdbTable::MyWorldFlags,
+            StdbRow { world_flag: StdbWorldFlag { id: r.id, golfer_id: r.golfer_id, flag: arena.text(&r.flag) } },
         ),
         Row::Room(r) => (
             StdbTable::Room,
@@ -156,7 +196,6 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                         account_id: r.account_id,
                         room_id: r.room_id,
                         group_id: r.group_id,
-                        zone: r.zone,
                         round_strokes: strokes,
                         round_strokes_count: count,
                     },
@@ -174,7 +213,6 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                     account_id: r.account_id,
                     room_id: r.room_id,
                     motion: StdbMotion {
-                        zone: r.zone,
                         mode: r.mode,
                         x: r.x,
                         y: r.y,
@@ -183,6 +221,13 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                         speed: r.speed,
                         turn_rate: r.turn_rate,
                         client_time: r.client_time,
+                        setup: StdbSetup {
+                            aim: r.setup_aim,
+                            face_open: r.setup_face_open,
+                            ball_position: r.setup_ball_position,
+                            backswing: r.setup_backswing,
+                        },
+                        crouched: r.crouched,
                     },
                     server_time_micros: r.server_time.to_micros_since_unix_epoch(),
                 },
@@ -194,30 +239,47 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                 ball: StdbBall {
                     account_id: r.account_id,
                     room_id: r.room_id,
-                    zone: r.zone,
+                    hole: r.hole,
                     x: r.x,
                     y: r.y,
                     z: r.z,
                     stroke_count: r.stroke_count,
                     last_shot_at: r.last_shot_at,
+                    in_cup: r.in_cup,
                 },
             },
         ),
-        Row::ShotEvent(r) => (
+        Row::ShotEvent(r) => {
+            let (flags_out, flags_out_count) = arena.ints(&r.flags_out);
+            let (snapshot, snapshot_count) = arena.snapshot(&r.snapshot);
+            let (levels, levels_count) = arena.levels(&r.levels);
+            (
             StdbTable::ShotEvent,
             StdbRow {
                 shot_event: StdbShotEvent {
                     room_id: r.room_id,
                     account_id: r.account_id,
-                    zone: r.zone,
+                    hole: r.hole,
                     shot: StdbShot {
                         stroke: r.stroke,
                         aim_angle: r.aim_angle,
+                        face_open: r.face_open,
+                        ball_position: r.ball_position,
+                        backswing: r.backswing,
+                        strike_timing: r.strike_timing,
                         club_id: arena.text(&r.club_id),
-                        power: r.power,
-                        cigarette_active: r.cigarette_active,
                         shot_at: r.shot_at,
+                        flags_out,
+                        flags_out_count,
                     },
+                    hand: r.hand,
+                    natural_shape: r.natural_shape,
+                    spread_scale: r.spread_scale,
+                    levels,
+                    levels_count,
+                    seed: r.seed,
+                    snapshot,
+                    snapshot_count,
                     start_x: r.start_x,
                     start_y: r.start_y,
                     start_z: r.start_z,
@@ -227,10 +289,68 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                     holed: r.holed,
                 },
             },
+            )
+        }
+        Row::ItemUseEvent(r) => (
+            StdbTable::ItemUseEvent,
+            StdbRow {
+                item_use_event: StdbItemUseEvent { room_id: r.room_id, account_id: r.account_id, item_id: arena.text(&r.item_id) },
+            },
         ),
-        Row::EmoteEvent(r) => (
-            StdbTable::EmoteEvent,
-            StdbRow { emote_event: StdbEmoteEvent { room_id: r.room_id, account_id: r.account_id, emote_id: arena.text(&r.emote_id) } },
+        Row::PlayerLoadout(r) => {
+            let (mounts, count) = arena.mounts(&r.cart_mounts);
+            (
+                StdbTable::PlayerLoadout,
+                StdbRow {
+                    player_loadout: StdbPlayerLoadout {
+                        account_id: r.account_id,
+                        cart: arena.text(&r.cart),
+                        cart_mounts: mounts,
+                        cart_mounts_count: count,
+                        smokable: arena.text(&r.smokable),
+                        drinkable: arena.text(&r.drinkable),
+                        bag: arena.text(&r.bag),
+                    },
+                },
+            )
+        }
+        Row::PlayerBag(r) => (
+            StdbTable::PlayerBag,
+            StdbRow {
+                player_bag: StdbPlayerBag {
+                    account_id: r.account_id,
+                    room_id: r.room_id,
+                    place: r.place,
+                    seat: r.seat,
+                    cart_owner: r.cart_owner,
+                    x: r.x,
+                    y: r.y,
+                    z: r.z,
+                    yaw: r.yaw,
+                    club_in_hand: arena.text(&r.club_in_hand),
+                },
+            },
+        ),
+        Row::GreenFlag(r) => (
+            StdbTable::GreenFlag,
+            StdbRow { green_flag: StdbGreenFlag { id: r.id, room_id: r.room_id, hole: r.hole } },
+        ),
+        Row::RunningEffect(r) => (
+            StdbTable::RunningEffect,
+            StdbRow {
+                running_effect: StdbRunningEffect {
+                    id: r.id,
+                    account_id: r.account_id,
+                    item_id: arena.text(&r.item_id),
+                    target: arena.text(&r.target),
+                    bucket: r.bucket,
+                    value: r.value,
+                    duration: r.duration,
+                    seconds: r.seconds,
+                    started_at_ms: r.started_at_ms,
+                    ends_at_ms: r.ends_at_ms,
+                },
+            },
         ),
         Row::MyLinkCode(r) => (
             StdbTable::MyLinkCode,
@@ -241,6 +361,7 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
             StdbRow { link_status: StdbLinkStatus { result: arena.text(&r.result), at_micros: r.at.to_micros_since_unix_epoch() } },
         ),
         Row::ServerProtocol(r) => (StdbTable::ServerProtocol, StdbRow { server_protocol: StdbServerProtocol { version: r.version } }),
+        Row::ServerContentHash(r) => (StdbTable::ServerContentHash, StdbRow { server_content: StdbServerContent { hash: r.hash } }),
         Row::GolfCart(r) => (
             StdbTable::GolfCart,
             StdbRow {
@@ -252,6 +373,31 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                     z: r.z,
                     yaw: r.yaw,
                     passenger: r.passenger,
+                    condition: r.condition,
+                    driver: r.driver,
+                    motion_id: r.motion_id,
+                },
+            },
+        ),
+        Row::RideMotion(r) => (
+            StdbTable::RideMotion,
+            StdbRow {
+                ride_motion: StdbRideMotion {
+                    rider: r.rider,
+                    owner: r.owner,
+                    motion: StdbMotion {
+                        mode: r.mode,
+                        x: r.x,
+                        y: r.y,
+                        z: r.z,
+                        yaw: r.yaw,
+                        speed: r.speed,
+                        turn_rate: r.turn_rate,
+                        client_time: r.client_time,
+                        setup: StdbSetup::default(),
+                        crouched: false,
+                    },
+                    server_time_micros: r.server_time.to_micros_since_unix_epoch(),
                 },
             },
         ),

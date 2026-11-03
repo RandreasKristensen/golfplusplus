@@ -8,7 +8,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[sats(crate = __lib)]
 pub struct WorldFlagRow {
     pub id: u64,
-    pub account_id: u64,
+    pub golfer_id: u64,
     pub flag: String,
 }
 
@@ -21,7 +21,7 @@ impl __sdk::InModule for WorldFlagRow {
 /// Provides typed access to columns for query building.
 pub struct WorldFlagRowCols {
     pub id: __sdk::__query_builder::Col<WorldFlagRow, u64>,
-    pub account_id: __sdk::__query_builder::Col<WorldFlagRow, u64>,
+    pub golfer_id: __sdk::__query_builder::Col<WorldFlagRow, u64>,
     pub flag: __sdk::__query_builder::Col<WorldFlagRow, String>,
 }
 
@@ -30,7 +30,7 @@ impl __sdk::__query_builder::HasCols for WorldFlagRow {
     fn cols(table_name: &'static str) -> Self::Cols {
         WorldFlagRowCols {
             id: __sdk::__query_builder::Col::new(table_name, "id"),
-            account_id: __sdk::__query_builder::Col::new(table_name, "account_id"),
+            golfer_id: __sdk::__query_builder::Col::new(table_name, "golfer_id"),
             flag: __sdk::__query_builder::Col::new(table_name, "flag"),
         }
     }
@@ -40,7 +40,7 @@ impl __sdk::__query_builder::HasCols for WorldFlagRow {
 ///
 /// Provides typed access to indexed columns for query building.
 pub struct WorldFlagRowIxCols {
-    pub account_id: __sdk::__query_builder::IxCol<WorldFlagRow, u64>,
+    pub golfer_id: __sdk::__query_builder::IxCol<WorldFlagRow, u64>,
     pub id: __sdk::__query_builder::IxCol<WorldFlagRow, u64>,
 }
 
@@ -48,7 +48,7 @@ impl __sdk::__query_builder::HasIxCols for WorldFlagRow {
     type IxCols = WorldFlagRowIxCols;
     fn ix_cols(table_name: &'static str) -> Self::IxCols {
         WorldFlagRowIxCols {
-            account_id: __sdk::__query_builder::IxCol::new(table_name, "account_id"),
+            golfer_id: __sdk::__query_builder::IxCol::new(table_name, "golfer_id"),
             id: __sdk::__query_builder::IxCol::new(table_name, "id"),
         }
     }

@@ -12,15 +12,26 @@
 #include <vector>
 
 namespace {
+// The shipped course with this id.
+const course_definition& course_named(const std::string& id) {
+    for (const course_definition& course : shipped_content().courses) {
+        if (course.id == id) {
+            return course;
+        }
+    }
+    CHECK(id == "no such course");
+    return shipped_content().courses.front();
+}
+
 // The shipped tuning's weather on a course, every 15 game minutes over 60
 // game days.
-std::vector<weather_state> weather_over_days(const std::uint32_t seed) {
+std::vector<weather_state> weather_over_days(const course_definition& course) {
     const game_tuning& tuning = shipped_content().tuning;
     const double real_ms_per_game_hour = 3600000.0 / tuning.sky_clock.game_days_per_real_day;
     const std::int64_t step = static_cast<std::int64_t>(real_ms_per_game_hour / 4.0);
     std::vector<weather_state> out;
     for (std::int64_t i = 0; i < 60 * 24 * 4; ++i) {
-        out.push_back(weather_at(tuning.weather, tuning.wind, tuning.sky_clock, seed, tuning.sky_clock.anchor_unix_ms + i * step));
+        out.push_back(weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course, tuning.sky_clock.anchor_unix_ms + i * step));
     }
     return out;
 }
@@ -32,7 +43,7 @@ bool foggy(const weather_kind kind) {
 
 TEST_CASE("the weather is the same at the same moment on the same course, and differs between courses") {
     const game_tuning& tuning = shipped_content().tuning;
-    const std::uint32_t here = course_weather_seed("marienlyst_golfklub");
+    const course_definition& here = course_named("marienlyst_golfklub");
     const std::int64_t now = 1800000000000;
     const weather_state a = weather_at(tuning.weather, tuning.wind, tuning.sky_clock, here, now);
     const weather_state b = weather_at(tuning.weather, tuning.wind, tuning.sky_clock, here, now);
@@ -40,12 +51,12 @@ TEST_CASE("the weather is the same at the same moment on the same course, and di
     CHECK(a.wind == b.wind);
     CHECK(a.wetness == b.wetness);
     CHECK(course_weather_seed("marienlyst_golfklub") != course_weather_seed("kalo_golf_club"));
-    const weather_state there = weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course_weather_seed("kalo_golf_club"), now);
+    const weather_state there = weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course_named("kalo_golf_club"), now);
     CHECK(there.wind != a.wind);
 }
 
 TEST_CASE("every kind of weather comes round, mostly dry") {
-    const std::vector<weather_state> days = weather_over_days(course_weather_seed("marienlyst_golfklub"));
+    const std::vector<weather_state> days = weather_over_days(course_named("marienlyst_golfklub"));
     std::array<int, weather_kind_count> counts{};
     for (const weather_state& weather : days) {
         ++counts[static_cast<std::size_t>(weather.kind)];
@@ -61,7 +72,7 @@ TEST_CASE("every kind of weather comes round, mostly dry") {
 TEST_CASE("the weather's numbers move smoothly and push each other") {
     const weather_tuning& tuning = shipped_content().tuning.weather;
     for (const char* const course : {"marienlyst_golfklub", "kalo_golf_club"}) {
-        const std::vector<weather_state> days = weather_over_days(course_weather_seed(course));
+        const std::vector<weather_state> days = weather_over_days(course_named(course));
         int sun_showers = 0;
         for (std::size_t i = 0; i < days.size(); ++i) {
             const weather_state& now = days[i];
@@ -102,7 +113,7 @@ TEST_CASE("the weather's numbers move smoothly and push each other") {
 TEST_CASE("there is always some wind, sometimes strong") {
     const game_tuning& tuning = shipped_content().tuning;
     float strongest = 0.0f;
-    for (const weather_state& weather : weather_over_days(course_weather_seed("kalo_golf_club"))) {
+    for (const weather_state& weather : weather_over_days(course_named("kalo_golf_club"))) {
         CHECK(wind_speed(weather) >= tuning.wind.calm_speed - 0.001f);
         strongest = std::max(strongest, wind_speed(weather));
     }
@@ -110,7 +121,7 @@ TEST_CASE("there is always some wind, sometimes strong") {
 }
 
 TEST_CASE("the ground gets wetter in steady rain and dries in the sun") {
-    const std::vector<weather_state> days = weather_over_days(course_weather_seed("mollerup_golf_club"));
+    const std::vector<weather_state> days = weather_over_days(course_named("mollerup_golf_club"));
     const weather_tuning& tuning = shipped_content().tuning.weather;
     float wettest = 0.0f;
     int wetting = 0;
@@ -168,7 +179,7 @@ TEST_CASE("a round of 18 holes mostly sees at most three skies, and fog lies mos
     const std::size_t round_samples =
         static_cast<std::size_t>(round_real_hours * tuning.sky_clock.game_days_per_real_day * 4.0);
     for (const char* const course : {"marienlyst_golfklub", "kalo_golf_club", "mollerup_golf_club"}) {
-        const std::vector<weather_state> days = weather_over_days(course_weather_seed(course));
+        const std::vector<weather_state> days = weather_over_days(course_named(course));
         int rounds = 0;
         int calm_rounds = 0;
         for (std::size_t start = 0; start + round_samples <= days.size(); start += round_samples / 2) {
@@ -222,7 +233,7 @@ TEST_CASE("each kind of weather comes about as often as it should") {
         int run = 0;
         for (int hour = 0; hour < days * 24; ++hour) {
             const weather_state weather =
-                weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course_weather_seed(course),
+                weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course_named(course),
                            tuning.sky_clock.anchor_unix_ms + static_cast<std::int64_t>(hour * ms_per_hour));
             const int kind = static_cast<int>(weather.kind);
             spells[static_cast<std::size_t>(kind)] += kind != previous ? 1 : 0;

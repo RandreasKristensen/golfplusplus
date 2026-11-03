@@ -9,6 +9,7 @@
 
 #include "server_test_support.h"
 
+#include <algorithm>
 #include <iterator>
 #include <string>
 #include <vector>
@@ -30,13 +31,13 @@ bool same_shot(const shot_result& a, const shot_result& b) {
     return true;
 }
 
-bool same_trees(const std::vector<tree_body>& a, const std::vector<tree_body>& b) {
+bool same_solids(const std::vector<solid>& a, const std::vector<solid>& b) {
     if (a.size() != b.size()) {
         return false;
     }
     for (std::size_t i = 0; i < a.size(); ++i) {
-        if (a[i].base != b[i].base || a[i].shape.trunk_radius != b[i].shape.trunk_radius ||
-            a[i].shape.leaf_radius != b[i].shape.leaf_radius) {
+        if (a[i].kind != b[i].kind || a[i].base != b[i].base || a[i].end != b[i].end || a[i].radius != b[i].radius ||
+            a[i].height != b[i].height || a[i].stops_ball != b[i].stops_ball || a[i].restitution != b[i].restitution) {
             return false;
         }
     }
@@ -51,6 +52,8 @@ TEST_CASE("the server loads the content it needs and only courses with a world")
     CHECK(loaded.error.empty());
     CHECK(loaded.content->clubs.size() == shipped_content().clubs.size());
     CHECK(loaded.content->font.glyphs.size() > 26U);
+    REQUIRE(loaded.content->skills.skills.size() == shipped_content().skills.skills.size());
+    CHECK(loaded.content->skills.curves.size() == shipped_content().skills.curves.size());
     REQUIRE(loaded.content->courses.size() == 1U);
     CHECK(loaded.content->courses[0].id == fixture_hub_course().id);
     CHECK(find_server_course(*loaded.content, "missing") == nullptr);
@@ -67,10 +70,67 @@ TEST_CASE("missing server content is reported, not filled in") {
     CHECK(loaded.error.find(tuning_path) != std::string::npos);
 
     fixture = fixture_content_files();
+    fixture.files.erase(curves_path);
+    const server_content_load_result without_curves = parse_server_content(fixture.files);
+    CHECK(!without_curves.content.has_value());
+    CHECK(without_curves.error.find(curves_path) != std::string::npos);
+
+    fixture = fixture_content_files();
     const server_content content = *parse_server_content(fixture.files).content;
     fixture.files.erase(std::string(fixture_hub_folder) + "/holes/test2.json");
     CHECK(!build_server_course(fixture.files, content, fixture_hub_course().id).has_value());
     CHECK(!build_server_course(fixture.files, content, "missing").has_value());
+}
+
+TEST_CASE("content hash: shipped files match the server and game fingerprints") {
+    content_fixture fixture;
+    for (const char* folder : simulation_content_folders) {
+        add_content_folder(fixture, asset_root(), folder);
+    }
+    for (const auto& [path, text] : fixture.texts) {
+        fixture.files.emplace(path, text);
+    }
+    const server_content_load_result loaded = parse_server_content(fixture.files);
+    REQUIRE(loaded.content);
+    CHECK(loaded.content->content_hash == shipped_content().content_hash);
+    CHECK(!load_simulation_content_hash(fixture_root()));
+}
+
+TEST_CASE("content hash: rules, equipment, progression, fonts and every course file matter") {
+    content_files files{{"play/tuning/ball.json", "{}"}, {"play/progression/skills.json", "[]"},
+                        {"play/items/default_loadout.json", "{}"}, {"play/items/club/driver.json", "{}"},
+                        {"interface/fonts/font.json", "{}"}, {"world/courses/test/course.json", "{}"},
+                        {"world/courses/test/world.json", "{}"}, {"world/courses/test/holes/h01.json", "{}"}};
+    const std::uint64_t hash = simulation_content_hash(files);
+    for (const auto& [path, text] : files) {
+        content_files changed = files;
+        changed[path] = "{\"changed\":true}";
+        CHECK(simulation_content_hash(changed) != hash);
+        changed = files;
+        changed.erase(path);
+        CHECK(simulation_content_hash(changed) != hash);
+        changed.emplace(path + ".json", text);
+        CHECK(simulation_content_hash(changed) != hash);
+    }
+    files.emplace("world/courses/added/holes/h01.json", "{}");
+    CHECK(simulation_content_hash(files) != hash);
+    files.erase("world/courses/added/holes/h01.json");
+    for (const char* path : {"picture/lighting.json", "sound/sounds.json", "interface/text/en.json", "play/online.json",
+                             "world/courses/test/backdrops/a.png", "world/courses_extra/test.json"}) {
+        files.emplace(path, "ignored");
+    }
+    CHECK(simulation_content_hash(files) == hash);
+}
+
+TEST_CASE("content hash: line endings agree and paths and file boundaries are framed") {
+    CHECK(simulation_content_hash({{"play/tuning/a.json", "{\n}\n"}}) ==
+          simulation_content_hash({{"play/tuning/a.json", "{\r\n}\r\n"}}));
+    CHECK(simulation_content_hash({{"play/tuning/a.json", "\r"}}) !=
+          simulation_content_hash({{"play/tuning/a.json", ""}}));
+    CHECK(simulation_content_hash({{"play/tuning/a.json", "b"}}) !=
+          simulation_content_hash({{"play/tuning/b.json", "a"}}));
+    CHECK(simulation_content_hash({{"play/tuning/a.json", "play/tuning/b.json"}}) !=
+          simulation_content_hash({{"play/tuning/a.json", ""}, {"play/tuning/b.json", ""}}));
 }
 
 // Both sides run natively here, so this proves the server builds the same
@@ -81,36 +141,57 @@ TEST_CASE("the server builds each hole where the game plays it, and shots land i
     const server_content content = *parse_server_content(fixture.files).content;
     const std::optional<server_course> course = build_server_course(fixture.files, content, fixture_hub_course().id);
     REQUIRE(course.has_value());
-    REQUIRE(course->shot_holes.size() == fixture_hub_course().holes.size());
+    REQUIRE(course->area.cups.size() == fixture_hub_course().holes.size());
     int tree_hits = 0;
 
-    for (std::size_t i = 0; i < course->shot_holes.size(); ++i) {
+    for (std::size_t i = 0; i < course->area.cups.size(); ++i) {
         game_state game = started_game(fixture_hub_course());
-        REQUIRE(start_hub_hole(game, i));
+        REQUIRE(tee_up(game, i, false));
         constexpr std::int64_t shot_at = 1800000000000;
         shot_course client = current_shot_course(game);
         client.weather = course_weather_at(game, shot_at);
-        const shot_course server = server_shot_course(*course, i, shot_at, content);
+        const shot_course server = server_shot_course(*course, i, shot_at, {}, content);
 
         CHECK(server.hole.pin == client.hole.pin);
         CHECK(server.weather.wind == client.weather.wind);
         CHECK(server.weather.wetness == client.weather.wetness);
         CHECK(glm::length(server.weather.wind) > 0.0f);
-        CHECK(same_trees(server.trees, client.trees));
-        CHECK(course->holes[i].tee_position == game.hole->tee_position);
+        CHECK(same_solids(server.area.solids, client.area.solids));
+        CHECK(course->holes[i].tee_position == game.holes[game.ball->hole].tee_position);
 
-        shot_input input;
-        input.ball_start = game.ball.position;
-        input.aim_angle = game.aim_angle + glm::radians(-15.0f);
-        input.club_id = "driver";
-        input.power = 0.85f;
-        input.shot_at = shot_at;
-        const shot_result on_client = simulate_shot(input, client, game.tuning, game.clubs, game.rewards);
-        const shot_result on_server = simulate_shot(input, server, content.tuning, content.clubs, content.rewards);
-        CHECK(on_client.duration > 0.0f);
-        CHECK(same_shot(on_client, on_server));
-        for (const shot_event& event : on_server.events) {
-            tree_hits += event.kind == shot_event_kind::tree_hit ? 1 : 0;
+        for (const float aim_off : {-25.0f, -15.0f, 15.0f, 25.0f}) {
+            shot_setup input;
+            input.ball_start = game.ball->position;
+            input.aim_angle = wrap_angle(game.player.yaw + glm::radians(aim_off));
+            input.club_id = "seven_iron";
+            input = stocked(input, game, 0.85f);
+            input.shot_at = shot_at;
+            const shot_result on_client = simulate_shot(input, client, game.tuning, game.clubs);
+            const shot_result on_server = simulate_shot(input, server, content.tuning, content.clubs);
+            CHECK(on_client.duration > 0.0f);
+            CHECK(same_shot(on_client, on_server));
+            for (const shot_event& event : on_server.events) {
+                tree_hits += event.kind == shot_event_kind::tree_hit || event.kind == shot_event_kind::leaves ? 1 : 0;
+            }
+        }
+        // And hit low straight at the hole's nearest tree.
+        refresh_static_anchor_cache(game);
+        const glm::vec3 from = game.ball->position;
+        const auto nearest = std::min_element(game.static_anchors.trees.begin(), game.static_anchors.trees.end(),
+                                              [&from](const tree_body& a, const tree_body& b) {
+                                                  return horizontal_distance(a.base, from) < horizontal_distance(b.base, from);
+                                              });
+        REQUIRE(nearest != game.static_anchors.trees.end());
+        shot_setup roll;
+        roll.ball_start = from;
+        roll.aim_angle = wrap_angle(yaw_towards(from, nearest->base));
+        roll.club_id = "driver";
+        roll = stocked(roll, game, 0.3f);
+        roll.shot_at = shot_at;
+        const shot_result rolled = simulate_shot(roll, server, content.tuning, content.clubs);
+        CHECK(same_shot(simulate_shot(roll, client, game.tuning, game.clubs), rolled));
+        for (const shot_event& event : rolled.events) {
+            tree_hits += event.kind == shot_event_kind::tree_hit || event.kind == shot_event_kind::leaves ? 1 : 0;
         }
     }
     // The shots go through the trees, not only over open ground.

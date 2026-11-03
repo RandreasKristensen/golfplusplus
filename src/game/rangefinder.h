@@ -5,9 +5,13 @@
 // whose laser reads the distance to whatever is at its reticle (the centre
 // of the view): the ground, a tree, a pole, a sign, a net, a cart or a
 // person (game/sight_line.h). It locks onto any hole's flag near the
-// reticle that it can see. Rain and fog spoil it: its readings wander, or
-// it reads nonsense. Presentation and aiming only: it never changes a shot.
-// An item (owns_rangefinder in game/progress_rules.h).
+// reticle that it can see. Like a real golf laser it shows the level
+// distance, the height and the slope's plays-like distance, reads nothing
+// nearer than its minimum range, and takes the nearest return in its beam
+// (first target priority): fog and rain shorten its reach, and their
+// droplets send back false short readings. Presentation and aiming only:
+// it never changes a shot. An item (owns_rangefinder in
+// game/progress_rules.h).
 
 #include "game/game_input.h"
 #include "game/game_tuning.h"
@@ -28,6 +32,8 @@ struct rangefinder_reading {
     std::optional<float> distance_meters;
     // Meters the same point stands above the ground under me (below, negative).
     std::optional<float> height_meters;
+    // Straight metres from the eye to it, which the laser travels.
+    std::optional<float> sight_meters;
     std::optional<glm::vec3> flag;  // the flagstick's foot, while locked onto it
 };
 
@@ -58,9 +64,12 @@ std::optional<glm::vec3> ground_hit(const play_area& area,
 // every hole's flag (this hole's where its pin is now).
 rangefinder_view rangefinder_view_of(const game_state& state);
 
-// What it reads from `eye` along `look` for a player standing at `player`:
-// the nearest flag within the lock angle of the look whose flag it can see
-// from `eye`, else the first thing the look meets, standing or ground.
+// What it reads in clear air from `eye` along `look` for a player standing
+// at `player`: nothing when the first thing the look meets is nearer than
+// min_range_meters; else the nearest flag within the lock angle of the
+// look, from min_range_meters to flag_range_meters away, whose cloth it
+// can see from `eye`; else that first thing, standing or ground, within
+// max_range_meters.
 rangefinder_reading read_rangefinder(const play_area& area,
                                      const rangefinder_view& view,
                                      const glm::vec3& player,
@@ -69,14 +78,22 @@ rangefinder_reading read_rangefinder(const play_area& area,
                                      const rangefinder_tuning& tuning,
                                      const world_scale_tuning& scale);
 
-// `clean` as `weather` lets it through on reading `ping` (a new one every
-// ping_seconds): true in the dry; off either way by up to light_rain_error
-// at light rain's amount (less in less) and light_fog_error at light fog's,
-// whichever is more; once the rain is rain (rain_kind) or the fog fog
-// (fog_kind), nonsense: blank blank_share of the time, else any distance
-// in range, never locked onto a flag.
-rangefinder_reading weathered_reading(const rangefinder_reading& clean, const weather_state& weather,
-                                      const weather_tuning& weather_rules, const rangefinder_tuning& tuning, std::uint32_t ping);
+// How far it reaches through `weather` to a target it reaches `range`
+// metres away in clear air: fog and rain dim the beam, adding up, so that
+// full fog (rain) alone cuts max_range_meters to fog_reach_meters
+// (rain_reach_meters).
+float rangefinder_reach(const weather_state& weather, const rangefinder_tuning& tuning, float range);
+
+// `clean`, read along unit `look` from an eye `eye_height_meters` over my
+// ground, as `weather` lets it through on reading `ping` (a new one every
+// ping_seconds). Droplets return the beam: on rain_false_share of pings at
+// full rain plus fog_false_share at full fog, fewer the nearer the target
+// is within its reach, it reads them instead, from min_range_meters to
+// false_return_meters off and short of the target, never on a flag. A
+// target beyond its reach, or the sky, reads droplets on that share of
+// pings and nothing on the rest. True readings are as clean.
+rangefinder_reading weathered_reading(const rangefinder_reading& clean, const glm::vec3& look, float eye_height_meters,
+                                      const weather_state& weather, const rangefinder_tuning& tuning, std::uint32_t ping);
 
 // Held up this frame: owned, held, on foot and walking.
 bool rangefinder_raised(const game_state& state, const game_input& input);
@@ -91,6 +108,11 @@ bool rangefinder_lock_lit(const game_state& state);
 // The eyepiece's zoom now: 1 at the eye, the tuning's magnification held
 // up. The look turns this much slower.
 float rangefinder_magnification(const game_state& state);
+
+// The distance `reading` plays like on the slope: its level distance plus
+// its height, as golf lasers that show both work it out (uphill plays
+// longer, downhill shorter); none without both.
+std::optional<float> plays_like_meters(const rangefinder_reading& reading);
 
 // Whole meters, as the rangefinder and the hole signs show them.
 int rounded_rangefinder_meters(float distance_meters);

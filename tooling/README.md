@@ -8,12 +8,16 @@ local multiplayer server.
 | `hole_editor/hole-editor.html` | Browser-based editor for holes and course worlds |
 | `osm_import/` | Converts real courses from OpenStreetMap into hole/course/world JSON |
 | `art/make_art.py` | Draws the rough's grass texture and every course's sky and land backdrop panoramas |
+| `practice_ground/make_practice_ground.py` | Writes the made-up practice ground: a driving range and a putting and chipping green |
 | `audio/make_thunder.py` | Draws the thunder heard after lightning, close and far, from seeded noise |
+| `audio/make_placeholders.py` | A short silence for each placeholder sound in the manifest that has none yet |
 | `gb.cmd` / `gb.ps1` | Windows release build helper, and local multiplayer testing (see below) |
 | `release/build_release.ps1` | What Windows players download: the installer and the zip; the server package (see below) |
 | `release/build_release.sh`, `release/build_deps.sh` | What macOS and Linux players download: the .dmg and the .tar.gz (see below) |
 | `net/dev.ps1` | The local SpacetimeDB server on demand: start, publish, anonymous logins, stop |
-| `net/check_determinism.ps1` | Golden shots natively and in the server's WASM |
+| `net/check_determinism.ps1` | Golden shots, drives and walks natively and in the server's WASM |
+| `shot_lab/` | Hits the bag through the game's simulation and prints carry, apex, landing and curve (its README) |
+| `net/online_check/` | A headless client that checks a running server's answers (its README) |
 
 ## art/make_art.py
 
@@ -46,12 +50,37 @@ imports) get a default parkland one. Run it after importing a course;
 python tooling/art/make_art.py
 ```
 
+## practice_ground/make_practice_ground.py
+
+Writes `assets/world/courses/practice_ground/` (`course.json`, `world.json`,
+`holes/`) from code, the same every run: not a real place, so not an import.
+Every hole is a practice station (`"practice": true`, no carts): six range
+bays on tee boxes, each aimed at its own target green inside a ball-stop net,
+and six stations dropped round one green with no tee box (`"tee_box": false`):
+two putts, a chip off the apron, a chip out of the rough and two bunker shots.
+Change the layout in the script and rerun it, then `art/make_art.py` for its
+backdrops; never edit its output.
+
+```
+python tooling/practice_ground/make_practice_ground.py
+```
+
 ## audio/make_thunder.py
 Writes `assets/sound/effects/thunder_close.wav` and `thunder_far.wav` from
 seeded noise (no recorded audio, nothing to license), the same every run.
 
 ```
 py -3 tooling/audio/make_thunder.py
+```
+
+## audio/make_placeholders.py
+Writes a tenth of a second of silence for every placeholder `.wav` in
+`assets/sound/sounds.json` (its description starts "Placeholder") that has no
+samples yet: SDL_mixer cannot free a chunk with none. A new sound's
+placeholder is its manifest entry, then this script.
+
+```
+py -3 tooling/audio/make_placeholders.py
 ```
 
 ## gb (build helper)
@@ -207,18 +236,16 @@ control point. Points are added in order; the live spline and measurement
 labels update as you place them. Switch back to select when done.
 
 **measure** — click a point A, then point B to get the distance between them.
-Right-click clears the measurement. Useful for checking zone radii or fairway
+Right-click clears the measurement. Useful for checking zone sizes or fairway
 lengths against real distances before committing.
 
-**+ green / + bunker / + water** — click to place an elliptical material zone
-at that position: greens a 6 m circle, bunkers 3.5 m, water 8 × 5 m radii.
-Select a zone to drag it, drag the two filled handles to set each radius along
-the zone's own axes, and drag the ring handle to turn it (shift snaps to
-15°); the panel edits the same centre, radii and rotation. A zone is saved as
-`{"type": "green", "center": [x, y, z], "radii": [rx, rz],
-"rotation_degrees": d}` (a circle is `[r, r]`); the rotation turns the zone
-the way a course world's hole `rotation_degrees` turns a hole, and the two add
-up when the hole is placed.
+**+ green / + bunker / + water / + fairway** — click to place a round
+material zone there (16 points; greens 6 m across the radius, bunkers 3.5 m,
+water 8 m, fairways 15 m). Select a zone to drag it whole; drag one of its
+filled points to move it, drag a ring at a side's middle to add a point
+there, and right-click a point to remove it (a zone keeps three). The panel
+moves it by its centre. A zone is saved as its outline,
+`{"type": "green", "outline": [[x, z], ...]}`, in the hole's frame.
 
 **+ tree** — click to place a tree with default proportions (trunk 0.35 r ×
 2.4 h, leaves 1.6 r × 3.2 h). Tree mode stays active so repeated clicks paint
@@ -243,8 +270,8 @@ much: an imported hole is 0 everywhere, so the land is the hole as it is, and
 a touch-up raises or lowers it. Selecting the tee or pin also exposes X/Y/Z
 fields for quick cleanup.
 
-**Material zones** — lists all greens, bunkers, and water hazards with their
-size, rotation and centre.
+**Material zones** — lists every green, bunker, water and fairway zone with
+its area, point count and centre.
 
 **Trees** — lists all placed trees. Select one to fine-tune trunk and leaf
 dimensions.
@@ -356,7 +383,7 @@ coarse: `elevation.terrarium.ground_cell_size` metres (20).
 
 Both are downloaded once: every later import, moved hole or new ground grid in
 the same area reads the cache with no network at all. Both require
-attribution: see `docs/launch_todo.md`.
+attribution: see `docs/todo/launch_todo.md`.
 
 The `ground` grid covers every hole plus `ground.margin`, with heights
 relative to hole 1's start: each hole's tee height above sea level goes in
@@ -440,8 +467,8 @@ none stand on the fairway's middle or on greens, bunkers and water.
 
 The top-level values are defaults. Entries under `courses` are keyed by the
 generated course id and override only the fields listed there. The file also
-holds `elevation`, `ground`, `zones` (ellipse fitting, see below) and `checks`
-(verification tolerances, see below).
+holds `elevation`, `ground`, `zones` (outlines, see below),
+`generated_fairway` and `checks` (verification tolerances, see below).
 
 The HTML hole editor also loads this file when you open the project root. Use
 its generator config panel for tree defaults and path filtering values, then
@@ -451,7 +478,7 @@ regenerating Marienlyst does not silently keep stale course-specific settings.
 
 ### Course-world editing
 
-`hole-editor.html` has a world view for course hub data. Open the project root,
+`hole-editor.html` has a world view for course world data. Open the project root,
 select a course with a `world` manifest entry, then switch to world view to:
 
 - move and rotate complete holes (drag a hole's outline; Q/E or the panel turns it)
@@ -531,25 +558,84 @@ manifest's references are relative to its folder:
    - Takes the line of play from the `golf=hole` way, else the fairway
      polygon's centreline, else a straight line.
    - Estimates fairway width from the polygon's cross-section.
-   - Fits every green, bunker and water polygon with ellipses (below).
+   - Takes every green, bunker, water and fairway polygon as its outline,
+     and makes a fairway where OSM has none (below).
    - Estimates par from the length if OSM has no `par` tag.
 6. Writes the course world, each hole start exactly on its hole's tee.
 7. Verifies the result and draws its contact sheet (below).
 
-### Zones are ellipses
+### Zones are outlines
 
-A material zone is `{"type": "bunker", "center": [x, y, z], "radii": [rx, rz],
-"rotation_degrees": d}`, turned about the vertical like a hole start
-(`rotate_about_y`: the first radius lies along `(cos d, sin d)` in x/z).
-`osm_ellipse.py` fits each OSM polygon from its area-weighted second moments,
-scaled to the polygon's area. A shape one ellipse cannot follow is cut in half
-across its long axis where the fit is worst, again and again, or laid out as a
-chain of ellipses along its centre line (a creek), up to `zones.max_pieces`; a
-stream mapped as a line becomes a chain `zones.stream_half_width` wide. How
-well the ellipses cover each polygon (intersection over union) is recorded in
-the hole's `source.zone_fit` next to the OSM way, and a poor fit is a
-`ZONE_FIT` warning. A hole whose pin has no green in OSM gets a circle at the
-pin (`source.made_green`, a `GREEN_MADE` warning).
+A material zone is `{"type": "bunker", "outline": [[x, z], ...]}`: the OSM
+polygon in the hole's frame (`osm_outline.py`), simplified so no dropped point
+is more than `zones.simplify_meters` (0.5 m) off it, and grown about its middle
+to `zones.min_area` when OSM's is smaller. A stream mapped as a line becomes
+overlapping strips `zones.stream_half_width` either side of it. Bunkers closer
+than `zones.bunker_join_gap` (1.5 m, a mapping seam rather than a grass
+island) are joined into one outline by closing them on a grid of
+`zones.bunker_join_cell`; bunkers further apart stay apart, as pot and
+cluster bunkers are. The game carves overlapping bunkers to one floor in any
+case.
+
+A hole whose pin has no green in OSM gets a circle at the pin
+(`source.made_green`, a `GREEN_MADE` warning). A hole with no fairway polygon
+takes its fairway from the aerial photos where an area's source covers the
+course (below), else one from `generated_fairway`'s design numbers, which name their sources:
+it runs from the tee to the pin, 40 yd wide for a par 4 and 35 yd for a par 5,
+narrowing from 200 yd out to 25 yd at the green, and a par 3 is 25 yd wide all
+the way. The course's mapped rough (`golf=rough`) is cut out of it, which can
+leave it in pieces; a piece off the hole's line is dropped (`source.fairway`
+`"generated"`, a `FAIRWAY_GENERATED` note: map the fairway in OSM). The game
+paints fairway only inside a hole's fairway zones then, rough everywhere else
+on its ribbon.
+
+### Ground cover from aerial photos
+
+Where an area's aerial source covers the course, the importer reads what
+OSM leaves out from photos and heights (`osm_aerial.py`, the `aerial`
+config): a hole's fairway when OSM maps none (`source.fairway` `"aerial"`),
+bunkers and ponds clear of OSM's (`source.aerial_bunkers`,
+`source.aerial_waters`), and every tree, each at its measured height and
+crown in place of trees planted through OSM's woods. OSM's layout (hole
+lines, tees, greens) always comes first; mapping a fairway in OSM still beats
+the photo's.
+
+The reading calibrates itself on each course. The hole lines run down the
+fairways, so the photo along them (short of tees and greens) is the course's
+mown grass: its colour and near infrared make a signature, fitted to the
+lines' most alike pixels so carries over rough drop out. A hole's fairway is
+the ground within `mown.corridor_meters` of its line that matches it, closed,
+its small holes filled, in pieces that come within `mown.line_reach_meters`
+of the line (mapped lines run straight from tee to green, cutting a dogleg's
+corner through trees). When too little of a line is near that grass
+(`mown.least_line_share`) the photo is no use there and the design numbers
+make the fairway. Sand is ground brighter than nearly all the rough near the
+hole lines (`sand.rough_percentile`) and much less green than the grass,
+compact (not a path) and cut into it: a course whose rough is as pale as its
+sand loses bunkers rather than gaining false ones. Water is ground far darker
+in the infrared than the grass and not green (a shadow on grass is dark but
+green), each pond found whole over the course; a tree stands at each top of
+the surface above the terrain, with flat roofs left out.
+
+| Area | Source | Data |
+|---|---|---|
+| Denmark | `aerial_dk.py` | GeoDanmark's spring orthophoto, colour and colour infrared (`orto_foraar`, flown before the rough greens up), and the Danish Elevation Model's terrain and surface; the Dataforsyningen token. |
+
+A new area is a source module with the same interface (`NAME`,
+`DESCRIPTION`, `in_coverage`, `available`, `layers` returning
+`osm_aerial.Layers`) in `AERIAL_SOURCES` of `osm_golf_convert.py`, and its
+own numbers, where it needs them, under `aerial.sources.<NAME>` in the
+config. Its photos need a near-infrared band and its heights a surface model,
+and their licence must allow derived data in the game, credited. Every
+square is cached in `.osm_cache/aerial_<area>/`. `--no-aerial` imports
+without it. The reading needs `numpy` and `scipy` (and Denmark's source
+`Pillow`): `py -3 -m pip install numpy scipy pillow`.
+
+A green under half of a real one (`checks.green_reference_m2`, 525 m², the
+USGA's average) is a `GREEN_SMALL` note: OSM's outline is worth checking
+against the orthophoto. The shipped 18-hole courses' median greens are
+360–500 m²; Marienlyst's and Mollerup's par 3 greens are mapped as tiny
+shapes and grown to the least area.
 
 ### Verifying an import
 

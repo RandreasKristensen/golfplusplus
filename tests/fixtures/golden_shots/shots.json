@@ -1,12 +1,18 @@
 {
   "shots": [
-    { "hole": 0, "club": "driver", "power": 1.0, "aim_offset_degrees": 0.0, "shot_at": 1800006000000, "cigarette": false, "rest": [112.8738, 0.0226, 123.0883], "holed": false, "duration": 3.7333, "events": "LL" },
-    { "hole": 0, "club": "seven_iron", "power": 0.7, "aim_offset_degrees": 5.0, "shot_at": 1800013200000, "cigarette": false, "rest": [65.4157, 0.0213, 63.9836], "holed": false, "duration": 5.5083, "events": "LLLL" },
-    { "hole": 1, "club": "pitching_wedge", "power": 0.5, "aim_offset_degrees": -10.0, "shot_at": 1800004200000, "cigarette": true, "rest": [190.5504, 0.6247, 45.9412], "holed": false, "duration": 4.4833, "events": "LLL" },
-    { "hole": 1, "club": "four_wood", "power": 0.9, "aim_offset_degrees": 20.0, "shot_at": 1800033600000, "cigarette": false, "rest": [249.7174, 0.0250, 155.0742], "holed": false, "duration": 5.2000, "events": "LLL" },
-    { "hole": 2, "club": "putter", "power": 0.4, "aim_offset_degrees": 0.0, "shot_at": 1800038400000, "cigarette": false, "rest": [397.6422, 0.1713, -0.0000], "holed": false, "duration": 0.6000, "events": "L" },
-    { "hole": 2, "club": "sand_wedge", "power": 0.727, "aim_offset_degrees": -30.0, "shot_at": 1800034800000, "cigarette": true, "rest": [400.0000, 0.1713, 0.0000], "holed": false, "duration": 3.7000, "events": "LL" },
-    { "hole": 1, "club": "driver", "power": 0.8, "aim_offset_degrees": -15.0, "shot_at": 1800021600000, "cigarette": false, "rest": [142.7933, 0.0607, 82.5260], "holed": false, "duration": 3.3833, "events": "TLL" },
-    { "hole": 2, "club": "putter", "power": 0.179, "putt_from_pin_meters": 3.0, "aim_offset_degrees": 0.0, "shot_at": 1800020400000, "cigarette": false, "rest": [320.0000, -0.0427, -0.0000], "holed": true, "duration": 0.6750, "events": "L" }
+    { "hole": 0, "seed": 1000020, "club": "driver", "backswing": 1.0, "aim_offset_degrees": 0.0, "shot_at": 1800006000000, "rest": [165.5290, 0.0216, 197.2838], "holed": false, "duration": 8.5833, "events": "LL" },
+    { "hole": 0, "seed": 2000023, "club": "seven_iron", "backswing": 0.7, "aim_offset_degrees": 5.0, "shot_at": 1800013200000, "rest": [83.7720, 0.0179, 89.7408], "holed": false, "duration": 6.3417, "events": "LLL" },
+    { "hole": 1, "seed": 3000026, "club": "pitching_wedge", "backswing": 0.5, "aim_offset_degrees": -10.0, "shot_at": 1800004200000, "rest": [183.0007, 0.5433, 72.1816], "holed": false, "duration": 5.3583, "events": "LL" },
+    { "hole": 1, "seed": 4000029, "club": "three_wood", "backswing": 0.9, "aim_offset_degrees": 20.0, "shot_at": 1800033600000, "rest": [253.8030, 0.0216, 189.4172], "holed": false, "duration": 8.1000, "events": "LL" },
+    { "hole": 2, "seed": 5000032, "club": "putter", "backswing": 0.4, "aim_offset_degrees": 0.0, "shot_at": 1800038400000, "rest": [398.1678, 0.1713, 0.0309], "holed": false, "duration": 1.8167, "events": "" },
+    { "hole": 2, "seed": 6000035, "club": "sand_wedge", "backswing": 0.727, "aim_offset_degrees": -30.0, "shot_at": 1800034800000, "rest": [332.2980, 0.0175, -40.6991], "holed": false, "duration": 4.9167, "events": "L" },
+    { "hole": 1, "seed": 7000038, "club": "driver", "backswing": 0.8, "aim_offset_degrees": -15.0, "shot_at": 1800021600000, "rest": [147.5494, 0.0310, 136.3687], "holed": false, "duration": 6.7833, "events": "VLLL" },
+    { "hole": 2, "seed": 8000041, "club": "putter", "backswing": 0.44, "putt_from_pin_meters": 3.0, "aim_offset_degrees": 0.0, "shot_at": 1800020400000, "rest": [319.9527, -0.0803, 0.0363], "holed": true, "duration": 2.3417, "events": "CC" },
+    { "hole": 2, "seed": 9000044, "club": "driver", "backswing": 0.3, "aim_offset_degrees": -68.1, "shot_at": 1800009000000, "rest": [380.4061, 0.0189, -49.3250], "holed": false, "duration": 4.2750, "events": "VLLLL" },
+    { "hole": 2, "seed": 10000047, "club": "sand_wedge", "backswing": 0.25, "aim_offset_degrees": 0.0, "shot_at": 1800012600000, "rest": [400.0000, 0.1713, 0.0000], "holed": false, "duration": 2.7000, "events": "" },
+    { "hole": 2, "seed": 11000050, "club": "putter", "backswing": 0.6, "putt_from_pin_meters": 4.0, "snapshot": [{ "kind": "ball", "ahead_meters": 1.5 }], "aim_offset_degrees": 0.0, "shot_at": 1800020400000, "rest": [322.6438, 0.0213, 0.8546], "holed": false, "duration": 2.1000, "events": "O" },
+    { "hole": 0, "seed": 12000053, "club": "putter", "backswing": 0.6, "snapshot": [{ "kind": "person", "ahead_meters": 3.0 }, { "kind": "person", "ahead_meters": -0.8, "shooter": true }], "aim_offset_degrees": 0.0, "shot_at": 1800006000000, "rest": [1.8586, 0.1713, 1.9290], "holed": false, "duration": 1.2833, "events": "HHHH" },
+    { "hole": 2, "seed": 13000056, "club": "putter", "backswing": 0.44, "putt_from_pin_meters": 3.0, "flags_out": [2], "aim_offset_degrees": 0.0, "shot_at": 1800020400000, "rest": [320.6382, 0.0213, -0.0381], "holed": false, "duration": 2.5917, "events": "F" },
+    { "hole": 1, "seed": 14000059, "club": "seven_iron", "backswing": 1.0, "snapshot": [{ "kind": "cart", "ahead_meters": 60.0 }], "aim_offset_degrees": 0.0, "shot_at": 1800033600000, "rest": [175.5686, 0.0454, 142.5332], "holed": false, "duration": 8.5917, "events": "LL" }
   ]
 }

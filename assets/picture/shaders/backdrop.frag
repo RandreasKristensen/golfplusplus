@@ -81,6 +81,9 @@ uniform vec4 u_rainbow_look;
 const float bottom_elevation = radians(-30.0);
 const float top_elevation = radians(60.0);
 const float min_land_visibility = 0.15;
+// Past every night light's reach: how far the air scatters their light
+// towards the eye along a look at the sky.
+const float sky_distance = 10000.0;
 const float full_turn = 6.28318530718;
 const float quarter_turn = 1.57079632679;
 // A bolt wanders in this many straight runs from its top to the horizon.
@@ -350,13 +353,16 @@ void main() {
     sky = add_moon(sky, direction, elevation, pixel, behind);
     sky = add_sun(min(sky, vec3(1.0)), direction, elevation, pixel, behind);
     // Thick weather (rain's curtains, fog) hides the sky, the sun too, in its haze.
-    sky = mix(sky, haze_color.rgb, weather.w * weather.w);
+    vec3 haze_here = haze_toward(direction);
+    sky = mix(sky, haze_here, weather.w * weather.w);
     sky = add_lightning(sky, direction, elevation, pixel, max(deck.a, weather.z));
 
     // Any land at all covers the sky; what of it the haze hides shows the
     // haze colour instead.
     float coverage = clamp(land.a / min_land_visibility, 0.0, 1.0);
     float haze = mix(min((coverage - land.a) * u_haze_amount, coverage), coverage, weather.w);
-    vec3 color = sky * (1.0 - coverage) + haze_color.rgb * haze + land.rgb * flat_light(0.0) * (coverage - haze);
-    frag_color = vec4(color, 1.0);
+    vec3 color = sky * (1.0 - coverage) + haze_here * haze + land.rgb * flat_light(0.0) * (coverage - haze);
+    // The low mist out to the haze's full distance, as the ground there has it.
+    color = mix(color, haze_here, 1.0 - exp(-mist_depth(direction, sky_distance)));
+    frag_color = vec4(color + scattered_light(haze_eye.xyz + direction * sky_distance), 1.0);
 }

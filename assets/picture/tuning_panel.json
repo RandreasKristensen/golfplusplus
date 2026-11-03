@@ -1,0 +1,18 @@
+{
+  "entries": [
+    {"label": "look.sun_glow", "path": "weather/sun_glow", "step": 0.005},
+    {"label": "look.sun_forwardness", "path": "weather/sun_forwardness", "step": 0.05},
+    {"label": "look.shaft_min_glow", "path": "shafts/min_glow", "step": 0.001},
+    {"label": "look.shaft_reach", "path": "shafts/reach_meters", "step": 10},
+    {"label": "look.shaft_steps", "path": "shafts/steps", "step": 1},
+    {"label": "look.beam_near_share", "path": "night_lights/beam_near_share", "step": 0.02},
+    {"label": "look.beam_core", "path": "night_lights/beam_core_meters", "step": 0.1},
+    {"label": "look.shaft_lamps", "path": "shafts/lamps", "step": 1},
+    {"label": "look.lamp_near", "path": "shafts/lamp_near_meters", "step": 0.05},
+    {"label": "look.mist_height", "path": "keys/@sun/mist_height_meters", "step": 1},
+    {"label": "look.mist_density", "path": "keys/@sun/mist_density", "step": 0.001},
+    {"label": "look.fog_mist", "path": "weather/fog_mist_density", "step": 0.002},
+    {"label": "look.rain_mist", "path": "weather/rain_mist_density", "step": 0.001},
+    {"label": "look.haze_mist", "path": "weather/mist", "step": 0.05}
+  ]
+}

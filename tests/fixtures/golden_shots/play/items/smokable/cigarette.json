@@ -1,0 +1,11 @@
+{
+  "model": "cigarette",
+  "name": "item.cigarette.name",
+  "use": {
+    "seconds_per_use": 2.0,
+    "xp_per_use": { "skill": "smoking", "xp": 10 },
+    "sound": "emote_smoke"
+  },
+  "stacking": "refresh",
+  "effects": []
+}

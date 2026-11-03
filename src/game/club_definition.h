@@ -1,23 +1,20 @@
 #pragma once
 
-#include <string>
+// A club: an item of the club kind (assets/play/items/club/,
+// game/item_catalog.h), as the game plays it.
 
-// Club stats from assets/play/clubs/*.json.
-struct club_stats {
-    float power = 0.0f;                // launch speed at full swing power, m/s
-    float loft_degrees = 0.0f;         // launch angle above the aim direction
-    float backspin = 0.0f;             // backspin per m/s of launch speed (Magnus lift)
-    float side_spin = 0.0f;            // spin about the aim axis, curves the shot
-    float timing_speed = 1.0f;         // swing meter speed multiplier
-    float roll_friction_scale = 1.0f;  // multiplies ground friction while rolling on the green
-    float bunker_power = 0.0f;         // share of `power` a shot from a bunker keeps
-};
+#include "physics/impact.h"
+
+#include <string>
 
 struct club_definition {
     std::string id;
-    std::string name;
-    std::string label;      // short HUD label, e.g. "7I"
-    std::string hit_sound;  // sound id in assets/sound/sounds.json
-    int bag_order = 0;      // place in the bag, shortest club first
-    club_stats stats;
+    std::string name;          // a string id (assets/interface/text/en.json)
+    std::string label;         // short HUD label, e.g. "7I"
+    std::string club_class;    // driver, woods, hybrids, long_irons, short_irons, wedges or putter: its skill
+    std::string hit_sound;     // sound ids in assets/sound/sounds.json: struck in the middle,
+    std::string mishit_sound;  // and off it
+    std::string model;         // its model in assets/world/props/
+    int bag_order = 0;         // place in the bag, longest club first
+    club_spec spec;
 };

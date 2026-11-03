@@ -9,13 +9,14 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub struct BallRow {
     pub account_id: u64,
     pub room_id: u64,
-    pub zone: i32,
+    pub hole: i32,
     pub x: f32,
     pub y: f32,
     pub z: f32,
     pub stroke_count: i32,
     pub last_shot_at: i64,
     pub rests_at: __sdk::Timestamp,
+    pub in_cup: bool,
 }
 
 impl __sdk::InModule for BallRow {
@@ -28,13 +29,14 @@ impl __sdk::InModule for BallRow {
 pub struct BallRowCols {
     pub account_id: __sdk::__query_builder::Col<BallRow, u64>,
     pub room_id: __sdk::__query_builder::Col<BallRow, u64>,
-    pub zone: __sdk::__query_builder::Col<BallRow, i32>,
+    pub hole: __sdk::__query_builder::Col<BallRow, i32>,
     pub x: __sdk::__query_builder::Col<BallRow, f32>,
     pub y: __sdk::__query_builder::Col<BallRow, f32>,
     pub z: __sdk::__query_builder::Col<BallRow, f32>,
     pub stroke_count: __sdk::__query_builder::Col<BallRow, i32>,
     pub last_shot_at: __sdk::__query_builder::Col<BallRow, i64>,
     pub rests_at: __sdk::__query_builder::Col<BallRow, __sdk::Timestamp>,
+    pub in_cup: __sdk::__query_builder::Col<BallRow, bool>,
 }
 
 impl __sdk::__query_builder::HasCols for BallRow {
@@ -43,13 +45,14 @@ impl __sdk::__query_builder::HasCols for BallRow {
         BallRowCols {
             account_id: __sdk::__query_builder::Col::new(table_name, "account_id"),
             room_id: __sdk::__query_builder::Col::new(table_name, "room_id"),
-            zone: __sdk::__query_builder::Col::new(table_name, "zone"),
+            hole: __sdk::__query_builder::Col::new(table_name, "hole"),
             x: __sdk::__query_builder::Col::new(table_name, "x"),
             y: __sdk::__query_builder::Col::new(table_name, "y"),
             z: __sdk::__query_builder::Col::new(table_name, "z"),
             stroke_count: __sdk::__query_builder::Col::new(table_name, "stroke_count"),
             last_shot_at: __sdk::__query_builder::Col::new(table_name, "last_shot_at"),
             rests_at: __sdk::__query_builder::Col::new(table_name, "rests_at"),
+            in_cup: __sdk::__query_builder::Col::new(table_name, "in_cup"),
         }
     }
 }

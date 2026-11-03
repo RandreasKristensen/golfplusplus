@@ -90,14 +90,14 @@ bool camcorder_pass::ensure_size(const int width, const int height) {
     has_frame_ = false;
     const int quarter_width = std::max(1, (width + quarter - 1) / quarter);
     const int quarter_height = std::max(1, (height + quarter - 1) / quarter);
-    const framebuffer_format light{framebuffer_color::hdr, false, true, false};
-    const framebuffer_format metered{framebuffer_color::hdr, false, true, true};
-    const framebuffer_format lag{framebuffer_color::signed_hdr, false, false, false};
+    const framebuffer_format light{framebuffer_color::hdr, framebuffer_depth::none, true, false};
+    const framebuffer_format metered{framebuffer_color::hdr, framebuffer_depth::none, true, true};
+    const framebuffer_format lag{framebuffer_color::signed_hdr, framebuffer_depth::none, false, false};
     // Its alpha is where down the picture each column's light is.
     const framebuffer_format column = lag;
     return quarter_.init(quarter_width, quarter_height, metered) && bloom_target_.init(quarter_width, quarter_height, light) &&
         smear_target_.init(width, 1, column) && adapt_targets_[0].init(1, 1, lag) && adapt_targets_[1].init(1, 1, lag) &&
-        picture_.init(width, height, framebuffer_format{framebuffer_color::rgb8, false, false, false});
+        picture_.init(width, height, framebuffer_format{framebuffer_color::rgb8, framebuffer_depth::none, false, false});
 }
 
 void camcorder_pass::draw_quad(const shader_program& shader) {

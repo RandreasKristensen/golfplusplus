@@ -1,0 +1,18 @@
+{
+  "hole": {
+    "diameter_m": { "value": 0.108, "source": "Rules of Golf, Definitions: Hole, 4 1/4 in across", "checked": true },
+    "depth_m": { "value": 0.1016, "source": "Rules of Golf, Definitions: Hole, at least 4 in deep", "checked": true }
+  },
+  "capture": {
+    "dead_centre_max_speed_mps": { "value": 1.31, "source": "Holmes (1991), 'The dynamics of a golf ball falling into the cup', Am. J. Phys. 59:129-136", "checked": false },
+    "rim_roll_studies": "Hubbard & Smith (1999), 'Dynamics of golf ball-hole interactions: rolling around the rim', J. Dyn. Sys. Meas. Control 121:88-95: the capture boundary falls as the ball arrives off centre",
+    "lip_outs": "fast or off-centre balls ride the rim and spin out"
+  },
+  "flagstick": {
+    "diameter_m": { "value": 0.019, "source": "Rules of Equipment, Part 8 (Committee equipment): at most 0.75 in (19 mm) from 3 in above to 3 in below the putting surface", "checked": true },
+    "material": "fibreglass",
+    "flag_in_putting": "USGA/Pelz 2019 flag-in putting tests: centred putts hitting the flagstick mostly drop; off-centre, firm ones bounce out",
+    "checked": false
+  },
+  "leniency": { "cup_radius_scale": 2.25, "source": "golf++ design: the one named departure from the real cup (cup_leniency)" }
+}

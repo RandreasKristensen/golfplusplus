@@ -1,13 +1,12 @@
 #pragma once
 
 // What a line of sight meets standing on a course, as the rangefinder's
-// laser does (game/rangefinder.h): tree trunks and their leaves, the poles
-// of floodlights, fences and signs, the signs' boards, the fences' nets,
-// carts and people. The ground is ground_hit's. Presentation only: no shot
+// laser does (game/rangefinder.h): the area's solids (tree trunks and their
+// leaves, the poles of floodlights, fences and signs, the signs' boards, the
+// fences' nets; not flagsticks or tee boxes), carts and people. The ground is ground_hit's. Presentation only: no shot
 // ever reads it. Pure.
 
 #include "game/play_area.h"
-#include "physics/tree_collision.h"
 
 #include <optional>
 #include <vector>
@@ -28,11 +27,10 @@ struct sight_box {
     glm::vec3 half{0.0f};
 };
 
-// What stands in view this frame: the area's own things and its trees,
-// with whatever moves (carts, people) gathered by the caller.
+// What stands in view this frame: the area's own solids, with whatever moves
+// (carts, people) gathered by the caller.
 struct sight_scene {
     const play_area* area = nullptr;
-    const std::vector<tree_body>* trees = nullptr;
     std::vector<sight_post> posts;
     std::vector<sight_box> boxes;
 };

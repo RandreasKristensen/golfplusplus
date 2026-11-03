@@ -94,6 +94,18 @@ audio_manifest_parse_result parse_audio_manifest(const std::string& text) {
         sound.category = json_string(entry, "category").value_or("gameplay");
         sound.volume_multiplier = std::max(0.0f, json_float(entry, "volume_multiplier").value_or(1.0f));
         sound.type = sound_type_from_string(json_string(entry, "type").value_or("sfx"));
+        if (json_bool(entry, "placed").value_or(true)) {
+            const std::optional<float> reference = json_float(entry, "reference_distance");
+            const std::optional<float> max = json_float(entry, "max_distance");
+            if (!reference || !max || *reference <= 0.0f || *max < *reference) {
+                return fail("audio manifest sound " + sound.id +
+                            " needs reference_distance and max_distance (0 < reference <= max) or \"placed\": false");
+            }
+            if (sound.type == audio_sound_type::ambience) {
+                return fail("audio manifest ambience " + sound.id + " cannot be placed");
+            }
+            sound.spread = sound_spread{*reference, *max};
+        }
         manifest.sounds.push_back(sound);
     }
 

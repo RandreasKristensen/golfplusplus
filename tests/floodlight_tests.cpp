@@ -24,11 +24,7 @@ const game_tuning& tuning() {
 hole_data long_hole(const float length) {
     hole_data hole = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, length), 30.0f);
     hole.spline.rough_width = 90.0f;
-    material_zone green;
-    green.type = material_zone_type::green;
-    green.center = hole.pin_position;
-    green.radii = glm::vec2(12.0f, 12.0f);
-    hole.material_zones = {green};
+    hole.material_zones = {circle_zone(material_zone_type::green, hole.pin_position, 12.0f)};
     return hole;
 }
 
@@ -106,14 +102,21 @@ TEST_CASE("floodlights stand down the fairway on alternating sides, one at the t
         CHECK(again.floodlights[i].aim == area.floodlights[i].aim);
     }
 
-    // Each pole is a leafless trunk up to its lamp.
-    REQUIRE(area.floodlight_poles.size() == area.floodlights.size());
-    const tree_body& pole = area.floodlight_poles.front();
-    CHECK(near(pole.base, area.floodlights.front().foot, 0.0001f));
-    CHECK(near(pole.shape.trunk_radius, rules.pole_radius, 0.0001f));
-    CHECK(near(pole.shape.trunk_height, rules.pole_height, 0.001f));
-    CHECK(pole.shape.leaf_radius == 0.0f);
-    CHECK(pole.shape.leaf_height == 0.0f);
+    // Each pole is a solid up to its lamp, stopping shots, people and carts.
+    for (const floodlight& light : area.floodlights) {
+        REQUIRE(solid_stands_at(area, solid_kind::pole, light.foot));
+    }
+    const auto pole = std::find_if(area.solids.begin(), area.solids.end(), [&](const solid& thing) {
+        return thing.kind == solid_kind::pole && horizontal_distance(thing.base, area.floodlights.front().foot) < 0.001f;
+    });
+    REQUIRE(pole != area.solids.end());
+    CHECK(near(pole->base, area.floodlights.front().foot, 0.0001f));
+    CHECK(pole->shape == solid_shape::cylinder);
+    CHECK(near(pole->radius, rules.pole_radius, 0.0001f));
+    CHECK(near(pole->height, rules.pole_height, 0.001f));
+    CHECK(pole->stops_ball);
+    CHECK(pole->stops_walker);
+    CHECK(pole->stops_cart);
 }
 
 TEST_CASE("a short par 3 has fewer floodlights, its tee and green still lit") {
@@ -161,37 +164,39 @@ TEST_CASE("a shot into a floodlight pole is stopped like one into a tree trunk")
     });
     REQUIRE(first_fairway != area.floodlights.end());
     const floodlight& pole = *first_fairway;
-    const tree_body& pole_body = area.floodlight_poles[static_cast<std::size_t>(first_fairway - area.floodlights.begin())];
-    const club_stats& stats = shipped_content().clubs.front().stats;
-    const std::vector<tree_body> no_trees;
-    const shot_course course{area, no_trees, shot_hole{hole.pin_position}, weather_state{}};
+    const shot_course course{area, shot_hole{hole.pin_position}, weather_state{}};
 
     // Low from the fairway straight at the pole, 10 m off.
     const glm::vec3 from_fairway = safe_normalize(glm::vec3(-pole.foot.x, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
     const glm::vec3 start = pole.foot + from_fairway * 10.0f + world_up * 2.5f;
     const ball_state launched = ball_at(start, -from_fairway * 20.0f);
-    const shot_result hit = simulate_ball(launched, stats, course, tuning());
+    const shot_result hit = simulate_ball(launched, course, tuning());
     CHECK(std::any_of(hit.events.begin(), hit.events.end(),
-                      [](const shot_event& event) { return event.kind == shot_event_kind::tree_hit; }));
+                      [](const shot_event& event) { return event.kind == shot_event_kind::pole_hit; }));
     // It never got past the pole.
     CHECK(glm::dot(hit.rest_position - pole.foot, from_fairway) > 0.0f);
 
-    // The same shot with the pole taken away and a trunk of its shape in its
-    // place comes to rest at the same spot, at the same moment.
-    play_area without = area;
-    without.floodlights.clear();
-    without.floodlight_poles.clear();
-    without.floodlight_grid = tree_grid{};
-    const std::vector<tree_body> trunk = {pole_body};
-    const shot_course as_tree{without, trunk, shot_hole{hole.pin_position}, weather_state{}};
-    const shot_result tree_hit = simulate_ball(launched, stats, as_tree, tuning());
+    // The same shot with the pole made a tree trunk of its shape comes to
+    // rest at the same spot, at the same moment.
+    play_area as_trunk = area;
+    std::vector<solid> solids = area.solids;
+    for (solid& thing : solids) {
+        if (thing.kind == solid_kind::pole && horizontal_distance(thing.base, pole.foot) < 0.001f) {
+            thing.kind = solid_kind::trunk;
+            thing.restitution = tuning().solids.trunk.restitution;
+            thing.friction = tuning().solids.trunk.friction;
+        }
+    }
+    set_solids(as_trunk, std::move(solids));
+    const shot_course as_tree{as_trunk, shot_hole{hole.pin_position}, weather_state{}};
+    const shot_result tree_hit = simulate_ball(launched, as_tree, tuning());
     CHECK(tree_hit.rest_position == hit.rest_position);
     CHECK(tree_hit.duration == hit.duration);
 }
 
 TEST_CASE("floodlights are drawn as a pole, an arm and a lamp head whose face glows") {
     const play_area area = hole_area(long_hole(400.0f), tuning());
-    const render_floodlights drawn = build_render_floodlights(area, 3U, test_props().floodlight);
+    const render_floodlights drawn = build_render_floodlights(area, 3U, test_props().at("floodlight"));
     CHECK(drawn.revision == 3U);
     REQUIRE(!drawn.vertices.empty());
     CHECK(drawn.vertices.size() % 3U == 0U);

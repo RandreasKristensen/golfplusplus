@@ -72,7 +72,7 @@ A new database lets no game in until the owner sets it up with
 | `auth_issuer` | The sign-in provider whose logins count as accounts (`""`: none) |
 | `auth_audience` | The game's client id at that provider |
 | `allow_anonymous` | `true`: any game may connect without signing in |
-| `link_secret` | Keys the link codes that join two logins into one account: at least 32 characters, kept private (it never leaves the server). `""` turns linking off |
+| `server_secret` | Keys the link codes that join two logins into one account, and the dice of every shot: at least 32 characters, kept private (it never leaves the server). `""` turns linking off and lets anyone work out a shot's dice |
 
 **Friends, no sign-in** (simplest for a private server): anonymous logins on.
 Make a secret first:

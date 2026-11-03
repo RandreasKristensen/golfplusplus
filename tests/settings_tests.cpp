@@ -76,7 +76,7 @@ TEST_CASE("settings survive a write and a read, clamped and without unknown ids"
     const std::vector<setting_definition> definitions = volume_only();
     settings_values values;
     values["music_volume"] = 30;
-    const std::optional<settings_values> parsed = parse_settings_from_text(settings_to_text(values), definitions);
+    const std::optional<settings_values> parsed = parse_settings_from_text(settings_to_text(values, definitions), definitions);
     REQUIRE(parsed.has_value());
     CHECK(*parsed == values);
 
@@ -92,9 +92,26 @@ TEST_CASE("settings survive a write and a read, clamped and without unknown ids"
     std::filesystem::remove_all(root, error);
     const std::filesystem::path path = settings_file_path(root);
     CHECK(load_settings(path, definitions).empty());
-    REQUIRE(write_settings(path, values));
+    REQUIRE(write_settings(path, values, definitions));
     CHECK(load_settings(path, definitions) == values);
     std::filesystem::remove_all(root, error);
+}
+
+TEST_CASE("a golfer setting is listed with the rest but never kept in the settings file") {
+    const std::vector<setting_definition> definitions = *parse_setting_definitions_from_text(R"({"settings": [
+        {"id": "music_volume", "label": "a", "value": "b", "min": 0, "max": 100, "step": 10, "default": 100},
+        {"id": "natural_shape", "label": "c", "values": ["d", "e", "f"], "min": 0, "max": 2, "step": 1, "default": 1,
+         "golfer": true}]})");
+    REQUIRE(definitions.size() == 2U);
+    CHECK(!definitions[0].golfer);
+    CHECK(definitions[1].golfer);
+    settings_values values;
+    values["music_volume"] = 30;
+    values["natural_shape"] = 2;
+    const std::string text = settings_to_text(values, definitions);
+    CHECK(text.find("natural_shape") == std::string::npos);
+    const settings_values parsed = *parse_settings_from_text(R"({"version": 1, "values": {"natural_shape": 0}})", definitions);
+    CHECK(parsed.count("natural_shape") == 0U);
 }
 
 TEST_CASE("the settings list scrolls, and the mouse hovers, clicks the side of each arrow and wheels it") {
@@ -294,7 +311,7 @@ TEST_CASE("the master and music volume settings become the audio levels, and per
     CHECK(near(played_gain(1.0f, audio_sound_type::ambience, levels), 0.3f));
     CHECK(near(played_gain(1.0f, audio_sound_type::sfx, levels), 0.6f));
 
-    const std::optional<settings_values> parsed = parse_settings_from_text(settings_to_text(values), definitions);
+    const std::optional<settings_values> parsed = parse_settings_from_text(settings_to_text(values, definitions), definitions);
     REQUIRE(parsed.has_value());
     CHECK(parsed->at("master_volume") == 60);
     CHECK(near(audio_levels_from_settings(*parsed, definitions).master, 0.6f));

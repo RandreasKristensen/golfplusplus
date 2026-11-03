@@ -48,20 +48,17 @@
     "max_shortcut_count": 12
   },
   "zones": {
-    "good_fit_iou": 0.8,
-    "max_pieces": {
-      "green": 3,
-      "bunker": 6,
-      "water": 16
-    },
-    "min_radius": {
-      "green": 5.0,
-      "bunker": 1.5,
-      "water": 2.0
+    "simplify_meters": 0.5,
+    "min_area": {
+      "green": 78.5,
+      "bunker": 7.0,
+      "water": 12.5
     },
     "missing_green_radius": 10.0,
     "stream_half_width": 2.5,
-    "stream_piece_length": 30.0
+    "stream_piece_length": 30.0,
+    "bunker_join_gap": 1.5,
+    "bunker_join_cell": 0.25
   },
   "checks": {
     "length_warn": 0.12,
@@ -76,7 +73,8 @@
     "overlap_share": 0.6,
     "start_mismatch_m": 1.0,
     "projection_error": 0.005,
-    "zone_fit_warn_iou": 0.7,
+    "green_reference_m2": 525.0,
+    "green_small_share": 0.5,
     "par_lengths": {
       "3": [
         40,

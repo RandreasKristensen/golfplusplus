@@ -40,6 +40,7 @@ struct hole_sign_text {
     int number = 0;  // the course hole, from 1
     int par = 0;
     int meters = 0;
+    bool practice = false;  // a practice ground's bay (make_hole_sign_labels)
 };
 
 // What a sign was built from: what it says, and where it stands.

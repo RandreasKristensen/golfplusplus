@@ -128,7 +128,7 @@ TEST_CASE("every skill has a name in the string table") {
     }
     const game_content_load_result content = load_game_content(GOLFPP_ASSETS_DIR);
     REQUIRE(content.content.has_value());
-    for (const skill_definition& skill : content.content->skills) {
+    for (const skill_definition& skill : content.content->skills.skills) {
         CHECK(text->strings.entries.count(skill_text_key(skill.id)) == 1U);
     }
 }

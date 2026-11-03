@@ -1,12 +1,13 @@
 #pragma once
 
-// A hop on foot: up at player.jump_speed, pulled down by player.jump_gravity,
-// in world height from where it took off, until it comes down on the ground
-// under it: ground passing underneath (a tee box's edge) never lifts it.
-// Movement and looks only, never scored. Mine and other players' hops
-// (game/remote_players.h) follow the same arc.
+// Up and down on foot: Space hops off the ground at player.jump_speed, and
+// in the air (hopping, or off an edge higher than player.step_up) a player
+// falls at player.jump_gravity until they come down on the surface under
+// them (physics/body_collision.h settle_vertical). Movement and looks only,
+// never scored. Mine and other players' (game/remote_players.h) move alike.
 
 #include "game/game_tuning.h"
+#include "physics/body_collision.h"
 
 // Higher than this over the ground a player is in the air: a motion sent
 // from there tells others I hopped (world units).
@@ -17,15 +18,15 @@ inline float hop_seconds(const player_tuning& tuning) {
     return tuning.jump_gravity > 0.0f ? 2.0f * tuning.jump_speed / tuning.jump_gravity : 0.0f;
 }
 
-// Height over where it took off `seconds` into a hop: past the hop's
-// length it goes on falling below it, onto lower ground.
-inline float hop_rise(const float seconds, const player_tuning& tuning) {
-    return tuning.jump_speed * seconds - 0.5f * tuning.jump_gravity * seconds * seconds;
+// `body` hopping: off the ground it takes off; in the air it goes on.
+inline vertical_body hopped(const vertical_body& body, const player_tuning& tuning) {
+    return body.grounded ? vertical_body{body.y, tuning.jump_speed, false} : body;
 }
 
-// A hop off `takeoff_y`, `seconds` in, has come down onto ground at
-// `ground_y` (or met ground rising faster than it).
-inline bool hop_landed(const float takeoff_y, const float seconds, const float ground_y, const player_tuning& tuning) {
-    constexpr float landing_tolerance = 1.0e-4f;
-    return seconds > 0.0f && takeoff_y + hop_rise(seconds, tuning) <= ground_y + landing_tolerance;
+// `body` (its feet at `y`) over `dt` above a surface at `surface`.
+inline vertical_body settle_on_foot(const vertical_body& body, const float y, const float surface,
+                                    const player_tuning& tuning, const float dt) {
+    vertical_body at = body;
+    at.y = y;
+    return settle_vertical(at, surface, tuning.step_up, tuning.jump_gravity, dt);
 }

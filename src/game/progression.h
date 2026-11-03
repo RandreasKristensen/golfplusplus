@@ -1,32 +1,38 @@
 #pragma once
 
-// RuneScape-style skills: any skill id maps to an XP total, and the level
-// (1-99) follows from the XP curve. The skill list itself is data
-// (assets/play/progression/skills.json).
+// RuneScape-style skills: any skill id maps to an XP total, and its level
+// follows from its curve (game/skill_catalog.h). XP is never capped or thrown
+// away: past a curve's top level it keeps counting, so a higher top later
+// gives back everything earned.
 
+#include <cstdint>
 #include <map>
 #include <string>
-
-inline constexpr int skill_max_level = 99;
-inline constexpr int skill_max_xp = 1000000;
+#include <vector>
 
 struct skill_progress {
-    int xp = 0;
+    std::int64_t xp = 0;
 };
 
 using skill_progression = std::map<std::string, skill_progress>;
 
-struct add_skill_xp_result {
-    int before_xp = 0;
-    int after_xp = 0;
-    int applied_xp = 0;  // after - before; less than asked for at the XP cap
+// The XP each level starts at: level_xp[n] reaches level n + 1, so
+// level_xp[0] is 0, and its size is the top level. Integers, so every
+// platform reads the same level.
+struct level_curve {
+    std::vector<std::int64_t> level_xp;
 };
 
-// XP needed to reach `level` (clamped to 1..99).
-int xp_for_level(int level);
-int skill_level(int xp);
+struct add_skill_xp_result {
+    std::int64_t before_xp = 0;
+    std::int64_t after_xp = 0;
+    std::int64_t applied_xp = 0;
+};
+
+int level_at(const level_curve& curve, std::int64_t xp);
+// 0 at the top level.
+std::int64_t xp_to_next_level(const level_curve& curve, std::int64_t xp);
 // 0 for skills with no XP yet.
-int skill_xp(const skill_progression& progression, const std::string& skill_id);
-int xp_to_next_level(const skill_progression& progression, const std::string& skill_id);
-// Adds XP, clamped to [0, skill_max_xp]. Non-positive amounts change nothing.
-add_skill_xp_result add_skill_xp(skill_progression& progression, const std::string& skill_id, int amount);
+std::int64_t skill_xp(const skill_progression& progression, const std::string& skill_id);
+// Non-positive amounts change nothing.
+add_skill_xp_result add_skill_xp(skill_progression& progression, const std::string& skill_id, std::int64_t amount);

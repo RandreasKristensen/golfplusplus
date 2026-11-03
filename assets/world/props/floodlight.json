@@ -1,4 +1,5 @@
 {
+  "kind": "floodlight",
   "colors": {
     "pole": [0.44, 0.44, 0.42],
     "head": [0.16, 0.16, 0.15]

@@ -1,6 +1,6 @@
 #include "game/content_files.h"
 
-#include "game/club_loader.h"
+#include "game/content_hash.h"
 #include "game/course_loader.h"
 #include "game/course_world_loader.h"
 #include "game/hole_loader.h"
@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <system_error>
 #include <utility>
 
@@ -66,6 +67,12 @@ std::optional<std::string> read_text_file(const std::filesystem::path& path) {
     return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 }
 
+std::optional<std::filesystem::file_time_type> file_write_time(const std::filesystem::path& path) {
+    std::error_code error;
+    const std::filesystem::file_time_type time = std::filesystem::last_write_time(path, error);
+    return error ? std::nullopt : std::optional<std::filesystem::file_time_type>(time);
+}
+
 std::vector<std::filesystem::path> json_files_in_directory(const std::filesystem::path& directory) {
     std::vector<std::filesystem::path> files;
     std::error_code error;
@@ -102,6 +109,29 @@ std::optional<hole_data> load_hole_from_file(const std::string& path) {
     return text ? parse_hole_from_text(*text) : std::nullopt;
 }
 
+std::optional<std::uint64_t> load_simulation_content_hash(const std::string& asset_root) {
+    const std::filesystem::path root(asset_root);
+    std::map<std::string, std::string> texts;
+    for (const char* folder : simulation_content_folders) {
+        const std::vector<std::filesystem::path> paths = json_files_under(root / folder);
+        if (paths.empty()) {
+            return std::nullopt;
+        }
+        for (const std::filesystem::path& path : paths) {
+            const std::optional<std::string> contents = read_text_file(path);
+            if (!contents) {
+                return std::nullopt;
+            }
+            texts.emplace(path.lexically_relative(root).generic_string(), *contents);
+        }
+    }
+    content_files files;
+    for (const auto& [path, contents] : texts) {
+        files.emplace(path, contents);
+    }
+    return simulation_content_hash(files);
+}
+
 std::vector<std::string> json_texts_in_directory(const std::filesystem::path& directory) {
     std::vector<std::string> texts;
     for (const std::filesystem::path& path : json_files_in_directory(directory)) {
@@ -110,10 +140,6 @@ std::vector<std::string> json_texts_in_directory(const std::filesystem::path& di
         }
     }
     return texts;
-}
-
-std::vector<club_definition> load_clubs_from_directory(const std::string& directory) {
-    return parse_clubs_from_texts(json_texts_in_directory(directory));
 }
 
 std::optional<course_definition> load_course(const std::string& asset_root, const std::string& folder) {
@@ -171,4 +197,23 @@ bool replace_text_file(const std::filesystem::path& path, const std::string& tex
         return false;
     }
     return replace_file(temp, path);
+}
+
+item_catalog_load_result load_items(const std::string& asset_root) {
+    const std::filesystem::path root = std::filesystem::path(asset_root) / items_path;
+    std::map<std::string, std::string> texts;
+    for (const std::filesystem::path& path : json_files_under(root)) {
+        const std::filesystem::path relative = path.lexically_relative(root);
+        if (!relative.has_parent_path()) {
+            continue;  // not an item: the default loadout (game/loadout.h)
+        }
+        const std::optional<std::string> text = read_text_file(path);
+        if (!text) {
+            item_catalog_load_result result;
+            result.error = "cannot read " + path.string();
+            return result;
+        }
+        texts[relative.generic_string()] = *text;
+    }
+    return parse_item_catalog(texts);
 }

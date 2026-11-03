@@ -39,13 +39,14 @@
     "wetting_per_hour": 0.35,
     "drying_per_hour": 0.12,
     "history_hours": 48.0,
-    "step_hours": 0.25,
-    "rain_drag_coeff": 0.0004,
-    "wet_spin_loss": 0.35,
-    "wet_bounce_loss": 0.45,
-    "wet_friction_gain": 0.6,
-    "wet_roll_gain": 0.8,
-    "wet_green_friction_gain": 0.05,
-    "wet_green_roll_gain": 0.2
+    "step_hours": 0.25
+  },
+  "temperature": {
+    "coldest_hour": 5.0,
+    "warmest_hour": 15.0,
+    "cloud_range_damping": 0.6,
+    "rain_cooling_c": 3.0,
+    "noise_c": 1.5,
+    "noise_hours": 9.0
   }
 }

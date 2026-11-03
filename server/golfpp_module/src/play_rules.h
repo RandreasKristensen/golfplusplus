@@ -1,16 +1,18 @@
 #pragma once
 
 // Rules for playing online, as plain functions the module's reducers call
-// and the native tests check: which room a player joins, how far they may
-// move and what that earns, what is in reach, and whether a shot is valid.
-// The server decides shots and progress; movement comes from the client and
-// is only checked against what the game allows. Errors are the ids in
-// server_errors.h.
+// and the native tests check: which room a player joins, how far a claimed
+// position may lie, what is in reach, and whether a shot is valid. The
+// server decides shots, progress and movement (stepped from inputs:
+// movement_rules.h). Errors are the ids in server_errors.h.
 
+#include "game/bag_place.h"
 #include "game/cart_seats.h"
+#include "game/golfer.h"
 #include "game/game_tuning.h"
 #include "game/net_types.h"
 #include "game/shot_simulation.h"
+#include "physics/cart_dynamics.h"
 #include "server_content.h"
 
 #include <cstdint>
@@ -37,9 +39,24 @@ std::optional<std::uint64_t> choose_room(const std::vector<room_candidate>& room
 // below this is a valid mode.
 inline constexpr std::uint8_t motion_mode_count = static_cast<std::uint8_t>(motion_mode::swing) + 1;
 
-// The fastest the game moves a player in `mode`: walking speed on foot,
-// the fastest cart in the cart.
-float mode_speed(std::uint8_t mode, const game_tuning& tuning);
+// How fast the game moves a player: running speed on foot, their cart's
+// top speed (its item's spec) with what items do to both now, and the
+// fastest the player, their aim or their cart turns (at its top speed, full
+// lock).
+struct movement_limits {
+    float foot_speed = 0.0f;  // world units a second
+    float cart_speed = 0.0f;
+    float turn_rate = 0.0f;   // rad/s
+};
+
+// The limits for a player in `cart` with `effects` running at `now_ms`
+// (walking speed and the cart's top speed, game/effects.h).
+movement_limits movement_limits_for(const game_tuning& tuning, const cart_spec& cart,
+                                    const std::vector<active_effect>& effects, std::int64_t now_ms);
+
+// The fastest the game moves a player in `mode`: running speed on foot,
+// their cart's top speed in a cart.
+float mode_speed(std::uint8_t mode, const movement_limits& limits);
 
 struct motion_check {
     bool allowed = false;
@@ -48,37 +65,32 @@ struct motion_check {
     // that much further than its speed allows, so the slack covers lag
     // without adding up over many quick calls.
     float slack_left = 0.0f;
-    // How far the move counts for movement XP, in previous.mode (the mode the
-    // stretch was covered in): the path `previous` traced when the move
-    // ended where it leads, else the straight line; never more than that
-    // mode's own speed over the time, as offline.
-    float earned_distance = 0.0f;  // world units
 };
 
-// Moving from `previous.position` to `to` (XZ) in `seconds` (at most
-// server.max_motion_gap_seconds count), having moved as `previous` (the last
-// accepted motion): the faster of the two modes' speeds times
-// server.motion_speed_scale, plus the slack left.
+// A claimed move from `previous.position` to `to` (XZ) in `seconds` (at
+// most server.max_motion_gap_seconds count), having moved as `previous`:
+// the faster of the two modes' speeds times server.motion_speed_scale, plus
+// the slack left.
 motion_check check_motion(const net_motion& previous,
                           const glm::vec3& to,
                           float seconds,
                           std::uint8_t mode,
                           float slack_left,
+                          const movement_limits& limits,
                           const game_tuning& tuning);
+
+// A driver's ride motion to their passenger (update_ride): `to` no further
+// from where the server last had them (`last`, `seconds` before, at most
+// server.max_motion_gap_seconds) than their cart's top speed times
+// server.motion_speed_scale takes it, plus server.motion_distance_slack.
+bool ride_motion_plausible(const glm::vec3& last, float seconds, const glm::vec3& to, const movement_limits& limits,
+                           const server_tuning& tuning);
 
 // What others extrapolate an avatar with is limited to what the game can
 // produce: speed to `mode`'s (times server.motion_speed_scale), the turn
 // rate to the fastest the player, aim or cart turns.
-float clamp_motion_speed(std::uint8_t mode, float speed, const game_tuning& tuning);
-float clamp_turn_rate(float turn_rate, const game_tuning& tuning);
-
-// Which movement XP a move earns, as offline: walking on foot, the cart
-// rate only at a cart's wheel on a road (riding along earns nothing).
-struct movement_earnings {
-    bool walking = false;
-    bool cart = false;
-};
-movement_earnings movement_earns(std::uint8_t mode, bool on_road);
+float clamp_motion_speed(std::uint8_t mode, float speed, const movement_limits& limits, const server_tuning& tuning);
+float clamp_turn_rate(float turn_rate, const movement_limits& limits);
 
 // Within an interaction `radius` of `target` (XZ), plus server.interact_slack.
 bool within_interact_reach(const glm::vec3& position, const glm::vec3& target, float radius, const server_tuning& tuning);
@@ -94,17 +106,30 @@ bool within_seat_reach(const cart_pose& cart, cart_seat seat, const glm::vec3& p
 std::size_t free_parking_slot(const std::vector<glm::vec3>& carts, const glm::vec3& start, const glm::vec3& pin,
                               const cart_tuning& tuning);
 
+// --- Items ---------------------------------------------------------------------
+
+// Using `item_id` at `now_ms` (UTC milliseconds): an item with a use, the one
+// equipped in its slot of `equipped`, its last use (from `last_used_ms`, 0:
+// never) over by server.timing_slack_seconds before the server's clock says
+// so. The error id, or empty when it may be used.
+std::string check_item_use(const std::string& item_id, const loadout& equipped, std::int64_t last_used_ms,
+                           std::int64_t now_ms, const server_content& content);
+
 // --- Shots ---------------------------------------------------------------------
 
-// What a client asks for: its shot_input without the ball start, which the
-// server takes from its own ball.
+// What a client asks for: its setup's dials and club (game/shot_setup.h),
+// played from the server's own ball in the hand the server has for them,
+// and which greens' flags it has out (each a hole index).
 struct shot_request {
     int stroke = 0;  // the stroke this shot is, from 1
     float aim_angle = 0.0f;
+    float face_open = 0.0f;
+    float ball_position = 0.0f;
+    float backswing = 0.0f;
+    float strike_timing = 0.0f;
     std::string club_id;
-    float power = 0.0f;
-    bool cigarette_active = false;
     std::int64_t shot_at = 0;  // UTC milliseconds, by the client's estimate of my clock
+    std::vector<int> flags_out;
 };
 
 // The server's ball on the hole being played.
@@ -112,22 +137,59 @@ struct server_ball {
     glm::vec3 position{0.0f};
     int stroke_count = 0;
     std::int64_t last_shot_at = 0;  // the last shot's shot_at; 0 before the first
+    ball_lie lie = ball_lie::fairway;  // what it lies on: the stock setup's face from sand
+};
+
+// The player as the server has them when they shoot: who they are as a
+// golfer, the club in their hand, whether their bag is on their back, and
+// which greens' flags are out in their room.
+struct server_golfer {
+    golfer_profile golfer;
+    std::string club_in_hand;
+    bool bag_on_back = false;
+    std::vector<int> flags_out;
 };
 
 struct shot_check {
-    std::optional<shot_input> input;  // what to simulate, when the shot is valid
+    std::optional<shot_setup> input;  // what to simulate, when the shot is valid
     std::string error;
 };
 
 // The next stroke, hit from beside the ball (player.ball_interact_radius,
-// plus slack), with a known club, an aim wrapped into [-pi, pi]
-// (wrap_angle), finite power (clamped to [swing.min_power, 1]), and a shot
-// time within server.shot_time_slack_seconds of `now_unix_ms` and no earlier
-// than the last shot's, so a player cannot pick a calm moment. A cigarette
-// must be lit if the shot says so.
+// plus slack), with the club in hand and the bag set down, the flags as the
+// room has them, an aim wrapped into [-pi, pi] (wrap_angle), every dial
+// finite and within the golfer's limits (shot_ability.h), and a shot time
+// within server.shot_time_slack_seconds of `now_unix_ms` and no earlier than
+// the last shot's, so a player cannot pick a calm moment.
 shot_check check_shot(const shot_request& request,
                       const server_ball& ball,
                       const glm::vec3& player_position,
+                      const server_golfer& golfer,
                       std::int64_t now_unix_ms,
-                      bool cigarette_lit,
                       const server_content& content);
+
+// A shot's dice, which the server picks when it plays it: a keyed hash of
+// its clock and the account under the owner's server_secret
+// (account_rules.h), then the stroke, so no client can work them out before.
+// Without a secret anyone could.
+std::uint64_t server_shot_seed(const std::string& secret, std::int64_t timestamp_micros, std::uint64_t account_id, int stroke);
+
+// --- The bag -------------------------------------------------------------------
+
+// A player at `player` moving their bag from `from` to `to` (game/golf_bag.h
+// move_bag): onto their back from the ground or a cart within
+// player.bag_reach (plus slack) of where it is; from their back onto a cart
+// within reach of that seat's spot with no other bag there, or down within
+// reach of where they stand. `from_cart` and `to_cart`: the carts they name
+// (none for no such cart), `to_spot_taken` whether another bag is behind
+// that seat. The error id, or empty.
+std::string check_bag_move(const bag_place& from, const bag_place& to, const glm::vec3& player,
+                           const std::optional<cart_pose>& from_cart, const std::optional<cart_pose>& to_cart,
+                           bool to_spot_taken, const game_tuning& tuning);
+
+// Taking `club_id` from the bag at `bag`: a club in the bag, and the bag set
+// down or on its cart (`cart`, none for no such cart) within reach of the
+// player at `player`.
+std::string check_take_club(const std::string& club_id, const bag_place& bag, const glm::vec3& player,
+                            const std::optional<cart_pose>& cart,
+                            const server_content& content);

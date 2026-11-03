@@ -16,7 +16,7 @@
 
 // Where a hole begins. The hole is placed so its tee lands on `position`,
 // rotated by `rotation_degrees` around the tee. Holes are tee-relative, so
-// `position.y` is what lines their heights up with each other in the hub.
+// `position.y` is what lines their heights up with each other on the course.
 struct course_world_hole_start {
     int hole_index = -1;
     glm::vec3 position{0.0f};
@@ -66,7 +66,7 @@ struct course_world_definition {
     std::string id;
     std::string name;
     // Where the course is on Earth (projection.origin_lat/lon): the sky over
-    // it, holes and hub alike (game/sky_clock.h).
+    // it (game/sky_clock.h).
     float latitude_deg = 0.0f;
     float longitude_deg = 0.0f;
     // One per hole, in hole order (hole_starts[i].hole_index == i). A course

@@ -41,10 +41,11 @@ name_check check_player_name(const std::string& requested, const pixel_font_data
 // A link code grants a whole account, so it must not be guessable. The
 // module's own random numbers are seeded from the call's timestamp, so codes
 // come from a keyed hash of `nonce` (time, account, connection) under the
-// owner's secret link_secret (server_config, set with admin_set_config):
-// without the secret, knowing the inputs does not give the code. Linking is
-// off until the owner sets a secret at least this long.
-inline constexpr std::size_t min_link_secret_length = 32;
+// owner's server_secret (server_config, set with admin_set_config): without
+// the secret, knowing the inputs does not give the code. Linking is off until
+// the owner sets a secret at least this long. Shot seeds use it too
+// (play_rules.h server_shot_seed).
+inline constexpr std::size_t min_server_secret_length = 32;
 
 // SipHash-2-4 (Aumasson and Bernstein) of `message` under the key k0, k1.
 std::uint64_t sip_hash_24(std::uint64_t k0, std::uint64_t k1, const std::string& message);

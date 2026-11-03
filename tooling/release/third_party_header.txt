@@ -15,6 +15,14 @@ Model.
   Data owner: Klimadatastyrelsen.
   Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
 
+Their fairways, bunkers, ponds and trees are read from the Danish spring
+aerial photos and the Danish Elevation Model's surface.
+  Data: GeoDanmark ortofoto (orto_foraar) and Danmarks Hoejdemodel
+  (DHM/Overflade), dataforsyningen.dk.
+  Data owner: Klimadatastyrelsen; the orthophotos with the Danish
+  municipalities (GeoDanmark).
+  Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+
 SOFTWARE
 
 golf++ uses these libraries. Their licences follow, in full.

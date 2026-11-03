@@ -2,31 +2,42 @@
 
 (recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
 
-Todo
-- accelleration and decelleration more accurate on the cart, slower uphill but never stopping.
+## **Todo**
+
+- Fix tees, they stick up the ground too far. The ground should just be made flat around it.
+- The animations for picking up clubs are irritating AND bad. They need to be made better (a club goes in from the top with the handle first) and they shouldn't lock you in place
+There are lines on the ground when you aim - presumably to show "your ball is here, this is your shot angle" - but that should be evident from the ball and your club. Remove these, then well see if its accurate
+- The irons and wedges should have their angle evident from their asset
+- The flag seems to work against you more than it helps you - this was not the intent. It should only deflect the ball when it has way too much speed, otherwise it should help the ball kinda "stick" to it, so puts are eaiser
+- make the step counting walk much slower. Make you be able to crouch around slowly while crouched to see the curve
+Generate carpaths? from the images or from osm - maybe both, maybe some just generated when we dont have it. On one side of the fairway, physics for ball interactions, and also signs from the green to the next tee
+ The exagurated heightmap works somewhat well, somewhat unwell. somethimes the fairways are unrealistically hilly, but I like the increased total height. It it possible to have like the general heightmap as flat as normal, but somehow scale it so the top and bottom points are still scaled 20%?So say a hole was going 10meters up from tee to green, now it goes 12, but the small irregularities in the fairway, 1m is still 1m. This should also change that the cart is a little stronger uphill
+- - mulligans?
 - see each other on map? Or maybe not see yourself or ball on map at all - forcing people to drop if they dont find ball type shit
 - tee times, instead of room caps. Makes par 3s have less people naturally, and improves "group finding" - naturally getting paired with others on the same teetime.
-- collectibles are only balls, for now. Balls from given up holes become collectibles. for a scavenging skill?
+- port to sdl3, possibly also away from opengl to ensure longterm support. 
+- Make the editor better? The importer is now very good, so small edits to them in the editor should feel nice and fast.
 
 
+## **Bugs**
 
-## **Feedback**
-
-
-## **bugs**
-
-- LAG after and "entering" every hole on 18 hole courses - i suspect everything loads every time you go in/out of the "overworld/underworld"
-- fairways are always the same width, and always fairways - you cant have like driver over rough then the fairway starts type beat. Bunkers also consist of many small circles - which is fine - but it would be cool if they "merged" into one big bunker instead of having grass in the middle of most of them
+- random scores showing up on group scorecards for holes not yet played, different for each person in the group
+- too far away cart desync
+- water graphics - blue ground but only water up to the lowest edge
 - some of the lights are colliding with trees.
+- no lights for many of the jelling course tees
 - rainbows at night lmao
 - grouping is a little bugged? Maybe mostly when youve already played. Fix with a friends menu on a phone.
 - when setting up its kinda bugged where you stand; It should always be the same for people viewing other people, as it is for them
-- final scorecard says 10 hole 10
-- Tree leaves are solid! they should't be.
-- sound playing at same level always, no matter "where sound happens"
+- final scorecard says 10 hole 10the room number goes up every time you enter a new room
+. WWhat ss the logic for this? I hope we dont make a new room every time a rooa rommom is empty, and a have a bunch of empty rooms "running"?"  
+Each room should have a room number that is a % modulus of the course no. I.e. if we have 12 courses, the first number will "own" room numbers 1, 13, 25 etc.
+- it rains inside the cart.
+
+
+
 
 ## **alpha roadmap**
-
 Each of these could be a new 0.x release. Bugs are 0.0.x releases, but probably wont be released unless they are gamebreaking. Find as many as make sense, then release alpha 1.0. 
 After that the game will enter beta where it should mostly be balance, changes from feedback, and creating content - more skills, more levelup rewards from skills, importing and testing more courses, more things to buy from the shop, more ways to earn money and exp. 
 When the game feels balanced, full and fun, release :D
@@ -35,8 +46,10 @@ When the game feels balanced, full and fun, release :D
 1. **new shooting physics system.**
 
 markdown, bugs
-
+underway
 2. **real skills and leveling system and unlocks**
+
+!!!! Simulator! Simple hub world that just consists of these and like a bus where you choose where to go.
 
 - Skills in **driver**, **woods**, **hybrids**, **long irons**, **short irons**, **wedges**.
 Your ability to shoot the different clubs - chance to miss, withd hit range.
@@ -56,6 +69,7 @@ goes up from caddying. You can always caddy, doesnt have to be a tournament. Som
 - **handicap**
 Based on real life - you recieve it when you've gotten your golf card, which you get through the introductory quests. ()
 
+- **Strength, fade, draw, flop, pu**
 Basically all of these will be unlocked through quests, but all will be available in the alpha. Then when quests are added, they will be hidden behind, but dev accounts should be a thing to turn on to always make them available.
 
 3. **new menu UIs for everything ingame - map, scorecard, party and friends**  
@@ -82,10 +96,11 @@ flirting with the cart girl
  6. **To be planned**
 
 - player owned housing - small instances where friends can join and be invited, where you can displayed collectibles, tournament wins and gear like clubsets etc.
-- lil better fidelity?
 - Tournaments, some only enterable with a caddy, which should be a real person. Live and longer timed events (i.e. one entry before thursday.)
-- linux and mac 
 - player owned clubs with player made courses - endgame and expensive, revenue from players playing and making tounaments
+- having different bags affecting walking speeds differently - i.e. a smaller setup bag for par 3 courses that would allow you to walk faster.
+- wildlife, set for each course.
+- Active buffs shows, so you can see like how drunks you are, and how other things affect you - e.g. maybe you can be cold / wet, and you can have like a umbrella to lessen the debuff.
 
 ## **story**
 

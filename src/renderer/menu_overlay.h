@@ -60,14 +60,15 @@ struct render_startup_menu {
     float cursor_time = 0.0f;  // the field's cursor blinks with it
     std::vector<render_startup_tile> tiles;
     // A list that scrolls: more of it above the first tile, or below the
-    // last but one (the last is BACK), shown by arrows beside them.
+    // last but one (the last is BACK); on a picker above or below its grid
+    // of tiles. Shown by arrows beside them.
     bool more_above = false;
     bool more_below = false;
 };
 
 // Tile layout in overlay clip space for `count` tiles: a single column on
 // the main, form and confirm screens (closer together when there are many),
-// a three-column grid on the pickers.
+// a grid of three by three in a box on the pickers.
 glm::vec2 startup_tile_center(startup_menu_screen screen, int index, int count);
 glm::vec2 startup_tile_half_size(startup_menu_screen screen, int count);
 // Index of the tile under `point` (overlay clip space), or -1.

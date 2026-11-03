@@ -1,10 +1,12 @@
 #include "game/remote_players.h"
 
+#include "game/course_session.h"
 #include "game/mode_dispatch.h"
 #include "game/play_area.h"
 #include "game/player_jump.h"
 #include "game/shot_simulation.h"
 #include "game/swing.h"
+#include "game/world_sounds.h"
 #include "physics/vector_math.h"
 
 #include <algorithm>
@@ -14,9 +16,6 @@
 #include <glm/geometric.hpp>
 
 namespace {
-// Others' meters run at this speed: the club they hold isn't sent.
-constexpr float base_meter_speed = 1.0f;
-
 bool connected(const game_state& state) {
     return state.online.status == net_status::connected;
 }
@@ -30,23 +29,26 @@ void follow(game_state& state, remote_avatar& avatar, const std::uint64_t accoun
         : 0.0f;
     glm::vec3 target = extrapolate_motion(motion, since);
     float yaw = wrap_angle(motion.yaw + motion.turn_rate * since);
-    // Riding along: in the seat of the cart as it is shown.
+    // Riding along: in the seat of the cart as it is shown. Driving the
+    // cart I ride in: at its wheel as its ride motions carry it.
     const std::optional<std::uint64_t> ridden = motion.mode == motion_mode::ride ? cart_ridden_by(state, account) : std::nullopt;
+    const bool carrying_me = motion.mode == motion_mode::cart && state.ride_shown && state.ride_shown->owner == account;
     const std::optional<cart_pose> cart = ridden ? shown_cart(state, *ridden) : std::nullopt;
     if (cart) {
         target = seat_position(*cart, cart_seat::passenger, state.tuning.cart);
         yaw = cart->yaw;
+    } else if (carrying_me) {
+        target = seat_position(state.ride_shown->shown, cart_seat::driver, state.tuning.cart);
+        yaw = state.ride_shown->shown.yaw;
     }
-    target.y = terrain_height(state.area, target);
+    const float surface = terrain_height(state.area, target);
+    target.y = surface;
     // A motion sent from the air: they hopped. Half the height, as the ground
     // sampled again may differ by a hair.
     const player_tuning& player_moves = state.tuning.player;
     const bool on_foot = motion.mode == motion_mode::walk || motion.mode == motion_mode::idle;
-    if ((!known || avatar.motion_at != player.motion_at) && on_foot && !avatar.hop_elapsed &&
-        motion.position.y - terrain_height(state.area, motion.position) > 0.5f * airborne_height) {
-        avatar.hop_elapsed = 0.0f;
-        avatar.hop_takeoff_y = target.y;
-    }
+    const bool hopping = (!known || avatar.motion_at != player.motion_at) && on_foot &&
+        motion.position.y - terrain_height(state.area, motion.position) > 0.5f * airborne_height;
 
     if (!known) {
         avatar.position = target;
@@ -55,8 +57,8 @@ void follow(game_state& state, remote_avatar& avatar, const std::uint64_t accoun
         // Stepping into or out of a cart blends over the step.
         const bool steps = in_cart(avatar.mode) != in_cart(motion.mode);
         avatar.correction = avatar.position - target;
-        // In the air the hop's arc is their height.
-        if (avatar.hop_elapsed) {
+        // On foot their height is their own up and down.
+        if (on_foot) {
             avatar.correction.y = 0.0f;
         }
         avatar.correction_seconds = steps ? state.tuning.cart.step_seconds : tuning.remote_correction_seconds;
@@ -65,19 +67,53 @@ void follow(game_state& state, remote_avatar& avatar, const std::uint64_t accoun
     }
     avatar.correction_left = std::max(0.0f, avatar.correction_left - dt);
     const float blend = avatar.correction_seconds > 0.0f ? avatar.correction_left / avatar.correction_seconds : 0.0f;
+    const float shown_y = known ? avatar.position.y : surface;
     avatar.position = target + avatar.correction * blend;
-    if (avatar.hop_elapsed) {
-        *avatar.hop_elapsed += dt;
-        if (hop_landed(avatar.hop_takeoff_y, *avatar.hop_elapsed, avatar.position.y, player_moves)) {
-            avatar.hop_elapsed.reset();
-        } else {
-            avatar.position.y = avatar.hop_takeoff_y + hop_rise(*avatar.hop_elapsed, player_moves);
-        }
+    if (on_foot) {
+        const vertical_body taking_off = hopping ? hopped(avatar.vertical, player_moves) : avatar.vertical;
+        avatar.vertical = settle_on_foot(taking_off, shown_y, terrain_height(state.area, avatar.position), player_moves, dt);
+        avatar.position.y = avatar.vertical.y;
+    } else {
+        avatar.vertical = vertical_body{};
     }
     avatar.yaw = yaw;
     avatar.mode = motion.mode;
-    tick_emote(avatar.smoke_emote, state.tuning.player.emote_seconds, dt);
-    tick_emote(avatar.drink_emote, state.tuning.player.emote_seconds, dt);
+    const float crouch_seconds = state.tuning.green_read.crouch_seconds;
+    const float crouch_change = crouch_seconds > 0.0f ? dt / crouch_seconds : 1.0f;
+    avatar.crouch = clamp01(avatar.crouch + (on_foot && motion.crouched ? crouch_change : -crouch_change));
+    tick_item_use(avatar.smoking, state.items, dt);
+    tick_item_use(avatar.drinking, state.items, dt);
+}
+
+// Their bag or club handled as their bag row changes: a new place carries
+// the bag there, a new club in hand swaps it.
+void follow_bag(game_state& state, remote_avatar& avatar, const room_bag& bag, const float dt) {
+    if (avatar.handling) {
+        avatar.handling = handling_after(*avatar.handling, state.tuning.player, dt);
+    }
+    if (avatar.bag_seen && !same_place(avatar.bag_seen->place, bag.place)) {
+        bag_handling handling;
+        handling.kind = handling_kind::bag;
+        handling.from = avatar.bag_seen->place;
+        handling.to = bag.place;
+        avatar.handling = handling;
+    } else if (avatar.bag_seen && avatar.bag_seen->club_in_hand != bag.club_in_hand) {
+        bag_handling handling;
+        handling.kind = handling_kind::club;
+        handling.from = bag.place;
+        handling.to = bag.place;
+        handling.club_out = avatar.bag_seen->club_in_hand;
+        handling.club_in = bag.club_in_hand;
+        avatar.handling = handling;
+    }
+    avatar.bag_seen = bag;
+}
+
+// The swing of their club in `setup`: theirs, else the full swing's.
+swing_tempo remote_tempo(const game_state& state, const shot_setup& setup) {
+    const club_definition* club = find_club(state.clubs, setup.club_id);
+    return club != nullptr ? swing_tempo_for(*club, state.tuning.swing)
+                           : swing_tempo{state.tuning.swing.backswing_seconds, state.tuning.swing.downswing_seconds};
 }
 
 void append_trail_point(std::vector<glm::vec3>& trail, const glm::vec3& point, const float min_spacing) {
@@ -96,7 +132,11 @@ void update_remote_players(game_state& state, const float dt) {
             continue;
         }
         const bool known = state.remote_avatars.count(account) != 0;
-        follow(state, state.remote_avatars[account], account, player, known, dt);
+        remote_avatar& avatar = state.remote_avatars[account];
+        follow(state, avatar, account, player, known, dt);
+        if (const auto bag = state.online.bags.find(account); bag != state.online.bags.end()) {
+            follow_bag(state, avatar, bag->second, dt);
+        }
     }
     for (auto it = state.remote_avatars.begin(); it != state.remote_avatars.end();) {
         const auto player = state.online.players.find(it->first);
@@ -107,10 +147,34 @@ void update_remote_players(game_state& state, const float dt) {
     const float fade = state.tuning.net.remote_trail_fade_seconds;
     for (auto it = state.remote_shots.begin(); it != state.remote_shots.end();) {
         remote_shot& shot = it->second;
+        const bool resting = shot.elapsed >= shot.result.duration;
+        const bool struck = shot.elapsed >= 0.0f;
         shot.elapsed += dt;
+        if (!struck && shot.elapsed >= 0.0f) {
+            if (const club_definition* club = find_club(state.clubs, shot.input.club_id)) {
+                push_club_hit(state, *club, shot.result, shot.input.ball_start);
+            }
+        }
+        shot.next_event = push_shot_events(state, shot.result, shot.correction, shot.next_event, shot.elapsed);
+        if (shot.result.holed && !resting && shot.elapsed >= shot.result.duration) {
+            push_audio_event(state, audio_event_type::ball_cup, remote_shot_position(shot));
+        }
         append_trail_point(shot.trail, remote_shot_position(shot), state.tuning.flight_path.min_point_spacing);
         it = shot.elapsed >= shot.result.duration + fade ? state.remote_shots.erase(it) : std::next(it);
     }
+}
+
+shot_result room_shot_result(const game_state& state, const room_shot& shot) {
+    std::vector<bool> flags_in(state.area.cups.size(), true);
+    for (const int out : shot.flags_out) {
+        if (out >= 0 && static_cast<std::size_t>(out) < flags_in.size()) {
+            flags_in[static_cast<std::size_t>(out)] = false;
+        }
+    }
+    const shot_course course = make_shot_course(state.area, static_cast<std::size_t>(std::max(0, shot.hole)),
+                                                course_weather_at(state, shot.record.setup.shot_at), state.course, flags_in,
+                                                state.tuning);
+    return simulate_struck_shot(shot.record, shot.golfer, course, state.tuning, state.clubs);
 }
 
 void start_remote_shot(game_state& state, const room_shot& shot) {
@@ -121,29 +185,30 @@ void start_remote_shot(game_state& state, const room_shot& shot) {
     if (avatar != state.remote_avatars.end() && player != state.online.players.end()) {
         avatar->second.hit_motion_at = player->second.motion_at;
     }
-    if (!state.hub || shot.zone < 0 || static_cast<std::size_t>(shot.zone) >= state.hub->markers.size()) {
+    if (shot.hole < 0 || static_cast<std::size_t>(shot.hole) >= state.holes.size()) {
         return;
     }
-    const hub_hole_marker& marker = state.hub->markers[static_cast<std::size_t>(shot.zone)];
-    const shot_course course{state.area, state.static_anchors.trees,
-                             shot_hole{anchor_on_terrain(state.area, marker.pin_position)},
-                             course_weather_at(state, shot.input.shot_at)};
+    const shot_setup& setup = shot.record.setup;
     remote_shot playing;
-    playing.input = shot.input;
-    playing.result = simulate_shot(shot.input, course, state.tuning, state.clubs, state.rewards);
+    playing.input = setup;
+    playing.result = room_shot_result(state, shot);
     playing.correction = shot.rest - playing.result.rest_position;
+    playing.elapsed = -remote_tempo(state, setup).down_seconds;
     playing.trail.push_back(remote_shot_position(playing));
     state.remote_shots[shot.account_id] = std::move(playing);
 }
 
-void start_remote_emote(game_state& state, const room_emote& emote) {
-    const auto avatar = state.remote_avatars.find(emote.account_id);
-    if (avatar == state.remote_avatars.end()) {
-        return;  // not shown (yet)
+void start_remote_item_use(game_state& state, const room_item_use& use) {
+    const auto avatar = state.remote_avatars.find(use.account_id);
+    const item_definition* item = state.items.find(use.item_id);
+    if (avatar == state.remote_avatars.end() || item == nullptr || !item->use) {
+        return;  // not shown (yet), or nothing to show
     }
-    emote_state& playing = emote.emote == emote_id::smoke ? avatar->second.smoke_emote : avatar->second.drink_emote;
-    if (!playing.active) {
-        trigger_emote(playing);
+    std::optional<item_use_shown>& playing =
+        item->kind == item_kind::smokable ? avatar->second.smoking : avatar->second.drinking;
+    if (!playing) {
+        playing = item_use_shown{item->id, 0.0f};
+        push_item_use(state, *item, avatar->second.position);
     }
 }
 
@@ -156,16 +221,32 @@ std::optional<remote_address> remote_address_pose(const game_state& state, const
         return std::nullopt;
     }
     const net_motion& motion = *player->second.motion;
-    const bool addressing = motion.mode == motion_mode::address || motion.mode == motion_mode::swing;
-    if (!addressing || player->second.motion_at == avatar->second.hit_motion_at) {
+    if (!at_ball(motion.mode)) {
         return std::nullopt;
     }
-    remote_address address{ball->second.position, motion.yaw, 0.0f};
+    if (player->second.motion_at == avatar->second.hit_motion_at) {
+        // Struck: the club comes down as the shot has it, until impact.
+        const auto shot = state.remote_shots.find(account);
+        if (shot == state.remote_shots.end() || shot->second.elapsed >= 0.0f) {
+            return std::nullopt;
+        }
+        const shot_setup& setup = shot->second.input;
+        const swing_tempo tempo = remote_tempo(state, setup);
+        return remote_address{setup, swing_club_raise(swing_impact_seconds(tempo) + shot->second.elapsed, setup.backswing, tempo)};
+    }
+    shot_setup stood;
+    stood.ball_start = ball->second.position;
+    if (const auto bag = state.online.bags.find(account); bag != state.online.bags.end()) {
+        stood.club_id = bag->second.club_in_hand;
+    }
+    stood.hand = player->second.hand;
+    remote_address address{with_sent_setup(stood, motion.setup), 0.0f};
     if (motion.mode == motion_mode::swing) {
+        const swing_tempo tempo = remote_tempo(state, address.setup);
         const float since = state.online.server_now != 0
             ? std::max(0.0f, server_seconds_between(player->second.motion_at, state.online.server_now))
             : 0.0f;
-        address.club_power = swing_meter_power(since, base_meter_speed, state.tuning.swing.meter_cycle_seconds);
+        address.club_raise = swing_club_raise(std::min(since, tempo.back_seconds), address.setup.backswing, tempo);
     }
     return address;
 }
@@ -191,7 +272,9 @@ std::vector<shown_ball> remote_balls(const game_state& state) {
         const auto shot = state.remote_shots.find(account);
         const bool playing = shot != state.remote_shots.end() && remote_shot_playing(shot->second);
         if (account != state.online.account_id && !playing) {
-            balls.push_back(shown_ball{account, ball.position});
+            const bool holed = ball.in_cup && ball.hole >= 0;
+            balls.push_back(
+                shown_ball{account, holed ? lying_in_cup(state, static_cast<std::size_t>(ball.hole), ball.position) : ball.position});
         }
     }
     return balls;
@@ -209,8 +292,7 @@ std::optional<std::uint64_t> nearest_player(const game_state& state, const float
     std::optional<std::uint64_t> best;
     float best_distance = std::numeric_limits<float>::max();
     for (const auto& [account, avatar] : state.remote_avatars) {
-        const auto player = state.online.players.find(account);
-        if (player == state.online.players.end() || player->second.zone != local_zone(state)) {
+        if (state.online.players.find(account) == state.online.players.end()) {
             continue;
         }
         const float apart = horizontal_distance(avatar.position, state.player.position);

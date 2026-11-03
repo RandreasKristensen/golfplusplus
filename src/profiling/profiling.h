@@ -71,8 +71,11 @@ enum class gpu_profile_stage : std::size_t {
     terrain,
     shadows,
     trees,
+    props,  // every model: carts, clubs, what is held (prop_renderer)
     sky,
     weather,
+    shafts,  // the sun's shafts: shadows taken out of the haze (sun_shaft_pass)
+    lamp_shadows,  // the floodlights' shadow maps, drawn only when a new lamp comes near (lamp_shadow_pass)
     eyepiece,
     zoom,  // the eyepiece's view, the scene drawn again at its zoom
     bloom,

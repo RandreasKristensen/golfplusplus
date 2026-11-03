@@ -10,10 +10,12 @@
 // Materials come from the exact zone shapes and the holes' fairway and rough
 // (surface_material), never from the grid, so their edges stay exact. On land
 // the cells over fairways and greens are split finer, so the land's detail is
-// there where the ball rolls. Bunkers and ponds are bowls carved into it
-// (zone_carve_depth), their cells split finer still so a bowl a few metres
-// across keeps its shape. A split cell meets coarser neighbours without a
-// crack.
+// there where the ball rolls. Bunkers and ponds are carved into it
+// (carved_height), their cells split finer still so a bowl a few metres
+// across keeps its shape: a pond to under its level, which is the lowest of
+// the uncarved ground round its edge (ponds that overlap are one pond, at
+// the lowest of their levels). A split cell meets coarser neighbours
+// without a crack.
 
 #include "physics/terrain.h"
 
@@ -52,7 +54,13 @@ struct ground_settings {
 // zones in the same coordinates; `land` may be null. The grid covers
 // every hole plus the margin, and all of `land`. Its vertices carry
 // surface_material, for drawing.
-terrain_mesh build_ground(const std::vector<terrain_mesh>& holes,
+// The ground, and each zone's water level (by its index in `zones`; 0 for
+// all but water).
+struct built_ground {
+    terrain_mesh mesh;
+    std::vector<float> water_levels;
+};
+built_ground build_ground(const std::vector<terrain_mesh>& holes,
                           const std::vector<material_zone>& zones,
                           const height_grid* land,
                           const ground_settings& settings);

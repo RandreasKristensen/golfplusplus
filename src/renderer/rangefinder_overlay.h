@@ -3,8 +3,9 @@
 // The rangefinder held up (game/rangefinder.h), as through a golf laser
 // rangefinder's eyepiece: the eyepiece's outline round the magnified view
 // (renderer/eyepiece_pass.h), an LCD aiming circle with crosshairs at the centre and a lock ring round it on the flag,
-// brackets on the flagstick, the flag lock above, the distance and the
-// height below and the wind lower left like a status icon. GL-free.
+// brackets on the flagstick, the flag lock above, the distance, the
+// height and the plays-like distance below and the wind lower left like a
+// status icon. GL-free.
 
 #include "game/text_assets.h"
 #include "renderer/overlay_batch.h"

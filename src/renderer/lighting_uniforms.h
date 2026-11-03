@@ -36,11 +36,14 @@ struct frame_lighting_block {
     glm::vec4 lamp_glow{0.0f};
     glm::vec4 weather{0.0f};  // render_sky_weather: mottle, rainbow, cover, haze_gain
     glm::vec4 wet{1.0f, 0.0f, 1.0f, 0.0f};  // wet_albedo, wet_gloss, wet_gloss_power, unused
+    glm::vec4 scatter{0.0f};  // render_sky_weather: scatter_per_meter, scatter_forwardness; beam_near_share, beam_core_meters
+    glm::vec4 air{0.0f};      // render_sky_weather: sun_glow, sun_forwardness, mist, unused
+    glm::vec4 mist{0.0f};     // scene_haze's mist_floor; 1 / mist_height_meters; mist_density; unused
     std::array<glm::vec4, max_scene_lights> light_position{};  // w: radius, 0 for none
     std::array<glm::vec4, max_scene_lights> light_color{};     // w: cone_full_cos
     std::array<glm::vec4, max_scene_lights> light_cone{};      // xyz: direction; w: cone_edge_cos
 };
-static_assert(sizeof(frame_lighting_block) == (15 + 3 * max_scene_lights) * sizeof(glm::vec4),
+static_assert(sizeof(frame_lighting_block) == (18 + 3 * max_scene_lights) * sizeof(glm::vec4),
               "frame_lighting_block must match std140");
 
 // `lights` are the ones the scene is lit by (nearest_scene_lights); any past
@@ -66,6 +69,11 @@ inline frame_lighting_block make_frame_lighting_block(const render_lighting& lig
     const render_sky_weather& weather = lighting.weather;
     block.weather = glm::vec4(weather.mottle, weather.rainbow, weather.cover, weather.haze_gain);
     block.wet = glm::vec4(weather.wet_albedo, weather.wet_gloss, weather.wet_gloss_power, 0.0f);
+    block.scatter =
+        glm::vec4(weather.scatter_per_meter, weather.scatter_forwardness, lighting.beam_near_share, lighting.beam_core_meters);
+    block.air = glm::vec4(weather.sun_glow, weather.sun_forwardness, weather.mist, 0.0f);
+    const float thinning = lighting.mist_height_meters > 0.0f ? 1.0f / lighting.mist_height_meters : 0.0f;
+    block.mist = glm::vec4(haze.mist_floor, thinning, lighting.mist_density, 0.0f);
     for (std::size_t i = 0; i < max_scene_lights; ++i) {
         const render_light light = i < lights.size() ? lights[i] : render_light{};
         block.light_position[i] = glm::vec4(light.position, light.radius);
@@ -83,7 +91,13 @@ public:
     // leaves the buffer bound to frame_lighting_binding.
     void upload(const render_lighting& lighting, const scene_haze& haze, const std::vector<render_light>& lights,
                 frame_profile* profile);
+    // What the last upload wrote.
+    const frame_lighting_block& block() const { return block_; }
+    // The lights it lit by, in the block's order.
+    const std::vector<render_light>& lights() const { return lights_; }
 
 private:
     unsigned int buffer_ = 0;
+    frame_lighting_block block_;
+    std::vector<render_light> lights_;
 };

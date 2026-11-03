@@ -15,7 +15,10 @@
 
 #include <glm/vec2.hpp>
 
+// The course pickers show this many rows of tiles at a time, scrolling
+// through the rest.
 inline constexpr int picker_columns = 3;
+inline constexpr int picker_rows = 3;
 
 // Moves `selection` by arrow keys (left/right by one, up/down by a row of
 // `columns`) or onto the tile the mouse moved over or clicked; queues a move
@@ -29,9 +32,21 @@ int select_with_input(startup_menu_screen screen,
                       const menu_pointer& pointer,
                       std::vector<ui_sound>& sounds);
 
+// A course picker's selection over `count` courses, picker_rows rows of
+// them shown from `top_row`: the wheel scrolls the rows (the selection kept
+// among them), the arrows move the selection (the rows following it), and
+// the mouse picks among the tiles shown. Returns the clicked course, or -1.
+int select_course(int& selection,
+                  int& top_row,
+                  int count,
+                  const input_state& input,
+                  const menu_pointer& pointer,
+                  std::vector<ui_sound>& sounds);
+
 void add_tile(render_startup_menu& menu, std::string title, std::string subtitle, bool selected);
-// One tile per catalog course, with hole 1's preview.
-void add_course_tiles(render_startup_menu& menu, const startup_catalog& catalog, const text_assets& text, int selection);
+// One tile per catalog course shown from `top_row`, with hole 1's preview.
+void add_course_tiles(render_startup_menu& menu, const startup_catalog& catalog, const text_assets& text, int selection,
+                      int top_row);
 
 // Shows `flow` from its first tile, with no message, field or wait left
 // over from the screen before.

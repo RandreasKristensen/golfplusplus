@@ -8,7 +8,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[sats(crate = __lib)]
 pub struct CompletedCourseRow {
     pub id: u64,
-    pub account_id: u64,
+    pub golfer_id: u64,
     pub course_id: String,
     pub at: __sdk::Timestamp,
 }
@@ -22,7 +22,7 @@ impl __sdk::InModule for CompletedCourseRow {
 /// Provides typed access to columns for query building.
 pub struct CompletedCourseRowCols {
     pub id: __sdk::__query_builder::Col<CompletedCourseRow, u64>,
-    pub account_id: __sdk::__query_builder::Col<CompletedCourseRow, u64>,
+    pub golfer_id: __sdk::__query_builder::Col<CompletedCourseRow, u64>,
     pub course_id: __sdk::__query_builder::Col<CompletedCourseRow, String>,
     pub at: __sdk::__query_builder::Col<CompletedCourseRow, __sdk::Timestamp>,
 }
@@ -32,7 +32,7 @@ impl __sdk::__query_builder::HasCols for CompletedCourseRow {
     fn cols(table_name: &'static str) -> Self::Cols {
         CompletedCourseRowCols {
             id: __sdk::__query_builder::Col::new(table_name, "id"),
-            account_id: __sdk::__query_builder::Col::new(table_name, "account_id"),
+            golfer_id: __sdk::__query_builder::Col::new(table_name, "golfer_id"),
             course_id: __sdk::__query_builder::Col::new(table_name, "course_id"),
             at: __sdk::__query_builder::Col::new(table_name, "at"),
         }
@@ -43,7 +43,7 @@ impl __sdk::__query_builder::HasCols for CompletedCourseRow {
 ///
 /// Provides typed access to indexed columns for query building.
 pub struct CompletedCourseRowIxCols {
-    pub account_id: __sdk::__query_builder::IxCol<CompletedCourseRow, u64>,
+    pub golfer_id: __sdk::__query_builder::IxCol<CompletedCourseRow, u64>,
     pub id: __sdk::__query_builder::IxCol<CompletedCourseRow, u64>,
 }
 
@@ -51,7 +51,7 @@ impl __sdk::__query_builder::HasIxCols for CompletedCourseRow {
     type IxCols = CompletedCourseRowIxCols;
     fn ix_cols(table_name: &'static str) -> Self::IxCols {
         CompletedCourseRowIxCols {
-            account_id: __sdk::__query_builder::IxCol::new(table_name, "account_id"),
+            golfer_id: __sdk::__query_builder::IxCol::new(table_name, "golfer_id"),
             id: __sdk::__query_builder::IxCol::new(table_name, "id"),
         }
     }

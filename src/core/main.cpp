@@ -35,12 +35,15 @@ int main(int argc, char** argv) {
     const environment_value database("GOLFPP_DB");
     const environment_value weather("GOLFPP_WEATHER");
     const environment_value god("GOLFPP_GOD");
+    const environment_value tour("GOLFPP_TOUR");
     const startup_options options = with_online_options(
-        with_weather_options(
-            with_game_time(
-                with_review_options(parse_startup_options(vsync.c_str(), course.c_str()), window.c_str(), screenshot.c_str()),
-                game_time.c_str()),
-            weather.c_str(), god.c_str()),
+        with_tour_option(
+            with_weather_options(
+                with_game_time(
+                    with_review_options(parse_startup_options(vsync.c_str(), course.c_str()), window.c_str(), screenshot.c_str()),
+                    game_time.c_str()),
+                weather.c_str(), god.c_str()),
+            tour.c_str()),
         server.c_str(), database.c_str(), arguments);
 
     app game;

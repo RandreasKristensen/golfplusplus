@@ -1,7 +1,8 @@
 #pragma once
 
 // The god menu (core/god_menu.h) as drawn: a HUD panel down the left, one
-// row per held value. GL-free.
+// row per held value. The look tuning panel (core/look_tuning.h) is drawn
+// the same way, one row per number. GL-free.
 
 #include "game/text_assets.h"
 #include "renderer/overlay_batch.h"

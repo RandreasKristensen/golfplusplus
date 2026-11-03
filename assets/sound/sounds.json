@@ -13,7 +13,8 @@
       "category": "ui",
       "description": "Short VHS menu cursor tick, dry and low-fi.",
       "target_length_seconds": 0.05,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "placed": false
     },
     {
       "id": "ui_select",
@@ -22,7 +23,8 @@
       "category": "ui",
       "description": "Confirm/select blip.",
       "target_length_seconds": 0.12,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "placed": false
     },
     {
       "id": "ui_back",
@@ -31,7 +33,8 @@
       "category": "ui",
       "description": "Back/cancel thunk.",
       "target_length_seconds": 0.12,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "placed": false
     },
     {
       "id": "swing_start",
@@ -40,7 +43,9 @@
       "category": "gameplay",
       "description": "Power meter starts, subtle club grip or backswing cue.",
       "target_length_seconds": 0.2,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 5.0,
+      "max_distance": 40.0
     },
     {
       "id": "club_hit_driver",
@@ -49,7 +54,9 @@
       "category": "gameplay",
       "description": "Loud wooden or metal golf drive hit, short transient.",
       "target_length_seconds": 0.5,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 5.0,
+      "max_distance": 400.0
     },
     {
       "id": "club_hit_iron",
@@ -58,7 +65,9 @@
       "category": "gameplay",
       "description": "Crisp iron strike.",
       "target_length_seconds": 0.4,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 5.0,
+      "max_distance": 300.0
     },
     {
       "id": "club_hit_wedge",
@@ -67,7 +76,9 @@
       "category": "gameplay",
       "description": "Softer wedge chip hit.",
       "target_length_seconds": 0.35,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 5.0,
+      "max_distance": 200.0
     },
     {
       "id": "club_hit_putter",
@@ -76,7 +87,119 @@
       "category": "gameplay",
       "description": "Small putter tap.",
       "target_length_seconds": 0.2,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 5.0,
+      "max_distance": 60.0
+    },
+    {
+      "id": "club_mishit_wood",
+      "file": "effects/club_mishit_wood.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a wood or driver struck off the middle of its face: a dull clack, no ring.",
+      "target_length_seconds": 0.4,
+      "volume_multiplier": 1.0,
+      "reference_distance": 5.0,
+      "max_distance": 400.0
+    },
+    {
+      "id": "club_mishit_iron",
+      "file": "effects/club_mishit_iron.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): an iron struck thin, off the toe or heel: a harsh click that stings the hands.",
+      "target_length_seconds": 0.35,
+      "volume_multiplier": 1.0,
+      "reference_distance": 5.0,
+      "max_distance": 300.0
+    },
+    {
+      "id": "club_mishit_putter",
+      "file": "effects/club_mishit_putter.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a putt struck off the putter's sweet spot: a dead, flat tap.",
+      "target_length_seconds": 0.2,
+      "volume_multiplier": 1.0,
+      "reference_distance": 5.0,
+      "max_distance": 60.0
+    },
+    {
+      "id": "ball_pole_hit",
+      "file": "effects/ball_pole_hit.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a golf ball striking a metal pole or a fence: a short clang.",
+      "target_length_seconds": 0.3,
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 150.0
+    },
+    {
+      "id": "ball_board_hit",
+      "file": "effects/ball_board_hit.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a golf ball striking a wooden sign board or a tee box side: a hollow knock.",
+      "target_length_seconds": 0.25,
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 120.0
+    },
+    {
+      "id": "ball_person_hit",
+      "file": "effects/ball_person_hit.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a golf ball striking someone standing in its way: a dull thud and a yelp.",
+      "target_length_seconds": 0.5,
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 80.0
+    },
+    {
+      "id": "ball_ball_hit",
+      "file": "effects/ball_ball_hit.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a golf ball clicking off another at rest.",
+      "target_length_seconds": 0.15,
+      "volume_multiplier": 1.0,
+      "reference_distance": 2.0,
+      "max_distance": 40.0
+    },
+    {
+      "id": "ball_flag_hit",
+      "file": "effects/ball_flag_hit.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a golf ball striking a fibreglass flagstick: a dull tick.",
+      "target_length_seconds": 0.2,
+      "volume_multiplier": 1.0,
+      "reference_distance": 2.0,
+      "max_distance": 60.0
+    },
+    {
+      "id": "ball_cup_rattle",
+      "file": "effects/ball_cup_rattle.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a golf ball rattling against a plastic cup liner.",
+      "target_length_seconds": 0.4,
+      "volume_multiplier": 1.0,
+      "reference_distance": 2.0,
+      "max_distance": 40.0
+    },
+    {
+      "id": "ball_leaves",
+      "file": "effects/ball_leaves.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a golf ball tearing through a tree canopy: a quick rustle.",
+      "target_length_seconds": 0.5,
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 100.0
     },
     {
       "id": "ball_land_grass",
@@ -85,7 +208,9 @@
       "category": "gameplay",
       "description": "Ball thump on grass.",
       "target_length_seconds": 0.25,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 2.0,
+      "max_distance": 80.0
     },
     {
       "id": "ball_land_bunker",
@@ -94,7 +219,9 @@
       "category": "gameplay",
       "description": "Muffled sand impact.",
       "target_length_seconds": 0.4,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 2.0,
+      "max_distance": 60.0
     },
     {
       "id": "ball_splash",
@@ -103,7 +230,9 @@
       "category": "gameplay",
       "description": "Small water splash.",
       "target_length_seconds": 0.7,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 150.0
     },
     {
       "id": "ball_tree_hit",
@@ -112,7 +241,9 @@
       "category": "gameplay",
       "description": "Woody knock and leaves rustle.",
       "target_length_seconds": 0.45,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 150.0
     },
     {
       "id": "ball_cup",
@@ -121,7 +252,9 @@
       "category": "gameplay",
       "description": "Ball dropping into cup.",
       "target_length_seconds": 0.7,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 2.0,
+      "max_distance": 50.0
     },
     {
       "id": "club_change",
@@ -130,7 +263,20 @@
       "category": "gameplay",
       "description": "Small inventory or club switch click.",
       "target_length_seconds": 0.15,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 2.0,
+      "max_distance": 15.0
+    },
+    {
+      "id": "bag_move",
+      "file": "effects/bag_move.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a golf bag shouldered, set down or strapped on a cart: canvas and clubs rattling.",
+      "target_length_seconds": 0.5,
+      "volume_multiplier": 1.0,
+      "reference_distance": 2.0,
+      "max_distance": 20.0
     },
     {
       "id": "cart_start",
@@ -139,7 +285,9 @@
       "category": "gameplay",
       "description": "Golf cart motor start or engage.",
       "target_length_seconds": 1.0,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 80.0
     },
     {
       "id": "cart_drive_loop",
@@ -148,25 +296,64 @@
       "category": "gameplay",
       "description": "Low golf cart electric motor loop, seamless.",
       "target_length_seconds": 2.0,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 100.0
     },
     {
       "id": "cart_crash",
       "file": "effects/cart_crash.wav",
       "type": "sfx",
       "category": "gameplay",
-      "description": "Placeholder (empty file): golf cart thumping into a tree, pole, fence or tee box.",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): golf cart thumping into a tree, pole, fence or tee box.",
       "target_length_seconds": 0.6,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 150.0
+    },
+    {
+      "id": "cart_tip",
+      "file": "effects/cart_tip.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): golf cart rolling over onto its side, a crunch of canopy and plastic.",
+      "target_length_seconds": 1.0,
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 150.0
+    },
+    {
+      "id": "cart_sink",
+      "file": "effects/cart_sink.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): golf cart settling into a pond, a heavy splash and gurgle.",
+      "target_length_seconds": 1.5,
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 150.0
+    },
+    {
+      "id": "cart_righted",
+      "file": "effects/cart_righted.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a tipped golf cart dropping back onto its wheels with a bounce.",
+      "target_length_seconds": 0.6,
+      "volume_multiplier": 1.0,
+      "reference_distance": 3.0,
+      "max_distance": 80.0
     },
     {
       "id": "player_bump",
       "file": "effects/player_bump.wav",
       "type": "sfx",
       "category": "gameplay",
-      "description": "Placeholder (empty file): walking into a tree, pole, sign or flagstick, a soft dull bump.",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): walking into a tree, pole, sign or flagstick, a soft dull bump.",
       "target_length_seconds": 0.25,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 2.0,
+      "max_distance": 15.0
     },
     {
       "id": "emote_smoke",
@@ -175,7 +362,9 @@
       "category": "gameplay",
       "description": "Lighter inhale and exhale cue.",
       "target_length_seconds": 1.4,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 1.0,
+      "max_distance": 15.0
     },
     {
       "id": "emote_beer",
@@ -184,7 +373,9 @@
       "category": "gameplay",
       "description": "Can open plus sip or glug.",
       "target_length_seconds": 1.4,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "reference_distance": 1.0,
+      "max_distance": 20.0
     },
     {
       "id": "thunder_close",
@@ -193,7 +384,8 @@
       "category": "ambience",
       "description": "Close thunder: a crack, then a rolling rumble. Made by tooling/audio/make_thunder.py.",
       "target_length_seconds": 6.0,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "placed": false
     },
     {
       "id": "thunder_far",
@@ -202,7 +394,8 @@
       "category": "ambience",
       "description": "Distant thunder: a low rumble. Made by tooling/audio/make_thunder.py.",
       "target_length_seconds": 7.0,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "placed": false
     },
     {
       "id": "ambience_course_day",
@@ -211,7 +404,8 @@
       "category": "ambience",
       "description": "Outdoor golf course bed: light wind, distant birds, no music, seamless.",
       "target_length_seconds": 40.0,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "placed": false
     },
     {
       "id": "ambience_menu_vcr",
@@ -220,7 +414,8 @@
       "category": "ambience",
       "description": "Very quiet CRT/VCR hum for menus, seamless.",
       "target_length_seconds": 20.0,
-      "volume_multiplier": 1.0
+      "volume_multiplier": 1.0,
+      "placed": false
     }
   ]
 }

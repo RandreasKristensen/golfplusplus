@@ -6,12 +6,15 @@
 #include "game/game_state.h"
 #include "game/reward_rules.h"
 #include "game/text_assets.h"
+#include "physics/cup.h"
 #include "profiling/profiling.h"
 #include "renderer/camera_transition.h"
 #include "renderer/hole_sign_batch.h"
 #include "renderer/render_data.h"
 #include "renderer/render_mesh.h"
 
+#include <optional>
+#include <string>
 #include <vector>
 
 camera_rig active_camera_rig(const game_state& game);
@@ -19,13 +22,25 @@ camera_rig active_camera_rig(const game_state& game);
 // `fov_degrees` is the player's field of view setting.
 camera_view live_camera_view(const game_state& game, float fov_degrees);
 
-// Where to draw a ball whose physical centre is `physics_center`. The drawn
-// ball is bigger than the physical one, so it is raised to touch the ground
-// where the physical ball does, never sunk into it.
+// Where a ball whose physics centre is `physics_center` is drawn: right
+// over it, raised so the bigger drawn ball sits on the ground where the
+// physical one does. The cup is drawn as big as it plays, so a putt is
+// drawn rolling, lipping and dropping exactly as it does.
 glm::vec3 drawn_ball_center(const glm::vec3& physics_center, const world_scale_tuning& scale);
 
+// The same, near `cups`: once the drawn ball sinks below a rim it is moved
+// in towards the hole's axis just enough that what is below the rim stays
+// inside the wall, as the smaller real ball does.
+glm::vec3 drawn_ball_center(const glm::vec3& physics_center, const world_scale_tuning& scale, const std::vector<cup>& cups);
+
+// The club in hand drawn at `setup`'s ball, swung back `raise`: its face
+// turned and its shaft leaning as the setup has them (game/delivery.h), its
+// head where `club_model` has it. None when `props` lacks the model.
+std::optional<render_club_pose> club_pose_at(const game_state& game, const shot_setup& setup, float raise,
+                                             const std::string& club_model, const prop_catalog& props);
+
 // What each sign of the play area says (area.signs order): its course hole,
-// par and length.
+// par and length; a practice ground's bay, its target's distance.
 std::vector<hole_sign_text> hole_sign_texts(const game_state& game);
 
 // The scene meshes the frame borrows (see render_data); app rebuilds them
@@ -43,8 +58,8 @@ struct render_meshes {
 // player's field of view setting, `interact_prompt` its interact prompt one.
 render_data make_render_data(const game_state& game,
                              const text_assets& text,
-                             const std::vector<skill_definition>& skills,
+                             const skill_catalog& skills,
                              const render_meshes& meshes,
+                             const prop_catalog& props,
                              float fov_degrees,
-                             bool interact_prompt,
-                             frame_profile* profile = nullptr);
+                             bool interact_prompt);

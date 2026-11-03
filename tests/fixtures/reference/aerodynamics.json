@@ -1,0 +1,30 @@
+{
+  "ball": {
+    "mass_kg": { "value": 0.04593, "source": "USGA/R&A Rules of Equipment, Part 4: a ball weighs no more than 1.620 oz (45.93 g)", "checked": true },
+    "radius_m": { "value": 0.021335, "source": "USGA/R&A Rules of Equipment, Part 4: a ball is at least 1.680 in (42.67 mm) across", "checked": true }
+  },
+  "air": {
+    "sea_level_density": { "value": 1.225, "unit": "kg/m3", "source": "ISO 2533 standard atmosphere at 15 C, 101325 Pa", "checked": true },
+    "sea_level_pressure": { "value": 101325.0, "unit": "Pa", "source": "ISO 2533", "checked": true },
+    "sea_level_temperature": { "value": 288.15, "unit": "K", "source": "ISO 2533", "checked": true },
+    "lapse_rate": { "value": 0.0065, "unit": "K/m", "source": "ISO 2533, troposphere", "checked": true },
+    "gas_constant": { "value": 287.05, "unit": "J/(kg K)", "source": "dry air", "checked": true },
+    "viscosity": { "value": 1.81e-5, "unit": "Pa s", "source": "dry air at 15 C", "checked": true },
+    "density_per_5_c_colder": { "value": 0.017, "source": "ideal gas law at constant pressure: rho ~ 1/T, 5 K in 288 K", "checked": true }
+  },
+  "coefficients": {
+    "spin_parameter": "S = r w / v",
+    "reynolds_number": "Re = rho v d / mu",
+    "lift": { "form": "CL = a S - b S^2 (the textbook start; the game's fit is in assets/play/tuning/ball.json's flight)", "a": 1.99, "b": 3.25, "source": "polynomial fit to Bearman & Harvey (1976), Aeronautical Quarterly 27:112-122, and Smits & Smith (1994), Science and Golf II pp. 340-347, for S below 0.3; the fit is judged by the TrackMan carries (trackman_tour.json), not taken from either paper", "checked": false },
+    "drag": { "form": "CD = c + d S, less a drop at high Re", "c": 0.24, "d": 0.18, "source": "as lift; the drag crisis of a dimpled ball lowers CD above Re of about 1.6e5 (Bearman & Harvey 1976)", "checked": false },
+    "spin_decay": { "form": "dw/dt = -k w v / r", "per_second_on_a_drive": [0.04, 0.07], "source": "Smits & Smith (1994): spin decays in proportion to w v / r, about 4-7% per second on a drive", "checked": false }
+  },
+  "temperature": {
+    "drive_carry_per_10_c": { "value": 3.6, "range": [2.0, 5.5], "unit": "m", "source": "rule of thumb from launch-monitor fitting (TrackMan, Titleist): about 2 yards of drive carry per 10 F, through the air's density alone", "checked": false }
+  },
+  "acceptance": {
+    "carry_share": 0.03,
+    "driver_carry_share": 0.04,
+    "note": "Fed each TrackMan launch (ball speed, launch, spin) in calm sea-level air, the flight's carry is within carry_share of TrackMan's for 3W-PW, the driver within driver_carry_share: fitted on condition that thin and warm air carry further (the temperature reference, and about 5-8% more carry 1600 m up), the point model leaves the drive about 4% short, which its club spec makes up (docs/plan.md 5.5.3's one named correction)."
+  }
+}

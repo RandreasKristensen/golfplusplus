@@ -1,0 +1,28 @@
+{
+  "smash_factor": { "source": "trackman_tour.json (ball speed / club speed)", "checked": true },
+  "d_plane": {
+    "start_direction_face_share": { "driver": 0.85, "irons": 0.75, "wedges": 0.70 },
+    "curve": "the spin axis tilts by face - path against spin loft (dynamic loft - attack); face open to the path curves the ball away from the golfer (a fade for a right-hander)",
+    "source": "TrackMan, 'D-Plane' explanations (Jorgensen, The Physics of Golf, 2nd ed. 1999; TrackMan newsletters); shares are typical, varying with loft and strike",
+    "checked": false
+  },
+  "launch": {
+    "form": "launch = attack + share x (dynamic loft - attack)",
+    "share": [0.80, 0.85],
+    "source": "TrackMan launch-angle guidance; Penner (2001), 'The physics of golf: the optimum loft of a driver', Am. J. Phys. 69:563-568",
+    "checked": false
+  },
+  "face_friction": {
+    "value": 0.4,
+    "form": "the ball's speed along the face is at most this share of its speed off it: past it the ball slides, as at a wide open lob wedge",
+    "source": "Cross (2002), 'Grip-slip behavior of a bouncing ball', Am. J. Phys. 70:1093-1102; Penner (2003), 'The physics of golf', Rep. Prog. Phys. 66:131-171 (ball on clubface, about 0.4)",
+    "checked": false
+  },
+  "spin": { "form": "spin rises with club speed x spin loft, cut by anything between face and ball", "source": "Penner (2001); Cross & Nathan (2007), 'Performance versus moment of inertia of sporting implements'", "checked": false },
+  "partial_swing_speed_share": {
+    "by_backswing_clock": { "7:30": 0.45, "9:00": 0.62, "10:30": 0.82, "12:00": 1.0 },
+    "source": "golf instruction 'clock system' wedge data (e.g. Pelz, Short Game Bible, 1999): a 9:00 backswing at about 60-65% of full speed",
+    "checked": false
+  },
+  "overswing": { "speed_gain": 0.03, "source": "golf++ design: past full, a little speed for much wider dice", "checked": false }
+}

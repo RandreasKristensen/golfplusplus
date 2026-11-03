@@ -7,10 +7,12 @@
 #include "core/god_menu.h"
 #include "core/input.h"
 #include "core/light_frame.h"
+#include "core/look_tuning.h"
 #include "core/sky_frame.h"
 #include "core/startup_flow.h"
 #include "core/startup_options.h"
 #include "core/tape_tracking.h"
+#include "core/visual_tour.h"
 #include "core/weather_frame.h"
 #include "core/window.h"
 #include "game/game_content.h"
@@ -47,16 +49,27 @@ public:
     void shutdown();
 
 private:
-    // A fresh state on the first course as the menu backdrop, keeping the save.
+    // A fresh state on the first course as the menu backdrop, keeping the
+    // save, with the visual tour flying round it.
     bool reset_to_menu_backdrop();
     void return_to_menu();
+    void show_golfer_settings();
     void save_progress();
     // Plays the menus' audio settings (music volume) and, when `write`,
     // saves them. make_frame reads the field of view every frame.
     void apply_settings(bool write);
-    void update_menu(frame_profile* profile);
+    void update_menu(float dt, frame_profile* profile);
     void update_confirm_menu(frame_profile* profile);
     void update_round(float dt, frame_profile* profile);
+    // The visual tour on `course` from stop `first`; false when the course
+    // fails to load.
+    bool begin_tour(const course_definition& course, std::size_t first);
+    void update_tour(float dt, frame_profile* profile);
+    // The tour `dt` seconds on (`next`: on to its next stop) as drawn: its
+    // camera, sky and weather, without the HUD.
+    render_data tour_frame(float dt, bool next, frame_profile* profile);
+    // The sky as drawn: the tour's while one runs, else sky_.
+    sky_controls shown_sky() const;
     // How far a count of mouse movement turns the look this frame.
     float mouse_look_radians() const;
     // How online play is going for the menus; offline only without it.
@@ -65,10 +78,18 @@ private:
     // Keeps an online round in its room: restarts it after a reconnect,
     // and leaves for the menus when the connection or the room is gone.
     void watch_online_round();
+    // The round's sounds, heard from the camera as drawn this frame.
     void play_game_audio();
+    void stop_motor_loops();
     void refresh_render_meshes();
-    // `snap_camera` cuts to the live view instead of blending (menus).
-    render_data make_frame(float dt, bool snap_camera, frame_profile* profile);
+    // lighting.json and picture.json reloaded when saved, and the F2 panel
+    // (app_look.cpp).
+    void update_look(float dt);
+    void apply_look(const look_reload& reload);
+    // `snap_camera` cuts to the live view instead of blending (menus);
+    // `fixed_camera` cuts to its place and target instead (the visual tour).
+    render_data make_frame(float dt, bool snap_camera, frame_profile* profile,
+                           const std::optional<camera_view>& fixed_camera = std::nullopt);
     void present_frame(render_data& data, frame_profile* profile);
 
     window window_;
@@ -96,14 +117,18 @@ private:
     render_floodlights floodlights_;
     render_water water_;
     tree_shadow_cache tree_shadows_;
-    bool cart_loop_playing_ = false;
+    std::vector<std::string> motor_loops_;  // the keys of the carts' motor loops playing
     tape_style tape_style_;
     lighting_palette lighting_;
-    prop_set props_;  // assets/world/props
+    std::string asset_root_;
+    look_tuning_state look_tuning_;
+    prop_catalog props_;  // assets/world/props
     sky_controls sky_;  // GOLFPP_GAME_TIME, the developer's scrub and the god menu's hour
     god_menu_state god_;
     tape_tracking_state tape_tracking_;
     weather_presentation weather_shown_;  // the weather as drawn, faded in and out
+    visual_tour tour_;  // assets/picture/visual_tour.json
+    std::optional<tour_state> touring_;  // the visual tour, or the menus' backdrop
     std::uint64_t last_present_ticks_ = 0;  // SDL ticks of the last frame shown
 
 #if GOLFPP_NET
@@ -112,8 +137,7 @@ private:
     std::optional<online_session> online_;
 #endif
 
-    // Ctrl toggles the FPS and profiling overlay; the profiler only records
-    // while it is shown.
+    // Shown from the god menu (god_menu_state::show_profiler).
     profiler profiler_;
     bool running_ = false;
     // GOLFPP_SCREENSHOT: where to save the picture, empty when off.

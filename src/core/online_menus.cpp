@@ -253,8 +253,7 @@ void update_online_course_picker(startup_flow_state& state,
                                  const startup_catalog& catalog,
                                  startup_menu_result& result) {
     const int count = static_cast<int>(catalog.courses.size());
-    const int hit = select_with_input(startup_menu_screen::course_picker, picker_columns, state.selection, count, input, pointer,
-                                      result.sounds);
+    const int hit = select_course(state.selection, state.picker_top_row, count, input, pointer, result.sounds);
     if (input.escape.pressed) {
         result.sounds.push_back(ui_sound::back);
         return_to_main_menu(state);
@@ -264,10 +263,7 @@ void update_online_course_picker(startup_flow_state& state,
         return;
     }
     result.sounds.push_back(ui_sound::select);
-    const course_definition course = catalog.courses[static_cast<std::size_t>(state.selection)].course;
-    request(result, online_request_type::join_course, course.id);
-    open_screen(state, startup_flow::joining);
-    state.joining_course = course;
+    pick_transport(state, catalog.courses[static_cast<std::size_t>(state.selection)].course, play_mode::online, result);
 }
 
 void update_waiting_screen(startup_flow_state& state,
@@ -350,6 +346,10 @@ bool is_online_flow(const startup_flow flow) {
     case startup_flow::settings:
     case startup_flow::course_picker:
     case startup_flow::exit_prompt:
+    case startup_flow::natural_shape_picker:
+    case startup_flow::transport_picker:
+    case startup_flow::tour_picker:
+    case startup_flow::touring:
     case startup_flow::playing:
         return false;
     }
@@ -472,7 +472,7 @@ void make_online_menu_render_data(const startup_flow_state& state,
         menu.screen = startup_menu_screen::course_picker;
         menu.subtitle = lookup_text(text, text_menu_online_course_picker_subtitle);
         menu.footer = lookup_text(text, text_menu_course_picker_footer);
-        add_course_tiles(menu, catalog, text, state.selection);
+        add_course_tiles(menu, catalog, text, state.selection, state.picker_top_row);
         break;
     case startup_flow::joining:
         menu.subtitle = lookup_text(text, text_menu_joining_subtitle);

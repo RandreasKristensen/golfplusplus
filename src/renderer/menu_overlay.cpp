@@ -27,7 +27,10 @@ enum class help_control_icon {
     escape,
     key_1,
     key_2,
-    key_g
+    key_g,
+    key_p,
+    key_k,
+    key_c
 };
 
 void draw_key_cap(overlay_batch& batch, const text_assets& text, const char* key, const glm::vec2 center, const glm::vec2 half_size) {
@@ -74,8 +77,9 @@ void draw_help_control_icon(overlay_batch& batch,
         draw_key_cap(batch, text, text_controls_key_f, center, key_half);
         break;
     case help_control_icon::swing:
-        draw_key_cap(batch, text, text_controls_key_q, center - side * 0.5f, cluster_half);
-        draw_key_cap(batch, text, text_controls_key_e, center + side * 0.5f, cluster_half);
+        // R, and Backspace as wide as Caps Lock, side by side about the centre.
+        draw_key_cap(batch, text, text_controls_key_r, center - glm::vec2(small_half.x + 0.006f, 0.0f), cluster_half);
+        draw_key_cap(batch, text, text_controls_key_backspace, center + glm::vec2(cluster_half.x + 0.006f, 0.0f), small_half);
         break;
     case help_control_icon::space:
         draw_key_button(batch, center, wide_half);
@@ -105,6 +109,15 @@ void draw_help_control_icon(overlay_batch& batch,
         break;
     case help_control_icon::key_g:
         draw_key_cap(batch, text, text_controls_key_g, center, key_half);
+        break;
+    case help_control_icon::key_p:
+        draw_key_cap(batch, text, text_controls_key_p, center, key_half);
+        break;
+    case help_control_icon::key_k:
+        draw_key_cap(batch, text, text_controls_key_k, center, key_half);
+        break;
+    case help_control_icon::key_c:
+        draw_key_cap(batch, text, text_controls_key_c, center, key_half);
         break;
     }
 }
@@ -145,12 +158,15 @@ void draw_startup_help_screen(overlay_batch& batch, const text_assets& text) {
         }},
         {0.45f, 0.84f, {
             {help_control_icon::key_m, glm::vec2(0.30f, 0.46f), 0.51f, text_help_key_m},
-            {help_control_icon::tab, glm::vec2(0.30f, 0.32f), 0.37f, text_help_tab},
-            {help_control_icon::caps_lock, glm::vec2(0.30f, 0.18f), 0.23f, text_help_caps_lock},
-            {help_control_icon::escape, glm::vec2(0.30f, 0.04f), 0.09f, text_help_escape},
+            {help_control_icon::tab, glm::vec2(0.30f, 0.34f), 0.39f, text_help_tab},
+            {help_control_icon::caps_lock, glm::vec2(0.30f, 0.22f), 0.27f, text_help_caps_lock},
+            {help_control_icon::key_c, glm::vec2(0.30f, 0.10f), 0.15f, text_help_key_c},
+            {help_control_icon::key_k, glm::vec2(0.30f, -0.02f), 0.03f, text_help_key_k},
+            {help_control_icon::escape, glm::vec2(0.30f, -0.14f), -0.09f, text_help_escape},
+            {help_control_icon::key_p, glm::vec2(0.30f, -0.26f), -0.21f, text_help_key_p},
             {help_control_icon::key_1, glm::vec2(0.30f, -0.40f), -0.35f, text_help_key_1},
-            {help_control_icon::key_2, glm::vec2(0.30f, -0.54f), -0.49f, text_help_key_2},
-            {help_control_icon::key_g, glm::vec2(0.30f, -0.68f), -0.63f, text_help_key_g},
+            {help_control_icon::key_2, glm::vec2(0.30f, -0.52f), -0.47f, text_help_key_2},
+            {help_control_icon::key_g, glm::vec2(0.30f, -0.64f), -0.59f, text_help_key_g},
         }},
     };
 
@@ -185,6 +201,8 @@ glm::vec3 thumbnail_zone_color(const ground_colors& ground, const material_zone_
         return terrain_material_color(ground, terrain_material::bunker);
     case material_zone_type::water:
         return terrain_material_color(ground, terrain_material::water);
+    case material_zone_type::fairway:
+        return terrain_material_color(ground, terrain_material::fairway);
     case material_zone_type::unknown:
         break;
     }
@@ -265,13 +283,20 @@ void draw_hole_thumbnail(overlay_batch& batch,
         }
     }
 
-    for (const material_zone& zone : preview.material_zones) {
-        // Each zone as the rectangle around it, at least a dot across.
-        const glm::vec3 color = thumbnail_zone_color(ground, zone.type);
-        const glm::vec2 extent = zone_half_extent(zone);
-        const glm::vec2 drawn = rotate_long_axis ? glm::vec2(extent.y, extent.x) : extent;
-        const glm::vec2 p = preview_point(zone.center, center, inset_half, padded_min, scale, rotate_long_axis);
-        draw_overlay_quad(batch, p, glm::max(drawn * scale, glm::vec2(0.010f)), color, 0.64f);
+    // Fairways first, under the rest; each zone its outline's triangles.
+    for (const bool fairways : {true, false}) {
+        for (const material_zone& zone : preview.material_zones) {
+            if ((zone.type == material_zone_type::fairway) != fairways) {
+                continue;
+            }
+            const glm::vec3 color = thumbnail_zone_color(ground, zone.type);
+            const auto at = [&](const glm::vec2& point) {
+                return preview_point(glm::vec3(point.x, 0.0f, point.y), center, inset_half, padded_min, scale, rotate_long_axis);
+            };
+            for (const auto& [a, b, c] : zone_triangles(zone)) {
+                draw_overlay_corner_quad(batch, at(a), at(b), at(c), at(c), color, 0.64f);
+            }
+        }
     }
 
     const glm::vec2 tee = preview_point(preview.tee_position, center, inset_half, padded_min, scale, rotate_long_axis);
@@ -288,6 +313,9 @@ bool single_column(const startup_menu_screen screen) {
 bool picker(const startup_menu_screen screen) {
     return screen == startup_menu_screen::course_picker;
 }
+
+// A picker's grid: three by three tiles.
+constexpr int picker_tiles_shown = 9;
 
 // A single column runs down from its top edge to above the footer. Main
 // and confirm columns start under the subtitle; form columns under the form.
@@ -403,14 +431,35 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
     }
 
     const glm::vec2 arrow_half(0.04f, 0.04f);
-    const float arrow_x = tile_half.x + 0.07f;
-    if (menu.more_above) {
-        const glm::vec2 at(arrow_x, startup_tile_center(menu.screen, 0, tile_count).y);
-        draw_arrow_icon(batch, at, glm::vec2(0.0f, 1.0f), arrow_half);
-    }
-    if (menu.more_below && tile_count >= 2) {
-        const glm::vec2 at(arrow_x, startup_tile_center(menu.screen, tile_count - 2, tile_count).y);
-        draw_arrow_icon(batch, at, glm::vec2(0.0f, -1.0f), arrow_half);
+    if (picker(menu.screen)) {
+        // The box the grid's nine tiles fit, its arrows outside its right edge
+        // by the top and bottom rows.
+        const glm::vec2 top_left = startup_tile_center(menu.screen, 0, tile_count) + glm::vec2(-tile_half.x, tile_half.y);
+        const glm::vec2 bottom_right =
+            startup_tile_center(menu.screen, picker_tiles_shown - 1, tile_count) + glm::vec2(tile_half.x, -tile_half.y);
+        const glm::vec2 margin(0.02f, 0.025f);
+        const glm::vec2 box_center = 0.5f * (top_left + bottom_right);
+        const glm::vec2 box_half = 0.5f * glm::abs(bottom_right - top_left) + margin;
+        draw_button_outline(batch, box_center, box_half, glm::vec3(0.50f, 0.52f, 0.48f), 0.44f);
+        const float arrow_x = box_center.x + box_half.x - arrow_half.x - 0.01f;
+        if (menu.more_above) {
+            draw_arrow_icon(batch, glm::vec2(arrow_x, box_center.y + box_half.y + arrow_half.y + 0.01f), glm::vec2(0.0f, 1.0f),
+                            arrow_half);
+        }
+        if (menu.more_below) {
+            draw_arrow_icon(batch, glm::vec2(arrow_x, box_center.y - box_half.y - arrow_half.y - 0.01f), glm::vec2(0.0f, -1.0f),
+                            arrow_half);
+        }
+    } else {
+        const float arrow_x = tile_half.x + 0.07f;
+        if (menu.more_above) {
+            const glm::vec2 at(arrow_x, startup_tile_center(menu.screen, 0, tile_count).y);
+            draw_arrow_icon(batch, at, glm::vec2(0.0f, 1.0f), arrow_half);
+        }
+        if (menu.more_below && tile_count >= 2) {
+            const glm::vec2 at(arrow_x, startup_tile_center(menu.screen, tile_count - 2, tile_count).y);
+            draw_arrow_icon(batch, at, glm::vec2(0.0f, -1.0f), arrow_half);
+        }
     }
 
     draw_label(batch, text.font, find_text_style(text, style_footer), menu.footer, ui_rect{glm::vec2(0.0f, -0.86f), glm::vec2(0.78f, 0.05f)});

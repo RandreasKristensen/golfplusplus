@@ -46,3 +46,8 @@ bool on_tee_box(const tee_box& box, const glm::vec3& position) {
     return std::abs(glm::dot(offset, across_of(box.down_hole))) <= box.half_width &&
         std::abs(glm::dot(offset, box.down_hole)) <= box.half_length;
 }
+
+const tee_box* hole_tee_box(const std::vector<tee_box>& boxes, const std::size_t hole) {
+    const auto found = std::find_if(boxes.begin(), boxes.end(), [hole](const tee_box& box) { return box.hole == hole; });
+    return found != boxes.end() ? &*found : nullptr;
+}

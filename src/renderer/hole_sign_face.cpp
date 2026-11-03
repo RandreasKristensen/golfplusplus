@@ -32,7 +32,6 @@ constexpr int detail_height = 9;
 // Empty texels between the hole's extent and the map box's edges.
 constexpr float map_margin_texels = 2.0f;
 // Points around the pin's green's outline when fitting the map to it.
-constexpr int green_outline_points = 16;
 
 // A whole-texel rectangle on the face: columns from the left, rows from the
 // top (as hole_sign_texels), clipped to `clip`.
@@ -193,9 +192,8 @@ hole_sign_map_frame make_hole_sign_map_frame(const play_area& area, const hole_s
         if (zone.type != material_zone_type::green || !zone_contains(zone, pin)) {
             continue;
         }
-        for (int i = 0; i < green_outline_points; ++i) {
-            const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(green_outline_points);
-            cover(zone_world_point(zone, glm::vec2(std::cos(angle), std::sin(angle)) * zone.radii));
+        for (const glm::vec2& point : zone.outline) {
+            cover(glm::vec3(point.x, 0.0f, point.y));
         }
     }
 
@@ -216,10 +214,11 @@ glm::vec3 hole_sign_map_ink(const ground_colors& ground, const hole_sign_map_spo
     return spot.own_hole ? ink : course_map_other_hole_ink(ink);
 }
 
-hole_sign_labels make_hole_sign_labels(const text_assets& text, const int hole_number, const int par, const int meters) {
+hole_sign_labels make_hole_sign_labels(const text_assets& text, const int hole_number, const int par, const int meters,
+                                       const bool practice) {
     return hole_sign_labels{
-        format_text(text, text_hole_sign_number, {{"hole", std::to_string(hole_number)}}),
-        format_text(text, text_hole_sign_par, {{"par", std::to_string(par)}}),
+        format_text(text, practice ? text_hole_sign_bay : text_hole_sign_number, {{"hole", std::to_string(hole_number)}}),
+        practice ? lookup_text(text, text_hole_sign_target) : format_text(text, text_hole_sign_par, {{"par", std::to_string(par)}}),
         format_text(text, text_hole_sign_length, {{"meters", std::to_string(meters)}}),
     };
 }

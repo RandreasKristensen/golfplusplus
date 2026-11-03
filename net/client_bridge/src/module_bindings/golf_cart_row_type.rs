@@ -14,6 +14,12 @@ pub struct GolfCartRow {
     pub z: f32,
     pub yaw: f32,
     pub passenger: u64,
+    pub condition: u8,
+    pub driver: u64,
+    pub motion_id: f64,
+    pub area_x: i32,
+    pub area_z: i32,
+    pub area_key: String,
 }
 
 impl __sdk::InModule for GolfCartRow {
@@ -31,6 +37,12 @@ pub struct GolfCartRowCols {
     pub z: __sdk::__query_builder::Col<GolfCartRow, f32>,
     pub yaw: __sdk::__query_builder::Col<GolfCartRow, f32>,
     pub passenger: __sdk::__query_builder::Col<GolfCartRow, u64>,
+    pub condition: __sdk::__query_builder::Col<GolfCartRow, u8>,
+    pub driver: __sdk::__query_builder::Col<GolfCartRow, u64>,
+    pub motion_id: __sdk::__query_builder::Col<GolfCartRow, f64>,
+    pub area_x: __sdk::__query_builder::Col<GolfCartRow, i32>,
+    pub area_z: __sdk::__query_builder::Col<GolfCartRow, i32>,
+    pub area_key: __sdk::__query_builder::Col<GolfCartRow, String>,
 }
 
 impl __sdk::__query_builder::HasCols for GolfCartRow {
@@ -44,6 +56,12 @@ impl __sdk::__query_builder::HasCols for GolfCartRow {
             z: __sdk::__query_builder::Col::new(table_name, "z"),
             yaw: __sdk::__query_builder::Col::new(table_name, "yaw"),
             passenger: __sdk::__query_builder::Col::new(table_name, "passenger"),
+            condition: __sdk::__query_builder::Col::new(table_name, "condition"),
+            driver: __sdk::__query_builder::Col::new(table_name, "driver"),
+            motion_id: __sdk::__query_builder::Col::new(table_name, "motion_id"),
+            area_x: __sdk::__query_builder::Col::new(table_name, "area_x"),
+            area_z: __sdk::__query_builder::Col::new(table_name, "area_z"),
+            area_key: __sdk::__query_builder::Col::new(table_name, "area_key"),
         }
     }
 }
@@ -52,7 +70,9 @@ impl __sdk::__query_builder::HasCols for GolfCartRow {
 ///
 /// Provides typed access to indexed columns for query building.
 pub struct GolfCartRowIxCols {
+    pub area_key: __sdk::__query_builder::IxCol<GolfCartRow, String>,
     pub owner: __sdk::__query_builder::IxCol<GolfCartRow, u64>,
+    pub passenger: __sdk::__query_builder::IxCol<GolfCartRow, u64>,
     pub room_id: __sdk::__query_builder::IxCol<GolfCartRow, u64>,
 }
 
@@ -60,7 +80,9 @@ impl __sdk::__query_builder::HasIxCols for GolfCartRow {
     type IxCols = GolfCartRowIxCols;
     fn ix_cols(table_name: &'static str) -> Self::IxCols {
         GolfCartRowIxCols {
+            area_key: __sdk::__query_builder::IxCol::new(table_name, "area_key"),
             owner: __sdk::__query_builder::IxCol::new(table_name, "owner"),
+            passenger: __sdk::__query_builder::IxCol::new(table_name, "passenger"),
             room_id: __sdk::__query_builder::IxCol::new(table_name, "room_id"),
         }
     }

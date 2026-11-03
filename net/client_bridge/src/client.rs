@@ -129,6 +129,10 @@ impl StdbClient {
     }
 
     fn start_connecting(&mut self, token: Option<String>) {
+        let lifecycle = self.queue.lock().map(|mut queue| queue.drain(..).filter(|event|
+            matches!(event, Event::SignedIn(_) | Event::Disconnected(_, _) | Event::LoginWaitingForBrowser |
+                           Event::LoginFailed(_))).collect()).unwrap_or_default();
+        self.queue = Arc::new(Mutex::new(lifecycle));
         let (sender, result) = channel();
         let cancel = Arc::new(AtomicBool::new(false));
         let thread_cancel = cancel.clone();
@@ -170,7 +174,11 @@ impl StdbClient {
                 let q = self.queue.clone();
                 conn.db.$table().on_insert(move |_, row| push(&q, Event::Row(StdbRowChange::Insert, Row::$variant(row.clone()))));
                 let q = self.queue.clone();
-                conn.db.$table().on_delete(move |_, row| push(&q, Event::Row(StdbRowChange::Delete, Row::$variant(row.clone()))));
+                conn.db.$table().on_delete(move |ctx, row| {
+                    if !matches!(ctx.event, spacetimedb_sdk::Event::UnsubscribeApplied | spacetimedb_sdk::Event::Disconnected) {
+                        push(&q, Event::Row(StdbRowChange::Delete, Row::$variant(row.clone())));
+                    }
+                });
             }};
         }
         macro_rules! watch_keyed {
@@ -187,23 +195,29 @@ impl StdbClient {
             }};
         }
         watch_keyed!(player, Player);
-        watch_keyed!(player_skill, PlayerSkill);
-        watch_keyed!(hole_score, HoleScore);
-        watch_keyed!(completed_course, CompletedCourse);
-        watch_keyed!(collected, Collected);
-        watch_keyed!(world_flag, WorldFlag);
         watch_keyed!(room, Room);
         watch_keyed!(room_member, RoomMember);
         watch_keyed!(golf_group, GolfGroup);
-        watch_keyed!(avatar_motion, AvatarMotion);
+        watch!(my_avatar_motion, AvatarMotion);
         watch_keyed!(ball, Ball);
-        watch_keyed!(golf_cart, GolfCart);
+        watch!(my_golf_carts, GolfCart);
+        watch_keyed!(player_loadout, PlayerLoadout);
+        watch_keyed!(running_effect, RunningEffect);
+        watch_keyed!(player_bag, PlayerBag);
+        watch_keyed!(green_flag, GreenFlag);
+        watch_keyed!(ride_motion, RideMotion);
         watch_events!(shot_event, ShotEvent);
-        watch_events!(emote_event, EmoteEvent);
+        watch_events!(item_use_event, ItemUseEvent);
         watch!(my_account, MyAccount);
+        watch!(my_golfer_progress, MyGolferProgress);
+        watch!(my_skills, MySkills);
+        watch!(my_completed_courses, MyCompletedCourses);
+        watch!(my_collected, MyCollected);
+        watch!(my_world_flags, MyWorldFlags);
         watch!(my_link_code, MyLinkCode);
         watch!(my_link_status, MyLinkStatus);
         watch!(server_protocol, ServerProtocol);
+        watch!(server_content_hash, ServerContentHash);
     }
 
     /// Closes the connection the game asked to close.
@@ -304,13 +318,13 @@ impl StdbClient {
     }
 
     /// Calls a reducer, reporting a failure (or no connection) as an event.
-    pub fn call<F>(&self, reducer: &'static str, invoke: F)
+    pub fn call<F>(&self, reducer: &'static str, invoke: F) -> bool
     where
         F: FnOnce(&DbConnection, ReducerDone) -> spacetimedb_sdk::Result<()>,
     {
         let Some(conn) = &self.connection else {
             push(&self.queue, Event::ReducerFailed(reducer, NOT_CONNECTED.to_string()));
-            return;
+            return false;
         };
         let queue = self.queue.clone();
         let report: ReducerDone = Box::new(move |_, result| match result {
@@ -320,7 +334,9 @@ impl StdbClient {
         });
         if let Err(error) = invoke(conn, report) {
             push(&self.queue, Event::ReducerFailed(reducer, login::failure(REQUEST_FAILED, error)));
+            return false;
         }
+        true
     }
 }
 

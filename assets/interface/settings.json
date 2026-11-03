@@ -71,6 +71,36 @@
       "max": 1,
       "step": 1,
       "default": 1
+    },
+    {
+      "id": "handedness",
+      "label": "menu.settings.handedness",
+      "values": ["menu.settings.right_handed", "menu.settings.left_handed"],
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0
+    },
+    {
+      "id": "natural_shape",
+      "label": "menu.settings.natural_shape",
+      "values": ["menu.settings.natural_draw", "menu.settings.natural_neutral", "menu.settings.natural_fade"],
+      "min": 0,
+      "max": 2,
+      "step": 1,
+      "default": 1,
+      "golfer": true
+    },
+    {
+      "id": "favourite_colour",
+      "label": "menu.settings.favourite_colour",
+      "values": ["menu.settings.colour_any", "menu.settings.colour_red", "menu.settings.colour_blue",
+                 "menu.settings.colour_green", "menu.settings.colour_yellow", "menu.settings.colour_purple",
+                 "menu.settings.colour_orange", "menu.settings.colour_teal", "menu.settings.colour_black"],
+      "min": 0,
+      "max": 8,
+      "step": 1,
+      "default": 0
     }
   ]
 }

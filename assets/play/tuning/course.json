@@ -4,12 +4,13 @@
     "ground_cell_size": 4.0,
     "ground_blend_distance": 40.0,
     "bunker_depth": 0.9,
-    "water_depth_per_metre": 0.3,
+    "bunker_lip_meters": 1.5,
+    "water_bank_meters": 4.0,
+    "water_shore_meters": 1.5,
     "water_min_depth": 0.6,
     "water_max_depth": 3.5,
     "fairway_cell_size": 2.0,
     "zone_cell_size": 0.75,
-    "material_overlay_spacing": 0.75,
     "relief_scale": 1.2,
     "green_relief_scale": 0.83,
     "green_relief_blend_distance": 6.0
@@ -27,13 +28,27 @@
   "tee_box": {
     "width": 9.6,
     "length": 6.4,
-    "padding": 0.05,
+    "padding": 0.2,
     "sample_spacing": 0.5
   },
   "fence": {
-    "pole_radius": 0.05,
-    "net_restitution": 0.08,
-    "net_friction": 0.6
+    "pole_radius": 0.05
+  },
+  "solids": {
+    "trunk": { "restitution": 0.25, "friction": 0.35 },
+    "leaves": { "restitution": 0.25, "friction": 0.35 },
+    "pole": { "restitution": 0.25, "friction": 0.35 },
+    "net": { "restitution": 0.08, "friction": 0.6 },
+    "tee_box": { "restitution": 0.35, "friction": 0.4 },
+    "board": { "restitution": 0.3, "friction": 0.35 },
+    "flagstick": { "restitution": 0.25, "friction": 0.3 },
+    "lamp": { "restitution": 0.3, "friction": 0.35 },
+    "cart": { "restitution": 0.25, "friction": 0.4 },
+    "person": { "restitution": 0.1, "friction": 0.5 },
+    "ball": { "restitution": 0.6, "friction": 0.2 },
+    "self_hit_grace_seconds": 0.15,
+    "leaves_drag_per_meter": 0.35,
+    "leaves_scatter_degrees_per_meter": 12.0
   },
   "floodlights": {
     "spacing": 60.0,
@@ -45,6 +60,9 @@
     "pole_height": 11.0,
     "pole_radius": 0.16,
     "arm_length": 0.7,
+    "head_width": 1.6,
+    "head_height": 0.9,
+    "head_depth": 0.4,
     "obstacle_clearance": 2.0,
     "nudge_step": 3.0,
     "nudge_tries": 4

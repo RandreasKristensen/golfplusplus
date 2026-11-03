@@ -67,10 +67,11 @@ render_weather make_render_weather(const weather_presentation& state, const weat
                                    const lighting_palette& palette, const wind_profile& profile, float flag_height,
                                    const glm::vec3& camera, float ground_height);
 
-// The frame's: `state` run on towards game.weather for `dt` while `playing`
-// (menus show the weather as it is), lightning striking only while I walk,
-// and what it draws, by `data`'s camera, flags and player.
+// The frame's: `state` run on towards game.weather for `dt` while `fading`
+// (else it shows the weather as it is), lightning striking only while
+// `strikes` and I walk, and what it draws, by `data`'s camera, flags and player.
 weather_presentation update_frame_weather(const weather_presentation& state, const game_state& game,
-                                          const lighting_palette& palette, const render_data& data, bool playing, float dt);
+                                          const lighting_palette& palette, const render_data& data, bool fading, bool strikes,
+                                          float dt);
 render_weather make_frame_weather(const weather_presentation& state, const game_state& game, const lighting_palette& palette,
                                   const render_data& data);

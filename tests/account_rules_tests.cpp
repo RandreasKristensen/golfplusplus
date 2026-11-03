@@ -49,7 +49,7 @@ login_claims claims_from(const std::string& issuer) {
     return login_claims{true, issuer, {"golfpp"}};
 }
 
-const std::string secret(min_link_secret_length, 's');
+const std::string secret(min_server_secret_length, 's');
 }
 
 TEST_CASE("a token's issuer and audience are read from its payload") {
@@ -106,7 +106,7 @@ TEST_CASE("link codes depend on the secret and use the unambiguous alphabet") {
         codes.insert(code);
     }
     CHECK(codes.size() == 4U);
-    CHECK(make_link_code(std::string(min_link_secret_length, 't'), "1:1:7:0") != make_link_code(secret, "1:1:7:0"));
+    CHECK(make_link_code(std::string(min_server_secret_length, 't'), "1:1:7:0") != make_link_code(secret, "1:1:7:0"));
     CHECK(std::string(link_code_alphabet).find_first_of("01OI") == std::string::npos);
     CHECK(link_code_from_bits(0) == std::string(static_cast<std::size_t>(link_code_length), link_code_alphabet[0]));
     CHECK(normalize_link_code(" ab2c-d3ef ") == "AB2CD3EF");

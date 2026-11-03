@@ -76,31 +76,49 @@ endif()
 set(GOLFPP_SHARED_SOURCES
   src/physics/ball_physics.cpp
   src/physics/collision.cpp
+  src/physics/det_math.cpp
   src/physics/flight_model.cpp
+  src/physics/cup.cpp
   src/physics/ground_contact.cpp
+  src/physics/turf_contact.cpp
   src/physics/ground_mesh.cpp
+  src/physics/impact.cpp
   src/physics/land_relief.cpp
+  src/physics/launch.cpp
   src/physics/material_zone.cpp
   src/physics/terrain.cpp
   src/physics/body_collision.cpp
-  src/physics/fence_collision.cpp
-  src/physics/tree_collision.cpp
+  src/physics/cart_dynamics.cpp
+  src/physics/solid.cpp
   src/physics/wind.cpp
+  src/game/bag_place.cpp
   src/game/cart_seats.cpp
-  src/game/club_loader.cpp
+  src/game/content_hash.cpp
   src/game/course_loader.cpp
   src/game/course_world_loader.cpp
+  src/game/delivery.cpp
+  src/game/golfer.cpp
+  src/game/shot_ability.cpp
+  src/game/shot_dice.cpp
+  src/game/shot_setup.cpp
+  src/game/shot_snapshot.cpp
+  src/game/effects.cpp
   src/game/hole_loader.cpp
+  src/game/item_catalog.cpp
+  src/game/loadout.cpp
+  src/game/movement_step.cpp
+  src/game/sent_setup.cpp
   src/game/floodlights.cpp
   src/game/hole_sign.cpp
   src/game/tee_box.cpp
   src/game/json_util.cpp
   src/game/pixel_font_data.cpp
-  src/game/area_obstacles.cpp
+  src/game/area_solids.cpp
   src/game/play_area.cpp
   src/game/progress_rules.cpp
   src/game/progression.cpp
   src/game/reward_rules.cpp
+  src/game/skill_catalog.cpp
   src/game/round_state.cpp
   src/game/shot_simulation.cpp
   src/game/sky_clock.cpp
@@ -113,14 +131,17 @@ list(TRANSFORM GOLFPP_SHARED_SOURCES PREPEND "${GOLFPP_ROOT}/")
 # Every asset file matching these patterns is compiled in: the play
 # content, the font, and every course's manifest, world and holes.
 set(GOLFPP_CONTENT_PATTERNS
-  play/tuning/*.json play/clubs/*.json play/progression/*.json interface/fonts/*.json
-  world/courses/*/course.json world/courses/*/world.json world/courses/*/holes/*.json)
+  play/tuning/*.json play/progression/*.json play/items/*.json interface/fonts/*.json world/courses/*.json)
 set(GOLFPP_ASSET_ROOT "${GOLFPP_ROOT}/assets")
 set(GOLFPP_CONTENT_FILES "")
 foreach(pattern IN LISTS GOLFPP_CONTENT_PATTERNS)
-  file(GLOB files CONFIGURE_DEPENDS "${GOLFPP_ASSET_ROOT}/${pattern}")
+  file(GLOB_RECURSE files CONFIGURE_DEPENDS "${GOLFPP_ASSET_ROOT}/${pattern}")
   list(APPEND GOLFPP_CONTENT_FILES ${files})
 endforeach()
+list(SORT GOLFPP_CONTENT_FILES)
+# A glob losing its last file must rebuild the embedded copy too.
+set(GOLFPP_CONTENT_MANIFEST "${CMAKE_BINARY_DIR}/content_manifest.txt")
+file(GENERATE OUTPUT "${GOLFPP_CONTENT_MANIFEST}" CONTENT "${GOLFPP_CONTENT_FILES}")
 set(GOLFPP_EMBEDDED_SOURCE "${CMAKE_BINARY_DIR}/embedded_content.cpp")
 add_custom_command(
   OUTPUT "${GOLFPP_EMBEDDED_SOURCE}"
@@ -129,15 +150,18 @@ add_custom_command(
     "-DPATTERNS=${GOLFPP_CONTENT_PATTERNS}"
     "-DOUTPUT=${GOLFPP_EMBEDDED_SOURCE}"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/embed_content.cmake"
-  DEPENDS ${GOLFPP_CONTENT_FILES} "${CMAKE_CURRENT_SOURCE_DIR}/embed_content.cmake"
+  DEPENDS ${GOLFPP_CONTENT_FILES} "${GOLFPP_CONTENT_MANIFEST}" "${CMAKE_CURRENT_SOURCE_DIR}/embed_content.cmake"
   COMMENT "Embedding game content"
   VERBATIM)
 
 add_executable(lib
   src/account_rules.cpp
+  src/progress_rollup.cpp
   src/lib.cpp
   src/module_cache.cpp
   src/play_rules.cpp
+  src/cart_rules.cpp
+  src/movement_rules.cpp
   src/server_content.cpp
   ${GOLFPP_SHARED_SOURCES}
   "${GOLFPP_EMBEDDED_SOURCE}"

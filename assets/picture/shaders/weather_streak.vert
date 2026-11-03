@@ -8,8 +8,9 @@
 // box never ends and nothing is rebuilt; fading out towards the box's edge
 // and very near the camera hides the wrap. Lit by the light there is: a
 // speck as an unlit thing, a drop of water by the sky's light seen through
-// it (the haze), so rain is pale by day, glints by the night lights and is
-// all but gone in the dark.
+// it (the haze), so rain is pale by day and all but gone in the dark; and
+// both by the night lights as the air takes them (air_light), so rain
+// sparkles in a floodlight's beam, brightest under the lamp.
 
 layout(location = 0) in vec4 a_seed;  // xyz: its place in the box, 0..1; w: its own random 0..1
 layout(location = 1) in float a_end;  // 0 where it is, 1 its tail
@@ -39,7 +40,7 @@ void main() {
     float edge = 2.0 * max(max(abs(local.x), abs(local.z)), abs(local.y));
     float near = smoothstep(0.0, u_streak.z, distance(head, haze_eye.xyz));
     float fade = (1.0 - smoothstep(0.6, 1.0, edge)) * near * mix(0.55, 1.0, a_seed.w) * mix(1.0, 0.5, a_end);
-    vec3 color = u_color * (mix(flat_light(0.0), haze_color.rgb, u_water) + local_light(world));
+    vec3 color = u_color * (mix(flat_light(0.0), haze_color.rgb, u_water) + air_light(world));
     v_color = vec4(hazed(color, world), u_streak.y * fade);
     gl_Position = u_view_proj * vec4(world, 1.0);
 }

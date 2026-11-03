@@ -312,7 +312,7 @@ TEST_CASE("the frame's light comes from the course's sky and the palette") {
     CHECK(midnight.star_visibility == star_visibility(palette.sky, glm::degrees(std::asin(midnight.sun_direction.y))));
     const sky_state sky = compute_sky_state(
         frame_game_day(state.tuning.sky_clock, state.course.sky, controls, 0),
-        state.hub->world.latitude_deg, state.hub->world.longitude_deg);
+        state.world.latitude_deg, state.world.longitude_deg);
     CHECK(near(midnight.moon_direction, sky.moon_direction, 0.0001f));
     CHECK(midnight.moon_phase == sky.moon_phase);
 
@@ -504,6 +504,10 @@ TEST_CASE("the VCR plays in the menus and pauses on a still frame, the datestamp
     game_state online = state;
     online.play = play_mode::online;
     CHECK(!make_render_vcr(text, online, sky_controls{}, 0, vcr_signals{false, false, true}).show_offline);
+    const render_vcr touring = make_render_vcr(text, state, sky_controls{}, 0, vcr_signals{false, false, true, true});
+    CHECK(touring.tag == vcr_tag::play);
+    CHECK(touring.show_datestamp);
+    CHECK(!touring.show_offline);
 }
 
 TEST_CASE("shadows fade in with the sun, the night lights come on without it, and the ball glows past white at night") {
@@ -567,4 +571,29 @@ TEST_CASE("shadows fade in with the sun, the night lights come on without it, an
         bad["shadows"][key] = value;
         CHECK(!parses(bad));
     }
+
+    // The sun shafts step a whole number of times, out to some reach.
+    const shaft_style shafts = parse_lighting_from_text(shipped.dump())->shafts;
+    CHECK(shafts.steps == shipped["shafts"]["steps"].get<int>());
+    CHECK(shafts.reach_meters > 0.0f);
+    for (const auto& [key, value] : std::initializer_list<std::pair<const char*, json>>{
+             {"steps", json(0)}, {"steps", json(65)}, {"steps", json(16.5)}, {"reach_meters", json(0.0)},
+             {"min_glow", json(-0.1)}, {"lamps", json(-1)}, {"lamps", json(9)}, {"lamps", json(2.5)},
+             {"lamp_map_resolution", json(100)}, {"lamp_map_resolution", json(8)}, {"lamp_map_resolution", json(1024)},
+             {"lamp_near_meters", json(0.0)}}) {
+        json bad = shipped;
+        bad["shafts"][key] = value;
+        CHECK(!parses(bad));
+    }
+    // The lamps' beams step their own small shadow maps.
+    CHECK(shafts.lamps == shipped["shafts"]["lamps"].get<int>());
+    CHECK(shafts.lamp_map_resolution == shipped["shafts"]["lamp_map_resolution"].get<int>());
+    for (const char* key : {"lamps", "lamp_map_resolution", "lamp_near_meters"}) {
+        json bad = shipped;
+        bad["shafts"].erase(key);
+        CHECK(!parses(bad));
+    }
+    json without = shipped;
+    without.erase("shafts");
+    CHECK(!parses(without));
 }

@@ -6,20 +6,27 @@
 #include "game/club_definition.h"
 #include "game/course_definition.h"
 #include "game/game_tuning.h"
+#include "game/item_catalog.h"
+#include "game/loadout.h"
 #include "game/reward_rules.h"
 #include "game/settings.h"
+#include "game/skill_catalog.h"
 
 #include <optional>
+#include <cstdint>
 #include <string>
 #include <vector>
 
 struct game_content {
     std::string asset_root;
+    std::uint64_t content_hash = 0;
     game_tuning tuning;
-    std::vector<club_definition> clubs;      // bag order
+    std::vector<club_definition> clubs;      // the club items, in bag order
     std::vector<course_definition> courses;  // sorted by file name
-    std::vector<skill_definition> skills;    // skills panel order
+    skill_catalog skills;
     reward_rules rewards;
+    item_catalog items;
+    loadout default_loadout;  // fits `items`
     std::vector<setting_definition> settings;  // settings screen order
 };
 

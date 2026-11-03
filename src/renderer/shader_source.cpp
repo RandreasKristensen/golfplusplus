@@ -63,3 +63,11 @@ std::optional<std::string> expand_shader_includes(const std::string& source, con
     }
     return expanded;
 }
+
+std::string with_defines(const std::string& source, const std::string& defines) {
+    if (source.rfind("#version", 0) != 0) {
+        return defines + source;
+    }
+    const std::size_t end = source.find('\n');
+    return end == std::string::npos ? source + "\n" + defines : source.substr(0, end + 1) + defines + source.substr(end + 1);
+}

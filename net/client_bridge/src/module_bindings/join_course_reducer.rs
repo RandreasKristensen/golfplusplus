@@ -8,12 +8,14 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[sats(crate = __lib)]
 pub(super) struct JoinCourseArgs {
     pub course_id: String,
+    pub takes_cart: bool,
 }
 
 impl From<JoinCourseArgs> for super::Reducer {
     fn from(args: JoinCourseArgs) -> Self {
         Self::JoinCourse {
             course_id: args.course_id,
+            takes_cart: args.takes_cart,
         }
     }
 }
@@ -33,8 +35,8 @@ pub trait join_course {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`join_course:join_course_then`] to run a callback after the reducer completes.
-    fn join_course(&self, course_id: String) -> __sdk::Result<()> {
-        self.join_course_then(course_id, |_, _| {})
+    fn join_course(&self, course_id: String, takes_cart: bool) -> __sdk::Result<()> {
+        self.join_course_then(course_id, takes_cart, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `join_course` to run as soon as possible,
@@ -46,6 +48,7 @@ pub trait join_course {
     fn join_course_then(
         &self,
         course_id: String,
+        takes_cart: bool,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -57,12 +60,18 @@ impl join_course for super::RemoteReducers {
     fn join_course_then(
         &self,
         course_id: String,
+        takes_cart: bool,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
-        self.imp
-            .invoke_reducer_with_callback(JoinCourseArgs { course_id }, callback)
+        self.imp.invoke_reducer_with_callback(
+            JoinCourseArgs {
+                course_id,
+                takes_cart,
+            },
+            callback,
+        )
     }
 }

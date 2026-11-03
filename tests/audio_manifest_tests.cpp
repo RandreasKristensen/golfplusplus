@@ -6,6 +6,7 @@
 #include "test_support.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <regex>
@@ -63,13 +64,15 @@ TEST_CASE("audio manifest parser accepts valid manifest") {
           "category": "ui",
           "description": "Short VHS menu cursor tick.",
           "target_length_seconds": 0.05,
-          "volume_multiplier": 1.25
+          "volume_multiplier": 1.25,
+          "placed": false
         },
         {
           "id": "ambience_menu_vcr",
           "file": "ambience/menu_vcr.ogg",
           "type": "ambience",
-          "category": "ambience"
+          "category": "ambience",
+          "placed": false
         }
       ]
     })");
@@ -95,7 +98,9 @@ TEST_CASE("audio manifest parser defaults optional fields") {
       "sounds": [
         {
           "id": "club_change",
-          "file": "sfx/club_change.wav"
+          "file": "sfx/club_change.wav",
+          "reference_distance": 2.0,
+          "max_distance": 15.0
         }
       ]
     })");
@@ -113,12 +118,15 @@ TEST_CASE("audio manifest parser defaults optional fields") {
     CHECK(sound.category == "gameplay");
     CHECK(sound.volume_multiplier == 1.0f);
     CHECK(sound.type == audio_sound_type::sfx);
+    REQUIRE(sound.spread.has_value());
+    CHECK(sound.spread->reference == 2.0f);
+    CHECK(sound.spread->max == 15.0f);
 }
 
 TEST_CASE("audio manifest parser clamps negative sound multipliers") {
     const audio_manifest_parse_result result = parse_audio_manifest(R"({
       "sounds": [
-        { "id": "muted", "file": "sfx/muted.wav", "volume_multiplier": -2.0 }
+        { "id": "muted", "file": "sfx/muted.wav", "volume_multiplier": -2.0, "placed": false }
       ]
     })");
 
@@ -139,8 +147,8 @@ TEST_CASE("audio manifest parser rejects invalid json") {
 TEST_CASE("audio manifest parser rejects duplicate ids") {
     const audio_manifest_parse_result result = parse_audio_manifest(R"({
       "sounds": [
-        { "id": "ui_move", "file": "sfx/ui_move.wav" },
-        { "id": "ui_move", "file": "sfx/ui_move_alt.wav" }
+        { "id": "ui_move", "file": "sfx/ui_move.wav", "placed": false },
+        { "id": "ui_move", "file": "sfx/ui_move_alt.wav", "placed": false }
       ]
     })");
 
@@ -151,8 +159,8 @@ TEST_CASE("audio manifest parser rejects duplicate ids") {
 TEST_CASE("audio manifest parser keeps SDL_mixer asset classes explicit") {
     const audio_manifest_parse_result result = parse_audio_manifest(R"({
       "sounds": [
-        { "id": "ball_roll", "file": "sfx/ball_roll.wav", "type": "loop" },
-        { "id": "ambience_course_day", "file": "ambience/course_day.ogg", "type": "ambience", "category": "ambience" }
+        { "id": "ball_roll", "file": "sfx/ball_roll.wav", "type": "loop", "placed": false },
+        { "id": "ambience_course_day", "file": "ambience/course_day.ogg", "type": "ambience", "category": "ambience", "placed": false }
       ]
     })");
 
@@ -189,6 +197,11 @@ TEST_CASE("every sound the game plays is in the manifest with an existing file")
     for (const club_definition& club : shipped_content().clubs) {
         played.push_back(club.hit_sound);
     }
+    for (const auto& [id, item] : shipped_content().items.items) {
+        if (item.use) {
+            played.push_back(item.use->sound);
+        }
+    }
 
     for (const std::string& id : played) {
         const audio_sound_definition* sound = find_sound(*result.manifest, id);
@@ -215,11 +228,23 @@ TEST_CASE("every file in the manifest is the format its extension says") {
     }
 }
 
+TEST_CASE("every file in the manifest has sound in it: SDL_mixer cannot free an empty one") {
+    const audio_manifest_parse_result result = load_audio_manifest_from_file(asset_root() + "/" + sounds_path);
+    REQUIRE(result.manifest.has_value());
+    // A wav's header alone is 44 bytes; a placeholder is a short silence (tooling/audio/make_placeholders.py).
+    constexpr std::uintmax_t header_bytes = 44;
+    for (const audio_sound_definition& sound : result.manifest->sounds) {
+        const std::filesystem::path path = (std::filesystem::path(asset_root()) / sounds_path).parent_path() / sound.file;
+        std::error_code error;
+        CHECK(std::filesystem::file_size(path, error) > header_bytes);
+    }
+}
+
 TEST_CASE("the master volume scales every sound and multiplies with the music volume for the ambience") {
     const audio_manifest_parse_result result = parse_audio_manifest(R"({
       "master_volume": 0.8,
       "categories": { "ui": 0.5 },
-      "sounds": [ { "id": "click", "file": "click.wav", "category": "ui", "volume_multiplier": 0.5 } ]
+      "sounds": [ { "id": "click", "file": "click.wav", "category": "ui", "volume_multiplier": 0.5, "placed": false } ]
     })");
     REQUIRE(result.manifest.has_value());
     const float mix = sound_mix_gain(*result.manifest, result.manifest->sounds[0]);

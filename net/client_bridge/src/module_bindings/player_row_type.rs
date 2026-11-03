@@ -11,9 +11,11 @@ pub struct PlayerRow {
     pub display_name: String,
     pub name_key: String,
     pub online: bool,
-    pub holes_completed: i32,
     pub created_at: __sdk::Timestamp,
     pub last_login: __sdk::Timestamp,
+    pub hand: u8,
+    pub natural_shape: u8,
+    pub favourite_colour: u8,
 }
 
 impl __sdk::InModule for PlayerRow {
@@ -28,9 +30,11 @@ pub struct PlayerRowCols {
     pub display_name: __sdk::__query_builder::Col<PlayerRow, String>,
     pub name_key: __sdk::__query_builder::Col<PlayerRow, String>,
     pub online: __sdk::__query_builder::Col<PlayerRow, bool>,
-    pub holes_completed: __sdk::__query_builder::Col<PlayerRow, i32>,
     pub created_at: __sdk::__query_builder::Col<PlayerRow, __sdk::Timestamp>,
     pub last_login: __sdk::__query_builder::Col<PlayerRow, __sdk::Timestamp>,
+    pub hand: __sdk::__query_builder::Col<PlayerRow, u8>,
+    pub natural_shape: __sdk::__query_builder::Col<PlayerRow, u8>,
+    pub favourite_colour: __sdk::__query_builder::Col<PlayerRow, u8>,
 }
 
 impl __sdk::__query_builder::HasCols for PlayerRow {
@@ -41,9 +45,11 @@ impl __sdk::__query_builder::HasCols for PlayerRow {
             display_name: __sdk::__query_builder::Col::new(table_name, "display_name"),
             name_key: __sdk::__query_builder::Col::new(table_name, "name_key"),
             online: __sdk::__query_builder::Col::new(table_name, "online"),
-            holes_completed: __sdk::__query_builder::Col::new(table_name, "holes_completed"),
             created_at: __sdk::__query_builder::Col::new(table_name, "created_at"),
             last_login: __sdk::__query_builder::Col::new(table_name, "last_login"),
+            hand: __sdk::__query_builder::Col::new(table_name, "hand"),
+            natural_shape: __sdk::__query_builder::Col::new(table_name, "natural_shape"),
+            favourite_colour: __sdk::__query_builder::Col::new(table_name, "favourite_colour"),
         }
     }
 }

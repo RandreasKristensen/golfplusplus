@@ -275,7 +275,8 @@ text_layout layout_text(const pixel_font_data& font,
     return layout_text_at_scale(font, style, text, box, grid, scale > 0 ? scale : style.min_scale);
 }
 
-void draw_text_layout(overlay_batch& batch, const pixel_font_data& font, const text_layout& layout, const glm::vec3 color) {
+void draw_text_layout(overlay_batch& batch, const pixel_font_data& font, const text_layout& layout, const glm::vec3 color,
+                      const float alpha) {
     if (layout.truncated) {
         ++batch.truncated_text_count;
     }
@@ -293,7 +294,8 @@ void draw_text_layout(overlay_batch& batch, const pixel_font_data& font, const t
                                       cursor + glm::vec2((static_cast<float>(x) + 0.5f) * layout.cell.x,
                                                          -(static_cast<float>(y) + 0.5f) * layout.cell.y),
                                       half_cell,
-                                      color);
+                                      color,
+                                      alpha);
                 }
             }
             cursor.x += static_cast<float>(glyph.width + 1) * layout.cell.x;

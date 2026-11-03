@@ -41,7 +41,8 @@ struct hole_sign_labels {
     std::string length;  // "385M", in whole metres like the rangefinder
 };
 
-hole_sign_labels make_hole_sign_labels(const text_assets& text, int hole_number, int par, int meters);
+// A practice ground's bay says its number and the target's distance, no par.
+hole_sign_labels make_hole_sign_labels(const text_assets& text, int hole_number, int par, int meters, bool practice);
 
 // The box `width` x `height` texels whose top-left texel is (`left`, `top`),
 // counted from the face's top-left corner, in the face's clip space.

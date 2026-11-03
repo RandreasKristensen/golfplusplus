@@ -80,15 +80,21 @@ endfunction()
 golfpp_library(golfpp-physics
     src/physics/ball_physics.cpp
     src/physics/collision.cpp
+    src/physics/det_math.cpp
     src/physics/flight_model.cpp
+    src/physics/cup.cpp
     src/physics/ground_contact.cpp
+    src/physics/turf_contact.cpp
     src/physics/ground_mesh.cpp
+    src/physics/impact.cpp
     src/physics/land_relief.cpp
+    src/physics/launch.cpp
     src/physics/material_zone.cpp
     src/physics/terrain.cpp
     src/physics/body_collision.cpp
-    src/physics/fence_collision.cpp
-    src/physics/tree_collision.cpp
+    src/physics/cart_dynamics.cpp
+    src/physics/cart_rollover.cpp
+    src/physics/solid.cpp
     src/physics/wind.cpp
 )
 
@@ -97,44 +103,74 @@ golfpp_library(golfpp-profiling
 )
 
 golfpp_library(golfpp-game
+    src/game/address_play.cpp
+    src/game/address_view.cpp
     src/game/asset_resolver.cpp
+    src/game/bag_place.cpp
     src/game/cart_seats.cpp
-    src/game/club_loader.cpp
     src/game/content_files.cpp
+    src/game/content_hash.cpp
     src/game/course_loader.cpp
     src/game/course_session.cpp
     src/game/course_world_loader.cpp
+    src/game/delivery.cpp
+    src/game/effects.cpp
     src/game/game_content.cpp
     src/game/game_state.cpp
+    src/game/interactables.cpp
     src/game/body_contact.cpp
     src/game/golf_cart.cpp
+    src/game/bag_handling.cpp
+    src/game/golf_bag.cpp
+    src/game/gear_paint.cpp
+    src/game/golfer.cpp
     src/game/group_round.cpp
     src/game/hole_loader.cpp
+    src/game/item_catalog.cpp
+    src/game/json_edit.cpp
+    src/game/loadout.cpp
+    src/game/model_kinds.cpp
     src/game/floodlights.cpp
     src/game/hole_sign.cpp
     src/game/tee_box.cpp
     src/game/json_util.cpp
     src/game/lighting_loader.cpp
+    src/game/lighting_numbers.cpp
+    src/game/look_reload.cpp
     src/game/sun_lighting.cpp
     src/game/mode_dispatch.cpp
     src/game/online_play.cpp
     src/game/motion_sync.cpp
+    src/game/movement_step.cpp
+    src/game/sent_setup.cpp
+    src/game/sync_reconciliation.cpp
+    src/game/cart_prediction.cpp
     src/game/picture_loader.cpp
+    src/game/visual_tour_loader.cpp
     src/game/pixel_font_data.cpp
-    src/game/area_obstacles.cpp
+    src/game/area_solids.cpp
     src/game/play_area.cpp
     src/game/progress_rules.cpp
     src/game/progression.cpp
     src/game/rangefinder.cpp
+    src/game/green_read.cpp
+    src/game/pacing.cpp
     src/game/sight_line.cpp
     src/game/remote_players.cpp
+    src/game/ride_sync.cpp
     src/game/reward_rules.cpp
+    src/game/skill_catalog.cpp
     src/game/round_state.cpp
     src/game/save_data.cpp
     src/game/save_manager.cpp
     src/game/settings.cpp
     src/game/scorecard.cpp
+    src/game/shot_ability.cpp
+    src/game/shot_dice.cpp
+    src/game/shot_number.cpp
+    src/game/shot_setup.cpp
     src/game/shot_simulation.cpp
+    src/game/shot_snapshot.cpp
     src/game/sky_clock.cpp
     src/game/weather.cpp
     src/game/weather_lighting.cpp
@@ -144,7 +180,10 @@ golfpp_library(golfpp-game
     src/game/prop_loader.cpp
     src/game/text_style.cpp
     src/game/tuning_loader.cpp
+    src/game/tuning_panel.cpp
     src/game/utf8.cpp
+    src/game/walking.cpp
+    src/game/world_sounds.cpp
 )
 target_link_libraries(golfpp-game PUBLIC golfpp-physics golfpp-profiling)
 target_compile_definitions(golfpp-game PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
@@ -155,11 +194,15 @@ golfpp_library(golfpp-render-data
     src/renderer/bmp_image.cpp
     src/renderer/camera_local.cpp
     src/renderer/camera_transition.cpp
+    src/renderer/bag_batch.cpp
     src/renderer/cart_batch.cpp
     src/renderer/control_icons.cpp
     src/renderer/course_map_fill.cpp
     src/renderer/course_map_overlay.cpp
-    src/renderer/emote_props.cpp
+    src/renderer/held_props.cpp
+    src/renderer/prop_batch.cpp
+    src/renderer/prop_light.cpp
+    src/renderer/scattered_light.cpp
     src/renderer/prop_pieces.cpp
     src/renderer/frustum.cpp
     src/renderer/fence_batch.cpp
@@ -169,6 +212,9 @@ golfpp_library(golfpp-render-data
     src/renderer/hole_sign_face.cpp
     src/renderer/god_menu_overlay.cpp
     src/renderer/hud_overlay.cpp
+    src/renderer/shot_number_overlay.cpp
+    src/renderer/osd_overlay.cpp
+    src/renderer/solid_outline.cpp
     src/renderer/hud_panel.cpp
     src/renderer/menu_overlay.cpp
     src/renderer/online_overlay.cpp
@@ -182,9 +228,11 @@ golfpp_library(golfpp-render-data
     src/renderer/remote_avatar_batch.cpp
     src/renderer/render_tree.cpp
     src/renderer/scene_lights.cpp
+    src/renderer/lamp_shadows.cpp
     src/renderer/scorecard_overlay.cpp
     src/renderer/shadow_casters.cpp
     src/renderer/shadow_map_fit.cpp
+    src/renderer/swing_club.cpp
     src/renderer/shader_source.cpp
     src/renderer/sky_visibility.cpp
     src/renderer/terrain_palette.cpp
@@ -277,17 +325,22 @@ endif()
 # SDL-free app logic: startup options, menu flow, audio manifest.
 golfpp_library(golfpp-app-logic
     src/audio/audio_manifest.cpp
+    src/audio/sound_placement.cpp
     src/core/god_menu.cpp
     src/core/input.cpp
     src/core/key_bindings.cpp
     src/core/light_frame.cpp
+    src/core/look_tuning.cpp
     src/core/menu_controls.cpp
     src/core/online_menus.cpp
     src/core/render_frame.cpp
+    src/core/render_gear.cpp
     src/core/render_online.cpp
+    src/core/render_putting.cpp
     src/core/settings_menu.cpp
     src/core/sky_frame.cpp
     src/core/startup_flow.cpp
+    src/core/visual_tour.cpp
     src/core/startup_options.cpp
     src/core/tape_tracking.cpp
     src/core/vcr_frame.cpp
@@ -311,6 +364,7 @@ target_link_libraries(golfpp-online-session PUBLIC golfpp-app-logic golfpp-net)
 add_executable(golfpp
     src/audio/audio_engine.cpp
     src/core/app.cpp
+    src/core/app_look.cpp
     src/core/event_loop.cpp
     src/core/main.cpp
     src/core/screenshot.cpp
@@ -329,9 +383,13 @@ add_executable(golfpp
     src/renderer/water_renderer.cpp
     src/renderer/eyepiece_pass.cpp
     src/renderer/overlay_pass.cpp
+    src/renderer/prop_renderer.cpp
     src/renderer/renderer.cpp
+    src/renderer/renderer_look.cpp
     src/renderer/shader.cpp
     src/renderer/shadow_map_pass.cpp
+    src/renderer/lamp_shadow_pass.cpp
+    src/renderer/sun_shaft_pass.cpp
     src/renderer/tape_pass.cpp
     src/renderer/terrain_renderer.cpp
     src/renderer/texture.cpp
@@ -389,6 +447,19 @@ if (GOLFPP_NET)
     target_compile_definitions(golfpp PRIVATE GOLFPP_NET=1)
 endif()
 
+# Hits the bag through the game's own simulation and prints what each shot
+# did (tooling/shot_lab).
+add_executable(golfpp-shot-lab EXCLUDE_FROM_ALL tooling/shot_lab/shot_lab_main.cpp)
+target_link_libraries(golfpp-shot-lab PRIVATE golfpp-game golfpp-warnings)
+target_compile_definitions(golfpp-shot-lab PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
+
+if (GOLFPP_NET)
+    # A headless client that checks a running server (tooling/net/online_check).
+    add_executable(golfpp-online-check EXCLUDE_FROM_ALL tooling/net/online_check/online_check_main.cpp)
+    target_link_libraries(golfpp-online-check PRIVATE golfpp-net golfpp-client-bridge golfpp-warnings)
+    target_compile_definitions(golfpp-online-check PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
+endif()
+
 # `cmake --install <build> --prefix <dir>`: everything a player's computer
 # needs to run the game from <dir>, which tooling/release packs.
 if (APPLE)
@@ -421,6 +492,9 @@ if (GOLFPP_BUILD_TESTS)
     add_library(golfpp-server-rules STATIC
         server/golfpp_module/src/account_rules.cpp
         server/golfpp_module/src/play_rules.cpp
+        server/golfpp_module/src/cart_rules.cpp
+        server/golfpp_module/src/movement_rules.cpp
+        server/golfpp_module/src/progress_rollup.cpp
         server/golfpp_module/src/server_content.cpp
     )
     target_include_directories(golfpp-server-rules PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/server/golfpp_module/src)
@@ -429,28 +503,47 @@ if (GOLFPP_BUILD_TESTS)
     add_executable(golfpp-tests
         tests/account_rules_tests.cpp
         tests/audio_manifest_tests.cpp
+        tests/sound_placement_tests.cpp
+        tests/shot_ability_tests.cpp
+        tests/shot_number_tests.cpp
+        tests/golf_bag_tests.cpp
+        tests/practice_tests.cpp
+        tests/osd_tests.cpp
+        tests/shot_snapshot_tests.cpp
         tests/camera_transition_tests.cpp
+        tests/cart_dynamics_tests.cpp
         tests/cart_tests.cpp
+        tests/shared_carts_tests.cpp
         tests/content_tests.cpp
         tests/prop_tests.cpp
         tests/controls_tests.cpp
         tests/course_map_fill_tests.cpp
         tests/course_tests.cpp
+        tests/det_math_tests.cpp
         tests/dynamic_buffer_tests.cpp
         tests/fence_tests.cpp
+        tests/flight_tests.cpp
+        tests/impact_tests.cpp
+        tests/lie_tests.cpp
         tests/floodlight_tests.cpp
         tests/gameplay_tests.cpp
         tests/god_menu_tests.cpp
         tests/hazard_tests.cpp
         tests/hole_sign_tests.cpp
+        tests/item_tests.cpp
         tests/tee_box_tests.cpp
         tests/light_frame_tests.cpp
         tests/material_zone_tests.cpp
+        tests/movement_tests.cpp
         tests/fake_stdb_bridge.cpp
         tests/mode_dispatch_tests.cpp
         tests/net_client_tests.cpp
+        tests/interest_rules_tests.cpp
+        tests/progress_rollup_tests.cpp
         tests/online_menus_tests.cpp
         tests/online_play_tests.cpp
+        tests/sync_harness.cpp
+        tests/sync_tests.cpp
         tests/online_session_tests.cpp
         tests/overlay_batch_tests.cpp
         tests/play_rules_tests.cpp
@@ -458,10 +551,14 @@ if (GOLFPP_BUILD_TESTS)
         tests/profiling_tests.cpp
         tests/progression_tests.cpp
         tests/rangefinder_tests.cpp
+        tests/putting_read_tests.cpp
         tests/render_culling_tests.cpp
         tests/render_frame_tests.cpp
         tests/server_content_tests.cpp
         tests/shader_tests.cpp
+        tests/scattered_light_tests.cpp
+        tests/lamp_shadow_tests.cpp
+        tests/look_tuning_tests.cpp
         tests/shadow_map_tests.cpp
         tests/shot_simulation_tests.cpp
         tests/sky_clock_tests.cpp
@@ -470,6 +567,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/sky_visibility_tests.cpp
         tests/settings_tests.cpp
         tests/startup_flow_tests.cpp
+        tests/visual_tour_tests.cpp
         tests/startup_options_tests.cpp
         tests/text_assets_tests.cpp
         tests/text_input_tests.cpp

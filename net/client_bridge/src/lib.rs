@@ -201,8 +201,8 @@ macro_rules! text_reducer {
 }
 
 text_reducer!(stdb_claim_name, "claim_name", |conn, text, done| conn.reducers.claim_name_then(text, done));
-text_reducer!(stdb_join_course, "join_course", |conn, text, done| conn.reducers.join_course_then(text, done));
-text_reducer!(stdb_emote, "emote", |conn, text, done| conn.reducers.emote_then(text, done));
+text_reducer!(stdb_use_item, "use_item", |conn, text, done| conn.reducers.use_item_then(text, done));
+text_reducer!(stdb_take_club, "take_club", |conn, text, done| conn.reducers.take_club_then(text, done));
 text_reducer!(stdb_claim_collectible, "claim_collectible", |conn, text, done| conn
     .reducers
     .claim_collectible_reducer_then(text, done));
@@ -210,10 +210,20 @@ text_reducer!(stdb_redeem_link_code, "redeem_link_code", |conn, text, done| conn
 reducer!(stdb_leave_room, "leave_room", |conn, done| conn.reducers.leave_room_then(done));
 reducer!(stdb_create_group, "create_group", |conn, done| conn.reducers.create_group_then(done));
 reducer!(stdb_leave_group, "leave_group", |conn, done| conn.reducers.leave_group_then(done));
-reducer!(stdb_return_to_hub, "return_to_hub", |conn, done| conn.reducers.return_to_hub_then(done));
+reducer!(stdb_give_up_hole, "give_up_hole", |conn, done| conn.reducers.give_up_hole_then(done));
 reducer!(stdb_pick_up_ball, "pick_up_ball", |conn, done| conn.reducers.pick_up_ball_then(done));
 reducer!(stdb_leave_cart, "leave_cart", |conn, done| conn.reducers.leave_cart_then(done));
 reducer!(stdb_create_link_code, "create_link_code", |conn, done| conn.reducers.create_link_code_then(done));
+
+/// # Safety
+/// `course_id` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn stdb_join_course(client: *mut StdbClient, course_id: *const c_char, len: usize, takes_cart: bool) {
+    let course = StdbString { data: course_id, len }.to_string();
+    if let Some(c) = self::client(client) {
+        c.call("join_course", |conn, done| conn.reducers.join_course_then(course, takes_cart, done));
+    }
+}
 
 /// # Safety
 /// See `client`.
@@ -236,20 +246,61 @@ pub unsafe extern "C" fn stdb_board_cart(client: *mut StdbClient, owner: u64) {
 /// # Safety
 /// See `client`.
 #[no_mangle]
-pub unsafe extern "C" fn stdb_enter_hole(client: *mut StdbClient, hole_index: i32) {
+pub unsafe extern "C" fn stdb_right_cart(client: *mut StdbClient, owner: u64) {
     if let Some(c) = self::client(client) {
-        c.call("enter_hole", |conn, done| conn.reducers.enter_hole_then(hole_index, done));
+        c.call("right_cart", |conn, done| conn.reducers.right_cart_then(owner, done));
     }
+}
+
+/// # Safety
+/// See `client`.
+#[no_mangle]
+pub unsafe extern "C" fn stdb_tee_up(client: *mut StdbClient, hole_index: i32, give_up: bool) {
+    if let Some(c) = self::client(client) {
+        c.call("tee_up", |conn, done| conn.reducers.tee_up_then(hole_index, give_up, done));
+    }
+}
+
+/// # Safety
+/// `motion` must point to a valid StdbMotion and `steps` to a valid
+/// StdbSteps whose `runs` holds `run_count` runs.
+#[no_mangle]
+pub unsafe extern "C" fn stdb_update_motion(client: *mut StdbClient, motion: *const StdbMotion, steps: *const StdbSteps) -> bool {
+    let (Some(c), Some(m), Some(s)) = (self::client(client), motion.as_ref(), steps.as_ref()) else { return false };
+    let m = *m;
+    let s = *s;
+    let runs: Vec<MoveRunRow> = if s.runs.is_null() || s.run_count == 0 {
+        Vec::new()
+    } else {
+        std::slice::from_raw_parts(s.runs, s.run_count)
+            .iter()
+            .map(|r| MoveRunRow {
+                kind: r.kind,
+                steps: r.steps,
+                forward: r.forward,
+                side: r.side,
+                run: r.run,
+                jump: r.jump,
+                yaw: r.yaw,
+                steer: r.steer,
+            })
+            .collect()
+    };
+    c.call("update_motion", |conn, done| {
+        conn.reducers.update_motion_then(m.mode, m.x, m.y, m.z, m.yaw, m.speed, m.turn_rate, m.client_time, s.first_step,
+                                         s.start_x, s.start_y, s.start_z, runs, m.setup.aim, m.setup.face_open,
+                                         m.setup.ball_position, m.setup.backswing, m.crouched, done)
+    })
 }
 
 /// # Safety
 /// `motion` must point to a valid StdbMotion.
 #[no_mangle]
-pub unsafe extern "C" fn stdb_update_motion(client: *mut StdbClient, motion: *const StdbMotion) {
+pub unsafe extern "C" fn stdb_update_ride(client: *mut StdbClient, motion: *const StdbMotion) {
     let (Some(c), Some(m)) = (self::client(client), motion.as_ref()) else { return };
     let m = *m;
-    c.call("update_motion", |conn, done| {
-        conn.reducers.update_motion_then(m.zone, m.mode, m.x, m.y, m.z, m.yaw, m.speed, m.turn_rate, m.client_time, done)
+    c.call("update_ride", |conn, done| {
+        conn.reducers.update_ride_then(m.x, m.y, m.z, m.yaw, m.speed, m.turn_rate, m.client_time, done)
     });
 }
 
@@ -260,7 +311,57 @@ pub unsafe extern "C" fn stdb_take_shot(client: *mut StdbClient, shot: *const St
     let (Some(c), Some(s)) = (self::client(client), shot.as_ref()) else { return };
     let s = *s;
     let club = s.club_id.to_string();
+    let flags_out = if s.flags_out.is_null() || s.flags_out_count == 0 {
+        Vec::new()
+    } else {
+        std::slice::from_raw_parts(s.flags_out, s.flags_out_count).to_vec()
+    };
     c.call("take_shot", |conn, done| {
-        conn.reducers.take_shot_then(s.stroke, s.aim_angle, club, s.power, s.cigarette_active, s.shot_at, done)
+        conn.reducers.take_shot_then(s.stroke, s.aim_angle, s.face_open, s.ball_position, s.backswing, s.strike_timing,
+                                     club, s.shot_at, flags_out, done)
     });
+}
+
+/// # Safety
+/// See `client`.
+#[no_mangle]
+pub unsafe extern "C" fn stdb_set_flag(client: *mut StdbClient, hole: i32, out: bool) {
+    if let Some(c) = self::client(client) {
+        c.call("set_flag", |conn, done| conn.reducers.set_flag_then(hole, out, done));
+    }
+}
+
+/// # Safety
+/// See `client`.
+#[no_mangle]
+pub unsafe extern "C" fn stdb_place_bag(client: *mut StdbClient, place: u8, seat: u8, cart_owner: u64, x: f32, y: f32, z: f32,
+                                        yaw: f32) {
+    if let Some(c) = self::client(client) {
+        c.call("place_bag", |conn, done| conn.reducers.place_bag_then(place, seat, cart_owner, x, y, z, yaw, done));
+    }
+}
+
+/// # Safety
+/// See `client`.
+#[no_mangle]
+pub unsafe extern "C" fn stdb_set_golfer(client: *mut StdbClient, hand: u8, natural_shape: u8, favourite_colour: u8) {
+    if let Some(c) = self::client(client) {
+        c.call("set_golfer", |conn, done| conn.reducers.set_golfer_then(hand, natural_shape, favourite_colour, done));
+    }
+}
+
+/// # Safety
+/// `client` must be the live client returned by stdb_create.
+#[no_mangle]
+pub unsafe extern "C" fn stdb_take_wheel(client: *mut StdbClient) {
+    let Some(c) = self::client(client) else { return };
+    c.call("take_wheel", |conn, done| conn.reducers.take_wheel_then(done));
+}
+
+/// # Safety
+/// `client` must be the live client returned by stdb_create.
+#[no_mangle]
+pub unsafe extern "C" fn stdb_leave_wheel(client: *mut StdbClient) {
+    let Some(c) = self::client(client) else { return };
+    c.call("leave_wheel", |conn, done| conn.reducers.leave_wheel_then(done));
 }

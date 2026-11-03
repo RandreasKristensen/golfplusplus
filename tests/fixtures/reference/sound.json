@@ -1,0 +1,4 @@
+{
+  "point_source_falloff_db_per_doubling": { "value": 6.02, "source": "inverse square law: sound pressure falls as 1/r, 20 log10(2) dB per doubling of distance in the open", "checked": true },
+  "max_distance": "how far each game sound carries is picked by ear per sound and named as such in the manifest"
+}

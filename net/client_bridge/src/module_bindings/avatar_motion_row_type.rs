@@ -9,7 +9,6 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub struct AvatarMotionRow {
     pub account_id: u64,
     pub room_id: u64,
-    pub zone: i32,
     pub mode: u8,
     pub x: f32,
     pub y: f32,
@@ -18,7 +17,15 @@ pub struct AvatarMotionRow {
     pub speed: f32,
     pub turn_rate: f32,
     pub client_time: f64,
+    pub setup_aim: u16,
+    pub setup_face_open: i16,
+    pub setup_ball_position: i8,
+    pub setup_backswing: u16,
+    pub crouched: bool,
     pub server_time: __sdk::Timestamp,
+    pub area_x: i32,
+    pub area_z: i32,
+    pub area_key: String,
 }
 
 impl __sdk::InModule for AvatarMotionRow {
@@ -31,7 +38,6 @@ impl __sdk::InModule for AvatarMotionRow {
 pub struct AvatarMotionRowCols {
     pub account_id: __sdk::__query_builder::Col<AvatarMotionRow, u64>,
     pub room_id: __sdk::__query_builder::Col<AvatarMotionRow, u64>,
-    pub zone: __sdk::__query_builder::Col<AvatarMotionRow, i32>,
     pub mode: __sdk::__query_builder::Col<AvatarMotionRow, u8>,
     pub x: __sdk::__query_builder::Col<AvatarMotionRow, f32>,
     pub y: __sdk::__query_builder::Col<AvatarMotionRow, f32>,
@@ -40,7 +46,15 @@ pub struct AvatarMotionRowCols {
     pub speed: __sdk::__query_builder::Col<AvatarMotionRow, f32>,
     pub turn_rate: __sdk::__query_builder::Col<AvatarMotionRow, f32>,
     pub client_time: __sdk::__query_builder::Col<AvatarMotionRow, f64>,
+    pub setup_aim: __sdk::__query_builder::Col<AvatarMotionRow, u16>,
+    pub setup_face_open: __sdk::__query_builder::Col<AvatarMotionRow, i16>,
+    pub setup_ball_position: __sdk::__query_builder::Col<AvatarMotionRow, i8>,
+    pub setup_backswing: __sdk::__query_builder::Col<AvatarMotionRow, u16>,
+    pub crouched: __sdk::__query_builder::Col<AvatarMotionRow, bool>,
     pub server_time: __sdk::__query_builder::Col<AvatarMotionRow, __sdk::Timestamp>,
+    pub area_x: __sdk::__query_builder::Col<AvatarMotionRow, i32>,
+    pub area_z: __sdk::__query_builder::Col<AvatarMotionRow, i32>,
+    pub area_key: __sdk::__query_builder::Col<AvatarMotionRow, String>,
 }
 
 impl __sdk::__query_builder::HasCols for AvatarMotionRow {
@@ -49,7 +63,6 @@ impl __sdk::__query_builder::HasCols for AvatarMotionRow {
         AvatarMotionRowCols {
             account_id: __sdk::__query_builder::Col::new(table_name, "account_id"),
             room_id: __sdk::__query_builder::Col::new(table_name, "room_id"),
-            zone: __sdk::__query_builder::Col::new(table_name, "zone"),
             mode: __sdk::__query_builder::Col::new(table_name, "mode"),
             x: __sdk::__query_builder::Col::new(table_name, "x"),
             y: __sdk::__query_builder::Col::new(table_name, "y"),
@@ -58,7 +71,18 @@ impl __sdk::__query_builder::HasCols for AvatarMotionRow {
             speed: __sdk::__query_builder::Col::new(table_name, "speed"),
             turn_rate: __sdk::__query_builder::Col::new(table_name, "turn_rate"),
             client_time: __sdk::__query_builder::Col::new(table_name, "client_time"),
+            setup_aim: __sdk::__query_builder::Col::new(table_name, "setup_aim"),
+            setup_face_open: __sdk::__query_builder::Col::new(table_name, "setup_face_open"),
+            setup_ball_position: __sdk::__query_builder::Col::new(
+                table_name,
+                "setup_ball_position",
+            ),
+            setup_backswing: __sdk::__query_builder::Col::new(table_name, "setup_backswing"),
+            crouched: __sdk::__query_builder::Col::new(table_name, "crouched"),
             server_time: __sdk::__query_builder::Col::new(table_name, "server_time"),
+            area_x: __sdk::__query_builder::Col::new(table_name, "area_x"),
+            area_z: __sdk::__query_builder::Col::new(table_name, "area_z"),
+            area_key: __sdk::__query_builder::Col::new(table_name, "area_key"),
         }
     }
 }
@@ -68,6 +92,7 @@ impl __sdk::__query_builder::HasCols for AvatarMotionRow {
 /// Provides typed access to indexed columns for query building.
 pub struct AvatarMotionRowIxCols {
     pub account_id: __sdk::__query_builder::IxCol<AvatarMotionRow, u64>,
+    pub area_key: __sdk::__query_builder::IxCol<AvatarMotionRow, String>,
     pub room_id: __sdk::__query_builder::IxCol<AvatarMotionRow, u64>,
 }
 
@@ -76,6 +101,7 @@ impl __sdk::__query_builder::HasIxCols for AvatarMotionRow {
     fn ix_cols(table_name: &'static str) -> Self::IxCols {
         AvatarMotionRowIxCols {
             account_id: __sdk::__query_builder::IxCol::new(table_name, "account_id"),
+            area_key: __sdk::__query_builder::IxCol::new(table_name, "area_key"),
             room_id: __sdk::__query_builder::IxCol::new(table_name, "room_id"),
         }
     }

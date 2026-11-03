@@ -201,9 +201,9 @@ function Enable-Anonymous {
         return
     }
     $online = Get-Content -LiteralPath (Join-Path $repo_root "assets\online.json") -Raw | ConvertFrom-Json
-    $secret = Get-ConfigValue "link_secret"
+    $secret = Get-ConfigValue "server_secret"
     if (-not $secret) {
-        # A new database: link codes need a secret of at least 32 characters.
+        # A new database: link codes and shot seeds need a secret of at least 32 characters.
         $bytes = New-Object byte[] 32
         [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
         $secret = -join ($bytes | ForEach-Object { $_.ToString("x2") })

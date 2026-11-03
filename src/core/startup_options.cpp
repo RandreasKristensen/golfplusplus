@@ -2,6 +2,7 @@
 
 #include "game/sky_clock.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -80,6 +81,19 @@ startup_options with_review_options(startup_options options, const char* window_
         }
     }
     options.screenshot_path = trimmed(screenshot_value);
+    return options;
+}
+
+startup_options with_tour_option(startup_options options, const char* tour_value) {
+    const std::string text = trimmed(tour_value);
+    if (text.empty() || !std::all_of(text.begin(), text.end(), [](const char c) { return c >= '0' && c <= '9'; }) ||
+        text.size() > 6) {
+        return options;
+    }
+    const int stop = std::stoi(text);
+    if (stop >= 1) {
+        options.tour_stop = static_cast<std::size_t>(stop - 1);
+    }
     return options;
 }
 

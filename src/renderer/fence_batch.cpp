@@ -51,11 +51,11 @@ void append_net(std::vector<fence_vertex>& out, const glm::vec3& a, const glm::v
 }
 }
 
-render_fences build_render_fences(const play_area& area, const std::uint64_t revision, const glm::vec3& post_color) {
+render_fences build_render_fences(const play_area& area, const std::uint64_t revision, const glm::vec3& post_color,
+                                  const float pole_radius) {
     render_fences fences;
     fences.revision = revision;
-    const float half_width = std::max(min_drawn_post_half_width,
-                                      area.fence_poles.empty() ? 0.0f : area.fence_poles.front().shape.trunk_radius);
+    const float half_width = std::max(min_drawn_post_half_width, pole_radius);
     for (const course_world_fence& fence : area.fences) {
         float along = 0.0f;
         for (std::size_t i = 0; i < fence.poles.size(); ++i) {
