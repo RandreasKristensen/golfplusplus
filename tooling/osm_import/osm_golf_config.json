@@ -242,6 +242,51 @@
           "par": 4
         }
       ]
+    },
+    "blommenslyst_9_holes": {
+      "ref_prefix": "P"
+    },
+    "hedensted_pay_play": {
+      "ref_prefix": "P",
+      "holes": [
+        {"line": "W1417421101", "par": 4},
+        {"line": "W1417421099", "par": 3},
+        {"line": "W1417222413", "par": 3},
+        {"line": "W1417222415", "par": 4},
+        {"line": "W1417411408", "par": 4},
+        {"line": "W1417411410", "par": 4},
+        {"line": "W1417411411", "par": 3},
+        {"line": "W1417421089", "par": 4},
+        {"line": "W1417421094", "par": 3}
+      ]
+    },
+    "odense_golfklub": {
+      "ref_prefix": "Holluf Park"
+    },
+    "odense_pilebanen": {
+      "ref_prefix": "Pilebanen"
+    },
+    "ry_golf_klub": {
+      "holes": [
+        {"line": "W1310868069", "par": 5},
+        {"line": "W1310868071", "par": 4},
+        {"line": "W1310868075", "par": 3},
+        {"line": "W1310868074", "par": 4},
+        {"line": "W1310868073", "par": 4},
+        {"line": "W1310868072", "par": 5},
+        {"line": "W1324660027", "par": 3},
+        {"line": "W1310868068", "par": 4},
+        {"line": "W1310868070", "par": 4},
+        {"line": "W1310868064", "par": 5},
+        {"line": "W1310868065", "par": 4},
+        {"line": "W1310868066", "par": 5},
+        {"line": "W1324663794", "par": 3},
+        {"line": "W1310868060", "par": 4},
+        {"line": "W1310868062", "par": 4},
+        {"line": "W1310868061", "par": 4},
+        {"line": "W1310868063", "par": 4},
+        {"line": "W1310868067", "par": 3}
+      ]
     }
   }
 }

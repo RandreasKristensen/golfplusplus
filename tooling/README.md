@@ -344,6 +344,8 @@ py -3 osm_golf_convert.py "Aarhus Golf Klub" --no-elevation
 # One boundary holding two courses told apart by ref (Kalø: 1-18 and P1-P9);
 # the course's config entry can set "ref_prefix" instead
 py -3 osm_golf_convert.py --id W96706717 --ref-prefix P --course-name "Kalø Par 3"
+# A worded prefix compares by its letters ("Pilebanen 3", "Pay & Play - 3")
+py -3 osm_golf_convert.py --id W44039647 --ref-prefix Pilebanen --course-name "Odense Pilebanen"
 
 # Re-download instead of reusing the cached OSM responses
 py -3 osm_golf_convert.py --id W1019045811 --refresh

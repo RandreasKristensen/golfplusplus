@@ -4,35 +4,12 @@
 
 ## **Todo**
 
-- Fix tees, they stick up the ground too far. The ground should just be made flat around it.
-- The animations for picking up clubs are irritating AND bad. They need to be made better (a club goes in from the top with the handle first) and they shouldn't lock you in place
-There are lines on the ground when you aim - presumably to show "your ball is here, this is your shot angle" - but that should be evident from the ball and your club. Remove these, then well see if its accurate
-- The irons and wedges should have their angle evident from their asset
-- The flag seems to work against you more than it helps you - this was not the intent. It should only deflect the ball when it has way too much speed, otherwise it should help the ball kinda "stick" to it, so puts are eaiser
-- make the step counting walk much slower. Make you be able to crouch around slowly while crouched to see the curve
-Generate carpaths? from the images or from osm - maybe both, maybe some just generated when we dont have it. On one side of the fairway, physics for ball interactions, and also signs from the green to the next tee
- The exagurated heightmap works somewhat well, somewhat unwell. somethimes the fairways are unrealistically hilly, but I like the increased total height. It it possible to have like the general heightmap as flat as normal, but somehow scale it so the top and bottom points are still scaled 20%?So say a hole was going 10meters up from tee to green, now it goes 12, but the small irregularities in the fairway, 1m is still 1m. This should also change that the cart is a little stronger uphill
-- - mulligans?
-- see each other on map? Or maybe not see yourself or ball on map at all - forcing people to drop if they dont find ball type shit
-- tee times, instead of room caps. Makes par 3s have less people naturally, and improves "group finding" - naturally getting paired with others on the same teetime.
-- port to sdl3, possibly also away from opengl to ensure longterm support. 
-- Make the editor better? The importer is now very good, so small edits to them in the editor should feel nice and fast.
+
 
 
 ## **Bugs**
 
-- random scores showing up on group scorecards for holes not yet played, different for each person in the group
-- too far away cart desync
-- water graphics - blue ground but only water up to the lowest edge
-- some of the lights are colliding with trees.
-- no lights for many of the jelling course tees
-- rainbows at night lmao
-- grouping is a little bugged? Maybe mostly when youve already played. Fix with a friends menu on a phone.
-- when setting up its kinda bugged where you stand; It should always be the same for people viewing other people, as it is for them
-- final scorecard says 10 hole 10the room number goes up every time you enter a new room
-. WWhat ss the logic for this? I hope we dont make a new room every time a rooa rommom is empty, and a have a bunch of empty rooms "running"?"  
-Each room should have a room number that is a % modulus of the course no. I.e. if we have 12 courses, the first number will "own" room numbers 1, 13, 25 etc.
-- it rains inside the cart.
+
 
 
 

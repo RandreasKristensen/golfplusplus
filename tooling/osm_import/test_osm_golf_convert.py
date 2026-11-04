@@ -716,6 +716,34 @@ class TeeSelectionTests(unittest.TestCase):
         # 500 m target: the tee at z=0 gives exactly 500, the one at -55 gives 555.
         self.assertEqual((0.0, 0.0), chosen)
 
+    def test_of_two_tees_as_far_from_the_pin_the_one_at_the_line_start_wins(self):
+        h = conv._empty_hole()
+        h["tees"] = [node(1, {"golf": "tee"}, 0.0, 0.0), node(2, {"golf": "tee"}, 0.0, 0.0)]
+        line = [(0.0, 0.0), (0.0, 200.0)]
+
+        def fake_to_xz(elements, *_args):
+            # Tee 1 is 60 m to the side, as far from the pin as the line is long.
+            return {1: [(-60.0, 200.0 - math.sqrt(200.0**2 - 60.0**2))], 2: [(0.0, 0.0)]}[elements[0]["id"]]
+
+        with mock.patch.object(conv, "_to_xz_list", side_effect=fake_to_xz):
+            chosen = conv._select_tee_xz(h, line, (0.0, 200.0), 0.0, 0.0)
+
+        self.assertEqual((0.0, 0.0), chosen)
+
+    def test_a_tee_only_beside_the_green_leaves_the_line_start_as_the_tee(self):
+        h = conv._empty_hole()
+        h["tees"] = [node(1, {"golf": "tee"}, 0.0, 0.0)]
+        line = [(0.0, 0.0), (0.0, 190.0)]
+
+        def fake_to_xz(elements, *_args):
+            # The next hole's tee, 60 m past this hole's green.
+            return [(0.0, 250.0)]
+
+        with mock.patch.object(conv, "_to_xz_list", side_effect=fake_to_xz):
+            chosen = conv._select_tee_xz(h, line, (0.0, 190.0), 0.0, 0.0)
+
+        self.assertIsNone(chosen)
+
     def test_a_neighbouring_holes_tee_is_excluded(self):
         h = conv._empty_hole()
         h["tees"] = [node(1, {"golf": "tee"}, 0.0, 0.0), node(2, {"golf": "tee"}, 0.0, 0.0)]
@@ -963,6 +991,18 @@ class CourseSelectionTests(unittest.TestCase):
 
         self.assertEqual([1, 3], [el["id"] for el in selected])
 
+    def test_a_worded_prefix_is_matched_by_its_letters(self):
+        elements = [
+            way(1, {"golf": "hole", "ref": "Holluf Park 12"}, [(56.0, 10.0), (56.0, 10.004)]),
+            way(2, {"golf": "hole", "ref": "Pay & Play - 3"}, [(56.01, 10.0), (56.01, 10.002)]),
+        ]
+
+        selected = conv.select_course_by_ref_prefix(elements, "Pay & Play", 56.005, 10.002)
+
+        self.assertEqual([2], [el["id"] for el in selected])
+        self.assertEqual("3", selected[0]["tags"]["ref"])
+        self.assertEqual([1], [el["id"] for el in conv.select_course_by_ref_prefix(elements, "holluf park", 56.005, 10.002)])
+
     def test_a_missing_prefix_is_an_error_naming_what_exists(self):
         with self.assertRaisesRegex(ValueError, "'P'"):
             conv.select_course_by_ref_prefix(self.ELEMENTS, "X", 56.005, 10.002)
@@ -1049,6 +1089,14 @@ class OtherCourseTests(unittest.TestCase):
         kept = conv._drop_other_course_features([theirs, ours], self.MAIN, [inner])
 
         self.assertEqual([5], [el["id"] for el in kept])
+
+    def test_rough_also_tagged_as_a_course_is_not_another_course(self):
+        # Ry's rough areas carry leisure=golf_course as well as golf=rough.
+        rough = way(13, {"golf": "rough", "leisure": "golf_course"}, [(56.001, 10.003), (56.001, 10.004), (56.002, 10.004)])
+
+        others = conv._other_courses([self.MAIN, rough, self.PITCH_AND_PUTT], self.MAIN)
+
+        self.assertEqual([10], [el["id"] for el in others])
 
 
 class ProjectionTests(unittest.TestCase):

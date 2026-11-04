@@ -1,0 +1,2789 @@
+{
+  "id": "hedensted_golf_klub_h16",
+  "name": "Hole 16",
+  "par": 4,
+  "tee": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pin": [
+    126.88,
+    0.0,
+    -353.45
+  ],
+  "spline": {
+    "control_points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        4.21,
+        0.0,
+        -35.93
+      ],
+      [
+        5.21,
+        0.0,
+        -72.11
+      ],
+      [
+        16.04,
+        0.0,
+        -106.35
+      ],
+      [
+        28.89,
+        0.0,
+        -140.19
+      ],
+      [
+        41.74,
+        0.0,
+        -174.03
+      ],
+      [
+        54.6,
+        0.0,
+        -207.87
+      ],
+      [
+        67.45,
+        0.0,
+        -241.7
+      ],
+      [
+        86.14,
+        0.0,
+        -269.88
+      ],
+      [
+        117.9,
+        0.0,
+        -286.18
+      ],
+      [
+        129.27,
+        0.0,
+        -317.33
+      ],
+      [
+        126.88,
+        0.0,
+        -353.45
+      ]
+    ],
+    "width": 55.3,
+    "rough_width": 85.7
+  },
+  "material_zones": [
+    {
+      "type": "green",
+      "outline": [
+        [
+          132.72,
+          -339.17
+        ],
+        [
+          133.42,
+          -347.03
+        ],
+        [
+          129.97,
+          -355.39
+        ],
+        [
+          128.65,
+          -364.21
+        ],
+        [
+          125.61,
+          -367.48
+        ],
+        [
+          123.18,
+          -368.85
+        ],
+        [
+          120.44,
+          -369.44
+        ],
+        [
+          116.29,
+          -368.16
+        ],
+        [
+          113.83,
+          -365.27
+        ],
+        [
+          112.84,
+          -357.09
+        ],
+        [
+          113.65,
+          -354.33
+        ],
+        [
+          118.57,
+          -345.94
+        ],
+        [
+          120.14,
+          -338.91
+        ],
+        [
+          124.18,
+          -335.08
+        ],
+        [
+          127.11,
+          -334.63
+        ],
+        [
+          130.42,
+          -335.67
+        ]
+      ]
+    },
+    {
+      "type": "bunker",
+      "outline": [
+        [
+          133.07,
+          -362.59
+        ],
+        [
+          133.11,
+          -358.51
+        ],
+        [
+          135.16,
+          -350.62
+        ],
+        [
+          136.75,
+          -348.61
+        ],
+        [
+          138.96,
+          -348.69
+        ],
+        [
+          141.2,
+          -351.74
+        ],
+        [
+          140.12,
+          -356.35
+        ],
+        [
+          140.42,
+          -361.81
+        ],
+        [
+          138.68,
+          -363.66
+        ],
+        [
+          135.79,
+          -364.52
+        ]
+      ]
+    },
+    {
+      "type": "bunker",
+      "outline": [
+        [
+          147.54,
+          -335.84
+        ],
+        [
+          145.4,
+          -325.38
+        ],
+        [
+          146.21,
+          -323.58
+        ],
+        [
+          147.77,
+          -323.03
+        ],
+        [
+          150.87,
+          -325.32
+        ],
+        [
+          151.46,
+          -330.83
+        ],
+        [
+          153.12,
+          -335.3
+        ],
+        [
+          151.14,
+          -337.41
+        ],
+        [
+          149.12,
+          -337.15
+        ]
+      ]
+    },
+    {
+      "type": "water",
+      "outline": [
+        [
+          109.16,
+          -302.81
+        ],
+        [
+          104.11,
+          -311.66
+        ],
+        [
+          103.88,
+          -314.82
+        ],
+        [
+          105.97,
+          -320.94
+        ],
+        [
+          108.49,
+          -323.54
+        ],
+        [
+          112.83,
+          -325.94
+        ],
+        [
+          113.82,
+          -328.32
+        ],
+        [
+          104.52,
+          -339.82
+        ],
+        [
+          102.91,
+          -344.85
+        ],
+        [
+          100.9,
+          -357.67
+        ],
+        [
+          99.35,
+          -360.7
+        ],
+        [
+          97.38,
+          -360.58
+        ],
+        [
+          95.36,
+          -359.51
+        ],
+        [
+          94.46,
+          -356.41
+        ],
+        [
+          95.52,
+          -351.27
+        ],
+        [
+          95.65,
+          -333.97
+        ],
+        [
+          89.64,
+          -318.74
+        ],
+        [
+          89.75,
+          -306.96
+        ],
+        [
+          93.22,
+          -300.69
+        ],
+        [
+          97.65,
+          -295.67
+        ],
+        [
+          100.64,
+          -294.07
+        ],
+        [
+          105.08,
+          -295.15
+        ],
+        [
+          106.85,
+          -296.67
+        ],
+        [
+          108.79,
+          -298.7
+        ]
+      ]
+    },
+    {
+      "type": "fairway",
+      "outline": [
+        [
+          47.75,
+          -146.81
+        ],
+        [
+          49.67,
+          -158.4
+        ],
+        [
+          56.87,
+          -167.11
+        ],
+        [
+          59.5,
+          -171.64
+        ],
+        [
+          61.17,
+          -176.68
+        ],
+        [
+          60.35,
+          -204.41
+        ],
+        [
+          62.73,
+          -216.82
+        ],
+        [
+          64.97,
+          -223.37
+        ],
+        [
+          69.94,
+          -229.68
+        ],
+        [
+          80.5,
+          -236.94
+        ],
+        [
+          83.24,
+          -241.52
+        ],
+        [
+          86.97,
+          -250.61
+        ],
+        [
+          92.94,
+          -257.32
+        ],
+        [
+          100.84,
+          -262.46
+        ],
+        [
+          119.84,
+          -268.05
+        ],
+        [
+          128.96,
+          -272.33
+        ],
+        [
+          137.09,
+          -279.5
+        ],
+        [
+          141.96,
+          -289.14
+        ],
+        [
+          143.5,
+          -300.59
+        ],
+        [
+          142.48,
+          -305.3
+        ],
+        [
+          136.7,
+          -318.71
+        ],
+        [
+          137.1,
+          -331.98
+        ],
+        [
+          134.94,
+          -340.24
+        ],
+        [
+          135.07,
+          -345.35
+        ],
+        [
+          134.0,
+          -349.62
+        ],
+        [
+          131.39,
+          -355.14
+        ],
+        [
+          130.51,
+          -363.79
+        ],
+        [
+          128.41,
+          -367.34
+        ],
+        [
+          124.7,
+          -369.95
+        ],
+        [
+          119.54,
+          -370.99
+        ],
+        [
+          115.17,
+          -369.47
+        ],
+        [
+          112.17,
+          -365.54
+        ],
+        [
+          110.91,
+          -360.54
+        ],
+        [
+          111.76,
+          -354.8
+        ],
+        [
+          115.76,
+          -348.97
+        ],
+        [
+          117.83,
+          -340.17
+        ],
+        [
+          120.31,
+          -336.38
+        ],
+        [
+          121.79,
+          -332.16
+        ],
+        [
+          121.06,
+          -325.43
+        ],
+        [
+          116.51,
+          -318.3
+        ],
+        [
+          115.58,
+          -314.86
+        ],
+        [
+          118.43,
+          -301.18
+        ],
+        [
+          117.29,
+          -294.52
+        ],
+        [
+          115.6,
+          -291.85
+        ],
+        [
+          113.07,
+          -288.78
+        ],
+        [
+          108.27,
+          -286.74
+        ],
+        [
+          104.19,
+          -286.4
+        ],
+        [
+          98.79,
+          -287.27
+        ],
+        [
+          93.84,
+          -288.76
+        ],
+        [
+          89.19,
+          -292.33
+        ],
+        [
+          82.87,
+          -302.63
+        ],
+        [
+          79.2,
+          -303.59
+        ],
+        [
+          74.22,
+          -301.86
+        ],
+        [
+          72.08,
+          -299.85
+        ],
+        [
+          71.24,
+          -297.4
+        ],
+        [
+          69.65,
+          -285.17
+        ],
+        [
+          67.22,
+          -278.88
+        ],
+        [
+          65.98,
+          -277.18
+        ],
+        [
+          56.49,
+          -272.2
+        ],
+        [
+          52.86,
+          -268.68
+        ],
+        [
+          51.85,
+          -266.46
+        ],
+        [
+          49.6,
+          -247.2
+        ],
+        [
+          46.38,
+          -238.44
+        ],
+        [
+          39.14,
+          -228.71
+        ],
+        [
+          28.53,
+          -219.49
+        ],
+        [
+          24.18,
+          -211.89
+        ],
+        [
+          25.4,
+          -199.2
+        ],
+        [
+          24.95,
+          -193.4
+        ],
+        [
+          23.39,
+          -188.09
+        ],
+        [
+          16.94,
+          -181.15
+        ],
+        [
+          15.34,
+          -177.33
+        ],
+        [
+          15.57,
+          -163.03
+        ],
+        [
+          10.49,
+          -151.03
+        ],
+        [
+          10.19,
+          -145.71
+        ],
+        [
+          10.78,
+          -143.4
+        ],
+        [
+          13.9,
+          -138.21
+        ],
+        [
+          19.29,
+          -134.04
+        ],
+        [
+          27.86,
+          -131.06
+        ],
+        [
+          34.75,
+          -131.08
+        ],
+        [
+          38.86,
+          -131.98
+        ],
+        [
+          43.59,
+          -134.94
+        ],
+        [
+          45.81,
+          -137.91
+        ]
+      ]
+    },
+    {
+      "type": "water",
+      "outline": [
+        [
+          103.15,
+          -249.18
+        ],
+        [
+          85.15,
+          -231.18
+        ],
+        [
+          89.15,
+          -229.18
+        ],
+        [
+          87.15,
+          -227.18
+        ],
+        [
+          88.15,
+          -222.18
+        ],
+        [
+          85.15,
+          -221.18
+        ],
+        [
+          83.15,
+          -223.18
+        ],
+        [
+          79.15,
+          -217.18
+        ],
+        [
+          74.15,
+          -218.18
+        ],
+        [
+          72.15,
+          -180.18
+        ],
+        [
+          76.15,
+          -176.18
+        ],
+        [
+          95.15,
+          -182.18
+        ],
+        [
+          101.15,
+          -188.18
+        ],
+        [
+          89.15,
+          -194.18
+        ],
+        [
+          86.15,
+          -203.18
+        ],
+        [
+          86.15,
+          -215.18
+        ],
+        [
+          96.15,
+          -227.18
+        ],
+        [
+          94.15,
+          -229.18
+        ],
+        [
+          97.15,
+          -232.18
+        ],
+        [
+          96.15,
+          -239.18
+        ],
+        [
+          104.15,
+          -242.18
+        ],
+        [
+          102.15,
+          -244.18
+        ]
+      ]
+    }
+  ],
+  "trees": [
+    {
+      "position": [
+        -11.35,
+        0.0,
+        16.32
+      ],
+      "trunk_radius": 0.93,
+      "trunk_height": 11.41,
+      "leaf_radius": 6.63,
+      "leaf_height": 13.95
+    },
+    {
+      "position": [
+        -16.35,
+        0.0,
+        -57.68
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 11.47,
+      "leaf_radius": 6.33,
+      "leaf_height": 14.02
+    },
+    {
+      "position": [
+        -21.35,
+        0.0,
+        3.32
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 12.72,
+      "leaf_radius": 6.36,
+      "leaf_height": 15.54
+    },
+    {
+      "position": [
+        -19.35,
+        0.0,
+        -23.68
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 13.4,
+      "leaf_radius": 5.67,
+      "leaf_height": 16.37
+    },
+    {
+      "position": [
+        -18.35,
+        0.0,
+        -43.68
+      ],
+      "trunk_radius": 0.8,
+      "trunk_height": 12.26,
+      "leaf_radius": 5.73,
+      "leaf_height": 14.98
+    },
+    {
+      "position": [
+        -22.35,
+        0.0,
+        -16.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 13.34,
+      "leaf_radius": 6.31,
+      "leaf_height": 16.3
+    },
+    {
+      "position": [
+        -4.35,
+        0.0,
+        -122.68
+      ],
+      "trunk_radius": 0.87,
+      "trunk_height": 4.6,
+      "leaf_radius": 6.21,
+      "leaf_height": 5.62
+    },
+    {
+      "position": [
+        -22.35,
+        0.0,
+        11.32
+      ],
+      "trunk_radius": 0.86,
+      "trunk_height": 12.99,
+      "leaf_radius": 6.15,
+      "leaf_height": 15.87
+    },
+    {
+      "position": [
+        107.65,
+        0.0,
+        -369.68
+      ],
+      "trunk_radius": 0.8,
+      "trunk_height": 6.17,
+      "leaf_radius": 5.7,
+      "leaf_height": 7.54
+    },
+    {
+      "position": [
+        -18.35,
+        0.0,
+        -86.68
+      ],
+      "trunk_radius": 0.83,
+      "trunk_height": 7.16,
+      "leaf_radius": 5.94,
+      "leaf_height": 8.76
+    },
+    {
+      "position": [
+        -25.35,
+        0.0,
+        -35.68
+      ],
+      "trunk_radius": 0.74,
+      "trunk_height": 12.19,
+      "leaf_radius": 5.29,
+      "leaf_height": 14.9
+    },
+    {
+      "position": [
+        -25.35,
+        0.0,
+        -56.68
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 12.06,
+      "leaf_radius": 5.61,
+      "leaf_height": 14.74
+    },
+    {
+      "position": [
+        -26.35,
+        0.0,
+        -30.68
+      ],
+      "trunk_radius": 0.76,
+      "trunk_height": 12.09,
+      "leaf_radius": 5.44,
+      "leaf_height": 14.78
+    },
+    {
+      "position": [
+        -6.35,
+        0.0,
+        -132.68
+      ],
+      "trunk_radius": 0.75,
+      "trunk_height": 4.8,
+      "leaf_radius": 5.35,
+      "leaf_height": 5.86
+    },
+    {
+      "position": [
+        -25.35,
+        0.0,
+        -83.68
+      ],
+      "trunk_radius": 0.78,
+      "trunk_height": 8.31,
+      "leaf_radius": 5.56,
+      "leaf_height": 10.16
+    },
+    {
+      "position": [
+        -22.35,
+        0.0,
+        -95.68
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 7.42,
+      "leaf_radius": 5.64,
+      "leaf_height": 9.07
+    },
+    {
+      "position": [
+        -27.35,
+        0.0,
+        -76.68
+      ],
+      "trunk_radius": 0.77,
+      "trunk_height": 7.74,
+      "leaf_radius": 5.47,
+      "leaf_height": 9.46
+    },
+    {
+      "position": [
+        -7.35,
+        0.0,
+        -137.68
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 5.05,
+      "leaf_radius": 4.89,
+      "leaf_height": 6.17
+    },
+    {
+      "position": [
+        -5.35,
+        0.0,
+        -144.68
+      ],
+      "trunk_radius": 0.77,
+      "trunk_height": 4.11,
+      "leaf_radius": 5.5,
+      "leaf_height": 5.02
+    },
+    {
+      "position": [
+        -24.35,
+        0.0,
+        23.32
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 13.41,
+      "leaf_radius": 5.67,
+      "leaf_height": 16.4
+    },
+    {
+      "position": [
+        -19.35,
+        0.0,
+        -108.68
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 7.19,
+      "leaf_radius": 6.36,
+      "leaf_height": 8.78
+    },
+    {
+      "position": [
+        -30.35,
+        0.0,
+        -44.68
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 13.28,
+      "leaf_radius": 5.67,
+      "leaf_height": 16.23
+    },
+    {
+      "position": [
+        -23.35,
+        0.0,
+        -101.68
+      ],
+      "trunk_radius": 0.75,
+      "trunk_height": 7.4,
+      "leaf_radius": 5.35,
+      "leaf_height": 9.04
+    },
+    {
+      "position": [
+        -31.35,
+        0.0,
+        -54.68
+      ],
+      "trunk_radius": 0.74,
+      "trunk_height": 11.92,
+      "leaf_radius": 5.29,
+      "leaf_height": 14.57
+    },
+    {
+      "position": [
+        96.65,
+        0.0,
+        -375.68
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 7.93,
+      "leaf_radius": 5.84,
+      "leaf_height": 9.69
+    },
+    {
+      "position": [
+        -36.35,
+        0.0,
+        -11.68
+      ],
+      "trunk_radius": 0.9,
+      "trunk_height": 13.12,
+      "leaf_radius": 6.43,
+      "leaf_height": 16.04
+    },
+    {
+      "position": [
+        -29.35,
+        0.0,
+        24.32
+      ],
+      "trunk_radius": 0.75,
+      "trunk_height": 13.3,
+      "leaf_radius": 5.35,
+      "leaf_height": 16.25
+    },
+    {
+      "position": [
+        -34.35,
+        0.0,
+        -74.68
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 8.22,
+      "leaf_radius": 6.1,
+      "leaf_height": 10.05
+    },
+    {
+      "position": [
+        -36.35,
+        0.0,
+        -48.68
+      ],
+      "trunk_radius": 0.71,
+      "trunk_height": 12.42,
+      "leaf_radius": 5.08,
+      "leaf_height": 15.18
+    },
+    {
+      "position": [
+        -37.35,
+        0.0,
+        -29.68
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 12.23,
+      "leaf_radius": 6.38,
+      "leaf_height": 14.95
+    },
+    {
+      "position": [
+        -11.35,
+        0.0,
+        -151.68
+      ],
+      "trunk_radius": 0.77,
+      "trunk_height": 4.08,
+      "leaf_radius": 5.5,
+      "leaf_height": 4.99
+    },
+    {
+      "position": [
+        -43.35,
+        0.0,
+        1.32
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 11.89,
+      "leaf_radius": 6.08,
+      "leaf_height": 14.53
+    },
+    {
+      "position": [
+        149.65,
+        0.0,
+        -390.68
+      ],
+      "trunk_radius": 0.92,
+      "trunk_height": 8.62,
+      "leaf_radius": 6.6,
+      "leaf_height": 10.54
+    },
+    {
+      "position": [
+        -44.35,
+        0.0,
+        -5.68
+      ],
+      "trunk_radius": 0.81,
+      "trunk_height": 12.18,
+      "leaf_radius": 5.75,
+      "leaf_height": 14.89
+    },
+    {
+      "position": [
+        -43.35,
+        0.0,
+        -20.68
+      ],
+      "trunk_radius": 0.91,
+      "trunk_height": 13.41,
+      "leaf_radius": 6.53,
+      "leaf_height": 16.39
+    },
+    {
+      "position": [
+        -32.35,
+        0.0,
+        32.32
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 13.89,
+      "leaf_radius": 5.67,
+      "leaf_height": 16.98
+    },
+    {
+      "position": [
+        -42.35,
+        0.0,
+        -40.68
+      ],
+      "trunk_radius": 0.83,
+      "trunk_height": 13.85,
+      "leaf_radius": 5.92,
+      "leaf_height": 16.93
+    },
+    {
+      "position": [
+        -29.35,
+        0.0,
+        -120.68
+      ],
+      "trunk_radius": 0.94,
+      "trunk_height": 12.4,
+      "leaf_radius": 6.7,
+      "leaf_height": 15.15
+    },
+    {
+      "position": [
+        79.65,
+        0.0,
+        -362.68
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 8.37,
+      "leaf_radius": 6.08,
+      "leaf_height": 10.24
+    },
+    {
+      "position": [
+        79.65,
+        0.0,
+        -336.68
+      ],
+      "trunk_radius": 0.72,
+      "trunk_height": 5.4,
+      "leaf_radius": 5.17,
+      "leaf_height": 6.6
+    },
+    {
+      "position": [
+        16.65,
+        0.0,
+        -244.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 8.32,
+      "leaf_radius": 6.28,
+      "leaf_height": 10.17
+    },
+    {
+      "position": [
+        -25.35,
+        0.0,
+        -134.68
+      ],
+      "trunk_radius": 0.96,
+      "trunk_height": 10.74,
+      "leaf_radius": 6.89,
+      "leaf_height": 13.12
+    },
+    {
+      "position": [
+        -44.35,
+        0.0,
+        -55.68
+      ],
+      "trunk_radius": 0.87,
+      "trunk_height": 10.61,
+      "leaf_radius": 6.21,
+      "leaf_height": 12.97
+    },
+    {
+      "position": [
+        127.65,
+        0.0,
+        -402.68
+      ],
+      "trunk_radius": 0.81,
+      "trunk_height": 8.85,
+      "leaf_radius": 5.78,
+      "leaf_height": 10.81
+    },
+    {
+      "position": [
+        -37.35,
+        0.0,
+        -104.68
+      ],
+      "trunk_radius": 0.95,
+      "trunk_height": 11.39,
+      "leaf_radius": 6.82,
+      "leaf_height": 13.92
+    },
+    {
+      "position": [
+        -45.35,
+        0.0,
+        -83.68
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 6.95,
+      "leaf_radius": 5.89,
+      "leaf_height": 8.5
+    },
+    {
+      "position": [
+        -46.35,
+        0.0,
+        -71.68
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 6.55,
+      "leaf_radius": 6.36,
+      "leaf_height": 8.0
+    },
+    {
+      "position": [
+        120.65,
+        0.0,
+        -404.68
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 8.73,
+      "leaf_radius": 6.0,
+      "leaf_height": 10.67
+    },
+    {
+      "position": [
+        76.65,
+        0.0,
+        -329.68
+      ],
+      "trunk_radius": 0.47,
+      "trunk_height": 3.59,
+      "leaf_radius": 3.39,
+      "leaf_height": 4.39
+    },
+    {
+      "position": [
+        -23.35,
+        0.0,
+        -149.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 9.54,
+      "leaf_radius": 6.28,
+      "leaf_height": 11.66
+    },
+    {
+      "position": [
+        74.65,
+        0.0,
+        -356.68
+      ],
+      "trunk_radius": 0.86,
+      "trunk_height": 8.67,
+      "leaf_radius": 6.13,
+      "leaf_height": 10.6
+    },
+    {
+      "position": [
+        4.65,
+        0.0,
+        -224.68
+      ],
+      "trunk_radius": 0.91,
+      "trunk_height": 10.27,
+      "leaf_radius": 6.53,
+      "leaf_height": 12.55
+    },
+    {
+      "position": [
+        30.65,
+        0.0,
+        -294.68
+      ],
+      "trunk_radius": 0.92,
+      "trunk_height": 11.34,
+      "leaf_radius": 6.6,
+      "leaf_height": 13.87
+    },
+    {
+      "position": [
+        -50.35,
+        0.0,
+        -41.68
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 13.28,
+      "leaf_radius": 6.36,
+      "leaf_height": 16.23
+    },
+    {
+      "position": [
+        -36.35,
+        0.0,
+        41.32
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 12.99,
+      "leaf_radius": 4.98,
+      "leaf_height": 15.88
+    },
+    {
+      "position": [
+        7.65,
+        0.0,
+        -239.68
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 11.72,
+      "leaf_radius": 6.1,
+      "leaf_height": 14.32
+    },
+    {
+      "position": [
+        133.65,
+        0.0,
+        -408.68
+      ],
+      "trunk_radius": 0.86,
+      "trunk_height": 8.75,
+      "leaf_radius": 6.13,
+      "leaf_height": 10.7
+    },
+    {
+      "position": [
+        -45.35,
+        0.0,
+        32.32
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 12.28,
+      "leaf_radius": 6.26,
+      "leaf_height": 15.01
+    },
+    {
+      "position": [
+        72.65,
+        0.0,
+        -324.68
+      ],
+      "trunk_radius": 0.61,
+      "trunk_height": 4.13,
+      "leaf_radius": 4.33,
+      "leaf_height": 5.05
+    },
+    {
+      "position": [
+        -24.35,
+        0.0,
+        -157.68
+      ],
+      "trunk_radius": 0.87,
+      "trunk_height": 9.33,
+      "leaf_radius": 6.21,
+      "leaf_height": 11.41
+    },
+    {
+      "position": [
+        -55.35,
+        0.0,
+        -8.68
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 12.92,
+      "leaf_radius": 5.97,
+      "leaf_height": 15.79
+    },
+    {
+      "position": [
+        85.65,
+        0.0,
+        -391.68
+      ],
+      "trunk_radius": 0.91,
+      "trunk_height": 9.46,
+      "leaf_radius": 6.53,
+      "leaf_height": 11.56
+    },
+    {
+      "position": [
+        11.65,
+        0.0,
+        -254.68
+      ],
+      "trunk_radius": 0.71,
+      "trunk_height": 13.02,
+      "leaf_radius": 5.05,
+      "leaf_height": 15.91
+    },
+    {
+      "position": [
+        -21.35,
+        0.0,
+        -168.68
+      ],
+      "trunk_radius": 0.94,
+      "trunk_height": 10.12,
+      "leaf_radius": 6.75,
+      "leaf_height": 12.37
+    },
+    {
+      "position": [
+        -52.35,
+        0.0,
+        -60.68
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 3.87,
+      "leaf_radius": 6.0,
+      "leaf_height": 4.73
+    },
+    {
+      "position": [
+        18.65,
+        0.0,
+        -274.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 12.74,
+      "leaf_radius": 6.28,
+      "leaf_height": 15.57
+    },
+    {
+      "position": [
+        -13.35,
+        0.0,
+        -190.68
+      ],
+      "trunk_radius": 0.96,
+      "trunk_height": 10.58,
+      "leaf_radius": 6.89,
+      "leaf_height": 12.93
+    },
+    {
+      "position": [
+        76.65,
+        0.0,
+        -381.68
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 3.41,
+      "leaf_radius": 4.85,
+      "leaf_height": 4.17
+    },
+    {
+      "position": [
+        -40.35,
+        0.0,
+        -120.68
+      ],
+      "trunk_radius": 0.9,
+      "trunk_height": 11.3,
+      "leaf_radius": 6.46,
+      "leaf_height": 13.81
+    },
+    {
+      "position": [
+        -3.35,
+        0.0,
+        -219.68
+      ],
+      "trunk_radius": 0.91,
+      "trunk_height": 12.99,
+      "leaf_radius": 6.53,
+      "leaf_height": 15.88
+    },
+    {
+      "position": [
+        -51.35,
+        0.0,
+        -92.68
+      ],
+      "trunk_radius": 0.93,
+      "trunk_height": 11.66,
+      "leaf_radius": 6.68,
+      "leaf_height": 14.25
+    },
+    {
+      "position": [
+        37.65,
+        0.0,
+        -309.68
+      ],
+      "trunk_radius": 0.93,
+      "trunk_height": 11.25,
+      "leaf_radius": 6.63,
+      "leaf_height": 13.75
+    },
+    {
+      "position": [
+        62.65,
+        0.0,
+        -323.68
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 3.94,
+      "leaf_radius": 5.67,
+      "leaf_height": 4.81
+    },
+    {
+      "position": [
+        111.65,
+        0.0,
+        -410.68
+      ],
+      "trunk_radius": 0.93,
+      "trunk_height": 8.56,
+      "leaf_radius": 6.65,
+      "leaf_height": 10.46
+    },
+    {
+      "position": [
+        68.65,
+        0.0,
+        -365.68
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 9.7,
+      "leaf_radius": 4.85,
+      "leaf_height": 11.85
+    },
+    {
+      "position": [
+        69.65,
+        0.0,
+        -370.68
+      ],
+      "trunk_radius": 0.77,
+      "trunk_height": 9.4,
+      "leaf_radius": 5.47,
+      "leaf_height": 11.49
+    },
+    {
+      "position": [
+        -59.35,
+        0.0,
+        8.32
+      ],
+      "trunk_radius": 0.96,
+      "trunk_height": 10.67,
+      "leaf_radius": 6.89,
+      "leaf_height": 13.04
+    },
+    {
+      "position": [
+        -44.35,
+        0.0,
+        40.32
+      ],
+      "trunk_radius": 0.74,
+      "trunk_height": 12.94,
+      "leaf_radius": 5.29,
+      "leaf_height": 15.81
+    },
+    {
+      "position": [
+        -57.35,
+        0.0,
+        -29.68
+      ],
+      "trunk_radius": 0.93,
+      "trunk_height": 11.75,
+      "leaf_radius": 6.63,
+      "leaf_height": 14.37
+    },
+    {
+      "position": [
+        8.65,
+        0.0,
+        -258.68
+      ],
+      "trunk_radius": 0.75,
+      "trunk_height": 13.39,
+      "leaf_radius": 5.32,
+      "leaf_height": 16.37
+    },
+    {
+      "position": [
+        5.65,
+        0.0,
+        -251.68
+      ],
+      "trunk_radius": 0.8,
+      "trunk_height": 13.34,
+      "leaf_radius": 5.73,
+      "leaf_height": 16.3
+    },
+    {
+      "position": [
+        -47.35,
+        0.0,
+        -112.68
+      ],
+      "trunk_radius": 0.77,
+      "trunk_height": 13.07,
+      "leaf_radius": 5.5,
+      "leaf_height": 15.98
+    },
+    {
+      "position": [
+        -56.35,
+        0.0,
+        -72.68
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 9.08,
+      "leaf_radius": 5.67,
+      "leaf_height": 11.1
+    },
+    {
+      "position": [
+        28.65,
+        0.0,
+        -304.68
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 11.82,
+      "leaf_radius": 6.36,
+      "leaf_height": 14.45
+    },
+    {
+      "position": [
+        11.65,
+        0.0,
+        -269.68
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 12.92,
+      "leaf_radius": 6.05,
+      "leaf_height": 15.79
+    },
+    {
+      "position": [
+        65.65,
+        0.0,
+        -328.68
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 4.34,
+      "leaf_radius": 4.65,
+      "leaf_height": 5.3
+    },
+    {
+      "position": [
+        88.65,
+        0.0,
+        -402.68
+      ],
+      "trunk_radius": 0.9,
+      "trunk_height": 9.88,
+      "leaf_radius": 6.41,
+      "leaf_height": 12.08
+    },
+    {
+      "position": [
+        -60.35,
+        0.0,
+        -19.68
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 12.46,
+      "leaf_radius": 6.33,
+      "leaf_height": 15.23
+    },
+    {
+      "position": [
+        45.65,
+        0.0,
+        -320.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 11.48,
+      "leaf_radius": 6.31,
+      "leaf_height": 14.03
+    },
+    {
+      "position": [
+        -62.35,
+        0.0,
+        -9.68
+      ],
+      "trunk_radius": 0.83,
+      "trunk_height": 12.77,
+      "leaf_radius": 5.92,
+      "leaf_height": 15.61
+    },
+    {
+      "position": [
+        -57.35,
+        0.0,
+        28.32
+      ],
+      "trunk_radius": 0.95,
+      "trunk_height": 8.65,
+      "leaf_radius": 6.79,
+      "leaf_height": 10.58
+    },
+    {
+      "position": [
+        -51.35,
+        0.0,
+        -109.68
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 12.79,
+      "leaf_radius": 5.84,
+      "leaf_height": 15.63
+    },
+    {
+      "position": [
+        126.65,
+        0.0,
+        -417.68
+      ],
+      "trunk_radius": 0.94,
+      "trunk_height": 9.13,
+      "leaf_radius": 6.7,
+      "leaf_height": 11.16
+    },
+    {
+      "position": [
+        62.65,
+        0.0,
+        -348.68
+      ],
+      "trunk_radius": 0.91,
+      "trunk_height": 11.71,
+      "leaf_radius": 6.51,
+      "leaf_height": 14.32
+    },
+    {
+      "position": [
+        -2.35,
+        0.0,
+        -239.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 12.06,
+      "leaf_radius": 6.26,
+      "leaf_height": 14.74
+    },
+    {
+      "position": [
+        -18.35,
+        0.0,
+        -203.68
+      ],
+      "trunk_radius": 0.96,
+      "trunk_height": 11.4,
+      "leaf_radius": 6.89,
+      "leaf_height": 13.93
+    },
+    {
+      "position": [
+        60.65,
+        0.0,
+        -363.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 9.85,
+      "leaf_radius": 6.31,
+      "leaf_height": 12.04
+    },
+    {
+      "position": [
+        75.65,
+        0.0,
+        -396.68
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 11.72,
+      "leaf_radius": 6.02,
+      "leaf_height": 14.33
+    },
+    {
+      "position": [
+        -62.35,
+        0.0,
+        -70.68
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 7.49,
+      "leaf_radius": 6.1,
+      "leaf_height": 9.15
+    },
+    {
+      "position": [
+        12.65,
+        0.0,
+        -289.68
+      ],
+      "trunk_radius": 0.8,
+      "trunk_height": 13.93,
+      "leaf_radius": 5.73,
+      "leaf_height": 17.03
+    },
+    {
+      "position": [
+        -41.35,
+        0.0,
+        -147.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 8.79,
+      "leaf_radius": 6.28,
+      "leaf_height": 10.74
+    },
+    {
+      "position": [
+        8.65,
+        0.0,
+        -279.68
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 13.3,
+      "leaf_radius": 6.0,
+      "leaf_height": 16.25
+    },
+    {
+      "position": [
+        100.65,
+        0.0,
+        -417.68
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 9.42,
+      "leaf_radius": 6.05,
+      "leaf_height": 11.51
+    },
+    {
+      "position": [
+        93.65,
+        0.0,
+        -414.68
+      ],
+      "trunk_radius": 0.86,
+      "trunk_height": 10.09,
+      "leaf_radius": 6.15,
+      "leaf_height": 12.34
+    },
+    {
+      "position": [
+        39.65,
+        0.0,
+        -325.68
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 11.38,
+      "leaf_radius": 5.97,
+      "leaf_height": 13.91
+    },
+    {
+      "position": [
+        -54.35,
+        0.0,
+        45.32
+      ],
+      "trunk_radius": 0.94,
+      "trunk_height": 12.57,
+      "leaf_radius": 6.72,
+      "leaf_height": 15.37
+    },
+    {
+      "position": [
+        -53.35,
+        0.0,
+        -123.68
+      ],
+      "trunk_radius": 0.95,
+      "trunk_height": 10.02,
+      "leaf_radius": 6.79,
+      "leaf_height": 12.24
+    },
+    {
+      "position": [
+        14.65,
+        0.0,
+        -301.68
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 12.78,
+      "leaf_radius": 6.38,
+      "leaf_height": 15.62
+    },
+    {
+      "position": [
+        -67.35,
+        0.0,
+        -45.68
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 6.67,
+      "leaf_radius": 6.02,
+      "leaf_height": 8.16
+    },
+    {
+      "position": [
+        -41.35,
+        0.0,
+        -157.68
+      ],
+      "trunk_radius": 0.76,
+      "trunk_height": 9.11,
+      "leaf_radius": 5.41,
+      "leaf_height": 11.13
+    },
+    {
+      "position": [
+        -66.35,
+        0.0,
+        -83.68
+      ],
+      "trunk_radius": 0.93,
+      "trunk_height": 6.4,
+      "leaf_radius": 6.63,
+      "leaf_height": 7.82
+    },
+    {
+      "position": [
+        82.65,
+        0.0,
+        -410.68
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 10.53,
+      "leaf_radius": 5.61,
+      "leaf_height": 12.88
+    },
+    {
+      "position": [
+        -11.35,
+        0.0,
+        -239.68
+      ],
+      "trunk_radius": 0.73,
+      "trunk_height": 12.84,
+      "leaf_radius": 5.2,
+      "leaf_height": 15.7
+    },
+    {
+      "position": [
+        -16.35,
+        0.0,
+        -226.68
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 11.99,
+      "leaf_radius": 6.38,
+      "leaf_height": 14.65
+    },
+    {
+      "position": [
+        74.65,
+        0.0,
+        -404.68
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 11.31,
+      "leaf_radius": 6.0,
+      "leaf_height": 13.83
+    },
+    {
+      "position": [
+        -68.35,
+        0.0,
+        -58.68
+      ],
+      "trunk_radius": 0.91,
+      "trunk_height": 11.03,
+      "leaf_radius": 6.48,
+      "leaf_height": 13.49
+    },
+    {
+      "position": [
+        -6.35,
+        0.0,
+        -253.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 13.18,
+      "leaf_radius": 6.28,
+      "leaf_height": 16.11
+    },
+    {
+      "position": [
+        53.65,
+        0.0,
+        -350.68
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 11.88,
+      "leaf_radius": 6.08,
+      "leaf_height": 14.52
+    },
+    {
+      "position": [
+        -70.35,
+        0.0,
+        -29.68
+      ],
+      "trunk_radius": 0.9,
+      "trunk_height": 12.8,
+      "leaf_radius": 6.43,
+      "leaf_height": 15.65
+    },
+    {
+      "position": [
+        -3.35,
+        0.0,
+        -263.68
+      ],
+      "trunk_radius": 0.93,
+      "trunk_height": 14.64,
+      "leaf_radius": 6.63,
+      "leaf_height": 17.89
+    },
+    {
+      "position": [
+        64.65,
+        0.0,
+        -393.68
+      ],
+      "trunk_radius": 0.76,
+      "trunk_height": 11.93,
+      "leaf_radius": 5.44,
+      "leaf_height": 14.58
+    },
+    {
+      "position": [
+        61.65,
+        0.0,
+        -388.68
+      ],
+      "trunk_radius": 0.75,
+      "trunk_height": 12.16,
+      "leaf_radius": 5.38,
+      "leaf_height": 14.86
+    },
+    {
+      "position": [
+        7.65,
+        0.0,
+        -293.68
+      ],
+      "trunk_radius": 0.57,
+      "trunk_height": 13.74,
+      "leaf_radius": 4.07,
+      "leaf_height": 16.79
+    },
+    {
+      "position": [
+        -74.35,
+        0.0,
+        -3.68
+      ],
+      "trunk_radius": 0.96,
+      "trunk_height": 10.22,
+      "leaf_radius": 6.89,
+      "leaf_height": 12.49
+    },
+    {
+      "position": [
+        -12.35,
+        0.0,
+        -244.68
+      ],
+      "trunk_radius": 0.74,
+      "trunk_height": 13.17,
+      "leaf_radius": 5.26,
+      "leaf_height": 16.09
+    },
+    {
+      "position": [
+        43.65,
+        0.0,
+        -334.68
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 12.54,
+      "leaf_radius": 6.05,
+      "leaf_height": 15.32
+    },
+    {
+      "position": [
+        -67.35,
+        0.0,
+        36.32
+      ],
+      "trunk_radius": 0.86,
+      "trunk_height": 7.25,
+      "leaf_radius": 6.13,
+      "leaf_height": 8.86
+    },
+    {
+      "position": [
+        2.65,
+        0.0,
+        -287.68
+      ],
+      "trunk_radius": 0.66,
+      "trunk_height": 14.08,
+      "leaf_radius": 4.69,
+      "leaf_height": 17.21
+    },
+    {
+      "position": [
+        -64.35,
+        0.0,
+        -111.68
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 11.55,
+      "leaf_radius": 4.89,
+      "leaf_height": 14.12
+    },
+    {
+      "position": [
+        -66.35,
+        0.0,
+        -106.68
+      ],
+      "trunk_radius": 0.83,
+      "trunk_height": 11.42,
+      "leaf_radius": 5.92,
+      "leaf_height": 13.95
+    },
+    {
+      "position": [
+        49.65,
+        0.0,
+        -340.68
+      ],
+      "trunk_radius": 0.73,
+      "trunk_height": 12.77,
+      "leaf_radius": 5.2,
+      "leaf_height": 15.61
+    },
+    {
+      "position": [
+        -75.35,
+        0.0,
+        20.32
+      ],
+      "trunk_radius": 0.81,
+      "trunk_height": 6.12,
+      "leaf_radius": 5.81,
+      "leaf_height": 7.48
+    },
+    {
+      "position": [
+        5.65,
+        0.0,
+        -299.68
+      ],
+      "trunk_radius": 0.61,
+      "trunk_height": 13.24,
+      "leaf_radius": 4.37,
+      "leaf_height": 16.18
+    },
+    {
+      "position": [
+        54.65,
+        0.0,
+        -384.68
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 13.15,
+      "leaf_radius": 6.02,
+      "leaf_height": 16.07
+    },
+    {
+      "position": [
+        103.65,
+        0.0,
+        -428.68
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 7.48,
+      "leaf_radius": 6.36,
+      "leaf_height": 9.14
+    },
+    {
+      "position": [
+        -25.35,
+        0.0,
+        -219.68
+      ],
+      "trunk_radius": 0.92,
+      "trunk_height": 10.57,
+      "leaf_radius": 6.56,
+      "leaf_height": 12.92
+    },
+    {
+      "position": [
+        -75.35,
+        0.0,
+        27.32
+      ],
+      "trunk_radius": 0.77,
+      "trunk_height": 5.46,
+      "leaf_radius": 5.5,
+      "leaf_height": 6.68
+    },
+    {
+      "position": [
+        -21.35,
+        0.0,
+        -234.68
+      ],
+      "trunk_radius": 0.81,
+      "trunk_height": 12.32,
+      "leaf_radius": 5.81,
+      "leaf_height": 15.05
+    },
+    {
+      "position": [
+        2.65,
+        0.0,
+        -298.68
+      ],
+      "trunk_radius": 0.66,
+      "trunk_height": 13.44,
+      "leaf_radius": 4.72,
+      "leaf_height": 16.43
+    },
+    {
+      "position": [
+        -66.35,
+        0.0,
+        -117.68
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 11.66,
+      "leaf_radius": 5.67,
+      "leaf_height": 14.25
+    },
+    {
+      "position": [
+        -3.35,
+        0.0,
+        -283.68
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 13.86,
+      "leaf_radius": 5.84,
+      "leaf_height": 16.93
+    },
+    {
+      "position": [
+        78.65,
+        0.0,
+        -418.68
+      ],
+      "trunk_radius": 0.9,
+      "trunk_height": 10.42,
+      "leaf_radius": 6.43,
+      "leaf_height": 12.74
+    },
+    {
+      "position": [
+        45.65,
+        0.0,
+        -344.68
+      ],
+      "trunk_radius": 0.69,
+      "trunk_height": 12.28,
+      "leaf_radius": 4.92,
+      "leaf_height": 15.01
+    },
+    {
+      "position": [
+        -79.35,
+        0.0,
+        -23.68
+      ],
+      "trunk_radius": 0.93,
+      "trunk_height": 13.45,
+      "leaf_radius": 6.65,
+      "leaf_height": 16.44
+    },
+    {
+      "position": [
+        -33.35,
+        0.0,
+        -206.68
+      ],
+      "trunk_radius": 0.96,
+      "trunk_height": 11.48,
+      "leaf_radius": 6.86,
+      "leaf_height": 14.03
+    },
+    {
+      "position": [
+        61.65,
+        0.0,
+        -403.68
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 12.14,
+      "leaf_radius": 5.97,
+      "leaf_height": 14.84
+    },
+    {
+      "position": [
+        -78.35,
+        0.0,
+        -36.68
+      ],
+      "trunk_radius": 0.93,
+      "trunk_height": 13.03,
+      "leaf_radius": 6.65,
+      "leaf_height": 15.93
+    },
+    {
+      "position": [
+        -75.35,
+        0.0,
+        36.32
+      ],
+      "trunk_radius": 0.72,
+      "trunk_height": 5.45,
+      "leaf_radius": 5.14,
+      "leaf_height": 6.66
+    },
+    {
+      "position": [
+        46.65,
+        0.0,
+        -378.68
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 13.35,
+      "leaf_radius": 6.0,
+      "leaf_height": 16.31
+    },
+    {
+      "position": [
+        -18.35,
+        0.0,
+        -252.68
+      ],
+      "trunk_radius": 0.91,
+      "trunk_height": 14.21,
+      "leaf_radius": 6.51,
+      "leaf_height": 17.37
+    },
+    {
+      "position": [
+        43.65,
+        0.0,
+        -369.68
+      ],
+      "trunk_radius": 0.9,
+      "trunk_height": 13.06,
+      "leaf_radius": 6.43,
+      "leaf_height": 15.96
+    },
+    {
+      "position": [
+        -4.35,
+        0.0,
+        -291.68
+      ],
+      "trunk_radius": 0.81,
+      "trunk_height": 14.2,
+      "leaf_radius": 5.78,
+      "leaf_height": 17.35
+    },
+    {
+      "position": [
+        54.65,
+        0.0,
+        -399.68
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 12.53,
+      "leaf_radius": 5.61,
+      "leaf_height": 15.32
+    },
+    {
+      "position": [
+        -81.35,
+        0.0,
+        -53.68
+      ],
+      "trunk_radius": 0.91,
+      "trunk_height": 12.67,
+      "leaf_radius": 6.51,
+      "leaf_height": 15.49
+    },
+    {
+      "position": [
+        -68.35,
+        0.0,
+        52.32
+      ],
+      "trunk_radius": 0.92,
+      "trunk_height": 5.91,
+      "leaf_radius": 6.58,
+      "leaf_height": 7.23
+    },
+    {
+      "position": [
+        40.65,
+        0.0,
+        -351.68
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 12.91,
+      "leaf_radius": 5.86,
+      "leaf_height": 15.78
+    },
+    {
+      "position": [
+        -85.35,
+        0.0,
+        13.32
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 6.6,
+      "leaf_radius": 6.0,
+      "leaf_height": 8.07
+    },
+    {
+      "position": [
+        -86.35,
+        0.0,
+        4.32
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 8.26,
+      "leaf_radius": 6.38,
+      "leaf_height": 10.09
+    },
+    {
+      "position": [
+        -81.35,
+        0.0,
+        -79.68
+      ],
+      "trunk_radius": 0.96,
+      "trunk_height": 13.91,
+      "leaf_radius": 6.89,
+      "leaf_height": 17.01
+    },
+    {
+      "position": [
+        109.65,
+        0.0,
+        -438.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 7.28,
+      "leaf_radius": 6.26,
+      "leaf_height": 8.89
+    },
+    {
+      "position": [
+        -69.35,
+        0.0,
+        -126.68
+      ],
+      "trunk_radius": 0.91,
+      "trunk_height": 10.61,
+      "leaf_radius": 6.51,
+      "leaf_height": 12.96
+    },
+    {
+      "position": [
+        -84.35,
+        0.0,
+        22.32
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 6.15,
+      "leaf_radius": 5.89,
+      "leaf_height": 7.52
+    },
+    {
+      "position": [
+        -30.35,
+        0.0,
+        -232.68
+      ],
+      "trunk_radius": 0.76,
+      "trunk_height": 10.33,
+      "leaf_radius": 5.44,
+      "leaf_height": 12.62
+    },
+    {
+      "position": [
+        -63.35,
+        0.0,
+        -148.68
+      ],
+      "trunk_radius": 0.91,
+      "trunk_height": 9.87,
+      "leaf_radius": 6.51,
+      "leaf_height": 12.06
+    },
+    {
+      "position": [
+        24.65,
+        0.0,
+        -338.68
+      ],
+      "trunk_radius": 0.95,
+      "trunk_height": 12.77,
+      "leaf_radius": 6.79,
+      "leaf_height": 15.61
+    },
+    {
+      "position": [
+        -80.35,
+        0.0,
+        40.32
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 5.34,
+      "leaf_radius": 4.85,
+      "leaf_height": 6.52
+    },
+    {
+      "position": [
+        -35.35,
+        0.0,
+        -224.68
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 11.24,
+      "leaf_radius": 6.36,
+      "leaf_height": 13.73
+    },
+    {
+      "position": [
+        6.65,
+        0.0,
+        -322.68
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 13.65,
+      "leaf_radius": 6.05,
+      "leaf_height": 16.68
+    },
+    {
+      "position": [
+        34.65,
+        0.0,
+        -345.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 12.11,
+      "leaf_radius": 6.31,
+      "leaf_height": 14.81
+    },
+    {
+      "position": [
+        -84.35,
+        0.0,
+        -93.68
+      ],
+      "trunk_radius": 0.91,
+      "trunk_height": 6.54,
+      "leaf_radius": 6.48,
+      "leaf_height": 8.0
+    },
+    {
+      "position": [
+        -30.35,
+        0.0,
+        -240.68
+      ],
+      "trunk_radius": 0.87,
+      "trunk_height": 10.44,
+      "leaf_radius": 6.23,
+      "leaf_height": 12.76
+    },
+    {
+      "position": [
+        -78.35,
+        0.0,
+        48.32
+      ],
+      "trunk_radius": 0.84,
+      "trunk_height": 5.9,
+      "leaf_radius": 6.0,
+      "leaf_height": 7.21
+    },
+    {
+      "position": [
+        66.65,
+        0.0,
+        -423.68
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 7.89,
+      "leaf_radius": 5.84,
+      "leaf_height": 9.65
+    },
+    {
+      "position": [
+        -70.35,
+        0.0,
+        -139.68
+      ],
+      "trunk_radius": 0.92,
+      "trunk_height": 14.71,
+      "leaf_radius": 6.6,
+      "leaf_height": 17.98
+    },
+    {
+      "position": [
+        -88.35,
+        0.0,
+        -47.68
+      ],
+      "trunk_radius": 0.76,
+      "trunk_height": 14.09,
+      "leaf_radius": 5.44,
+      "leaf_height": 17.22
+    },
+    {
+      "position": [
+        -20.35,
+        0.0,
+        -272.68
+      ],
+      "trunk_radius": 0.9,
+      "trunk_height": 15.12,
+      "leaf_radius": 6.46,
+      "leaf_height": 18.48
+    },
+    {
+      "position": [
+        56.65,
+        0.0,
+        -414.68
+      ],
+      "trunk_radius": 0.94,
+      "trunk_height": 11.36,
+      "leaf_radius": 6.72,
+      "leaf_height": 13.88
+    },
+    {
+      "position": [
+        -8.35,
+        0.0,
+        -304.68
+      ],
+      "trunk_radius": 0.95,
+      "trunk_height": 13.44,
+      "leaf_radius": 6.77,
+      "leaf_height": 16.43
+    },
+    {
+      "position": [
+        48.65,
+        0.0,
+        -404.68
+      ],
+      "trunk_radius": 0.81,
+      "trunk_height": 12.32,
+      "leaf_radius": 5.78,
+      "leaf_height": 15.06
+    },
+    {
+      "position": [
+        -82.35,
+        0.0,
+        -111.68
+      ],
+      "trunk_radius": 0.92,
+      "trunk_height": 12.51,
+      "leaf_radius": 6.58,
+      "leaf_height": 15.29
+    },
+    {
+      "position": [
+        -86.35,
+        0.0,
+        -102.68
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 13.28,
+      "leaf_radius": 4.65,
+      "leaf_height": 16.23
+    },
+    {
+      "position": [
+        35.65,
+        0.0,
+        -379.68
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 14.16,
+      "leaf_radius": 6.31,
+      "leaf_height": 17.31
+    }
+  ],
+  "source": {
+    "type": "osm",
+    "tee_latlon": [
+      55.7447951,
+      9.7261306
+    ],
+    "pin_latlon": [
+      55.7479702,
+      9.7281559
+    ],
+    "centerline": "hole_way",
+    "elevation": "dhm",
+    "tee_elevation": 23.49,
+    "hole_way": "way/1417569678",
+    "fairway": "osm",
+    "aerial": "dk",
+    "aerial_bunkers": 0,
+    "aerial_waters": 1,
+    "made_green": false
+  }
+}

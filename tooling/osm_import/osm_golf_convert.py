@@ -779,6 +779,13 @@ def _element_in_course_footprint(el: dict, course_el: dict, buffer_m: float = 45
     return False
 
 
+def _other_courses(candidates: list[dict], course_el: dict) -> list[dict]:
+    """The golf courses found around this one, but for itself and golf
+    features also tagged leisure=golf_course (Ry's rough), which are not courses."""
+    return [el for el in candidates
+            if _element_key(el) != _element_key(course_el) and "golf" not in el.get("tags", {})]
+
+
 def _drop_other_course_features(golf: list[dict], course_el: dict, other_courses: list[dict]) -> list[dict]:
     """
     Leave out the golf features of another course mapped next to or inside
@@ -982,8 +989,7 @@ out geom;""")
 
     scoped = [el for el in _dedupe_elements(fetched)
               if _element_in_course_footprint(el, course_el)]
-    other_courses = [el for el in _scoped_query(course_el, COURSE_SELECTORS)
-                     if _element_key(el) != _element_key(course_el)]
+    other_courses = _other_courses(_scoped_query(course_el, COURSE_SELECTORS), course_el)
     golf = _drop_other_course_features([_as_water_hazard(el) for el in scoped if _is_golf_feature(el)],
                                        course_el, other_courses)
     trees = [el for el in _dedupe_elements(vegetation)
@@ -1564,6 +1570,13 @@ def _select_tee_xz(h: dict, line, pin_xz, origin_lat: float, origin_lon: float):
         return candidates[0]
 
     start = line[0]
+    # A tee nearer the line's green end than its start is another hole's (the
+    # next tee beside Ry's 18th green); with none left the line's start is the tee.
+    end = line[-1]
+    candidates = [c for c in candidates
+                  if math.hypot(c[0]-start[0], c[1]-start[1]) < math.hypot(c[0]-end[0], c[1]-end[1])]
+    if not candidates:
+        return None
     distances = [math.hypot(c[0]-start[0], c[1]-start[1]) for c in candidates]
     nearest = min(distances)
     # Everything within 60 m of the line start is a tee box for this hole;
@@ -1575,10 +1588,12 @@ def _select_tee_xz(h: dict, line, pin_xz, origin_lat: float, origin_lon: float):
     # Among this hole's tee boxes, pick the one that makes the hole play the
     # length the surveyed centreline says it is. Simply taking the tee furthest
     # from the pin reaches past the back tee onto a neighbouring hole's, which
-    # stretched Augusta's 15th by 60 m.
+    # stretched Augusta's 15th by 60 m. Off the line's start counts too: two
+    # tees as far from the pin can sit 60 m apart (Holluf Park's 7th).
     target = _polyline_length(line)
     return min(near_start,
-               key=lambda c: abs(math.hypot(c[0]-pin_xz[0], c[1]-pin_xz[1]) - target))
+               key=lambda c: math.hypot(math.hypot(c[0]-pin_xz[0], c[1]-pin_xz[1]) - target,
+                                        math.hypot(c[0]-start[0], c[1]-start[1])))
 
 
 def _assign_to_existing_holes(unassigned: list, holes: dict, origin_lat: float, origin_lon: float):
@@ -1774,20 +1789,27 @@ def _resolve_duplicate_hole_lines(elements: list) -> list:
     return [el for el in elements if _element_key(el) not in dropped]
 
 
-_PREFIXED_REF = re.compile(r"\s*([A-Za-z]*)\s*0*(\d{1,2})\s*")
+_PREFIXED_REF = re.compile(r"(\D*?)0*(\d{1,2})\s*")
+
+
+def _ref_prefix_key(prefix: str) -> str:
+    """A ref prefix by its letters alone: "PAYPLAY" for "Pay & Play - "."""
+    return "".join(c for c in prefix if c.isalpha()).upper()
 
 
 def _split_ref(tags: dict) -> tuple[str, int] | None:
-    """("P", 3) for ref "P3", ("", 12) for "12"; None without a single-hole ref."""
+    """("P", 3) for ref "P3", ("HOLLUFPARK", 12) for "Holluf Park 12", ("", 12)
+    for "12"; None without a single-hole ref."""
     m = _PREFIXED_REF.fullmatch(str(tags.get("ref", "")))
-    return (m.group(1).upper(), int(m.group(2))) if m else None
+    return (_ref_prefix_key(m.group(1)), int(m.group(2))) if m else None
 
 
 def select_course_by_ref_prefix(elements: list, prefix: str, origin_lat: float, origin_lon: float) -> list:
     """
     Keep the course whose hole refs carry `prefix` ("" for plain numbers) when
     one boundary holds several courses told apart by ref, like Kalø's main
-    course (1–18) and its par-3 course (P1–P9).
+    course (1–18) and its par-3 course (P1–P9), or Odense's "Holluf Park 1"
+    and "Pilebanen 1". Prefixes compare by their letters alone.
 
     Hole lines of the chosen course are renumbered to plain numbers and the
     other courses' lines are dropped. A feature with a ref follows its prefix;
@@ -1795,7 +1817,7 @@ def select_course_by_ref_prefix(elements: list, prefix: str, origin_lat: float, 
     course steals the other's greens and bunkers. With a single course in the
     boundary the elements come back unchanged.
     """
-    prefix = prefix.upper()
+    prefix = _ref_prefix_key(prefix)
     lines = [el for el in elements if el.get("tags", {}).get("golf") == "hole" and _split_ref(el.get("tags", {}))]
     prefixes = {_split_ref(el["tags"])[0] for el in lines}
     if not prefixes and not prefix:
@@ -3106,7 +3128,8 @@ Examples:
                     help="Skip writing the course-world JSON")
     ap.add_argument("--ref-prefix", default="", metavar="PREFIX",
                     help="Import the course whose hole refs start with PREFIX when one boundary holds "
-                         "several, e.g. P for par-3 holes P1-P9 (default: plain numbers)")
+                         "several, e.g. P for par-3 holes P1-P9 or 'Pay & Play' for 'Pay & Play - 1' "
+                         "(default: plain numbers)")
     ap.add_argument("--course-name", metavar="NAME",
                     help="Name (and id) for the imported course instead of the OSM name, "
                          "e.g. \"Kalø Par 3\" with --ref-prefix P")

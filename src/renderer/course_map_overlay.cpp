@@ -40,7 +40,8 @@ constexpr float number_box_aspect = 2.0f;
 constexpr float number_backing_alpha = 0.85f;
 // Where along its hole's line of play a number may sit, as shares of its
 // length: the middle, then further out to either side while that is taken.
-constexpr std::array<float, 7> number_places{0.5f, 0.42f, 0.58f, 0.34f, 0.66f, 0.26f, 0.74f};
+constexpr std::array<float, 13> number_places{0.5f,  0.46f, 0.54f, 0.42f, 0.58f, 0.38f, 0.62f,
+                                              0.34f, 0.66f, 0.3f,  0.7f,  0.26f, 0.74f};
 // Space wanted between a number's box and the other numbers and marks, as a
 // share of the box's half size.
 constexpr float number_spacing = 0.25f;

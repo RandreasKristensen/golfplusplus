@@ -259,6 +259,196 @@
         "5": {"par": 3},
         "6": {"par": 3}
       }
+    },
+    "odense_golfklub": {
+      "name": "Odense Golfklub",
+      "osm": "way/44039647 (refs Holluf Park 1-18)",
+      "tees": "58",
+      "sources": [
+        "https://www.golfpass.com/courses/26077-odense-golf-club-holluf-park-course/scorecard-and-layout",
+        "https://www.openstreetmap.org/way/44039647"
+      ],
+      "confidence": "Medium. The Holluf Park course's pars and tee-58 lengths from a third-party scorecard; OSM's par tags on the Holluf Park 1-18 hole ways agree.",
+      "total_par": 72,
+      "holes": {
+        "1": {"par": 5, "metres": 484},
+        "2": {"par": 4, "metres": 377},
+        "3": {"par": 5, "metres": 511},
+        "4": {"par": 3, "metres": 152},
+        "5": {"par": 4, "metres": 417},
+        "6": {"par": 5, "metres": 505},
+        "7": {"par": 3, "metres": 166},
+        "8": {"par": 4, "metres": 379},
+        "9": {"par": 3, "metres": 155},
+        "10": {"par": 5, "metres": 536},
+        "11": {"par": 4, "metres": 416},
+        "12": {"par": 4, "metres": 363},
+        "13": {"par": 3, "metres": 180},
+        "14": {"par": 4, "metres": 330},
+        "15": {"par": 3, "metres": 159},
+        "16": {"par": 5, "metres": 482},
+        "17": {"par": 4, "metres": 371},
+        "18": {"par": 4, "metres": 408}
+      }
+    },
+    "odense_pilebanen": {
+      "name": "Odense Pilebanen",
+      "osm": "way/44039647 (refs Pilebanen 1-9)",
+      "tees": "39",
+      "sources": [
+        "https://www.golfpass.com/courses/26078-odense-golf-club-pilebanen-course/scorecard-and-layout",
+        "https://www.openstreetmap.org/way/44039647"
+      ],
+      "confidence": "Medium. Pars and tee-39 lengths from a third-party scorecard; OSM's par tags on the Pilebanen 1-9 hole ways agree.",
+      "total_par": 31,
+      "holes": {
+        "1": {"par": 3, "metres": 145},
+        "2": {"par": 4, "metres": 302},
+        "3": {"par": 3, "metres": 110},
+        "4": {"par": 4, "metres": 319},
+        "5": {"par": 4, "metres": 348},
+        "6": {"par": 3, "metres": 156},
+        "7": {"par": 4, "metres": 384},
+        "8": {"par": 3, "metres": 177},
+        "9": {"par": 3, "metres": 166}
+      }
+    },
+    "blommenslyst_golfklub": {
+      "name": "Blommenslyst Golfklub",
+      "osm": "way/157412476 (refs 1-18)",
+      "tees": "58",
+      "sources": [
+        "https://www.golfpass.com/courses/26059-blommenslyst-golf-club-18-hole-course/scorecard-and-layout",
+        "https://www.openstreetmap.org/way/157412476"
+      ],
+      "confidence": "Medium. Pars from a third-party scorecard, matching OSM's par tags; lengths are OSM's dist:58 tags on the hole ways (the scorecard gives yards only).",
+      "total_par": 72,
+      "holes": {
+        "1": {"par": 3, "metres": 165},
+        "2": {"par": 4, "metres": 336},
+        "3": {"par": 4, "metres": 294},
+        "4": {"par": 4, "metres": 351},
+        "5": {"par": 4, "metres": 272},
+        "6": {"par": 4, "metres": 301},
+        "7": {"par": 5, "metres": 412},
+        "8": {"par": 4, "metres": 331},
+        "9": {"par": 4, "metres": 360},
+        "10": {"par": 4, "metres": 273},
+        "11": {"par": 4, "metres": 284},
+        "12": {"par": 4, "metres": 357},
+        "13": {"par": 3, "metres": 170},
+        "14": {"par": 4, "metres": 356},
+        "15": {"par": 5, "metres": 436},
+        "16": {"par": 3, "metres": 120},
+        "17": {"par": 4, "metres": 319},
+        "18": {"par": 5, "metres": 444}
+      }
+    },
+    "blommenslyst_9_holes": {
+      "name": "Blommenslyst 9 Holes",
+      "osm": "way/157412476 (refs P1-P9)",
+      "tees": "yellow",
+      "sources": [
+        "https://www.golfpass.com/courses/26060-blommenslyst-golf-club-9-hole-course/scorecard-and-layout",
+        "https://www.openstreetmap.org/way/157412476"
+      ],
+      "confidence": "Medium. Pars and yellow lengths are OSM's par and dist:yellow tags on the P1-P9 hole ways (three par 4s, as the club describes the course). A third-party scorecard gives par 29 with hole 2 a par 3 of 188 yd; its stroke indexes match OSM's.",
+      "total_par": 30,
+      "holes": {
+        "1": {"par": 3, "metres": 105},
+        "2": {"par": 4, "metres": 232},
+        "3": {"par": 3, "metres": 143},
+        "4": {"par": 3, "metres": 108},
+        "5": {"par": 3, "metres": 99},
+        "6": {"par": 4, "metres": 281},
+        "7": {"par": 4, "metres": 246},
+        "8": {"par": 3, "metres": 126},
+        "9": {"par": 3, "metres": 89}
+      }
+    },
+    "ry_golf_klub": {
+      "name": "Ry Golf Klub",
+      "osm": "relation/2821476 (refs 1-18)",
+      "tees": "yellow",
+      "sources": [
+        "https://www.golfpass.com/travel-advisor/courses/32260-ry-golf-club-18-hole-course/scorecard-and-layout",
+        "https://www.openstreetmap.org/relation/2821476"
+      ],
+      "confidence": "Medium. Pars and yellow lengths from a third-party scorecard; OSM's hole ways carry no pars.",
+      "total_par": 72,
+      "holes": {
+        "1": {"par": 5, "metres": 525},
+        "2": {"par": 4, "metres": 354},
+        "3": {"par": 3, "metres": 153},
+        "4": {"par": 4, "metres": 374},
+        "5": {"par": 4, "metres": 375},
+        "6": {"par": 5, "metres": 482},
+        "7": {"par": 3, "metres": 165},
+        "8": {"par": 4, "metres": 392},
+        "9": {"par": 4, "metres": 419},
+        "10": {"par": 5, "metres": 527},
+        "11": {"par": 4, "metres": 323},
+        "12": {"par": 5, "metres": 506},
+        "13": {"par": 3, "metres": 115},
+        "14": {"par": 4, "metres": 449},
+        "15": {"par": 4, "metres": 283},
+        "16": {"par": 4, "metres": 339},
+        "17": {"par": 4, "metres": 437},
+        "18": {"par": 3, "metres": 182}
+      }
+    },
+    "hedensted_golf_klub": {
+      "name": "Hedensted Golf Klub",
+      "osm": "way/139806272 (refs 1-18)",
+      "tees": "yellow",
+      "sources": [
+        "https://www.golfingrecord.com/golf-scorecard/b23b81e4-c0e2-4c7a-936b-cd6d6a425399",
+        "https://www.openstreetmap.org/way/139806272"
+      ],
+      "confidence": "Medium. Pars and yellow lengths from a third-party scorecard, labelled yards but metres: they match OSM's dist:57 tags to a few metres, and the pars match OSM's.",
+      "total_par": 72,
+      "holes": {
+        "1": {"par": 4, "metres": 308},
+        "2": {"par": 3, "metres": 165},
+        "3": {"par": 5, "metres": 458},
+        "4": {"par": 4, "metres": 345},
+        "5": {"par": 4, "metres": 267},
+        "6": {"par": 3, "metres": 153},
+        "7": {"par": 4, "metres": 265},
+        "8": {"par": 5, "metres": 503},
+        "9": {"par": 3, "metres": 149},
+        "10": {"par": 4, "metres": 351},
+        "11": {"par": 4, "metres": 336},
+        "12": {"par": 4, "metres": 365},
+        "13": {"par": 5, "metres": 463},
+        "14": {"par": 3, "metres": 134},
+        "15": {"par": 5, "metres": 448},
+        "16": {"par": 4, "metres": 358},
+        "17": {"par": 4, "metres": 248},
+        "18": {"par": 4, "metres": 375}
+      }
+    },
+    "hedensted_pay_play": {
+      "name": "Hedensted Pay & Play",
+      "osm": "way/139806272 (refs P1-P9)",
+      "tees": "37",
+      "sources": [
+        "https://www.hole19golf.com/courses/hedensted-golf-klub-pay-play",
+        "https://www.openstreetmap.org/way/139806272"
+      ],
+      "confidence": "Medium. Pars and lengths from a third-party scorecard, labelled yards but metres: they are OSM's dist:37 tags on the P1-P9 hole ways. OSM tags P5 (300 m) par 5; the scorecard's par 4 is used.",
+      "total_par": 32,
+      "holes": {
+        "1": {"par": 4, "metres": 235},
+        "2": {"par": 3, "metres": 110},
+        "3": {"par": 3, "metres": 165},
+        "4": {"par": 4, "metres": 325},
+        "5": {"par": 4, "metres": 300},
+        "6": {"par": 4, "metres": 210},
+        "7": {"par": 3, "metres": 115},
+        "8": {"par": 4, "metres": 250},
+        "9": {"par": 3, "metres": 130}
+      }
     }
   }
 }
