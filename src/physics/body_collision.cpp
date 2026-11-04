@@ -122,6 +122,8 @@ glm::vec2 push_circle(const glm::vec2& center, const float radius, const solid& 
         return push_from(center, nearest_on_wall(flat(thing.base), flat(thing.end), center), thing.radius + radius);
     case solid_shape::box:
         return circle_from_box(center, radius, solid_box(thing));
+    case solid_shape::slab:
+        break;  // only ever stood on
     }
     return glm::vec2(0.0f);
 }
@@ -135,6 +137,8 @@ glm::vec2 push_box(const flat_box& box, const solid& thing) {
         return box_from_box(box, wall_box(thing));
     case solid_shape::box:
         return box_from_box(box, solid_box(thing));
+    case solid_shape::slab:
+        break;  // only ever stood on
     }
     return glm::vec2(0.0f);
 }

@@ -144,14 +144,13 @@ std::size_t check_piece(const world_marker_batch& batch,
     return first + local.size();
 }
 
-// A 12 x 8 m tee box topped at `center`, over ground half a metre lower.
+// A 12 x 8 m tee box topped at `center`.
 tee_box make_tee_box(const glm::vec3& center, const glm::vec3& down_hole) {
     tee_box box;
     box.center = center;
     box.down_hole = down_hole;
     box.half_width = 6.0f;
     box.half_length = 4.0f;
-    box.bottom = center.y - 0.5f;
     return box;
 }
 
@@ -447,37 +446,34 @@ TEST_CASE("looking down at a cup, its far wall and bottom face me inside the ope
     }
 }
 
-TEST_CASE("a tee box is a flat top of grey tiles under a green mat, its sides down to the ground") {
+TEST_CASE("a tee box is a flat top of grey tiles under a green mat, flush with the ground") {
     const glm::vec3 down_hole(0.6f, 0.0f, 0.8f);
     const glm::vec3 across(-0.8f, 0.0f, 0.6f);
     const tee_box box = make_tee_box(glm::vec3(10.0f, 2.0f, -5.0f), down_hole);
     const std::vector<world_marker_vertex> vertices = tee_box_vertices(box);
-    // Top, four sides, 8 x 5 whole tiles of about 1.5 m, the mat.
-    REQUIRE(vertices.size() == (5U + 40U + 1U) * quad_vertex_count);
+    // Top, 8 x 5 whole tiles of about 1.5 m, the mat.
+    REQUIRE(vertices.size() == (1U + 40U + 1U) * quad_vertex_count);
 
-    float lowest = box.center.y;
     for (const world_marker_vertex& vertex : vertices) {
         const glm::vec3 offset = vertex.position - box.center;
         // Never past the box's footprint.
         CHECK(std::abs(glm::dot(offset, down_hole)) <= box.half_length + 1e-4f);
         CHECK(std::abs(glm::dot(offset, across)) <= box.half_width + 1e-4f);
-        lowest = std::min(lowest, vertex.position.y);
+        // Nothing under its top: no sides, nothing buried.
+        CHECK(vertex.position.y >= box.center.y - 1e-5f);
         const glm::vec3 color = vertex.color;
         const bool grey = std::abs(color.r - color.g) < 0.05f && std::abs(color.g - color.b) < 0.05f;
         const bool green = color.g > color.r && color.g > color.b;
         CHECK((grey || green));
     }
-    // The sides reach below the lowest ground under the box.
-    CHECK(lowest < box.bottom);
-
     // The top and the tiles are flat at the box's height; the mat is the last
     // quad, green, just over them.
-    const std::size_t sides_end = 5U * quad_vertex_count;
+    const std::size_t top_end = quad_vertex_count;
     const std::size_t mat_first = vertices.size() - quad_vertex_count;
     for (std::size_t i = 0; i < quad_vertex_count; ++i) {
         CHECK(std::abs(vertices[i].position.y - box.center.y) < 1e-5f);
     }
-    for (std::size_t i = sides_end; i < mat_first; ++i) {
+    for (std::size_t i = top_end; i < mat_first; ++i) {
         CHECK(std::abs(vertices[i].position.y - box.center.y) < 0.015f);
         CHECK(vertices[i].position.y < vertices[mat_first].position.y);
     }
@@ -569,8 +565,8 @@ TEST_CASE("the tee box batch holds every tee box's grout, then every box's tiles
     world_marker_batch batch;
     build_tee_box_batch(batch, &boxes, test_scene_colors().markers);
     CHECK(batch.vertices().size() == 2 * tee_box_vertex_count());
-    // A box's top and four sides, its tiles, its mat.
-    const std::size_t grout = 2 * 5 * quad_vertex_count;
+    // A box's top, its tiles, its mat.
+    const std::size_t grout = 2 * quad_vertex_count;
     const std::size_t mat = 2 * quad_vertex_count;
     const std::size_t tiles = batch.vertices().size() - grout - mat;
     REQUIRE(batch.runs().size() == 3U);
@@ -581,7 +577,7 @@ TEST_CASE("the tee box batch holds every tee box's grout, then every box's tiles
     const std::array<glm::vec3, 3> layer_colors{colors.tee_grout, colors.tee_tile, colors.tee_mat};
     for (std::size_t layer = 0; layer < batch.runs().size(); ++layer) {
         const world_marker_run& run = batch.runs()[layer];
-        CHECK(run.layer == static_cast<int>(layer));
+        CHECK(run.layer == static_cast<int>(tee_box_layer::grout) + static_cast<int>(layer));
         for (std::size_t i = run.first; i < run.first + run.count; ++i) {
             CHECK(batch.vertices()[i].color == layer_colors[layer]);
         }
@@ -592,7 +588,8 @@ TEST_CASE("the tee box batch holds every tee box's grout, then every box's tiles
         for (const tee_box& box : boxes) {
             world_marker_batch one;
             append_tee_box(one, box, colors);
-            const world_marker_run& run = one.runs()[static_cast<std::size_t>(layer)];
+            const world_marker_run& run =
+                one.runs()[static_cast<std::size_t>(static_cast<int>(layer) - static_cast<int>(tee_box_layer::grout))];
             expected.insert(expected.end(), one.vertices().begin() + static_cast<std::ptrdiff_t>(run.first),
                             one.vertices().begin() + static_cast<std::ptrdiff_t>(run.first + run.count));
         }

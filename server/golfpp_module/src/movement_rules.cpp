@@ -116,7 +116,7 @@ move_outcome play_move(const mover_state& mover, const std::optional<room_cart>&
         body.vertical.y = my_cart->position.y;
     }
     const walk_world walking{world.area, world.walker_obstacles, tuning.player, world.walk_speed, nullptr};
-    const cart_world driving_world{world.area, world.roads, tuning, world.spec, world.wetness, world.grip_scale,
+    const cart_world driving_world{world.area, tuning, world.spec, world.wetness, world.grip_scale,
                                    world.cart_obstacles, nullptr};
     // My cart's row and my mover as its steps so far leave them.
     const auto commit_cart = [&]() {

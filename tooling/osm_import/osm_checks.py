@@ -28,6 +28,7 @@ import json
 import math
 from pathlib import Path
 
+import osm_cart_paths
 import osm_outline
 
 SCORECARDS = Path(__file__).resolve().parent / "testdata" / "scorecards.json"
@@ -42,6 +43,9 @@ DEFAULT_TOLERANCES = {
     # Walk from one green to the next tee.
     "routing_warn_m": 300.0,
     "routing_error_m": 700.0,
+    # A cart path ends within this of each pin and tee it links (it keeps
+    # 12-18 m off the green's edge: osm_golf_convert's cart_paths).
+    "cart_path_reach_m": 45.0,
     # Two pins this close are one green claimed by two holes; two tees, one tee.
     "shared_pin_m": 5.0,
     "shared_tee_m": 2.0,
@@ -498,6 +502,18 @@ def _check_routing(findings: Findings, placed: list[dict], tol: dict):
                      f"{walk:.0f} m{hint}", a["number"])
 
 
+def _check_cart_paths(findings: Findings, placed: list[dict], world: dict, tol: dict):
+    """A course with made paths (osm_cart_paths.py) has one from each green to
+    the next tee; one keeping only its mapped paths may leave a way unpaved
+    (the way sign there points straight at the tee)."""
+    roads, reach = world.get("cart_roads", []), tol["cart_path_reach_m"]
+    made = any(road.get("source") == osm_cart_paths.GENERATED for road in roads)
+    for a, b in zip(placed, placed[1:]):
+        if not osm_cart_paths.connects(roads, a["pin"], b["tee"], reach):
+            findings.add("error" if made else "info", "CART_PATH_GAP",
+                         f"no cart path from green {a['number']} to tee {b['number']}", a["number"])
+
+
 def check_course(course_id: str, hole_jsons: list[dict], world: dict | None,
                  scorecard: dict | None, tolerances: dict | None = None) -> Findings:
     """Every check on one course; holes in play order."""
@@ -518,6 +534,8 @@ def check_course(course_id: str, hole_jsons: list[dict], world: dict | None,
         _check_tree_sides(findings, p, tol)
     _check_pairs(findings, placed, tol)
     _check_routing(findings, placed, tol)
+    if world is not None and world.get("source", {}).get("type") == "osm":
+        _check_cart_paths(findings, placed, world, tol)
     if scorecard:
         _check_scorecard(findings, placed, scorecard, tol)
     return findings

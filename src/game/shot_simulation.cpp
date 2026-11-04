@@ -160,7 +160,6 @@ shot_event_kind event_of(const solid_kind kind) {
     case solid_kind::leaves:
         return shot_event_kind::tree_hit;
     case solid_kind::board:
-    case solid_kind::tee_box:
     case solid_kind::cart:
         return shot_event_kind::board_hit;
     case solid_kind::flagstick:
@@ -172,6 +171,7 @@ shot_event_kind event_of(const solid_kind kind) {
     case solid_kind::pole:
     case solid_kind::net:
     case solid_kind::lamp:
+    case solid_kind::path:  // met as the surface, never hit
         break;
     }
     return shot_event_kind::pole_hit;
@@ -194,6 +194,16 @@ ball_state through_leaves(const ball_state& in, const float metres, const shot_c
     const glm::vec3 axis = side * det_cos(around) + lift * det_sin(around);
     const glm::vec3 turned = safe_normalize(heading * det_cos(turn) + glm::cross(axis, heading) * det_sin(turn), heading);
     out.velocity = turned * (speed * det_exp(-tuning.leaves_drag_per_meter * metres));
+    return out;
+}
+
+// How a cart path's hard top takes the ball: its own bounce, no crater, a fast roll.
+turf path_turf(const solid& path, const game_tuning& tuning) {
+    turf out;
+    out.contact_angle_scale = 0.0f;
+    out.restitution = path.restitution;
+    out.friction = path.friction;
+    out.stimp_feet = tuning.cart_path.ball_stimp_feet;
     return out;
 }
 
@@ -223,12 +233,13 @@ shot_step step_shot(const ball_state& ball,
     step.ball = step_ball_flight(ball, wind, shot_air(course, tuning), ball_in_water(ball, ground), dt, tuning.physics);
     const terrain_sample after = sample_area(area, step.ball.position);
     const std::optional<std::size_t> over = cup_over(step.ball, area.cups);
-    if (after.material == terrain_material::water) {
+    const bool on_path = after.top_solid >= 0 && area.solids[static_cast<std::size_t>(after.top_solid)].kind == solid_kind::path;
+    if (after.material == terrain_material::water && !on_path) {
         step.ball = resolve_terrain_collision(step.ball, after, rules.water_restitution, rules.water_friction, dt);
     } else if (!over) {
-        const turf_step met =
-            turf_contact(step.ball, after, turf_for(after.material, weather.wetness, course.green_stimp_feet, tuning),
-                         rules.settle_speed, dt);
+        const turf surface = on_path ? path_turf(area.solids[static_cast<std::size_t>(after.top_solid)], tuning)
+                                     : turf_for(after.material, weather.wetness, course.green_stimp_feet, tuning);
+        const turf_step met = turf_contact(step.ball, after, surface, rules.settle_speed, dt);
         step.ball = met.ball;
         step.landed = met.bounced && !ball_is_grounded(ball, ground);
         step.plugged = met.plugged;

@@ -730,9 +730,9 @@
         0.0,
         6.32
       ],
-      "trunk_radius": 0.46,
+      "trunk_radius": 0.22,
       "trunk_height": 2.52,
-      "leaf_radius": 3.29,
+      "leaf_radius": 1.54,
       "leaf_height": 3.08
     }
   ],

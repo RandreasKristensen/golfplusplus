@@ -284,6 +284,44 @@ def hole_cover(cover: Cover, line, rules: dict) -> dict:
     return out
 
 
+def paths(cover: Cover, rules: dict) -> list[tuple[float, float]]:
+    """The (x, z) of every cell that reads as a path near the hole lines: bare
+    ground (much less green than the grass, not water) in long thin shapes;
+    wider ground (a car park, a field, a bunker) is left out."""
+    layers, path_rules = cover.layers, rules["paths"]
+    if cover.signature is None:
+        return []
+    mean = cover.signature[0]
+    on_lines = np.zeros(layers.shape, bool)
+    for line in cover.lines:
+        for (xa, za), (xb, zb) in zip(line, line[1:]):
+            n = max(1, int(math.ceil(math.dist((xa, za), (xb, zb)) / (0.5 * layers.cell))))
+            for i in range(n + 1):
+                row, col = layers.cell_of(xa + (xb - xa) * i / n, za + (zb - za) * i / n)
+                if 0 <= int(row) < layers.shape[0] and 0 <= int(col) < layers.shape[1]:
+                    on_lines[int(row), int(col)] = True
+    near = ndi.distance_transform_edt(~on_lines) * layers.cell <= float(path_rules["reach_meters"])
+    ndvi, nir = cover.raw[..., cover.index("ndvi")], cover.raw[..., cover.index("nir")]
+    bare = (cover.ground & near & (ndvi <= mean[cover.index("ndvi")] - float(path_rules["less_green_by"]))
+            & (nir > float(rules["water"]["infrared_share"]) * mean[cover.index("nir")]))
+    # What is wider than a path, and its edge, goes.
+    half = float(path_rules["most_half_width_meters"])
+    wide = ndi.distance_transform_edt(bare) * layers.cell > half
+    bare &= ~ndi.binary_dilation(wide, _disk(max(1, int(round(half / layers.cell)))))
+    labels, count = ndi.label(bare, structure=np.ones((3, 3)))
+    if count == 0:
+        return []
+    cell_area = layers.cell ** 2
+    sizes = ndi.sum(np.ones_like(labels), labels, np.arange(count + 1)) * cell_area
+    thickness = np.maximum(ndi.maximum(ndi.distance_transform_edt(bare), labels, np.arange(count + 1)) * layers.cell,
+                           layers.cell)
+    keep = ((sizes >= float(path_rules["least_square_meters"]))
+            & (sizes / (2.0 * thickness) >= float(path_rules["least_length_meters"])))
+    keep[0] = False
+    rows, columns = np.nonzero(keep[labels])
+    return [(layers.x0 + (c + 0.5) * layers.cell, layers.z0 + (r + 0.5) * layers.cell) for r, c in zip(rows, columns)]
+
+
 def _nearest_hole(cover: Cover, pond: int, line) -> bool:
     """Whether `line` passes as near pond `pond`'s middle as any of the
     course's hole lines (within a metre, the lines being drawn alike)."""

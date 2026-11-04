@@ -219,12 +219,11 @@ TEST_CASE("the land's relief is scaled about its mean, greens flatter, and what 
         previous = green_height(x);
     }
 
-    // The pin is anchored on the scaled green, the tee box sits on the scaled
-    // ground and the pond fills its scaled bowl to its lowest rim.
+    // The pin is anchored on the scaled green, the tee box is flush with the
+    // scaled ground and the pond fills its scaled bowl to its lowest rim.
     REQUIRE(course.tee_boxes.size() == 2);
     const tee_box& box = course.tee_boxes.front();
-    CHECK(box.center.y > box.bottom);
-    CHECK(box.center.y - sample_terrain_mesh(course.ground, box.center, course.ground_y).point.y < 1.0f);
+    CHECK(near(box.center.y, sample_terrain_mesh(course.ground, box.center, course.ground_y).point.y, 1e-4f));
     const glm::vec3 pin = with_green.pin_position;
     CHECK(near(anchor_on_terrain(course, pin).y,
                green_mean + relief.green_scale * (slope(pin.x, pin.z) - slope(green.center.x, green.center.z)), 0.02f));

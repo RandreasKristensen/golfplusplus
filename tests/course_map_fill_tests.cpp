@@ -253,3 +253,54 @@ TEST_CASE("every hole's number sits in the middle of its hole on the course map,
         CHECK(batch.truncated_text_count == 0U);
     }
 }
+
+TEST_CASE("every hole's tee box is drawn on the course map at its tee, lying across its hole") {
+    render_data data;
+    data.course_map_low = glm::vec3(0.0f);
+    data.course_map_high = glm::vec3(400.0f, 0.0f, 400.0f);
+    const auto box_at = [](const glm::vec3& center, const glm::vec3& down_hole) {
+        tee_box box;
+        box.center = center;
+        box.down_hole = down_hole;
+        box.half_width = 4.8f;
+        box.half_length = 3.2f;
+        return box;
+    };
+    // Hole 1 plays up +z, hole 2 along +x.
+    const glm::vec3 first(50.0f, 0.0f, 50.0f);
+    const glm::vec3 second(150.0f, 0.0f, 350.0f);
+    data.map_holes.push_back(render_map_hole{"1", {first, first + glm::vec3(0.0f, 0.0f, 250.0f)},
+                                             box_at(first, glm::vec3(0.0f, 0.0f, 1.0f))});
+    data.map_holes.push_back(render_map_hole{"2", {second, second + glm::vec3(220.0f, 0.0f, 0.0f)},
+                                             box_at(second, glm::vec3(1.0f, 0.0f, 0.0f))});
+    data.player_position = glm::vec3(200.0f, 0.0f, 200.0f);
+    overlay_batch batch;
+    batch.grid = overlay_grid{640, 480};
+    const course_map_layout layout = make_course_map_layout(data, batch.grid);
+    draw_course_map_marks(batch, shipped_text_assets(), layout, data);
+    // The tee boxes' fills: whole quads in the tee's ink, fully opaque.
+    std::vector<std::pair<glm::vec2, glm::vec2>> boxes;  // centre, half extent
+    for (std::size_t i = 0; i + overlay_vertices_per_quad <= batch.vertices.size(); i += overlay_vertices_per_quad) {
+        const overlay_vertex& vertex = batch.vertices[i];
+        if (glm::length(glm::vec3(vertex.color) - course_map_tee_ink) > 0.001f || vertex.color.a < 0.99f) {
+            continue;
+        }
+        glm::vec2 low(1.0e9f), high(-1.0e9f);
+        for (std::size_t k = 0; k < overlay_vertices_per_quad; ++k) {
+            low = glm::min(low, batch.vertices[i + k].position);
+            high = glm::max(high, batch.vertices[i + k].position);
+        }
+        boxes.emplace_back((low + high) * 0.5f, (high - low) * 0.5f);
+    }
+    REQUIRE(boxes.size() == 2U);
+    for (std::size_t i = 0; i < 2; ++i) {
+        const glm::vec2 tee = map_point(layout, data.map_holes[i].tee->center);
+        CHECK(glm::length(boxes[i].first - tee) < 0.002f);
+    }
+    // Wider across its hole than along it: hole 1's across the screen's x,
+    // hole 2's along its y, as the map turns the world.
+    const glm::vec2 x_way = map_point(layout, glm::vec3(1.0f, 0.0f, 0.0f)) - map_point(layout, glm::vec3(0.0f));
+    const bool world_x_is_screen_x = std::abs(x_way.x) > std::abs(x_way.y);
+    CHECK((boxes[0].second.x > boxes[0].second.y) == world_x_is_screen_x);
+    CHECK((boxes[1].second.y > boxes[1].second.x) == world_x_is_screen_x);
+}

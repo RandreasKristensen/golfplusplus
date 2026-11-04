@@ -36,6 +36,7 @@ except ImportError:
     requests = None
 
 import osm_audit
+import osm_cart_paths
 import osm_checks
 import osm_dhm
 import osm_elevation
@@ -78,7 +79,7 @@ DEFAULT_CONFIG = {
     "tree": {
         "trunk_radius": 0.65,
         "trunk_height": 5.0,
-        "leaf_radius": 4.7,
+        "leaf_radius": 3.0,
         "leaf_height": 6.0,
         "max_per_hole": 200,
         # Trees, woods and scrub this far outside the course boundary are
@@ -107,17 +108,82 @@ DEFAULT_CONFIG = {
     },
     "world": {
         "hole_start_interaction_radius": 4.0,
-        "fallback_cart_width": 4.0,
         "shortcut_width": 2.0,
         "max_shortcut_length": 180.0,
-        "max_cart_road_length": 280.0,
         "max_path_distance_from_holes": 75.0,
         "fairway_avoidance_clearance": 8.0,
         "fallback_road_extra_offset": 8.0,
-        # A generated road keeps this far from water (its half width, the
-        # game's shore and a margin).
-        "fallback_road_water_clearance": 5.0,
         "max_shortcut_count": 12,
+    },
+    # The course's one cart path network (osm_cart_paths.py): OSM's paths
+    # where it maps them, the aerial photos' where it does not, else made
+    # along one side of each hole; costs are per metre, rough 1.
+    "cart_paths": {
+        # Brauer, "Cart path design", Golf Course Industry (Design
+        # Conceptions); golfnewsstoriesonline.com (Q: How do we design cart
+        # paths?): paths 8 ft wide (at least 7); 40-60 ft (12.2-18.3 m) from
+        # the fairway, 40 ft behind to 60 ft beside the green (12.2-18.3 m),
+        # 25-40 ft from the tee (7.6-12.2 m). A path keeps at least the first
+        # of each pair and runs inside the pair where it can (outside it costs
+        # `outside_band` more). Bunkers and water are kept `hazard` clear, as
+        # far as smoothing (`smooth_meters`) can draw a curve in past its route.
+        # Owner decision: paths are 3 m wide (about 10 ft), wider than the
+        # 8 ft reference, so a cart has room either side.
+        "width_meters": 3.0,
+        "clearance_meters": {
+            "fairway": [12.2, 18.3],
+            "green": [12.2, 18.3],
+            "tee": [7.6, 12.2],
+            "hazard": 4.0,
+        },
+        # The game's tee box (tuning tee_box, 9.6 x 6.4 m) reaches this far
+        # from its tee: kept clear like a mapped tee.
+        "tee_pad_radius_meters": 5.8,
+        "cell_meters": 2.0,
+        "margin_meters": 60.0,
+        "window_meters": 80.0,
+        # Aerial paths this near one of OSM's are OSM's.
+        "aerial_beside_osm_meters": 6.0,
+        # Dead ends shorter than this, short of a tee, green or the
+        # clubhouse, are the grid's, not paths.
+        "least_spur_meters": 12.0,
+        # A stretch read from one source (OSM, the photos, made) shorter than
+        # this is taken as its neighbours'.
+        "least_source_run_meters": 20.0,
+        "simplify_meters": 1.5,
+        # Smoothed over this (a Gaussian's sigma), so corners are curves a
+        # cart takes at full speed, but for a path doubling back sharper than
+        # this, where a cart stops and turns.
+        "smooth_meters": 8.0,
+        "sharpest_turn_degrees": 150.0,
+        # Turning more than this within smooth_meters either side of a point
+        # is a hook tighter than smoothing makes drivable: the stretch is cut
+        # there into two that meet.
+        "hook_degrees": 120.0,
+        # A loop shorter than this is two legs a cell apart, dropped.
+        "least_loop_meters": 60.0,
+        "aerial_surface": "gravel",
+        "generated_surface": "gravel",
+        "costs": {
+            "osm_cartpath": 0.2,
+            "osm_path": 0.3,
+            "network": 0.35,
+            "aerial": 0.5,
+            "rough": 1.0,
+            "fairway": 12.0,
+            "near_fairway": 4.0,
+            "outside_band": 0.5,
+            "water": 40.0,
+            # Off the mapped paths, where a course keeps only those.
+            "gap": 20.0,
+        },
+        # A course has its own path network when its mapped paths alone join
+        # this share of its greens to the next tee: coming within
+        # mapped_end_reach_meters of each pin and tee, gaps in them no longer
+        # than most_gap_meters.
+        "own_network_share": 0.75,
+        "mapped_end_reach_meters": 45.0,
+        "most_gap_meters": 10.0,
     },
     # Where heights come from: the Danish lidar model where it covers the
     # course (osm_dhm.py), else the Terrarium tiles (osm_elevation.py). Each
@@ -218,6 +284,16 @@ DEFAULT_CONFIG = {
             # A bunker is cut into the grass: within this of it.
             "grass_within_meters": 3.0,
         },
+        # Paths: bare ground (less green than the grass by this NDVI) in
+        # shapes no wider than this either side of their middle, this long
+        # and this big, within reach of a hole line.
+        "paths": {
+            "less_green_by": 0.2,
+            "most_half_width_meters": 2.5,
+            "least_length_meters": 25.0,
+            "least_square_meters": 40.0,
+            "reach_meters": 80.0,
+        },
         "water": {
             "beyond_corridor_meters": 30.0,
             # Darker in the infrared than this share of the grass's, and less
@@ -237,7 +313,10 @@ DEFAULT_CONFIG = {
             "least_crown_radius_meters": 1.0,
             "most_crown_radius_meters": 7.0,
             # A tree's trunk is this share of its height, and this thick
-            # for each metre of its crown's radius.
+            # for each metre of its crown's radius. Its crown is as wide as
+            # it is long, as an open-grown tree's is when grown (Hemery et
+            # al., allometry of open-grown ash and sycamore), so its width
+            # follows its height; the aerial outline only finds the tree.
             "trunk_share": 0.45,
             "trunk_radius_per_crown": 0.14,
         },
@@ -2203,14 +2282,16 @@ def _r(v): return round(v, 2)
 
 def _tree_json(pt, tee_x: float, tee_z: float, tree_config: dict, aerial_trees: dict | None) -> dict:
     """A hole file's tree at `pt`: (x, z) in the `tree` config's shape, or
-    (x, z, height, crown radius) as the aerial heights measured it."""
+    (x, z, height, crown radius) as the aerial heights measured it, its
+    crown as wide as it is long."""
     position = [_r(pt[0] - tee_x), 0.0, _r(pt[1] - tee_z)]
     if len(pt) == 2:
         return {"position": position,
                 "trunk_radius": float(tree_config["trunk_radius"]), "trunk_height": float(tree_config["trunk_height"]),
                 "leaf_radius": float(tree_config["leaf_radius"]), "leaf_height": float(tree_config["leaf_height"])}
-    height, crown = pt[2], pt[3]
+    height = pt[2]
     trunk = height * float(aerial_trees["trunk_share"])
+    crown = max(float(aerial_trees["least_crown_radius_meters"]), 0.5 * (height - trunk))
     return {"position": position, "trunk_radius": _r(crown * float(aerial_trees["trunk_radius_per_crown"])),
             "trunk_height": _r(trunk), "leaf_radius": _r(crown), "leaf_height": _r(height - trunk)}
 
@@ -2587,42 +2668,6 @@ def _offset_from_fairway(point: tuple[float, float],
     return (point[0] + px * offset, point[1] + pz * offset)
 
 
-def _detour_point_away_from_fairways(a: tuple[float, float],
-                                     b: tuple[float, float],
-                                     fairway_corridors: list[dict],
-                                     extra_offset: float) -> tuple[float, float] | None:
-    if not fairway_corridors:
-        return None
-    segment = [a, b]
-    if not _route_overlaps_fairway(segment, fairway_corridors):
-        return None
-
-    mid = ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5)
-    corridor = min(fairway_corridors,
-                   key=lambda c: _point_polyline_distance(mid, c.get("line", [])))
-    line = corridor.get("line", [])
-    dx, dz = _polyline_direction(line, True)
-    px, pz = -dz, dx
-    ref = line[0] if line else mid
-    side = 1.0 if ((mid[0] - ref[0]) * px + (mid[1] - ref[1]) * pz) >= 0.0 else -1.0
-    offset = float(corridor.get("radius", 16.0)) + extra_offset
-    return (mid[0] + px * side * offset, mid[1] + pz * side * offset)
-
-
-def _detour_polyline_away_from_fairways(points: list[tuple[float, float]],
-                                        fairway_corridors: list[dict],
-                                        extra_offset: float) -> list[tuple[float, float]]:
-    if len(points) < 2:
-        return points
-    out = [points[0]]
-    for a, b in zip(points, points[1:]):
-        detour = _detour_point_away_from_fairways(a, b, fairway_corridors, extra_offset)
-        if detour is not None:
-            out.append(detour)
-        out.append(b)
-    return out
-
-
 def _route_overlaps_fairway(pts: list[tuple[float, float]],
                             fairway_corridors: list[dict],
                             sample_spacing: float = 4.0) -> bool:
@@ -2652,66 +2697,6 @@ def _path_polyline(el: dict, origin_lat: float, origin_lon: float) -> list[tuple
     return deduped if len(deduped) >= 2 and _polyline_length(deduped) >= 5.0 else []
 
 
-def _is_cart_road(el: dict) -> bool:
-    tags = el.get("tags", {})
-    return tags.get("golf") == "cartpath" or tags.get("highway") in ("service", "track")
-
-
-def _spine_clear_of(spine_x: float, spine_z: list[float], rings: list, clearance: float) -> float:
-    """The road spine's x (it runs along z over `spine_z`), moved towards -x
-    until it passes no ring closer than `clearance`."""
-    low, high = min(spine_z), max(spine_z)
-    moved = True
-    while moved:
-        moved = False
-        for ring in rings:
-            xs, zs = [q[0] for q in ring], [q[1] for q in ring]
-            if max(zs) < low - clearance or min(zs) > high + clearance:
-                continue
-            if min(xs) - clearance < spine_x < max(xs) + clearance:
-                spine_x = min(xs) - clearance
-                moved = True
-    return spine_x
-
-
-def _fallback_cart_roads(spawn: tuple[float, float],
-                         hole_anchors: list[dict],
-                         width: float = 4.0,
-                         fairway_corridors: list[dict] | None = None,
-                         extra_offset: float = 8.0,
-                         water_rings: list | None = None,
-                         water_clearance: float = 0.0) -> list[dict]:
-    if not hole_anchors:
-        return []
-
-    if fairway_corridors:
-        fairway_points = [pt for corridor in fairway_corridors for pt in corridor.get("line", [])]
-        max_radius = max(float(corridor.get("radius", 0.0)) for corridor in fairway_corridors)
-        spine_x = min([spawn[0]] + [pt[0] for pt in fairway_points]) - max_radius - extra_offset - 12.0
-        spine_x = _spine_clear_of(spine_x, [spawn[1]] + [z for anchor in hole_anchors
-                                                         for z in (anchor["start_xz"][1], anchor["return_xz"][1])],
-                                  water_rings or [], water_clearance)
-        chain = [(spine_x, spawn[1])]
-        for anchor in hole_anchors:
-            chain.append((spine_x, anchor["start_xz"][1]))
-            chain.append((spine_x, anchor["return_xz"][1]))
-        road_points = chain
-    else:
-        chain = [spawn]
-        for anchor in hole_anchors:
-            chain.append(anchor.get("road_start_xz", anchor["start_xz"]))
-            chain.append(anchor.get("road_return_xz", anchor["return_xz"]))
-        road_points = _detour_polyline_away_from_fairways(chain, [], extra_offset)
-
-    return [{
-        "id": "fallback_main_cart_loop",
-        "surface": "gravel",
-        "width": width,
-        "source": "generated_fallback",
-        "polyline": [_xyz_from_xz(pt) for pt in road_points]
-    }]
-
-
 def fitness_skill_id_for_world() -> str:
     return "fitness"
 
@@ -2726,59 +2711,82 @@ def _path_near_holes(pts: list[tuple[float, float]], hole_anchors: list[dict], m
     return any(_point_polyline_distance(ref, pts) <= max_distance for ref in route_refs)
 
 
-def _world_paths_from_osm(path_elements: list,
-                          origin_lat: float,
-                          origin_lon: float,
-                          hole_anchors: list[dict],
-                          fairway_corridors: list[dict],
-                          config: dict) -> tuple[list[dict], list[dict]]:
-    cart_roads = []
+def _osm_walking_shortcuts(path_elements: list,
+                           origin_lat: float,
+                           origin_lon: float,
+                           hole_anchors: list[dict],
+                           fairway_corridors: list[dict],
+                           config: dict) -> list[dict]:
+    """OSM's footpaths near the holes, clear of the fairways, as walking
+    shortcuts (tooling-only metadata)."""
     shortcuts = []
     world_config = config.get("world", {})
     max_distance = float(world_config.get("max_path_distance_from_holes", 75.0))
     max_shortcut_length = float(world_config.get("max_shortcut_length", 180.0))
-    max_cart_road_length = float(world_config.get("max_cart_road_length", 280.0))
     shortcut_width = float(world_config.get("shortcut_width", 2.0))
     max_shortcut_count = int(world_config.get("max_shortcut_count", 12))
+    for el in path_elements:
+        if _is_cart_path(el):
+            continue
+        pts = _path_polyline(el, origin_lat, origin_lon)
+        if not pts or not _path_near_holes(pts, hole_anchors, max_distance):
+            continue
+        if _route_overlaps_fairway(pts, fairway_corridors) or _polyline_length(pts) > max_shortcut_length:
+            continue
+        tags = el.get("tags", {})
+        shortcuts.append({
+            "id": f"shortcut_{el.get('type', 'way')}_{el.get('id')}",
+            "surface": tags.get("surface", "dirt"),
+            "width": shortcut_width,
+            "source": "osm",
+            "osm_ref": f"{el.get('type', '?')}/{el.get('id', '?')}",
+            "required_skill_id": fitness_skill_id_for_world(),
+            "required_level": 2,
+            "polyline": [_xyz_from_xz(pt) for pt in pts]
+        })
+    shortcuts.sort(key=lambda route: _polyline_length([(pt[0], pt[2]) for pt in route.get("polyline", [])]))
+    if max_shortcut_count >= 0:
+        shortcuts = shortcuts[:max_shortcut_count]
+    return shortcuts
+
+
+def _is_cart_path(el: dict) -> bool:
+    """A way carts drive on: golf=cartpath, or a service road or track."""
+    tags = el.get("tags", {})
+    return tags.get("golf") == "cartpath" or tags.get("highway") in ("service", "track")
+
+
+def _osm_cart_path_lines(path_elements: list, origin_lat: float, origin_lon: float) -> list[dict]:
+    """Every path OSM maps in the course (its cart paths, service roads,
+    tracks and footpaths), as osm_cart_paths.build_network takes them."""
+    out = []
     for el in path_elements:
         pts = _path_polyline(el, origin_lat, origin_lon)
         if not pts:
             continue
-        if not _path_near_holes(pts, hole_anchors, max_distance):
-            continue
-        if _route_overlaps_fairway(pts, fairway_corridors):
-            continue
-        length = _polyline_length(pts)
-        tags = el.get("tags", {})
-        osm_ref = f"{el.get('type', '?')}/{el.get('id', '?')}"
-        if _is_cart_road(el):
-            if length > max_cart_road_length:
-                continue
-            cart_roads.append({
-                "id": f"cart_{el.get('type', 'way')}_{el.get('id')}",
-                "surface": "asphalt" if tags.get("surface") in ("asphalt", "paved", "concrete") else "gravel",
-                "width": float(world_config.get("fallback_cart_width", 4.0)),
-                "source": "osm",
-                "osm_ref": osm_ref,
-                "polyline": [_xyz_from_xz(pt) for pt in pts]
-            })
-        else:
-            if length > max_shortcut_length:
-                continue
-            shortcuts.append({
-                "id": f"shortcut_{el.get('type', 'way')}_{el.get('id')}",
-                "surface": tags.get("surface", "dirt"),
-                "width": shortcut_width,
-                "source": "osm",
-                "osm_ref": osm_ref,
-                "required_skill_id": fitness_skill_id_for_world(),
-                "required_level": 2,
-                "polyline": [_xyz_from_xz(pt) for pt in pts]
-            })
-    shortcuts.sort(key=lambda route: _polyline_length([(pt[0], pt[2]) for pt in route.get("polyline", [])]))
-    if max_shortcut_count >= 0:
-        shortcuts = shortcuts[:max_shortcut_count]
-    return cart_roads, shortcuts
+        surface = el.get("tags", {}).get("surface")
+        out.append({"line": pts, "ref": f"{el.get('type', '?')}/{el.get('id', '?')}",
+                    "surface": "asphalt" if surface in ("asphalt", "paved", "concrete") else "gravel",
+                    "cartpath": el.get("tags", {}).get("golf") == "cartpath"})
+    return out
+
+
+def _cart_path_holes(holes: dict, hole_jsons: dict, origin_lat: float, origin_lon: float) -> list[dict]:
+    """Each hole, in play order, as osm_cart_paths.build_network takes it: its
+    tee, pin and line, and its zones and OSM tees as rings in course metres."""
+    out = []
+    for num in sorted(holes):
+        h_json = hole_jsons[num]
+        tee, pin = _hole_world_anchors(h_json, origin_lat, origin_lon)
+        rings = {"greens": [], "bunkers": [], "waters": [], "fairways": []}
+        for zone in h_json["material_zones"]:
+            rings[zone["type"] + "s"].append([(x + tee[0], z + tee[1]) for x, z in zone["outline"]])
+        tees = [pts for el in holes[num]["tees"] for pts, closed in _element_shapes_xz(el, origin_lat, origin_lon)
+                if closed and len(pts) >= 3]
+        line = [(p[0] + tee[0], p[2] + tee[1]) for p in h_json["spline"]["control_points"]]
+        out.append({"tee": tee, "pin": pin, "par": h_json["par"], "line": line if len(line) >= 2 else [tee, pin],
+                    "tees": tees, **rings})
+    return out
 
 
 def _collectible_candidates(course_id: str,
@@ -2834,6 +2842,16 @@ def _collectible_candidates(course_id: str,
     return collectibles
 
 
+def clubhouse_xz(elements: list, origin_lat: float, origin_lon: float) -> tuple[float, float] | None:
+    """The middle of the course's golf=clubhouse, None when OSM maps none."""
+    for el in elements:
+        if el.get("tags", {}).get("golf") == "clubhouse":
+            pts = _to_xz_list([el], origin_lat, origin_lon)
+            if pts:
+                return _centroid(pts)
+    return None
+
+
 def course_world_to_json(course_id: str,
                          course_name: str,
                          course_el: dict,
@@ -2843,12 +2861,17 @@ def course_world_to_json(course_id: str,
                          origin_lon: float,
                          hole_jsons: dict,
                          config: dict | None = None,
-                         fences: list | None = None) -> dict:
+                         fences: list | None = None,
+                         aerial_paths: list | None = None,
+                         clubhouse: tuple[float, float] | None = None) -> dict:
     """
     `hole_jsons` maps hole number to its generated hole JSON; `fences` are
-    the course world's fences (fences_to_json). Each hole start
-    is that hole's tee, at its height (source.tee_elevation) relative to the
-    first hole's tee, which sits at y = 0; holes without a height stay at 0.
+    the course world's fences (fences_to_json); `aerial_paths` the cells the
+    aerial photos read as path (osm_aerial.paths), None without them;
+    `clubhouse` where its path starts, None where OSM maps none. Each hole
+    start is that hole's tee, at its height (source.tee_elevation) relative
+    to the first hole's tee, which sits at y = 0; holes without a height stay
+    at 0.
     """
     config = config or DEFAULT_CONFIG
     world_config = config.get("world", {})
@@ -2857,41 +2880,28 @@ def course_world_to_json(course_id: str,
     for output_index, hole_num in enumerate(sorted(holes.keys())):
         tee_xz, pin_xz = _hole_world_anchors(hole_jsons[hole_num], origin_lat, origin_lon)
         corridor = _hole_fairway_corridor(holes[hole_num], tee_xz, pin_xz, origin_lat, origin_lon, config)
-        side = 1.0
         extra_offset = float(world_config.get("fallback_road_extra_offset", 8.0))
         hole_anchors.append({
             "hole_num": hole_num,
             "hole_index": output_index,
             "start_xz": tee_xz,
             "return_xz": pin_xz,
-            "road_start_xz": _offset_from_fairway(tee_xz, corridor, side, True, extra_offset),
-            "road_return_xz": _offset_from_fairway(pin_xz, corridor, side, False, extra_offset),
+            "road_start_xz": _offset_from_fairway(tee_xz, corridor, 1.0, True, extra_offset),
         })
         fairway_corridors.append(corridor)
 
     if hole_anchors:
         first = hole_anchors[0]
         dx, dz = _polyline_direction(fairway_corridors[0].get("line", []), True) if fairway_corridors else (0.0, 1.0)
-        road_start = first.get("road_start_xz", first["start_xz"])
+        road_start = first["road_start_xz"]
         spawn = (road_start[0] - dx * 18.0, road_start[1] - dz * 18.0)
     else:
         spawn = (0.0, 0.0)
 
-    cart_roads, shortcuts = _world_paths_from_osm(path_elements,
-                                                  origin_lat,
-                                                  origin_lon,
-                                                  hole_anchors,
-                                                  fairway_corridors,
-                                                  config)
-    if not cart_roads:
-        cart_roads = _fallback_cart_roads(spawn,
-                                          hole_anchors,
-                                          float(world_config.get("fallback_cart_width", 4.0)),
-                                          fairway_corridors,
-                                          float(world_config.get("fallback_road_extra_offset", 8.0)),
-                                          [pts for hole in holes.values() for el in hole["waters"]
-                                           for pts, closed in _element_shapes_xz(el, origin_lat, origin_lon) if closed],
-                                          float(world_config.get("fallback_road_water_clearance", 5.0)))
+    shortcuts = _osm_walking_shortcuts(path_elements, origin_lat, origin_lon, hole_anchors, fairway_corridors, config)
+    cart_roads = osm_cart_paths.build_network(_cart_path_holes(holes, hole_jsons, origin_lat, origin_lon),
+                                              _osm_cart_path_lines(path_elements, origin_lat, origin_lon),
+                                              aerial_paths, clubhouse, config["cart_paths"])
 
     tee_elevations = {num: h_json["source"].get("tee_elevation") for num, h_json in hole_jsons.items()}
     tee_elevations = {num: height for num, height in tee_elevations.items() if height is not None}
@@ -3255,6 +3265,10 @@ Examples:
 
     # ── 6. Write course manifest ──────────────────────────────────────────────
     world_reference = "world.json"
+    aerial_paths = None
+    if aerial is not None:
+        import osm_aerial
+        aerial_paths = osm_aerial.paths(aerial, aerial.rules)
     world_json = course_world_to_json(course_id,
                                       course_name,
                                       course_el,
@@ -3265,7 +3279,11 @@ Examples:
                                       hole_jsons,
                                       config,
                                       fences_to_json(fence_elements, driving_ranges, origin_lat, origin_lon,
-                                                     config["fence"]))
+                                                     config["fence"]),
+                                      aerial_paths,
+                                      clubhouse_xz(elements, origin_lat, origin_lon))
+    print(f"→ Cart paths (metres by source): {osm_cart_paths.lengths_by_source(world_json['cart_roads'])}",
+          file=sys.stderr)
     if not args.no_world:
         world_json["ground"] = _course_ground(world_json, list(hole_jsons.values()), elevation,
                                               origin_lat, origin_lon, config)

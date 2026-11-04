@@ -43,7 +43,8 @@ Entry points for finding the code relevant to a task. Paths are relative to the 
 | A cart going over and lying on its side | `src/physics/cart_rollover.h`, `cart_falls` in `src/game/golf_cart.h`, `cart_rolled` in `src/renderer/cart_batch.h` |
 | Riding together: the driver's cart sent often to the rider alone | `src/game/ride_sync.h`; the server's `ride_motion` table and `update_ride`; the net tuning's `ride_*` |
 | How a cart drives: motor, slopes, grip, tipping, sinking | `src/physics/cart_dynamics.h` (fixed steps); the cart item's `spec` in `assets/play/items/cart/`; the surfaces' `cart` numbers in `assets/play/tuning/surfaces.json` (`cart_ground_at` in `src/game/play_area.h`); `update_motion`, `right_cart` and `tow_cart` in the server; `tests/fixtures/reference/carts.json` |
-| Hole signs, tee boxes, floodlights, fences | `src/game/hole_sign.h`, `src/game/tee_box.h`, `src/game/floodlights.h` |
+| Cart paths: laid on the ground, the ball's hard top, carts' path numbers, the lane kept clear beside them, drawn draped on the ground in asphalt | `src/game/cart_path.h`, the `slab` solid in `src/physics/solid.h`, `sample_area` and `cart_ground_at` in `src/game/play_area.h` (trees and fences cleared in `with_cart_paths`, `with_fences`), `src/renderer/cart_path_mesh.h`, `terrain.frag` (`cart_path.bmp` from `tooling/art/make_art.py`); the tuning's `cart_path` and `solids.path`; made by `tooling/osm_import/osm_cart_paths.py` |
+| Hole signs, the way signs from each green to the next tee, tee boxes, floodlights, fences | `src/game/hole_sign.h`, `src/game/way_sign.h`, `src/game/tee_box.h` (the ground levelled under it: `src/physics/ground_pad.h`; the tuning's `tee_box`), `src/game/floodlights.h` |
 | Anything solid: what the ball, players and carts meet | `src/physics/solid.h`, `src/game/area_solids.h` (`play_area::solids`), `src/game/body_contact.h`, `src/physics/body_collision.h`; restitution and friction by kind in the tuning's `solids` |
 | Up and down: the one surface, steps, hops and falls | `sample_area` in `src/game/play_area.h` (the ground or a walkable top), `settle_vertical` in `src/physics/body_collision.h`, `src/game/player_jump.h`; `step_up` in the player's and the cart's tuning |
 | The visual tour: a camera flown round a course through every hour and weather (VISUAL TOUR, `GOLFPP_TOUR`) | `src/core/visual_tour.h`; its stops and flight in `assets/picture/visual_tour.json` (`src/game/visual_tour_loader.h`) |
@@ -69,7 +70,7 @@ Entry points for finding the code relevant to a task. Paths are relative to the 
 | Backdrops, ground textures | `tooling/art/make_art.py` |
 | Tooling (OSM importer, hole editor, art) | `tooling/README.md` |
 | How OSM shapes become zones: simplified outlines, joined bunkers, generated fairways (with their sources) | `tooling/osm_import/osm_outline.py`; `zones` and `generated_fairway` in `osm_golf_convert.py`'s config |
-| What OSM leaves out, read from aerial photos and heights: fairways, bunkers, ponds, every tree; one source per area | `tooling/osm_import/osm_aerial.py`, Denmark's `aerial_dk.py`; `aerial` in `osm_golf_convert.py`'s config |
+| What OSM leaves out, read from aerial photos and heights: fairways, bunkers, ponds, paths, every tree; one source per area | `tooling/osm_import/osm_aerial.py`, Denmark's `aerial_dk.py`; `aerial` in `osm_golf_convert.py`'s config |
 | Shots, driving and walking natively vs in WASM | `tooling/net/check_determinism.ps1` |
 | A running server checked by a headless client | `tooling/net/online_check/` |
 | What real golf measures, with sources; what each club does | `tests/fixtures/reference/` (the oracle tests check against); `tooling/shot_lab/` |

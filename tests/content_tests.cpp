@@ -96,6 +96,7 @@ TEST_CASE("game tuning names every missing field") {
     CHECK(empty.error.find("ball.stop_speed") != std::string::npos);
     CHECK(empty.error.find("camera.walking_eye_height") != std::string::npos);
     CHECK(empty.error.find("terrain.relief_scale") != std::string::npos);
+    CHECK(empty.error.find("terrain.relief_shape_meters") != std::string::npos);
     CHECK(empty.error.find("terrain.green_relief_scale") != std::string::npos);
     CHECK(empty.error.find("terrain.green_relief_blend_distance") != std::string::npos);
     CHECK(!parse_game_tuning_from_text("not json").tuning.has_value());
@@ -962,6 +963,7 @@ TEST_CASE("every shipped course, hole, world and image loads") {
     CHECK(content.courses.size() == course_folders);
     const std::optional<rgba_image> grass = load_bmp_file(std::filesystem::path(content.asset_root) / "world" / "ground" / "rough_grass.bmp");
     CHECK(grass.has_value());
+    CHECK(load_bmp_file(std::filesystem::path(content.asset_root) / "world" / "ground" / "cart_path.bmp").has_value());
     for (const course_definition& course : content.courses) {
         // The land panorama shows the sky above it and the far ground (never
         // fully hazed) along its bottom.
@@ -1327,7 +1329,7 @@ TEST_CASE("every shipped hole sign's map frames its hole and shows what lies on 
         for (std::size_t i = 0; i < holes.size(); ++i) {
             placed.push_back(place_hole(holes[i], world->hole_starts[i]));
         }
-        area.signs = place_hole_signs(area, placed, content.tuning.hole_sign);
+        area.signs = place_hole_signs(area, placed, content.tuning.hole_sign, content.tuning.cart_path.clearance);
         REQUIRE(area.signs.size() ==
                 static_cast<std::size_t>(std::count_if(holes.begin(), holes.end(), [](const hole_data& hole) { return hole.tee_box; })));
         for (const hole_sign& sign : area.signs) {
@@ -1730,6 +1732,53 @@ TEST_CASE("every shipped pond's water lies on ground under its level") {
     CHECK(dry.empty());
     for (const std::string& where : dry) {
         std::fprintf(stderr, "water above its level: %s\n", where.c_str());
+    }
+}
+
+TEST_CASE("every shipped tee has a floodlight, and none stands in a canopy, on a playing surface or in a line of play") {
+    const floodlight_tuning& rules = shipped_content().tuning.floodlights;
+    const float head_reach = rules.arm_length + rules.head_width * 0.5f;
+    std::vector<std::string> wrong;
+    for (const course_definition& course : shipped_content().courses) {
+        game_state state = make_game_state(shipped_content(), save_data{});
+        REQUIRE(start_course(state, course));
+        const play_area& area = state.area;
+        std::vector<hole_data> holes;
+        for (std::size_t i = 0; i < state.course_holes.size(); ++i) {
+            holes.push_back(place_hole(state.course_holes[i], state.world.hole_starts[i]));
+        }
+        const auto report = [&](const std::size_t hole, const std::string& what) {
+            wrong.push_back(course.id + " hole " + std::to_string(hole + 1) + ": " + what);
+        };
+        for (const tee_box& box : area.tee_boxes) {
+            if (std::none_of(area.floodlights.begin(), area.floodlights.end(), [&](const floodlight& light) {
+                    return light.area_hole == box.hole && light.target == floodlight_target::tee;
+                })) {
+                report(box.hole, "no tee floodlight");
+            }
+        }
+        for (const floodlight& light : area.floodlights) {
+            if (std::any_of(area.trees.begin(), area.trees.end(), [&](const tree_instance& tree) {
+                    return horizontal_distance(light.foot, tree.position) < tree.shape.leaf_radius + head_reach;
+                })) {
+                report(light.area_hole, "a floodlight in a canopy");
+            }
+            if (sample_area(area, light.foot).material != terrain_material::rough ||
+                std::any_of(area.tee_boxes.begin(), area.tee_boxes.end(),
+                            [&](const tee_box& box) { return on_tee_box(box, light.foot); })) {
+                report(light.area_hole, "a floodlight on a playing surface");
+            }
+            for (std::size_t i = 0; i < holes.size(); ++i) {
+                const tee_box* box = hole_tee_box(area.tee_boxes, i);
+                if (in_line_of_play(light.foot, holes[i], box ? box->half_length : 0.0f, rules.play_line_half_width)) {
+                    report(light.area_hole, "a floodlight in hole " + std::to_string(i + 1) + "'s line of play");
+                }
+            }
+        }
+    }
+    CHECK(wrong.empty());
+    for (const std::string& where : wrong) {
+        std::fprintf(stderr, "%s\n", where.c_str());
     }
 }
 

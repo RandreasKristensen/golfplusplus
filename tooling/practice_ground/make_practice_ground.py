@@ -117,9 +117,9 @@ def range_trees() -> list[dict]:
         z = -10.0 - i * 18.0
         for side in (-1.0, 1.0):
             x = side * (RANGE_HALF_WIDTH + 8.0 + 3.0 * math.sin(i * 1.7))
-            trees.append({"position": (x, z), "leaf_radius": 3.2, "leaf_height": 7.5, "trunk_height": 3.0})
+            trees.append({"position": (x, z), "leaf_radius": 3.75, "leaf_height": 7.5, "trunk_height": 3.0})
     for i in range(-3, 4):
-        trees.append({"position": (i * 16.0, -RANGE_NET_DEPTH - 10.0), "leaf_radius": 3.5, "leaf_height": 8.0, "trunk_height": 3.2})
+        trees.append({"position": (i * 16.0, -RANGE_NET_DEPTH - 10.0), "leaf_radius": 4.0, "leaf_height": 8.0, "trunk_height": 3.2})
     return trees
 
 
@@ -166,7 +166,7 @@ def green_stations() -> list[tuple[dict, tuple[float, float]]]:
         {"type": "fairway", "outline": straight_sided([[48.0, 20.0], [64.0, 17.0], [64.0, 29.0], [48.0, 28.0]], 1.5)},
         {"type": "green", "outline": ellipse(GREEN_CENTER, GREEN_RADII, 32)},
     ] + [{"type": "bunker", "outline": ellipse(center, radii, 20)} for center, radii in BUNKERS]
-    trees = [{"position": (gx + 34.0 * math.cos(a), gz + 26.0 * math.sin(a)), "leaf_radius": 3.0, "leaf_height": 6.5,
+    trees = [{"position": (gx + 34.0 * math.cos(a), gz + 26.0 * math.sin(a)), "leaf_radius": 3.25, "leaf_height": 6.5,
               "trunk_height": 2.6} for a in (0.3, 1.1, 1.9, 2.6, 4.3, 5.2)]
     out = []
     names = {"putt": "Putting", "chip": "Chipping", "bunker": "Bunker"}

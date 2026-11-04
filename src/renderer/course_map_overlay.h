@@ -2,8 +2,9 @@
 
 // The paper course map held up while walking (render_data::show_course_map):
 // the layout that fits the course's holes onto the paper, the paper itself,
-// and what is marked over the ground (trees, tee, ball, player, my bag, pin, and
-// every hole's number in the middle of the hole). The ground under the marks is
+// and what is marked over the ground (every hole's line of play, faintly,
+// trees, every hole's tee box, the tee, ball, player, my bag, pin, and every
+// hole's number in the middle of the hole). The ground under the marks is
 // course_map_fill.h, kept in its own retained buffer by the renderer, which
 // draws it between the paper and the marks. GL-free.
 

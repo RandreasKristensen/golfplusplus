@@ -238,6 +238,7 @@ struct ground_colors {
     glm::vec3 water{0.0f};
     glm::vec3 backdrop{0.0f};    // the plain under and around the course
     glm::vec3 underwater{0.0f};  // over the picture seen from under a pond
+    glm::vec3 cart_path{0.0f};   // a cart path's top (renderer/cart_path_mesh.h)
 };
 
 // The ball, tee boxes, cups and flags, aim dots and collectibles: lost balls,

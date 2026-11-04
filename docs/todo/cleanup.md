@@ -4,38 +4,7 @@ Sorted from the owner's scratchpad (`docs/ideas.md`) on 2026-11-03. Each
 section is one task. Remove an item when it is done and the section when it
 is empty. The SDL3 port has its own plan (`docs/todo/sdl3_port.md`).
 
-## 1. Course ground and lights
-
-- **Tees sit too high.** A tee box's top is `tee_box.padding` over the
-  highest ground it covers (`src/game/tee_box.h`), so on a slope it stands
-  well proud of the land. Level the ground under and around the tee box
-  instead, carved into the ground like bunkers and ponds
-  (`carved_height` in `src/physics/terrain.h`), with the platform flush.
-- **Relief: stretch the hills, not the bumps.** `relief_scale` 1.2
-  (`assets/play/tuning/course.json`, `src/physics/land_relief.h`) stretches
-  every height about the mean, so fairways get unrealistically hilly. Split
-  the land into its large-scale shape (smoothed) and the detail on it;
-  stretch only the shape by 1.2 and add the detail back at 1×. A hole that
-  climbs 10 m now climbs 12 m; a 1 m hump stays 1 m. Greens keep their own
-  scale. Then tune the cart's motor (the cart item's `spec`) so it climbs the
-  new slopes well, with the cart reference (`tests/fixtures/reference/carts.json`)
-  updated.
-- **Floodlights in trees.** Some poles stand in trees, although placement
-  already avoids "a tree" (`src/game/floodlights.h`): likely the check uses
-  trunks, not canopies. Find the cases on the shipped courses and fix the
-  rule, with a test.
-- **Jelling's tees have no lights.** Many tees on `jelling_golfklub` (check
-  `jelling_par_3` too) get no pole beside the tee box. Find why placement
-  gives up there; fix the rule, not the course data.
-- **Cart paths where OSM has none.** Generate cart paths from OSM where
-  mapped and from the aerial photos (`tooling/osm_import/osm_aerial.py`)
-  where not, else along one side of each fairway. They are solids the ball
-  meets (`play_area::solids`), carts drive them (`cart_ground_at`), and signs
-  point from each green to the next tee (`src/game/hole_sign.h`). An importer
-  change: re-import and verify with zero errors.
-- **tees in front of teepads** Some teepads are basically on other holes fairways, so e.g. 6th hole in jelling par 3 has a floodlight just in front of the teebox. Make sure this never happens.
-
-## 2. At the ball
+## 1. At the ball
 
 - **Club handling.** Drawing and putting away a club looks bad and locks you
   in place. Clubs stand in the bag grip down, head up: to draw one, reach up,
@@ -59,7 +28,7 @@ is empty. The SDL3 port has its own plan (`docs/todo/sdl3_port.md`).
   green (C, `src/game/green_read.h`) you can move slowly to see the break
   from other sides. Speeds go in `player.json`'s `pacing` and `green_read`.
 
-## 3. The hub, tee times and groups (online)
+## 2. The hub, tee times and groups (online)
 
 - **Random scores on group scorecards.** Holes not yet played show scores,
   different for each person in the group. Find where the group card reads
@@ -109,7 +78,7 @@ is empty. The SDL3 port has its own plan (`docs/todo/sdl3_port.md`).
 All of this changes server tables and reducers: bump `protocol_version` and
 regenerate bindings.
 
-## 4. Weather
+## 3. Weather
 
 - **Rainbows at night.** `rainbow_of` (`src/game/weather.cpp`) reads only rain
   and cloud, never the sun, and the shader's sky lightening inside the bow
@@ -121,14 +90,14 @@ regenerate bindings.
   (`src/renderer/weather_renderer.h`, `src/core/weather_frame.h`), and from
   the rain's sound if it's placed there.
 
-## 5. The hole editor
+## 4. The hole editor
 
 The importer now makes playable courses, so the editor is for touch-ups:
 small edits should be quick and pleasant. Start by going through a real
 touch-up with the owner to find the slow and fiddly steps
 (`tooling/hole_editor/`), then fix those.
 
-## 6. Decide first (owner)
+## 5. Decide first (owner)
 
 Design questions; each is built here once decided.
 

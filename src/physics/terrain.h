@@ -1,10 +1,12 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <vector>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "physics/material_zone.h"
@@ -129,6 +131,9 @@ struct terrain_sample {
     bool inside_surface = false;
     // Where `material` is water: the pond's surface, above its bed at `point`.
     float water_level = 0.0f;
+    // The walkable solid whose top `point` is on (an index into the area's
+    // solids), -1 on the ground itself. `material` stays the ground's.
+    int top_solid = -1;
 };
 
 glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, float t);
@@ -158,6 +163,11 @@ std::optional<terrain_material> zone_material_at(const std::vector<material_zone
 // to the zone's outline, so the shapes lie exactly on the ground. Each
 // vertex shows the zone that wins at its spot.
 terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground, const std::vector<material_zone>& zones);
+
+// The parts of `ground`'s triangles under each of `pieces` (XZ triangles),
+// three vertices each, wound as the ground's: what lies flat on the ground,
+// exactly on it. Pieces that overlap give the ground there twice.
+std::vector<terrain_vertex> drape_on_ground(const terrain_mesh& ground, const std::vector<std::array<glm::vec2, 3>>& pieces);
 
 // Two triangles per grid cell over `rows` x `columns` vertices laid out row by
 // row starting at `first_vertex`.

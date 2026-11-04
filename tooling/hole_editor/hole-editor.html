@@ -369,10 +369,9 @@ body {
           <div class="field compact"><label>trunk h</label><input type="number" id="cfg-tree-trunk-height" step="0.1" min="0.1" oninput="setConfigValue(['tree','trunk_height'],+this.value)"></div>
         </div>
         <div class="field"><label>max trees</label><input type="number" id="cfg-tree-max" step="1" min="0" oninput="setConfigValue(['tree','max_per_hole'],+this.value)"></div>
-        <div class="field"><label>cart width</label><input type="number" id="cfg-cart-width" step="0.25" min="0.5" oninput="setConfigValue(['world','fallback_cart_width'],+this.value)"></div>
+        <div class="field"><label>cart width</label><input type="number" id="cfg-cart-width" step="0.25" min="0.5" oninput="setConfigValue(['cart_paths','width_meters'],+this.value)"></div>
         <div class="field"><label>shortcut w</label><input type="number" id="cfg-shortcut-width" step="0.25" min="0.5" oninput="setConfigValue(['world','shortcut_width'],+this.value)"></div>
         <div class="field"><label>max shortcut</label><input type="number" id="cfg-max-shortcut" step="5" min="0" oninput="setConfigValue(['world','max_shortcut_length'],+this.value)"></div>
-        <div class="field"><label>max cart</label><input type="number" id="cfg-max-cart" step="5" min="0" oninput="setConfigValue(['world','max_cart_road_length'],+this.value)"></div>
         <div class="field"><label>path range</label><input type="number" id="cfg-path-range" step="5" min="0" oninput="setConfigValue(['world','max_path_distance_from_holes'],+this.value)"></div>
         <div class="field"><label>fairway gap</label><input type="number" id="cfg-fairway-gap" step="1" min="0" oninput="setConfigValue(['world','fairway_avoidance_clearance'],+this.value)"></div>
         <div class="field"><label>road offset</label><input type="number" id="cfg-road-offset" step="1" min="0" oninput="setConfigValue(['world','fallback_road_extra_offset'],+this.value)"></div>
@@ -824,15 +823,14 @@ function defaultGeneratorConfig() {
                  terrarium: { zoom: 14, ground_cell_size: 20.0 } },
     world: {
       hole_start_interaction_radius: 4.0,
-      fallback_cart_width: 4.0,
       shortcut_width: 2.0,
       max_shortcut_length: 180.0,
-      max_cart_road_length: 280.0,
       max_path_distance_from_holes: 75.0,
       fairway_avoidance_clearance: 8.0,
       fallback_road_extra_offset: 8.0,
       max_shortcut_count: 12
     },
+    cart_paths: { width_meters: 2.5 },
     courses: {}
   };
 }
@@ -843,6 +841,7 @@ function normalizeGeneratorConfig() {
   generatorConfig.hole = { ...defaultGeneratorConfig().hole, ...(generatorConfig.hole || {}) };
   generatorConfig.elevation = { ...defaultGeneratorConfig().elevation, ...(generatorConfig.elevation || {}) };
   generatorConfig.world = { ...defaultGeneratorConfig().world, ...(generatorConfig.world || {}) };
+  generatorConfig.cart_paths = { ...defaultGeneratorConfig().cart_paths, ...(generatorConfig.cart_paths || {}) };
   if (!generatorConfig.courses || typeof generatorConfig.courses !== 'object') generatorConfig.courses = {};
 }
 
@@ -2660,10 +2659,9 @@ function updateConfigPanel() {
   setValue('cfg-tree-leaf-radius', config.tree.leaf_radius);
   setValue('cfg-tree-leaf-height', config.tree.leaf_height);
   setValue('cfg-tree-max', config.tree.max_per_hole);
-  setValue('cfg-cart-width', config.world.fallback_cart_width);
+  setValue('cfg-cart-width', config.cart_paths?.width_meters);
   setValue('cfg-shortcut-width', config.world.shortcut_width);
   setValue('cfg-max-shortcut', config.world.max_shortcut_length);
-  setValue('cfg-max-cart', config.world.max_cart_road_length);
   setValue('cfg-path-range', config.world.max_path_distance_from_holes);
   setValue('cfg-fairway-gap', config.world.fairway_avoidance_clearance);
   setValue('cfg-road-offset', config.world.fallback_road_extra_offset);
@@ -2721,7 +2719,7 @@ function newWorldRoute(collectionName, makeDirty = true) {
   const route = {
     id: `${isShortcut ? 'manual_shortcut' : 'manual_cart_road'}_${String(collection.length + 1).padStart(2, '0')}`,
     surface: isShortcut ? 'dirt' : 'gravel',
-    width: isShortcut ? +(config.world.shortcut_width || 2.0) : +(config.world.fallback_cart_width || 4.0),
+    width: isShortcut ? +(config.world.shortcut_width || 2.0) : +(config.cart_paths?.width_meters || 2.5),
     source: 'manual',
     polyline: []
   };

@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "core/render_frame.h"
+#include "game/green_read.h"
 #include "game/progress_rules.h"
 #include "game/rangefinder.h"
 #include "game/sight_line.h"
@@ -150,6 +151,17 @@ TEST_CASE("held up the rangefinder magnifies its eyepiece, not the view, and slo
     }
     CHECK(!state.rangefinder_active);
     CHECK(near(rangefinder_magnification(state), 1.0f));
+}
+
+TEST_CASE("sat in my cart the rangefinder reads past the cart around me") {
+    game_state state = dry_hole();
+    sit_in_cart(state);
+    state.look.pitch = -0.1f;
+    raise_rangefinder(state);
+    REQUIRE(state.rangefinder_active);
+    REQUIRE(state.rangefinder.distance_meters.has_value());
+    const float eye_meters = my_eye_height(state) * state.tuning.scale.meters_per_world_unit;
+    CHECK(*state.rangefinder.distance_meters > 0.5f * eye_meters / std::tan(0.1f));
 }
 
 TEST_CASE("the rangefinder reads what it points at as above or below the ground under me") {

@@ -212,3 +212,95 @@ TEST_CASE("floodlights are drawn as a pole, an arm and a lamp head whose face gl
     }
     CHECK(top > tuning().floodlights.pole_height);
 }
+
+TEST_CASE("a floodlight's lamp head stands clear of a tree's canopy, not only of its trunk") {
+    const hole_data open = long_hole(400.0f);
+    const play_area clear = hole_area(open, tuning());
+    const floodlight first = of_kind(clear.floodlights, floodlight_target::fairway).front();
+    const floodlight_tuning& rules = tuning().floodlights;
+
+    // A broad tree just out past the first pole: its trunk is clear of the
+    // pole's spot, its canopy is not.
+    hole_data wooded = open;
+    tree_instance tree;
+    tree.position = first.foot + glm::vec3(-4.0f, 0.0f, 0.0f);
+    tree.shape = tree_shape{0.4f, 3.0f, 5.0f, 6.0f};
+    wooded.trees = {tree};
+    REQUIRE(horizontal_distance(first.foot, tree.position) >=
+            tree.shape.trunk_radius + rules.pole_radius + rules.obstacle_clearance);
+
+    const play_area area = hole_area(wooded, tuning());
+    CHECK(of_kind(area.floodlights, floodlight_target::fairway).size() == of_kind(clear.floodlights, floodlight_target::fairway).size());
+    const float head_reach = rules.arm_length + rules.head_width * 0.5f;
+    for (const floodlight& light : area.floodlights) {
+        CHECK(horizontal_distance(light.foot, tree.position) >= tree.shape.leaf_radius + head_reach);
+    }
+}
+
+TEST_CASE("a tee crowded on its left gets its floodlight on its right, never in front of it") {
+    const hole_data open = long_hole(400.0f);
+    const play_area clear = hole_area(open, tuning());
+    const tee_box& box = clear.tee_boxes.front();
+    // The hole runs down +z, so the box's left is +x: a wood fills it.
+    hole_data crowded = open;
+    for (float x = 6.0f; x <= 30.0f; x += 4.0f) {
+        for (float z = -24.0f; z <= 24.0f; z += 4.0f) {
+            tree_instance tree;
+            tree.position = glm::vec3(x, 0.0f, z);
+            tree.shape = tree_shape{0.3f, 2.0f, 2.0f, 4.0f};
+            crowded.trees.push_back(tree);
+        }
+    }
+    const play_area area = hole_area(crowded, tuning());
+    const std::vector<floodlight> tee = of_kind(area.floodlights, floodlight_target::tee);
+    REQUIRE(tee.size() == 1U);
+    CHECK(tee.front().foot.x < -box.half_width);
+    CHECK(tee.front().foot.z < box.center.z + box.half_length);
+    CHECK(!in_line_of_play(tee.front().foot, open, box.half_length, tuning().floodlights.play_line_half_width));
+}
+
+TEST_CASE("no floodlight stands in front of another hole's tee or on another hole's fairway") {
+    const floodlight_tuning& rules = tuning().floodlights;
+    const hole_data first = long_hole(400.0f);
+    const play_area alone = hole_area(first, tuning());
+
+    // A second hole teeing off just past the first's green, its ribbon
+    // rough, so only its line of play keeps the first's green pole away.
+    hole_data second = long_hole(300.0f);
+    second.ribbon_fairway = false;
+    course_world_definition world = hole_world(first);
+    world.hole_starts.push_back(course_world_hole_start{1, glm::vec3(18.0f, 0.0f, 375.0f), 0.0f, 0.0f});
+    const hole_data second_placed = place_hole(second, world.hole_starts[1]);
+    const play_area beside = build_course_area({first, second}, world, tuning());
+    const tee_box* second_box = hole_tee_box(beside.tee_boxes, 1);
+    REQUIRE(second_box != nullptr);
+    const std::vector<floodlight> greens_alone = of_kind(alone.floodlights, floodlight_target::green);
+    CHECK(std::any_of(greens_alone.begin(), greens_alone.end(), [&](const floodlight& light) {
+        return in_line_of_play(light.foot, second_placed, second_box->half_length, rules.play_line_half_width);
+    }));
+    for (const floodlight& light : beside.floodlights) {
+        CHECK(!in_line_of_play(light.foot, first, alone.tee_boxes.front().half_length, rules.play_line_half_width));
+        CHECK(!in_line_of_play(light.foot, second_placed, second_box->half_length, rules.play_line_half_width));
+    }
+    CHECK(std::count_if(beside.floodlights.begin(), beside.floodlights.end(), [](const floodlight& light) {
+              return light.area_hole == 0 && light.target == floodlight_target::green;
+          }) == 2);
+
+    // A second hole alongside whose fairway covers the first's left poles' spots.
+    hole_data parallel = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 400.0f), 30.0f);
+    course_world_definition side_by_side = hole_world(first);
+    side_by_side.hole_starts.push_back(course_world_hole_start{1, glm::vec3(35.0f, 0.0f, 0.0f), 0.0f, 0.0f});
+    const play_area crowded = build_course_area({first, parallel}, side_by_side, tuning());
+    REQUIRE(sample_area(crowded, glm::vec3(first.spline.width * 0.5f + rules.fairway_offset, 0.0f, 200.0f)).material ==
+            terrain_material::fairway);
+    const float margin = rules.pole_radius + rules.obstacle_clearance - 0.01f;
+    for (const floodlight& light : crowded.floodlights) {
+        for (const float x : {-margin, 0.0f, margin}) {
+            CHECK(sample_area(crowded, light.foot + glm::vec3(x, 0.0f, 0.0f)).material == terrain_material::rough);
+        }
+    }
+    // The first hole's fairway still lit from its open right.
+    CHECK(std::any_of(crowded.floodlights.begin(), crowded.floodlights.end(), [](const floodlight& light) {
+        return light.area_hole == 0 && light.target == floodlight_target::fairway && light.foot.x < 0.0f;
+    }));
+}

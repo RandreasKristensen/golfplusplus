@@ -480,7 +480,68 @@ TEST_CASE("terrain mesh end caps extend beyond first and last control points") {
     CHECK(first_edge.material == terrain_material::rough);
 }
 
-TEST_CASE("land relief scales heights about the land's mean, and a green's about its own") {
+TEST_CASE("land relief stretches the land's long climbs about its mean and keeps its bumps as they are") {
+    // A 2 m grid 400 m square: a 20 m climb along z, and 1 m humps about 16 m across.
+    const std::vector<glm::vec2> bumps{{-60.0f, -40.0f}, {50.0f, 30.0f}, {0.0f, 100.0f}};
+    const auto natural = [&](const float x, const float z) {
+        float height = 40.0f + 0.05f * z;
+        for (const glm::vec2& bump : bumps) {
+            const glm::vec2 off = glm::vec2(x, z) - bump;
+            height += std::exp(-glm::dot(off, off) / (2.0f * 4.0f * 4.0f));
+        }
+        return height;
+    };
+    height_grid land;
+    land.origin_x = -200.0f;
+    land.origin_z = -200.0f;
+    land.cell_size = 2.0f;
+    land.columns = 201;
+    land.rows = 201;
+    for (int row = 0; row < land.rows; ++row) {
+        for (int column = 0; column < land.columns; ++column) {
+            land.heights.push_back(natural(land.origin_x + 2.0f * static_cast<float>(column), land.origin_z + 2.0f * static_cast<float>(row)));
+        }
+    }
+    CHECK(relieved_land(land, {}, land_relief{1.0f, 60.0f, 1.0f, 3.0f}).heights == land.heights);
+
+    const height_grid relieved = relieved_land(land, {}, land_relief{1.2f, 60.0f, 1.0f, 3.0f});
+    const auto height = [&](const float x, const float z) { return sample_height_grid(relieved, x, z); };
+    // The climb, edge to edge and between two points in the middle, is 1.2 times as much.
+    CHECK(near(height(-120.0f, 190.0f) - height(-120.0f, -190.0f), 1.2f * 0.05f * 380.0f, 0.1f));
+    CHECK(near(height(120.0f, 60.0f) - height(120.0f, -60.0f), 1.2f * 0.05f * 120.0f, 0.05f));
+    // Each hump still stands 1 m over the stretched slope beside it.
+    for (const glm::vec2& bump : bumps) {
+        const float beside = 0.5f * (height(bump.x - 30.0f, bump.y) + height(bump.x + 30.0f, bump.y));
+        CHECK(near(height(bump.x, bump.y) - beside, 1.0f, 0.05f));
+    }
+    // The mean height stays.
+    double land_sum = 0.0;
+    double relieved_sum = 0.0;
+    for (std::size_t i = 0; i < land.heights.size(); ++i) {
+        land_sum += land.heights[i];
+        relieved_sum += relieved.heights[i];
+    }
+    CHECK(near(static_cast<float>(relieved_sum / land_sum), 1.0f, 1e-5f));
+}
+
+TEST_CASE("the land's shape is the land averaged; a plane is its own") {
+    height_grid plane;
+    plane.cell_size = 2.0f;
+    plane.columns = 30;
+    plane.rows = 20;
+    for (int row = 0; row < plane.rows; ++row) {
+        for (int column = 0; column < plane.columns; ++column) {
+            plane.heights.push_back(3.0f + 0.1f * static_cast<float>(column) - 0.04f * static_cast<float>(row));
+        }
+    }
+    const height_grid shape = land_shape(plane, 60.0f);
+    for (std::size_t i = 0; i < plane.heights.size(); ++i) {
+        CHECK(near(shape.heights[i], plane.heights[i], 1e-4f));
+    }
+    CHECK(land_shape(plane, 0.0f).heights == plane.heights);
+}
+
+TEST_CASE("land relief scales the shape about its mean, and a green's height about its own") {
     height_grid land;
     land.cell_size = 1.0f;
     land.columns = 41;
@@ -494,45 +555,49 @@ TEST_CASE("land relief scales heights about the land's mean, and a green's about
     const std::vector<material_zone> zones{green, circle_zone(material_zone_type::bunker, glm::vec3(10.0f, 0.0f, 10.0f), 5.0f)};
 
     // Unit scales leave every height exactly as it was.
-    CHECK(relieved_land(land, zones, land_relief{1.0f, 1.0f, 3.0f}).heights == land.heights);
+    CHECK(relieved_land(land, zones, land_relief{1.0f, 8.0f, 1.0f, 3.0f}).heights == land.heights);
 
-    const land_relief relief{1.25f, 0.5f, 3.0f};
+    const land_relief relief{1.25f, 8.0f, 0.5f, 3.0f};
     const height_grid relieved = relieved_land(land, zones, relief);
+    const height_grid shape = land_shape(land, relief.shape_meters);
     double sum = 0.0;
-    for (const float height : land.heights) {
+    for (const float height : shape.heights) {
         sum += height;
     }
-    const float mean = static_cast<float>(sum / static_cast<double>(land.heights.size()));
+    const float mean = static_cast<float>(sum / static_cast<double>(shape.heights.size()));
     const auto at = [](const height_grid& grid, const int row, const int column) {
         return grid.heights[static_cast<std::size_t>(row * grid.columns + column)];
     };
-    // Away from the green (the bunker changes nothing), mean + scale * (h - mean).
+    const auto scaled = [&](const int row, const int column) { return at(land, row, column) + 0.25f * (at(shape, row, column) - mean); };
+    // Away from the green (the bunker changes nothing), h + (scale - 1) * (shape - mean).
     for (const auto& [row, column] : std::vector<std::pair<int, int>>{{0, 0}, {10, 10}, {40, 3}, {30, 15}}) {
-        CHECK(near(at(relieved, row, column), mean + 1.25f * (at(land, row, column) - mean), 0.0001f));
+        CHECK(near(at(relieved, row, column), scaled(row, column), 0.0001f));
     }
-    // On the green, its scaled mean plus half its own relief.
+    // On the green, its mean with its shape scaled so, plus half its own relief.
     double green_sum = 0.0;
+    double green_shape_sum = 0.0;
     int inside = 0;
     for (int row = 25; row <= 35; ++row) {
         for (int column = 25; column <= 35; ++column) {
             if (zone_contains(green, glm::vec3(static_cast<float>(column), 0.0f, static_cast<float>(row)))) {
                 green_sum += at(land, row, column);
+                green_shape_sum += at(shape, row, column);
                 ++inside;
             }
         }
     }
     const float green_mean = static_cast<float>(green_sum / inside);
+    const float green_level = green_mean + 0.25f * (static_cast<float>(green_shape_sum / inside) - mean);
+    const auto flattened = [&](const int row, const int column) { return green_level + 0.5f * (at(land, row, column) - green_mean); };
     for (const auto& [row, column] : std::vector<std::pair<int, int>>{{30, 30}, {28, 33}, {30, 25}}) {
-        CHECK(near(at(relieved, row, column),
-                   mean + 1.25f * (green_mean - mean) + 0.5f * (at(land, row, column) - green_mean), 0.0001f));
+        CHECK(near(at(relieved, row, column), flattened(row, column), 0.0001f));
     }
     // Part way between in the blend past its edge.
     const float blended = at(relieved, 30, 23);
-    const float scaled = mean + 1.25f * (at(land, 30, 23) - mean);
-    const float flattened = mean + 1.25f * (green_mean - mean) + 0.5f * (at(land, 30, 23) - green_mean);
-    CHECK(std::abs(blended - scaled) > 0.001f);
-    CHECK(std::abs(blended - flattened) > 0.001f);
-    CHECK(std::abs(blended - scaled) + std::abs(blended - flattened) < std::abs(scaled - flattened) + 0.0001f);
+    CHECK(std::abs(blended - scaled(30, 23)) > 0.001f);
+    CHECK(std::abs(blended - flattened(30, 23)) > 0.001f);
+    CHECK(std::abs(blended - scaled(30, 23)) + std::abs(blended - flattened(30, 23)) <
+          std::abs(scaled(30, 23) - flattened(30, 23)) + 0.0001f);
 }
 
 TEST_CASE("the ground around a lone hole follows the hole, on it and past its edge") {
@@ -545,7 +610,7 @@ TEST_CASE("the ground around a lone hole follows the hole, on it and past its ed
     terrain.sample_count = 20;
 
     const std::vector<terrain_mesh> holes{plain_terrain_mesh(terrain)};
-    const terrain_mesh ground = build_ground(holes, {}, nullptr, ground_settings{1.0f, 10.0f, 0.0f}).mesh;
+    const terrain_mesh ground = build_ground(holes, {}, {}, nullptr, ground_settings{1.0f, 10.0f, 0.0f}).mesh;
 
     // On the hole the ground matches the ribbon; beside it, the edge height.
     const glm::vec3 on_hole(0.0f, 0.0f, 10.0f);
@@ -730,7 +795,7 @@ TEST_CASE("terrain spatial index is built by the mesh builders") {
           == static_cast<std::size_t>(mesh.spatial_index.cells_x) * static_cast<std::size_t>(mesh.spatial_index.cells_z) + 1U);
     CHECK(mesh.spatial_index.cell_triangles.size() >= mesh.indices.size() / 3U);
 
-    const terrain_mesh ground = build_ground({mesh}, index_test_zones(), nullptr, ground_settings{8.0f, 12.0f, 0.0f}).mesh;
+    const terrain_mesh ground = build_ground({mesh}, index_test_zones(), {}, nullptr, ground_settings{8.0f, 12.0f, 0.0f}).mesh;
     CHECK(ground.spatial_index.cells_x > 0);
     CHECK(ground.spatial_index.triangle_count == static_cast<uint32_t>(ground.indices.size() / 3U));
 
@@ -851,7 +916,7 @@ TEST_CASE("indexed terrain sampling matches the full scan on mesh edges and beyo
 
 TEST_CASE("indexed terrain sampling matches the full scan on the ground mesh") {
     const terrain_mesh mesh = index_test_mesh();
-    const terrain_mesh ground = build_ground({mesh}, index_test_zones(), nullptr, ground_settings{8.0f, 12.0f, 0.0f}).mesh;
+    const terrain_mesh ground = build_ground({mesh}, index_test_zones(), {}, nullptr, ground_settings{8.0f, 12.0f, 0.0f}).mesh;
     const terrain_mesh reference_ground = without_spatial_index(ground);
     CHECK(ground.indices.size() >= 3U);
     if (ground.indices.size() < 3U) {
@@ -1134,6 +1199,32 @@ TEST_CASE("a box body is its rectangle: square corners, and boxes meet boxes by 
     CHECK(against.position.x > 5.0f - 1.0f - std::sqrt(2.0f) - 0.01f);
     // Moved again from there it stays put: nothing left to push.
     CHECK(near(move(block, square, against.position, against.position).position, against.position, 0.001f));
+}
+
+TEST_CASE("a slab's walkable top is its height over the surface under it, round at its ends, and nothing past its edge") {
+    solid slab;
+    slab.shape = solid_shape::slab;
+    slab.kind = solid_kind::path;
+    slab.base = glm::vec3(0.0f, 1.0f, 0.0f);
+    slab.end = glm::vec3(4.0f, 2.0f, 0.0f);
+    slab.radius = 1.0f;
+    slab.height = 0.05f;
+    slab.walkable = true;
+    solid step = test_box(glm::vec3(2.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), 3.0f, 3.0f, 5.0f);
+    step.walkable = true;
+    const std::vector<solid> solids{step, slab};
+    const solid_grid grid = build_solid_grid(solids, 16.0f);
+
+    // It outranks a higher top: it lies on whatever is under it.
+    const std::optional<walkable_top> middle = walkable_top_at(solids, grid, glm::vec3(2.0f, 0.0f, 0.9f));
+    REQUIRE(middle.has_value());
+    CHECK(middle->over_surface);
+    CHECK(near(middle->height, 0.05f));
+    CHECK(middle->solid == 1U);
+    // Round past its ends, so slabs end to end leave no gap at a bend.
+    CHECK(walkable_top_at(solids, grid, glm::vec3(4.6f, 0.0f, 0.6f))->over_surface);
+    CHECK(!walkable_top_at(solids, grid, glm::vec3(4.8f, 0.0f, 0.8f))->over_surface);
+    CHECK(!walkable_top_at(solids, grid, glm::vec3(2.0f, 0.0f, 1.1f))->over_surface);
 }
 
 TEST_CASE("a walkable top no higher than a body's step-up does not stop it; higher, it does") {

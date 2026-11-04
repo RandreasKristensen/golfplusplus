@@ -1,5 +1,5 @@
-"""Draws golf++'s procedural images: the rough's grass texture, the fences'
-net and the two backdrop panoramas every course in assets/courses names (a sky, and the land
+"""Draws golf++'s procedural images: the rough's grass texture, the cart
+paths' asphalt, the fences' net and the two backdrop panoramas every course in assets/courses names (a sky, and the land
 in front of it), as uncompressed BMPs. Courses without a theme of their own
 below (fresh imports) get the default parkland one, seeded by their id.
 
@@ -59,6 +59,8 @@ TREE_BANDS = ((0.45, 0.9, 0.72, 0.85), (0.7, 0.8, 0.62, 0.45), (1.0, 0.65, 0.5, 
 HILL_HAZE = 0.78
 
 GRASS_SIZE = 64
+# Keep in step with path_tile_meters in assets/picture/shaders/terrain.frag.
+PATH_SIZE = 64
 
 Color = tuple[float, float, float]
 
@@ -410,6 +412,42 @@ def grass_texture() -> list[Color]:
     return [(v * 0.96, v, v * 0.94) for v in values]
 
 
+# --- cart path ----------------------------------------------------------------
+
+def path_texture() -> list[Color]:
+    """Worn asphalt as a tint around neutral mid grey (128 leaves the path
+    colour alone in terrain.frag): soft lighter and darker patches, single
+    light and dark grains of stone, and a few thin dark cracks. Tiles both ways."""
+    rng = random.Random(5150)
+    size = PATH_SIZE
+    neutral = 128.0 / 255.0
+    noise = [[rng.random() for _ in range(8)] for _ in range(8)]
+
+    def patch(x: float, y: float) -> float:
+        u = x / size * 8.0
+        v = y / size * 8.0
+        i, j = math.floor(u), math.floor(v)
+        tu, tv = u - i, v - j
+        tu, tv = tu * tu * (3.0 - 2.0 * tu), tv * tv * (3.0 - 2.0 * tv)
+        a = noise[j % 8][i % 8] + (noise[j % 8][(i + 1) % 8] - noise[j % 8][i % 8]) * tu
+        b = noise[(j + 1) % 8][i % 8] + (noise[(j + 1) % 8][(i + 1) % 8] - noise[(j + 1) % 8][i % 8]) * tu
+        return a + (b - a) * tv
+
+    values = [neutral + (patch(x, y) - 0.5) * 0.12 for y in range(size) for x in range(size)]
+    for _ in range(size * size // 5):
+        index = rng.randrange(size * size)
+        values[index] += rng.choice((rng.uniform(0.08, 0.16), rng.uniform(-0.16, -0.08)))
+    for _ in range(3):
+        x, y = rng.uniform(0, size), rng.uniform(0, size)
+        angle = rng.uniform(0.0, math.tau)
+        for _ in range(rng.randint(14, 26)):
+            values[int(y) % size * size + int(x) % size] -= 0.14
+            angle += rng.uniform(-0.6, 0.6)
+            x += math.cos(angle)
+            y += math.sin(angle)
+    return [(v, v, v * 0.97) for v in values]
+
+
 # --- fence net --------------------------------------------------------------
 
 # The net texture covers NET_TILE_METRES square of net; keep it in step with
@@ -442,6 +480,7 @@ def course_theme(course: dict) -> dict:
 def outputs() -> dict[Path, bytes]:
     assets = REPO / "assets"
     files = {assets / "world" / "ground" / "rough_grass.bmp": bmp_bytes(GRASS_SIZE, GRASS_SIZE, grass_texture()),
+             assets / "world" / "ground" / "cart_path.bmp": bmp_bytes(PATH_SIZE, PATH_SIZE, path_texture()),
              assets / "world" / "props" / "fence_net.bmp": bmp_bytes_with_alpha(NET_SIZE, NET_SIZE, net_texture())}
     for course_file in sorted((assets / "world" / "courses").glob("*/course.json")):
         course = json.loads(course_file.read_text(encoding="utf-8"))

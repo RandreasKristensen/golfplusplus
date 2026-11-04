@@ -196,8 +196,7 @@ rangefinder_reading weathered_reading(const rangefinder_reading& clean, const gl
 }
 
 bool rangefinder_raised(const game_state& state, const game_input& input) {
-    return input.rangefinder_held && state.mode == game_mode::walking && on_foot(state) &&
-        owns_rangefinder(active_progress(state));
+    return input.rangefinder_held && state.mode == game_mode::walking && owns_rangefinder(active_progress(state));
 }
 
 void update_rangefinder(game_state& state, const game_input& input, const float dt) {

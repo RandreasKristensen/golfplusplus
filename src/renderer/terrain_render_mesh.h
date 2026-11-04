@@ -12,6 +12,12 @@
 #include <cstdint>
 #include <vector>
 
+// A vertex of the ground or of what lies flat on it: its colour, its grass
+// texture's share (`rough`), the sky it sees and its horizon from `light`
+// (sky_visibility.h; empty grids: all of the sky, nothing on the horizon).
+render_terrain_vertex lit_ground_vertex(const glm::vec3& position, const glm::vec3& normal, const glm::vec3& color,
+                                        float rough, const ground_light_bake& light);
+
 // Appends `meshes` in order (null entries are skipped), colours each vertex by
 // its material, gives it the sky it sees and its horizon from `light`
 // (sky_visibility.h; empty grids: all of the sky, nothing on the horizon),

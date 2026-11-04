@@ -154,7 +154,8 @@ std::vector<glm::vec3> other_pin_markers(const game_state& game) {
     return pins;
 }
 
-// What the course map shows: the course's holes, each numbered along its line of play.
+// What the course map shows: the course's holes, each numbered along its
+// line of play, with its tee box.
 void add_course_map(render_data& data, const game_state& game, const text_assets& text) {
     data.course_map_low = game.area.holes_low;
     data.course_map_high = game.area.holes_high;
@@ -166,8 +167,10 @@ void add_course_map(render_data& data, const game_state& game, const text_assets
             continue;
         }
         const std::size_t number = sign.area_hole + 1;
+        const tee_box* box = hole_tee_box(game.area.tee_boxes, sign.area_hole);
         data.map_holes.push_back(render_map_hole{
-            format_text(text, text_course_map_hole_number, {{"hole", std::to_string(number)}}), sign.line_of_play});
+            format_text(text, text_course_map_hole_number, {{"hole", std::to_string(number)}}), sign.line_of_play,
+            box != nullptr ? std::optional<tee_box>(*box) : std::nullopt});
     }
 }
 

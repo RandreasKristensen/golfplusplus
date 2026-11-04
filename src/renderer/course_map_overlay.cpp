@@ -6,10 +6,12 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <limits>
 
 #include <glm/common.hpp>
+#include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 
 namespace {
@@ -33,6 +35,12 @@ const glm::vec2 flagstick_offset(0.0f, 0.028f);
 const glm::vec2 flagstick_half(0.004f, 0.042f);
 const glm::vec2 flag_offset(0.022f, 0.055f);
 const glm::vec2 flag_half(0.028f, 0.018f);
+// A tee box is drawn at least this big (half its longer side, clip units),
+// so a small one still reads; a hole's line of play this thick and faint.
+constexpr float least_tee_half_size = 0.014f;
+constexpr float tee_outline = 0.004f;
+constexpr float line_of_play_thickness = 0.004f;
+constexpr float line_of_play_alpha = 0.45f;
 // A hole number's box is twice as wide as tall, and as tall as the first of
 // these shares of the paper's height at which no two numbers overlap.
 constexpr std::array<float, 4> number_box_shares{1.0f / 14.0f, 1.0f / 18.0f, 1.0f / 22.0f, 1.0f / 26.0f};
@@ -64,6 +72,35 @@ void cover(const glm::vec3& position, glm::vec2& low, glm::vec2& high) {
 void draw_marker(overlay_batch& batch, const glm::vec2 position, const glm::vec3 color, const float radius) {
     draw_overlay_quad(batch, position, glm::vec2(radius), map_marker_outline, 0.55f);
     draw_overlay_quad(batch, position, glm::vec2(radius * 0.64f), color, 1.0f);
+}
+
+// The tee box's footprint on the map, grown about its middle to the least
+// size; `grow` more on every side (its outline).
+std::array<glm::vec2, 4> tee_corners(const course_map_layout& layout, const tee_box& box, const float grow) {
+    const glm::vec3 across(-box.down_hole.z, 0.0f, box.down_hole.x);
+    const glm::vec2 middle = map_point(layout, box.center);
+    std::array<glm::vec2, 4> corners{};
+    const std::array<glm::vec2, 4> signs{glm::vec2(-1.0f, -1.0f), glm::vec2(1.0f, -1.0f), glm::vec2(1.0f, 1.0f),
+                                         glm::vec2(-1.0f, 1.0f)};
+    float reach = 0.0f;
+    for (std::size_t i = 0; i < corners.size(); ++i) {
+        corners[i] = map_point(layout, box.center + across * (signs[i].x * box.half_width) +
+                                           box.down_hole * (signs[i].y * box.half_length)) - middle;
+        reach = std::max(reach, std::max(std::abs(corners[i].x), std::abs(corners[i].y)));
+    }
+    const float scale = reach > 0.0f ? std::max(1.0f, least_tee_half_size / reach) : 1.0f;
+    for (glm::vec2& corner : corners) {
+        const float length = glm::length(corner);
+        corner = middle + corner * scale + (length > 0.0f ? corner / length * grow : glm::vec2(0.0f));
+    }
+    return corners;
+}
+
+void draw_tee_box(overlay_batch& batch, const course_map_layout& layout, const tee_box& box) {
+    const std::array<glm::vec2, 4> outline = tee_corners(layout, box, tee_outline);
+    draw_overlay_corner_quad(batch, outline[0], outline[1], outline[2], outline[3], map_marker_outline, 0.75f);
+    const std::array<glm::vec2, 4> fill = tee_corners(layout, box, 0.0f);
+    draw_overlay_corner_quad(batch, fill[0], fill[1], fill[2], fill[3], course_map_tee_ink, 1.0f);
 }
 
 void draw_hole_number(overlay_batch& batch, const text_assets& text, const ui_rect& box, const render_map_hole& hole) {
@@ -223,10 +260,21 @@ void draw_course_map_marks(overlay_batch& batch,
                            const text_assets& text,
                            const course_map_layout& layout,
                            const render_data& data) {
+    for (const render_map_hole& hole : data.map_holes) {
+        for (std::size_t i = 0; i + 1 < hole.line_of_play.size(); ++i) {
+            draw_overlay_segment(batch, map_point(layout, hole.line_of_play[i]), map_point(layout, hole.line_of_play[i + 1]),
+                                 line_of_play_thickness, course_map_tee_ink, line_of_play_alpha);
+        }
+    }
     if (data.trees != nullptr) {
         for (const tree_body& tree : *data.trees) {
             const float radius = std::clamp(tree.shape.leaf_radius * layout.scale.y, 0.012f, 0.028f);
             draw_marker(batch, map_point(layout, tree.base), course_map_tree_ink, radius);
+        }
+    }
+    for (const render_map_hole& hole : data.map_holes) {
+        if (hole.tee) {
+            draw_tee_box(batch, layout, *hole.tee);
         }
     }
     if (data.show_hole) {

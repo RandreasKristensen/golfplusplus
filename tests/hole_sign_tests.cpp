@@ -211,14 +211,16 @@ TEST_CASE("render hole signs carry a face and a model per sign, numbered by cour
     const render_hole_signs signs =
         build_render_hole_signs(state.area, hole_sign_texts(state), shipped_text_assets(), test_scene_colors(), test_props().at("hole_sign"), 7);
     CHECK(signs.revision == 7U);
-    REQUIRE(signs.signs.size() == state.area.signs.size());
+    // The hole signs, then the way signs.
+    REQUIRE(signs.signs.size() == state.area.signs.size() + state.area.way_signs.size());
     CHECK(signs.truncated_text_count == 0U);
     std::size_t next_vertex = 0;
-    for (const render_hole_sign& sign : signs.signs) {
+    for (std::size_t i = 0; i < signs.signs.size(); ++i) {
+        const render_hole_sign& sign = signs.signs[i];
         CHECK(sign.first_vertex == next_vertex);
         CHECK(sign.vertex_count > 0U);
         CHECK(sign.vertex_count % 3U == 0U);
-        CHECK(sign.face.width == hole_sign_face_width);
+        CHECK(sign.face.width == (i < state.area.signs.size() ? hole_sign_face_width : way_sign_face_width));
         next_vertex += sign.vertex_count;
     }
     CHECK(next_vertex == signs.vertices.size());

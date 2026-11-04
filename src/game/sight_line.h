@@ -3,7 +3,7 @@
 // What a line of sight meets standing on a course, as the rangefinder's
 // laser does (game/rangefinder.h): the area's solids (tree trunks and their
 // leaves, the poles of floodlights, fences and signs, the signs' boards, the
-// fences' nets; not flagsticks or tee boxes), carts and people. The ground is ground_hit's. Presentation only: no shot
+// fences' nets; not flagsticks), carts and people. The ground is ground_hit's. Presentation only: no shot
 // ever reads it. Pure.
 
 #include "game/play_area.h"

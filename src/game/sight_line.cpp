@@ -130,7 +130,7 @@ std::optional<float> solid_hit(const solid& thing, const glm::vec3& eye, const g
                                  glm::vec3(thing.half_length, 0.5f * thing.height, thing.half_width)},
                        eye, direction);
     case solid_kind::flagstick:
-    case solid_kind::tee_box:
+    case solid_kind::path:
     case solid_kind::cart:
     case solid_kind::person:
     case solid_kind::ball:

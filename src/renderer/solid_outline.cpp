@@ -67,6 +67,16 @@ std::vector<world_segment> solid_outline(const solid& thing) {
         add_box(out, thing.base, along * thing.half_length, across * thing.half_width, thing.height);
         break;
     }
+    case solid_shape::slab: {
+        // Its top's outline, tilting with it.
+        const glm::vec3 across = safe_normalize(glm::cross(horizontal(thing.end - thing.base), world_up), glm::vec3(1.0f, 0.0f, 0.0f)) *
+            thing.radius;
+        out.emplace_back(thing.base + across, thing.end + across);
+        out.emplace_back(thing.base - across, thing.end - across);
+        out.emplace_back(thing.base - across, thing.base + across);
+        out.emplace_back(thing.end - across, thing.end + across);
+        break;
+    }
     }
     return out;
 }

@@ -7,6 +7,7 @@ layout(location = 3) in float a_rough;
 layout(location = 4) in float a_ao;
 layout(location = 5) in vec4 a_horizon_a;
 layout(location = 6) in vec4 a_horizon_b;
+layout(location = 7) in float a_paved;
 
 uniform mat4 u_mvp;
 uniform mat4 u_model;
@@ -16,6 +17,7 @@ uniform mat4 u_shadow_view_proj;
 out vec3 v_normal;
 out vec3 v_color;
 out float v_rough;
+out float v_paved;
 out float v_ao;
 out vec4 v_horizon_a;
 out vec4 v_horizon_b;
@@ -28,6 +30,7 @@ void main() {
     v_normal = normalize(mat3(transpose(inverse(u_model))) * a_normal);
     v_color = a_color;
     v_rough = a_rough;
+    v_paved = a_paved;
     v_ao = a_ao;
     v_horizon_a = a_horizon_a;
     v_horizon_b = a_horizon_b;

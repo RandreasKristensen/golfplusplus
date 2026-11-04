@@ -443,7 +443,6 @@ A full 18-hole import is normally under ten requests.
   },
   "world": {
     "max_shortcut_length": 180.0,
-    "max_cart_road_length": 280.0,
     "max_path_distance_from_holes": 75.0,
     "fairway_avoidance_clearance": 8.0,
     "fallback_road_extra_offset": 8.0,
@@ -489,7 +488,7 @@ select a course with a `world` manifest entry, then switch to world view to:
   right-click one to delete it, and set the fence's height in the panel. A
   fence needs two poles to be saved.
 
-Cart roads, walking shortcuts, collectibles and interactables come from the
+Cart paths, walking shortcuts, collectibles and interactables come from the
 importer and are not edited in world view. Walking shortcuts, spawn zones and
 interactables are not read by the game yet; they are placeholders for
 NPC/interaction work.
@@ -591,13 +590,32 @@ leave it in pieces; a piece off the hole's line is dropped (`source.fairway`
 paints fairway only inside a hole's fairway zones then, rough everywhere else
 on its ribbon.
 
+### Cart paths
+
+Every course gets one cart path network (`osm_cart_paths.py`, the
+`cart_paths` config), the course world's `cart_roads`: routed on a grid
+from the clubhouse (OSM's `golf=clubhouse`, where mapped) to the first tee,
+down each hole from its tee to its green on the side away from the other
+holes, and from each green to the next tee, so every green connects to the
+next tee (`CART_PATH_GAP` is an error otherwise). It follows OSM's cart
+paths, service roads, tracks and footpaths where mapped, then paths read
+from the aerial photos where OSM has none, else it is made through the
+rough. It keeps the distances course architects give (Brauer, Golf Course
+Industry's "Design Conceptions"): 8 ft wide, 40-60 ft off the fairway and
+the green, 25-40 ft off the tee, clear of bunkers and water but for a
+bridge, and crosses a fairway only where it must. Corners are smoothed into
+curves a cart takes at speed; a hook tighter than that becomes two stretches
+that meet. Each stretch records its `source` (`osm` with its `osm_ref`,
+`aerial` or `generated`). The game lays them on the ground as walkable
+slabs and draws them draped on it (`src/game/cart_path.h`).
+
 ### Ground cover from aerial photos
 
 Where an area's aerial source covers the course, the importer reads what
 OSM leaves out from photos and heights (`osm_aerial.py`, the `aerial`
 config): a hole's fairway when OSM maps none (`source.fairway` `"aerial"`),
 bunkers and ponds clear of OSM's (`source.aerial_bunkers`,
-`source.aerial_waters`), and every tree, each at its measured height and
+`source.aerial_waters`), paths where OSM maps none (cart paths, above), and every tree, each at its measured height and
 crown in place of trees planted through OSM's woods. OSM's layout (hole
 lines, tees, greens) always comes first; mapping a fairway in OSM still beats
 the photo's.

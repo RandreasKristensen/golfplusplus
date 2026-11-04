@@ -226,7 +226,7 @@ struct player_tuning {
     float jump_gravity = 0.0f;
     // On foot I bump into what stands on the ground (game/body_contact.h)
     // as a circle this wide round my feet, and step up onto a walkable top
-    // (a tee box) up to step_up over them, about a stair.
+    // up to step_up over them, about a stair.
     float body_radius = 0.0f;
     float step_up = 0.0f;
 };
@@ -274,8 +274,8 @@ struct cart_tuning {
     // middle, from body_back behind it to body_front ahead (golf_cart.h
     // cart_solid): it bumps into what stands on the ground, people on foot
     // and other carts, and others into it (game/body_contact.h). It drives
-    // up onto a walkable top up to step_up over its wheels, about a kerb:
-    // never a tee box. Crashing, it bounces back by the restitution of what
+    // up onto a walkable top up to step_up over its wheels, about a kerb.
+    // Crashing, it bounces back by the restitution of what
     // it hit (the solids' tuning), heard from crash_sound_speed (m/s into it).
     float body_half_width = 0.0f;
     float body_front = 0.0f;
@@ -351,7 +351,7 @@ struct flight_path_tuning {
     float line_width = 0.0f;
 };
 
-// The rangefinder held up on foot (game/rangefinder.h).
+// The rangefinder held up walking or in a cart (game/rangefinder.h).
 struct rangefinder_tuning {
     float magnification = 0.0f;   // the zoom; the look turns this much slower
     float raise_seconds = 0.0f;   // from the eye to fully zoomed
@@ -518,12 +518,39 @@ struct hole_sign_tuning {
     float post_radius = 0.0f;
 };
 
+// The signs pointing the way from every green but the last to the next tee
+// (game/way_sign.h), in world units: a board on one post beside the way.
+struct way_sign_tuning {
+    float green_reach = 0.0f;   // a path leads the way when it comes this near the pin and the next tee
+    float green_offset = 0.0f;  // with no path, the sign stands this far past the green's edge
+    float path_offset = 0.0f;   // the post's foot, past the path's edge (or the straight way's middle)
+    float junction_lead = 0.0f;  // a junction's sign stands this far back along the way in
+    float board_width = 0.0f;  // along the way it points
+    float board_height = 0.0f;
+    float board_thickness = 0.0f;
+    float board_lift = 0.0f;  // its bottom edge over the post's foot
+    float post_radius = 0.0f;
+};
+
+// The course world's cart paths (game/cart_path.h), in world units: slabs
+// `piece_length` long laid along each path, their tops `top_lift` over the
+// highest ground across them. The ball rolls on them as on turf this fast
+// (a stimpmeter reading in feet); it bounces off them by the `solids` tuning's `path`.
+// Nothing a cart stops at stands within `clearance` of a path's edge, so a
+// cart driving along its edge clears trees, poles and signs.
+struct cart_path_tuning {
+    float piece_length = 0.0f;
+    float top_lift = 0.0f;
+    float ball_stimp_feet = 0.0f;
+    float clearance = 0.0f;
+};
+
 // The tee box at every hole's tee (game/tee_box.h), in world units.
 struct tee_box_tuning {
     float width = 0.0f;   // across the hole
     float length = 0.0f;  // down the hole
-    float padding = 0.0f;  // its top over the highest ground it covers
-    float sample_spacing = 0.0f;  // between the ground samples that find that height
+    float sample_spacing = 0.0f;  // between the ground samples whose mean is its level
+    float blend_distance = 0.0f;  // round it, the levelled ground back to the land
 };
 
 // Fences (course worlds): their poles stop shots like tree trunks, their nets
@@ -546,10 +573,10 @@ struct solids_tuning {
     solid_contact_tuning leaves;
     solid_contact_tuning pole;
     solid_contact_tuning net;
-    solid_contact_tuning tee_box;
     solid_contact_tuning board;
     solid_contact_tuning flagstick;
     solid_contact_tuning lamp;
+    solid_contact_tuning path;  // a cart path's top
     solid_contact_tuning cart;
     solid_contact_tuning person;
     solid_contact_tuning ball;  // another's at rest
@@ -580,7 +607,12 @@ struct floodlight_tuning {
     float head_width = 0.0f;
     float head_height = 0.0f;
     float head_depth = 0.0f;
-    float obstacle_clearance = 0.0f;  // from a trunk, post or another pole, past its radius
+    // From a canopy (past its lamp head's reach), a trunk, post, another pole
+    // or a playing surface, past its radius.
+    float obstacle_clearance = 0.0f;
+    // No pole within this of any hole's line of play, from the front of its
+    // tee box to its pin.
+    float play_line_half_width = 0.0f;
     float nudge_step = 0.0f;        // a blocked spot is tried again this much further out or along
     int nudge_tries = 0;
 };
@@ -766,6 +798,8 @@ struct game_tuning {
     net_tuning net;
     server_tuning server;
     hole_sign_tuning hole_sign;
+    way_sign_tuning way_sign;
+    cart_path_tuning cart_path;
     tee_box_tuning tee_box;
     fence_tuning fence;
     solids_tuning solids;

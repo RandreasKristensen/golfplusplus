@@ -13,6 +13,8 @@
 #include "physics/ball_state.h"
 #include "physics/terrain.h"
 
+#include <optional>
+
 // How one surface takes the ball, wet or dry already blended in.
 struct turf {
     float contact_angle_scale = 1.0f;  // of Penner's green contact angle: softer ground craters more
@@ -24,6 +26,9 @@ struct turf {
     // plugs, sunk plug_depth; 0 never plugs.
     float plug_speed = 0.0f;
     float plug_depth = 0.0f;
+    // A hard surface's own restitution (a cart path's, which gives nothing
+    // under the ball), in place of Penner's green's scaled.
+    std::optional<float> restitution;
 };
 
 // Penner's restitution of a green for an impact at `speed` m/s.

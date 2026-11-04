@@ -2,6 +2,7 @@
 
 #include "game/course_session.h"
 #include "game/game_state.h"
+#include "game/movement_step.h"
 #include "game/play_area.h"
 #include "physics/cart_dynamics.h"
 #include "physics/flight_model.h"
@@ -54,8 +55,9 @@ constexpr cart_controls full_throttle{1.0f, 0.0f};
 
 TEST_CASE("the shipped cart is a real electric two-seater: its build within the reference's ranges") {
     const cart_spec& cart = shipped_cart();
-    CHECK(cart.motor_power_w >= 3000.0f);
-    CHECK(cart.motor_power_w <= 4000.0f);
+    // It climbs on more than its rated power, never past its peak.
+    CHECK(cart.motor_power_w > 4000.0f);
+    CHECK(cart.motor_power_w <= 9600.0f);
     CHECK(cart.top_speed_mps >= 5.3f);
     CHECK(cart.top_speed_mps <= 6.7f);
     CHECK(cart.track_m >= 0.9f);
@@ -71,7 +73,10 @@ TEST_CASE("the shipped cart is a real electric two-seater: its build within the 
     CHECK(surfaces.rough.rolling_resistance <= 0.10f);
     // Soft bunker sand: past the dry-sand range, as the reference says soft sand is more.
     CHECK(surfaces.bunker.rolling_resistance >= 0.30f);
-    CHECK(near(surfaces.path.grip, 0.8f, 0.001f));
+    // Owner decision (docs/gameplay_rules.md): the path's grip is under the
+    // cart's stability, not the reference's 0.8, so a hard turn on it slides.
+    CHECK(surfaces.path.grip < cart_stability(cart));
+    CHECK(surfaces.path.grip > surfaces.fairway.grip);
     CHECK(surfaces.fairway.grip >= 0.5f);
     CHECK(surfaces.fairway.grip <= 0.6f);
     const float wet_grass = surfaces.fairway.grip * surfaces.fairway.wet_grip_scale;
@@ -103,11 +108,14 @@ TEST_CASE("on the flat a cart reaches its top speed and no more") {
     CHECK(near(cart_forward_speed(backing), -shipped_cart().top_speed_mps * shipped_cart().reverse_share, 0.001f));
 }
 
-TEST_CASE("up a 25 % grade a cart is slower but keeps moving, and down one it holds its top speed") {
+TEST_CASE("loaded, a cart climbs a 15 % grade at nearly its top speed, a 25 % one slower, and holds its top speed down one") {
+    const cart_motion fifteen = drive_for(cart_motion{}, full_throttle, ground_of(cart_surfaces().fairway, 0.15f), 20.0f);
+    CHECK(cart_forward_speed(fifteen) > 0.95f * shipped_cart().top_speed_mps);
+    // The steepest grade carts may be driven on: slower, still at least half its top speed.
     const cart_ground up = ground_of(cart_surfaces().fairway, 0.25f);
     const cart_motion climbing = drive_for(cart_motion{}, full_throttle, up, 20.0f);
-    CHECK(cart_forward_speed(climbing) > 1.0f);
-    CHECK(cart_forward_speed(climbing) < 0.7f * shipped_cart().top_speed_mps);
+    CHECK(cart_forward_speed(climbing) > 0.5f * shipped_cart().top_speed_mps);
+    CHECK(cart_forward_speed(climbing) < 0.8f * shipped_cart().top_speed_mps);
     // Its motor's power holds it there: the force it needs times the speed.
     const float g = gravity_meters_per_second2;
     const float slope = std::atan(0.25f);
@@ -136,7 +144,9 @@ TEST_CASE("a cart is quicker on a path than on grass, and crawls in sand, where 
 
     const cart_motion sand = drive_for(cart_motion{}, full_throttle, ground_of(cart_surfaces().bunker), 10.0f);
     CHECK(cart_forward_speed(sand) > 0.5f);
-    CHECK(cart_forward_speed(sand) < 0.5f * shipped_cart().top_speed_mps);
+    // Slower on the flat than up the steepest grade it may be driven on.
+    const cart_motion steepest = drive_for(cart_motion{}, full_throttle, ground_of(cart_surfaces().fairway, 0.25f), 10.0f);
+    CHECK(cart_forward_speed(sand) < cart_forward_speed(steepest));
     // Up a bunker's side it does not move at all: stuck.
     const cart_motion stuck = drive_for(cart_motion{}, full_throttle, ground_of(cart_surfaces().bunker, 0.2f), 5.0f);
     CHECK(cart_forward_speed(stuck) <= 0.0f);
@@ -189,6 +199,15 @@ TEST_CASE("a hard turn at speed tips a cart on a side slope, never on flat grass
     CHECK(across.condition == cart_condition::upright);
 }
 
+TEST_CASE("full lock at top speed on any flat dry ground slides the cart wide and never tips it, the path too") {
+    for (const cart_surface_tuning* surface : {&cart_surfaces().path, &cart_surfaces().fairway, &cart_surfaces().rough}) {
+        cart_motion motion = drive_for(cart_motion{0.0f}, full_throttle, ground_of(*surface), 6.0f);
+        REQUIRE(near(cart_forward_speed(motion), shipped_cart().top_speed_mps, 0.05f));
+        motion = drive_for(motion, cart_controls{1.0f, 1.0f}, ground_of(*surface), 3.0f);
+        CHECK(!cart_tipped(motion.condition));
+    }
+}
+
 TEST_CASE("water deeper than its wade depth sinks a cart; shallower it drives through") {
     cart_ground shallow = ground_of(cart_surfaces().water);
     shallow.water_depth = 0.8f * shipped_cart().wade_depth_m;
@@ -204,24 +223,21 @@ TEST_CASE("water deeper than its wade depth sinks a cart; shallower it drives th
     CHECK(drive_for(sunk, full_throttle, ground_of(cart_surfaces().path), 1.0f).velocity == glm::vec2(0.0f));
 }
 
-TEST_CASE("a cart on a course's ground: a path on a cart road, its material off it, soaked by the weather, and the pond's depth") {
+TEST_CASE("a cart on a course's ground: its material, soaked by the weather, and the pond's depth") {
     const game_tuning& tuning = shipped_content().tuning;
     hole_data hole = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 200.0f), 40.0f);
     hole.material_zones = {circle_zone(material_zone_type::water, glm::vec3(0.0f, 0.0f, 120.0f), 12.0f),
                   circle_zone(material_zone_type::bunker, glm::vec3(0.0f, 0.0f, 60.0f), 6.0f)};
     const play_area area = hole_area(hole, tuning);
-    const std::vector<course_world_cart_road> roads{course_world_cart_road{3.0f, {glm::vec3(-10.0f, 0.0f, 20.0f), glm::vec3(10.0f, 0.0f, 20.0f)}}};
     const cart_surfaces_tuning& surfaces = tuning.surfaces.cart;
 
-    CHECK(cart_ground_at(area, roads, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 20.0f)).rolling_resistance == surfaces.path.rolling_resistance);
-    // Past the road's half width it is the ground's own.
-    CHECK(cart_ground_at(area, roads, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 22.0f)).rolling_resistance == surfaces.fairway.rolling_resistance);
-    CHECK(cart_ground_at(area, roads, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 60.0f)).rolling_resistance == surfaces.bunker.rolling_resistance);
-    const cart_ground soaked = cart_ground_at(area, roads, tuning, 1.0f, glm::vec3(0.0f, 0.0f, 40.0f));
+    CHECK(cart_ground_at(area, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 22.0f)).rolling_resistance == surfaces.fairway.rolling_resistance);
+    CHECK(cart_ground_at(area, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 60.0f)).rolling_resistance == surfaces.bunker.rolling_resistance);
+    const cart_ground soaked = cart_ground_at(area, tuning, 1.0f, glm::vec3(0.0f, 0.0f, 40.0f));
     CHECK(near(soaked.grip, surfaces.fairway.grip * surfaces.fairway.wet_grip_scale, 0.0001f));
-    const cart_ground pond = cart_ground_at(area, roads, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 120.0f));
+    const cart_ground pond = cart_ground_at(area, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 120.0f));
     CHECK(pond.water_depth > shipped_cart().wade_depth_m);
-    CHECK(cart_ground_at(area, roads, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 40.0f)).water_depth == 0.0f);
+    CHECK(cart_ground_at(area, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 40.0f)).water_depth == 0.0f);
 }
 
 namespace {
@@ -291,6 +307,83 @@ struct road_follower {
 }
 
 namespace {
+// A flat open course with `road` on it.
+play_area area_with_road(const course_world_cart_road& road) {
+    hole_data hole = straight_hole(glm::vec3(0.0f, 0.0f, -200.0f), glm::vec3(0.0f, 0.0f, -100.0f), 20.0f);
+    hole.spline.rough_width = 40.0f;
+    course_world_definition world;
+    world.hole_starts = {course_world_hole_start{0, hole.tee_position, 0.0f, 0.0f}};
+    world.cart_roads = {road};
+    return build_course_area({hole}, world, shipped_content().tuning);
+}
+
+// A cart at `throttle` from the start of `route` steered along it to its
+// end over `area`; false if it ever hit anything or never got there.
+bool drives_clean(const play_area& area, const std::vector<glm::vec3>& route, const float throttle) {
+    const game_tuning& tuning = shipped_content().tuning;
+    const std::vector<solid> none;
+    const cart_world world{area, tuning, shipped_cart(), 0.0f, 1.0f, none, nullptr};
+    cart_mover mover;
+    mover.pose = cart_pose{anchor_on_terrain(area, route.front()), yaw_towards(route[0], route[1])};
+    mover.motion.yaw = mover.pose.yaw;
+    mover.vertical.y = mover.pose.position.y;
+    road_follower driver{route};
+    for (int step = 0; step < 120 * 60 && !driver.at_end(); ++step) {
+        const float steer = steer_towards(mover.motion, mover.pose.position, driver.ahead_of_me(6.0f));
+        const cart_move moved = step_cart_mover(mover, cart_controls{throttle, steer}, world);
+        if (moved.crash_speed > 0.0f || moved.after.against_obstacle || cart_tipped(moved.after.motion.condition)) {
+            return false;
+        }
+        mover = moved.after;
+        driver.follow(mover.pose.position);
+    }
+    return driver.at_end();
+}
+}
+
+TEST_CASE("a cart drives a cart path through bends of 30, 60 and 90 degrees without hitting anything, on the path's numbers") {
+    for (const float bend : {30.0f, 60.0f, 90.0f}) {
+        const float a = glm::radians(bend);
+        const glm::vec3 corner(0.0f, 0.0f, 0.0f);
+        const glm::vec3 out = corner + glm::vec3(std::sin(a), 0.0f, std::cos(a)) * 40.0f;
+        // As the importer lays them: straight in, round the corner on an 8 m
+        // curve in metre steps, straight out.
+        constexpr float radius = 8.0f;
+        const float cut = radius * std::tan(0.5f * a);
+        std::vector<glm::vec3> line{glm::vec3(0.0f, 0.0f, -40.0f), corner - glm::vec3(0.0f, 0.0f, cut)};
+        const glm::vec3 centre = line.back() + glm::vec3(radius, 0.0f, 0.0f);
+        const int steps = static_cast<int>(std::ceil(radius * a));
+        for (int k = 1; k <= steps; ++k) {
+            const float turned = a * static_cast<float>(k) / static_cast<float>(steps);
+            line.push_back(centre - glm::vec3(std::cos(turned), 0.0f, -std::sin(turned)) * radius);
+        }
+        line.push_back(out);
+        const course_world_cart_road road{2.4f, line};
+        const play_area area = area_with_road(road);
+        CHECK(drives_clean(area, road.polyline, 0.6f));
+        // The bend's outside edge is path too, at and between its joints: no
+        // wedge missing between the stretches.
+        for (std::size_t k = 1; k + 2 < road.polyline.size(); ++k) {
+            for (const float t : {0.0f, 0.5f}) {
+                const glm::vec3 at = glm::mix(road.polyline[k], road.polyline[k + 1], t);
+                const glm::vec3 outside = at + safe_normalize(at - centre, glm::vec3(-1.0f, 0.0f, 0.0f)) * 1.15f;
+                CHECK(cart_ground_at(area, shipped_content().tuning, 0.0f, outside).rolling_resistance ==
+                      shipped_content().tuning.surfaces.cart.path.rolling_resistance);
+            }
+        }
+    }
+}
+
+TEST_CASE("a cart drives onto a cart path from the grass at an angle and across it without hitting anything") {
+    const course_world_cart_road road{2.4f, {glm::vec3(-40.0f, 0.0f, 0.0f), glm::vec3(40.0f, 0.0f, 0.0f)}};
+    const play_area area = area_with_road(road);
+    for (const float angle : {20.0f, 45.0f, 90.0f}) {
+        const glm::vec3 across(std::cos(glm::radians(angle)), 0.0f, std::sin(glm::radians(angle)));
+        CHECK(drives_clean(area, {-across * 20.0f, across * 20.0f}, 1.0f));
+    }
+}
+
+namespace {
 // `road` cut where it turns back on itself (more than 150 degrees at a
 // point), which no cart drives round: some imported roads fold back along
 // their own line.
@@ -323,7 +416,7 @@ TEST_CASE("driving every shipped course's cart roads at full throttle never tips
                 glm::vec3 at = stretch.front();
                 cart_motion motion{yaw_towards(stretch[0], stretch[1])};
                 for (int step = 0; step < 120 * 600 && !driver.at_end(); ++step) {
-                    const cart_ground ground = cart_ground_at(state.area, state.world.cart_roads, state.tuning, 0.0f, at);
+                    const cart_ground ground = cart_ground_at(state.area, state.tuning, 0.0f, at);
                     const float steer = steer_towards(motion, at, driver.ahead_of_me(8.0f));
                     motion = step_cart(motion, cart_controls{1.0f, steer}, ground, shipped_cart(), cart_step_seconds);
                     if (cart_tipped(motion.condition)) {

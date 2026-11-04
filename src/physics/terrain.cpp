@@ -883,14 +883,14 @@ namespace {
 // A corner of a ground triangle being cut: where it is and the ground's normal
 // there, both interpolated along the triangle so it stays in that plane.
 struct overlay_point {
-    glm::vec3 position{0.0f};
-    glm::vec3 normal{0.0f, 1.0f, 0.0f};
+    glm::dvec3 position{0.0};
+    glm::dvec3 normal{0.0, 1.0, 0.0};
 };
 
 // Which side of the line from `a` to `b` (in XZ) `point` is on, signed.
-float side_of_line(const glm::vec2& a, const glm::vec2& b, const glm::vec2& point) {
-    const glm::vec2 edge = b - a;
-    const glm::vec2 offset = point - a;
+double side_of_line(const glm::dvec2& a, const glm::dvec2& b, const glm::dvec2& point) {
+    const glm::dvec2 edge = b - a;
+    const glm::dvec2 offset = point - a;
     return edge.x * offset.y - edge.y * offset.x;
 }
 
@@ -901,10 +901,10 @@ float side_of_line(const glm::vec2& a, const glm::vec2& b, const glm::vec2& poin
 std::vector<overlay_point> clip_to_side(std::vector<overlay_point> polygon,
                                         const glm::vec2& a,
                                         const glm::vec2& b,
-                                        const float inside_sign) {
-    const auto side = [&](const glm::vec2& point) { return side_of_line(a, b, point); };
+                                        const double inside_sign) {
+    const auto side = [&](const glm::dvec2& point) { return side_of_line(a, b, point); };
     if (std::all_of(polygon.begin(), polygon.end(), [&](const overlay_point& point) {
-            return side(glm::vec2(point.position.x, point.position.z)) * inside_sign >= 0.0f;
+            return side(glm::dvec2(point.position.x, point.position.z)) * inside_sign >= 0.0f;
         })) {
         return polygon;
     }
@@ -912,25 +912,34 @@ std::vector<overlay_point> clip_to_side(std::vector<overlay_point> polygon,
     for (std::size_t i = 0; i < polygon.size(); ++i) {
         const overlay_point& from = polygon[i];
         const overlay_point& to = polygon[(i + 1U) % polygon.size()];
-        const float from_side = side(glm::vec2(from.position.x, from.position.z)) * inside_sign;
-        const float to_side = side(glm::vec2(to.position.x, to.position.z)) * inside_sign;
+        const double from_side = side(glm::dvec2(from.position.x, from.position.z)) * inside_sign;
+        const double to_side = side(glm::dvec2(to.position.x, to.position.z)) * inside_sign;
         if (from_side >= 0.0f) {
             clipped.push_back(from);
         }
         if ((from_side >= 0.0f) != (to_side >= 0.0f)) {
-            const float t = from_side / (from_side - to_side);
+            const double t = from_side / (from_side - to_side);
             clipped.push_back(overlay_point{glm::mix(from.position, to.position, t), glm::mix(from.normal, to.normal, t)});
         }
     }
     return clipped;
 }
 
-// `polygon` cut to the side of the line from `a` to `b` that `inside` is on.
-std::vector<overlay_point> clip_to_edge(std::vector<overlay_point> polygon,
-                                        const glm::vec2& a,
-                                        const glm::vec2& b,
-                                        const glm::vec2& inside) {
-    return clip_to_side(std::move(polygon), a, b, side_of_line(a, b, inside) >= 0.0f ? 1.0f : -1.0f);
+// All three edges use the triangle's winding. A rounded centroid can lie
+// outside a thin triangle and select the opposite half-plane, leaking whole
+// ground cells beyond the outline. Keep intersections in double precision
+// until the finished polygon is stored, including for nearly straight bends.
+std::vector<overlay_point> clip_to_triangle(std::vector<overlay_point> polygon,
+                                           const std::array<glm::vec2, 3>& triangle) {
+    const double winding = side_of_line(triangle[0], triangle[1], triangle[2]);
+    if (winding == 0.0) {
+        return {};
+    }
+    for (std::size_t edge = 0; edge < 3U && polygon.size() >= 3U; ++edge) {
+        polygon = clip_to_side(std::move(polygon), triangle[edge], triangle[(edge + 1U) % 3U],
+                               winding > 0.0 ? 1.0 : -1.0);
+    }
+    return polygon;
 }
 
 // Convex `polygon` without what triangle `cut` covers: up to three convex
@@ -938,12 +947,15 @@ std::vector<overlay_point> clip_to_edge(std::vector<overlay_point> polygon,
 // left.
 std::vector<std::vector<overlay_point>> outside_triangle(std::vector<overlay_point> polygon,
                                                          const std::array<glm::vec2, 3>& cut) {
-    const glm::vec2 middle = (cut[0] + cut[1] + cut[2]) / 3.0f;
+    const double winding = side_of_line(cut[0], cut[1], cut[2]);
+    if (winding == 0.0) {
+        return {std::move(polygon)};
+    }
+    const double inside_sign = winding > 0.0 ? 1.0 : -1.0;
     std::vector<std::vector<overlay_point>> pieces;
     for (std::size_t edge = 0; edge < 3U && polygon.size() >= 3U; ++edge) {
         const glm::vec2& a = cut[edge];
         const glm::vec2& b = cut[(edge + 1U) % 3U];
-        const float inside_sign = side_of_line(a, b, middle) >= 0.0f ? 1.0f : -1.0f;
         std::vector<overlay_point> beyond = clip_to_side(polygon, a, b, -inside_sign);
         if (beyond.size() >= 3U) {
             pieces.push_back(std::move(beyond));
@@ -1171,7 +1183,7 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground, const std::
                 for (const overlay_point& point : polygon) {
                     terrain_vertex vertex;
                     vertex.position = point.position;
-                    vertex.normal = safe_normalize(point.normal, world_up);
+                    vertex.normal = safe_normalize(glm::vec3(point.normal), world_up);
                     vertex.material = *material;
                     mesh.vertices.push_back(vertex);
                 }
@@ -1201,9 +1213,9 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground, const std::
                 const std::vector<std::size_t> under = piece_grid.meeting(middle, middle);
                 if (std::any_of(under.begin(), under.end(), [&](const std::size_t i) {
                         const std::array<glm::vec2, 3>& piece = pieces[i];
-                        const float ab = side_of_line(piece[0], piece[1], middle);
-                        const float bc = side_of_line(piece[1], piece[2], middle);
-                        const float ca = side_of_line(piece[2], piece[0], middle);
+                        const double ab = side_of_line(piece[0], piece[1], middle);
+                        const double bc = side_of_line(piece[1], piece[2], middle);
+                        const double ca = side_of_line(piece[2], piece[0], middle);
                         return (ab >= 0.0f && bc >= 0.0f && ca >= 0.0f) || (ab <= 0.0f && bc <= 0.0f && ca <= 0.0f);
                     })) {
                     add_polygon(polygon);
@@ -1212,18 +1224,38 @@ terrain_mesh build_material_overlay_mesh(const terrain_mesh& ground, const std::
             }
             for (const std::size_t i : piece_grid.meeting(triangle_low, triangle_high)) {
                 const std::array<glm::vec2, 3>& piece = pieces[i];
-                const glm::vec2 piece_middle = (piece[0] + piece[1] + piece[2]) / 3.0f;
-                std::vector<overlay_point> cut = polygon;
-                for (std::size_t edge = 0; edge < 3U && cut.size() >= 3U; ++edge) {
-                    cut = clip_to_edge(std::move(cut), piece[edge], piece[(edge + 1U) % 3U], piece_middle);
-                }
-                add_polygon(cut);
+                add_polygon(clip_to_triangle(polygon, piece));
             }
         }
     }
 
     mesh.spatial_index = make_terrain_mesh_index(mesh);
     return mesh;
+}
+
+std::vector<terrain_vertex> drape_on_ground(const terrain_mesh& ground, const std::vector<std::array<glm::vec2, 3>>& pieces) {
+    std::vector<terrain_vertex> out;
+    for (const std::array<glm::vec2, 3>& piece : pieces) {
+        const glm::vec2 low = glm::min(piece[0], glm::min(piece[1], piece[2]));
+        const glm::vec2 high = glm::max(piece[0], glm::max(piece[1], piece[2]));
+        for (const int triangle : ground_triangles_near(ground, low, high)) {
+            std::vector<overlay_point> cut;
+            for (std::size_t corner = 0; corner < 3U; ++corner) {
+                const terrain_vertex& vertex = triangle_vertex(ground, triangle, corner);
+                cut.push_back(overlay_point{vertex.position, vertex.normal});
+            }
+            cut = clip_to_triangle(std::move(cut), piece);
+            for (std::size_t i = 1; i + 1 < cut.size(); ++i) {
+                for (const overlay_point& point : {cut[0], cut[i], cut[i + 1]}) {
+                    terrain_vertex vertex;
+                    vertex.position = point.position;
+                    vertex.normal = safe_normalize(glm::vec3(point.normal), world_up);
+                    out.push_back(vertex);
+                }
+            }
+        }
+    }
+    return out;
 }
 
 terrain_mesh build_terrain_mesh_index(terrain_mesh mesh) {

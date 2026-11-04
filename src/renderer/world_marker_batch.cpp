@@ -19,11 +19,9 @@ namespace {
 // Tiles are about this many metres square, with this much grout between them.
 constexpr float tee_tile_size = 1.5f;
 constexpr float tee_grout_gap = 0.08f;
-// Over the box's top: the tiles, then the mat. The sides reach this far
-// under the lowest ground, so they never stop short of it.
+// Over the box's top: the tiles, then the mat.
 constexpr float tee_tile_lift = 0.01f;
 constexpr float tee_mat_lift = 0.02f;
-constexpr float tee_side_bury = 0.2f;
 // The mat's share of the box's top, across and along the hole.
 constexpr float tee_mat_share_across = 0.7f;
 constexpr float tee_mat_share_along = 0.75f;
@@ -262,18 +260,8 @@ void append_tee_box_layer(world_marker_batch& batch, const tee_box& box, const m
         return;
     }
 
-    // The top in grout colour, and the four sides down into the ground.
+    // The top in grout colour, on the levelled ground.
     batch.append_quad(ground_rect_model(box.center, along, half), colors.tee_grout, no_glow, true);
-    const float side_half_height = (box.center.y - box.bottom + tee_side_bury) * 0.5f;
-    const glm::vec3 side_middle(box.center.x, box.center.y - side_half_height, box.center.z);
-    for (const float sign : {-1.0f, 1.0f}) {
-        batch.append_quad(world_panel_model(side_middle + along * (half.y * sign), across, 0.0f,
-                                            glm::vec2(half.x, side_half_height)),
-                          colors.tee_grout, no_glow, true);
-        batch.append_quad(world_panel_model(side_middle + across * (half.x * sign), along, 0.0f,
-                                            glm::vec2(half.y, side_half_height)),
-                          colors.tee_grout, no_glow, true);
-    }
 }
 }
 

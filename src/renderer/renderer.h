@@ -110,6 +110,7 @@ private:
     overlay_pass overlay_pass_;
     backdrop_pass backdrop_pass_;
     texture grass_texture_;  // on the rough (terrain.frag)
+    texture path_texture_;   // on the cart paths (terrain.frag)
     framebuffer scene_fbo_;
     camcorder_pass camcorder_pass_;
     eyepiece_pass eyepiece_pass_;

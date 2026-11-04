@@ -9,7 +9,6 @@
 // (move_input), and the game steps the quantised values too.
 
 #include "game/cart_seats.h"
-#include "game/course_world_definition.h"
 #include "game/effects.h"
 #include "game/game_tuning.h"
 #include "physics/body_collision.h"
@@ -117,7 +116,6 @@ struct cart_mover {
 
 struct cart_world {
     const play_area& area;
-    const std::vector<course_world_cart_road>& roads;
     const game_tuning& tuning;
     const cart_spec& spec;  // effective_cart_spec
     float wetness = 0.0f;
@@ -130,6 +128,12 @@ struct cart_move {
     cart_mover after;
     float crash_speed = 0.0f;  // m/s into what it hit this step, 0 for nothing
 };
+
+// What the cart at `pose` drives on: the grip and rolling resistance under
+// each of its four wheels (its spec's wheelbase and track about its body's
+// middle), averaged, so it takes an edge onto or off a path one wheel at a
+// time rather than all at once; the slope and water under its seat.
+cart_ground cart_ground_under(const cart_pose& pose, const cart_world& world);
 
 // One step over the ground at `controls`, clear of what stands in its way
 // (bouncing off what it crashes into, scraping along it), on the surface or

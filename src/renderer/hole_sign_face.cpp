@@ -232,6 +232,21 @@ ui_rect hole_sign_texels(const int left, const int top, const int width, const i
                            1.0f - static_cast<float>(top) * texel_y);
 }
 
+void draw_way_sign_face(overlay_batch& batch, const text_assets& text, const std::string& label) {
+    batch.grid = overlay_grid{way_sign_face_width, way_sign_face_height};
+    const auto texels = [](const int left, const int top, const int width, const int height) {
+        const float texel_x = 2.0f / static_cast<float>(way_sign_face_width);
+        const float texel_y = 2.0f / static_cast<float>(way_sign_face_height);
+        return rect_from_edges(-1.0f + static_cast<float>(left) * texel_x, 1.0f - static_cast<float>(top + height) * texel_y,
+                               -1.0f + static_cast<float>(left + width) * texel_x, 1.0f - static_cast<float>(top) * texel_y);
+    };
+    const ui_rect panel = texels(frame_texels, frame_texels, way_sign_face_width - frame_texels * 2,
+                                 way_sign_face_height - frame_texels * 2);
+    draw_overlay_quad(batch, panel.center, panel.half_size, panel_paint);
+    draw_label(batch, text.font, find_text_style(text, style_hole_sign_number), label,
+               texels(frame_texels, frame_texels, way_sign_face_width - frame_texels * 2, way_sign_face_height - frame_texels * 2));
+}
+
 void draw_hole_sign_face(overlay_batch& batch,
                          const text_assets& text,
                          const hole_sign_labels& labels,

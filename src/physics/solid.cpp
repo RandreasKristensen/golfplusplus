@@ -10,6 +10,10 @@
 #include <glm/geometric.hpp>
 
 namespace {
+// Numerical allowance at a slab's offset outline, shared by its grid bounds
+// and top query so rounded edge vertices remain on the raised surface.
+constexpr float slab_edge_roundoff = 0.0005f;
+
 // Leaves push the ball slightly upwards so it drops out of the canopy.
 constexpr float leaf_lift = 0.18f;
 // Pushed this little past touching, so a swept bounce still registers when
@@ -111,10 +115,12 @@ void footprint(const solid& thing, glm::vec2& low, glm::vec2& high) {
         low = base - glm::vec2(thing.radius);
         high = base + glm::vec2(thing.radius);
         return;
-    case solid_shape::wall: {
+    case solid_shape::wall:
+    case solid_shape::slab: {
         const glm::vec2 end(thing.end.x, thing.end.z);
-        low = glm::min(base, end) - glm::vec2(thing.radius);
-        high = glm::max(base, end) + glm::vec2(thing.radius);
+        const float radius = thing.radius + (thing.shape == solid_shape::slab ? slab_edge_roundoff : 0.0f);
+        low = glm::min(base, end) - glm::vec2(radius);
+        high = glm::max(base, end) + glm::vec2(radius);
         return;
     }
     case solid_shape::box: {
@@ -129,7 +135,17 @@ void footprint(const solid& thing, glm::vec2& low, glm::vec2& high) {
 }
 
 float push_reach(const solid& thing) {
-    return thing.shape == solid_shape::box ? std::max(thing.half_length, thing.half_width) : thing.radius;
+    switch (thing.shape) {
+    case solid_shape::box:
+        return std::max(thing.half_length, thing.half_width);
+    case solid_shape::slab:
+        return 0.0f;  // never pushes
+    case solid_shape::cylinder:
+    case solid_shape::cone:
+    case solid_shape::wall:
+        break;
+    }
+    return thing.radius;
 }
 }
 
@@ -211,7 +227,35 @@ std::vector<std::uint32_t> solids_near(const solid_grid& grid, const glm::vec3& 
     return near;
 }
 
-std::optional<float> walkable_top_at(const std::vector<solid>& solids, const solid_grid& grid, const glm::vec3& point) {
+namespace {
+// `thing`'s top over `point` (XZ), if it is over it.
+std::optional<walkable_top> top_over(const solid& thing, const glm::vec3& point) {
+    const glm::vec3 offset = horizontal(point - thing.base);
+    if (thing.shape == solid_shape::slab) {
+        const glm::vec3 level = horizontal(thing.end - thing.base);
+        const float length_squared = glm::dot(level, level);
+        const float t = length_squared <= 1.0e-8f ? 0.0f : clamp01(glm::dot(offset, level) / length_squared);
+        // Rounded offset vertices at course coordinates can land a fraction
+        // of a millimetre outside the exact capsule. Keep its boundary on the
+        // same raised top as its interior, including where it is drawn.
+        if (glm::length(offset - level * t) > thing.radius + slab_edge_roundoff) {
+            return std::nullopt;
+        }
+        const glm::vec3 across = safe_normalize(glm::cross(level, world_up), glm::vec3(1.0f, 0.0f, 0.0f));
+        return walkable_top{thing.height, world_up, 0, true, across};
+    }
+    const bool over = thing.shape == solid_shape::box
+        ? std::abs(glm::dot(offset, thing.along)) <= thing.half_length &&
+            std::abs(glm::dot(offset, across_of(thing.along))) <= thing.half_width
+        : glm::length(offset) <= thing.radius;
+    if (!over) {
+        return std::nullopt;
+    }
+    return walkable_top{solid_top(thing), world_up, 0};
+}
+}
+
+std::optional<walkable_top> walkable_top_at(const std::vector<solid>& solids, const solid_grid& grid, const glm::vec3& point) {
     if (grid.cells.empty()) {
         return std::nullopt;
     }
@@ -220,20 +264,18 @@ std::optional<float> walkable_top_at(const std::vector<solid>& solids, const sol
     if (column < 0 || row < 0 || column >= grid.columns || row >= grid.rows) {
         return std::nullopt;
     }
-    std::optional<float> top;
+    std::optional<walkable_top> top;
     for (const std::uint32_t index :
          grid.cells[static_cast<std::size_t>(row) * static_cast<std::size_t>(grid.columns) + static_cast<std::size_t>(column)]) {
-        const solid& thing = solids[index];
-        if (!thing.walkable) {
+        if (!solids[index].walkable) {
             continue;
         }
-        const glm::vec3 offset = horizontal(point - thing.base);
-        const bool over = thing.shape == solid_shape::box
-            ? std::abs(glm::dot(offset, thing.along)) <= thing.half_length &&
-                std::abs(glm::dot(offset, across_of(thing.along))) <= thing.half_width
-            : glm::length(offset) <= thing.radius;
-        if (over && (!top || solid_top(thing) > *top)) {
-            top = solid_top(thing);
+        std::optional<walkable_top> here = top_over(solids[index], point);
+        const bool better = here && (!top || (here->over_surface && !top->over_surface) ||
+                                     (here->over_surface == top->over_surface && here->height > top->height));
+        if (better) {
+            here->solid = index;
+            top = here;
         }
     }
     return top;
@@ -248,6 +290,7 @@ ball_state resolve_solid_contact(const ball_state& in, const solid& thing) {
     case solid_shape::box:
         return box_contact(in, thing);
     case solid_shape::wall:
+    case solid_shape::slab:
         break;
     }
     return in;

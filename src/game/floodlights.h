@@ -1,12 +1,14 @@
 #pragma once
 
 // The floodlight poles along every hole: alternating sides down the fairway,
-// out past its edge, one beside the tee box and one each side of the green,
-// each with a lamp head up top aimed down at what it lights. Placed at
-// runtime from the holes and the finished ground (no authored data), so every
-// imported course has them, never on fairway, green, tee, sand, water or a
-// cart road, nor against a tree or another post. Pure: the server builds the
-// same poles, and they stop shots like tree trunks (game/area_solids.h).
+// out past its edge, one beside or behind the tee box and one each side of
+// the green, each with a lamp head up top aimed down at what it lights.
+// Placed at runtime from the holes and the finished ground (no authored
+// data), so every imported course has them, never on or by a fairway, green,
+// tee box, sand, water or a cart road, in any hole's line of play, against
+// another post, or with its lamp head or beam in a tree's canopy. Pure: the
+// server builds the same poles, and they stop shots like tree trunks
+// (game/area_solids.h).
 // Their light after dark is core/light_frame.h's; drawn by
 // renderer/floodlight_batch.h.
 

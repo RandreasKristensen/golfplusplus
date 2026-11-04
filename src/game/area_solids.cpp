@@ -88,6 +88,33 @@ std::vector<solid> standing_solids(const play_area& area, const game_tuning& tun
         head.friction = contacts.lamp.friction;
         solids.push_back(head);
     }
+    for (const way_sign& sign : area.way_signs) {
+        solids.push_back(stopping_all(upright(solid_kind::pole, sign.post_foot, sign.post_radius,
+                                              way_sign_top(sign) - sign.post_foot.y),
+                                      contacts.pole));
+        const glm::vec3 half = sign.points * sign.board_half_width;
+        const glm::vec3 low(0.0f, sign.board_half_height, 0.0f);
+        solids.push_back(stopping_all(wall(solid_kind::board, sign.board_center - half - low, sign.board_center + half - low,
+                                           0.5f * sign.board_thickness, 2.0f * sign.board_half_height),
+                                      contacts.board));
+    }
+    // Each cart path's slabs, joint to joint: walkable tops the ball meets
+    // as the surface (sample_area), by the path's numbers.
+    for (const cart_path& path : area.cart_paths) {
+        for (std::size_t i = 0; i + 1 < path.joints.size(); ++i) {
+            solid slab;
+            slab.shape = solid_shape::slab;
+            slab.kind = solid_kind::path;
+            slab.base = path.joints[i];
+            slab.end = path.joints[i + 1];
+            slab.radius = path.half_width;
+            slab.height = tuning.cart_path.top_lift;
+            slab.walkable = true;
+            slab.restitution = contacts.path.restitution;
+            slab.friction = contacts.path.friction;
+            solids.push_back(slab);
+        }
+    }
     for (const hole_sign& sign : area.signs) {
         const glm::vec3 half = sign.down_hole * sign.board_half_width;
         const glm::vec3 low(0.0f, sign.board_half_height, 0.0f);
@@ -102,8 +129,6 @@ std::vector<solid> standing_solids(const play_area& area, const game_tuning& tun
                                           contacts.net));
         }
     }
-    const std::vector<solid> boxes = tee_box_solids(area.tee_boxes, tuning);
-    solids.insert(solids.end(), boxes.begin(), boxes.end());
     return solids;
 }
 
@@ -136,22 +161,6 @@ std::vector<solid> flagstick_solids(const std::vector<cup>& cups, const std::vec
             stick.friction = tuning.solids.flagstick.friction;
             solids.push_back(stick);
         }
-    }
-    return solids;
-}
-
-std::vector<solid> tee_box_solids(const std::vector<tee_box>& boxes, const game_tuning& tuning) {
-    std::vector<solid> solids;
-    for (const tee_box& box : boxes) {
-        solid block = stopping_all(upright(solid_kind::tee_box, glm::vec3(box.center.x, box.bottom, box.center.z), 0.0f,
-                                           box.center.y - box.bottom),
-                                   tuning.solids.tee_box);
-        block.shape = solid_shape::box;
-        block.along = safe_normalize(horizontal(box.down_hole), glm::vec3(0.0f, 0.0f, 1.0f));
-        block.half_length = box.half_length;
-        block.half_width = box.half_width;
-        block.walkable = true;
-        solids.push_back(block);
     }
     return solids;
 }

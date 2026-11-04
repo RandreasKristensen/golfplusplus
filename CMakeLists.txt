@@ -86,6 +86,7 @@ golfpp_library(golfpp-physics
     src/physics/ground_contact.cpp
     src/physics/turf_contact.cpp
     src/physics/ground_mesh.cpp
+    src/physics/ground_pad.cpp
     src/physics/impact.cpp
     src/physics/land_relief.cpp
     src/physics/launch.cpp
@@ -131,7 +132,9 @@ golfpp_library(golfpp-game
     src/game/loadout.cpp
     src/game/model_kinds.cpp
     src/game/floodlights.cpp
+    src/game/cart_path.cpp
     src/game/hole_sign.cpp
+    src/game/way_sign.cpp
     src/game/tee_box.cpp
     src/game/json_util.cpp
     src/game/lighting_loader.cpp
@@ -236,6 +239,7 @@ golfpp_library(golfpp-render-data
     src/renderer/shader_source.cpp
     src/renderer/sky_visibility.cpp
     src/renderer/terrain_palette.cpp
+    src/renderer/cart_path_mesh.cpp
     src/renderer/terrain_render_mesh.cpp
     src/renderer/text_input.cpp
     src/renderer/ui_rect.cpp
@@ -512,6 +516,8 @@ if (GOLFPP_BUILD_TESTS)
         tests/shot_snapshot_tests.cpp
         tests/camera_transition_tests.cpp
         tests/cart_dynamics_tests.cpp
+        tests/cart_path_tests.cpp
+        tests/cart_path_mesh_tests.cpp
         tests/cart_tests.cpp
         tests/shared_carts_tests.cpp
         tests/content_tests.cpp

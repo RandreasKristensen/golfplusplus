@@ -68,7 +68,7 @@ def rings_gap(a, b) -> float:
     return min(min(edge_distance(p, b) for p in a), min(edge_distance(p, a) for p in b))
 
 
-def _simplify_open(pts, tolerance):
+def simplify_line(pts, tolerance):
     """Douglas–Peucker on an open polyline, keeping both ends."""
     if len(pts) < 3:
         return list(pts)
@@ -79,7 +79,7 @@ def _simplify_open(pts, tolerance):
             worst, index = d, i
     if worst <= tolerance:
         return [pts[0], pts[-1]]
-    return _simplify_open(pts[:index + 1], tolerance)[:-1] + _simplify_open(pts[index:], tolerance)
+    return simplify_line(pts[:index + 1], tolerance)[:-1] + simplify_line(pts[index:], tolerance)
 
 
 def simplify(ring, tolerance: float):
@@ -90,7 +90,7 @@ def simplify(ring, tolerance: float):
     first = 0
     far = max(range(len(ring)), key=lambda i: math.dist(ring[0], ring[i]))
     halves = ring[first:far + 1], ring[far:] + ring[:1]
-    out = _simplify_open(halves[0], tolerance)[:-1] + _simplify_open(halves[1], tolerance)[:-1]
+    out = simplify_line(halves[0], tolerance)[:-1] + simplify_line(halves[1], tolerance)[:-1]
     return out if len(out) >= 3 else list(ring)
 
 

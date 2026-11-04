@@ -79,55 +79,98 @@ float ribbon_width(const hole_data& hole) {
 
 ground_settings ground_settings_for(const float margin, const game_tuning& tuning) {
     return ground_settings{tuning.terrain.ground_cell_size, margin, tuning.terrain.ground_blend_distance,
-                           tuning.terrain.fairway_cell_size, tuning.terrain.zone_cell_size, tuning.terrain.zones};
+                           tuning.terrain.fairway_cell_size, tuning.terrain.zone_cell_size, tuning.terrain.zones,
+                           tuning.tee_box.blend_distance, tuning.tee_box.sample_spacing};
 }
 
 // Metres per cell of the solids' grid, a few canopies wide. Any size gives
 // the same contacts; only how many solids each test looks at depends on it.
 constexpr float solid_grid_cell_size = 16.0f;
 
-// The area with its ground built from its holes and zones, and the zone
-// shapes draped on that ground for drawing.
-play_area with_ground(play_area area, const height_grid* land, const float margin, const game_tuning& tuning) {
-    built_ground built = build_ground(area.holes, area.zones, land, ground_settings_for(margin, tuning));
+// The area with its ground built from its holes and zones, a tee box at
+// each hole's tee that has one (facing the way its sign does) levelled into
+// it, and the zone shapes draped on that ground for drawing.
+play_area with_ground(play_area area, const std::vector<hole_data>& holes, const height_grid* land, const float margin,
+                      const game_tuning& tuning) {
+    std::vector<tee_box> boxes;
+    std::vector<ground_pad> pads;
+    for (std::size_t i = 0; i < holes.size(); ++i) {
+        if (!holes[i].tee_box) {
+            continue;
+        }
+        boxes.push_back(place_tee_box(holes[i], down_hole_at_tee(holes[i], tuning.hole_sign.look_ahead), tuning.tee_box));
+        boxes.back().hole = i;
+        pads.push_back(tee_box_pad(boxes.back()));
+    }
+    built_ground built = build_ground(area.holes, area.zones, pads, land, ground_settings_for(margin, tuning));
+    for (std::size_t i = 0; i < boxes.size(); ++i) {
+        boxes[i].center.y = built.pad_levels[i];
+    }
+    area.tee_boxes = std::move(boxes);
     area.ground = std::move(built.mesh);
     area.water_levels = std::move(built.water_levels);
     area.material_overlay = build_material_overlay_mesh(area.ground, area.zones);
     return area;
 }
 
-// The area with a tee box at each hole's tee that has one, over its
-// finished ground. Each faces the way its sign does.
-play_area with_tee_boxes(play_area area, const std::vector<hole_data>& holes, const game_tuning& tuning) {
-    std::vector<tee_box> boxes;
-    for (std::size_t i = 0; i < holes.size(); ++i) {
-        if (!holes[i].tee_box) {
-            continue;
-        }
-        boxes.push_back(place_tee_box(area, holes[i], down_hole_at_tee(holes[i], tuning.hole_sign.look_ahead), tuning.tee_box));
-        boxes.back().hole = i;
-    }
-    area.tee_boxes = std::move(boxes);
-    // Their tops are the surface for what is placed on the ground next;
-    // standing_solids makes the whole list once everything stands.
-    area.solids = tee_box_solids(area.tee_boxes, tuning);
-    area.solids_grid = build_solid_grid(area.solids, solid_grid_cell_size);
+// The area with `roads` laid on its finished ground, and no tree trunk
+// within the paths' clearance.
+play_area with_cart_paths(play_area area, const std::vector<course_world_cart_road>& roads, const game_tuning& tuning) {
+    area.cart_paths = lay_cart_paths(area, roads, tuning.cart_path);
+    const auto in_lane = [&](const tree_instance& tree) {
+        return distance_past_cart_paths(area.cart_paths, tree.position) - tree.shape.trunk_radius < tuning.cart_path.clearance;
+    };
+    area.trees.erase(std::remove_if(area.trees.begin(), area.trees.end(), in_lane), area.trees.end());
     return area;
 }
 
-// The area with a sign at each hole's tee, standing on its finished ground.
+// The area with a sign at each hole's tee and one by each green on its cart
+// paths, standing on its finished ground.
 play_area with_signs(play_area area, const std::vector<hole_data>& holes, const game_tuning& tuning) {
-    area.signs = place_hole_signs(area, holes, tuning.hole_sign);
+    area.signs = place_hole_signs(area, holes, tuning.hole_sign, tuning.cart_path.clearance);
+    area.way_signs = place_way_signs(area, holes, tuning.way_sign, tuning.cart_path.clearance);
     return area;
 }
 
-// The area with `fences` standing on its finished ground.
-play_area with_fences(play_area area, const std::vector<course_world_fence>& fences) {
-    for (course_world_fence fence : fences) {
-        for (glm::vec3& pole : fence.poles) {
-            pole.y = terrain_height(area, pole);
+// The area with `fences` standing on its finished ground, open where they
+// would stand within its cart paths' clearance: each a run of poles and the
+// nets between them clear of it.
+play_area with_fences(play_area area, const std::vector<course_world_fence>& fences, const game_tuning& tuning) {
+    const float clearance = tuning.cart_path.clearance;
+    const auto pole_clear = [&](const glm::vec3& pole) {
+        return distance_past_cart_paths(area.cart_paths, pole) - tuning.fence.pole_radius >= clearance;
+    };
+    // Checked this often along a net.
+    constexpr float net_check_step = 0.5f;
+    const auto net_clear = [&](const glm::vec3& a, const glm::vec3& b) {
+        const int steps = std::max(1, static_cast<int>(std::ceil(horizontal_distance(a, b) / net_check_step)));
+        for (int k = 1; k < steps; ++k) {
+            if (distance_past_cart_paths(area.cart_paths, glm::mix(a, b, static_cast<float>(k) / static_cast<float>(steps))) <
+                clearance) {
+                return false;
+            }
         }
-        area.fences.push_back(std::move(fence));
+        return true;
+    };
+    for (const course_world_fence& fence : fences) {
+        course_world_fence run{{}, fence.height};
+        const auto close_run = [&]() {
+            if (run.poles.size() >= 2) {
+                area.fences.push_back(run);
+            }
+            run.poles.clear();
+        };
+        for (const glm::vec3& pole : fence.poles) {
+            if (!pole_clear(pole)) {
+                close_run();
+                continue;
+            }
+            if (!run.poles.empty() && !net_clear(run.poles.back(), pole)) {
+                close_run();
+            }
+            run.poles.push_back(glm::vec3(pole.x, terrain_height(area, pole), pole.z));
+        }
+        close_run();
     }
     return area;
 }
@@ -221,10 +264,11 @@ play_area build_course_area(const std::vector<hole_data>& holes,
     // as authored; only the land's relief is scaled.
     const height_grid relieved = relieved_land(world.ground, course.zones, tuning.terrain.relief);
     const height_grid* land = world.ground.heights.empty() ? nullptr : &relieved;
-    play_area grounded = with_tee_boxes(with_bounds(with_ground(std::move(course), land, margin, tuning)),
-                                        placed_holes, tuning);
+    play_area grounded = with_bounds(with_ground(std::move(course), placed_holes, land, margin, tuning));
     play_area standing = with_floodlights(
-        with_fences(with_signs(std::move(grounded), placed_holes, tuning), world.fences), placed_holes, world.cart_roads,
+        with_fences(with_signs(with_cart_paths(std::move(grounded), world.cart_roads, tuning), placed_holes, tuning),
+                    world.fences, tuning),
+        placed_holes, world.cart_roads,
         tuning);
     standing.solids = standing_solids(standing, tuning);
     standing.solids_grid = build_solid_grid(standing.solids, solid_grid_cell_size);
@@ -255,10 +299,20 @@ terrain_sample sample_area(const play_area& area, const glm::vec3& position, fra
         }
     }
     sample.distance_from_center = on_hole ? on_hole->distance_from_center : 0.0f;
-    if (const std::optional<float> top = walkable_top_at(area.solids, area.solids_grid, position);
-        top && *top > sample.point.y) {
-        sample.point.y = *top;
-        sample.normal = world_up;
+    if (const std::optional<walkable_top> top = walkable_top_at(area.solids, area.solids_grid, position); top) {
+        if (top->over_surface) {
+            // A cart path's top, over the ground or the pond it bridges, following it.
+            const bool pond = sample.material == terrain_material::water;
+            sample.point.y = (pond ? std::max(sample.point.y, sample.water_level) : sample.point.y) + top->height;
+            // Level across the path, following the ground along it.
+            const glm::vec3 normal = pond ? world_up : sample.normal;
+            sample.normal = safe_normalize(normal - top->across * glm::dot(normal, top->across), world_up);
+            sample.top_solid = static_cast<int>(top->solid);
+        } else if (top->height > sample.point.y) {
+            sample.point.y = top->height;
+            sample.normal = top->normal;
+            sample.top_solid = static_cast<int>(top->solid);
+        }
     }
     record_terrain_sample(profile, sample.triangles_tested);
     return sample;
@@ -325,18 +379,19 @@ bool on_cart_road(const std::vector<course_world_cart_road>& roads, const glm::v
     return near_cart_road(roads, position, cart.road_reach_margin, cart.min_road_reach);
 }
 
-cart_ground cart_ground_at(const play_area& area, const std::vector<course_world_cart_road>& roads, const game_tuning& tuning,
-                           const float wetness, const glm::vec3& position, frame_profile* profile) {
+cart_ground cart_ground_at(const play_area& area, const game_tuning& tuning, const float wetness, const glm::vec3& position,
+                           frame_profile* profile) {
     const terrain_sample sample = sample_area(area, position, profile);
     const cart_surfaces_tuning& surfaces = tuning.surfaces.cart;
-    const bool on_road = near_cart_road(roads, position, 0.0f, 0.0f);
+    const bool on_road =
+        sample.top_solid >= 0 && area.solids[static_cast<std::size_t>(sample.top_solid)].kind == solid_kind::path;
     const cart_surface_tuning& surface = on_road ? surfaces.path : cart_surface(surfaces, sample.material);
     const float wet = clamp01(wetness);
     cart_ground ground;
     ground.normal = sample.normal;
     ground.rolling_resistance = surface.rolling_resistance * glm::mix(1.0f, surface.wet_rolling_resistance_scale, wet);
     ground.grip = surface.grip * glm::mix(1.0f, surface.wet_grip_scale, wet);
-    // A cart road over water is its bridge or ford.
+    // A cart path over water is its bridge.
     if (sample.material == terrain_material::water && !on_road) {
         ground.water_depth = std::max(0.0f, sample.water_level - sample.point.y) * tuning.scale.meters_per_world_unit;
     }

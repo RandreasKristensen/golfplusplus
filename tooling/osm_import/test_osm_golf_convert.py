@@ -12,6 +12,7 @@ import osm_dhm as dhm
 import osm_elevation as elev
 import osm_checks
 import osm_contact_sheet
+import osm_cart_paths
 import osm_outline
 
 
@@ -186,6 +187,13 @@ class OsmGolfConvertTests(unittest.TestCase):
         self.assertEqual(5.5, h_json["trees"][0]["leaf_radius"])
         self.assertEqual(8.5, h_json["trees"][0]["leaf_height"])
 
+    def test_an_aerial_trees_crown_is_as_wide_as_it_is_long_whatever_outline_it_was_found_by(self):
+        rules = conv.load_generation_config(None)["aerial"]["trees"]
+        short, tall = (conv._tree_json((0.0, 0.0, height, 6.5), 0.0, 0.0, {}, rules) for height in (6.0, 24.0))
+        for tree in (short, tall):
+            self.assertAlmostEqual(tree["leaf_height"] / 2.0, tree["leaf_radius"], delta=0.01)
+        self.assertAlmostEqual(4.0, tall["leaf_radius"] / short["leaf_radius"], delta=0.02)
+
     def test_course_world_uses_shared_coordinates_and_osm_paths(self):
         origin_lat = 56.0
         origin_lon = 10.0
@@ -193,7 +201,8 @@ class OsmGolfConvertTests(unittest.TestCase):
         tee_1 = node(2, {"golf": "tee", "ref": "1"}, 56.0, 10.0)
         pin_1 = node(3, {"golf": "pin", "ref": "1"}, 56.001, 10.0)
         hole_2 = way(4, {"golf": "hole", "ref": "2"}, [(56.001, 10.001), (56.002, 10.001)])
-        service = way(5, {"highway": "service"}, [(56.0, 10.0005), (56.001, 10.0005)])
+        # A service road down hole 1's quieter side (hole 2 is east of it).
+        service = way(5, {"highway": "service"}, [(56.0, 9.99955), (56.001, 9.99955)])
         footway = way(6, {"highway": "footway"}, [(56.001, 10.0015), (56.002, 10.0015)])
         holes = conv.group_holes([hole_1, tee_1, pin_1, hole_2])
 
@@ -209,20 +218,21 @@ class OsmGolfConvertTests(unittest.TestCase):
         self.assertEqual(2, len(world["hole_starts"]))
         self.assertEqual(0, world["hole_starts"][0]["hole_index"])
         self.assertNotEqual(world["hole_starts"][0]["position"], world["hole_starts"][1]["position"])
-        self.assertEqual(1, len(world["cart_roads"]))
+        self.assertIn("way/5", [road.get("osm_ref") for road in world["cart_roads"]])
         self.assertEqual(1, len(world["walking_shortcuts"]))
         self.assertEqual("fitness", world["walking_shortcuts"][0]["required_skill_id"])
         self.assertGreaterEqual(len(world["collectibles"]), 2)
         self.assertTrue(any(item.get("repeatable") for item in world["collectibles"]))
         self.assertTrue(any(item.get("requirement", {}).get("skill_id") == "fitness" for item in world["collectibles"]))
 
-    def test_course_world_generates_fallback_roads_when_osm_roads_are_absent(self):
+    def test_course_world_connects_each_green_to_the_next_tee_without_osm_paths(self):
         origin_lat = 56.0
         origin_lon = 10.0
         holes = conv.group_holes([
-            way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.001, 10.0)]),
-            way(2, {"golf": "hole", "ref": "2"}, [(56.001, 10.001), (56.002, 10.001)]),
+            way(1, {"golf": "hole", "ref": "1", "par": "4"}, [(56.0, 10.0), (56.001, 10.0)]),
+            way(2, {"golf": "hole", "ref": "2", "par": "4"}, [(56.001, 10.001), (56.002, 10.001)]),
         ])
+        hole_jsons = hole_jsons_for(holes, origin_lat, origin_lon)
 
         world = conv.course_world_to_json("test_course",
                                           "Test Course",
@@ -231,40 +241,13 @@ class OsmGolfConvertTests(unittest.TestCase):
                                           [],
                                           origin_lat,
                                           origin_lon,
-                                          hole_jsons_for(holes, origin_lat, origin_lon))
+                                          hole_jsons)
 
-        self.assertEqual(2, len(world["hole_starts"]))
-        self.assertEqual(1, len(world["cart_roads"]))
-        self.assertEqual("generated_fallback", world["cart_roads"][0]["source"])
-        self.assertGreaterEqual(len(world["cart_roads"][0]["polyline"]), 5)
-
-        corridors = []
-        for num in sorted(holes.keys()):
-            tee_xz, pin_xz = conv._hole_world_anchors(hole_jsons_for(holes, origin_lat, origin_lon)[num],
-                                                      origin_lat, origin_lon)
-            corridors.append(conv._hole_fairway_corridor(holes[num], tee_xz, pin_xz, origin_lat, origin_lon, conv.load_generation_config(None)))
-        road_xz = [(p[0], p[2]) for p in world["cart_roads"][0]["polyline"]]
-        self.assertFalse(conv._route_overlaps_fairway(road_xz, corridors))
-
-    def test_course_world_rejects_paths_crossing_fairways(self):
-        origin_lat = 56.0
-        origin_lon = 10.0
-        holes = conv.group_holes([
-            way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.001, 10.0)]),
-        ])
-        crossing_service = way(5, {"highway": "service"}, [(56.0, 10.0), (56.001, 10.0)])
-        side_service = way(6, {"highway": "service"}, [(56.0, 10.0005), (56.001, 10.0005)])
-
-        world = conv.course_world_to_json("test_course",
-                                          "Test Course",
-                                          way(9, {"leisure": "golf_course"}, [(56.0, 10.0), (56.002, 10.002)]),
-                                          holes,
-                                          [crossing_service, side_service],
-                                          origin_lat,
-                                          origin_lon,
-                                          hole_jsons_for(holes, origin_lat, origin_lon))
-
-        self.assertEqual(["cart_way_6"], [route["id"] for route in world["cart_roads"]])
+        self.assertEqual({"generated"}, {road["source"] for road in world["cart_roads"]})
+        green_1 = conv._hole_world_anchors(hole_jsons[1], origin_lat, origin_lon)[1]
+        tee_2 = conv._hole_world_anchors(hole_jsons[2], origin_lat, origin_lon)[0]
+        reach = osm_checks.DEFAULT_TOLERANCES["cart_path_reach_m"]
+        self.assertTrue(osm_cart_paths.connects(world["cart_roads"], green_1, tee_2, reach))
 
     def test_course_world_places_hole_starts_at_tee_heights_relative_to_hole_one(self):
         holes = conv.group_holes([
@@ -901,13 +884,160 @@ class ZoneTests(unittest.TestCase):
         self.assertEqual("way/1", h_json["source"]["hole_way"])
 
 
-class FallbackRoadTests(unittest.TestCase):
-    def test_a_generated_road_spine_passes_beside_every_pond(self):
-        pond = [(-5.0, 10.0), (3.0, 10.0), (3.0, 20.0), (-5.0, 20.0)]
-        beyond = [(-30.0, 100.0), (-20.0, 100.0), (-20.0, 110.0), (-30.0, 110.0)]
+class CartPathTests(unittest.TestCase):
+    """Two holes side by side running north (-z), 120 m apart: hole 1 up
+    x = 0, hole 2 back down x = 120 from beside green 1."""
 
-        self.assertEqual(-10.0, conv._spine_clear_of(0.0, [0.0, 40.0], [pond, beyond], 5.0))
-        self.assertEqual(20.0, conv._spine_clear_of(20.0, [0.0, 40.0], [pond], 5.0))
+    @staticmethod
+    def square(cx, cz, half):
+        return [(cx - half, cz - half), (cx + half, cz - half), (cx + half, cz + half), (cx - half, cz + half)]
+
+    def holes(self, par=4):
+        def hole(tee, pin):
+            near, far = tee[1] + (pin[1] - tee[1]) * 0.25, pin[1] - (pin[1] - tee[1]) * 0.08
+            fairway = [(tee[0] - 15, near), (tee[0] + 15, near), (tee[0] + 15, far), (tee[0] - 15, far)]
+            return {"tee": tee, "pin": pin, "par": par, "line": [tee, pin],
+                    "greens": [self.square(pin[0], pin[1], 12)], "bunkers": [self.square(pin[0] + 16, pin[1], 3)],
+                    "waters": [], "fairways": [fairway], "tees": [self.square(tee[0], tee[1], 4)]}
+        return [hole((0.0, 0.0), (0.0, -300.0)), hole((120.0, -300.0), (120.0, 0.0))]
+
+    # A course's own network, as OSM maps it: down hole 1's west side, round
+    # behind green 1 to tee 2 and down hole 2's east side.
+    network = {"line": [(-30.0, -10.0), (-30.0, -340.0), (150.0, -340.0), (150.0, -10.0)], "ref": "way/77",
+               "surface": "asphalt", "cartpath": True}
+
+    def rules(self):
+        return conv.DEFAULT_CONFIG["cart_paths"]
+
+    def reach(self):
+        return osm_checks.DEFAULT_TOLERANCES["cart_path_reach_m"]
+
+    def assert_clear(self, roads, holes):
+        """No path point on a green, bunker, fairway or tee."""
+        for road in roads:
+            for x, _, z in road["polyline"]:
+                for h in holes:
+                    for key in ("greens", "bunkers", "fairways", "tees"):
+                        for ring in h[key]:
+                            self.assertFalse(osm_outline.point_in_polygon((x, z), ring), f"{road['id']} on a {key}")
+
+    def test_without_a_mapped_network_only_a_connector_is_made_from_each_green_to_the_next_tee(self):
+        holes = self.holes()
+
+        roads = osm_cart_paths.build_network(holes, [], None, (60.0, 60.0), self.rules())
+
+        self.assertEqual({"generated"}, {road["source"] for road in roads})
+        self.assertTrue(osm_cart_paths.connects(roads, holes[0]["pin"], holes[1]["tee"], self.reach()))
+        # Nothing down the holes, nor from the clubhouse: carts drive those on the grass.
+        self.assertFalse(osm_cart_paths.connects(roads, holes[0]["tee"], holes[0]["pin"], self.reach()))
+        self.assertFalse(osm_cart_paths.connects(roads, (60.0, 60.0), holes[0]["tee"], self.reach()))
+        self.assertLess(sum(osm_cart_paths.lengths_by_source(roads).values()), 200)
+        self.assert_clear(roads, holes)
+
+    def test_a_connector_follows_a_mapped_path_where_one_leads_that_way(self):
+        holes = self.holes()
+        behind = {"line": [(-10.0, -345.0), (130.0, -345.0)], "ref": "way/78", "surface": "gravel", "cartpath": True}
+
+        roads = osm_cart_paths.build_network(holes, [behind], None, None, self.rules())
+
+        self.assertIn("way/78", {road.get("osm_ref") for road in roads})
+        self.assertTrue(osm_cart_paths.connects(roads, holes[0]["pin"], holes[1]["tee"], self.reach()))
+
+    def test_a_course_with_its_own_mapped_network_keeps_it_and_makes_nothing(self):
+        holes = self.holes()
+
+        roads = osm_cart_paths.build_network(holes, [self.network], None, (60.0, 60.0), self.rules())
+
+        self.assertEqual({"osm"}, {road["source"] for road in roads})
+        self.assertEqual({"way/77"}, {road["osm_ref"] for road in roads})
+        self.assertEqual({"asphalt"}, {road["surface"] for road in roads})
+        self.assertTrue(osm_cart_paths.connects(roads, holes[0]["pin"], holes[1]["tee"], self.reach()))
+        # Down the holes too, as it is mapped.
+        self.assertGreater(osm_cart_paths.lengths_by_source(roads)["osm"], 500)
+
+    def test_a_short_gap_in_a_mapped_network_is_bridged_as_part_of_it_a_long_one_is_not(self):
+        holes = self.holes()
+        line = self.network["line"]
+        for gap, kept in ((6.0, True), (40.0, False)):
+            # The way behind green 1 broken at x = 60.
+            first = {**self.network, "line": line[:2] + [(60.0 - gap / 2.0, -340.0)], "ref": "way/77"}
+            second = {**self.network, "line": [(60.0 + gap / 2.0, -340.0)] + line[2:], "ref": "way/79"}
+
+            roads = osm_cart_paths.build_network(holes, [first, second], None, None, self.rules())
+
+            self.assertEqual(kept, "generated" not in osm_cart_paths.lengths_by_source(roads), gap)
+
+    def test_the_photos_network_counts_as_the_courses_own(self):
+        holes = self.holes()
+        photo = [(float(x), float(z)) for x, z in osm_outline.resample(self.network["line"], 1.0)]
+
+        roads = osm_cart_paths.build_network(holes, [], photo, None, self.rules())
+
+        self.assertEqual({"aerial"}, {road["source"] for road in roads})
+        self.assertTrue(osm_cart_paths.connects(roads, holes[0]["pin"], holes[1]["tee"], self.reach()))
+
+    def test_the_photos_path_beside_an_osm_path_is_osms(self):
+        holes = self.holes()
+        photo = [(x - 2.0, z) for x, z in osm_outline.resample(self.network["line"], 1.0)]
+
+        roads = osm_cart_paths.build_network(holes, [self.network], photo, None, self.rules())
+
+        self.assertNotIn("aerial", osm_cart_paths.lengths_by_source(roads))
+
+    def test_a_par_3_course_gets_no_made_paths_only_its_mapped_ones(self):
+        holes = self.holes(par=3)
+
+        self.assertEqual([], osm_cart_paths.build_network(holes, [], None, None, self.rules()))
+        mapped = osm_cart_paths.build_network(holes, [self.network], None, None, self.rules())
+        self.assertEqual({"osm"}, {road["source"] for road in mapped})
+
+    def test_a_connector_crosses_a_fairway_where_it_must(self):
+        holes = self.holes()
+        # A fairway lies right across the way from green 1 to tee 2, end to end.
+        holes[1]["tee"], holes[1]["pin"] = (120.0, -360.0), (120.0, -60.0)
+        holes[1]["line"] = [holes[1]["tee"], holes[1]["pin"]]
+        holes[1]["tees"] = [self.square(120.0, -360.0, 4)]
+        holes[1]["greens"] = [self.square(120.0, -60.0, 12)]
+        holes[1]["bunkers"] = []
+        holes[1]["fairways"].append([(-100.0, -340.0), (240.0, -340.0), (240.0, -320.0), (-100.0, -320.0)])
+
+        roads = osm_cart_paths.build_network(holes, [], None, None, self.rules())
+
+        self.assertTrue(osm_cart_paths.connects(roads, holes[0]["pin"], holes[1]["tee"], self.reach()))
+
+    def test_corners_are_curves_a_cart_takes_at_speed_but_a_path_doubling_back_stays_sharp(self):
+        def tightest(line):
+            radii = []
+            for a, b, c in zip(line, line[1:], line[2:]):
+                area = abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / 2.0
+                if area > 1e-9:
+                    radii.append(math.dist(a, b) * math.dist(b, c) * math.dist(a, c) / (4.0 * area))
+            return min(radii)
+
+        corner = osm_cart_paths._smoothed([(0.0, 0.0), (0.0, 40.0), (40.0, 40.0)], 8.0, math.radians(150.0))
+        self.assertGreater(tightest(corner), 0.9 * 8.0)
+        self.assertEqual((0.0, 0.0), corner[0])
+        self.assertEqual((40.0, 40.0), corner[-1])
+        # Two corners close together are one curve.
+        jog = osm_cart_paths._smoothed([(0.0, 0.0), (0.0, 40.0), (6.0, 46.0), (6.0, 90.0)], 8.0, math.radians(150.0))
+        self.assertGreater(tightest(jog), 0.9 * 8.0)
+        back = osm_cart_paths._smoothed([(0.0, 0.0), (0.0, 40.0), (2.0, 0.0)], 8.0, math.radians(150.0))
+        self.assertIn((0.0, 40.0), back)
+
+    def test_a_hook_too_tight_to_drive_round_is_two_stretches_that_meet(self):
+        hook = [(0.0, 0.0), (0.0, 40.0), (4.0, 44.0), (8.0, 40.0), (8.0, 20.0)]
+        pieces = osm_cart_paths._cut_at_bends(hook, math.radians(120.0), 8.0)
+        self.assertEqual(2, len(pieces))
+        self.assertEqual(pieces[0][-1], pieces[1][0])
+        bend = [(0.0, 0.0), (0.0, 40.0), (40.0, 40.0)]
+        self.assertEqual(1, len(osm_cart_paths._cut_at_bends(bend, math.radians(120.0), 8.0)))
+
+    def test_stretches_that_do_not_meet_do_not_connect(self):
+        roads = [{"source": "generated", "polyline": [[0, 0, 0], [0, 0, -50]]},
+                 {"source": "generated", "polyline": [[30, 0, 0], [30, 0, -50]]}]
+
+        self.assertTrue(osm_cart_paths.connects(roads, (0.0, 0.0), (0.0, -50.0), 3.0))
+        self.assertFalse(osm_cart_paths.connects(roads, (0.0, 0.0), (30.0, -50.0), 3.0))
 
 
 class SharedGreenTests(unittest.TestCase):
@@ -1668,6 +1798,21 @@ class AerialTests(unittest.TestCase):
         self.assertFalse(inside(found["bunkers"], 35.0, -50.0))   # sand away from the grass
         self.assertFalse(inside(found["bunkers"], 27.0, -200.0))  # a path is no bunker
         self.assertTrue(inside(found["waters"], -30.0, -200.0))
+
+    def test_a_long_thin_bare_strip_is_a_path_and_sand_and_water_are_not(self):
+        import osm_aerial
+        cover, rules = self.scene()
+
+        found = osm_aerial.paths(cover, rules)
+
+        def near(x, z):
+            return any(math.hypot(px - x, pz - z) < 1.5 for px, pz in found)
+        self.assertTrue(near(27.0, -120.0))
+        self.assertTrue(near(27.0, -230.0))
+        self.assertFalse(near(15.0, -150.0))   # the bunker
+        self.assertFalse(near(35.0, -50.0))    # sand in the rough
+        self.assertFalse(near(-30.0, -200.0))  # the pond
+        self.assertFalse(near(0.0, -150.0))    # the fairway
 
     def test_trees_stand_at_each_top_and_a_roof_is_no_tree(self):
         import osm_aerial

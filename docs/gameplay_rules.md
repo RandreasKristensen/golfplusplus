@@ -36,9 +36,12 @@ the shorter the swing (`stepped_backswing`, the tuning's
 `backswing_step_short` and `backswing_step_full`). Every random thing about a shot
 comes from its seed (`src/game/shot_dice.h`); the spreads are the golfer's
 (`src/game/shot_ability.h`), designed as if every skill is 99. Reference
-fixtures are the oracle. The established departures from real are `cup_leniency`
-and the greens' flattened relief; further departures require an explicit owner
-design decision, documentation where they live, and tests.
+fixtures are the oracle. The established departures from real are `cup_leniency`,
+the greens' flattened relief, cart paths 3 m wide (the importer's
+`cart_paths.width_meters`, against 8 ft) and their grip under the cart's static
+stability factor (`surfaces.cart.path.grip`, against asphalt's 0.8), so a hard
+turn on a flat path slides wide rather than tipping the cart; further departures
+require an explicit owner design decision, documentation where they live, and tests.
 
 **Items change numbers only through `effective_value`.** Gameplay reads every
 number an item can change (`src/game/effects.h`: XP, walking speed, the cart's

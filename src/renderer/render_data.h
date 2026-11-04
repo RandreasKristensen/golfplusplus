@@ -120,11 +120,13 @@ struct render_trail {
     float alpha = 0.0f;
 };
 
-// A hole's number on the course map, along its line of play (tee, the
-// hole's interior control points, pin).
+// A hole on the course map: its number, along its line of play (tee, the
+// hole's interior control points, pin), drawn faintly from tee to pin; and
+// its tee box, if it has one.
 struct render_map_hole {
     std::string number;
     std::vector<glm::vec3> line_of_play;
+    std::optional<tee_box> tee;
 };
 
 // How the frame's shadows fall (lighting.glsl's `shadow`): blob shadows

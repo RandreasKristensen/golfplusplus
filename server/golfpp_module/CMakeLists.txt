@@ -82,6 +82,7 @@ set(GOLFPP_SHARED_SOURCES
   src/physics/ground_contact.cpp
   src/physics/turf_contact.cpp
   src/physics/ground_mesh.cpp
+  src/physics/ground_pad.cpp
   src/physics/impact.cpp
   src/physics/land_relief.cpp
   src/physics/launch.cpp
@@ -109,7 +110,9 @@ set(GOLFPP_SHARED_SOURCES
   src/game/movement_step.cpp
   src/game/sent_setup.cpp
   src/game/floodlights.cpp
+  src/game/cart_path.cpp
   src/game/hole_sign.cpp
+  src/game/way_sign.cpp
   src/game/tee_box.cpp
   src/game/json_util.cpp
   src/game/pixel_font_data.cpp

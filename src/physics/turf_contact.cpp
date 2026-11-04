@@ -56,7 +56,8 @@ void bounce(ball_state& ball, const glm::vec3& normal, const turf& surface) {
         face = normal;
     }
     const float closing = -glm::dot(ball.velocity, face);
-    const float restitution = clamp01(std::max(0.0f, surface.restitution_scale) * green_restitution(speed));
+    const float restitution =
+        clamp01(surface.restitution ? *surface.restitution : std::max(0.0f, surface.restitution_scale) * green_restitution(speed));
     const float normal_impulse = (1.0f + restitution) * closing;
     ball.velocity += face * normal_impulse;
     // Friction at the contact point, as much as stops it sliding.

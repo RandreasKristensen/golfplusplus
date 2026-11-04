@@ -203,10 +203,12 @@ terrain_material surface_material(const std::vector<material_zone>& zones,
 
 built_ground build_ground(const std::vector<terrain_mesh>& holes,
                           const std::vector<material_zone>& zones,
+                          const std::vector<ground_pad>& pads,
                           const height_grid* land,
                           const ground_settings& settings) {
     built_ground built;
     built.water_levels.assign(zones.size(), 0.0f);
+    built.pad_levels.assign(pads.size(), 0.0f);
     terrain_mesh& ground = built.mesh;
     std::vector<grid_bounds> hole_bounds;
     grid_bounds bounds;
@@ -224,6 +226,12 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
         const glm::vec3 half(zone.half_size.x + zone_reach, 0.0f, zone.half_size.y + zone_reach);
         bounds.low = glm::min(bounds.low, zone.center - half);
         bounds.high = glm::max(bounds.high, zone.center + half);
+    }
+    const float pad_blend = std::max(0.0f, settings.pad_blend_distance);
+    for (const ground_pad& pad : pads) {
+        const glm::vec2 reach = levelled_reach(levelled_pad{pad, 0.0f, settings.cell_size}, pad_blend);
+        bounds.low = glm::min(bounds.low, pad.center - glm::vec3(reach.x, 0.0f, reach.y));
+        bounds.high = glm::max(bounds.high, pad.center + glm::vec3(reach.x, 0.0f, reach.y));
     }
     if (land != nullptr && land->columns > 1 && land->rows > 1) {
         bounds.low = glm::min(bounds.low, glm::vec3(land->origin_x, 0.0f, land->origin_z));
@@ -338,8 +346,18 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
         }
     }
 
-    // The ground before any carving, between the grid's points.
-    const auto uncarved_at = [&](const glm::vec3& point) {
+    // How many parts a cell is split into along each side. The zone split
+    // is a multiple of the fairway split, so every split cell's points lie on
+    // one lattice of `lattice` steps per cell side.
+    const auto split_for = [&](const float spacing) {
+        return spacing > 0.0f ? std::max(1, static_cast<int>(std::ceil(std::max(step_x, step_z) / spacing))) : 1;
+    };
+    const int fairway_split = land != nullptr ? split_for(settings.fairway_cell_size) : 1;
+    const int lattice = fairway_split * ((split_for(settings.zone_cell_size) + fairway_split - 1) / fairway_split);
+    const float cell_diagonal = std::sqrt(step_x * step_x + step_z * step_z);
+
+    // The ground before any levelling or carving, between the grid's points.
+    const auto natural_at = [&](const glm::vec3& point) {
         const float u_cells = std::clamp((point.x - low.x) / step_x, 0.0f, static_cast<float>(cell_columns));
         const float v_cells = std::clamp((point.z - low.z) / step_z, 0.0f, static_cast<float>(cell_rows));
         const int column = std::min(static_cast<int>(u_cells), cell_columns - 1);
@@ -350,6 +368,25 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
         return land_at(point) + (at(row, column) * (1.0f - u) + at(row, column + 1) * u) * (1.0f - v) +
             (at(row + 1, column) * (1.0f - u) + at(row + 1, column + 1) * u) * v;
     };
+
+    // Each pad at the mean of the natural ground over it, level out to two
+    // split cells' diagonals past its edge: every triangle over it is flat,
+    // and so is every triangle round each of their corners (the normals).
+    std::vector<levelled_pad> levelled;
+    for (std::size_t i = 0; i < pads.size(); ++i) {
+        const std::vector<glm::vec3> points = pad_footprint_points(pads[i], settings.pad_sample_spacing);
+        float sum = 0.0f;
+        for (const glm::vec3& point : points) {
+            sum += natural_at(point);
+        }
+        built.pad_levels[i] = sum / static_cast<float>(points.size());
+        levelled.push_back(levelled_pad{pads[i], built.pad_levels[i], 2.0f * cell_diagonal / static_cast<float>(lattice)});
+    }
+    const auto with_pads = [&](const glm::vec3& point, const float height) {
+        return levelled.empty() ? height : levelled_height(levelled, point, height, pad_blend);
+    };
+    // The ground before any carving.
+    const auto uncarved_at = [&](const glm::vec3& point) { return with_pads(point, natural_at(point)); };
 
     // Each pond's level: the lowest of the uncarved ground round its edge
     // (its corners and the middles of its sides), but where another pond's
@@ -444,7 +481,6 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
     // bank and shore) are split: past it the bottom is flat.
     std::vector<bool> near_zone(cell_count, false);
     std::vector<bool> near_edge(cell_count, false);
-    const float cell_diagonal = std::sqrt(step_x * step_x + step_z * step_z);
     for (const material_zone& zone : zones) {
         if (zone.type != material_zone_type::bunker && zone.type != material_zone_type::water) {
             continue;
@@ -482,14 +518,17 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
         return false;
     };
 
-    // How many parts each cell is split into along each side. The zone split
-    // is a multiple of the fairway split, so every split cell's points lie on
-    // one lattice of `lattice` steps per cell side.
-    const auto split_for = [&](const float spacing) {
-        return spacing > 0.0f ? std::max(1, static_cast<int>(std::ceil(std::max(step_x, step_z) / spacing))) : 1;
-    };
-    const int fairway_split = land != nullptr ? split_for(settings.fairway_cell_size) : 1;
-    const int lattice = fairway_split * ((split_for(settings.zone_cell_size) + fairway_split - 1) / fairway_split);
+    // The cells a pad's levelling reaches are split like a bunker's edge.
+    for (const levelled_pad& pad : levelled) {
+        const glm::vec2 reach = levelled_reach(pad, pad_blend) + glm::vec2(cell_diagonal);
+        for (int row = cell_row_at(pad.pad.center.z - reach.y); row <= cell_row_at(pad.pad.center.z + reach.y); ++row) {
+            for (int column = cell_column_at(pad.pad.center.x - reach.x); column <= cell_column_at(pad.pad.center.x + reach.x);
+                 ++column) {
+                near_edge[static_cast<std::size_t>(row * cell_columns + column)] = true;
+            }
+        }
+    }
+
     std::vector<int> cell_split(cell_count, 1);
     for (int row = 0; row < cell_rows; ++row) {
         for (int column = 0; column < cell_columns; ++column) {
@@ -511,7 +550,7 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
             const std::size_t index = static_cast<std::size_t>(row * columns + column);
             terrain_vertex vertex;
             vertex.position = grid_point(row, column);
-            vertex.position.y = base[index] + offset[index];
+            vertex.position.y = with_pads(vertex.position, base[index] + offset[index]);
             if (corner_of_near_cell(row, column)) {
                 vertex.position.y = carved_height(carving_at(vertex.position), vertex.position, vertex.position.y, settings.zones);
             }
@@ -545,16 +584,17 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
         return std::pair<int, int>(std::min(lattice_row / lattice, cell_rows - 1), std::min(lattice_column / lattice, cell_columns - 1));
     };
     // A lattice point's own height: the land there plus the offset bilinear
-    // over its cell, carved by the zones of a near-zone cell it touches.
+    // over its cell, levelled, carved by the zones of a near-zone cell it
+    // touches.
     const auto own_height = [&](const int lattice_row, const int lattice_column) {
         const glm::vec3 position = lattice_position(lattice_row, lattice_column);
         const auto [row, column] = cell_of(lattice_row, lattice_column);
         const float u = static_cast<float>(lattice_column - column * lattice) / static_cast<float>(lattice);
         const float v = static_cast<float>(lattice_row - row * lattice) / static_cast<float>(lattice);
         const auto at = [&](const int r, const int c) { return offset[static_cast<std::size_t>(r * columns + c)]; };
-        const float y = land_at(position) +
+        const float y = with_pads(position, land_at(position) +
             (at(row, column) * (1.0f - u) + at(row, column + 1) * u) * (1.0f - v) +
-            (at(row + 1, column) * (1.0f - u) + at(row + 1, column + 1) * u) * v;
+            (at(row + 1, column) * (1.0f - u) + at(row + 1, column + 1) * u) * v);
         const auto [first_row, last_row] = touching_cells(lattice_row, cell_rows);
         const auto [first_column, last_column] = touching_cells(lattice_column, cell_columns);
         for (int r = first_row; r <= last_row; ++r) {

@@ -108,12 +108,34 @@ std::vector<solid> walker_obstacles(const std::vector<cart_pose>& carts, const s
     return solids;
 }
 
+cart_ground cart_ground_under(const cart_pose& pose, const cart_world& world) {
+    const game_tuning& tuning = world.tuning;
+    cart_ground ground = cart_ground_at(world.area, tuning, world.wetness, pose.position, world.profile);
+    const glm::vec3 forward = yaw_direction(pose.yaw);
+    const glm::vec3 left(forward.z, 0.0f, -forward.x);
+    const float unit = tuning.scale.meters_per_world_unit;
+    const glm::vec3 middle = pose.position + forward * (0.5f * (tuning.cart.body_front - tuning.cart.body_back));
+    const glm::vec3 half_base = forward * (0.5f * world.spec.wheelbase_m / unit);
+    const glm::vec3 half_track = left * (0.5f * world.spec.track_m / unit);
+    float grip = 0.0f;
+    float rolling_resistance = 0.0f;
+    for (const glm::vec3& wheel : {middle + half_base + half_track, middle + half_base - half_track,
+                                   middle - half_base + half_track, middle - half_base - half_track}) {
+        const cart_ground under = cart_ground_at(world.area, tuning, world.wetness, wheel, world.profile);
+        grip += 0.25f * under.grip;
+        rolling_resistance += 0.25f * under.rolling_resistance;
+    }
+    ground.grip = grip;
+    ground.rolling_resistance = rolling_resistance;
+    return ground;
+}
+
 cart_move step_cart_mover(const cart_mover& in, const cart_controls& controls, const cart_world& world) {
     const game_tuning& tuning = world.tuning;
     cart_move out{in, 0.0f};
     cart_mover& cart = out.after;
     cart.motion.yaw = cart.pose.yaw;
-    cart_ground ground = cart_ground_at(world.area, world.roads, tuning, world.wetness, cart.pose.position, world.profile);
+    cart_ground ground = cart_ground_under(cart.pose, world);
     ground.grip *= world.grip_scale;
     ground.on_ground = cart.vertical.grounded;
     const float cart_seconds = move_step_seconds * tuning.cart.time_scale;

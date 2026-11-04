@@ -121,6 +121,7 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.terrain.fairway_cell_size = terrain.number("fairway_cell_size");
     tuning.terrain.zone_cell_size = terrain.number("zone_cell_size");
     tuning.terrain.relief.scale = terrain.number("relief_scale");
+    tuning.terrain.relief.shape_meters = terrain.number("relief_shape_meters");
     tuning.terrain.relief.green_scale = terrain.number("green_relief_scale");
     tuning.terrain.relief.green_blend_distance = terrain.number("green_relief_blend_distance");
 
@@ -483,11 +484,31 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.hole_sign.board_lift = hole_sign.number("board_lift");
     tuning.hole_sign.post_radius = hole_sign.number("post_radius");
 
+    const section_reader way_sign = section("way_sign");
+    tuning.way_sign.green_reach = way_sign.number("green_reach");
+    tuning.way_sign.green_offset = way_sign.number("green_offset");
+    tuning.way_sign.path_offset = way_sign.number("path_offset");
+    tuning.way_sign.junction_lead = way_sign.number("junction_lead");
+    tuning.way_sign.board_width = way_sign.number("board_width");
+    tuning.way_sign.board_height = way_sign.number("board_height");
+    tuning.way_sign.board_thickness = way_sign.number("board_thickness");
+    tuning.way_sign.board_lift = way_sign.number("board_lift");
+    tuning.way_sign.post_radius = way_sign.number("post_radius");
+
+    const section_reader cart_path = section("cart_path");
+    tuning.cart_path.piece_length = cart_path.number("piece_length");
+    tuning.cart_path.top_lift = cart_path.number("top_lift");
+    tuning.cart_path.ball_stimp_feet = cart_path.number("ball_stimp_feet");
+    tuning.cart_path.clearance = cart_path.number("clearance");
+    if (!(tuning.cart_path.piece_length > 0.0f)) {
+        missing.push_back("cart_path.piece_length (positive)");
+    }
+
     const section_reader tee_box = section("tee_box");
     tuning.tee_box.width = tee_box.number("width");
     tuning.tee_box.length = tee_box.number("length");
-    tuning.tee_box.padding = tee_box.number("padding");
     tuning.tee_box.sample_spacing = tee_box.number("sample_spacing");
+    tuning.tee_box.blend_distance = tee_box.number("blend_distance");
 
     const section_reader fence = section("fence");
     tuning.fence.pole_radius = fence.number("pole_radius");
@@ -502,10 +523,10 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.solids.leaves = contact("leaves");
     tuning.solids.pole = contact("pole");
     tuning.solids.net = contact("net");
-    tuning.solids.tee_box = contact("tee_box");
     tuning.solids.board = contact("board");
     tuning.solids.flagstick = contact("flagstick");
     tuning.solids.lamp = contact("lamp");
+    tuning.solids.path = contact("path");
     tuning.solids.cart = contact("cart");
     tuning.solids.person = contact("person");
     tuning.solids.ball = contact("ball");
@@ -527,6 +548,7 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.floodlights.head_height = floodlights.number("head_height");
     tuning.floodlights.head_depth = floodlights.number("head_depth");
     tuning.floodlights.obstacle_clearance = floodlights.number("obstacle_clearance");
+    tuning.floodlights.play_line_half_width = floodlights.number("play_line_half_width");
     tuning.floodlights.nudge_step = floodlights.number("nudge_step");
     tuning.floodlights.nudge_tries = floodlights.integer("nudge_tries");
 

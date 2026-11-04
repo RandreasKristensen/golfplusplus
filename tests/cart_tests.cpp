@@ -294,7 +294,7 @@ TEST_CASE("stepping out of the cart I go on facing where my head was turned") {
     CHECK(state.look.head_yaw == 0.0f);
 }
 
-TEST_CASE("trees, poles, signs, nets, flagsticks and tee boxes stand in the way of players and carts; a tee box's top is walkable") {
+TEST_CASE("trees, poles, signs, nets and flagsticks stand in the way of players and carts; only the cart paths are walkable") {
     const game_state state = started_game(fixture_hub_course());
     const play_area& area = state.area;
     std::size_t fence_poles = 0;
@@ -304,23 +304,25 @@ TEST_CASE("trees, poles, signs, nets, flagsticks and tee boxes stand in the way 
         nets += fence.poles.size() - 1;
     }
     CHECK(solids_of(area, solid_kind::trunk).size() == area.trees.size());
-    CHECK(solids_of(area, solid_kind::pole).size() == 2 * area.signs.size() + fence_poles + area.floodlights.size());
+    CHECK(solids_of(area, solid_kind::pole).size() ==
+          2 * area.signs.size() + area.way_signs.size() + fence_poles + area.floodlights.size());
     CHECK(solids_of(area, solid_kind::flagstick).empty());  // by the flags (flagstick_solids)
     CHECK(solids_of(area, solid_kind::lamp).size() == area.floodlights.size());
-    CHECK(solids_of(area, solid_kind::board).size() == area.signs.size());
+    CHECK(solids_of(area, solid_kind::board).size() == area.signs.size() + area.way_signs.size());
     CHECK(solids_of(area, solid_kind::net).size() == nets);
-    CHECK(solids_of(area, solid_kind::tee_box).size() == area.tee_boxes.size());
+    CHECK(!solids_of(area, solid_kind::path).empty());
     for (const solid& thing : area.solids) {
+        if (thing.kind == solid_kind::path) {
+            // Lying on the ground: stood on, never in the way.
+            CHECK(thing.walkable);
+            CHECK(!thing.stops_walker);
+            CHECK(!thing.stops_cart);
+            continue;
+        }
         const bool body = thing.kind != solid_kind::leaves && thing.kind != solid_kind::lamp;
         CHECK(thing.stops_walker == body);
         CHECK(thing.stops_cart == body);
-        CHECK(thing.walkable == (thing.kind == solid_kind::tee_box));
-    }
-    // Every tee box stands taller than a cart can climb.
-    for (const solid& box : solids_of(area, solid_kind::tee_box)) {
-        CHECK(box.stops_ball);
-        CHECK(solid_top(box) - terrain_height(area, box.base - box.along * (box.half_length + 0.5f)) >
-              state.tuning.cart.step_up);
+        CHECK(!thing.walkable);
     }
 }
 
@@ -343,8 +345,8 @@ TEST_CASE("walking into a tree stops me at its trunk, with one bump heard") {
 }
 
 namespace {
-// A tee box's worth of box on the ground at `middle`, 6 m along `along` and
-// 4 m across, its walkable top `height` up.
+// A platform on the ground at `middle`, 6 m along `along` and 4 m across,
+// its walkable top `height` up.
 solid platform(const play_area& area, const glm::vec3& middle, const glm::vec3& along, const float height) {
     solid box = test_box(anchor_on_terrain(area, middle), along, 3.0f, 2.0f, height);
     box.walkable = true;
@@ -352,7 +354,7 @@ solid platform(const play_area& area, const glm::vec3& middle, const glm::vec3& 
 }
 }
 
-TEST_CASE("driving into a tee box crashes the cart: it stops at it, bounces back and is heard") {
+TEST_CASE("driving into a platform crashes the cart: it stops at it, bounces back and is heard") {
     game_state state = started_game(fixture_hub_course());
     set_solids(state.area, {});
     sit_in_cart(state);
@@ -639,7 +641,7 @@ TEST_CASE("driven into a pond deeper than its wade depth my cart sinks, I wade o
     CHECK(state.cart.motion.condition == cart_condition::sunk);
     CHECK(on_foot(state));
     CHECK(has_audio(state, audio_event_type::cart_sink));
-    CHECK(cart_ground_at(state.area, {}, state.tuning, 0.0f, state.cart.pose.position).water_depth >
+    CHECK(cart_ground_at(state.area, state.tuning, 0.0f, state.cart.pose.position).water_depth >
           my_cart_spec(state).wade_depth_m);
     stand_at_door(state, state.cart.pose, cart_seat::driver);
     CHECK(!seat_door_at(state).has_value());

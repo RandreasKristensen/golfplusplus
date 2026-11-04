@@ -1,7 +1,8 @@
 #pragma once
 
 // The sign at every hole's tee box: a board on two posts on the tee box, at its
-// right edge looking down the hole, standing along the hole so its face looks across
+// right edge looking down the hole (further in where a cart path's clearance
+// reaches over that edge), standing along the hole so its face looks across
 // the tee. Placed at runtime from the hole and its place on the course (no
 // authored data), so every imported course has them. Pure: the server builds
 // the same signs, and their posts stop shots like tree trunks
@@ -48,11 +49,14 @@ glm::vec3 point_along(const std::vector<glm::vec3>& points, float distance);
 
 // The sign for `hole` (already placed in `area`'s coordinates, its tee box
 // already in `area.tee_boxes[area_hole]`), standing on the box's tiles just
-// inside its right edge.
-hole_sign place_hole_sign(const play_area& area, const hole_data& hole, std::size_t area_hole, const hole_sign_tuning& tuning);
+// inside its right edge, or as little further in (across the box at most)
+// as keeps it `path_clearance` clear of `area`'s cart paths.
+hole_sign place_hole_sign(const play_area& area, const hole_data& hole, std::size_t area_hole, const hole_sign_tuning& tuning,
+                          float path_clearance);
 std::vector<hole_sign> place_hole_signs(const play_area& area,
                                         const std::vector<hole_data>& holes,
-                                        const hole_sign_tuning& tuning);
+                                        const hole_sign_tuning& tuning,
+                                        float path_clearance);
 
 // The hole's direction at its tee: towards its line of play `look_ahead` down
 // it (horizontal unit vector). Its sign and tee box face this way.

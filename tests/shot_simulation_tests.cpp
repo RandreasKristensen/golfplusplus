@@ -682,7 +682,9 @@ TEST_CASE("a ball on a slope keeps its velocity along the surface") {
 
 TEST_CASE("the ball lands on the terrain height") {
     game_state state = started_hole();
-    play_hole(state, straight_hole(glm::vec3(0.0f, 4.0f, 0.0f), glm::vec3(0.0f, 4.0f, 10.0f), 8.0f));
+    hole_data hole = straight_hole(glm::vec3(0.0f, 4.0f, 0.0f), glm::vec3(0.0f, 4.0f, 10.0f), 8.0f);
+    hole.tee_box = false;  // the ground levelled round it would reach here
+    play_hole(state, hole);
     still_air(state);
     ball_state ball = still_ball(state);
     ball.position = glm::vec3(0.0f, 4.05f, 5.0f);
@@ -1200,23 +1202,4 @@ TEST_CASE("a ball landing in a shipped bunker plugs where it lands") {
             CHECK(horizontal_distance(result.rest_position, course.sand) < 2.0f);
         }
     }
-}
-
-TEST_CASE("a ball rolling into a tee box's side bounces off it, never up onto its top") {
-    game_state state = started_hole();
-    still_air(state);
-    const tee_box& box = state.area.tee_boxes[state.ball->hole];
-    const glm::vec3 across(box.down_hole.z, 0.0f, -box.down_hole.x);
-    ball_state ball = resting_ball(state, box.center + across * (box.half_width + 1.0f));
-    REQUIRE(!on_tee_box(box, ball.position));
-    REQUIRE(box.center.y - ball.position.y > 2.0f * ball.radius);
-    ball.velocity = -across * 4.0f;
-    const shot_result result = simulate_ball(ball, current_shot_course(state), state.tuning);
-    CHECK(!on_tee_box(box, result.rest_position));
-    CHECK(glm::dot(result.rest_position - box.center, across) > box.half_width);
-    float highest = 0.0f;
-    for (const glm::vec3& point : result.trajectory) {
-        highest = std::max(highest, point.y);
-    }
-    CHECK(highest < box.center.y);
 }

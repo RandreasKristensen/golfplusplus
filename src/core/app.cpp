@@ -24,6 +24,7 @@
 #include "game/settings.h"
 #include "game/text_ids.h"
 #include "game/world_sounds.h"
+#include "renderer/cart_path_mesh.h"
 #include "renderer/sky_visibility.h"
 #include "renderer/terrain_render_mesh.h"
 
@@ -667,7 +668,8 @@ void app::refresh_render_meshes() {
     const ground_light_bake light = bake_ground_light(game_.area.ground);
     terrain_render_mesh_ = make_terrain_render_mesh({&game_.area.ground}, revision, colors.ground, light);
     material_overlay_render_mesh_ =
-        make_terrain_render_mesh({&game_.area.material_overlay}, revision, colors.ground, light);
+        with_cart_paths(make_terrain_render_mesh({&game_.area.material_overlay}, revision, colors.ground, light),
+                        game_.area, colors.ground.cart_path, light);
     refresh_render_hole_signs(hole_signs_, game_.area, hole_sign_texts(game_), text_, colors, props_.at(hole_sign_model), revision);
     fences_ = build_render_fences(game_.area, revision, props_.at(fence_model).color("post"), game_.tuning.fence.pole_radius);
     water_ = build_render_water(game_.area, revision);

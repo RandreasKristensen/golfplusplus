@@ -35,6 +35,10 @@ inline constexpr int hole_sign_map_top = 16;
 inline constexpr int hole_sign_map_width = 86;
 inline constexpr int hole_sign_map_height = 34;
 
+// A way sign's face (game/hole_sign.h way_sign), in texels: its board's aspect.
+inline constexpr int way_sign_face_width = 64;
+inline constexpr int way_sign_face_height = 24;
+
 struct hole_sign_labels {
     std::string number;  // "HOLE 3"
     std::string par;     // "PAR 4"
@@ -79,6 +83,10 @@ std::optional<hole_sign_map_spot> hole_sign_map_spot_at(const play_area& area, c
 // The spot's ink: other holes' fairway, rough and green faded
 // (course_map_other_hole_ink), bunkers and water as they are.
 glm::vec3 hole_sign_map_ink(const ground_colors& ground, const hole_sign_map_spot& spot);
+
+// Sets `batch`'s grid to a way sign's face and appends its painted panel
+// and `label`, the hole it points to ("HOLE 4").
+void draw_way_sign_face(overlay_batch& batch, const text_assets& text, const std::string& label);
 
 // Sets `batch`'s grid to the face and appends the face over the board's
 // wood: the painted panel, the labels and the map of `sign`'s hole (the

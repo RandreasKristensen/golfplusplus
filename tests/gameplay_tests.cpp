@@ -37,7 +37,9 @@ TEST_CASE("walking forward moves the player and turning changes yaw") {
 
 TEST_CASE("walking follows the terrain height") {
     game_state state = started_hole();
-    play_hole(state, straight_hole(glm::vec3(0.0f, 3.0f, 0.0f), glm::vec3(0.0f, 3.0f, 20.0f), 8.0f));
+    hole_data hole = straight_hole(glm::vec3(0.0f, 3.0f, 0.0f), glm::vec3(0.0f, 3.0f, 20.0f), 8.0f);
+    hole.tee_box = false;  // the ground levelled round it would reach here
+    play_hole(state, hole);
     state.player.position = glm::vec3(0.0f, 0.0f, 5.0f);
     state.player.yaw = 0.0f;
 
@@ -413,7 +415,7 @@ TEST_CASE("the camera lets go once the ball has rolled a little, and the moving 
     CHECK(state.mode == game_mode::addressing);
 }
 
-TEST_CASE("overlays show only while held, and the rangefinder only on foot") {
+TEST_CASE("overlays show only while held, the rangefinder in a cart too") {
     game_state state = started_hole();
 
     game_input input;
@@ -435,7 +437,7 @@ TEST_CASE("overlays show only while held, and the rangefinder only on foot") {
 
     sit_in_cart(state);
     update_game(state, input, 0.016f);
-    CHECK(!state.rangefinder_active);
+    CHECK(state.rangefinder_active);
 
     game_state addressing = started_hole();
     enter_addressing(addressing);

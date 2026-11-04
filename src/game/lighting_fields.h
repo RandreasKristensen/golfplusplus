@@ -277,6 +277,7 @@ inline constexpr color_field<ground_colors> ground_fields[] = {
     {"water", &ground_colors::water},
     {"backdrop", &ground_colors::backdrop},
     {"underwater", &ground_colors::underwater},
+    {"cart_path", &ground_colors::cart_path},
 };
 
 inline constexpr color_field<marker_colors> marker_fields[] = {

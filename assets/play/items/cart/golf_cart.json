@@ -5,7 +5,7 @@
   "effects": [],
   "spec": {
     "mass_kg": 450,
-    "motor_power_w": 3500,
+    "motor_power_w": 5000,
     "max_drive_force_n": 2000,
     "reverse_share": 0.5,
     "top_speed_mps": 5.8,

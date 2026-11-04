@@ -84,7 +84,7 @@ enum class shot_event_kind {
     land,
     tree_hit,    // a trunk
     pole_hit,    // a pole, a fence's net or a lamp head
-    board_hit,   // a sign's board, a tee box's side or a cart
+    board_hit,   // a sign's board or a cart
     flag_hit,    // a flagstick, standing or lying
     cup_rattle,  // the rim or the inside of a cup
     leaves,      // through a canopy

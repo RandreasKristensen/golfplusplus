@@ -38,6 +38,7 @@ void describe_render_terrain_vertex() {
     // The horizon's 8 ways as two normalized byte quads.
     attribute(5, 4, GL_UNSIGNED_BYTE, true, offsetof(render_terrain_vertex, horizon));
     attribute(6, 4, GL_UNSIGNED_BYTE, true, offsetof(render_terrain_vertex, horizon) + 4);
+    attribute(7, 1, GL_FLOAT, false, offsetof(render_terrain_vertex, paved));
 }
 
 void set_terrain_draw_state(const shader_program& shader, const glm::mat4& model, const glm::mat4& view_proj,

@@ -8,7 +8,7 @@ void step_predicted_cart(game_state& state, const cart_controls& controls, const
                   const std::vector<solid>& others, frame_profile* profile) {
     cart_state& cart = state.cart;
     const cart_move moved = step_cart_mover(cart_mover{cart.pose, cart.motion, cart.vertical, cart.against_obstacle}, controls,
-                                            cart_world{state.area, state.world.cart_roads, state.tuning, spec,
+                                            cart_world{state.area, state.tuning, spec,
                                                        state.weather.wetness, grip_scale, others, profile});
     cart.pose = moved.after.pose;
     cart.motion = moved.after.motion;

@@ -22,7 +22,13 @@ enum class solid_shape {
     cylinder,  // upright and round: `radius` across, from `base` up `height`
     cone,      // upright, `radius` across at `base`, narrowing to its tip `height` up
     wall,      // upright and thin: from `base` to `end` (their feet), `radius` either side, `height` up
-    box        // upright: `half_length` along `along` and `half_width` across either side of `base`, `height` up
+    box,       // upright: `half_length` along `along` and `half_width` across either side of `base`, `height` up
+    // Lying on the ground: everything within `radius` of the line from
+    // `base` to `end` (round at its ends, so slabs end to end leave no gap),
+    // its top `height` over whatever surface is under it, which it follows.
+    // Only its top counts: it is walkable and met as the surface
+    // (sample_area), never from the side.
+    slab
 };
 
 enum class solid_kind {
@@ -33,7 +39,7 @@ enum class solid_kind {
     board,      // a hole sign's
     lamp,       // a floodlight's head
     flagstick,
-    tee_box,
+    path,  // a cart path's stretch (a slab)
     cart,
     person,
     ball  // another's at rest, as of a shot: it never moves
@@ -50,7 +56,7 @@ struct solid {
     solid_shape shape = solid_shape::cylinder;
     solid_kind kind = solid_kind::trunk;
     glm::vec3 base{0.0f};
-    glm::vec3 end{0.0f};                  // wall only
+    glm::vec3 end{0.0f};                  // wall and slab only
     glm::vec3 along{0.0f, 0.0f, 1.0f};   // box only: horizontal unit
     float radius = 0.0f;
     float height = 0.0f;
@@ -70,7 +76,7 @@ struct solid {
 
 bool stops(const solid& thing, solid_mover mover);
 
-// The height of its top.
+// The height of its top (a slab's over its base).
 float solid_top(const solid& thing);
 
 // The indices of solids bucketed by the grid cells their footprints cover,
@@ -89,9 +95,20 @@ struct solid_grid {
 solid_grid build_solid_grid(const std::vector<solid>& solids, float cell_size);
 
 // The highest walkable top over `point` (XZ) among `solids` (`grid` built
-// from them), if any. Walkable things stand on the ground with nothing under
-// them, so whatever the point's height, their top is the surface there.
-std::optional<float> walkable_top_at(const std::vector<solid>& solids, const solid_grid& grid, const glm::vec3& point);
+// from them), if any: its height there, its normal and which solid it is.
+// Walkable things stand on the ground with nothing under them, so whatever
+// the point's height, their top is the surface there. A slab's height is
+// over the surface under it (`over_surface`), level across it like a real
+// path cut into a slope; it outranks every other top.
+struct walkable_top {
+    float height = 0.0f;
+    glm::vec3 normal{0.0f, 1.0f, 0.0f};
+    std::uint32_t solid = 0;
+    bool over_surface = false;
+    // A slab's: the horizontal unit vector across it. It is level across.
+    glm::vec3 across{0.0f};
+};
+std::optional<walkable_top> walkable_top_at(const std::vector<solid>& solids, const solid_grid& grid, const glm::vec3& point);
 
 // Every solid whose footprint may reach the XZ box from `low` to `high`
 // grown by `margin`, ascending and once each.

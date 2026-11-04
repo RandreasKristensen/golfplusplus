@@ -1,6 +1,6 @@
 #pragma once
 
-// The rangefinder, held up on foot while walking: a monocular whose round
+// The rangefinder, held up walking about, on foot or in a cart: a monocular whose round
 // eyepiece magnifies the middle of the view (renderer/eyepiece_pass.h) and
 // whose laser reads the distance to whatever is at its reticle (the centre
 // of the view): the ground, a tree, a pole, a sign, a net, a cart or a
@@ -95,7 +95,7 @@ float rangefinder_reach(const weather_state& weather, const rangefinder_tuning& 
 rangefinder_reading weathered_reading(const rangefinder_reading& clean, const glm::vec3& look, float eye_height_meters,
                                       const weather_state& weather, const rangefinder_tuning& tuning, std::uint32_t ping);
 
-// Held up this frame: owned, held, on foot and walking.
+// Held up this frame: owned, held and walking, on foot or in a cart.
 bool rangefinder_raised(const game_state& state, const game_input& input);
 
 // Raises or lowers it, zooming over raise_seconds, and takes its reading.

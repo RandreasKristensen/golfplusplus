@@ -12,6 +12,7 @@
     "fairway_cell_size": 2.0,
     "zone_cell_size": 0.75,
     "relief_scale": 1.0,
+    "relief_shape_meters": 60.0,
     "green_relief_scale": 1.0,
     "green_relief_blend_distance": 6.0
   },
@@ -25,11 +26,28 @@
     "board_lift": 0.45,
     "post_radius": 0.06
   },
+  "way_sign": {
+    "green_reach": 50.0,
+    "green_offset": 4.0,
+    "path_offset": 1.2,
+    "junction_lead": 6.0,
+    "board_width": 1.0,
+    "board_height": 0.375,
+    "board_thickness": 0.05,
+    "board_lift": 0.85,
+    "post_radius": 0.06
+  },
+  "cart_path": {
+    "piece_length": 2.0,
+    "top_lift": 0.03,
+    "ball_stimp_feet": 30.0,
+    "clearance": 1.0
+  },
   "tee_box": {
     "width": 12.0,
     "length": 8.0,
-    "padding": 0.15,
-    "sample_spacing": 0.5
+    "sample_spacing": 0.5,
+    "blend_distance": 4.0
   },
   "fence": {
     "pole_radius": 0.05
@@ -39,10 +57,10 @@
     "leaves": { "restitution": 0.25, "friction": 0.35 },
     "pole": { "restitution": 0.25, "friction": 0.35 },
     "net": { "restitution": 0.08, "friction": 0.6 },
-    "tee_box": { "restitution": 0.35, "friction": 0.4 },
     "board": { "restitution": 0.3, "friction": 0.35 },
     "flagstick": { "restitution": 0.25, "friction": 0.3 },
     "lamp": { "restitution": 0.3, "friction": 0.35 },
+    "path": { "restitution": 0.6, "friction": 0.4 },
     "cart": { "restitution": 0.25, "friction": 0.4 },
     "person": { "restitution": 0.1, "friction": 0.5 },
     "ball": { "restitution": 0.6, "friction": 0.2 },
@@ -64,6 +82,7 @@
     "head_height": 0.9,
     "head_depth": 0.4,
     "obstacle_clearance": 2.0,
+    "play_line_half_width": 10.0,
     "nudge_step": 3.0,
     "nudge_tries": 4
   }

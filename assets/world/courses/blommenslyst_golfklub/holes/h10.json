@@ -624,9 +624,9 @@
         0.0,
         -14.82
       ],
-      "trunk_radius": 0.66,
+      "trunk_radius": 0.52,
       "trunk_height": 6.11,
-      "leaf_radius": 4.72,
+      "leaf_radius": 3.73,
       "leaf_height": 7.46
     },
     {
@@ -635,9 +635,9 @@
         0.0,
         1.18
       ],
-      "trunk_radius": 0.76,
+      "trunk_radius": 0.62,
       "trunk_height": 7.3,
-      "leaf_radius": 5.41,
+      "leaf_radius": 4.46,
       "leaf_height": 8.92
     },
     {
@@ -646,9 +646,9 @@
         0.0,
         20.18
       ],
-      "trunk_radius": 0.58,
+      "trunk_radius": 0.2,
       "trunk_height": 2.3,
-      "leaf_radius": 4.15,
+      "leaf_radius": 1.41,
       "leaf_height": 2.82
     },
     {
@@ -657,9 +657,9 @@
         0.0,
         9.18
       ],
-      "trunk_radius": 0.49,
+      "trunk_radius": 0.51,
       "trunk_height": 5.91,
-      "leaf_radius": 3.48,
+      "leaf_radius": 3.61,
       "leaf_height": 7.22
     },
     {
@@ -668,9 +668,9 @@
         0.0,
         16.18
       ],
-      "trunk_radius": 0.62,
+      "trunk_radius": 0.2,
       "trunk_height": 2.37,
-      "leaf_radius": 4.44,
+      "leaf_radius": 1.45,
       "leaf_height": 2.89
     },
     {
@@ -679,9 +679,9 @@
         0.0,
         -53.82
       ],
-      "trunk_radius": 0.27,
+      "trunk_radius": 0.29,
       "trunk_height": 3.4,
-      "leaf_radius": 1.95,
+      "leaf_radius": 2.08,
       "leaf_height": 4.15
     },
     {
@@ -690,9 +690,9 @@
         0.0,
         -43.82
       ],
-      "trunk_radius": 0.45,
+      "trunk_radius": 0.46,
       "trunk_height": 5.33,
-      "leaf_radius": 3.24,
+      "leaf_radius": 3.26,
       "leaf_height": 6.52
     },
     {
@@ -701,9 +701,9 @@
         0.0,
         -63.82
       ],
-      "trunk_radius": 0.3,
+      "trunk_radius": 0.4,
       "trunk_height": 4.65,
-      "leaf_radius": 2.11,
+      "leaf_radius": 2.84,
       "leaf_height": 5.68
     },
     {
@@ -712,9 +712,9 @@
         0.0,
         -86.82
       ],
-      "trunk_radius": 0.26,
+      "trunk_radius": 0.31,
       "trunk_height": 3.66,
-      "leaf_radius": 1.87,
+      "leaf_radius": 2.24,
       "leaf_height": 4.48
     },
     {
@@ -723,9 +723,9 @@
         0.0,
         -281.82
       ],
-      "trunk_radius": 0.47,
+      "trunk_radius": 0.16,
       "trunk_height": 1.93,
-      "leaf_radius": 3.34,
+      "leaf_radius": 1.18,
       "leaf_height": 2.36
     },
     {
@@ -734,9 +734,9 @@
         0.0,
         -291.82
       ],
-      "trunk_radius": 0.45,
+      "trunk_radius": 0.15,
       "trunk_height": 1.79,
-      "leaf_radius": 3.24,
+      "leaf_radius": 1.09,
       "leaf_height": 2.19
     },
     {
@@ -745,9 +745,9 @@
         0.0,
         -302.82
       ],
-      "trunk_radius": 0.47,
+      "trunk_radius": 0.14,
       "trunk_height": 1.58,
-      "leaf_radius": 3.34,
+      "leaf_radius": 1.0,
       "leaf_height": 1.94
     }
   ],

@@ -14,6 +14,7 @@
 #include "game/game_state.h"
 #include "game/golf_cart.h"
 #include "game/hole_data.h"
+#include "game/hole_sign.h"
 #include "game/lighting_loader.h"
 #include "game/mode_dispatch.h"
 #include "game/prop_loader.h"
@@ -393,7 +394,7 @@ inline solid test_wall(const glm::vec3& a, const glm::vec3& b, const float half_
 // `half_length` along unit `along`, `half_width` across, from `base` up `height`.
 inline solid test_box(const glm::vec3& base, const glm::vec3& along, const float half_length, const float half_width,
                       const float height = 1.0f) {
-    solid thing = test_solid(solid_shape::box, solid_kind::tee_box, base, 0.0f, height);
+    solid thing = test_solid(solid_shape::box, solid_kind::cart, base, 0.0f, height);
     thing.along = along;
     thing.half_length = half_length;
     thing.half_width = half_width;
@@ -473,4 +474,25 @@ inline terrain_mesh plain_terrain_mesh(const terrain_spline& spline) {
 
 inline terrain_sample sample_spline(const terrain_spline& spline, const glm::vec3& position, const float fallback_y) {
     return sample_terrain_mesh(plain_terrain_mesh(spline), position, fallback_y);
+}
+
+// Whether `spot` (XZ) stands in `hole`'s line of play: within `half_width`
+// of it, nearest a point past `start` along it from the tee, and not past
+// its pin. Sampled every 0.25 m.
+inline bool in_line_of_play(const glm::vec3& spot, const hole_data& hole, const float start, const float half_width) {
+    const std::vector<glm::vec3> line = line_of_play(hole);
+    if (glm::dot(horizontal(spot - line.back()), horizontal(line.back() - line[line.size() - 2])) > 0.0f) {
+        return false;
+    }
+    const float length = polyline_length(line);
+    float nearest = 0.0f;
+    float nearest_distance = horizontal_distance(spot, line.front());
+    for (float along = 0.0f; along <= length; along += 0.25f) {
+        const float distance = horizontal_distance(spot, point_along(line, along));
+        if (distance < nearest_distance) {
+            nearest = along;
+            nearest_distance = distance;
+        }
+    }
+    return nearest > start && nearest_distance < half_width;
 }

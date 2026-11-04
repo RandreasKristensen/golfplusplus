@@ -12,6 +12,7 @@
 #include "game/play_area.h"
 #include "game/prop_loader.h"
 #include "game/text_assets.h"
+#include "game/way_sign.h"
 #include "renderer/bmp_image.h"
 
 #include <cstddef>
@@ -52,7 +53,7 @@ struct hole_sign_source {
 struct render_hole_signs {
     std::vector<hole_sign_vertex> vertices;  // triangles
     std::vector<render_hole_sign> signs;
-    std::vector<hole_sign_source> sources;  // one per sign of the play area
+    std::vector<hole_sign_source> sources;  // one per sign of the play area, then per way sign
     // Bumped when rebuilt; the GL side re-uploads only when it changes.
     std::uint64_t revision = 0;
     // Labels on the faces that did not fit their boxes (tests want none).
@@ -61,8 +62,12 @@ struct render_hole_signs {
 
 // Appends `sign`'s board and posts as triangles.
 void append_hole_sign_model(std::vector<hole_sign_vertex>& vertices, const hole_sign& sign, const prop_model& model);
+// Appends a way sign: its board, its face towards the path, pointed at the
+// end it points to, on its post.
+void append_way_sign_model(std::vector<hole_sign_vertex>& vertices, const way_sign& sign, const prop_model& model);
 
-// Every sign of `area`, each saying `texts[i]` (one per area.signs[i]).
+// Every sign of `area`, each saying `texts[i]` (one per area.signs[i]), then
+// its way signs, each saying the hole it points to.
 render_hole_signs build_render_hole_signs(const play_area& area,
                                           const std::vector<hole_sign_text>& texts,
                                           const text_assets& text,

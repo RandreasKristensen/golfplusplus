@@ -36,6 +36,8 @@ constexpr float backdrop_ground_drop = 2.0f;
 constexpr float flight_path_lift = 0.02f;
 constexpr int grass_texture_unit = 1;
 constexpr const char* grass_texture_path = "world/ground/rough_grass.bmp";
+constexpr int path_texture_unit = 6;
+constexpr const char* path_texture_path = "world/ground/cart_path.bmp";
 constexpr const char* fence_net_texture_path = "world/props/fence_net.bmp";
 constexpr float min_far_plane = 160.0f;
 constexpr float far_plane_extent_scale = 2.5f;
@@ -116,8 +118,14 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
         SDL_Log("%s is missing or not an uncompressed 24/32-bit BMP", grass_texture_path);
         return false;
     }
+    const std::optional<rgba_image> asphalt = load_bmp_file(std::filesystem::path(asset_root) / path_texture_path);
+    if (!asphalt || !path_texture_.upload(*asphalt, texture_sampling::tiled_detail)) {
+        SDL_Log("%s is missing or not an uncompressed 24/32-bit BMP", path_texture_path);
+        return false;
+    }
     terrain_shader_.use();
     terrain_shader_.set_int("u_grass", grass_texture_unit);
+    terrain_shader_.set_int("u_path", path_texture_unit);
     terrain_shader_.set_int("u_shadow_map", shadow_map_unit);
     tee_box_renderer_.shader().use();
     tee_box_renderer_.shader().set_int("u_shadow_map", shadow_map_unit);
@@ -151,6 +159,7 @@ void renderer::shutdown() {
     overlay_pass_.shutdown();
     backdrop_pass_.shutdown();
     grass_texture_.shutdown();
+    path_texture_.shutdown();
     terrain_shader_.shutdown();
     ball_shader_.shutdown();
     camcorder_pass_.shutdown();
@@ -371,6 +380,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     colors_.glow = data.glow;
     terrain_shader_.use();
     grass_texture_.bind(grass_texture_unit);
+    path_texture_.bind(path_texture_unit);
     shadow_map_pass_.bind(terrain_shader_, shadow_map_unit);
 
     // Backdrop ground under the whole area so the horizon is never empty.

@@ -95,7 +95,7 @@
   "shafts": {
     "steps": 16,
     "reach_meters": 160,
-    "min_glow": 0.002,
+    "min_glow": 0.004,
     "lamps": 4,
     "lamp_map_resolution": 128,
     "lamp_near_meters": 0.3
@@ -155,7 +155,7 @@
     "sun_glow": 0.03,
     "sun_forwardness": 0.7,
     "mist": 0.5,
-    "fog_mist_density": 0.01,
+    "fog_mist_density": 0.02,
     "rain_mist_density": 0.002
   },
   "rain": {
@@ -222,7 +222,8 @@
     "bunker": [0.66, 0.55, 0.22],
     "water": [0.10, 0.22, 0.60],
     "backdrop": [0.10, 0.26, 0.13],
-    "underwater": [0.06, 0.18, 0.32]
+    "underwater": [0.06, 0.18, 0.32],
+    "cart_path": [0.40, 0.37, 0.31]
   },
   "markers": {
     "ball": [0.9, 0.9, 0.9],

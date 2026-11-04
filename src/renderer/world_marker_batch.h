@@ -192,11 +192,13 @@ struct world_marker_scene {
 // ball's white, now and then in one of the collectible paints.
 void append_collectible(world_marker_batch& batch, const render_collectible& collectible, float radius,
                         const marker_colors& colors, float glow);
-// The layers of a tee box's top, bottom up (world_marker_run::layer).
-enum class tee_box_layer : int { grout, tiles, mat };
+// The layers of a tee box's top, bottom up (world_marker_run::layer). Its
+// grout lies on the ground, so it is drawn nearer than the ground and the
+// zone shapes on it (terrain_renderer.cpp's overlay offset).
+enum class tee_box_layer : int { grout = 3, tiles, mat };
 
-// A tee box: grey tiles over its whole top, sides down to the ground under
-// it, and a turf mat on the tiles, each in its tee_box_layer.
+// A tee box: grey tiles over its whole top, flush with the ground, and a
+// turf mat on the tiles, each in its tee_box_layer.
 void append_tee_box(world_marker_batch& batch, const tee_box& box, const marker_colors& colors);
 // A hole `radius` across and `depth` deep cut into the ground at each of
 // `centres` (on the green, the middle of the hole): first every cup's
@@ -215,7 +217,7 @@ void append_lying_flagstick(world_marker_batch& batch, const glm::vec3& foot, co
                             const marker_colors& colors, const glow_floors& glow);
 // Clears `batch` and fills it with every tee box of the area (`boxes` may be
 // null), in a pass of their own that the shadow map falls on
-// (assets/picture/shaders/tee_box.frag): every box's grout and sides, then
+// (assets/picture/shaders/tee_box.frag): every box's grout, then
 // every box's tiles, then every mat, one run each.
 void build_tee_box_batch(world_marker_batch& batch, const std::vector<tee_box>* boxes, const marker_colors& colors);
 

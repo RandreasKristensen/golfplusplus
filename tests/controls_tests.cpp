@@ -3,14 +3,12 @@
 #include "core/key_bindings.h"
 #include "core/render_frame.h"
 #include "game/address_play.h"
-#include "game/area_solids.h"
 #include "game/game_state.h"
 #include "game/movement_step.h"
 #include "game/golf_cart.h"
 #include "game/player_jump.h"
 #include "game/rangefinder.h"
 #include "game/shot_ability.h"
-#include "game/tee_box.h"
 #include "physics/vector_math.h"
 
 #include "test_support.h"
@@ -718,18 +716,19 @@ TEST_CASE("over the ball the mouse looks freely within the clamp, never turning 
     CHECK(near(wrap_angle(address_view_yaw(state.address.setup, state.address.look) - view_before), turned, 0.0001f));
 }
 
-TEST_CASE("jumping onto a tee box the hop keeps its arc over the box's edge and lands on its top") {
+TEST_CASE("jumping onto a platform the hop keeps its arc over its edge and lands on its top") {
     game_state state = started_hole();
     const player_tuning& tuning = state.tuning.player;
     const glm::vec3 ahead = yaw_direction(state.player.yaw);
-    tee_box box;
-    box.center = state.player.position + ahead * 3.5f + glm::vec3(0.0f, 0.3f, 0.0f);
-    box.down_hole = ahead;
-    box.half_length = 1.5f;
-    box.half_width = 2.0f;
-    box.bottom = state.player.position.y - 1.0f;
-    state.area.tee_boxes = {box};
-    set_solids(state.area, tee_box_solids(state.area.tee_boxes, state.tuning));
+    const glm::vec3 middle = state.player.position + ahead * 3.5f;
+    const float top = state.player.position.y + 0.3f;
+    solid platform = test_box(glm::vec3(middle.x, top - 1.3f, middle.z), ahead, 1.5f, 2.0f, 1.3f);
+    platform.walkable = true;
+    set_solids(state.area, {platform});
+    const auto on_platform = [&](const glm::vec3& position) {
+        const glm::vec3 offset = horizontal(position - middle);
+        return std::abs(glm::dot(offset, ahead)) <= 1.5f && std::abs(glm::dot(offset, yaw_left(ahead))) <= 2.0f;
+    };
     const float takeoff = state.player.position.y;
     const auto rise = [&tuning](const float seconds) {
         return tuning.jump_speed * seconds - 0.5f * tuning.jump_gravity * seconds * seconds;
@@ -747,14 +746,14 @@ TEST_CASE("jumping onto a tee box the hop keeps its arc over the box's edge and 
     bool crossed = false;
     for (; !state.player.vertical.grounded && elapsed < 5.0f; elapsed += 0.02f) {
         CHECK(near(state.player.position.y, takeoff + rise(stepped(elapsed)), 0.0005f));
-        crossed = crossed || on_tee_box(box, state.player.position);
+        crossed = crossed || on_platform(state.player.position);
         game_input walk;
         walk.forward_held = true;
         update_game(state, walk, 0.02f);
     }
     CHECK(crossed);
-    CHECK(on_tee_box(box, state.player.position));
-    CHECK(near(state.player.position.y, box.center.y, 0.0001f));
+    CHECK(on_platform(state.player.position));
+    CHECK(near(state.player.position.y, top, 0.0001f));
     // It came down on the box before it would have on the ground.
     CHECK(elapsed < hop_seconds(tuning));
 }

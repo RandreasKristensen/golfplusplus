@@ -1,5 +1,6 @@
 #include "game/hole_sign.h"
 
+#include "game/cart_path.h"
 #include "game/play_area.h"
 #include "physics/vector_math.h"
 
@@ -60,7 +61,8 @@ glm::vec3 down_hole_at_tee(const hole_data& hole, const float look_ahead) {
 hole_sign place_hole_sign(const play_area& area,
                           const hole_data& hole,
                           const std::size_t area_hole,
-                          const hole_sign_tuning& tuning) {
+                          const hole_sign_tuning& tuning,
+                          const float path_clearance) {
     hole_sign sign;
     sign.area_hole = area_hole;
     sign.line_of_play = line_of_play(hole);
@@ -80,11 +82,35 @@ hole_sign place_hole_sign(const play_area& area,
     const float post_reach = std::max(0.0f, sign.board_half_width - sign.post_radius);
     const glm::vec3 behind = -sign.face_normal * (sign.board_thickness * 0.5f + sign.post_radius);
 
-    // On the tee box's tiles, just inside its right edge.
+    // On the tee box's tiles, just inside its right edge, or further in
+    // until its posts and board are clear of the cart paths.
     const tee_box* box = hole_tee_box(area.tee_boxes, area_hole);
     const float box_edge = box != nullptr ? box->half_width : 0.0f;
-    const glm::vec3 center =
-        tee + sign.down_hole * tuning.forward_offset + right * std::max(0.0f, box_edge - tuning.edge_inset);
+    const glm::vec3 ahead = tee + sign.down_hole * tuning.forward_offset;
+    const auto clear_at = [&](const glm::vec3& center) {
+        const glm::vec3 board_end = sign.down_hole * sign.board_half_width;
+        for (const glm::vec3& post : {center - sign.down_hole * post_reach + behind, center + sign.down_hole * post_reach + behind}) {
+            if (distance_past_cart_paths(area.cart_paths, post) - sign.post_radius < path_clearance) {
+                return false;
+            }
+        }
+        for (const glm::vec3& board : {center - board_end, center, center + board_end}) {
+            if (distance_past_cart_paths(area.cart_paths, board) - sign.board_thickness * 0.5f < path_clearance) {
+                return false;
+            }
+        }
+        return true;
+    };
+    // Tried this far apart, from the edge in across the box.
+    constexpr float inset_step = 0.25f;
+    float inset = std::min(tuning.edge_inset, box_edge);
+    while (inset + inset_step <= 2.0f * box_edge && !clear_at(ahead + right * (box_edge - inset))) {
+        inset += inset_step;
+    }
+    if (!clear_at(ahead + right * (box_edge - inset))) {
+        inset = std::min(tuning.edge_inset, box_edge);
+    }
+    const glm::vec3 center = ahead + right * (box_edge - inset);
     sign.post_feet = {center - sign.down_hole * post_reach + behind, center + sign.down_hole * post_reach + behind};
 
     for (glm::vec3& foot : sign.post_feet) {
@@ -97,12 +123,13 @@ hole_sign place_hole_sign(const play_area& area,
 
 std::vector<hole_sign> place_hole_signs(const play_area& area,
                                         const std::vector<hole_data>& holes,
-                                        const hole_sign_tuning& tuning) {
+                                        const hole_sign_tuning& tuning,
+                                        const float path_clearance) {
     std::vector<hole_sign> signs;
     signs.reserve(holes.size());
     for (std::size_t i = 0; i < holes.size(); ++i) {
         if (holes[i].tee_box) {
-            signs.push_back(place_hole_sign(area, holes[i], i, tuning));
+            signs.push_back(place_hole_sign(area, holes[i], i, tuning, path_clearance));
         }
     }
     return signs;
@@ -111,5 +138,3 @@ std::vector<hole_sign> place_hole_signs(const play_area& area,
 float hole_sign_top(const hole_sign& sign) {
     return sign.board_center.y + sign.board_half_height;
 }
-
-

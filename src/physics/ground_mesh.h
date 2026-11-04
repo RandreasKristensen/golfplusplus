@@ -14,9 +14,11 @@
 // (carved_height), their cells split finer still so a bowl a few metres
 // across keeps its shape: a pond to under its level, which is the lowest of
 // the uncarved ground round its edge (ponds that overlap are one pond, at
-// the lowest of their levels). A split cell meets coarser neighbours
-// without a crack.
+// the lowest of their levels). Before that, pads (tee boxes) are levelled
+// into it (physics/ground_pad.h), their cells split as finely as a bunker's.
+// A split cell meets coarser neighbours without a crack.
 
+#include "physics/ground_pad.h"
 #include "physics/terrain.h"
 
 #include <optional>
@@ -47,21 +49,25 @@ struct ground_settings {
     float fairway_cell_size = 0.0f;  // the finer spacing over fairways and greens, on land
     float zone_cell_size = 0.0f;     // the finer spacing over bunkers and ponds
     terrain_zone_tuning zones;    // how deep they are carved
+    float pad_blend_distance = 0.0f;  // round a pad, back to the land
+    float pad_sample_spacing = 0.0f;  // between the ground samples a pad's level is the mean of
 };
 
 // `holes` are ribbon meshes (each with its spatial index): with `land`, their
 // heights are their lift over it, else heights. `zones` are every hole's
-// zones in the same coordinates; `land` may be null. The grid covers
-// every hole plus the margin, and all of `land`. Its vertices carry
-// surface_material, for drawing.
-// The ground, and each zone's water level (by its index in `zones`; 0 for
-// all but water).
+// zones in the same coordinates; `pads` are levelled into it. `land` may be
+// null. The grid covers every hole plus the margin, and all of `land`. Its
+// vertices carry surface_material, for drawing.
+// The ground, each zone's water level (by its index in `zones`; 0 for all
+// but water) and each pad's level (by its index in `pads`).
 struct built_ground {
     terrain_mesh mesh;
     std::vector<float> water_levels;
+    std::vector<float> pad_levels;
 };
 built_ground build_ground(const std::vector<terrain_mesh>& holes,
                           const std::vector<material_zone>& zones,
+                          const std::vector<ground_pad>& pads,
                           const height_grid* land,
                           const ground_settings& settings);
 

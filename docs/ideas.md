@@ -5,13 +5,7 @@
 ## **Todo**
 
 
-
-
 ## **Bugs**
-
-
-
-
 
 
 ## **alpha roadmap**
@@ -20,11 +14,7 @@ After that the game will enter beta where it should mostly be balance, changes f
 When the game feels balanced, full and fun, release :D
 
 
-1. **new shooting physics system.**
-
-markdown, bugs
-underway
-2. **real skills and leveling system and unlocks**
+2. **real skills and leveling system - think in unlocks, but wait for shops**
 
 !!!! Simulator! Simple hub world that just consists of these and like a bus where you choose where to go.
 
@@ -46,7 +36,7 @@ goes up from caddying. You can always caddy, doesnt have to be a tournament. Som
 - **handicap**
 Based on real life - you recieve it when you've gotten your golf card, which you get through the introductory quests. ()
 
-- **Strength, fade, draw, flop, pu**
+- **Strength, fade, draw, flop, putting**
 Basically all of these will be unlocked through quests, but all will be available in the alpha. Then when quests are added, they will be hidden behind, but dev accounts should be a thing to turn on to always make them available.
 
 3. **new menu UIs for everything ingame - map, scorecard, party and friends**  
@@ -55,13 +45,13 @@ clubs, gear(cart, smokes, rangefinder etc.), levels, inventory, music, friends&p
 A view of how many people are in each course. Just 0/40 -> 40+ if more than one room.
 social panel - friends, grouping - by dapping up?
 
-4. **Real visual asset- and sound asset-, and weather systems, Day night cycle + Visual assets, sound assets**
+4. **Real visual asset- and sound asset- designer, and real assets.**
 
 Music controlled by the day night cycle and weather system.
-Carts being physically in the world - space for two. A driver left side, and a passenger right side, so you can ride with people whove unlocked it, when you havent unlocked it yet
 parody club brands: Hatermade, Tiltist, Wacomo etc. 
 
-5. **Quests, Shops and Hub**
+
+5. **Quests and Shops in Hub (and maybe on each course for random stuff?)**
 
 Move the Course chooser to the hub - busses, planes ships whatever.
 Also a driving range / simulator to get a view of how fair your clubs can go.
