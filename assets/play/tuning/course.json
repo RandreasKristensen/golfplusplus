@@ -27,8 +27,11 @@
     "post_radius": 0.09
   },
   "way_sign": {
-    "green_reach": 50.0,
+    "path_reach": 50.0,
     "green_offset": 4.0,
+    "behind_reach": 20.0,
+    "behind_spread": 60.0,
+    "tee_clearance": 15.0,
     "path_offset": 1.2,
     "junction_lead": 6.0,
     "board_width": 1.0,
@@ -58,7 +61,7 @@
     "pole": { "restitution": 0.25, "friction": 0.35 },
     "net": { "restitution": 0.08, "friction": 0.6 },
     "board": { "restitution": 0.3, "friction": 0.35 },
-    "flagstick": { "restitution": 0.25, "friction": 0.3 },
+    "flagstick": { "restitution": 0.2, "friction": 0.3 },
     "lamp": { "restitution": 0.3, "friction": 0.35 },
     "path": { "restitution": 0.6, "friction": 0.4 },
     "cart": { "restitution": 0.25, "friction": 0.4 },

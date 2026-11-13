@@ -1064,6 +1064,59 @@
     },
     {
       "id": "cart_path_009",
+      "source": "bus_stop",
+      "surface": "gravel",
+      "width": 3.0,
+      "polyline": [
+        [
+          -469.33,
+          0.0,
+          -182.15
+        ],
+        [
+          -466.11,
+          0.0,
+          -179.79
+        ],
+        [
+          -463.61,
+          0.0,
+          -178.2
+        ],
+        [
+          -461.03,
+          0.0,
+          -176.85
+        ],
+        [
+          -459.25,
+          0.0,
+          -176.13
+        ],
+        [
+          -456.53,
+          0.0,
+          -175.3
+        ],
+        [
+          -453.77,
+          0.0,
+          -174.75
+        ],
+        [
+          -451.01,
+          0.0,
+          -174.42
+        ],
+        [
+          -447.33,
+          0.0,
+          -174.15
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_010",
       "source": "generated",
       "surface": "gravel",
       "width": 3.0,
@@ -1291,7 +1344,7 @@
       ]
     },
     {
-      "id": "cart_path_010",
+      "id": "cart_path_011",
       "source": "generated",
       "surface": "gravel",
       "width": 3.0,
@@ -1389,7 +1442,7 @@
       ]
     },
     {
-      "id": "cart_path_011",
+      "id": "cart_path_012",
       "source": "generated",
       "surface": "gravel",
       "width": 3.0,
@@ -1824,6 +1877,14 @@
       "content_id": "clubhouse_notice"
     }
   ],
+  "bus_stop": {
+    "position": [
+      -444.36,
+      0.0,
+      -181.01
+    ],
+    "heading": 0.2078
+  },
   "ground": {
     "origin": [
       -938.33,

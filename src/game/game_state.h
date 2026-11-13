@@ -5,10 +5,12 @@
 // game/course_session.h; this file is the per-frame update.
 
 #include "game/address_view.h"
+#include "game/ball_kind.h"
 #include "game/bag_handling.h"
 #include "game/bag_place.h"
 #include "game/club_definition.h"
 #include "game/course_definition.h"
+#include "game/hub_definition.h"
 #include "game/course_world_definition.h"
 #include "game/game_content.h"
 #include "game/game_input.h"
@@ -110,10 +112,12 @@ enum class ball_place {
 };
 
 struct my_ball {
-    std::size_t hole = 0;  // the hole it is played on
+    std::optional<std::size_t> hole;  // absent for a hub practice ball
     glm::vec3 position{0.0f};
     int strokes = 0;
     ball_place place = ball_place::teed;
+    ball_kind kind = ball_kind::scored;
+    std::optional<std::size_t> tee_mat = std::nullopt;
 };
 
 // The club picker open at my bag: the club it has highlighted (in bag order).
@@ -291,10 +295,26 @@ struct static_anchor_cache {
     std::vector<glm::vec3> collectibles;  // one per course world collectible, available or not
 };
 
+enum class hub_screen { none, book, bus };
+
+struct hub_flow_state {
+    hub_screen screen = hub_screen::none;
+    std::string travel_course;
+    std::optional<net_command_type> ball_request;
+    std::uint64_t ball_updates = 0;
+};
+
 struct game_state {
+    std::optional<tee_reservation_info> offline_booking;
+    bool offline_preparing = false;
+    std::optional<std::uint64_t> dap_pending;
+    std::int64_t dap_requested_at = 0;
+    hub_flow_state hub_flow;
+    bool results_dismissed = false;
     // Content, copied in when the state is made. Never changed by play.
     std::string asset_root;
     game_tuning tuning;
+    prop_catalog hub_props;
     std::vector<club_definition> clubs;
     reward_rules rewards;
     skill_catalog skills;
@@ -302,9 +322,13 @@ struct game_state {
     loadout default_loadout;
 
     // The course and the ground under the player.
-    course_definition course;
+    place_kind kind = place_kind::course;
+    place_definition place;
+    std::optional<hub_definition> hub;
+    // The hub's sky: tee times read on its clock wherever I am (core/tee_book.h).
+    course_sky hub_sky;
     std::vector<hole_data> course_holes;  // as authored, in hole coordinates
-    round_state round;
+    std::optional<round_state> round;
     course_world_definition world;
     std::vector<course_hole> holes;  // empty until a course starts
     play_area area;                  // the whole course
@@ -332,8 +356,6 @@ struct game_state {
     std::optional<ball_blend> ball_correction;
     std::map<std::uint64_t, remote_avatar> remote_avatars;
     std::map<std::uint64_t, remote_shot> remote_shots;
-    // Others' strokes per hole this round as seen here (game/group_round.h).
-    std::map<std::uint64_t, std::vector<int>> group_strokes;
     std::optional<game_notice> notice;
 
     // nullopt: in my pocket. Not saved: leaving the course puts it away.

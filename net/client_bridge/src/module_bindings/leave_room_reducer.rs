@@ -6,11 +6,15 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub(super) struct LeaveRoomArgs {}
+pub(super) struct LeaveRoomArgs {
+    pub expected_room: u64,
+}
 
 impl From<LeaveRoomArgs> for super::Reducer {
     fn from(args: LeaveRoomArgs) -> Self {
-        Self::LeaveRoom
+        Self::LeaveRoom {
+            expected_room: args.expected_room,
+        }
     }
 }
 
@@ -29,8 +33,8 @@ pub trait leave_room {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`leave_room:leave_room_then`] to run a callback after the reducer completes.
-    fn leave_room(&self) -> __sdk::Result<()> {
-        self.leave_room_then(|_, _| {})
+    fn leave_room(&self, expected_room: u64) -> __sdk::Result<()> {
+        self.leave_room_then(expected_room, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `leave_room` to run as soon as possible,
@@ -41,6 +45,7 @@ pub trait leave_room {
     ///  and its status can be observed with the `callback`.
     fn leave_room_then(
         &self,
+        expected_room: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -51,12 +56,13 @@ pub trait leave_room {
 impl leave_room for super::RemoteReducers {
     fn leave_room_then(
         &self,
+        expected_room: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
         self.imp
-            .invoke_reducer_with_callback(LeaveRoomArgs {}, callback)
+            .invoke_reducer_with_callback(LeaveRoomArgs { expected_room }, callback)
     }
 }

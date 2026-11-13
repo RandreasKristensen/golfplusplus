@@ -69,7 +69,8 @@
     "rainbow_secondary_share": 0.4,
     "rainbow_brightness": 0.4,
     "rainbow_inner_glow": 0.08,
-    "rainbow_band_darkening": 0.08
+    "rainbow_band_darkening": 0.08,
+    "rainbow_sun_full_deg": 4
   },
   "shadows": {
     "blob_strength": 0.5,
@@ -152,8 +153,8 @@
     "rain_forwardness": 0.85,
     "fog_visibility_meters": 200,
     "fog_forwardness": 0.85,
-    "sun_glow": 0.03,
-    "sun_forwardness": 0.7,
+    "sun_glow_at_sun": 0.6,
+    "sun_glow_spread": 0.3,
     "mist": 0.5,
     "fog_mist_density": 0.01,
     "rain_mist_density": 0.002
@@ -209,8 +210,6 @@
     "cup": 0.5,
     "pin_pole": 0.5,
     "flag": 0.65,
-    "alignment_stick": 0.7,
-    "face_line": 0.7,
     "ember": 1.0,
     "flight_path": 1.0
   },
@@ -237,9 +236,7 @@
     "collectible_paint_share": 0.2,
     "cup": [0.03, 0.03, 0.035],
     "pin_pole": [0.95, 0.90, 0.68],
-    "flag": [0.86, 0.16, 0.12],
-    "alignment_stick": [0.98, 0.98, 0.94],
-    "face_line": [1.00, 0.97, 0.82]
+    "flag": [0.86, 0.16, 0.12]
   },
   "figures": {
     "trousers": [0.16, 0.15, 0.13],

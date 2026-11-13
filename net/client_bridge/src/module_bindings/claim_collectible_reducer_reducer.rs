@@ -7,12 +7,14 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct ClaimCollectibleReducerArgs {
+    pub expected_room: u64,
     pub collectible_id: String,
 }
 
 impl From<ClaimCollectibleReducerArgs> for super::Reducer {
     fn from(args: ClaimCollectibleReducerArgs) -> Self {
         Self::ClaimCollectibleReducer {
+            expected_room: args.expected_room,
             collectible_id: args.collectible_id,
         }
     }
@@ -33,8 +35,12 @@ pub trait claim_collectible_reducer {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`claim_collectible_reducer:claim_collectible_reducer_then`] to run a callback after the reducer completes.
-    fn claim_collectible_reducer(&self, collectible_id: String) -> __sdk::Result<()> {
-        self.claim_collectible_reducer_then(collectible_id, |_, _| {})
+    fn claim_collectible_reducer(
+        &self,
+        expected_room: u64,
+        collectible_id: String,
+    ) -> __sdk::Result<()> {
+        self.claim_collectible_reducer_then(expected_room, collectible_id, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `claim_collectible` to run as soon as possible,
@@ -45,6 +51,7 @@ pub trait claim_collectible_reducer {
     ///  and its status can be observed with the `callback`.
     fn claim_collectible_reducer_then(
         &self,
+        expected_room: u64,
         collectible_id: String,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
@@ -56,13 +63,19 @@ pub trait claim_collectible_reducer {
 impl claim_collectible_reducer for super::RemoteReducers {
     fn claim_collectible_reducer_then(
         &self,
+        expected_room: u64,
         collectible_id: String,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
-        self.imp
-            .invoke_reducer_with_callback(ClaimCollectibleReducerArgs { collectible_id }, callback)
+        self.imp.invoke_reducer_with_callback(
+            ClaimCollectibleReducerArgs {
+                expected_room,
+                collectible_id,
+            },
+            callback,
+        )
     }
 }

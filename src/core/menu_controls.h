@@ -41,7 +41,8 @@ int select_course(int& selection,
                   int count,
                   const input_state& input,
                   const menu_pointer& pointer,
-                  std::vector<ui_sound>& sounds);
+                  std::vector<ui_sound>& sounds,
+                  startup_menu_screen screen = startup_menu_screen::course_picker);
 
 void add_tile(render_startup_menu& menu, std::string title, std::string subtitle, bool selected);
 // One tile per catalog course shown from `top_row`, with hole 1's preview.

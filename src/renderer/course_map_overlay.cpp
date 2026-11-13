@@ -12,6 +12,8 @@
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
+#include <glm/vector_relational.hpp>
 #include <glm/vec2.hpp>
 
 namespace {
@@ -64,9 +66,37 @@ glm::vec2 pixels_per_clip(const overlay_grid grid) {
     return glm::vec2(static_cast<float>(grid.width), static_cast<float>(grid.height)) * 0.5f;
 }
 
-void cover(const glm::vec3& position, glm::vec2& low, glm::vec2& high) {
-    low = glm::min(low, glm::vec2(position.x, position.z));
-    high = glm::max(high, glm::vec2(position.x, position.z));
+// A world position on the paper's axes before scaling: world +X left, +Z
+// up, turned by `turn`.
+glm::vec2 turned_point(const glm::vec3& position, const glm::vec2 turn) {
+    const glm::vec2 point(-position.x, position.z);
+    return glm::vec2(point.x * turn.x - point.y * turn.y, point.x * turn.y + point.y * turn.x);
+}
+
+// How the course's outline is turned on the paper: the turn, nearest to
+// none, that leaves it least tall, so its widest way lies across.
+glm::vec2 course_turn(const std::vector<glm::vec3>& outline) {
+    glm::vec2 best(1.0f, 0.0f);
+    float best_height = std::numeric_limits<float>::max();
+    for (int step = 0; step < 180; ++step) {
+        // 0, 1, -1, 2, -2, ... degrees.
+        const float degrees = static_cast<float>(step % 2 == 0 ? -(step / 2) : step / 2 + 1);
+        const float radians = degrees * glm::pi<float>() / 180.0f;
+        const glm::vec2 turn(std::cos(radians), std::sin(radians));
+        glm::vec2 low(std::numeric_limits<float>::max());
+        glm::vec2 high(std::numeric_limits<float>::lowest());
+        for (const glm::vec3& point : outline) {
+            const glm::vec2 turned = turned_point(point, turn);
+            low = glm::min(low, turned);
+            high = glm::max(high, turned);
+        }
+        const float height = high.y - low.y;
+        if (height < best_height * 0.9999f) {
+            best = turn;
+            best_height = height;
+        }
+    }
+    return best;
 }
 
 void draw_marker(overlay_batch& batch, const glm::vec2 position, const glm::vec3 color, const float radius) {
@@ -201,27 +231,39 @@ number_placement place_numbers(const course_map_layout& layout,
 }
 
 course_map_layout make_course_map_layout(const render_data& data, const overlay_grid grid) {
-    glm::vec2 low(data.player_position.x, data.player_position.z);
-    glm::vec2 high = low;
-    if (data.show_hole) {
-        cover(data.tee_position, low, high);
-        cover(data.pin_position, low, high);
-        cover(data.ball_position, low, high);
-    }
-    if (data.map_bag_position) {
-        cover(*data.map_bag_position, low, high);
-    }
-    if (data.course_map_low.x < data.course_map_high.x && data.course_map_low.z < data.course_map_high.z) {
-        cover(data.course_map_low, low, high);
-        cover(data.course_map_high, low, high);
-    }
-
     course_map_layout layout;
-    const glm::vec2 span = glm::max(high - low, glm::vec2(1.0f));
     const glm::vec2 per_clip = pixels_per_clip(grid);
     const glm::vec2 drawable = (layout.half_size - glm::vec2(map_margin)) * 2.0f * per_clip;
+    if (data.course_map_outline.size() >= 2) {
+        layout.turn = course_turn(data.course_map_outline);
+    }
+
+    glm::vec2 low = turned_point(data.player_position, layout.turn);
+    glm::vec2 high = low;
+    const auto cover = [&](const glm::vec3& position) {
+        const glm::vec2 point = turned_point(position, layout.turn);
+        low = glm::min(low, point);
+        high = glm::max(high, point);
+    };
+    if (data.show_hole) {
+        cover(data.tee_position);
+        cover(data.pin_position);
+        cover(data.ball_position);
+    }
+    if (data.map_bag_position) {
+        cover(*data.map_bag_position);
+    }
+    for (const glm::vec3& point : data.course_map_outline) {
+        cover(point);
+    }
+
+    const glm::vec2 span = glm::max(high - low, glm::vec2(1.0f));
     const float pixels_per_unit = std::min(drawable.x / span.x, drawable.y / span.y);
-    layout.world_center = glm::vec3((low.x + high.x) * 0.5f, 0.0f, (low.y + high.y) * 0.5f);
+    // The middle of the box turned back to the world.
+    const glm::vec2 middle = (low + high) * 0.5f;
+    const glm::vec2 unturned(middle.x * layout.turn.x + middle.y * layout.turn.y,
+                             -middle.x * layout.turn.y + middle.y * layout.turn.x);
+    layout.world_center = glm::vec3(-unturned.x, 0.0f, unturned.y);
     layout.scale = glm::vec2(pixels_per_unit) / per_clip;
     return layout;
 }
@@ -267,9 +309,16 @@ void draw_course_map_marks(overlay_batch& batch,
         }
     }
     if (data.trees != nullptr) {
+        // Only those wholly on the paper, inside the ground's edge.
+        const glm::vec2 paper_low = layout.center - layout.half_size + glm::vec2(course_map_fill_inset);
+        const glm::vec2 paper_high = layout.center + layout.half_size - glm::vec2(course_map_fill_inset);
         for (const tree_body& tree : *data.trees) {
             const float radius = std::clamp(tree.shape.leaf_radius * layout.scale.y, 0.012f, 0.028f);
-            draw_marker(batch, map_point(layout, tree.base), course_map_tree_ink, radius);
+            const glm::vec2 point = map_point(layout, tree.base);
+            if (glm::all(glm::greaterThanEqual(point - radius, paper_low)) &&
+                glm::all(glm::lessThanEqual(point + radius, paper_high))) {
+                draw_marker(batch, point, course_map_tree_ink, radius);
+            }
         }
     }
     for (const render_map_hole& hole : data.map_holes) {

@@ -48,7 +48,8 @@ number an item can change (`src/game/effects.h`: XP, walking speed, the cart's
 speed, …) through `effective_value` on the shared clock, offline and on the
 server alike, never an item's raw numbers. A final value is `(base + Σ flat) ×
 (1 + Σ increased) × Π (1 + more)`. Looks (a model) and rules (an item) are
-separate files; only rules are compiled into the server.
+separate files. Hub model collision points are also compiled into the server
+(`game/hub_scene.h`).
 
 **The weather is shared, replayable and in play.** A course's weather is a pure
 function of the course and UTC time (`weather_at`), the same for everyone: no
@@ -74,3 +75,50 @@ at rest, in flight, in its cup). Anything in reach can be used at any time, thro
 interaction list. Teeing up, holing out and giving up change only the ball, its
 strokes and the shot, never the player's seat, an item in use or its effects,
 the area or its meshes. Online the ball row is the server's word on my ball.
+
+Online groups form only from UTC tee-time slots, up to five (owner departure
+from four-player real-golf groups, `server.group_capacity`). Bus lead, expiry,
+spacing and booking horizon live in `network.json`. Warmup balls never count as
+round starts or scores; the authoritative first-tee audit records the actual
+first strike, with no lateness penalty. See networking rules for row lifecycle.
+
+Course warmup stations lie `server.warmup_distance_meters` from each cup, on its
+near side; F reach is `server.warmup_reach_meters`. The shared helper chooses the
+same point for the client and server. A warmup ball is on a practice green, so it accepts only putters: preparing
+or addressing it puts the putter in hand, while the club picker stays open for any club. A prepared first scored ball cannot be given up before its first
+accepted strike (leave the group to cancel an unstarted booking). Practice
+ground stations retain every club. The first scored preparation is always
+`start_booked_round` at the first tee; tee_up cannot replace it before the first
+accepted strike. Later holes retain free order. Online results never reset an
+unrestricted scored round: a completed reservation/card remains until the bus back to the hub.
+
+A course warmup ball by a green does not occupy that hole's tee. Practice-ground
+station balls still reserve their station until struck (`tee_in_use`).
+
+**Social daps (owner design).** F uses the same nearest interaction list for
+another online golfer in reach. Both participants earn the data reward once
+per accepted pair, including hub and course warmup. Only the animation's
+server-clock duration limits repeats; no daily cap, XP quota or extra cooldown.
+Offline solo has no synthetic partners or Social awards. Idle/walking, grounded
+golfers are eligible; seats, address/swing, shots in flight and item uses are busy.
+The pair briefly holds walking, never the camera, ball, strokes or effects.
+
+**Places.** The hub and scored courses share a world loader, one ground,
+`play_area::solids` and `sample_area`. The hub manifest (`world/hub/hub.json`)
+has tee mats, range targets and practice cups, never holes, hole signs, way signs
+or a round. `game_state::round` exists only on courses. Practice balls have no
+hole; warmup and scored balls name their course hole (`ball_kind`). Hub cups
+hold a ball for pickup and award no score or XP. Arrivals use `enter_place`.
+
+Every place has a parked bus (`world.bus_stop`): F in reach of its door opens
+its menu, in both modes. Travel is a camcorder cut (a fade to black and a burst
+of tracking noise), never a drive. The pause menu on a course offers RETURN TO
+HUB at any time, leaving the round; online the completed holes' scores stay.
+
+In the hub, G drops one practice ball at the golfer's feet, on whatever surface
+is there, whatever they are doing (owner decision: the hub is for fooling
+about, so the drop is never refused). A golfer has one ball, so the drop
+replaces their last wherever it lies or flies. F in reach picks up their resting ball, including one in a practice cup;
+Space beside it addresses it with the club in hand. Neither drop nor pickup
+moves the golfer, bag, items, effects or meshes, or changes progress. Online
+both actions wait for the complete authoritative ball row; refusals restore it.

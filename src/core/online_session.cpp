@@ -98,7 +98,12 @@ online_round_status online_session::watch_round(const game_state& state) {
     }
 
     const std::optional<online_room>& room = state.online.room;
-    const bool in_course_room = room && room->course_id == state.course.id;
+    const std::string target = rejoining_ ? online_hub_course :
+        (!state.hub_flow.travel_course.empty() ? state.hub_flow.travel_course : state.place.id);
+    const bool in_course_room = room && room->course_id == target;
+    if (!rejoining_ && !state.hub_flow.travel_course.empty()) {
+        return in_course_room && state.online.room_ready ? online_round_status{online_round_event::restart, {}} : online_round_status{};
+    }
     if (!rejoining_) {
         if (in_course_room) {
             return {};
@@ -118,7 +123,7 @@ online_round_status online_session::watch_round(const game_state& state) {
         return {online_round_event::restart, {}};
     }
     if (!rejoin_sent_ && state.online.account_id != 0) {
-        net_.join_course(state.course.id, state.takes_cart && state.course.carts);
+        net_.join_course(online_hub_course, false);
         rejoin_sent_ = true;
     }
     return {};

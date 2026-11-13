@@ -30,10 +30,7 @@
     "drag_threshold_counts": 6,
     "pull_counts_per_step": 12,
     "swipe_drag_counts": 150,
-    "swipe_wheel_amount": 3.0,
-    "face_line_half_length_meters": 0.14,
-    "stick_out_meters": 0.5,
-    "stick_half_length_meters": 0.6
+    "swipe_wheel_amount": 3.0
   },
   "shot_preview": {
     "step_seconds": 0.05,
@@ -55,13 +52,13 @@
   "shot_numbers": {
     "crit_share": 0.005,
     "lifetime_seconds": 1.6,
-    "rise": 0.3,
+    "fall": 0.3,
     "fade_share": 0.35,
     "half_height": 0.052,
     "long_half_height": 0.078,
     "long_meters": 250.0,
     "crit_size": 1.5,
-    "crit_pop_size": 2.0,
-    "crit_pop_seconds": 0.15
+    "start_size": 1.6,
+    "end_size": 0.8
   }
 }

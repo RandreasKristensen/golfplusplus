@@ -26,9 +26,14 @@ struct club_fit {
     float face_from_shaft = 0.0f;
     float face_ahead = 0.0f;
     glm::vec3 sole{0.0f};  // from the grip, in the model's frame
+    glm::vec3 face_normal{0.0f, 0.0f, 1.0f};  // the lofted head's
 };
 
-club_fit club_fit_of(const prop_model& club);
+// Iron heads tagged club_head are lofted from their item's spec, about the face.
+prop_part_pose club_head_pose(const prop_model& club, float loft_degrees);
+club_fit club_fit_of(const prop_model& club, float loft_degrees = 0.0f);
+void append_club_model(prop_batch& batch, const prop_model& club, const glm::mat4& frame,
+                       float loft_degrees, const glow_floors& glow);
 
 struct render_club_pose {
     glm::vec3 ball_position{0.0f};  // the drawn ball's centre, its bottom on the ground
@@ -38,6 +43,7 @@ struct render_club_pose {
     float raise = 0.0f;             // how far it is swung back (game/swing.h swing_club_raise)
     bool left_handed = false;
     bool putt = false;
+    float loft_degrees = 0.0f;  // club spec, for its head's model
     std::string club_model;
     club_fit fit;  // club_model's
 };

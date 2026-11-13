@@ -96,10 +96,6 @@ bool bag_moving(const game_state& game, const std::uint64_t account) {
         avatar->second.handling->kind == handling_kind::bag;
 }
 
-std::string club_model(const game_state& game, const std::string& id) {
-    const club_definition* club = find_club(game.clubs, id);
-    return club != nullptr ? club->model : std::string();
-}
 }
 
 std::string bag_model_of(const game_state& game, const std::uint64_t account) {
@@ -140,19 +136,17 @@ void add_handling(render_data& data, render_remote_avatar& figure, const game_st
     }
     // The club in hand down into the bag, then the other drawn out of it.
     const bool putting_back = t < 0.5f;
-    const std::string club = club_model(game, putting_back ? handling.club_out : handling.club_in);
-    const auto club_prop = props.find(club);
+    const club_definition* club = find_club(game.clubs, putting_back ? handling.club_out : handling.club_in);
+    const auto club_prop = club != nullptr ? props.find(club->model) : props.end();
     if (club_prop == props.end()) {
         return;
     }
-    const glm::mat4 in_bag = club_in_bag_frame(*at, model);
-    const glm::mat4 carried = carried_club_frame(figure, eye_height, club_prop->second);
     const float half = putting_back ? t * 2.0f : (t - 0.5f) * 2.0f;
-    data.handled_props.push_back(putting_back ? render_handled_prop{club, std::nullopt, carried, in_bag, eased(half), 0.0f}
-                                              : render_handled_prop{club, std::nullopt, in_bag, carried, eased(half), 0.0f});
+    const handled_club_pose pose = handling_club_pose(figure, eye_height, *at, model, club_prop->second, half, !putting_back);
+    data.handled_props.push_back(render_handled_prop{club->model, std::nullopt, pose.frame, pose.frame, 0.0f, 0.0f,
+                                                    club->spec.static_loft_degrees});
     figure.carried_club_model.clear();
-    figure.reach = glm::vec3(*at * glm::vec4(model.point("mouth"), 1.0f));
-    figure.crouch = handling.to.where == bag_where::on_ground ? 0.3f * std::sin(glm::pi<float>() * t) : 0.0f;
+    figure.reach = pose.hand;
 }
 
 void add_carts_and_bags(render_data& data, const game_state& game, const prop_catalog& props, render_remote_avatar* me) {

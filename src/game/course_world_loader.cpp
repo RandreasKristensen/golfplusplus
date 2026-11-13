@@ -1,6 +1,7 @@
 #include "game/course_world_loader.h"
 
 #include "game/json_util.h"
+#include "game/hole_loader.h"
 
 #include <algorithm>
 #include <cmath>
@@ -146,20 +147,41 @@ std::optional<course_world_collectible> collectible_from_json(const json& value)
 }
 }
 
-std::optional<course_world_definition> parse_course_world_from_text(const std::string& text,
-                                                                    const course_definition& course) {
+std::optional<course_world_definition> parse_world_from_text(const std::string& text,
+                                                           const course_definition* course) {
     const std::optional<json> root = parse_json(text);
     const json* starts = root ? json_array(*root, "hole_starts") : nullptr;
-    if (starts == nullptr || starts->size() != course.holes.size()) {
+    if (!root || (course && (starts == nullptr || starts->size() != course->holes.size()))) {
         return std::nullopt;
     }
 
     course_world_definition world;
+    if (const json* hub = json_object(*root, "hub")) {
+        const auto anchor = [](const json& object, const char* key) -> std::optional<hub_anchor> {
+            const json* value = json_object(object, key);
+            if (!value) { return std::nullopt; }
+            const auto position = json_vec3(*value, "position");
+            const auto reach = json_float(*value, "reach");
+            if (!position || !reach || *reach <= 0.0f) { return std::nullopt; }
+            return hub_anchor{*position, *reach};
+        };
+        const auto book = anchor(*hub, "book");
+        if (!book || course) { return std::nullopt; }
+        world.hub = hub_anchors{*book};
+    }
+    if (root->contains("bus_stop")) {
+        const auto stop = json_object(*root, "bus_stop");
+        const auto position = stop ? json_vec3(*stop, "position") : std::nullopt;
+        const auto heading = stop ? json_float(*stop, "heading") : std::nullopt;
+        if (!position || !heading) { return std::nullopt; }
+        world.bus_stop = bus_stop{*position, *heading};
+    }
     world.id = json_string(*root, "id").value_or("");
     world.name = json_string(*root, "name").value_or(world.id);
 
+    if (course) {
     for (const json& value : *starts) {
-        const std::optional<course_world_hole_start> start = hole_start_from_json(value, course);
+        const std::optional<course_world_hole_start> start = hole_start_from_json(value, *course);
         if (!start) {
             return std::nullopt;
         }
@@ -172,6 +194,12 @@ std::optional<course_world_definition> parse_course_world_from_text(const std::s
             return std::nullopt;
         }
     }
+
+    }
+    const auto zones = material_zones_from_json(*root);
+    if (!zones) { return std::nullopt; }
+    world.zones = *zones;
+    world.trees = trees_from_json(*root);
 
     const json* projection = json_object(*root, "projection");
     const std::optional<float> latitude = projection != nullptr ? json_float(*projection, "origin_lat") : std::nullopt;
@@ -203,3 +231,8 @@ std::optional<course_world_definition> parse_course_world_from_text(const std::s
     return world;
 }
 
+
+std::optional<course_world_definition> parse_course_world_from_text(const std::string& text,
+                                                                    const course_definition& course) {
+    return parse_world_from_text(text, &course);
+}

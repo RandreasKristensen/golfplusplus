@@ -94,6 +94,10 @@ pub enum StdbTable {
     GreenFlag = 21,
     RideMotion = 22,
     ServerContentHash = 23,
+    TeeSlot = 24,
+    MyTeeReservation = 25,
+    MyTeeBookStatus = 26,
+    Dap = 27,
 }
 
 #[repr(C)]
@@ -171,6 +175,8 @@ pub struct StdbRoom {
     pub room_id: u64,
     pub course_id: StdbString,
     pub player_count: i32,
+    pub world_id: u32,
+    pub kind: u8,
 }
 
 #[repr(C)]
@@ -181,6 +187,7 @@ pub struct StdbRoomMember {
     pub group_id: u64,
     pub round_strokes: *const i32,
     pub round_strokes_count: usize,
+    pub round_started: bool,
 }
 
 #[repr(C)]
@@ -188,7 +195,6 @@ pub struct StdbRoomMember {
 pub struct StdbGolfGroup {
     pub group_id: u64,
     pub room_id: u64,
-    pub leader: u64,
     pub member_count: i32,
 }
 
@@ -229,6 +235,8 @@ pub struct StdbMoveRun {
     pub jump: bool,
     pub yaw: u16,
     pub steer: i16,
+    pub paced: bool,
+    pub crouched: bool,
 }
 
 /// The fixed steps a motion carries: numbered on from first_step, the first
@@ -275,6 +283,8 @@ pub struct StdbBall {
     /// UTC milliseconds.
     pub last_shot_at: i64,
     pub in_cup: bool,
+    pub kind: u8,
+    pub tee_mat: i32,
 }
 
 #[repr(C)]
@@ -352,6 +362,22 @@ pub struct StdbShotEvent {
     pub rest_y: f32,
     pub rest_z: f32,
     pub holed: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbDap {
+    pub id: u64,
+    pub room_id: u64,
+    pub first: u64,
+    pub second: u64,
+    pub started_at: i64,
+    pub first_x: f32,
+    pub first_y: f32,
+    pub first_z: f32,
+    pub second_x: f32,
+    pub second_y: f32,
+    pub second_z: f32,
 }
 
 #[repr(C)]
@@ -454,7 +480,41 @@ pub struct StdbServerContent {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct StdbTeeSlot {
+    pub slot_id: u64,
+    pub course_id: StdbString,
+    pub world_id: u32,
+    pub room_id: u64,
+    pub scheduled_at: i64,
+    pub booked_count: i32,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbTeeReservation {
+    pub reservation_id: u64,
+    pub slot_id: u64,
+    pub started_at: i64,
+    pub grouped: bool,
+    pub completed: bool,
+    pub revision: u64,
+    pub course_id: StdbString,
+    pub world_id: u32,
+    pub room_id: u64,
+    pub scheduled_at: i64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbTeeBookStatus {
+    pub course_id: StdbString,
+    pub server_now: i64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub union StdbRow {
+    pub tee_slot: StdbTeeSlot,
+    pub tee_reservation: StdbTeeReservation,
+    pub tee_book_status: StdbTeeBookStatus,
     pub player: StdbPlayer,
     pub golfer_skill: StdbGolferSkill,
     pub golfer_progress: StdbGolferProgress,
@@ -468,6 +528,7 @@ pub union StdbRow {
     pub ball: StdbBall,
     pub shot_event: StdbShotEvent,
     pub item_use_event: StdbItemUseEvent,
+    pub dap: StdbDap,
     pub link_code: StdbLinkCode,
     pub link_status: StdbLinkStatus,
     pub server_protocol: StdbServerProtocol,
@@ -523,23 +584,24 @@ pub fn layout() -> Vec<usize> {
     describe!(out, StdbCompletedCourse, id, golfer_id, course_id);
     describe!(out, StdbCollected, id, golfer_id, collectible_id, repeatable, claim_count, claimed_at_holes_completed);
     describe!(out, StdbWorldFlag, id, golfer_id, flag);
-    describe!(out, StdbRoom, room_id, course_id, player_count);
-    describe!(out, StdbRoomMember, account_id, room_id, group_id, round_strokes, round_strokes_count);
-    describe!(out, StdbGolfGroup, group_id, room_id, leader, member_count);
+    describe!(out, StdbRoom, room_id, course_id, player_count, world_id, kind);
+    describe!(out, StdbRoomMember, account_id, room_id, group_id, round_strokes, round_strokes_count, round_started);
+    describe!(out, StdbGolfGroup, group_id, room_id, member_count);
     describe!(out, StdbSetup, aim, face_open, ball_position, backswing);
     describe!(out, StdbMotion, mode, x, y, z, yaw, speed, turn_rate, client_time, setup, crouched);
     describe!(out, StdbAvatarMotion, account_id, room_id, motion, server_time_micros);
     describe!(out, StdbRideMotion, rider, owner, motion, server_time_micros);
-    describe!(out, StdbBall, account_id, room_id, hole, x, y, z, stroke_count, last_shot_at, in_cup);
+    describe!(out, StdbBall, account_id, room_id, hole, x, y, z, stroke_count, last_shot_at, in_cup, kind, tee_mat);
     describe!(out, StdbGolfCart, owner, room_id, x, y, z, yaw, passenger, condition, driver, motion_id);
     describe!(out, StdbShot, stroke, aim_angle, face_open, ball_position, backswing, strike_timing, club_id, shot_at, flags_out, flags_out_count);
-    describe!(out, StdbMoveRun, kind, steps, forward, side, run, jump, yaw, steer);
+    describe!(out, StdbMoveRun, kind, steps, forward, side, run, jump, yaw, steer, paced, crouched);
     describe!(out, StdbSteps, first_step, start_x, start_y, start_z, runs, run_count);
     describe!(out, StdbSnapshotEntry, kind, x, y, z, yaw, shooter);
     describe!(out, StdbSkillLevel, skill_id, level);
     describe!(out, StdbShotEvent, room_id, account_id, hole, shot, hand, natural_shape, spread_scale, levels, levels_count, seed,
               snapshot, snapshot_count,
               start_x, start_y, start_z, rest_x, rest_y, rest_z, holed);
+    describe!(out, StdbDap, id, room_id, first, second, started_at, first_x, first_y, first_z, second_x, second_y, second_z);
     describe!(out, StdbItemUseEvent, room_id, account_id, item_id);
     describe!(out, StdbLoadoutMount, mount, item_id);
     describe!(out, StdbPlayerLoadout, account_id, cart, cart_mounts, cart_mounts_count, smokable, drinkable, bag);
@@ -550,6 +612,9 @@ pub fn layout() -> Vec<usize> {
     describe!(out, StdbLinkStatus, result, at_micros);
     describe!(out, StdbServerProtocol, version);
     describe!(out, StdbServerContent, hash);
+    describe!(out, StdbTeeSlot, slot_id, course_id, world_id, room_id, scheduled_at, booked_count);
+    describe!(out, StdbTeeReservation, reservation_id, slot_id, started_at, grouped, completed, revision, course_id, world_id, room_id, scheduled_at);
+    describe!(out, StdbTeeBookStatus, course_id, server_now);
     out.push(size_of::<StdbRow>());
     describe!(out, StdbEvent, kind, text, reducer, subscription, login_method, retrying, table, change, row);
     out.push(size_of::<StdbEventKind>());

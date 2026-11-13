@@ -45,7 +45,7 @@ void play_course_hole(game_state& state, const std::size_t index, const int stro
 
 // A shot that holes out at once, then plays out.
 void hole_out(game_state& state) {
-    const glm::vec3 cup = pin_anchor_position(state, state.ball->hole);
+    const glm::vec3 cup = pin_anchor_position(state, *state.ball->hole);
     state.ball->strokes = 1;
     play_shot(state, shot_result{cup, true, 0.05f, {state.ball->position, cup}, {}});
     for (int i = 0; i < 20 && ball_in_play(state); ++i) {
@@ -328,7 +328,7 @@ TEST_CASE("interacting at a hole's tee tees my ball up on that hole where the co
     CHECK(state.ball->hole == 2U);
     CHECK(state.ball->place == ball_place::teed);
     CHECK(state.ball->strokes == 0);
-    CHECK(state.round.current_hole_index == 2);
+    CHECK(state.round->current_hole_index == 2);
     CHECK(horizontal_distance(state.ball->position, hole.tee_position) < 0.5f);
     CHECK(near(horizontal(pin_anchor_position(state, 2)), horizontal(hole.pin_position), 0.001f));
     CHECK(sample_area(state.area, hole.pin_position).inside_surface);
@@ -368,8 +368,8 @@ TEST_CASE("holing out leaves the player where they stand and the ball in the cup
     CHECK(near(horizontal(hole.centre), horizontal(cup)));
     CHECK(horizontal_distance(state.ball->position, hole.centre) < hole.radius);
     CHECK(state.ball->position.y < hole.centre.y);
-    CHECK(*state.round.strokes[1] == 1);
-    CHECK(state.round.current_hole_index == 2);
+    CHECK(*state.round->strokes[1] == 1);
+    CHECK(state.round->current_hole_index == 2);
     CHECK(near(horizontal(state.player.position), horizontal(stance), 0.001f));
     CHECK(state.save_requested);
 }
@@ -429,7 +429,7 @@ TEST_CASE("holes can be played in any order and the round ends after all of them
 
     REQUIRE(tee_up(state, 2, false));
     finish_hole(state, 5);
-    CHECK(!round_finished(state.round));
+    CHECK(!round_finished(*state.round));
     CHECK(state.save.completed_course_ids.empty());
     pick_up_from_cup(state);
     CHECK(!tee_up(state, 2, false));
@@ -440,7 +440,7 @@ TEST_CASE("holes can be played in any order and the round ends after all of them
     REQUIRE(tee_up(state, 1, false));
     finish_hole(state, 4);
 
-    CHECK(round_finished(state.round));
+    CHECK(round_finished(*state.round));
     CHECK(state.save.completed_course_ids == std::vector<std::string>{"fixture_hub"});
 }
 
@@ -479,7 +479,7 @@ TEST_CASE("the ball in the cup stays into the next round and goes when the cours
         REQUIRE(tee_up(state, i, false));
         finish_hole(state, 3);
     }
-    REQUIRE(round_finished(state.round));
+    REQUIRE(round_finished(*state.round));
     REQUIRE(state.ball.has_value());  // not picked up: the round ended
     CHECK(state.ball->place == ball_place::in_cup);
 
@@ -487,7 +487,7 @@ TEST_CASE("the ball in the cup stays into the next round and goes when the cours
     CHECK(state.ball.has_value());
     CHECK(!tee_up(state, 0, false));
 
-    REQUIRE(start_course(state, state.course));
+    REQUIRE(enter_place(state, state.place.id));
     CHECK(!state.ball.has_value());
     CHECK(tee_up(state, 0, false));
 }
@@ -542,7 +542,7 @@ TEST_CASE("F at another tee with my ball in play asks first, and yes gives the h
     CHECK(state.ball->hole == 2U);
     CHECK(state.ball->strokes == 0);
     CHECK(state.mode == game_mode::addressing);
-    CHECK(!hole_played(state.round, 0));
+    CHECK(!hole_played(*state.round, 0));
     CHECK(state.save.holes_completed == 0);
 }
 
@@ -579,7 +579,7 @@ TEST_CASE("giving up a hole puts my ball in my pocket and leaves me where I stan
     give_up_hole(state);
     CHECK(!state.ball.has_value());
     CHECK(near(state.player.position, standing));
-    CHECK(!hole_played(state.round, 0));
+    CHECK(!hole_played(*state.round, 0));
     CHECK(tee_up(state, 0, false));
 }
 

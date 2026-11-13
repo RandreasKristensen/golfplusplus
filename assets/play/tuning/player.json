@@ -42,11 +42,13 @@
     "viewmodel_fov_degrees": 60.0
   },
   "pacing": {
+    "walk_factor": 0.45,
     "pace_meters": 1.0,
     "popup_ahead_meters": 3.0,
     "popup_drop_meters": 0.6
   },
   "green_read": {
+    "walk_factor": 0.16,
     "eye_height": 0.6,
     "crouch_seconds": 0.3,
     "spacing_meters": 1.0,
@@ -78,5 +80,18 @@
     "fog_false_share": 0.6,
     "rain_false_share": 0.5,
     "false_return_meters": 25.0
+  },
+  "dap": {
+    "reach_meters": 1.6,
+    "seconds": 1.4,
+    "contact_share": 0.45,
+    "release_share": 0.65,
+    "hand_height_meters": 1.5,
+    "rest_height_meters": 0.85,
+    "hand_side_meters": 0.3,
+    "hand_forward_meters": 0.3,
+    "fist_radius_meters": 0.065,
+    "arm_radius_meters": 0.045,
+    "thumb_share": 0.6
   }
 }

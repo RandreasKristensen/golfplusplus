@@ -94,33 +94,10 @@ eye_view address_eye(const play_area& area, const shot_setup& setup, const addre
     return eye_view{eye, glm::normalize(level * std::cos(look.pitch) + world_up * std::sin(look.pitch))};
 }
 
-address_marks address_marks_for(const play_area& area, const shot_setup& setup, const club_definition& club,
-                                const game_tuning& tuning) {
-    const setup_tuning& marks = tuning.setup;
-    const float unit = tuning.scale.meters_per_world_unit;
+address_feet address_feet_for(const play_area& area, const shot_setup& setup, const game_tuning& tuning) {
     const glm::vec3 forward = yaw_direction(setup.aim_angle);
-    const glm::vec3 side = stance_side(setup);
-    address_marks out;
-    out.ball = setup.ball_start;
-    out.stance = address_stance_position(area, setup, tuning);
-    const float half_width = 0.5f * tuning.lies.stance_width_meters / unit;
-    out.lead_foot = on_ground(area, out.stance + forward * half_width);
-    out.trail_foot = on_ground(area, out.stance - forward * half_width);
-
-    // The face's leading edge runs across where it points, heel on my side.
-    const glm::vec3 face = yaw_direction(world_face_yaw(setup));
-    const glm::vec3 edge = yaw_left(face) * hand_sign(setup.hand);
-    const glm::vec3 behind = setup.ball_start - face * (tuning.scale.ball_visual_radius_meters / unit);
-    const float half = marks.face_line_half_length_meters / unit;
-    out.face_heel = on_ground(area, behind + edge * half);
-    out.face_toe = on_ground(area, behind - edge * half);
-
-    const glm::vec3 toe_line = setup.ball_start + side * (marks.stick_out_meters / unit) + forward * stance_ahead(setup, tuning);
-    const float stick = marks.stick_half_length_meters / unit;
-    out.stick_back = on_ground(area, toe_line - forward * stick);
-    out.stick_front = on_ground(area, toe_line + forward * stick);
-    shot_setup stock = setup;
-    stock.ball_position = club.spec.stock_ball_position;
-    out.stock_tick = on_ground(area, toe_line - forward * stance_ahead(stock, tuning));
-    return out;
+    const glm::vec3 stance = address_stance_position(area, setup, tuning);
+    const float half_width = 0.5f * tuning.lies.stance_width_meters / tuning.scale.meters_per_world_unit;
+    return address_feet{setup.ball_start, on_ground(area, stance + forward * half_width),
+                        on_ground(area, stance - forward * half_width)};
 }

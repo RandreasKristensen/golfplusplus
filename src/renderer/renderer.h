@@ -138,6 +138,8 @@ private:
     world_marker_batch shadow_casters_;
     world_marker_batch tee_box_batch_;
     prop_batch prop_batch_;
+    prop_batch world_props_;
+    std::uint64_t world_props_revision_ = 0;
     prop_batch shadow_models_;
     prop_batch viewmodel_batch_;
     std::vector<render_terrain_vertex> flight_path_vertices_;

@@ -19,6 +19,7 @@ constexpr std::uint64_t my_account = 7;
 // Strings in queued rows must outlive the poll that hands them out.
 const std::string anna = "ANNA";
 const std::string first_course = "first";
+const std::string hub_course = online_hub_course;
 
 stdb_event account_row(const std::uint64_t account_id, const std::string& name) {
     stdb_row row{};
@@ -34,9 +35,9 @@ stdb_event member_row(const std::uint64_t room_id, const stdb_row_change change)
     return row_event(STDB_TABLE_ROOM_MEMBER, change, row);
 }
 
-stdb_event room_row(const std::uint64_t room_id, const int players) {
+stdb_event room_row(const std::uint64_t room_id, const int players, const std::string& course = first_course) {
     stdb_row row{};
-    row.room = stdb_room{room_id, fake_text(first_course), players};
+    row.room = stdb_room{room_id, fake_text(course), players, 1};
     return row_event(STDB_TABLE_ROOM, STDB_ROW_INSERT, row);
 }
 
@@ -50,9 +51,9 @@ void connect(online_session& session, game_state& state) {
     session.update(state);
 }
 
-void join_room(online_session& session, game_state& state, const std::uint64_t room_id) {
+void join_room(online_session& session, game_state& state, const std::uint64_t room_id, const std::string& course = first_course) {
     queue_event(member_row(room_id, STDB_ROW_INSERT));
-    queue_event(room_row(room_id, 2));
+    queue_event(room_row(room_id, 2, course));
     session.update(state);
     stdb_event applied = fake_event(STDB_EVENT_SUBSCRIPTION_APPLIED);
     applied.subscription = static_cast<std::uint32_t>(fake_bridge().subscriptions.size());
@@ -68,7 +69,7 @@ online_session playing_session(game_state& state) {
     connect(session, state);
     join_room(session, state, 3);
     state.play = play_mode::online;
-    state.course.id = first_course;
+    state.place.id = first_course;
     return session;
 }
 
@@ -163,7 +164,7 @@ TEST_CASE("an online round stays put while its room is there") {
     CHECK(called("stdb_leave_room"));
 }
 
-TEST_CASE("after a silent reconnect an online round joins its course again and restarts") {
+TEST_CASE("after a silent reconnect online play joins the hub and waits for its complete snapshot") {
     game_state state = started_hole();
     online_session session = playing_session(state);
 
@@ -173,14 +174,15 @@ TEST_CASE("after a silent reconnect an online round joins its course again and r
     session.update(state);
     CHECK(session.watch_round(state).event == online_round_event::none);
     CHECK(state.online.status == net_status::signing_in);
-    CHECK(!called("stdb_join_course", "first"));
+    CHECK(!called("stdb_join_course", online_hub_course));
 
     connect(session, state);
     CHECK(session.watch_round(state).event == online_round_event::none);
-    CHECK(called("stdb_join_course", "first"));
+    CHECK(called("stdb_join_course", online_hub_course));
 
-    join_room(session, state, 4);
+    join_room(session, state, 4, hub_course);
     CHECK(session.watch_round(state).event == online_round_event::restart);
+    state.place.id = online_hub_course;
     CHECK(session.watch_round(state).event == online_round_event::none);
 }
 
@@ -216,7 +218,7 @@ TEST_CASE("sync: reconnect restart waits for the complete room subscription") {
     connect(session, state);
     CHECK(session.watch_round(state).event == online_round_event::none);
     queue_event(member_row(4, STDB_ROW_INSERT));
-    queue_event(room_row(4, 2));
+    queue_event(room_row(4, 2, hub_course));
     session.update(state);
     CHECK(session.watch_round(state).event == online_round_event::none);
     CHECK(session.menu_status(state, std::chrono::system_clock::now()).room_course_id.empty());
@@ -225,4 +227,26 @@ TEST_CASE("sync: reconnect restart waits for the complete room subscription") {
     queue_event(applied);
     session.update(state);
     CHECK(session.watch_round(state).event == online_round_event::restart);
+}
+
+TEST_CASE("intentional bus travel waits for a complete target room without reporting room loss") {
+    game_state state = started_hole();
+    online_session session = playing_session(state);
+    state.hub_flow.travel_course = online_hub_course;
+    state.online.progress.holes_completed = 12;
+    queue_event(member_row(3, STDB_ROW_DELETE));
+    session.update(state);
+    CHECK(session.watch_round(state).event == online_round_event::none);
+    queue_event(member_row(8, STDB_ROW_INSERT));
+    queue_event(room_row(8, 5, hub_course));
+    session.update(state);
+    CHECK(!state.online.room_ready);
+    CHECK(session.watch_round(state).event == online_round_event::none);
+    auto applied = fake_event(STDB_EVENT_SUBSCRIPTION_APPLIED);
+    applied.subscription = static_cast<std::uint32_t>(fake_bridge().subscriptions.size());
+    queue_event(applied); session.update(state);
+    REQUIRE(state.online.room_ready);
+    CHECK(session.watch_round(state).event == online_round_event::restart);
+    CHECK(state.online.progress.holes_completed == 12);
+    CHECK(!state.ball); CHECK(state.remote_shots.empty());
 }

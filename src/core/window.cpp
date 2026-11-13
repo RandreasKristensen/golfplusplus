@@ -17,7 +17,7 @@ void set_window_icon(SDL_Window* window, const std::string& icon_path) {
 }
 }
 
-bool window::init(const char* title, const int width, const int height, const bool vsync, const std::string& icon_path) {
+bool window::init(const char* title, const int width, const int height, const bool vsync, const std::string& icon_path, const bool hidden) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return false;
@@ -35,7 +35,7 @@ bool window::init(const char* title, const int width, const int height, const bo
         SDL_WINDOWPOS_CENTERED,
         width,
         height,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
+        SDL_WINDOW_OPENGL | (hidden ? SDL_WINDOW_HIDDEN : SDL_WINDOW_SHOWN) | SDL_WINDOW_RESIZABLE
     );
 
     if (!window_) {

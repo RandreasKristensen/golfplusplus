@@ -254,8 +254,10 @@ TEST_CASE("the air scatters as thick as its visibility says: faint when clear, t
     const render_sky_weather foggy = make_render_sky_weather(shown_weather{0.0f, 0.0f, 1.0f, 0.0f, 0.0f}, style);
     CHECK(foggy.scatter_per_meter == fog.per_meter);
     CHECK(foggy.scatter_forwardness == fog.forwardness);
-    CHECK(foggy.sun_glow == style.sun_glow);
-    CHECK(foggy.sun_forwardness == style.sun_forwardness);
+    // The haze's glow looking straight at the sun is the style's, whatever its spread.
+    const float g = foggy.sun_forwardness;
+    CHECK(near(g, 1.0f - style.sun_glow_spread));
+    CHECK(near(foggy.sun_glow * (1.0f + g) / ((1.0f - g) * (1.0f - g)), style.sun_glow_at_sun, 1.0e-5f));
     CHECK(foggy.mist == style.mist);
 }
 

@@ -229,7 +229,9 @@ void add_block_labels(std::vector<scorecard_label>& labels,
         const text_style& row_ink = player.me ? current_ink : ink;
         add(scorecard_label_kind::name, player.name, with_align(row_ink, text_align::left), label_cell(grid, block, row));
         for (std::size_t hole = first; hole < end; ++hole) {
-            add(scorecard_label_kind::strokes, count_label(player.strokes[hole]), row_ink, grid_cell(grid, block, row, hole - first + 1U));
+            const std::string strokes = player.current_hole && player.current_hole->index == hole
+                ? std::to_string(player.current_hole->strokes) : count_label(player.strokes[hole]);
+            add(scorecard_label_kind::strokes, strokes, row_ink, grid_cell(grid, block, row, hole - first + 1U));
         }
         if (has_subtotals(grid)) {
             add(scorecard_label_kind::strokes_total, count_label(sum_between(player.strokes, first, end)), total,

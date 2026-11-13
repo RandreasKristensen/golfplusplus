@@ -62,12 +62,13 @@ struct shot_course {
     std::optional<std::size_t> shooter;
     // The shot's dice: what turns it at random through a canopy.
     std::uint64_t seed = 0;
+    bool practice = false;
 };
 
 // The course a shot towards hole `hole` plays on: `area`, `course`'s air and
 // greens, `weather`, and each green's flag in or out by `flags_in`.
 shot_course make_shot_course(const play_area& area, std::size_t hole, const weather_state& weather,
-                             const course_definition& course, const std::vector<bool>& flags_in,
+                             const place_definition& course, const std::vector<bool>& flags_in,
                              const game_tuning& tuning);
 
 // The dice of a shot set up as `setup` says: the same for everyone who

@@ -3,15 +3,21 @@
 // The scorecard for the course being played (hold Tab, and the results
 // screen after the last hole): every hole's par and a row of strokes per
 // player. Built from round_state and the course holes; online, in a group,
-// a row per member as this round has seen them (game/group_round.h).
+// a row per member from their current round's row (game/group_round.h).
 
 #include "game/string_table.h"
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
 struct game_state;
+
+struct scorecard_current_hole {
+    std::size_t index = 0;
+    int strokes = 0;
+};
 
 struct scorecard_player {
     std::string name;
@@ -19,6 +25,8 @@ struct scorecard_player {
     int total_strokes = 0;
     std::string relative_label;  // against the par of the holes played
     bool me = false;  // marked in a group only
+    // Shown in its hole's cell, excluded from completed-hole totals and par.
+    std::optional<scorecard_current_hole> current_hole;
 };
 
 struct scorecard_data {

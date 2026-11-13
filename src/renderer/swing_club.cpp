@@ -3,6 +3,7 @@
 #include "physics/vector_math.h"
 #include "renderer/camera_local.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include <glm/geometric.hpp>
@@ -37,8 +38,8 @@ club_address address_of(const render_club_pose& pose, const float ball_visual_ra
     // Square to the path, then turned about the shaft as the face is opened.
     const glm::mat4 square = posed_model(glm::vec3(0.0f), shaft, forward, glm::vec3(pose.left_handed ? -1.0f : 1.0f, 1.0f, 1.0f));
     const glm::mat4 turned = glm::rotate(glm::mat4(1.0f), pose.face_turn, shaft) * square;
-    const glm::vec3 face_normal = glm::normalize(glm::vec3(turned * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)));
     const club_fit& fit = pose.fit;
+    const glm::vec3 face_normal = glm::normalize(glm::vec3(turned * glm::vec4(fit.face_normal, 0.0f)));
     const float radius = std::max(0.02f, ball_visual_radius_meters);
     const glm::vec3 face_at = pose.ball_position - horizontal(face_normal) * radius;
 
@@ -50,7 +51,7 @@ club_address address_of(const render_club_pose& pose, const float ball_visual_ra
     // Moved back along the ground until the face's plane just touches the
     // ball, however it is turned and leant: the head is never in the ball.
     const glm::vec3 face_middle =
-        out.grip - heel * fit.face_from_shaft - shaft * fit.shaft_length + face_normal * fit.face_ahead;
+        out.grip - heel * fit.face_from_shaft - shaft * fit.shaft_length + glm::vec3(turned[2]) * fit.face_ahead;
     const glm::vec3 level = safe_normalize(horizontal(face_normal), forward);
     const float gap = glm::dot(pose.ball_position - face_middle, face_normal) - radius;
     out.grip += level * (gap / std::max(0.1f, glm::dot(level, face_normal)));
@@ -77,10 +78,25 @@ glm::mat4 swung(const club_address& address, const float raise, const bool putt)
 }
 }
 
-club_fit club_fit_of(const prop_model& club) {
+prop_part_pose club_head_pose(const prop_model& club, const float loft_degrees) {
+    const bool lofted = std::any_of(club.parts.begin(), club.parts.end(),
+                                    [](const prop_part& part) { return part.tag == "club_head"; });
+    return prop_part_pose{"club_head", lofted ? turned_about(club.point("face"), glm::vec3(1.0f, 0.0f, 0.0f),
+                                                            -glm::radians(loft_degrees)) : glm::mat4(1.0f)};
+}
+
+club_fit club_fit_of(const prop_model& club, const float loft_degrees) {
     const glm::vec3 grip = club.point("grip");
     const glm::vec3 face = club.point("face");
-    return club_fit{grip.y - face.y, grip.x - face.x, face.z - grip.z, club.point("sole") - grip};
+    const glm::mat4 head = club_head_pose(club, loft_degrees).frame;
+    return club_fit{grip.y - face.y, grip.x - face.x, face.z - grip.z,
+                    glm::vec3(head * glm::vec4(club.point("sole"), 1.0f)) - grip,
+                    glm::vec3(head * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f))};
+}
+
+void append_club_model(prop_batch& batch, const prop_model& club, const glm::mat4& frame,
+                       const float loft_degrees, const glow_floors& glow) {
+    append_prop_model(batch, club, frame, glow, std::nullopt, std::nullopt, club_head_pose(club, loft_degrees));
 }
 
 glm::vec3 swing_club_grip(const render_club_pose& pose, const float ball_visual_radius_meters) {
@@ -96,5 +112,5 @@ glm::mat4 swing_club_frame(const render_club_pose& pose, const float ball_visual
 
 void append_swing_club(prop_batch& batch, const render_club_pose& pose, const float ball_visual_radius_meters,
                        const prop_model& club, const glow_floors& glow) {
-    append_prop_model(batch, club, swing_club_frame(pose, ball_visual_radius_meters, club), glow);
+    append_club_model(batch, club, swing_club_frame(pose, ball_visual_radius_meters, club), pose.loft_degrees, glow);
 }

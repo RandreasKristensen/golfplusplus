@@ -5,7 +5,7 @@
 // cart) over player.bag_handle_seconds, and the club in hand put back in
 // the bag and another drawn out over player.club_swap_seconds. The rules
 // move a bag or a club at once (game/golf_bag.h, the server's player_bag
-// row); this is how it is seen happening. While mine plays I stand still.
+// row); this is how it is seen happening, without stopping the golfer walking.
 
 #include "game/bag_place.h"
 
@@ -45,8 +45,6 @@ float handling_progress(const bag_handling& handling, const player_tuning& tunin
 void start_bag_handling(game_state& state, const bag_place& from);
 void start_club_swap(game_state& state, const std::string& club_out);
 
-// True while my handling plays: it runs on, and I stand still.
-bool handling_bag(const game_state& state);
 void update_bag_handling(game_state& state, float dt);
 
 // Steps `handling` on by `dt`; nullopt once it has played.

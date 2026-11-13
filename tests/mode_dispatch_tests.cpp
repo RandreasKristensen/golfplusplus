@@ -226,11 +226,11 @@ TEST_CASE("completing a hole and the course is saved offline only") {
         complete_current_hole(state);
     });
 
-    CHECK(round_finished(pair.offline.round));
+    CHECK(round_finished(*pair.offline.round));
     CHECK(pair.offline.save.holes_completed == 1);
     CHECK(pair.offline.save.completed_course_ids == std::vector<std::string>{"fixture_hub"});
     CHECK(pair.offline.save_requested);
-    CHECK(round_finished(pair.online.round));
+    CHECK(round_finished(*pair.online.round));
     CHECK(gameplay_commands(pair.online).empty());
 }
 
@@ -238,7 +238,7 @@ TEST_CASE("no motion is sent for a round that just finished") {
     game_state state = in_mode(single_hole_course(), play_mode::online);
     state.ball->strokes = 2;
     complete_current_hole(state);
-    REQUIRE(round_finished(state.round));
+    REQUIRE(round_finished(*state.round));
     const std::size_t before = state.net_commands.size();
 
     // The round's results show: the player moves no more.

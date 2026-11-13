@@ -7,6 +7,8 @@
 #include "game/gear_paint.h"
 #include "game/group_round.h"
 #include "game/loadout.h"
+#include "game/social_dap.h"
+#include "renderer/dap_pose.h"
 #include "game/mode_dispatch.h"
 #include "game/remote_players.h"
 #include "game/text_ids.h"
@@ -61,6 +63,10 @@ render_remote_avatar shown_avatar(const game_state& game, const std::uint64_t ac
     shown.crouch = avatar.crouch;
     shown.left_handed = player.hand == handedness::left;
     shown.carried_club_model = shown_club_model(game, account);
+    const auto bag_row = game.online.bags.find(account);
+    if (const club_definition* club = bag_row != game.online.bags.end() ? find_club(game.clubs, bag_row->second.club_in_hand) : nullptr) {
+        shown.carried_club_loft_degrees = club->spec.static_loft_degrees;
+    }
     if (const std::optional<shown_bag> bag = remote_bag(game, account); bag && bag->place.where == bag_where::on_back) {
         shown.bag_model = bag->model;
         shown.bag_paint = gear_paint_of(game, account);
@@ -94,6 +100,14 @@ void add_online_render_data(render_data& data, const game_state& game, const tex
     if (!is_online(game)) {
         return;
     }
+    if (const auto pair = active_dap(game, game.online.account_id); pair && game.mode == game_mode::walking && !game.shot) {
+        data.dap_hand = paired_dap_pose(*pair, game.online.account_id, game.hand, game.online.server_now, game.tuning);
+        if (data.my_figure) {
+            data.my_figure->player_id = game.online.account_id;
+            data.my_figure->dap = data.dap_hand; data.my_figure->reach = data.dap_hand->hand;
+            data.my_figure->yaw = data.dap_hand->yaw; data.my_figure->carried_club_model.clear();
+        }
+    }
     const float eye_height = game.tuning.camera.walking_eye_height;
     for (const auto& [account, avatar] : game.remote_avatars) {
         const auto player = game.online.players.find(account);
@@ -101,8 +115,17 @@ void add_online_render_data(render_data& data, const game_state& game, const tex
             continue;
         }
         data.remote_avatars.push_back(shown_avatar(game, account, avatar, player->second, props));
-        if (avatar.handling && !data.remote_avatars.back().seated) {
+        if (avatar.handling && !data.remote_avatars.back().seated && !active_dap(game, account)) {
             add_handling(data, data.remote_avatars.back(), game, *avatar.handling, account, bag_model_of(game, account), props);
+        }
+        if (const auto pair = active_dap(game, account)) {
+            auto& shown = data.remote_avatars.back();
+            shown.dap = paired_dap_pose(*pair, account, player->second.hand, game.online.server_now, game.tuning);
+            shown.position = account == pair->first ? pair->first_position : pair->second_position;
+            shown.yaw = shown.dap->yaw; shown.reach = shown.dap->hand; shown.crouch = 0.0f;
+            shown.seated = false; shown.at_wheel = false;
+            shown.smoking.reset(); shown.drinking.reset();
+            shown.swing.reset(); shown.carried_club_model.clear();
         }
         const float tag_height = (data.remote_avatars.back().seated ? tag_height_seated : tag_height_on_foot) * eye_height;
         data.name_tags.push_back(render_name_tag{data.remote_avatars.back().position + world_up * tag_height, player->second.name,

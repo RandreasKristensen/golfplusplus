@@ -5,11 +5,10 @@
 // level ground I walk is a pace, and the count pops up as each lands, as a
 // shot's number does. Caps Lock again stops it; so do running, a hop, Esc,
 // leaving my feet or the walk. Its last count then fades. Presentation and
-// aiming only: it never changes a shot.
+// aiming only: it never changes a shot. Steps use pacing.walk_factor of my
+// item-modified walking speed.
 
 #include "game/game_input.h"
-
-#include <glm/vec3.hpp>
 
 struct game_state;
 
@@ -27,9 +26,10 @@ struct pacing_walk {
 // Whole paces in `meters` of `pace_meters` each.
 int paces_in(float meters, float pace_meters);
 
-// Starts, counts or stops pacing for this frame on foot, `before` where I
-// stood when the frame began.
-void update_pacing(game_state& state, const game_input& input, const glm::vec3& before);
+// Applies the pacing toggle and cancellations before this frame moves.
+void update_pacing(game_state& state, const game_input& input);
+// Counts the actual level metres traveled by one fixed step after collision.
+void count_paces(game_state& state, float meters);
 
 // Ages the count shown: held while pacing, gone after its lifetime once
 // stopped. Pacing stops off my feet or the walk.

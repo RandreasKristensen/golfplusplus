@@ -25,11 +25,6 @@ constexpr float tee_mat_lift = 0.02f;
 // The mat's share of the box's top, across and along the hole.
 constexpr float tee_mat_share_across = 0.7f;
 constexpr float tee_mat_share_along = 0.75f;
-// The flagstick as drawn: thicker than a real one so it reads at a distance,
-// and further off at least this many scene pixels across: seen corner on,
-// its two crossed panels still cover a whole pixel in every row.
-constexpr float pole_half_width = 0.028f;
-constexpr float pole_min_half_pixels = 0.75f;
 // A flag: its length out from the pole and half its height; in calm it
 // hangs this far from straight down; how much of a wave runs along it, and
 // how far its wave's phase moves per metre across the course.
@@ -304,13 +299,16 @@ void append_cup_holes(world_marker_batch& batch, const std::vector<glm::vec3>& c
 
 void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, const float pin_visual_height_meters,
                           const marker_colors& colors, const glow_floors& glow, const flag_pose& flag,
-                          const float pixel_meters) {
+                          const pole_view& pole) {
     const float pin_height = std::max(0.1f, pin_visual_height_meters);
     const glm::vec3 pin_base = position + glm::vec3(0.0f, pin_height * 0.5f, 0.0f);
-    const float half_width = std::max(pole_half_width, pixel_meters * pole_min_half_pixels);
-    const glm::vec3 pole_scale(half_width, pin_height * 0.5f, 1.0f);
-    batch.append_quad(panel_model(pin_base, 0.0f, pole_scale), colors.pin_pole, glow.pin_pole, true);
-    batch.append_quad(panel_model(pin_base, 90.0f, pole_scale), colors.pin_pole, glow.pin_pole, true);
+    // Square to the eye, so its width on screen is its width: real, or one
+    // scene pixel where real would be thinner.
+    const float half_width = std::max(pole.radius_meters, pole.pixel_meters * 0.5f);
+    const glm::vec3 to_eye = safe_normalize(horizontal(pole.toward_eye), glm::vec3(0.0f, 0.0f, 1.0f));
+    const float yaw = glm::degrees(std::atan2(to_eye.x, to_eye.z));
+    batch.append_quad(panel_model(pin_base, yaw, glm::vec3(half_width, pin_height * 0.5f, 1.0f)), colors.pin_pole,
+                      glow.pin_pole, true);
 
     // Hung from just under the pole's top, flying out from it at `angle`
     // from straight down, its fly end waving across the wind.
@@ -348,31 +346,11 @@ void append_lying_flagstick(world_marker_batch& batch, const glm::vec3& foot, co
 }
 
 namespace {
-// The stick and the face's line, wide enough to read at the picture's
-// lines, lifted off the ground they lie on; the shoes' size.
-constexpr float stick_half_width = 0.012f;
-constexpr float face_line_half_width = 0.008f;
-constexpr float tick_half_length = 0.05f;
-constexpr float mark_lift = 0.004f;
+// My shoes at address.
 constexpr glm::vec3 shoe_half_size(0.05f, 0.045f, 0.14f);
-
-// A flat strip on the ground from `a` to `b`.
-void append_ground_strip(world_marker_batch& batch, const glm::vec3& a, const glm::vec3& b, const float half_width,
-                         const glm::vec3& color, const float glow) {
-    const glm::vec3 across = yaw_left(safe_normalize(horizontal(b - a), glm::vec3(0.0f, 0.0f, 1.0f))) * half_width;
-    const glm::vec3 lift = world_up * mark_lift;
-    batch.append_world_quad(a - across + lift, b - across + lift, b + across + lift, a + across + lift, color, glow, true);
-}
 }
 
-void append_address_marks(world_marker_batch& batch, const render_address_marks& marks, const scene_colors& colors) {
-    const marker_colors& markers = colors.markers;
-    append_ground_strip(batch, marks.stick_back, marks.stick_front, stick_half_width, markers.alignment_stick,
-                        colors.glow.alignment_stick);
-    const glm::vec3 across = yaw_left(safe_normalize(horizontal(marks.stick_front - marks.stick_back), glm::vec3(0.0f, 0.0f, 1.0f)));
-    append_ground_strip(batch, marks.stock_tick - across * tick_half_length, marks.stock_tick + across * tick_half_length,
-                        stick_half_width, markers.alignment_stick, colors.glow.alignment_stick);
-    append_ground_strip(batch, marks.face_heel, marks.face_toe, face_line_half_width, markers.face_line, colors.glow.face_line);
+void append_address_feet(world_marker_batch& batch, const render_address_feet& marks, const scene_colors& colors) {
     for (const glm::vec3& foot : {marks.lead_foot, marks.trail_foot}) {
         // Toes towards the ball.
         const glm::vec3 toes = safe_normalize(horizontal(marks.ball - foot), glm::vec3(0.0f, 0.0f, 1.0f));
@@ -405,10 +383,11 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
         const std::vector<glm::vec3>& out = markers(scene.flags_out);
         return std::find(out.begin(), out.end(), cup) != out.end();
     };
-    // How wide a scene pixel is at a flagstick's middle.
-    const auto pixel_at = [&scene](const glm::vec3& pin) {
+    // A flagstick's pole as seen from the camera, a scene pixel as wide as at its middle.
+    const auto pole_at = [&scene](const glm::vec3& pin) {
         const glm::vec3 middle = pin + world_up * (scene.pin_visual_height_meters * 0.5f);
-        return glm::length(middle - scene.camera_position) * scene.pixel_per_meter;
+        return pole_view{scene.flagstick_radius_meters, scene.camera_position - pin,
+                         glm::length(middle - scene.camera_position) * scene.pixel_per_meter};
     };
     std::vector<glm::vec3> cups = markers(scene.pin_markers);
     if (scene.show_hole) {
@@ -418,7 +397,7 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
     if (scene.show_hole) {
         if (!flag_out(scene.pin_position)) {
             append_pin_flagstick(batch, scene.pin_position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag,
-                                 pixel_at(scene.pin_position));
+                                 pole_at(scene.pin_position));
         }
     }
     if (scene.lying_flags != nullptr) {
@@ -435,12 +414,12 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
     for (const glm::vec3& position : markers(scene.pin_markers)) {
         if (!flag_out(position)) {
             append_pin_flagstick(batch, position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag,
-                                 pixel_at(position));
+                                 pole_at(position));
         }
     }
 
-    if (scene.address_marks != nullptr) {
-        append_address_marks(batch, *scene.address_marks, colors);
+    if (scene.address_feet != nullptr) {
+        append_address_feet(batch, *scene.address_feet, colors);
     }
     if (scene.remote_avatars != nullptr) {
         for (const render_remote_avatar& avatar : *scene.remote_avatars) {

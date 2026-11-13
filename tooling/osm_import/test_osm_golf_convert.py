@@ -12,6 +12,7 @@ import osm_dhm as dhm
 import osm_elevation as elev
 import osm_checks
 import osm_contact_sheet
+import osm_bus_stop
 import osm_cart_paths
 import osm_outline
 
@@ -1827,6 +1828,96 @@ class AerialTests(unittest.TestCase):
         self.assertAlmostEqual(6.0, short[2], delta=0.6)
         self.assertGreater(tall[3], short[3])
         self.assertEqual(2, len(trees))
+
+
+class BusStopTests(unittest.TestCase):
+    """The club bus parks on the car park or service road nearest the first
+    tee, clear of play, door towards the tee (osm_bus_stop.py)."""
+
+    rules = {"step_meters": 2.0, "max_candidates": 4000, "clearance_meters": 8.72}
+
+    @staticmethod
+    def square(cx, cz, half):
+        return [(cx - half, cz - half), (cx + half, cz - half), (cx + half, cz + half), (cx - half, cz + half)]
+
+    def test_the_game_frame_has_the_door_on_the_right_of_a_bus_facing_south(self):
+        bus = osm_bus_stop.load_bus()
+        door = osm_bus_stop.model_point((0.0, 0.0), 0.0, bus["door"])
+        # Facing +z its left is +x (the game's yaw_left), so the kerb door is at -x.
+        self.assertLess(door[0], 0.0)
+        self.assertAlmostEqual(osm_bus_stop.heading_of((1.0, 0.0)), math.pi / 2)
+
+    def test_the_nearest_clear_car_park_wins_and_the_door_faces_the_first_tee(self):
+        tee = (0.0, 0.0)
+        near, far = self.square(0.0, 40.0, 12.0), self.square(0.0, 140.0, 12.0)
+        stop = osm_bus_stop.choose([far, near], [], tee, osm_bus_stop.Obstacles(), self.rules)
+        self.assertIsNotNone(stop)
+        self.assertTrue(osm_outline.point_in_polygon(stop["position"], near))
+        bus = osm_bus_stop.load_bus()
+        door = osm_bus_stop.model_point(stop["position"], stop["heading"], bus["door"])
+        across = osm_bus_stop.model_point(stop["position"], stop["heading"], (-bus["door"][0], bus["door"][1]))
+        self.assertLess(math.dist(door, tee), math.dist(across, tee))
+
+    def test_play_trees_and_cart_paths_keep_the_bus_off_and_no_clear_place_is_none(self):
+        tee = (0.0, 0.0)
+        park = self.square(0.0, 40.0, 12.0)
+        covered = osm_bus_stop.Obstacles(rings=[self.square(0.0, 40.0, 30.0)])
+        self.assertIsNone(osm_bus_stop.choose([park], [], tee, covered, self.rules))
+        tree = osm_bus_stop.Obstacles(circles=[(0.0, 30.0, 3.0)])
+        stop = osm_bus_stop.choose([park], [], tee, tree, self.rules)
+        self.assertIsNotNone(stop)
+        self.assertFalse(osm_outline.point_in_polygon((0.0, 30.0), stop["footprint"]))
+        self.assertGreaterEqual(osm_outline.edge_distance((0.0, 30.0), stop["footprint"]), 8.72 + 3.0)
+        path = osm_bus_stop.Obstacles(lines=[[(-50.0, 40.0), (50.0, 40.0)]])
+        self.assertIsNone(osm_bus_stop.choose([self.square(0.0, 40.0, 6.0)], [], tee, path, self.rules))
+        road = osm_bus_stop.choose([], [[(-60.0, 40.0), (60.0, 40.0)]], tee, osm_bus_stop.Obstacles(), self.rules)
+        self.assertIsNotNone(road)
+        self.assertAlmostEqual(abs(math.sin(road["heading"])), 1.0, places=3)
+
+    def test_the_bus_stays_off_every_line_of_play_and_beside_or_behind_the_first_tee(self):
+        tee = (0.0, 0.0)
+        # The first hole plays +z across open rough: no zone ahead of the tee.
+        corridor = osm_bus_stop.play_corridors([[tee, (0.0, 150.0)]], [15.0])
+        rules = {**self.rules, "ahead_degrees": 60.0}
+        ahead = self.square(0.0, 40.0, 12.0)
+        self.assertIsNone(osm_bus_stop.choose([ahead], [], tee, osm_bus_stop.Obstacles(rings=corridor), rules))
+        # Off the line but still ahead of the tee, and further off beside it:
+        # beside wins.
+        ahead_left = self.square(45.0, 40.0, 8.0)
+        beside = self.square(-60.0, -5.0, 8.0)
+        stop = osm_bus_stop.choose([ahead_left, beside], [], tee, osm_bus_stop.Obstacles(rings=corridor), rules,
+                                   first_way=(0.0, 1.0))
+        self.assertIsNotNone(stop)
+        self.assertTrue(osm_outline.point_in_polygon(stop["position"], beside))
+        self.assertFalse(osm_bus_stop.ahead_of(stop["position"], tee, (0.0, 1.0), 60.0))
+        # With only the place ahead, it still parks there, off the line.
+        stop = osm_bus_stop.choose([ahead_left], [], tee, osm_bus_stop.Obstacles(rings=corridor), rules, first_way=(0.0, 1.0))
+        self.assertIsNotNone(stop)
+        self.assertGreater(osm_outline.rings_gap(stop["footprint"], corridor[0]), 0.0)
+
+    def test_the_network_runs_from_the_bus_door_to_the_first_tee_and_never_under_the_bus(self):
+        holes = CartPathTests().holes()
+        stop = osm_bus_stop.choose([self.square(0.0, 60.0, 14.0)], [], holes[0]["tee"], osm_bus_stop.Obstacles(), self.rules)
+        self.assertIsNotNone(stop)
+        roads = osm_cart_paths.build_network(holes, [], None, None, conv.DEFAULT_CONFIG["cart_paths"], stop)
+        self.assertTrue(osm_cart_paths.connects(roads, stop["approach"], holes[0]["tee"],
+                                                osm_checks.DEFAULT_TOLERANCES["cart_path_reach_m"]))
+        self.assertTrue(any(osm_outline.segment_distance(stop["approach"], (a[0], a[2]), (b[0], b[2])) <= 6.0
+                            for road in roads for a, b in zip(road["polyline"], road["polyline"][1:])))
+        for road in roads:
+            for x, _, z in road["polyline"]:
+                self.assertFalse(osm_outline.point_in_polygon((x, z), stop["footprint"]))
+
+    def test_checks_call_a_course_without_a_bus_stop_an_error(self):
+        findings = osm_checks.Findings()
+        placed = [{"number": 1, "tee": (0.0, 0.0), "zones": []}]
+        osm_checks._check_bus_stop(findings, placed, {"cart_roads": []}, osm_checks.DEFAULT_TOLERANCES)
+        self.assertEqual(1, findings.count("error"))
+        stop = osm_bus_stop.choose([self.square(0.0, 40.0, 12.0)], [], (0.0, 0.0), osm_bus_stop.Obstacles(), self.rules)
+        world = {"bus_stop": osm_bus_stop.stop_json(stop), "cart_roads": []}
+        findings = osm_checks.Findings()
+        osm_checks._check_bus_stop(findings, placed, world, osm_checks.DEFAULT_TOLERANCES)
+        self.assertEqual(["BUS_STOP_PATH"], [f["code"] for f in findings.items if f["level"] == "error"])
 
 
 if __name__ == "__main__":

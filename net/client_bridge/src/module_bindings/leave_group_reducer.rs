@@ -6,11 +6,17 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub(super) struct LeaveGroupArgs {}
+pub(super) struct LeaveGroupArgs {
+    pub room_id: u64,
+    pub reservation_id: u64,
+}
 
 impl From<LeaveGroupArgs> for super::Reducer {
     fn from(args: LeaveGroupArgs) -> Self {
-        Self::LeaveGroup
+        Self::LeaveGroup {
+            room_id: args.room_id,
+            reservation_id: args.reservation_id,
+        }
     }
 }
 
@@ -29,8 +35,8 @@ pub trait leave_group {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`leave_group:leave_group_then`] to run a callback after the reducer completes.
-    fn leave_group(&self) -> __sdk::Result<()> {
-        self.leave_group_then(|_, _| {})
+    fn leave_group(&self, room_id: u64, reservation_id: u64) -> __sdk::Result<()> {
+        self.leave_group_then(room_id, reservation_id, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `leave_group` to run as soon as possible,
@@ -41,6 +47,8 @@ pub trait leave_group {
     ///  and its status can be observed with the `callback`.
     fn leave_group_then(
         &self,
+        room_id: u64,
+        reservation_id: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -51,12 +59,19 @@ pub trait leave_group {
 impl leave_group for super::RemoteReducers {
     fn leave_group_then(
         &self,
+        room_id: u64,
+        reservation_id: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
-        self.imp
-            .invoke_reducer_with_callback(LeaveGroupArgs {}, callback)
+        self.imp.invoke_reducer_with_callback(
+            LeaveGroupArgs {
+                room_id,
+                reservation_id,
+            },
+            callback,
+        )
     }
 }

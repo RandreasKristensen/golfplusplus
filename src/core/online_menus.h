@@ -1,7 +1,7 @@
 #pragma once
 
 // The online screens of the menu flow (core/startup_flow.h): signing in,
-// picking a name, linking logins, picking a course and joining its room.
+// picking a name, linking logins and entering the practice ground hub.
 // They move on by themselves as the connection and the server's answers
 // arrive (online_menu_status), and ask app for what the server should do
 // (online_request).
@@ -17,7 +17,7 @@
 
 bool is_online_flow(startup_flow flow);
 
-// PLAY ONLINE from the main menu: the course picker when signed in with a
+// PLAY ONLINE from the main menu: enter the hub when signed in with a
 // name, else the sign-in screen, starting a silent sign-in.
 void open_play_online(startup_flow_state& state, const online_menu_status& online, startup_menu_result& result);
 // LINK ANOTHER LOGIN from the main menu.

@@ -1,6 +1,8 @@
 #include "game/mode_dispatch.h"
 
 #include "game/motion_sync.h"
+#include "game/content_files.h"
+#include "game/hub_flow.h"
 
 #include "game/progress_rules.h"
 #include "game/progression.h"
@@ -80,8 +82,8 @@ golfer_profile my_golfer(const game_state& state) {
     if (!is_online(state) && state.save.natural) {
         golfer.natural = *state.save.natural;
     }
-    if (const room_player* me = my_room_player(state)) {
-        golfer.natural = natural_shape_from_index(me->natural_shape).value_or(natural_shape::neutral);
+    if (is_online(state) && state.online.golfer) {
+        golfer.natural = natural_shape_from_index(state.online.golfer->natural).value_or(natural_shape::neutral);
     }
     golfer.spread_scale = effective_value(1.0f, effect_target_shot_spread, current_effects(state), shot_unix_ms(state));
     return golfer;
@@ -91,8 +93,10 @@ bool natural_shape_picked(const game_state& state) {
     if (!is_online(state)) {
         return state.save.natural.has_value();
     }
-    const room_player* me = my_room_player(state);
-    return me == nullptr || natural_shape_from_index(me->natural_shape).has_value();
+    // Picked once my row has it, or once I have sent it and wait for the row.
+    const std::optional<golfer_row>& me = state.online.golfer;
+    return !me || natural_shape_from_index(me->natural).has_value() ||
+        (state.golfer_sent && natural_shape_from_index(state.golfer_sent->natural).has_value());
 }
 
 void record_natural_shape(game_state& state, const natural_shape shape) {
@@ -108,12 +112,14 @@ void record_natural_shape(game_state& state, const natural_shape shape) {
 }
 
 void sync_golfer(game_state& state) {
-    const room_player* me = is_online(state) ? my_room_player(state) : nullptr;
-    if (me == nullptr) {
+    // Not before my row has my natural shot: sending it unset would wipe the
+    // shot I picked; picking it sends my hand and colour with it.
+    const std::optional<golfer_row>& me = state.online.golfer;
+    if (!is_online(state) || !me || !natural_shape_from_index(me->natural)) {
         return;
     }
-    const golfer_row wanted{state.hand, me->natural_shape, state.favourite_colour};
-    if (wanted == golfer_row{me->hand, me->natural_shape, me->favourite_colour} || state.golfer_sent == wanted) {
+    const golfer_row wanted{state.hand, me->natural, state.favourite_colour};
+    if (wanted == *me || state.golfer_sent == wanted) {
         return;
     }
     net_command command;
@@ -129,7 +135,7 @@ std::uint64_t next_shot_seed(const game_state& state) {
 
 void record_shot(game_state& state, const shot_setup& setup) {
     if (!is_online(state)) {
-        if (!state.course.practice) {
+        if (state.ball && state.ball->kind == ball_kind::scored) {
             award_skill_xp(state, state.rewards.shot);
         }
         return;
@@ -216,6 +222,7 @@ xp_effects current_xp_effects(const game_state& state) {
 }
 
 void record_movement(game_state& state, const movement_xp_rate& rate, float& pending_meters, const float meters) {
+    if (course_warmup(state)) { return; }
     if (is_online(state) || meters <= 0.0f) {
         return;
     }
@@ -279,25 +286,10 @@ void record_cart_righted(game_state& state, const std::uint64_t owner) {
     push_command(state, std::move(command));
 }
 
-void request_group(game_state& state) {
-    if (!is_online(state)) {
-        return;
-    }
-    net_command command;
-    command.type = net_command_type::create_group;
-    if (const std::optional<std::uint64_t> near = nearest_player(state, state.tuning.net.group_join_distance)) {
-        const std::uint64_t group = state.online.players.at(*near).group_id;
-        const auto size = state.online.group_sizes.find(group);
-        if (group != 0 && size != state.online.group_sizes.end() && size->second < state.tuning.server.group_capacity) {
-            command.type = net_command_type::join_group;
-            command.group_id = group;
-        }
-    }
-    push_command(state, std::move(command));
-}
-
 void request_leave_group(game_state& state) {
-    push_online_command(state, net_command_type::leave_group);
+    net_command command;
+    command.type = net_command_type::leave_group;
+    request_tee_action(state, std::move(command));
 }
 
 std::int64_t shared_unix_ms(const game_state& state, const std::int64_t local_unix_ms) {
@@ -320,7 +312,7 @@ weather_state course_weather_at(const game_state& state, const std::int64_t unix
         return *state.weather_override;
     }
     const game_tuning& tuning = state.tuning;
-    return weather_at(tuning.weather, tuning.wind, tuning.sky_clock, state.course, unix_ms);
+    return weather_at(tuning.weather, tuning.wind, tuning.sky_clock, state.place, unix_ms);
 }
 
 void record_hole_completed(game_state& state) {
@@ -328,8 +320,8 @@ void record_hole_completed(game_state& state) {
         return;
     }
     state.save = apply_hole_completed(state.save);
-    if (round_finished(state.round)) {
-        state.save = apply_course_completed(state.save, state.course.id);
+    if ((state.round && round_finished(*state.round))) {
+        state.save = apply_course_completed(state.save, state.place.id);
     }
     state.save_requested = true;
 }
@@ -370,4 +362,28 @@ void receive_online_progress(game_state& state, const save_data& progress) {
     state.online.progress = progress;
     state.online.progress_received = true;
     show_awarded_xp(state, gained);
+}
+
+const std::optional<tee_reservation_info>& active_booking(const game_state& state) {
+    return is_online(state) ? state.online.reservation : state.offline_booking;
+}
+
+void request_tee_action(game_state& state, net_command command) {
+    if (!is_online(state)) {
+        if (command.type == net_command_type::book_tee) {
+            for (const auto& course : load_courses(state.asset_root)) {
+                if (course.id == command.course_id) {
+                    tee_reservation_info choice; choice.course_id = course.id;
+                    state.offline_booking = choice; return;
+                }
+            }
+        } else if (command.type == net_command_type::cancel_tee) {
+            state.offline_booking.reset();
+        }
+        return;
+    }
+    if (!state.online.room_ready || !state.online.room) { return; }
+    command.room_id = state.online.room->room_id;
+    command.reservation_id = state.online.reservation ? state.online.reservation->reservation_id : 0;
+    push_command(state, std::move(command));
 }

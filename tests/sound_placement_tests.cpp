@@ -161,7 +161,7 @@ TEST_CASE("a shot's landings are heard on the ground where the ball lands, mine 
     input = stocked(input, other, 1.0f);
     input.shot_at = shot_unix_ms(other);
     // As their game and the server play it: the server's rest is this one's.
-    const shot_course course = make_shot_course(other.area, 0, course_weather_at(other, input.shot_at), other.course,
+    const shot_course course = make_shot_course(other.area, 0, course_weather_at(other, input.shot_at), other.place,
                                                 other.flags_in, other.tuning);
     const shot_result result = simulate_shot(input, course, other.tuning, other.clubs);
     start_remote_shot(other, played_shot(2, 0, 1, input, result.rest_position, false));

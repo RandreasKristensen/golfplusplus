@@ -2,6 +2,9 @@
 
 #include "game/content_files.h"
 #include "game/golf_bag.h"
+#include "game/hub_flow.h"
+#include "game/hub_scene.h"
+#include "game/online_play.h"
 #include "game/mode_dispatch.h"
 #include "game/net_types.h"
 #include "game/shot_dice.h"
@@ -62,8 +65,12 @@ bool start_course(game_state& state, const course_definition& course) {
         return false;
     }
 
-    state.course = course;
-    state.area = build_course_area(*holes, *world, state.tuning);
+    state.kind = place_kind::course;
+    state.hub.reset();
+    state.results_dismissed = false;
+    state.place = course;
+    state.area = build_course_area(*holes, *world, state.tuning, bus_ground_pad(*world, state.hub_props));
+    place_hub_scene(state.area, *world, state.hub_props, state.tuning);
     state.world = *world;
     state.holes = place_holes(*world, *holes);
     state.course_holes = std::move(*holes);
@@ -93,18 +100,25 @@ bool start_course(game_state& state, const course_definition& course) {
 }
 
 bool tee_up(game_state& state, const std::size_t hole_index, const bool give_up) {
-    const bool practice = state.course.practice;
-    if (hole_index >= state.holes.size() || (!practice && hole_played(state.round, hole_index))) {
+    if (!state.round) { return false; }
+    if (first_tee_required(state) && !course_warmup(state)) {
+        state.notice = game_notice{text_online_error_first_tee_required, 0}; return false;
+    }
+    if (course_warmup(state)) {
+        request_ball_preparation(state, net_command_type::tee_up, hole_index, give_up);
+        return false; // adopt the whole row and stance on acknowledgement
+    }
+    if (hole_index >= state.holes.size() || hole_played(*state.round, hole_index)) {
         return false;
     }
-    if (!practice && state.ball && state.ball->place == ball_place::in_cup) {
+    if (state.ball && state.ball->place == ball_place::in_cup) {
         state.notice = game_notice{text_ball_in_cup, 0.0f};
         return false;
     }
-    if (!practice && state.ball && state.ball->hole == hole_index) {
+    if (state.ball && state.ball->hole == hole_index) {
         return false;  // that hole's ball is mine: it is played where it lies
     }
-    if (!practice && state.ball && !give_up) {
+    if (state.ball && !give_up) {
         state.notice = game_notice{text_ball_in_play, 0.0f};
         return false;
     }
@@ -114,7 +128,7 @@ bool tee_up(game_state& state, const std::size_t hole_index, const bool give_up)
         return false;
     }
     end_ball_play(state);
-    state.round.current_hole_index = hole_index;
+    state.round->current_hole_index = hole_index;
     const float radius = state.tuning.scale.ball_physics_radius_meters;
     const glm::vec3 tee = resting_ball_position(state.area, state.holes[hole_index].tee_position, radius);
     state.ball = my_ball{hole_index, tee, 0, ball_place::teed};
@@ -126,18 +140,20 @@ bool tee_up(game_state& state, const std::size_t hole_index, const bool give_up)
 }
 
 void complete_current_hole(game_state& state) {
-    if (!ball_in_play(state)) {
+    if (!state.round || !ball_in_play(state) || !state.ball->hole) {
         return;
     }
     my_ball& ball = *state.ball;
-    if (!state.course.practice) {
-        state.round = complete_hole(state.round, ball.hole, ball.strokes);
+    const auto online_ball = state.online.balls.find(state.online.account_id);
+    const bool warmup = ball.kind == ball_kind::warmup || course_warmup(state) || (is_online(state) && online_ball != state.online.balls.end() && online_ball->second.kind == ball_kind::warmup);
+    if (!warmup) {
+        state.round = complete_hole(*state.round, *ball.hole, ball.strokes);
         record_hole_completed(state);
     }
     end_ball_play(state);
     // The ball stays in the cup until it is picked up, into the next round too.
     ball.place = ball_place::in_cup;
-    ball.position = lying_in_cup(state, ball.hole, ball.position);
+    ball.position = lying_in_cup(state, *ball.hole, ball.position);
 }
 
 glm::vec3 lying_in_cup(const game_state& state, const std::size_t hole, const glm::vec3& near) {
@@ -152,6 +168,10 @@ glm::vec3 lying_in_cup(const game_state& state, const std::size_t hole, const gl
 }
 
 void give_up_hole(game_state& state) {
+    if (!state.round) { return; }
+    if (first_tee_required(state) && !course_warmup(state)) {
+        state.notice = game_notice{text_online_error_first_tee_required, 0}; return;
+    }
     if (!ball_in_play(state)) {
         return;
     }
@@ -161,11 +181,10 @@ void give_up_hole(game_state& state) {
 }
 
 void start_next_round(game_state& state) {
-    if (!course_started(state) || !round_finished(state.round)) {
+    if (is_online(state) || !course_started(state) || !(state.round && round_finished(*state.round))) {
         return;
     }
     state.round = start_round(state.course_holes.size());
-    state.group_strokes.clear();
 }
 
 bool cup_ball_in_reach(const game_state& state) {

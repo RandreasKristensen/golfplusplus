@@ -9,6 +9,7 @@ use super::move_run_row_type::MoveRunRow;
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct UpdateMotionArgs {
+    pub expected_room: u64,
     pub mode: u8,
     pub x: f32,
     pub y: f32,
@@ -32,6 +33,7 @@ pub(super) struct UpdateMotionArgs {
 impl From<UpdateMotionArgs> for super::Reducer {
     fn from(args: UpdateMotionArgs) -> Self {
         Self::UpdateMotion {
+            expected_room: args.expected_room,
             mode: args.mode,
             x: args.x,
             y: args.y,
@@ -71,6 +73,7 @@ pub trait update_motion {
     /// /// Use [`update_motion:update_motion_then`] to run a callback after the reducer completes.
     fn update_motion(
         &self,
+        expected_room: u64,
         mode: u8,
         x: f32,
         y: f32,
@@ -91,6 +94,7 @@ pub trait update_motion {
         crouched: bool,
     ) -> __sdk::Result<()> {
         self.update_motion_then(
+            expected_room,
             mode,
             x,
             y,
@@ -121,6 +125,7 @@ pub trait update_motion {
     ///  and its status can be observed with the `callback`.
     fn update_motion_then(
         &self,
+        expected_room: u64,
         mode: u8,
         x: f32,
         y: f32,
@@ -149,6 +154,7 @@ pub trait update_motion {
 impl update_motion for super::RemoteReducers {
     fn update_motion_then(
         &self,
+        expected_room: u64,
         mode: u8,
         x: f32,
         y: f32,
@@ -174,6 +180,7 @@ impl update_motion for super::RemoteReducers {
     ) -> __sdk::Result<()> {
         self.imp.invoke_reducer_with_callback(
             UpdateMotionArgs {
+                expected_room,
                 mode,
                 x,
                 y,

@@ -145,10 +145,18 @@
         {"line": "W543942751", "par": 3}
       ]
     },
+    "jelling_par_3": {
+      "bus_stop": {
+        "reach_m": 320.0
+      }
+    },
     "kalo_par_3": {
       "ref_prefix": "P"
     },
     "marienlyst_golfklub": {
+      "bus_stop": {
+        "reach_m": 400.0
+      },
       "tree": {
         "trunk_radius": 0.65,
         "trunk_height": 5.0,

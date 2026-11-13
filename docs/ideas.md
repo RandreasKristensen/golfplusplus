@@ -4,8 +4,26 @@
 
 ## **Todo**
 
+- I am very particular about the game design for this project: its the only hope for this game to have character, when its a vibe coded lofi game. I am very often finding that the models I'm using have to, and are making design decisions, even when I ask them to ask me for anything undefined. at some level i expect this will always be the case, so we need some design guidelines that capture the essence of the game direction, so fewer wrong design choices will be made.
+  1. UI should have some guidelines, that I think should use especially the rangefinder as examples, UI that is not intrusive and fits in the game. I want as little UI as possible, and the UI we have I would like to be physical things in the world you interact with. Stuff like the distance numbers that pop up are the exceptions, and are taken from the MMORPG side of the game, but most of the UI should be "as little as possible". Also similar UI elements like Error messages should have a general and consistent look and display, which they currently dont.
+  2. For game design choices, the general guideline should be realism first. For any design decision, ask yourself "how would this work in real life, and whats the easiest abstraction of this in code that would make it feel like that in game, without sacrificing UX too much." Worse UX for more realism is often preferred, like walking to your bag to get a club.
+  3. The project is now more mature, and would benefit from worktrees and multiple agents, so we need a more mature workflow. Help me design such guidelines.
+There are also some guidelines like the file-length, that I am unsure whether if healthy - are we just splitting files to split them? How do we design more amture guidelines like this for 
+We also need some new guidelines for testing - it keeps growing (which I guess is expected) but often hasn't tested what I would say is "expected behaviour" It often seems its testing the code is the code type of thing. How do we test behaviour instead? I am also using a bunch of time on actual in game testing, so more minimal testing might also be okay? I don't know, but it needs to be looked at.
+This should take precedent over basically every other readme!
 
 ## **Bugs**
+
+- Maps should rotate so its widest part is always horizontal.
+We need some like open world feeling road off the course. It should be much wider than a normal cart course - it should be real road sized.
+- The headcovers are ugly as hell
+- The "hole x" waysigns are still too close to the tee.
+- The step counting walk speed is way too slow now.
+- Falgsticks donnt draw shadows - why is this? Everything we make should draw shadows.
+When joining online you have to choose draw/fade twice. It also gives you a choice of straight, which im unsure whether thats actually a real choice in golf, needs research. Also, I have to choose it every time i log in - which i think is not just reset database, but a bug.
+The bigger road off the track code is still fucked - on the horsens par 3 its just in front of the first tee. It should always be out of the way, but close to the first tee. How do we ensure it doesn't interfere with play, but is close to the first, which presumably would make it close to the 18th/9th/6th/last hole on most courses
+-The map has trees "outside" the map. I like its current size where its scaled to show just the holes, but it shouldn't draw anything outside of the map edges.
+The hit-numbers as well as the walking steps numbers are big, then get instantly small, They should just get gradually a bit smaller as they fall down the screen. 
 
 
 ## **alpha roadmap**
@@ -36,8 +54,14 @@ goes up from caddying. You can always caddy, doesnt have to be a tournament. Som
 - **handicap**
 Based on real life - you recieve it when you've gotten your golf card, which you get through the introductory quests. ()
 
+- **rep**
+Some sort of way of having a reputation - you lose it by crashing carts, driving on the green, having trolleys go on greens og inbetween greens and bunkers, etc. Everything bad in golf. Maybe only if youre caught for certain things? But then more rep loss if 2, 3 people see you etc. Then some courses have a rep requirement to enter, so you basically lock yourself out of the game from acting bad - but its possible to do.
+
 - **Strength, fade, draw, flop, putting**
 Basically all of these will be unlocked through quests, but all will be available in the alpha. Then when quests are added, they will be hidden behind, but dev accounts should be a thing to turn on to always make them available.
+
+  **Handedness and natural shot**
+This should go into yur skills. When changing your handedness and natural shot, it should be possible always, but probably be gated behind a quest for natural shot. Your handedness could retain 10% of your total exp from the other hand, and then let you train on top, also increasing your skill with the original handedness. The same for the natural shot - some players change it later, but it will affect your skills.
 
 3. **new menu UIs for everything ingame - map, scorecard, party and friends**  
 
@@ -68,6 +92,8 @@ flirting with the cart girl
 - having different bags affecting walking speeds differently - i.e. a smaller setup bag for par 3 courses that would allow you to walk faster.
 - wildlife, set for each course.
 - Active buffs shows, so you can see like how drunks you are, and how other things affect you - e.g. maybe you can be cold / wet, and you can have like a umbrella to lessen the debuff.
+- Tapping it in when its close enough? the gameplay is not that fun at very close putts. At least being able to say good-good, or tapping it in when solo?
+- In game proximity chat? Would be so fucking sick. Maybe just in parties, but you and a caddie or just a group on proximity ingame would be amazing.
 
 ## **story**
 

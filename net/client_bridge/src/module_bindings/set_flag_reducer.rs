@@ -7,6 +7,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct SetFlagArgs {
+    pub expected_room: u64,
     pub hole: i32,
     pub out: bool,
 }
@@ -14,6 +15,7 @@ pub(super) struct SetFlagArgs {
 impl From<SetFlagArgs> for super::Reducer {
     fn from(args: SetFlagArgs) -> Self {
         Self::SetFlag {
+            expected_room: args.expected_room,
             hole: args.hole,
             out: args.out,
         }
@@ -35,8 +37,8 @@ pub trait set_flag {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`set_flag:set_flag_then`] to run a callback after the reducer completes.
-    fn set_flag(&self, hole: i32, out: bool) -> __sdk::Result<()> {
-        self.set_flag_then(hole, out, |_, _| {})
+    fn set_flag(&self, expected_room: u64, hole: i32, out: bool) -> __sdk::Result<()> {
+        self.set_flag_then(expected_room, hole, out, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `set_flag` to run as soon as possible,
@@ -47,6 +49,7 @@ pub trait set_flag {
     ///  and its status can be observed with the `callback`.
     fn set_flag_then(
         &self,
+        expected_room: u64,
         hole: i32,
         out: bool,
 
@@ -59,6 +62,7 @@ pub trait set_flag {
 impl set_flag for super::RemoteReducers {
     fn set_flag_then(
         &self,
+        expected_room: u64,
         hole: i32,
         out: bool,
 
@@ -66,7 +70,13 @@ impl set_flag for super::RemoteReducers {
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
-        self.imp
-            .invoke_reducer_with_callback(SetFlagArgs { hole, out }, callback)
+        self.imp.invoke_reducer_with_callback(
+            SetFlagArgs {
+                expected_room,
+                hole,
+                out,
+            },
+            callback,
+        )
     }
 }

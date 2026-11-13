@@ -153,6 +153,12 @@ private:
     bool content_applied_ = false;
     std::uint32_t self_subscription_ = 0;
     std::uint32_t room_subscription_ = 0;
+    std::optional<tee_reservation_info> reservation_;
+    std::map<std::uint64_t, tee_slot_info> tee_slots_;
+    std::string book_course_;
+    bool book_acknowledged_ = false;
+    std::int64_t book_after_ = 0;
+    std::int64_t last_book_status_at_ = 0;
     room_rows room_;
     server_clock clock_;
     bool self_applied_ = false;     // the first progress snapshot is complete

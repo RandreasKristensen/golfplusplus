@@ -7,12 +7,14 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct UseItemArgs {
+    pub expected_room: u64,
     pub item_id: String,
 }
 
 impl From<UseItemArgs> for super::Reducer {
     fn from(args: UseItemArgs) -> Self {
         Self::UseItem {
+            expected_room: args.expected_room,
             item_id: args.item_id,
         }
     }
@@ -33,8 +35,8 @@ pub trait use_item {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`use_item:use_item_then`] to run a callback after the reducer completes.
-    fn use_item(&self, item_id: String) -> __sdk::Result<()> {
-        self.use_item_then(item_id, |_, _| {})
+    fn use_item(&self, expected_room: u64, item_id: String) -> __sdk::Result<()> {
+        self.use_item_then(expected_room, item_id, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `use_item` to run as soon as possible,
@@ -45,6 +47,7 @@ pub trait use_item {
     ///  and its status can be observed with the `callback`.
     fn use_item_then(
         &self,
+        expected_room: u64,
         item_id: String,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
@@ -56,13 +59,19 @@ pub trait use_item {
 impl use_item for super::RemoteReducers {
     fn use_item_then(
         &self,
+        expected_room: u64,
         item_id: String,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
-        self.imp
-            .invoke_reducer_with_callback(UseItemArgs { item_id }, callback)
+        self.imp.invoke_reducer_with_callback(
+            UseItemArgs {
+                expected_room,
+                item_id,
+            },
+            callback,
+        )
     }
 }

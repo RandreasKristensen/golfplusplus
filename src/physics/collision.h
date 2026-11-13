@@ -28,3 +28,16 @@ ball_state resolve_contact(const ball_state& in,
                            float penetration,
                            float restitution,
                            float friction);
+
+// A golf ball's moment of inertia, as a share of m r^2: a solid sphere's.
+inline constexpr float ball_inertia_share = 0.4f;
+
+// As resolve_contact, but the surface grips the spinning ball where it
+// touches: Coulomb `grip` (a coefficient of friction) trades speed and spin,
+// at most enough to stop the contact point sliding. A rolling ball hitting a
+// wall climbs it.
+ball_state resolve_gripping_contact(const ball_state& in,
+                                    const glm::vec3& normal,
+                                    float penetration,
+                                    float restitution,
+                                    float grip);

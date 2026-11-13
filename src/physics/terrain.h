@@ -134,6 +134,7 @@ struct terrain_sample {
     // The walkable solid whose top `point` is on (an index into the area's
     // solids), -1 on the ground itself. `material` stays the ground's.
     int top_solid = -1;
+    float green_stimp_feet = 0.0f;  // authored green, zero inherits the place
 };
 
 glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, float t);

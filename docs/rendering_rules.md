@@ -24,12 +24,14 @@ with the area's render meshes, never per frame. Every model (a cart, a club,
 what is held, mine pinned to the camera too) is drawn by the one lit prop path
 (`src/renderer/prop_renderer.h`, `prop.frag`): lit where it is in the world by
 the sun, the shadow map and the night lights on the side facing them; a new
-model file needs no shader or drawing code.
+model file needs no shader or drawing code. Everything standing in the world
+casts the sun's shadow: anything drawn outside the prop path (flagsticks,
+signs, fence posts, figures) is added to `src/renderer/shadow_casters.h`.
 
 **Light in the air is real, never boosted.** The air's light all lives in
 `lighting.glsl` (on the CPU for tests: `src/renderer/scattered_light.h`):
-the haze glows toward the sun (Henyey-Greenstein, `sun_glow`,
-`sun_forwardness`), thick as real visibility says (Koschmieder: 3.912 /
+the haze glows toward the sun (Henyey-Greenstein, `sun_glow_at_sun`,
+`sun_glow_spread`), thick as real visibility says (Koschmieder: 3.912 /
 visibility); the night lights' beams scatter by the real inverse square,
 softened over the lamp's housing (`beam_core_meters`), as bright as a surface
 at `beam_near_share` of the reach; the low mist is exponential height fog
@@ -37,12 +39,19 @@ integrated in closed form. Every shader hazes as if the air in front were in
 sun; the sun shaft pass (`sun_shaft_pass.h`) then takes out the glow of the
 air in the shadow map's shadow, and the trees' and floodlights' shadows out of
 the nearest floodlights' beams (`lamp_shadow_pass.h`, maps drawn only when a
-lamp or the casters change). So shafts are invisible in clear air, strong in
-mist and fog, and a beam is bright at the lamp and faint by the ground. Not
+lamp or the casters change). A thin mist lies all day, so the view fades out
+within a kilometre and shafts are faint in clear noon air, strong in mist and
+fog, and a beam is bright at the lamp and faint by the ground. Not
 done: a 3D grid of light cells (froxels) needs compute shaders, which macOS's
 GL 4.1 lacks, and costs too much as fragment shaders; screen-space god rays
 work only with the sun on screen and read as a lens trick. Tune the air by eye
 in the visual tour with the F2 panel (`docs/development.md`).
+
+**Words in the world are sign faces.** Hole signs, way signs and prop boards (the
+bus's destination, the tee book's title) are painted with the pixel font into
+small textures (`renderer/hole_sign_batch.h`), rebuilt only when what they say or
+where they stand changes; never letters made of geometry. Board placement is the
+model's `board_center`/`board_size`/`board_normal` points.
 
 **The ball, cup and flag stay readable at every time of day.** Contrast tests
 in `tests/content_tests.cpp` check them at every palette key and at night:

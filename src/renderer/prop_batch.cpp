@@ -37,6 +37,11 @@ void prop_batch::clear() {
     blended_.clear();
 }
 
+void prop_batch::append(const prop_batch& batch) {
+    opaque_.insert(opaque_.end(), batch.opaque_.begin(), batch.opaque_.end());
+    blended_.insert(blended_.end(), batch.blended_.begin(), batch.blended_.end());
+}
+
 void prop_batch::append(const prop_mesh mesh, const glm::mat4& model, const glm::vec3& color, const float glow,
                         const float alpha) {
     const std::vector<float>& unit = mesh == prop_mesh::cylinder ? cylinder_ : mesh == prop_mesh::sphere ? sphere_ : quad_;
@@ -79,8 +84,9 @@ glm::vec3 painted_color(const prop_part& part, const std::optional<glm::vec3>& p
 }
 
 void append_prop_model(prop_batch& batch, const prop_model& model, const glm::mat4& frame, const glow_floors& glow,
-                       const std::optional<glm::vec3>& ember_color, const std::optional<glm::vec3>& paint) {
-    for (const prop_piece& piece : prop_pieces(model, frame)) {
+                       const std::optional<glm::vec3>& ember_color, const std::optional<glm::vec3>& paint,
+                       const std::optional<prop_part_pose>& pose) {
+    for (const prop_piece& piece : prop_pieces(model, frame, pose)) {
         const bool ember = ember_color && piece.part->tag == "ember";
         const glm::vec3 color = ember ? *ember_color : painted_color(*piece.part, paint);
         batch.append(piece.mesh, piece.model, color, glow_floor(glow, piece.part->glow));
@@ -90,4 +96,11 @@ void append_prop_model(prop_batch& batch, const prop_model& model, const glm::ma
 glm::mat4 mounted_frame(const glm::mat4& frame, const prop_mount& mount, const prop_model& hung) {
     return frame * posed_model(mount.at, mount.up, mount.forward, glm::vec3(1.0f)) *
            glm::translate(glm::mat4(1.0f), -hung.point("hang"));
+}
+
+void append_world_props(prop_batch& batch, const std::vector<static_prop>& placed,
+    const prop_catalog& props, const glow_floors& glow) {
+    for (const auto& prop : placed) {
+        append_prop_model(batch, props.at(prop.model), posed_model(prop.position, world_up, yaw_direction(prop.heading), glm::vec3(1)), glow);
+    }
 }

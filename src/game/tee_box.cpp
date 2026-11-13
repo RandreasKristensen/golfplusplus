@@ -32,6 +32,13 @@ bool on_tee_box(const tee_box& box, const glm::vec3& position) {
         std::abs(glm::dot(offset, box.down_hole)) <= box.half_length;
 }
 
+float distance_from_tee_box(const tee_box& box, const glm::vec3& position) {
+    const glm::vec3 offset = horizontal(position - box.center);
+    const float across = std::max(std::abs(glm::dot(offset, across_of(box.down_hole))) - box.half_width, 0.0f);
+    const float along = std::max(std::abs(glm::dot(offset, box.down_hole)) - box.half_length, 0.0f);
+    return std::sqrt(across * across + along * along);
+}
+
 const tee_box* hole_tee_box(const std::vector<tee_box>& boxes, const std::size_t hole) {
     const auto found = std::find_if(boxes.begin(), boxes.end(), [hole](const tee_box& box) { return box.hole == hole; });
     return found != boxes.end() ? &*found : nullptr;

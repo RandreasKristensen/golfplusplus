@@ -30,9 +30,14 @@ consumer camcorder tape played on a small TV. Real OSM courses are continuous
 places; the practice ground is scripted in `tooling/practice_ground/`. Imports
 should be playable directly; the hole editor is for touch-ups.
 
-Online is the main mode: up to 40 players per course, groups of up to 4, each with
-their own ball and pace. Offline remains complete solo play. Everything is unlocked
+Online is the main mode: one uncapped world per course, tee times every 15 real
+minutes forming groups of up to 5 (an owner departure from real golf), each with
+their own ball and pace. Players only ever see the hub's in-game clock, never
+real-world time or dates. Offline remains complete solo play. Everything is unlocked
 today: no money, shop, quests or unlock gating.
+
+Restrict a player only for a real reason: the rules of golf, fairness, server
+integrity or a physical impossibility. A refusal without one is a bug.
 
 Real golf decides unspecified rules, equipment and physics. Look up uncertain
 facts rather than guessing. Departures require an explicit owner design decision,

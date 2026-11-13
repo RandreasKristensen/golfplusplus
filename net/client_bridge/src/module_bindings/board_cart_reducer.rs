@@ -7,12 +7,16 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct BoardCartArgs {
+    pub expected_room: u64,
     pub owner: u64,
 }
 
 impl From<BoardCartArgs> for super::Reducer {
     fn from(args: BoardCartArgs) -> Self {
-        Self::BoardCart { owner: args.owner }
+        Self::BoardCart {
+            expected_room: args.expected_room,
+            owner: args.owner,
+        }
     }
 }
 
@@ -31,8 +35,8 @@ pub trait board_cart {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`board_cart:board_cart_then`] to run a callback after the reducer completes.
-    fn board_cart(&self, owner: u64) -> __sdk::Result<()> {
-        self.board_cart_then(owner, |_, _| {})
+    fn board_cart(&self, expected_room: u64, owner: u64) -> __sdk::Result<()> {
+        self.board_cart_then(expected_room, owner, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `board_cart` to run as soon as possible,
@@ -43,6 +47,7 @@ pub trait board_cart {
     ///  and its status can be observed with the `callback`.
     fn board_cart_then(
         &self,
+        expected_room: u64,
         owner: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
@@ -54,13 +59,19 @@ pub trait board_cart {
 impl board_cart for super::RemoteReducers {
     fn board_cart_then(
         &self,
+        expected_room: u64,
         owner: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
-        self.imp
-            .invoke_reducer_with_callback(BoardCartArgs { owner }, callback)
+        self.imp.invoke_reducer_with_callback(
+            BoardCartArgs {
+                expected_room,
+                owner,
+            },
+            callback,
+        )
     }
 }

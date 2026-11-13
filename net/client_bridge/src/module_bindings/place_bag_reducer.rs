@@ -7,6 +7,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct PlaceBagArgs {
+    pub expected_room: u64,
     pub place: u8,
     pub seat: u8,
     pub cart_owner: u64,
@@ -19,6 +20,7 @@ pub(super) struct PlaceBagArgs {
 impl From<PlaceBagArgs> for super::Reducer {
     fn from(args: PlaceBagArgs) -> Self {
         Self::PlaceBag {
+            expected_room: args.expected_room,
             place: args.place,
             seat: args.seat,
             cart_owner: args.cart_owner,
@@ -47,6 +49,7 @@ pub trait place_bag {
     /// /// Use [`place_bag:place_bag_then`] to run a callback after the reducer completes.
     fn place_bag(
         &self,
+        expected_room: u64,
         place: u8,
         seat: u8,
         cart_owner: u64,
@@ -55,7 +58,17 @@ pub trait place_bag {
         z: f32,
         yaw: f32,
     ) -> __sdk::Result<()> {
-        self.place_bag_then(place, seat, cart_owner, x, y, z, yaw, |_, _| {})
+        self.place_bag_then(
+            expected_room,
+            place,
+            seat,
+            cart_owner,
+            x,
+            y,
+            z,
+            yaw,
+            |_, _| {},
+        )
     }
 
     /// Request that the remote module invoke the reducer `place_bag` to run as soon as possible,
@@ -66,6 +79,7 @@ pub trait place_bag {
     ///  and its status can be observed with the `callback`.
     fn place_bag_then(
         &self,
+        expected_room: u64,
         place: u8,
         seat: u8,
         cart_owner: u64,
@@ -83,6 +97,7 @@ pub trait place_bag {
 impl place_bag for super::RemoteReducers {
     fn place_bag_then(
         &self,
+        expected_room: u64,
         place: u8,
         seat: u8,
         cart_owner: u64,
@@ -97,6 +112,7 @@ impl place_bag for super::RemoteReducers {
     ) -> __sdk::Result<()> {
         self.imp.invoke_reducer_with_callback(
             PlaceBagArgs {
+                expected_room,
                 place,
                 seat,
                 cart_owner,

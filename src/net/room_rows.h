@@ -45,6 +45,7 @@ private:
     struct member {
         std::uint64_t group_id = 0;
         std::vector<int> round_strokes;
+        bool round_started = false;
     };
     struct motion {
         net_motion value;
@@ -60,6 +61,7 @@ private:
     std::map<std::uint64_t, member> members_;
     std::map<std::uint64_t, named> names_;
     std::map<std::uint64_t, motion> motions_;
+    std::map<std::uint64_t, room_dap> daps_;
     std::map<std::uint64_t, room_ball> balls_;
     std::map<std::uint64_t, room_cart> carts_;
     std::map<std::uint64_t, loadout> loadouts_;

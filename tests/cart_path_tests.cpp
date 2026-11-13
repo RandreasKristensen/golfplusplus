@@ -197,32 +197,60 @@ TEST_CASE("walking onto a cart path, I stand on its top") {
     CHECK(on_top);
 }
 
-TEST_CASE("a sign by each green points along the path to the next tee, beside the path, its face towards it") {
+namespace {
+// Two holes side by side, 80 apart: hole 1 up +z to its pin at z = 200,
+// hole 2 back down from its tee at z = 220.
+std::vector<hole_data> two_holes() {
     hole_data first = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 200.0f), 30.0f);
     hole_data second = straight_hole(glm::vec3(80.0f, 0.0f, 220.0f), glm::vec3(80.0f, 0.0f, 20.0f), 30.0f);
     for (hole_data* hole : {&first, &second}) {
         hole->spline.rough_width = 60.0f;
         hole->material_zones = {circle_zone(material_zone_type::green, hole->pin_position, 10.0f)};
     }
-    // Up beside hole 1, past its green, and across to the second tee.
-    const course_world_cart_road road{2.5f, {glm::vec3(-25.0f, 0.0f, 10.0f), glm::vec3(-25.0f, 0.0f, 235.0f),
-                                             glm::vec3(80.0f, 0.0f, 235.0f)}};
-    const play_area area = area_with_roads({first, second}, {road});
-    REQUIRE(area.way_signs.size() == 1U);
-    const way_sign& sign = area.way_signs.front();
-    CHECK(sign.to_hole == 1U);
-    // Hole 1's green is at z = 200, the path passing it at x = -25 going on
-    // to tee 2: up the path (+z), away from where it came.
-    CHECK(glm::dot(sign.points, glm::vec3(0.0f, 0.0f, 1.0f)) > 0.9f);
-    // Beside the path, on its side away from the pin, its face looking back over it.
-    CHECK(sign.post_foot.x < -25.0f - road.width * 0.5f);
-    CHECK(path_under(area, sign.post_foot) == nullptr);
-    CHECK(glm::dot(sign.face_normal, glm::vec3(1.0f, 0.0f, 0.0f)) > 0.99f);
-    // Its board is fixed to the post's front, so the post never crosses its face.
+    return {first, second};
+}
+
+// Whether any of `sign` stands where play goes: off the rough or on a tee box.
+bool sign_in_play(const play_area& area, const way_sign& sign) {
+    const glm::vec3 end = sign.points * sign.board_half_width;
+    for (const glm::vec3& at : {sign.post_foot, sign.board_center - end, sign.board_center + end,
+                                sign.board_center + end + sign.points * sign.board_half_height}) {
+        if (sample_area(area, at).material != terrain_material::rough ||
+            std::any_of(area.tee_boxes.begin(), area.tee_boxes.end(), [&](const tee_box& box) { return on_tee_box(box, at); })) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// The board is fixed to the post's front and square to the way it points.
+void check_built(const way_sign& sign) {
+    CHECK(std::abs(glm::dot(sign.points, sign.face_normal)) < 0.001f);
     CHECK(glm::dot(horizontal(sign.board_center - sign.post_foot), sign.face_normal) >=
           sign.board_thickness * 0.5f + sign.post_radius - 0.001f);
     CHECK(glm::length(horizontal(sign.board_center - sign.post_foot) -
                       sign.face_normal * glm::dot(horizontal(sign.board_center - sign.post_foot), sign.face_normal)) < 0.001f);
+}
+}
+
+TEST_CASE("a sign behind each green points to where the path to the next tee leaves it, its face back at the green") {
+    const std::vector<hole_data> holes = two_holes();
+    // Up beside hole 1, past its green, and across to the second tee.
+    const course_world_cart_road road{2.5f, {glm::vec3(-25.0f, 0.0f, 10.0f), glm::vec3(-25.0f, 0.0f, 235.0f),
+                                             glm::vec3(80.0f, 0.0f, 235.0f)}};
+    const play_area area = area_with_roads(holes, {road});
+    REQUIRE(area.way_signs.size() == 1U);
+    const way_sign& sign = area.way_signs.front();
+    CHECK(sign.to_hole == 1U);
+    // Behind the green (round z = 200, radius 10), from the tee at the origin.
+    CHECK(sign.post_foot.z > 210.0f);
+    CHECK(std::abs(sign.post_foot.x) < 1.0f);
+    CHECK(!sign_in_play(area, sign));
+    // At the path's nearest joint to the pin, beside the green at x = -25.
+    const glm::vec3 to_path = safe_normalize(horizontal(glm::vec3(-25.0f, 0.0f, 200.0f) - sign.post_foot), glm::vec3(1.0f, 0.0f, 0.0f));
+    CHECK(glm::dot(sign.points, to_path) > 0.99f);
+    CHECK(glm::dot(sign.face_normal, horizontal(holes[0].pin_position - sign.post_foot)) > 0.0f);
+    check_built(sign);
     // Its post and board stop the ball.
     const std::size_t at_foot = static_cast<std::size_t>(std::count_if(area.solids.begin(), area.solids.end(), [&](const solid& thing) {
         return thing.stops_ball && horizontal_distance(thing.base, sign.post_foot) < 1.0f;
@@ -230,49 +258,88 @@ TEST_CASE("a sign by each green points along the path to the next tee, beside th
     CHECK(at_foot >= 2U);
 }
 
-TEST_CASE("with no path that way, the sign stands just off the green pointing straight at the next tee") {
-    hole_data first = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 200.0f), 30.0f);
-    hole_data second = straight_hole(glm::vec3(80.0f, 0.0f, 220.0f), glm::vec3(80.0f, 0.0f, 20.0f), 30.0f);
-    for (hole_data* hole : {&first, &second}) {
-        hole->spline.rough_width = 60.0f;
-        hole->material_zones = {circle_zone(material_zone_type::green, hole->pin_position, 10.0f)};
-    }
-    const play_area area = area_with_roads({first, second}, {});
+TEST_CASE("with no path that way, the sign behind the green points straight at the next tee") {
+    const std::vector<hole_data> holes = two_holes();
+    const play_area area = area_with_roads(holes, {});
     REQUIRE(area.way_signs.size() == 1U);
     const way_sign& sign = area.way_signs.front();
     CHECK(sign.to_hole == 1U);
-    const glm::vec3 to_tee = safe_normalize(horizontal(second.tee_position - sign.board_center), glm::vec3(1.0f, 0.0f, 0.0f));
+    const float from_pin = horizontal_distance(sign.post_foot, holes[0].pin_position);
+    CHECK(sign.post_foot.z > 210.0f);
+    CHECK(from_pin < 10.0f + tuning().way_sign.green_offset + tuning().way_sign.behind_reach + 1.0f);
+    CHECK(!sign_in_play(area, sign));
+    const glm::vec3 to_tee = safe_normalize(horizontal(holes[1].tee_position - sign.post_foot), glm::vec3(1.0f, 0.0f, 0.0f));
     CHECK(glm::dot(sign.points, to_tee) > 0.99f);
-    // Off the green, a few metres past its edge.
-    CHECK(sample_area(area, sign.post_foot).material != terrain_material::green);
-    const float from_pin = horizontal_distance(sign.post_foot, first.pin_position);
-    CHECK(from_pin > 10.0f);
-    CHECK(from_pin < 10.0f + tuning().way_sign.green_offset + tuning().way_sign.path_offset + 4.0f);
-    // Its face looks across the straight way, where you walk past it.
-    CHECK(std::abs(glm::dot(sign.face_normal, sign.points)) < 0.01f);
+    CHECK(glm::dot(sign.face_normal, horizontal(holes[0].pin_position - sign.post_foot)) > 0.0f);
+    check_built(sign);
 }
 
-TEST_CASE("along a path with a junction on the way, a second sign there points the way to take") {
-    hole_data first = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 200.0f), 30.0f);
-    hole_data second = straight_hole(glm::vec3(80.0f, 0.0f, 220.0f), glm::vec3(80.0f, 0.0f, 20.0f), 30.0f);
-    for (hole_data* hole : {&first, &second}) {
-        hole->spline.rough_width = 60.0f;
-        hole->material_zones = {circle_zone(material_zone_type::green, hole->pin_position, 10.0f)};
+TEST_CASE("with the next tee back across the hole, the sign still stands behind the green, off the fairway") {
+    std::vector<hole_data> holes = two_holes();
+    // The next tee level with hole 1's fairway, off to its right: the
+    // straight way there from the green runs down the fairway.
+    holes[1] = straight_hole(glm::vec3(60.0f, 0.0f, 150.0f), glm::vec3(200.0f, 0.0f, 150.0f), 30.0f);
+    holes[1].spline.rough_width = 60.0f;
+    holes[1].material_zones = {circle_zone(material_zone_type::green, holes[1].pin_position, 10.0f)};
+    const play_area area = area_with_roads(holes, {});
+    REQUIRE(area.way_signs.size() == 1U);
+    const way_sign& sign = area.way_signs.front();
+    CHECK(sign.post_foot.z > 210.0f);
+    CHECK(!sign_in_play(area, sign));
+    const glm::vec3 to_tee = safe_normalize(horizontal(holes[1].tee_position - sign.post_foot), glm::vec3(1.0f, 0.0f, 0.0f));
+    CHECK(glm::dot(sign.points, to_tee) > 0.99f);
+    check_built(sign);
+}
+
+TEST_CASE("with the next tee just behind the green, the sign stands well away from it") {
+    std::vector<hole_data> holes = two_holes();
+    // The next tee 12 past the green's edge, straight behind it.
+    holes[1] = straight_hole(glm::vec3(0.0f, 0.0f, 222.0f), glm::vec3(0.0f, 0.0f, 420.0f), 30.0f);
+    holes[1].spline.rough_width = 60.0f;
+    holes[1].material_zones = {circle_zone(material_zone_type::green, holes[1].pin_position, 10.0f)};
+    const play_area area = area_with_roads(holes, {});
+    REQUIRE(area.way_signs.size() == 1U);
+    const way_sign& sign = area.way_signs.front();
+    for (const tee_box& box : area.tee_boxes) {
+        CHECK(distance_from_tee_box(box, sign.post_foot) >= tuning().way_sign.tee_clearance);
     }
+    CHECK(!sign_in_play(area, sign));
+    check_built(sign);
+}
+
+TEST_CASE("along a path with a junction on the way, a second sign there points the way to take, read on the way in") {
+    const std::vector<hole_data> holes = two_holes();
     // Up beside hole 1 to a junction behind its green: on to tee 2 (east),
     // or off north-west elsewhere.
     const glm::vec3 junction(-25.0f, 0.0f, 235.0f);
     const course_world_cart_road up{2.5f, {glm::vec3(-25.0f, 0.0f, 150.0f), junction}};
     const course_world_cart_road on{2.5f, {junction, glm::vec3(80.0f, 0.0f, 235.0f)}};
     const course_world_cart_road off{2.5f, {junction, glm::vec3(-90.0f, 0.0f, 300.0f)}};
-    const play_area area = area_with_roads({first, second}, {up, on, off});
+    const play_area area = area_with_roads(holes, {up, on, off});
     REQUIRE(area.way_signs.size() == 2U);
     const way_sign& at_junction = area.way_signs.back();
     CHECK(at_junction.to_hole == 1U);
     // Just before it on the way in, beside the path up.
     CHECK(at_junction.post_foot.z < junction.z);
     CHECK(horizontal_distance(at_junction.post_foot, junction) < tuning().way_sign.junction_lead + 4.0f);
+    CHECK(path_under(area, at_junction.post_foot) == nullptr);
     CHECK(glm::dot(at_junction.points, glm::vec3(1.0f, 0.0f, 0.0f)) > 0.95f);
+    // The way turns, and its face looks back down the path coming in.
+    CHECK(glm::dot(at_junction.face_normal, glm::vec3(0.0f, 0.0f, -1.0f)) > 0.95f);
+    check_built(at_junction);
+}
+
+TEST_CASE("a junction on the fairway gets no sign") {
+    const std::vector<hole_data> holes = two_holes();
+    // Down hole 1's fairway from by its green to a junction at z = 100, then
+    // across to hole 2 and up to its tee; the other branch on down the fairway.
+    const glm::vec3 junction(0.0f, 0.0f, 100.0f);
+    const course_world_cart_road down{2.5f, {glm::vec3(0.0f, 0.0f, 160.0f), junction}};
+    const course_world_cart_road across{2.5f, {junction, glm::vec3(80.0f, 0.0f, 100.0f), glm::vec3(80.0f, 0.0f, 200.0f)}};
+    const course_world_cart_road on{2.5f, {junction, glm::vec3(0.0f, 0.0f, 40.0f)}};
+    const play_area area = area_with_roads(holes, {down, across, on});
+    REQUIRE(area.way_signs.size() == 1U);
+    CHECK(area.way_signs.front().post_foot.z > 210.0f);
 }
 
 namespace {
@@ -287,8 +354,23 @@ float solid_past_paths(const play_area& area, const solid& thing) {
         }
         return least;
     }
-    return distance_past_cart_paths(area.cart_paths, thing.base) -
-        (thing.shape == solid_shape::box ? std::hypot(thing.half_length, thing.half_width) : thing.radius);
+    if (thing.shape == solid_shape::box) {
+        // Round its outline: a long box (the parked bus) reaches less far sideways than its half diagonal.
+        const glm::vec3 across = yaw_left(thing.along);
+        float least = std::numeric_limits<float>::max();
+        constexpr int samples = 16;
+        for (int k = 0; k <= samples; ++k) {
+            const float t = static_cast<float>(k) / static_cast<float>(samples) * 2.0f - 1.0f;
+            for (const glm::vec3& edge : {thing.along * (thing.half_length * t) + across * thing.half_width,
+                                          thing.along * (thing.half_length * t) - across * thing.half_width,
+                                          thing.along * thing.half_length + across * (thing.half_width * t),
+                                          thing.along * -thing.half_length + across * (thing.half_width * t)}) {
+                least = std::min(least, distance_past_cart_paths(area.cart_paths, thing.base + edge));
+            }
+        }
+        return least;
+    }
+    return distance_past_cart_paths(area.cart_paths, thing.base) - thing.radius;
 }
 }
 
@@ -388,36 +470,57 @@ TEST_CASE("a cart path is drawn on its top as played, facing up, with no gap whe
     }
 }
 
-TEST_CASE("every shipped course has a sign by each green but the last pointing the way to the next tee") {
+TEST_CASE("every shipped course has a sign behind each green but the last, and no way sign stands in play or by a tee") {
     std::vector<std::string> unsigned_greens;
+    std::vector<std::string> in_play;
+    std::vector<std::string> by_tee;
     for (const course_definition& course : shipped_content().courses) {
-        if (course.practice) {
-            continue;
-        }
         game_state state = make_game_state(shipped_content(), save_data{});
         REQUIRE(start_course(state, course));
-        const float reach = state.tuning.way_sign.green_reach + state.tuning.way_sign.path_offset + 4.0f;
         for (std::size_t i = 0; i + 1 < state.holes.size(); ++i) {
+            const glm::vec3& pin = state.holes[i].pin_position;
+            const auto tee_sign = std::find_if(state.area.signs.begin(), state.area.signs.end(),
+                                               [&](const hole_sign& sign) { return sign.area_hole == i; });
+            REQUIRE(tee_sign != state.area.signs.end());
+            const std::vector<glm::vec3>& line = tee_sign->line_of_play;
+            const glm::vec3 behind = horizontal(pin - line[line.size() - 2]);
             const bool signed_way = std::any_of(state.area.way_signs.begin(), state.area.way_signs.end(), [&](const way_sign& sign) {
-                return sign.to_hole == i + 1 && horizontal_distance(sign.post_foot, state.holes[i].pin_position) <= reach;
+                return sign.to_hole == i + 1 && glm::dot(horizontal(sign.post_foot - pin), behind) > 0.0f;
             });
             if (!signed_way) {
                 unsigned_greens.push_back(course.id + " green " + std::to_string(i + 1));
             }
         }
+        for (const way_sign& sign : state.area.way_signs) {
+            CHECK(std::abs(glm::dot(sign.points, sign.face_normal)) < 0.001f);
+            if (sign_in_play(state.area, sign)) {
+                in_play.push_back(course.id + " sign to hole " + std::to_string(sign.to_hole + 1));
+            }
+            for (const tee_box& box : state.area.tee_boxes) {
+                if (distance_from_tee_box(box, sign.post_foot) < state.tuning.way_sign.tee_clearance) {
+                    by_tee.push_back(course.id + " sign to hole " + std::to_string(sign.to_hole + 1) + " by tee " +
+                                     std::to_string(box.hole + 1));
+                }
+            }
+        }
     }
     for (const std::string& green : unsigned_greens) {
-        std::cout << "  no way sign by: " << green << '\n';
+        std::cout << "  no way sign behind: " << green << '\n';
+    }
+    for (const std::string& sign : in_play) {
+        std::cout << "  in play: " << sign << '\n';
+    }
+    for (const std::string& sign : by_tee) {
+        std::cout << "  by a tee: " << sign << '\n';
     }
     CHECK(unsigned_greens.empty());
+    CHECK(in_play.empty());
+    CHECK(by_tee.empty());
 }
 
 TEST_CASE("every shipped course's drawn cart paths lie on their walkable top, nowhere under the ground") {
     std::vector<std::string> sunk;
     for (const course_definition& course : shipped_content().courses) {
-        if (course.practice) {
-            continue;
-        }
         game_state state = make_game_state(shipped_content(), save_data{});
         REQUIRE(start_course(state, course));
         const render_static_mesh drawn = with_cart_paths(render_static_mesh{}, state.area, glm::vec3(0.4f), ground_light_bake{});

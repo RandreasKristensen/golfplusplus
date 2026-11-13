@@ -27,7 +27,8 @@ bool same_intent(const net_motion& a, const net_motion& b) {
     return a.mode == b.mode && a.on_road == b.on_road &&
         direction(a.speed, still_speed) == direction(b.speed, still_speed) &&
         direction(a.turn_rate, still_turn_rate) == direction(b.turn_rate, still_turn_rate) &&
-        a.crouched == b.crouched && (!at_ball(a.mode) || a.setup == b.setup);
+        a.crouched == b.crouched &&
+        (!on_foot_mode(a.mode) || a.speed == b.speed) && (!at_ball(a.mode) || a.setup == b.setup);
 }
 
 motion_mode current_motion_mode(const game_state& state) {
@@ -113,10 +114,10 @@ void push_motion(game_state& state, net_motion now) {
     sync.since_queued = 0.0f;
 }
 
-// The player moves while a finished round's results wait for the group;
-// once they show, nothing is sent.
+// Results hold movement only while shown. Dismissing the card keeps its
+// completed scores while the server follows the walk back to the bus.
 bool sends_motion(const game_state& state) {
-    return is_online(state) && (!round_finished(state.round) || waiting_for_group(state));
+    return is_online(state) && !round_results_shown(state);
 }
 
 // Not while the camera follows my shot, nor while my ball blends to where
@@ -150,7 +151,11 @@ void sync_motion(game_state& state, const float dt) {
     state.motion_sync.since_queued += dt;
     const net_motion now = current_motion(state);
     sync_ride_motion(state, dt);
-    if (holds_motion(state) || !should_send_motion(state.motion_sync, now, state.tuning.net)) {
+    // Even standing steps must drain before a later action sends a batch
+    // larger than the server accepts. Idle time does not buy movement credit.
+    const bool steps_due = !state.motion_sync.unsent.empty() &&
+        state.motion_sync.since_queued >= state.tuning.server.max_motion_gap_seconds;
+    if (holds_motion(state) || (!steps_due && !should_send_motion(state.motion_sync, now, state.tuning.net))) {
         return;
     }
     push_motion(state, now);

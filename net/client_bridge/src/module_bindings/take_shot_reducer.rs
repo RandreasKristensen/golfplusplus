@@ -7,6 +7,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct TakeShotArgs {
+    pub expected_room: u64,
     pub stroke: i32,
     pub aim_angle: f32,
     pub face_open: f32,
@@ -21,6 +22,7 @@ pub(super) struct TakeShotArgs {
 impl From<TakeShotArgs> for super::Reducer {
     fn from(args: TakeShotArgs) -> Self {
         Self::TakeShot {
+            expected_room: args.expected_room,
             stroke: args.stroke,
             aim_angle: args.aim_angle,
             face_open: args.face_open,
@@ -51,6 +53,7 @@ pub trait take_shot {
     /// /// Use [`take_shot:take_shot_then`] to run a callback after the reducer completes.
     fn take_shot(
         &self,
+        expected_room: u64,
         stroke: i32,
         aim_angle: f32,
         face_open: f32,
@@ -62,6 +65,7 @@ pub trait take_shot {
         flags_out: Vec<i32>,
     ) -> __sdk::Result<()> {
         self.take_shot_then(
+            expected_room,
             stroke,
             aim_angle,
             face_open,
@@ -83,6 +87,7 @@ pub trait take_shot {
     ///  and its status can be observed with the `callback`.
     fn take_shot_then(
         &self,
+        expected_room: u64,
         stroke: i32,
         aim_angle: f32,
         face_open: f32,
@@ -102,6 +107,7 @@ pub trait take_shot {
 impl take_shot for super::RemoteReducers {
     fn take_shot_then(
         &self,
+        expected_room: u64,
         stroke: i32,
         aim_angle: f32,
         face_open: f32,
@@ -118,6 +124,7 @@ impl take_shot for super::RemoteReducers {
     ) -> __sdk::Result<()> {
         self.imp.invoke_reducer_with_callback(
             TakeShotArgs {
+                expected_room,
                 stroke,
                 aim_angle,
                 face_open,

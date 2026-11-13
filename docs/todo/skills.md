@@ -2,8 +2,10 @@
 
 The plan for real skills and levels (the owner's list is in `docs/ideas.md`:
 club skills, XP by how a shot went, smoking and drinking, fitness, driving,
-exploration, social, caddying). The tables and rules they stand on are
-built (`docs/networking_rules.md` "Progress lasts").
+exploration and caddying). Social daps are implemented: `social` uses the
+standard curve and generic icon, with `dap_xp` paid to both online participants
+through progress rules, including the hub. There is no Social farming cap.
+The tables and rules they stand on are built (`docs/networking_rules.md` "Progress lasts").
 
 ## 1. What a skill takes now
 

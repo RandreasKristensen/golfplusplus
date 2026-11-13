@@ -10,6 +10,7 @@
 #include "game/reward_rules.h"
 #include "game/shot_simulation.h"
 #include "game/tuning_loader.h"
+#include "physics/cup.h"
 #include "physics/flight_model.h"
 #include "physics/ground_contact.h"
 #include "physics/vector_math.h"
@@ -95,6 +96,7 @@ ball_state resting_ball(const game_state& state, const glm::vec3& position) {
 
 bool same_result(const shot_result& a, const shot_result& b) {
     if (a.rest_position != b.rest_position || a.holed != b.holed || a.duration != b.duration ||
+        a.lost != b.lost || a.penalty_strokes != b.penalty_strokes || a.strike_centredness != b.strike_centredness ||
         a.trajectory != b.trajectory || a.events.size() != b.events.size()) {
         return false;
     }
@@ -190,6 +192,21 @@ TEST_CASE("the same shot twice gives bit-identical results") {
     CHECK(same_result(first, second));
 }
 
+TEST_CASE("the shot comparison detects scoring and strike differences") {
+    shot_result original;
+    original.trajectory = {glm::vec3(0), glm::vec3(1)};
+    original.events = {{0.5f, shot_event_kind::land, terrain_material::fairway}};
+    auto changed = original;
+    changed.lost = true;
+    CHECK(!same_result(original, changed));
+    changed = original;
+    changed.penalty_strokes = 2;
+    CHECK(!same_result(original, changed));
+    changed = original;
+    changed.strike_centredness = 0.5f;
+    CHECK(!same_result(original, changed));
+}
+
 TEST_CASE("playback ends at the simulated rest whatever the frame rate") {
     const game_state start = teed_hole(golden_content(), 0);
     shot_setup input = tee_shot(start, "driver", 0.8f);
@@ -248,8 +265,8 @@ TEST_CASE("golden shots land where they always have") {
         for (const int out : golden_flags_out(shot)) {
             flags_in[static_cast<std::size_t>(out)] = false;
         }
-        shot_course course = make_shot_course(state.area, state.ball->hole, course_weather_at(state, input.shot_at),
-                                              state.course, flags_in, state.tuning);
+        shot_course course = make_shot_course(state.area, state.ball->hole.value_or(state.area.cups.size()), course_weather_at(state, input.shot_at),
+                                              state.place, flags_in, state.tuning);
         const shot_record record{input, shot.value("seed", std::uint64_t{0}),
                                  golden_snapshot(shot, state.area, input.ball_start, input.aim_angle,
                                                  state.tuning.scale.ball_physics_radius_meters)};
@@ -265,7 +282,7 @@ TEST_CASE("golden shots land where they always have") {
         CHECK(matches);
         holed += result.holed ? 1 : 0;
         tree_hits += count_events(result, shot_event_kind::tree_hit) + count_events(result, shot_event_kind::leaves);
-        lost += result.penalty_strokes;
+        lost += result.lost ? 1 : 0;
     }
     // The shots cover the cup, the trees and the water, not only open ground.
     CHECK(holed > 0);
@@ -564,7 +581,7 @@ glm::vec3 backspin(const glm::vec3& velocity, const float rpm) {
 }
 
 const cup& target_cup(const game_state& state) {
-    return state.area.cups[state.ball->hole];
+    return state.area.cups[*state.ball->hole];
 }
 
 // A ball rolling at `speed` along +z on the flat green, from just short of
@@ -594,7 +611,7 @@ TEST_CASE("Penner's green: restitution falls with impact speed, the turf's give 
 TEST_CASE("a ball rolling off a stimpmeter at 1.83 m/s rolls the green's reading in feet") {
     for (const float stimp : {8.0f, 10.0f, 12.0f}) {
         game_state state = started_hole();
-        state.course.green_stimp_feet = stimp;
+        state.place.green_stimp_feet = stimp;
         play_flat_green(state);
         const glm::vec3 from(0.0f, 0.0f, 10.0f);
         const ball_state ball = rolling_ball(state, from, glm::vec3(0.0f, 0.0f, 1.83f));
@@ -607,7 +624,7 @@ TEST_CASE("a green holds a still ball on a slope gentler than its stimp holds, a
     // A stimp-10 green holds a ball up to about 4.4 degrees.
     for (const float degrees : {3.0f, 6.0f}) {
         game_state state = started_hole();
-        state.course.green_stimp_feet = 10.0f;
+        state.place.green_stimp_feet = 10.0f;
         play_flat_green(state, green_length * std::tan(glm::radians(degrees)));
         const ball_state ball = resting_ball(state, glm::vec3(0.0f, 0.0f, 20.0f));
         const shot_result left = simulate_ball(ball, current_shot_course(state), state.tuning);
@@ -658,7 +675,7 @@ TEST_CASE("a putt that rolls off the green is caught by the rough") {
     game_state state = started_hole();
     still_air(state);
     // The first rough beside the tee, away from the fairway.
-    glm::vec3 start = state.holes[state.ball->hole].tee_position;
+    glm::vec3 start = state.holes[*state.ball->hole].tee_position;
     while (sample_area(state.area, start).material != terrain_material::rough) {
         start.x += 0.5f;
     }
@@ -776,20 +793,29 @@ TEST_CASE("water slows a ball more than grass") {
     CHECK(speeds[0] < speeds[1]);
 }
 
-TEST_CASE("a centred putt drops below Holmes's capture speed and runs over the real cup above it") {
+TEST_CASE("a putt drops below Penner's capture speeds, centred or off centre, and runs over the real cup above them") {
+    const std::optional<std::string> text = read_text_file(fixture_root() + "/reference/cup.json");
+    REQUIRE(text.has_value());
+    const std::optional<json> reference = parse_json(*text);
+    REQUIRE(reference.has_value());
+    const std::optional<float> most = json_float(reference->at("capture").at("max_speed_mps"), "value");
+    REQUIRE(most.has_value());
     game_state state = started_hole();
     state.tuning.cup.leniency = 1.0f;
     play_flat_green(state);
     REQUIRE(near(target_cup(state).radius, 0.054f, 1.0e-4f));
     // Holmes's cup has no flagstick in it.
-    state.flags_in[state.ball->hole] = false;
-    // Holmes (1991): dead centre a real ball drops below about 1.31 m/s.
-    CHECK(roll_at_cup(state, 1.1f, 0.0f).holed);
-    CHECK(!roll_at_cup(state, 1.6f, 0.0f).holed);
+    state.flags_in[*state.ball->hole] = false;
+    for (const float share : {0.0f, 0.2f, 0.4f, 0.6f, 0.8f}) {
+        const float limit = *most * (1.0f - share * share);
+        const float offset = share * target_cup(state).radius;
+        CHECK(roll_at_cup(state, 0.9f * limit, offset).holed);
+        CHECK(!roll_at_cup(state, 1.4f * limit, offset).holed);
+    }
     // A bigger cup (cup_leniency) takes a firmer putt.
     game_state lenient = started_hole();
     play_flat_green(lenient);
-    lenient.flags_in[lenient.ball->hole] = false;
+    lenient.flags_in[*lenient.ball->hole] = false;
     CHECK(lenient.tuning.cup.leniency > 1.0f);
     CHECK(roll_at_cup(lenient, 1.8f, 0.0f).holed);
 }
@@ -798,8 +824,8 @@ TEST_CASE("off centre the cup takes only a slower putt: a firm one lips out") {
     game_state state = started_hole();
     play_flat_green(state);
     const float radius = target_cup(state).radius;
-    CHECK(roll_at_cup(state, 1.5f, 0.0f).holed);
-    const shot_result lipped = roll_at_cup(state, 1.5f, 0.8f * radius);
+    CHECK(roll_at_cup(state, 2.3f, 0.0f).holed);
+    const shot_result lipped = roll_at_cup(state, 2.3f, 0.8f * radius);
     CHECK(!lipped.holed);
     CHECK(has_event(lipped, shot_event_kind::cup_rattle));
     CHECK(roll_at_cup(state, 0.6f, 0.8f * radius).holed);
@@ -861,19 +887,40 @@ TEST_CASE("a ball stopping just short of the rim stays out, and one rolling in r
     CHECK(horizontal_distance(holed.rest_position, hole.centre) < hole.radius);
 }
 
+TEST_CASE("the cup's lip is flush with the green, flat or sloped: no ridge round it turns a ball away") {
+    const cup_contact_tuning tuning = shipped_content().tuning.cup.contact;
+    const float radius = 0.02135f;
+    for (const glm::vec3 up : {glm::vec3(0.0f, 1.0f, 0.0f), glm::normalize(glm::vec3(0.0f, 1.0f, 0.03f))}) {
+        cup hole{glm::vec3(0.0f), 0.054f, 0.1016f, 0.003f, up};
+        // The green falls away down the slope (+z) and rises up it.
+        CHECK(lip_height(hole, glm::vec3(0.0f, 0.0f, hole.radius)) <= 0.0f);
+        CHECK(lip_height(hole, glm::vec3(0.0f, 0.0f, -hole.radius)) >= 0.0f);
+        for (const float side : {1.0f, -1.0f}) {
+            for (float reach = hole.radius; reach < hole.radius + 0.03f; reach += 0.001f) {
+                const glm::vec3 on_green(0.0f, 0.0f, side * reach);
+                ball_state ball;
+                ball.radius = radius;
+                ball.position = glm::vec3(0.0f, lip_height(hole, on_green), on_green.z) + up * radius;
+                ball.velocity = glm::vec3(0.0f, 0.0f, -side * 0.5f);
+                CHECK(!cup_contact(ball, hole, tuning).touched);
+            }
+        }
+    }
+}
+
 TEST_CASE("centred putts too firm for the cup mostly drop off the flagstick; with the flag out they run over") {
     game_state state = started_hole();
     play_flat_green(state);
-    REQUIRE(state.flags_in[state.ball->hole]);
+    REQUIRE(state.flags_in[*state.ball->hole]);
     int firm = 0;
     int dropped = 0;
-    for (float speed = 2.2f; speed <= 3.4f; speed += 0.1f) {
-        state.flags_in[state.ball->hole] = false;
+    for (float speed = 3.0f; speed <= 4.4f; speed += 0.1f) {
+        state.flags_in[*state.ball->hole] = false;
         if (roll_at_cup(state, speed, 0.0f).holed) {
             continue;
         }
         ++firm;
-        state.flags_in[state.ball->hole] = true;
+        state.flags_in[*state.ball->hole] = true;
         const shot_result in = roll_at_cup(state, speed, 0.0f);
         CHECK(has_event(in, shot_event_kind::flag_hit));
         dropped += in.holed ? 1 : 0;
@@ -891,10 +938,96 @@ TEST_CASE("a slow putt hitting the flagstick still holes, with no penalty") {
     CHECK(result.penalty_strokes == 0);
 }
 
+namespace {
+// Integrate v / a(v) over speed to derive the initial speed for a rollout.
+// The studies report distances past the hole, not speeds on our test green.
+float speed_for_rollout(const float meters, const float stimp_feet) {
+    constexpr float speed_step = 0.001f;
+    float speed = 0.0f;
+    float distance = 0.0f;
+    while (distance < meters) {
+        const float middle = speed + 0.5f * speed_step;
+        distance += middle / rolling_deceleration(middle, stimp_feet) * speed_step;
+        speed += speed_step;
+    }
+    return speed;
+}
+}
+
+TEST_CASE("flagstick reference: slow and medium direct hits drop, firm glancing hits can escape") {
+    const std::optional<std::string> text = read_text_file(fixture_root() + "/reference/cup.json");
+    REQUIRE(text.has_value());
+    const std::optional<json> reference = parse_json(*text);
+    REQUIRE(reference.has_value());
+    const json& pin = reference->at("flagstick");
+    const std::optional<float> green_stimp = json_float(pin.at("simulation_checks"), "green_stimp_feet");
+    const std::optional<float> pin_diameter = json_float(pin.at("diameter_m"), "value");
+    const std::optional<float> slow_past = json_float(pin.at("mase"), "slow_roll_past_feet");
+    const std::optional<float> too_fast = json_float(pin.at("simulation_checks"), "beyond_test_band_mps");
+    REQUIRE(green_stimp.has_value());
+    REQUIRE(pin_diameter.has_value());
+    REQUIRE(slow_past.has_value());
+    REQUIRE(too_fast.has_value());
+    const float stimp = *green_stimp;
+    REQUIRE(stimp > 0.0f);
+    const json& distances = pin.at("mygolfspy").at("roll_past_feet");
+    REQUIRE(distances.size() == 3U);
+    for (const float leniency : {1.0f, shipped_content().tuning.cup.leniency}) {
+        game_state state = started_hole();
+        state.tuning.cup.leniency = leniency;
+        state.place.green_stimp_feet = stimp;
+        play_flat_green(state);
+        const cup& hole = target_cup(state);
+        CHECK(near(state.tuning.cup.flagstick_radius_meters * 2.0f, *pin_diameter));
+        // The ball starts just short of the front rim: include that approach
+        // when deriving a speed that would finish the stated distance past.
+        const float approach = hole.radius + 0.03f;
+        for (const json& feet : distances) {
+            const float speed = speed_for_rollout(feet.get<float>() * 0.3048f + approach, stimp);
+            const shot_result result = roll_at_cup(state, speed, 0.0f);
+            CHECK(result.holed);
+            CHECK(has_event(result, shot_event_kind::flag_hit));
+            CHECK(result.penalty_strokes == 0);
+        }
+        // Sweep the moderate speeds too: a single slower-centre rejection
+        // must not be hidden by the gameplay cup's larger capture radius.
+        for (int step = 0; step <= 12; ++step) {
+            const float speed = 1.0f + static_cast<float>(step) * 0.05f;
+            CHECK(roll_at_cup(state, speed, 0.0f).holed);
+        }
+        const float glancing = state.tuning.cup.flagstick_radius_meters +
+            0.5f * state.tuning.scale.ball_physics_radius_meters;
+        const float slow = speed_for_rollout(*slow_past * 0.3048f + approach, stimp);
+        const shot_result gentle = roll_at_cup(state, slow, glancing);
+        CHECK(gentle.holed);
+        CHECK(has_event(gentle, shot_event_kind::flag_hit));
+        const float firm = speed_for_rollout(distances.back().get<float>() * 0.3048f + approach, stimp);
+        const shot_result missed = roll_at_cup(state, firm, glancing);
+        if (leniency == 1.0f) {
+            CHECK(!missed.holed);
+            CHECK(has_event(missed, shot_event_kind::flag_hit));
+            // Well outside the studies' putting speeds, even a direct hit
+            // can escape a real cup. The wider gameplay cup can catch more.
+            CHECK(!roll_at_cup(state, *too_fast, 0.0f).holed);
+        }
+    }
+}
+
+TEST_CASE("flagstick reference: its energy loss saves a direct putt too firm for the real cup") {
+    game_state state = started_hole();
+    state.tuning.cup.leniency = 1.0f;
+    play_flat_green(state);
+    const shot_result in = roll_at_cup(state, 2.4f, 0.0f);
+    REQUIRE(in.holed);
+    CHECK(has_event(in, shot_event_kind::flag_hit));
+    state.flags_in[*state.ball->hole] = false;
+    CHECK(!roll_at_cup(state, 2.4f, 0.0f).holed);
+}
+
 TEST_CASE("a putt into the flagstick lying on the green bounces off it, with no penalty") {
     game_state state = started_hole();
     play_flat_green(state);
-    state.flags_in[state.ball->hole] = false;
+    state.flags_in[*state.ball->hole] = false;
     const std::vector<solid> sticks = flagstick_solids(state.area.cups, state.flags_in, state.tuning);
     const auto lying = std::find_if(sticks.begin(), sticks.end(), [](const solid& stick) { return stick.shape == solid_shape::wall; });
     REQUIRE(lying != sticks.end());
@@ -920,7 +1053,7 @@ TEST_CASE("a steep ball landing in the cup dunks; a fast low one skips over") {
         return simulate_ball(ball, current_shot_course(state), state.tuning);
     };
     CHECK(fall_in(3.0f, 5.0f).holed);
-    state.flags_in[state.ball->hole] = false;  // nothing to stop it
+    state.flags_in[*state.ball->hole] = false;  // nothing to stop it
     CHECK(!fall_in(10.0f, 0.5f).holed);
 }
 
@@ -1009,7 +1142,7 @@ TEST_CASE("a well-paced putt drops, a hard one stays out and a short one stops a
         hole_data hole = straight_hole(glm::vec3(0.0f), pin, 20.0f);
         hole.material_zones.push_back(circle_zone(material_zone_type::green, pin, 12.0f));
         play_hole(state, hole);
-        state.flags_in[state.ball->hole] = false;
+        state.flags_in[*state.ball->hole] = false;
         const float radius = state.area.cups[0].radius;
         for (const float distance : {1.0f, 2.0f, 3.0f, 5.0f, 8.0f}) {
             // The softest putt that holes, and how many steps of the meter hole.
@@ -1076,7 +1209,7 @@ TEST_CASE("a stopped shot outside the cup returns to walking without completing"
 
     CHECK(state.mode == game_mode::walking);
     CHECK(state.ball->strokes == 2);
-    CHECK(!hole_played(state.round, 0));
+    CHECK(!hole_played(*state.round, 0));
 }
 
 TEST_CASE("a holed shot completes the hole once it has played") {
@@ -1088,9 +1221,9 @@ TEST_CASE("a holed shot completes the hole once it has played") {
     const std::vector<audio_event> played = play_out(state, 0.016f);
 
     CHECK(count_audio(played, audio_event_type::ball_cup) == 1);
-    CHECK(hole_played(state.round, 0));
-    CHECK(*state.round.strokes[0] == 2);
-    CHECK(state.round.current_hole_index == 1);
+    CHECK(hole_played(*state.round, 0));
+    CHECK(*state.round->strokes[0] == 2);
+    CHECK(state.round->current_hole_index == 1);
     REQUIRE(state.ball.has_value());
     CHECK(state.ball->place == ball_place::in_cup);
     CHECK(state.mode == game_mode::walking);
@@ -1106,8 +1239,8 @@ TEST_CASE("holing the last hole finishes the round and completes the course") {
 
     play_out(state, 0.016f);
 
-    CHECK(round_finished(state.round));
-    CHECK(*state.round.strokes[0] == 3);
+    CHECK(round_finished(*state.round));
+    CHECK(*state.round->strokes[0] == 3);
     CHECK(state.save.completed_course_ids == std::vector<std::string>{"fixture_hub"});
     CHECK(state.save.holes_completed == 1);
     REQUIRE(state.ball.has_value());
@@ -1203,3 +1336,4 @@ TEST_CASE("a ball landing in a shipped bunker plugs where it lands") {
         }
     }
 }
+

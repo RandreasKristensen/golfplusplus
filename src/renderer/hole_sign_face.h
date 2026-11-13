@@ -39,6 +39,9 @@ inline constexpr int hole_sign_map_height = 34;
 inline constexpr int way_sign_face_width = 64;
 inline constexpr int way_sign_face_height = 24;
 
+// A prop board's face is this many texels high, and as wide as its aspect.
+inline constexpr int prop_board_face_height = 24;
+
 struct hole_sign_labels {
     std::string number;  // "HOLE 3"
     std::string par;     // "PAR 4"
@@ -87,6 +90,10 @@ glm::vec3 hole_sign_map_ink(const ground_colors& ground, const hole_sign_map_spo
 // Sets `batch`'s grid to a way sign's face and appends its painted panel
 // and `label`, the hole it points to ("HOLE 4").
 void draw_way_sign_face(overlay_batch& batch, const text_assets& text, const std::string& label);
+
+// Sets `batch`'s grid to `width` x prop_board_face_height texels and appends
+// `label` in dark ink, painted straight onto the board's own colour.
+void draw_prop_board_face(overlay_batch& batch, const text_assets& text, const std::string& label, int width);
 
 // Sets `batch`'s grid to the face and appends the face over the board's
 // wood: the painted panel, the labels and the map of `sign`'s hole (the

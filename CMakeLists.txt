@@ -117,8 +117,18 @@ golfpp_library(golfpp-game
     src/game/delivery.cpp
     src/game/effects.cpp
     src/game/game_content.cpp
+    src/game/game_walking.cpp
     src/game/game_state.cpp
     src/game/interactables.cpp
+    src/game/dap_rules.cpp
+    src/game/social_dap.cpp
+    src/game/place_entry.cpp
+    src/game/hub_ball.cpp
+    src/game/hub_session.cpp
+    src/game/hub_flow.cpp
+    src/game/hub_ball_rules.cpp
+    src/game/hub_loader.cpp
+    src/game/hub_scene.cpp
     src/game/body_contact.cpp
     src/game/golf_cart.cpp
     src/game/bag_handling.cpp
@@ -228,6 +238,7 @@ golfpp_library(golfpp-render-data
     src/renderer/primitive_mesh.cpp
     src/renderer/rangefinder_overlay.cpp
     src/renderer/render_mesh_chunks.cpp
+    src/renderer/dap_pose.cpp
     src/renderer/remote_avatar_batch.cpp
     src/renderer/render_tree.cpp
     src/renderer/scene_lights.cpp
@@ -337,6 +348,7 @@ golfpp_library(golfpp-app-logic
     src/core/look_tuning.cpp
     src/core/menu_controls.cpp
     src/core/online_menus.cpp
+    src/core/tee_book.cpp
     src/core/render_frame.cpp
     src/core/render_gear.cpp
     src/core/render_online.cpp
@@ -368,6 +380,8 @@ target_link_libraries(golfpp-online-session PUBLIC golfpp-app-logic golfpp-net)
 add_executable(golfpp
     src/audio/audio_engine.cpp
     src/core/app.cpp
+    src/core/app_hub.cpp
+    src/core/app_scene.cpp
     src/core/app_look.cpp
     src/core/event_loop.cpp
     src/core/main.cpp
@@ -457,9 +471,24 @@ add_executable(golfpp-shot-lab EXCLUDE_FROM_ALL tooling/shot_lab/shot_lab_main.c
 target_link_libraries(golfpp-shot-lab PRIVATE golfpp-game golfpp-warnings)
 target_compile_definitions(golfpp-shot-lab PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
 
+# Prop inspection uses the executable's actual GL renderer and recording pipeline.
+get_target_property(GOLFPP_GL_SOURCES golfpp SOURCES)
+list(FILTER GOLFPP_GL_SOURCES INCLUDE REGEX "^src/renderer/")
+add_executable(golfpp-preview-prop EXCLUDE_FROM_ALL
+    tooling/art/preview_prop/preview_prop_main.cpp
+    src/core/window.cpp src/core/screenshot.cpp ${GOLFPP_GL_SOURCES})
+target_compile_definitions(golfpp-preview-prop PRIVATE SDL_MAIN_HANDLED GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
+target_link_libraries(golfpp-preview-prop PRIVATE golfpp-app-logic golfpp-warnings ${GOLFPP_SDL2} OpenGL::GL)
+
 if (GOLFPP_NET)
     # A headless client that checks a running server (tooling/net/online_check).
-    add_executable(golfpp-online-check EXCLUDE_FROM_ALL tooling/net/online_check/online_check_main.cpp)
+    add_executable(golfpp-online-check EXCLUDE_FROM_ALL
+        tooling/net/online_check/online_check_main.cpp
+        tooling/net/online_check/check_runtime.cpp
+        tooling/net/online_check/booking_checks.cpp
+        tooling/net/online_check/practice_checks.cpp
+        tooling/net/online_check/social_checks.cpp
+        tooling/net/online_check/round_checks.cpp)
     target_link_libraries(golfpp-online-check PRIVATE golfpp-net golfpp-client-bridge golfpp-warnings)
     target_compile_definitions(golfpp-online-check PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
 endif()
@@ -495,6 +524,7 @@ if (GOLFPP_BUILD_TESTS)
     # SpacetimeDB parts, so tests check it natively against the game.
     add_library(golfpp-server-rules STATIC
         server/golfpp_module/src/account_rules.cpp
+        server/golfpp_module/src/tee_rules.cpp
         server/golfpp_module/src/play_rules.cpp
         server/golfpp_module/src/cart_rules.cpp
         server/golfpp_module/src/movement_rules.cpp
@@ -511,6 +541,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/shot_ability_tests.cpp
         tests/shot_number_tests.cpp
         tests/golf_bag_tests.cpp
+        tests/bag_handling_tests.cpp
         tests/practice_tests.cpp
         tests/osd_tests.cpp
         tests/shot_snapshot_tests.cpp
@@ -547,11 +578,15 @@ if (GOLFPP_BUILD_TESTS)
         tests/interest_rules_tests.cpp
         tests/progress_rollup_tests.cpp
         tests/online_menus_tests.cpp
+        tests/social_dap_tests.cpp
+        tests/hub_flow_tests.cpp
         tests/online_play_tests.cpp
+        tests/scorecard_tests.cpp
         tests/sync_harness.cpp
         tests/sync_tests.cpp
         tests/online_session_tests.cpp
         tests/overlay_batch_tests.cpp
+        tests/tee_rules_tests.cpp
         tests/play_rules_tests.cpp
         tests/physics_tests.cpp
         tests/profiling_tests.cpp

@@ -8,6 +8,10 @@
 #include "game/green_read.h"
 #include "game/group_round.h"
 #include "game/interactables.h"
+#include "game/social_dap.h"
+#include "game/hub_flow.h"
+#include "game/hub_session.h"
+#include "game/hub_ball.h"
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
 #include "game/online_play.h"
@@ -60,10 +64,10 @@ void use_item(game_state& state, std::optional<item_use_shown>& shown, const std
 // Any time, waiting on a rolling ball too.
 void update_item_uses(game_state& state, const game_input& input, const float dt) {
     const loadout equipped = equipped_loadout(state);
-    if (input.use_smokable) {
+    if (input.use_smokable && !dap_holds_movement(state)) {
         use_item(state, state.smoking, equipped.smokable);
     }
-    if (input.use_drinkable) {
+    if (input.use_drinkable && !dap_holds_movement(state)) {
         use_item(state, state.drinking, equipped.drinkable);
     }
     tick_item_use(state.smoking, state.items, dt);
@@ -73,153 +77,10 @@ void update_item_uses(game_state& state, const game_input& input, const float dt
 void update_overlays(game_state& state, const game_input& input, const float dt) {
     const bool walking = state.mode == game_mode::walking;
     update_rangefinder(state, input, dt);
-    update_crouch(state, input, dt);
+    update_crouch(state, dap_holds_movement(state) ? game_input{} : input, dt);
     state.course_map_active = walking && input.course_map_held;
-    state.scorecard_active = walking && input.scorecard_held && !state.course.practice;
+    state.scorecard_active = walking && input.scorecard_held && state.round.has_value();
     state.skills_panel_active = input.skills_panel_held;
-}
-
-// F with what is in reach (game/interactables.h). Teeing up also takes up the
-// ball teed there, like any press beside the ball; with my ball in play on
-// another hole the tee asks first (give_up_prompt). Online the server checks
-// reach from where it last had me: it hears where I stand first.
-void interact(game_state& state) {
-    const std::optional<interactable> near = nearest_interactable(state);
-    if (!near) {
-        return;
-    }
-    switch (near->kind) {
-    case interactable_kind::fallen_bag:
-        take_bag_on_back(state);
-        return;
-    case interactable_kind::tipped_cart:
-        start_righting(state, near->tipped);
-        return;
-    case interactable_kind::ball:
-        step_up_to_ball(state);
-        return;
-    case interactable_kind::bag:
-        open_club_picker(state);
-        return;
-    case interactable_kind::cup_ball:
-        send_motion_now(state);
-        pick_up_cup_ball(state);
-        return;
-    case interactable_kind::collectible:
-        send_motion_now(state);
-        record_collectible_claim(state, state.world.collectibles[near->index]);
-        return;
-    case interactable_kind::tee: {
-        const bool practice = state.course.practice;
-        if (ball_in_play(state) && !practice) {
-            state.give_up_prompt = near->index;
-            return;
-        }
-        // Practising, a ball dropped again where the last was hit is set up
-        // as that one was, so ball after ball needs only the swing.
-        const bool again = practice && state.ball && state.ball->hole == near->index;
-        const address_state last = state.address;
-        send_motion_now(state);
-        if (tee_up(state, near->index, practice)) {
-            step_up_to_ball(state);
-            if (again) {
-                set_up_as(state, last);
-            }
-        }
-        return;
-    }
-    }
-}
-
-// The give-up question at a tee: F gives my hole up and tees up there. Esc,
-// or walking out of the tee's reach, keeps playing it. True when F answered.
-bool answer_give_up_prompt(game_state& state, const game_input& input) {
-    if (!state.give_up_prompt) {
-        return false;
-    }
-    const std::size_t tee = *state.give_up_prompt;
-    const std::vector<interactable> near = interactables_in_reach(state);
-    const bool in_reach = std::any_of(near.begin(), near.end(), [tee](const interactable& thing) {
-        return thing.kind == interactable_kind::tee && thing.index == tee;
-    });
-    if (!in_reach || !ball_in_play(state) || !on_foot(state)) {
-        state.give_up_prompt.reset();
-        return false;
-    }
-    if (!input.interact) {
-        return false;
-    }
-    state.give_up_prompt.reset();
-    send_motion_now(state);
-    if (tee_up(state, tee, true)) {
-        step_up_to_ball(state);
-    }
-    return true;
-}
-
-// The arrow keys and the mouse: on foot they turn me, in a cart my head,
-// slower through the rangefinder's zoom. With the club picker open the
-// arrows pick a club instead.
-void look_around(game_state& state, const game_input& input, const float dt) {
-    const player_tuning& tuning = state.tuning.player;
-    const float slow = 1.0f / rangefinder_magnification(state);
-    const float arrows = state.picker ? 0.0f : 1.0f;
-    const float turn = tuning.turn_rate * turn_direction(input) * arrows * slow;
-    const float look_yaw = input.look_yaw * slow;
-    if (state.ride) {
-        state.look.head_yaw = wrap_angle(state.look.head_yaw + turn * dt + look_yaw);
-    } else {
-        state.player.turn_rate = turn;
-        state.player.yaw = wrap_angle(state.player.yaw + turn * dt + look_yaw);
-    }
-    const float pitch =
-        state.look.pitch + (tuning.look_pitch_rate * look_pitch_direction(input) * arrows * dt + input.look_pitch) * slow;
-    state.look.pitch = std::clamp(pitch, -tuning.max_look_pitch, tuning.max_look_pitch);
-}
-
-void update_walking(game_state& state, const game_input& input, const float dt, frame_profile* profile) {
-    look_around(state, input, dt);
-    if (state.ride) {
-        stop_walking(state);
-        update_cart(state, input, dt, profile);
-        return;
-    }
-
-    // Handling my bag or a club I stand still.
-    if (update_club_picker(state, input) || handling_bag(state)) {
-        stop_walking(state);
-        return;
-    }
-    const glm::vec3 before = state.player.position;
-    // Crouched reading the green I stay put.
-    game_input moving = input;
-    if (crouch_held(state, input)) {
-        moving.forward_held = moving.back_held = moving.strafe_left_held = moving.strafe_right_held = false;
-        moving.jump = false;
-    }
-    walk_steps(state, moving, dt, profile);
-    walk_into_seat(state, moving, dt);
-    update_pacing(state, moving, before);
-    if (input.move_bag) {
-        move_bag(state);
-    }
-    if (input.toggle_flag) {
-        toggle_flag_in_reach(state);
-    }
-
-    const float meters = horizontal_distance(state.player.position, before) * state.tuning.scale.meters_per_world_unit;
-    record_movement(state, state.rewards.walking, state.walk_meters_pending, meters);
-
-    if (!answer_give_up_prompt(state, input) && input.interact) {
-        interact(state);
-    }
-    // Taking up the ball or a seat puts me back on my feet.
-    if (!state.player.vertical.grounded && (state.mode != game_mode::walking || state.ride)) {
-        state.player.vertical = vertical_body{};
-        if (!state.ride) {
-            state.player.position.y = terrain_height(state.area, state.player.position, profile);
-        }
-    }
 }
 
 // Moves the ball along the playing shot; a holed shot completes the hole
@@ -266,7 +127,8 @@ void update_shot_playback(game_state& state, const float dt) {
     }
     // Online the hole is over when the server says so (game/online_play.h).
     if (holed && !is_online(state)) {
-        complete_current_hole(state);
+        if (state.hub) { finish_practice_shot(state); }
+        else { complete_current_hole(state); }
     }
 }
 }
@@ -285,6 +147,8 @@ void tick_item_use(std::optional<item_use_shown>& use, const item_catalog& items
 game_state make_game_state(const game_content& content, const save_data& save) {
     game_state state;
     state.asset_root = content.asset_root;
+    state.hub_props = content.hub_props;
+    state.hub_sky = content.hub.sky;
     state.tuning = content.tuning;
     state.clubs = content.clubs;
     state.rewards = content.rewards;
@@ -298,7 +162,13 @@ game_state make_game_state(const game_content& content, const save_data& save) {
 
 void update_game(game_state& state, const game_input& input, const float raw_dt, frame_profile* profile) {
     const float dt = std::clamp(raw_dt, 0.0f, max_update_seconds);
-    if (round_finished(state.round)) {
+    if (is_online(state) && ((state.online.room && !state.online.room_ready) || !state.hub_flow.travel_course.empty())) { return; }
+    if (state.hub_flow.screen != hub_screen::none || state.hub_flow.ball_request) {
+        update_online_play(state, dt);
+        if (!state.hub_flow.ball_request) { sync_motion(state, dt); }
+        return;
+    }
+    if ((state.round && round_finished(*state.round)) && !state.results_dismissed) {
         // Online, my results wait for the group; the room plays on meanwhile,
         // and I can walk and drive around it, but play nothing more.
         if (waiting_for_group(state)) {
@@ -307,7 +177,7 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
             state.player.move_angle = 0.0f;
             update_item_uses(state, input, dt);
             game_input moving = input;
-            moving.interact = false;
+            moving.interact = input.interact;
             update_walking(state, moving, dt, profile);
             watch_room(state, dt);
             update_remote_players(state, dt);
@@ -330,8 +200,10 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
     follow_ride(state, dt);
     if (input.leave_group) {
         request_leave_group(state);
-    } else if (input.group) {
-        request_group(state);
+    }
+    // Whatever I am doing: the hub's balls are for fooling about.
+    if (input.drop_practice_ball) {
+        request_practice_drop(state);
     }
 
     if (input.cancel && state.give_up_prompt) {
@@ -361,7 +233,7 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
     update_overlays(state, input, dt);
     update_online_play(state, dt);
     update_remote_players(state, dt);
-    sync_motion(state, dt);
+    if (!state.hub_flow.ball_request) { sync_motion(state, dt); }
 }
 
 void update_xp_drops(game_state& state, const float dt) {
@@ -388,7 +260,7 @@ float view_yaw(const game_state& state) {
 }
 
 bool course_started(const game_state& state) {
-    return !state.holes.empty();
+    return state.kind == place_kind::hub ? state.hub.has_value() : !state.holes.empty();
 }
 
 bool ball_in_play(const game_state& state) {
@@ -419,7 +291,11 @@ void toggle_flag_in_reach(game_state& state) {
 }
 
 shot_course current_shot_course(const game_state& state) {
-    return make_shot_course(state.area, state.ball->hole, state.weather, state.course, state.flags_in, state.tuning);
+    auto course = make_shot_course(state.area, state.ball->hole.value_or(state.area.cups.size()), state.weather, state.place, state.flags_in, state.tuning);
+    course.practice = state.kind == place_kind::hub;
+    const float speed = sample_area(state.area, state.ball->position).green_stimp_feet;
+    if (speed > 0) { course.green_stimp_feet = speed; }
+    return course;
 }
 
 void play_shot(game_state& state, shot_result result) {
@@ -453,6 +329,10 @@ static_anchor_cache build_static_anchor_cache(const game_state& state, frame_pro
     for (const course_hole& hole : state.holes) {
         cache.tees.push_back(anchor_on_terrain(area, hole.tee_position, profile));
         cache.pins.push_back(anchor_on_terrain(area, hole.pin_position, profile));
+    }
+    if (state.hub) {
+        for (const auto& cup : state.area.cups) { cache.pins.push_back(cup.centre); }
+        for (const auto& target : state.hub->targets) { cache.pins.push_back(anchor_on_terrain(area, target.position)); }
     }
     for (const course_world_collectible& collectible : state.world.collectibles) {
         cache.collectibles.push_back(anchor_on_terrain(area, collectible.position, profile));

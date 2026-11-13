@@ -33,11 +33,11 @@ double frame_game_day(const sky_timeline& timeline, const course_sky& sky, const
 }
 
 double course_game_day(const game_state& game, const sky_controls& controls, const std::int64_t local_unix_ms) {
-    return frame_game_day(game.tuning.sky_clock, game.course.sky, controls, shared_unix_ms(game, local_unix_ms));
+    return frame_game_day(game.tuning.sky_clock, game.place.sky, controls, shared_unix_ms(game, local_unix_ms));
 }
 
 float course_hour(const game_state& game, const sky_controls& controls, const std::int64_t local_unix_ms) {
-    const double local_day = course_game_day(game, controls, local_unix_ms) + static_cast<double>(game.course.sky.utc_offset_hours) / 24.0;
+    const double local_day = course_game_day(game, controls, local_unix_ms) + static_cast<double>(game.place.sky.utc_offset_hours) / 24.0;
     return static_cast<float>((local_day - std::floor(local_day)) * 24.0);
 }
 
@@ -46,7 +46,7 @@ render_lighting make_render_lighting(const game_state& game, const lighting_pale
     const double latitude = static_cast<double>(game.world.latitude_deg);
     const double longitude = static_cast<double>(game.world.longitude_deg);
     const double game_day = course_game_day(game, controls, local_unix_ms);
-    const sky_state sky = with_lowest_sun(compute_sky_state(game_day, latitude, longitude), game.course.sky.lowest_sun_deg);
+    const sky_state sky = with_lowest_sun(compute_sky_state(game_day, latitude, longitude), game.place.sky.lowest_sun_deg);
     const float sun_elevation_deg = glm::degrees(sky.sun_elevation);
     const lighting_key light = weathered_lighting(lighting_at(palette, sun_elevation_deg), palette.weather, weather);
 
@@ -76,5 +76,6 @@ render_lighting make_render_lighting(const game_state& game, const lighting_pale
     lighting.gain_noise = light.gain_noise;
     lighting.saturation = light.saturation;
     lighting.weather = make_render_sky_weather(weather, palette.weather);
+    lighting.weather.rainbow *= rainbow_sun_share(palette.sky, sun_elevation_deg);
     return lighting;
 }

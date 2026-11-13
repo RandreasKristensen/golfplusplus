@@ -7,6 +7,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct UpdateRideArgs {
+    pub expected_room: u64,
     pub x: f32,
     pub y: f32,
     pub z: f32,
@@ -19,6 +20,7 @@ pub(super) struct UpdateRideArgs {
 impl From<UpdateRideArgs> for super::Reducer {
     fn from(args: UpdateRideArgs) -> Self {
         Self::UpdateRide {
+            expected_room: args.expected_room,
             x: args.x,
             y: args.y,
             z: args.z,
@@ -47,6 +49,7 @@ pub trait update_ride {
     /// /// Use [`update_ride:update_ride_then`] to run a callback after the reducer completes.
     fn update_ride(
         &self,
+        expected_room: u64,
         x: f32,
         y: f32,
         z: f32,
@@ -55,7 +58,17 @@ pub trait update_ride {
         turn_rate: f32,
         client_time: f64,
     ) -> __sdk::Result<()> {
-        self.update_ride_then(x, y, z, yaw, speed, turn_rate, client_time, |_, _| {})
+        self.update_ride_then(
+            expected_room,
+            x,
+            y,
+            z,
+            yaw,
+            speed,
+            turn_rate,
+            client_time,
+            |_, _| {},
+        )
     }
 
     /// Request that the remote module invoke the reducer `update_ride` to run as soon as possible,
@@ -66,6 +79,7 @@ pub trait update_ride {
     ///  and its status can be observed with the `callback`.
     fn update_ride_then(
         &self,
+        expected_room: u64,
         x: f32,
         y: f32,
         z: f32,
@@ -83,6 +97,7 @@ pub trait update_ride {
 impl update_ride for super::RemoteReducers {
     fn update_ride_then(
         &self,
+        expected_room: u64,
         x: f32,
         y: f32,
         z: f32,
@@ -97,6 +112,7 @@ impl update_ride for super::RemoteReducers {
     ) -> __sdk::Result<()> {
         self.imp.invoke_reducer_with_callback(
             UpdateRideArgs {
+                expected_room,
                 x,
                 y,
                 z,

@@ -119,7 +119,7 @@ TEST_CASE("crits are rare: a few stock swings in a hundred at the top level, few
     }
 }
 
-TEST_CASE("my shot's number pops up over my ball as I strike it, rising above it on screen, and is gone after its time") {
+TEST_CASE("my shot's number pops up over my ball as I strike it, falling onto it on screen, and is gone after its time") {
     game_state state = started_hole();
     address_looking_down(state);
     start_swing_on_time(state);
@@ -162,7 +162,7 @@ TEST_CASE("my shot's number pops up over my ball as I strike it, rising above it
     CHECK(!frame_for(state).shot_number);
 }
 
-TEST_CASE("a drive's number is drawn a font size bigger than a pitch's, a crit's bigger still, biggest as it pops") {
+TEST_CASE("a drive's number is drawn a font size bigger than a pitch's, a crit's bigger still, shrinking evenly as it falls") {
     game_state state = started_hole();
     const text_assets text = *load_text_assets(asset_root());
     const auto scale = [&](const float meters, const bool crit, const float age) -> int {
@@ -181,11 +181,17 @@ TEST_CASE("a drive's number is drawn a font size bigger than a pitch's, a crit's
         // Rows of target pixels, edge included, over the font's own.
         return static_cast<int>(std::lround((high - low) * 180.0f)) / (text.font.height + 2);
     };
-    const float settled = state.tuning.shot_numbers.crit_pop_seconds + 0.1f;
+    const float settled = state.tuning.shot_numbers.lifetime_seconds * 0.5f;
     CHECK(scale(60.0f, false, settled) >= 2);
     CHECK(scale(260.0f, false, settled) == scale(60.0f, false, settled) + 1);
     CHECK(scale(60.0f, true, settled) > scale(60.0f, false, settled));
     CHECK(scale(260.0f, true, settled) > scale(260.0f, false, settled));
     CHECK(scale(260.0f, true, 0.0f) > scale(260.0f, true, settled));
+    // Never bigger again as it ages, and smaller by its end.
+    const float lifetime = state.tuning.shot_numbers.lifetime_seconds;
+    for (float age = 0.05f; age < lifetime; age += 0.05f) {
+        CHECK(scale(260.0f, false, age) <= scale(260.0f, false, age - 0.05f));
+    }
+    CHECK(scale(260.0f, false, lifetime * 0.99f) < scale(260.0f, false, 0.0f));
     CHECK(frame_for(state).shot_number->label == "260");
 }

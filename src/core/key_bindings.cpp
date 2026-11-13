@@ -39,7 +39,6 @@ game_input game_input_from_keys(const input_state& keys, const float mouse_look_
 
     // The wheel away from me, like W and up, is more: a longer club in the
     // picker, and at address a longer backswing.
-    const bool shift = keys.left_shift.is_down || keys.right_shift.is_down;
     input.backswing_steps = keys.wheel_steps;
     input.picker_steps = keys.wheel_steps + static_cast<int>(keys.key_w.pressed) - static_cast<int>(keys.key_s.pressed) +
         static_cast<int>(keys.up.pressed) - static_cast<int>(keys.down.pressed);
@@ -49,6 +48,7 @@ game_input game_input_from_keys(const input_state& keys, const float mouse_look_
     input.snap_view = keys.key_r.pressed;
 
     input.interact = keys.key_f.pressed;
+    input.drop_practice_ball = keys.key_g.pressed;
     input.swing = keys.space.pressed;
     input.jump = keys.space.pressed;
     input.cancel = keys.escape.pressed;
@@ -61,7 +61,5 @@ game_input game_input_from_keys(const input_state& keys, const float mouse_look_
     input.skills_panel_held = keys.key_k.is_down;
     input.toggle_pacing = keys.caps_lock.pressed;
     input.crouch_held = keys.key_c.is_down;
-    input.group = keys.key_g.pressed && !shift;
-    input.leave_group = keys.key_g.pressed && shift;
     return input;
 }

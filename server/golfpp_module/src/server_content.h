@@ -6,6 +6,8 @@
 // the game builds from the same files.
 
 #include "game/club_definition.h"
+#include "game/hub_definition.h"
+#include "game/prop_loader.h"
 #include "game/content_hash.h"
 #include "game/course_definition.h"
 #include "game/course_world_definition.h"
@@ -31,12 +33,14 @@
 struct server_content {
     std::uint64_t content_hash = 0;
     game_tuning tuning;
+    prop_catalog hub_props;
     std::vector<club_definition> clubs;
     reward_rules rewards;
     skill_catalog skills;
     item_catalog items;
     loadout default_loadout;  // fits `items`
     pixel_font_data font;
+    std::optional<hub_definition> hub;
     std::vector<course_definition> courses;  // only courses with a world: a room is one
 };
 
@@ -50,7 +54,9 @@ server_content_load_result parse_server_content(const content_files& files);
 // One course as the server plays it, built the way the game builds it
 // (game/course_session.h), so a shot lands in the same place on both.
 struct server_course {
-    course_definition course;
+    place_kind kind = place_kind::course;
+    place_definition course;
+    std::optional<hub_definition> hub;
     course_world_definition world;
     std::vector<hole_data> holes;  // placed where the world puts them
     play_area area;

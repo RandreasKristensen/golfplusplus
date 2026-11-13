@@ -111,6 +111,10 @@ sight_box board_box(const solid& board) {
 }
 
 std::optional<float> solid_hit(const solid& thing, const glm::vec3& eye, const glm::vec3& direction, const float length) {
+    if (thing.shape == solid_shape::box) {
+        return box_hit(sight_box{thing.base + world_up * (0.5f * thing.height), thing.along,
+            glm::vec3(thing.half_length, .5f * thing.height, thing.half_width)}, eye, direction);
+    }
     switch (thing.kind) {
     case solid_kind::trunk:
     case solid_kind::pole:

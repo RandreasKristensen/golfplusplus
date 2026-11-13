@@ -57,7 +57,7 @@ int select_course(int& selection,
                   const int count,
                   const input_state& input,
                   const menu_pointer& pointer,
-                  std::vector<ui_sound>& sounds) {
+                  std::vector<ui_sound>& sounds, const startup_menu_screen screen) {
     if (count <= 0) {
         selection = 0;
         top_row = 0;
@@ -88,11 +88,11 @@ int select_course(int& selection,
     top_row = std::clamp(std::clamp(top_row, row - picker_rows + 1, row), 0, last_top);
     const int first = top_row * picker_columns;
     const int shown = std::min(count - first, picker_columns * picker_rows);
-    const int hovered = pointer.hover ? startup_tile_at(startup_menu_screen::course_picker, shown, *pointer.hover) : -1;
+    const int hovered = pointer.hover ? startup_tile_at(screen, shown, *pointer.hover) : -1;
     if (hovered >= 0) {
         selection = first + hovered;
     }
-    const int hit = pointer.click ? startup_tile_at(startup_menu_screen::course_picker, shown, *pointer.click) : -1;
+    const int hit = pointer.click ? startup_tile_at(screen, shown, *pointer.click) : -1;
     if (hit >= 0) {
         selection = first + hit;
     }

@@ -19,6 +19,10 @@
 #include "game/content_files.h"
 #include "game/course_loader.h"
 #include "game/course_session.h"
+#include "game/hub_scene.h"
+#include "game/hub_session.h"
+#include "game/interactables.h"
+#include "game/movement_step.h"
 #include "game/course_world_loader.h"
 #include "game/hole_sign.h"
 #include "game/hole_loader.h"
@@ -207,12 +211,12 @@ TEST_CASE("the shipped lighting loads, and its daylight shows the scene as it wa
     CHECK(palette->sky.sun_brightness > 1.0f);
 }
 
-TEST_CASE("the shipped mist lies over the course at dawn, thickens in fog and is gone by noon") {
+TEST_CASE("the shipped mist lies over the course at dawn, thickens in fog and is a veil by noon") {
     const std::optional<lighting_palette> palette = load_lighting(asset_root());
     REQUIRE(palette.has_value());
-    // How much of the ground 200 m off the mist hides from a golfer's eye on
-    // the lowest ground, and of a tree top 20 m up as far off.
-    const auto hidden = [](const lighting_key& key, const float height) {
+    // How much of the ground `meters` off the mist hides from a golfer's eye
+    // on the lowest ground, and of a tree top 20 m up as far off.
+    const auto hidden = [](const lighting_key& key, const float height, const float meters = 200.0f) {
         render_lighting lighting;
         lighting.mist_height_meters = key.mist_height_meters;
         lighting.mist_density = key.mist_density;
@@ -220,12 +224,13 @@ TEST_CASE("the shipped mist lies over the course at dawn, thickens in fog and is
         haze.full_distance = 1000.0f;
         haze.eye = glm::vec3(0.0f, 1.6f, 0.0f);
         const frame_lighting_block block = make_frame_lighting_block(lighting, haze, {});
-        return haze_at(block, glm::vec3(0.0f, height, 200.0f));
+        return haze_at(block, glm::vec3(0.0f, height, meters));
     };
     const lighting_key dawn = lighting_at(*palette, 2.0f);
     const lighting_key noon = lighting_at(*palette, 50.0f);
-    CHECK(noon.mist_density == 0.0f);
-    CHECK(hidden(noon, 0.0f) == 0.0f);
+    // At noon the view fades out within a kilometre, yet a 500 m shot still shows through.
+    CHECK(hidden(noon, 0.0f, 1000.0f) > 0.7f);
+    CHECK(hidden(noon, 0.0f, 500.0f) < 0.6f);
     CHECK(hidden(dawn, 0.0f) > 0.5f);
     CHECK(hidden(dawn, 20.0f) < hidden(dawn, 0.0f) - 0.2f);
     const lighting_key foggy = weathered_lighting(noon, palette->weather, shown_weather{0.0f, 0.0f, 1.0f, 0.0f, 0.0f});
@@ -244,7 +249,7 @@ float luminance_contrast(const glm::vec3& a, const glm::vec3& b) {
 }
 }
 
-TEST_CASE("the ball, the alignment stick and the face's line stand out on the grass and the flag against the sky at every time of day") {
+TEST_CASE("the ball stands out on the grass and the flag against the sky at every time of day") {
     constexpr float min_readable_contrast = 1.6f;
     const std::optional<lighting_palette> palette = load_lighting(asset_root());
     REQUIRE(palette.has_value());
@@ -263,13 +268,6 @@ TEST_CASE("the ball, the alignment stick and the face's line stand out on the gr
             const glm::vec3 fairway = colors.ground.fairway * wet * light;
             const glm::vec3 ball = colors.markers.ball * glm::max(light, glm::vec3(colors.glow.ball));
             CHECK(luminance_contrast(ball, fairway) >= min_readable_contrast);
-            // At address the setup on the ground, wherever the ball lies but sand.
-            const glm::vec3 stick = colors.markers.alignment_stick * glm::max(light, glm::vec3(colors.glow.alignment_stick));
-            const glm::vec3 face_line = colors.markers.face_line * glm::max(light, glm::vec3(colors.glow.face_line));
-            for (const glm::vec3& grass : {colors.ground.fairway, colors.ground.rough, colors.ground.green}) {
-                CHECK(luminance_contrast(stick, grass * wet * light) >= min_readable_contrast);
-                CHECK(luminance_contrast(face_line, grass * wet * light) >= min_readable_contrast);
-            }
             const glm::vec3 flag = colors.markers.flag * glm::max(light, glm::vec3(colors.glow.flag));
             for (const course_definition& course : shipped_content().courses) {
                 // The sky at the horizon: the course's haze, giving way to the
@@ -770,6 +768,7 @@ TEST_CASE("the picture style needs every field in range, and the shipped one loa
     CHECK(out_of_range({"tape", "worn", "saturation"}, -0.1f));
     CHECK(out_of_range({"tape", "fresh", "luma_lines"}, 0));
     CHECK(out_of_range({"tape", "tracking_fade_seconds"}, 0));
+    CHECK(out_of_range({"tape", "travel_fade_seconds"}, 0));
     CHECK(out_of_range({"tape", "fresh", "grain"}, 1.5f));
     CHECK(out_of_range({"tape", "worn", "dropouts_per_second"}, -1));
     CHECK(out_of_range({"tv", "scanline_full_factor"}, 1));
@@ -996,6 +995,39 @@ TEST_CASE("json helpers never throw on wrong types") {
     CHECK(json_files_in_directory(fixture_root() + "/missing").empty());
 }
 
+TEST_CASE("json numeric helpers refuse overflow instead of wrapping or producing infinity") {
+    const auto value = parse_json(R"({
+        "int_min": -2147483648, "int_max": 2147483647,
+        "below_int": -2147483649, "above_int": 2147483648,
+        "uint_max": 4294967295, "above_uint": 4294967296,
+        "largest": 18446744073709551615, "negative": -1,
+        "huge": 1e100, "tiny": -1e100,
+        "v2": [1, 1e100], "v3": [1, -1e100, 3],
+        "position": [1, 2, 3], "ordinary": 1.25,
+        "wide_integer": 9223372586610589697
+    })");
+    REQUIRE(value);
+    CHECK(json_int(*value, "int_min") == std::numeric_limits<int>::min());
+    CHECK(json_int(*value, "int_max") == std::numeric_limits<int>::max());
+    for (const char* key : {"below_int", "above_int", "largest"}) {
+        CHECK(!json_int(*value, key));
+    }
+    CHECK(json_uint32(*value, "uint_max") == std::numeric_limits<std::uint32_t>::max());
+    for (const char* key : {"negative", "above_uint", "largest"}) {
+        CHECK(!json_uint32(*value, key));
+    }
+    CHECK(json_uint32(json{{"signed", 1}}, "signed") == 1U);
+    CHECK(!json_float(*value, "huge"));
+    CHECK(!json_float(*value, "tiny"));
+    CHECK(!json_vec2(*value, "v2"));
+    CHECK(!json_vec3(*value, "v3"));
+    CHECK(!json_vec3_array(json::array({(*value)["position"], (*value)["v3"]})));
+    CHECK(json_float(*value, "ordinary") == 1.25f);
+    CHECK(json_float(*value, "wide_integer") == 9223373136366403584.0f);
+    REQUIRE(json_vec3(*value, "position"));
+    CHECK(*json_vec3(*value, "position") == glm::vec3(1, 2, 3));
+}
+
 namespace {
 // The scene target (renderer/picture_size.h) for 4:3, 16:9 and 21:9 windows
 // at the shipped line count; 4:3 is the narrowest the screens are laid out for.
@@ -1111,8 +1143,7 @@ render_data busy_hud(const text_assets& text, const club_definition& club) {
     data.mode_label = format_text(text, text_hud_mode_online,
                                   {{"course", longest_course_name()},
                                    {"room", "99999"},
-                                   {"players", std::to_string(shipped_content().tuning.server.room_capacity)},
-                                   {"capacity", std::to_string(shipped_content().tuning.server.room_capacity)}});
+                                   {"players", "400"}});
     data.show_swing_clock = true;
     data.swing_backswing = 1.0f;
     data.key_hints = text_hud_address_hints;
@@ -1129,7 +1160,7 @@ render_data busy_hud(const text_assets& text, const club_definition& club) {
     }
     data.xp_drops.push_back(render_xp_drop{skill_icon_id::generic, 99999, 0.5f});
     const shot_number_tuning& numbers = shipped_content().tuning.shot_numbers;
-    data.shot_number = render_shot_number{glm::vec3(0.0f), "999", true, numbers.long_half_height * numbers.crit_pop_size, numbers.rise, 1.0f};
+    data.shot_number = render_shot_number{glm::vec3(0.0f), "999", true, numbers.long_half_height * numbers.crit_size * numbers.start_size, numbers.fall, 1.0f};
     data.show_rangefinder = true;
     data.rangefinder_distance_label = format_text(text, text_hud_rangefinder, {{"meters", "999"}});
     data.rangefinder_flag = glm::vec3(0.0f);
@@ -1246,7 +1277,7 @@ TEST_CASE("every shipped course's map numbers each hole in the middle of the hol
             const std::optional<hole_data> hole = load_hole_from_file(course_hole_path(content.asset_root, course, i));
             REQUIRE(hole.has_value());
             const std::vector<glm::vec3> line = line_of_play(place_hole(*hole, world->hole_starts[i]));
-            // The map fits the holes' ribbons (play_area::holes_low/high).
+            // The map fits the holes' ribbons (play_area::holes_outline).
             const glm::vec3 reach(std::max(hole->spline.width, hole->spline.rough_width) * 0.5f);
             for (const glm::vec3& point : line) {
                 low = glm::min(low, point - reach);
@@ -1257,8 +1288,7 @@ TEST_CASE("every shipped course's map numbers each hole in the middle of the hol
                 data.map_holes.push_back(render_map_hole{std::to_string(i + 1), line});
             }
         }
-        data.course_map_low = low;
-        data.course_map_high = high;
+        data.course_map_outline = {low, glm::vec3(high.x, 0.0f, low.z), high, glm::vec3(low.x, 0.0f, high.z)};
         data.player_position = data.map_holes.front().line_of_play.front();
         for (const overlay_grid& grid : shipped_grids()) {
             const course_map_layout layout = make_course_map_layout(data, grid);
@@ -1298,7 +1328,7 @@ TEST_CASE("every shipped hole sign fits its number, par and a four-digit length"
             const std::optional<hole_data> hole = load_hole_from_file(course_hole_path(shipped_content().asset_root, course, i));
             REQUIRE(hole.has_value());
             overlay_batch batch;
-            draw_hole_sign_face(batch, text, make_hole_sign_labels(text, static_cast<int>(i) + 1, hole->par, 9999, course.practice), area,
+            draw_hole_sign_face(batch, text, make_hole_sign_labels(text, static_cast<int>(i) + 1, hole->par, 9999, false), area,
                                 area.signs.front(), test_scene_colors().ground);
             CHECK(batch.truncated_text_count == 0U);
         }
@@ -1419,9 +1449,9 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
     const startup_catalog catalog = load_startup_catalog(shipped_content(), text);
     const online_menu_status online = busy_online(catalog.name_max_length);
     for (const overlay_grid& grid : shipped_grids()) {
-        for (const startup_flow flow : {startup_flow::main, startup_flow::help, startup_flow::course_picker, startup_flow::exit_prompt,
-                                        startup_flow::natural_shape_picker, startup_flow::transport_picker,
-                                        startup_flow::link_code_show, startup_flow::online_course_picker}) {
+        for (const startup_flow flow : {startup_flow::main, startup_flow::help, startup_flow::tour_picker, startup_flow::exit_prompt,
+                                        startup_flow::natural_shape_picker,
+                                        startup_flow::link_code_show}) {
             startup_flow_state state;
             state.flow = flow;
             check_fits(grid, text, state, catalog, online_menu_status{});
@@ -1435,7 +1465,7 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
 
         // A full field, and every message the server or the menus can show.
         for (const startup_flow flow : {startup_flow::main, startup_flow::name_entry, startup_flow::link_code_entry,
-                                        startup_flow::link_code_show, startup_flow::online_course_picker,
+                                        startup_flow::link_code_show,
                                         startup_flow::joining}) {
             for (const std::string& message : online_messages(text)) {
                 startup_flow_state state;
@@ -1782,44 +1812,26 @@ TEST_CASE("every shipped tee has a floodlight, and none stands in a canopy, on a
     }
 }
 
-TEST_CASE("the shipped practice ground: six bays on tee boxes clear of each other, and a green's stations on the lies they are named for") {
-    const game_content& content = shipped_content();
-    const auto found = std::find_if(content.courses.begin(), content.courses.end(),
-                                    [](const course_definition& course) { return course.practice; });
-    REQUIRE(found != content.courses.end());
-    CHECK(!found->carts);
+TEST_CASE("the shipped hub has mats, targets and cups but no holes, signs or round") {
+    const auto& content = shipped_content();
     game_state state = make_game_state(content, save_data{});
-    REQUIRE(start_course(state, *found));
+    REQUIRE(start_hub(state, content.hub));
+    CHECK(state.kind == place_kind::hub);
+    CHECK(!state.round);
+    CHECK(state.holes.empty()); CHECK(state.course_holes.empty());
+    CHECK(state.area.signs.empty()); CHECK(state.area.way_signs.empty());
+    CHECK(state.hub->tee_mats.size() == 15);
+    CHECK(state.hub->targets.size() == 9);
+    REQUIRE(state.area.cups.size() == 3);
+    REQUIRE(state.area.bus);
+    const auto book = state.hub->anchors.book.position;
+    CHECK(horizontal_distance(book, state.area.bus->position) < 20.0f);
+    CHECK(std::any_of(state.hub->tee_mats.begin(), state.hub->tee_mats.end(), [&](const hub_tee_mat& mat) {
+        return mat.raised && horizontal_distance(book, mat.position) < 60.0f; }));
+    CHECK(horizontal_distance(book, state.area.cups.front().centre) < 55.0f);
+    CHECK(horizontal_distance(state.player.position, book) < 6.0f);
 
-    const std::vector<tee_box>& boxes = state.area.tee_boxes;
-    REQUIRE(boxes.size() == 6U);
-    for (std::size_t i = 0; i < boxes.size(); ++i) {
-        for (std::size_t j = 0; j < i; ++j) {
-            // Side by side along the tee line: further apart than either's width.
-            CHECK(horizontal_distance(boxes[i].center, boxes[j].center) > boxes[i].half_width + boxes[j].half_width);
-        }
-    }
-    const auto lie_named = [](const std::string& name) {
-        return name.rfind("Putting", 0) == 0 ? std::vector<ball_lie>{ball_lie::green}
-            : name.rfind("Bunker", 0) == 0   ? std::vector<ball_lie>{ball_lie::bunker}
-            : name.rfind("Chipping", 0) == 0 ? std::vector<ball_lie>{ball_lie::fairway, ball_lie::rough}
-                                             : std::vector<ball_lie>{ball_lie::tee};
-    };
-    std::vector<ball_lie> chips;
-    for (std::size_t i = 0; i < state.course_holes.size(); ++i) {
-        const glm::vec3 drop = state.holes[i].tee_position;
-        const std::vector<ball_lie> named = lie_named(state.course_holes[i].name);
-        const ball_lie lie = lie_at(state.area, drop);
-        CHECK(std::find(named.begin(), named.end(), lie) != named.end());
-        if (state.course_holes[i].name.rfind("Chipping", 0) == 0) {
-            chips.push_back(lie);
-        }
-        // Every station's cup is on a green.
-        CHECK(lie_at(state.area, state.area.cups[i].centre) == ball_lie::green);
-    }
-    // One chip off the apron, one out of the rough.
-    CHECK(std::find(chips.begin(), chips.end(), ball_lie::fairway) != chips.end());
-    CHECK(std::find(chips.begin(), chips.end(), ball_lie::rough) != chips.end());
+    for (const auto& cup : state.area.cups) { CHECK(lie_at(state.area, cup.centre) == ball_lie::green); }
 }
 
 
@@ -1829,5 +1841,114 @@ TEST_CASE("motion interest needs a positive finite cell width") {
             "\"motion_cell_meters\": 100.0", std::string("\"motion_cell_meters\": ") + value));
         CHECK(!result.tuning);
         CHECK(result.error.find("server.motion_cell_meters") != std::string::npos);
+    }
+}
+
+
+TEST_CASE("slow walking factors are required finite fractions of walking speed") {
+    const std::vector<std::string> shipped = json_texts_in_directory(std::filesystem::path(asset_root()) / tuning_path);
+    for (const std::string section : {"pacing", "green_read"}) {
+        const std::string field = section + ".walk_factor";
+        for (const std::string value : {"0.0", "-1.0", "1.0", "1e100", "null", "missing"}) {
+            std::vector<std::string> texts = shipped;
+            int edited = 0;
+            for (std::string& text : texts) {
+                std::optional<json> root = parse_json(text);
+                REQUIRE(root.has_value());
+                if (json_object(*root, section.c_str()) == nullptr) {
+                    continue;
+                }
+                if (value == "missing") {
+                    (*root)[section].erase("walk_factor");
+                } else {
+                    const std::optional<json> replacement = parse_json(value);
+                    REQUIRE(replacement.has_value());
+                    (*root)[section]["walk_factor"] = *replacement;
+                }
+                text = root->dump();
+                ++edited;
+            }
+            REQUIRE(edited == 1);
+            const game_tuning_parse_result result = parse_game_tuning_from_texts(texts);
+            CHECK(!result.tuning);
+            CHECK(result.error.find(field) != std::string::npos);
+        }
+    }
+}
+
+// make_practice_ground.py checks the route and cups against the firing lines.
+TEST_CASE("shipped hub: a walking route reaches the level hill tee") {
+    auto state = make_game_state(shipped_content(), save_data{});
+    REQUIRE(start_hub(state, shipped_content().hub));
+    REQUIRE(state.area.tee_boxes.size() == 9);
+    REQUIRE(!state.world.cart_roads.empty());
+    const auto& route = state.world.cart_roads.front().polyline;
+    CHECK(near(route.front(), state.hub->anchors.book.position));
+    const std::vector<solid> moving;
+    walk_world world{state.area, moving, state.tuning, state.tuning.player.walk_speed, nullptr};
+    walker player; player.position = anchor_on_terrain(state.area, route.front()); player.vertical.y = player.position.y;
+    for (const auto& target : route) {
+        int steps = 0;
+        while (horizontal_distance(player.position, target) > .15f && steps++ < 12000) {
+            move_input input; input.forward = 1; input.yaw = quantise_yaw(yaw_towards(player.position, target));
+            player = step_walker(player, input, world).after;
+        }
+        CHECK(horizontal_distance(player.position, target) <= .15f);
+        CHECK(player.vertical.grounded);
+    }
+    const auto flat = sample_area(state.area, state.area.cups[0].centre);
+    const auto tiered = sample_area(state.area, state.area.cups[1].centre);
+    const auto breaking = sample_area(state.area, state.area.cups[2].centre);
+    CHECK(flat.green_stimp_feet == 9); CHECK(tiered.green_stimp_feet == 11); CHECK(breaking.green_stimp_feet == 8);
+    CHECK(near(flat.normal, world_up, .001f)); CHECK(breaking.normal.x < -.02f);
+}
+
+TEST_CASE("shipped hub: the parked bus stands level on its pad and its door is reachable on foot") {
+    auto state = make_game_state(shipped_content(), save_data{});
+    REQUIRE(start_hub(state, shipped_content().hub));
+    REQUIRE(state.area.bus);
+    const auto parked = std::find_if(state.area.props.begin(), state.area.props.end(),
+        [](const static_prop& prop) { return prop.model == "hub_bus"; });
+    REQUIRE(parked != state.area.props.end());
+    const auto& model = test_props().at("hub_bus");
+    for (const char* wheel : {"wheel_contact_fl", "wheel_contact_fr", "wheel_contact_rl", "wheel_contact_rr"}) {
+        CHECK(model.point(wheel).y == 0);
+        const auto contact = prop_point(*parked, model.point(wheel));
+        CHECK(std::abs(contact.y - terrain_height(state.area, contact)) < .02f);
+    }
+    const std::vector<solid> moving;
+    walk_world world{state.area, moving, state.tuning, state.tuning.player.walk_speed, nullptr};
+    walker player; player.position = anchor_on_terrain(state.area, state.hub->anchors.book.position);
+    player.vertical.y = player.position.y;
+    for (int steps = 0; horizontal_distance(player.position, state.area.bus->position) > .15f && steps < 4000; ++steps) {
+        move_input input; input.forward = 1; input.yaw = quantise_yaw(yaw_towards(player.position, state.area.bus->position));
+        player = step_walker(player, input, world).after;
+    }
+    state.player.position = player.position;
+    for (const auto mode : {play_mode::offline, play_mode::online}) {
+        state.play = mode;
+        const auto found = nearest_interactable(state);
+        REQUIRE(found); CHECK(found->kind == interactable_kind::bus);
+    }
+}
+
+TEST_CASE("shipped courses: each has a bus standing level on its pad, door reachable on foot from its path") {
+    const auto& model = test_props().at("hub_bus");
+    for (const course_definition& course : shipped_content().courses) {
+        auto state = make_game_state(shipped_content(), save_data{});
+        REQUIRE(start_course(state, course));
+        REQUIRE(state.world.bus_stop);
+        REQUIRE(state.area.bus);
+        const auto parked = std::find_if(state.area.props.begin(), state.area.props.end(),
+            [](const static_prop& prop) { return prop.model == "hub_bus"; });
+        REQUIRE(parked != state.area.props.end());
+        for (const char* wheel : {"wheel_contact_fl", "wheel_contact_fr", "wheel_contact_rl", "wheel_contact_rr"}) {
+            const auto contact = prop_point(*parked, model.point(wheel));
+            CHECK(std::abs(contact.y - terrain_height(state.area, contact)) < .02f);
+        }
+        state.player.position = anchor_on_terrain(state.area, state.area.bus->position);
+        const auto found = nearest_interactable(state);
+        REQUIRE(found); CHECK(found->kind == interactable_kind::bus);
+        CHECK(sample_area(state.area, state.area.bus->position).material != terrain_material::water);
     }
 }

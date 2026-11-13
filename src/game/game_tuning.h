@@ -188,12 +188,6 @@ struct setup_tuning {
     // counts), or the touchpad's two fingers scrolling this far across.
     int swipe_drag_counts = 0;
     float swipe_wheel_amount = 0.0f;
-    // The setup on the ground (game/address_view.h): the face's line past
-    // the head each way, and the alignment stick this far out from the ball
-    // along my toes, this long each way.
-    float face_line_half_length_meters = 0.0f;
-    float stick_out_meters = 0.0f;
-    float stick_half_length_meters = 0.0f;
 };
 
 struct player_tuning {
@@ -215,7 +209,7 @@ struct player_tuning {
     // side (game/golf_bag.h).
     float bag_reach = 0.0f;
     float bag_set_down_distance = 0.0f;
-    // Handling my bag takes this long, standing still: setting it down,
+    // Handling my bag takes this long, while walking on: setting it down,
     // taking it up, onto or off a cart (game/bag_handling.h); swapping the
     // club in hand for one from it, club_swap_seconds.
     float bag_handle_seconds = 0.0f;
@@ -391,28 +385,30 @@ struct xp_drop_tuning {
 };
 
 // The number a struck shot pops up as (game/shot_number.h): a crit within
-// crit_share of its planned carry. It rises `rise` (overlay clip units)
-// above the ball over lifetime_seconds, fading over its last fade_share.
-// Its box is half_height high (clip units) at no distance, long_half_height
-// at long_meters and beyond, a crit's crit_size times that, and
-// crit_pop_size times for its first crit_pop_seconds.
+// crit_share of its planned carry. It pops up `fall` (overlay clip units)
+// over the ball and falls onto it over lifetime_seconds, fading over its
+// last fade_share. Its box is half_height high (clip units) at no distance,
+// long_half_height at long_meters and beyond, a crit's crit_size times
+// that; start_size times as it pops up, shrinking evenly to end_size times
+// by the end of its life.
 struct shot_number_tuning {
     float crit_share = 0.0f;
     float lifetime_seconds = 0.0f;
-    float rise = 0.0f;
+    float fall = 0.0f;
     float fade_share = 0.0f;
     float half_height = 0.0f;
     float long_half_height = 0.0f;
     float long_meters = 0.0f;
     float crit_size = 0.0f;
-    float crit_pop_size = 0.0f;
-    float crit_pop_seconds = 0.0f;
+    float start_size = 0.0f;
+    float end_size = 0.0f;
 };
 
 // Pacing a distance off on foot (game/pacing.h): a pace is pace_meters of
 // level ground; its count pops up popup_ahead_meters ahead of my eyes and
 // popup_drop_meters under them, as a shot's number does (shot_numbers).
 struct pacing_tuning {
+    float walk_factor = 0.0f;  // fraction of item-modified walking speed
     float pace_meters = 0.0f;
     float popup_ahead_meters = 0.0f;
     float popup_drop_meters = 0.0f;
@@ -425,6 +421,7 @@ struct pacing_tuning {
 // downhill at drift_speed_per_percent m/s per percent of slope, and stays
 // put under level_percent.
 struct green_read_tuning {
+    float walk_factor = 0.0f;  // fraction of item-modified walking speed
     float eye_height = 0.0f;
     float crouch_seconds = 0.0f;
     float spacing_meters = 0.0f;
@@ -455,7 +452,6 @@ struct net_tuning {
     float shot_correction_distance = 0.0f;
     float shot_correction_seconds = 0.0f;
     float remote_trail_fade_seconds = 0.0f;  // another player's shot trail, after the ball stops
-    float group_join_distance = 0.0f;        // G joins the group of a player this close (world units)
     float notice_seconds = 0.0f;             // how long a refusal from the server shows
     // Driving with a passenger, my cart goes to them alone (the ride_motion
     // row only the rider follows) this often, seconds; they ride on it
@@ -468,8 +464,16 @@ struct net_tuning {
 // client's honest rounding and lag, not cheating.
 struct server_tuning {
     float motion_cell_meters = 0.0f;  // visible motion: this spatial cell and its eight neighbours
-    int room_capacity = 0;
+    // Owner departure from real golf: tee-time groups hold five, rather than four.
     int group_capacity = 0;
+    float group_tee_spacing_meters = 0.0f;
+    int tee_interval_minutes = 0;
+    int tee_expiry_minutes = 0;
+    int bus_early_minutes = 0;
+    float bus_reach_meters = 0.0f;
+    int tee_book_days = 0;
+    float warmup_distance_meters = 0.0f;
+    float warmup_reach_meters = 0.0f;
     int name_min_length = 0;  // code points
     int name_max_length = 0;
     float link_code_minutes = 0.0f;  // how long a link code works
@@ -519,11 +523,14 @@ struct hole_sign_tuning {
 };
 
 // The signs pointing the way from every green but the last to the next tee
-// (game/way_sign.h), in world units: a board on one post beside the way.
+// (game/way_sign.h), in world units: a board on one post out of play.
 struct way_sign_tuning {
-    float green_reach = 0.0f;   // a path leads the way when it comes this near the pin and the next tee
-    float green_offset = 0.0f;  // with no path, the sign stands this far past the green's edge
-    float path_offset = 0.0f;   // the post's foot, past the path's edge (or the straight way's middle)
+    float path_reach = 0.0f;     // a path leads the way when it comes this near the pin and the next tee
+    float green_offset = 0.0f;   // the sign behind a green: at least this far past its edge
+    float behind_reach = 0.0f;   // and up to this much further out, until it stands out of play
+    float behind_spread = 0.0f;  // degrees either side of straight behind it may turn to, failing that
+    float tee_clearance = 0.0f;  // every sign at least this far from every tee box, out of the way of play from it
+    float path_offset = 0.0f;    // a junction's sign: the post's foot past the path's edge
     float junction_lead = 0.0f;  // a junction's sign stands this far back along the way in
     float board_width = 0.0f;  // along the way it points
     float board_height = 0.0f;
@@ -774,7 +781,23 @@ struct golfer_tuning {
     float word_threshold = 0.0f;
 };
 
+// Shared paired greeting: real metres and server-clock seconds.
+struct dap_tuning {
+    float reach_meters = 0.0f;
+    float seconds = 0.0f;
+    float contact_share = 0.0f;
+    float release_share = 0.0f;
+    float hand_height_meters = 0.0f;
+    float rest_height_meters = 0.0f;
+    float hand_side_meters = 0.0f;
+    float hand_forward_meters = 0.0f;
+    float fist_radius_meters = 0.0f;
+    float arm_radius_meters = 0.0f;
+    float thumb_share = 0.0f;
+};
+
 struct game_tuning {
+    dap_tuning dap;
     world_scale_tuning scale;
     terrain_build_tuning terrain;
     physics_tuning physics;

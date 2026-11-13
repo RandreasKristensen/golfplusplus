@@ -3,6 +3,7 @@
 #include "game/address_view.h"
 #include "game/golf_bag.h"
 #include "game/golf_cart.h"
+#include "game/hub_flow.h"
 #include "game/mode_dispatch.h"
 #include "game/remote_players.h"
 #include "game/shot_ability.h"
@@ -156,14 +157,14 @@ void launch_shot(game_state& state) {
     if (state.address.answer) {
         result = room_shot_result(state, *state.address.answer);
         number = shot_number_for(state.address.answer->record, state.address.answer->golfer, lie,
-                                 state.course.green_stimp_feet, state.tuning, state.clubs);
+                                 current_shot_course(state).green_stimp_feet, state.tuning, state.clubs);
     } else {
         shot_course course = current_shot_course(state);
         course.weather = course_weather_at(state, setup.shot_at);
         const shot_record record{setup, next_shot_seed(state), offline_snapshot(state)};
         ++state.shots_hit;
         result = simulate_struck_shot(record, my_golfer(state), course, state.tuning, state.clubs);
-        number = shot_number_for(record, my_golfer(state), lie, state.course.green_stimp_feet, state.tuning, state.clubs);
+        number = shot_number_for(record, my_golfer(state), lie, current_shot_course(state).green_stimp_feet, state.tuning, state.clubs);
     }
     if (number) {
         state.shot_number = shot_number_popup{*number, 0.0f};
@@ -207,6 +208,7 @@ void step_up_to_ball(game_state& state) {
         state.notice = game_notice{text_hud_bag_on_back, 0.0f};
         return;
     }
+    if (state.ball->kind == ball_kind::warmup) { select_putter(state); club = club_in_hand(state); }
     const glm::vec3 ball = state.ball->position;
     address_state address;
     address.setup = stock_setup(*club, lie_at(state.area, ball), ball, state.player.yaw, state.hand,
@@ -366,6 +368,6 @@ eye_view my_address_eye(const game_state& state) {
     return address_eye(state.area, state.address.setup, state.address.look, state.tuning);
 }
 
-address_marks my_address_marks(const game_state& state) {
-    return address_marks_for(state.area, state.address.setup, *club_in_hand(state), state.tuning);
+address_feet my_address_feet(const game_state& state) {
+    return address_feet_for(state.area, state.address.setup, state.tuning);
 }

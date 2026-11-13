@@ -1,7 +1,7 @@
 #pragma once
 
 // Everything F acts on, in reach of me on foot: my ball, my ball in its cup, a
-// collectible, an unplayed hole's tee (every station's on a practice
+// collectible, a nearby online golfer, an unplayed hole's tee (every station's on a practice
 // ground), my bag, my bag on a cart that has gone over, a tipped cart.
 // Anything in reach can be used at any time; the nearest wins, and where two
 // are as near, the kind listed first. Cart seats are walked into, not F'd
@@ -15,6 +15,12 @@
 #include <vector>
 
 enum class interactable_kind {
+    dap,
+    tee_book,
+    bus,
+    booked_start,
+    warmup,
+    practice_ball, // F picks it up; swing beside it addresses it
     ball,         // my ball, teed or at rest: take it up to play it
     cup_ball,     // my ball in its cup: pick it up
     collectible,  // by index into world.collectibles

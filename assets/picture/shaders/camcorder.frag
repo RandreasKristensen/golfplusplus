@@ -21,6 +21,7 @@ uniform vec3 u_shadow_tint;
 uniform vec4 u_gain;           // gain (0..1), grain, colour noise, smear strength
 uniform float u_smear_fade;    // how much of a column's smear is lost per picture height from its light
 uniform float u_field;
+uniform float u_fade;          // the fader: 0 the picture .. 1 black
 
 uvec3 pcg3d(uvec3 v) {
     v = v * 1664525u + 1013904223u;
@@ -71,5 +72,5 @@ void main() {
     vec3 chroma = noise - dot(noise, luma_weights);
     float grain = hash3(seed ^ uvec3(0x9e37u, 0x79b9u, 0x7f4au)).x;
     color += u_gain.x * (u_gain.y * grain + u_gain.z * chroma);
-    frag_color = vec4(clamp(color, 0.0, 1.0), 1.0);
+    frag_color = vec4(clamp(color, 0.0, 1.0) * (1.0 - u_fade), 1.0);
 }

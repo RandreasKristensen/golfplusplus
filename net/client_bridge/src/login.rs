@@ -106,6 +106,34 @@ pub fn forget_refresh_token(config: &AuthConfig) {
     }
 }
 
+#[cfg(all(test, target_os = "windows"))]
+mod credential_tests {
+    use super::*;
+    use crate::client::StdbClient;
+
+    #[test]
+    fn guest_sign_out_preserves_browser_sign_in() {
+        let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let config = AuthConfig {
+            issuer: "https://cleanup2.invalid".into(), client_id: format!("test-{}-{unique}", std::process::id()),
+            scopes: String::new(), authorization_endpoint: String::new(), token_endpoint: String::new(),
+            page_signed_in: String::new(), page_failed: String::new(),
+        };
+        struct TestCredential(keyring::Entry);
+        impl Drop for TestCredential {
+            fn drop(&mut self) { let _ = self.0.delete_credential(); }
+        }
+        let entry = keyring_entry(&config).unwrap();
+        assert!(matches!(entry.get_password(), Err(keyring::Error::NoEntry)));
+        entry.set_password("disposable-test-credential").unwrap();
+        let entry = TestCredential(entry);
+        StdbClient::new(String::new(), String::new(), config.clone(), true).sign_out();
+        assert!(entry.0.get_password().is_ok());
+        StdbClient::new(String::new(), String::new(), config, false).sign_out();
+        assert!(matches!(entry.0.get_password(), Err(keyring::Error::NoEntry)));
+    }
+}
+
 fn client(config: &AuthConfig, redirect: Option<&str>) -> Result<OidcClient, String> {
     let auth = AuthUrl::new(config.authorization_endpoint.clone()).map_err(|e| failure(FAILED_SIGN_IN, e))?;
     let token = TokenUrl::new(config.token_endpoint.clone()).map_err(|e| failure(FAILED_SIGN_IN, e))?;

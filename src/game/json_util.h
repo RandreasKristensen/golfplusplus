@@ -3,6 +3,7 @@
 // Shared JSON helpers for every loader. None of them throw: a missing key or
 // a wrong type gives nullopt (or an empty result), and the caller decides
 // whether that is an error. Reading files is game/content_files.h.
+// Numeric reads also refuse values outside the destination's finite range.
 
 #include <cstdint>
 #include <map>

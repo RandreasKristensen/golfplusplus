@@ -30,10 +30,6 @@ void start_club_swap(game_state& state, const std::string& club_out) {
     state.handling = handling;
 }
 
-bool handling_bag(const game_state& state) {
-    return state.handling.has_value();
-}
-
 std::optional<bag_handling> handling_after(const bag_handling& handling, const player_tuning& tuning, const float dt) {
     bag_handling next = handling;
     next.elapsed += dt;

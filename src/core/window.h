@@ -9,7 +9,7 @@ class window {
 public:
     // `vsync` maps to the GL swap interval (off only for profiling, see
     // core/startup_options.h). A missing icon is logged and ignored.
-    bool init(const char* title, int width, int height, bool vsync, const std::string& icon_path);
+    bool init(const char* title, int width, int height, bool vsync, const std::string& icon_path, bool hidden = false);
     void shutdown();
     void swap();
     // Borderless at the desktop's resolution, or back to the window.

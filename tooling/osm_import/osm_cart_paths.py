@@ -18,8 +18,10 @@ least, a path read from the aerial photos next, and plain rough more;
 fairways and tees cost much more (a path crosses one only when it must),
 ponds more still (a bridge), and greens and bunkers are never crossed.
 
-Each stretch of the network records its source: "osm", "aerial" or
-"generated". Pure Python.
+Each stretch of the network records its source: "osm", "aerial",
+"generated", or "bus_stop" for the path made from the club bus's stop to the
+first tee (made on every course, so it says nothing of the network's kind).
+Pure Python.
 """
 
 import heapq
@@ -29,7 +31,7 @@ from collections import Counter, defaultdict
 
 import osm_outline
 
-OSM, AERIAL, GENERATED = "osm", "aerial", "generated"
+OSM, AERIAL, GENERATED, BUS_STOP = "osm", "aerial", "generated", "bus_stop"
 BLOCKED = math.inf
 
 
@@ -343,10 +345,14 @@ def _cut_at_bends(line, sharpest: float, reach: float):
     return [piece for piece in pieces if len(piece) >= 2]
 
 
-def build_network(holes, osm_paths, aerial_points, start, rules: dict) -> list[dict]:
+def build_network(holes, osm_paths, aerial_points, start, rules: dict, bus_stop=None) -> list[dict]:
     """The course's cart paths (course world `cart_roads`, polylines in local
     metres as [x, 0, z]) linking `start` (the clubhouse, or None) to the first
-    tee, each hole's tee to its green and each green to the next tee.
+    tee, each hole's tee to its green and each green to the next tee, the
+    first tee reached from beside or behind it, never across its first shot. A
+    `bus_stop` (osm_bus_stop.choose) always gets a path from its approach to
+    the first tee, along mapped paths where they lead there, and no path runs
+    under the parked bus.
 
     `holes`, in play order: {"tee": (x, z), "pin": (x, z), "par", "line": tee
     to pin, "greens", "bunkers", "waters", "fairways", "tees": rings}. `osm_paths`: {"line", "ref", "surface", "cartpath"} for each path
@@ -356,7 +362,7 @@ def build_network(holes, osm_paths, aerial_points, start, rules: dict) -> list[d
         return []
     cell = float(rules["cell_meters"])
     width = float(rules["width_meters"])
-    pts = [p for h in holes for p in h["line"]] + ([start] if start else [])
+    pts = [p for h in holes for p in h["line"]] + ([start] if start else []) + ([bus_stop["approach"]] if bus_stop else [])
     margin = float(rules["margin_meters"])
     grid = _Grid((min(p[0] for p in pts) - margin, min(p[1] for p in pts) - margin),
                  (max(p[0] for p in pts) + margin, max(p[1] for p in pts) + margin), cell)
@@ -374,9 +380,15 @@ def build_network(holes, osm_paths, aerial_points, start, rules: dict) -> list[d
     # Clear of the greens and bunkers always; of the water but for a bridge.
     greens = filled("greens")
     blocked = grid.grown(greens, half + float(away["green"][0])) | grid.grown(filled("bunkers"), half + float(away["hazard"]))
+    # The parked bus is kept two cells clear: past the game's cart path
+    # clearance after grid rounding, simplifying and smoothing.
+    parked = set()
+    if bus_stop:
+        grid.fill_ring(bus_stop["footprint"], parked)
+        blocked |= grid.grown(parked, half + 2.0 * cell)
     near_green = grid.grown(greens, half + float(away["green"][1]))
     # What a smoothed curve must still keep off: the greens and bunkers themselves.
-    on_hazard = grid.grown(greens | filled("bunkers"), half)
+    on_hazard = grid.grown(greens | filled("bunkers"), half) | grid.grown(parked, half + 2.0 * cell)
     water = grid.grown(filled("waters"), half + float(away["hazard"]))
     # OSM's paths cross the fairways' edges but never run down them; every
     # tee, OSM's and the tee box the game lays at each hole's, is kept clear
@@ -435,18 +447,36 @@ def build_network(holes, osm_paths, aerial_points, start, rules: dict) -> list[d
     def free(index):
         return index in open_ground and base_cost(index) <= float(costs["rough"]) + float(costs["outside_band"])
 
-    def lay(cells, bridging=False):
-        """Adds `cells` to the network; `bridging`, a gap between mapped
-        paths takes the source of the path before it."""
-        source = GENERATED
+    def lay(cells, bridging=False, made=GENERATED):
+        """Adds `cells` to the network, those on no mapped path as `made`;
+        `bridging`, a gap between mapped paths takes the source of the path
+        before it."""
+        source = made
         for index in cells:
             if index in osm or index in aerial or not bridging:
-                source = OSM if index in osm else AERIAL if index in aerial else GENERATED
+                source = OSM if index in osm else AERIAL if index in aerial else made
             network.setdefault(index, source)
         edges.update((min(a, b), max(a, b)) for a, b in zip(cells, cells[1:]))
 
     edges = set()
+
+    def behind_tee(h):
+        """Whether a cell is level with or behind `h`'s tee, so a path reaches
+        it from beside or behind and never crosses its first shot. Only the
+        first tee's: the paths are laid with no idea of the ground's slope, and
+        another tee's behind may be a bank no cart climbs."""
+        line = h["line"]
+        way = (line[1][0] - line[0][0], line[1][1] - line[0][1]) if len(line) >= 2 else (0.0, 0.0)
+
+        def ok(index):
+            x, z = grid.centre(index)
+            return free(index) and (x - h["tee"][0]) * way[0] + (z - h["tee"][1]) * way[1] <= 0.0
+        return ok
+
     tees = [_nearest_free(grid, h["tee"], free) for h in holes]
+    first_end = _nearest_free(grid, holes[0]["tee"], behind_tee(holes[0]))
+    if first_end is not None:
+        tees[0] = first_end
     greens = [_nearest_free(grid, h["pin"], free) for h in holes]
     # Each leg: the cells it runs between, and the places they stand for.
     connectors = [(greens[i], tees[i + 1], holes[i]["pin"], holes[i + 1]["tee"]) for i in range(len(holes) - 1)]
@@ -520,7 +550,20 @@ def build_network(holes, osm_paths, aerial_points, start, rules: dict) -> list[d
         else:
             print(f"  [warn] no cart path from {grid.centre(begin)} to {grid.centre(end)}", file=sys.stderr)
 
-    surface_of = {OSM: None, AERIAL: rules["aerial_surface"], GENERATED: rules["generated_surface"]}
+    if bus_stop:
+        # From beside the door, which may stand in a fairway's or tee's band.
+        begin, end = _nearest_free(grid, bus_stop["approach"], lambda index: index in open_ground), tees[0]
+        if begin is not None and end is not None and begin != end:
+            # Mapped paths cost least, so it takes them where they lead, from the door itself.
+            cells = _route(grid, base_cost, begin, end, ((0, grid.rows - 1), (0, grid.columns - 1)), least)
+            if cells is not None and len(cells) >= 2:
+                lay(cells, made=BUS_STOP)
+                laid_ends.update((cells[0], cells[-1]))
+            else:
+                print("  [warn] no path from the bus stop to the first tee", file=sys.stderr)
+
+    surface_of = {OSM: None, AERIAL: rules["aerial_surface"], GENERATED: rules["generated_surface"],
+                  BUS_STOP: rules["generated_surface"]}
     roads = []
     ends = laid_ends
     least_run = max(2, int(round(float(rules["least_source_run_meters"]) / cell)))

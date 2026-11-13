@@ -100,7 +100,31 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     };
 
     game_tuning tuning;
+    const section_reader dap = section("dap");
+    tuning.dap.reach_meters = dap.number("reach_meters");
+    if (tuning.dap.reach_meters <= 0.0f) { missing.push_back("dap.reach_meters"); }
+    tuning.dap.seconds = dap.number("seconds");
+    if (tuning.dap.seconds <= 0.0f) { missing.push_back("dap.seconds"); }
+    tuning.dap.contact_share = dap.number("contact_share");
+    if (tuning.dap.contact_share <= 0.0f) { missing.push_back("dap.contact_share"); }
+    tuning.dap.release_share = dap.number("release_share");
+    if (tuning.dap.release_share <= 0.0f) { missing.push_back("dap.release_share"); }
+    tuning.dap.hand_height_meters = dap.number("hand_height_meters");
+    if (tuning.dap.hand_height_meters <= 0.0f) { missing.push_back("dap.hand_height_meters"); }
+    tuning.dap.rest_height_meters = dap.number("rest_height_meters");
+    if (tuning.dap.rest_height_meters <= 0.0f) { missing.push_back("dap.rest_height_meters"); }
+    tuning.dap.hand_side_meters = dap.number("hand_side_meters");
+    if (tuning.dap.hand_side_meters <= 0.0f) { missing.push_back("dap.hand_side_meters"); }
+    tuning.dap.hand_forward_meters = dap.number("hand_forward_meters");
+    if (tuning.dap.hand_forward_meters <= 0.0f) { missing.push_back("dap.hand_forward_meters"); }
+    tuning.dap.fist_radius_meters = dap.number("fist_radius_meters");
+    if (tuning.dap.fist_radius_meters <= 0.0f) { missing.push_back("dap.fist_radius_meters"); }
+    tuning.dap.arm_radius_meters = dap.number("arm_radius_meters");
+    if (tuning.dap.arm_radius_meters <= 0.0f) { missing.push_back("dap.arm_radius_meters"); }
+    if (tuning.dap.contact_share >= tuning.dap.release_share || tuning.dap.release_share >= 1.0f) { missing.push_back("dap.timeline"); }
 
+    tuning.dap.thumb_share = dap.number("thumb_share");
+    if (tuning.dap.thumb_share <= 0.0f || tuning.dap.thumb_share >= 1.0f) { missing.push_back("dap.thumb_share"); }
     const section_reader scale = section("scale");
     tuning.scale.meters_per_world_unit = scale.number("meters_per_world_unit");
     tuning.scale.ball_physics_radius_meters = scale.number("ball_physics_radius_meters");
@@ -249,7 +273,8 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.cup.leniency = cup.number("leniency");
     tuning.cup.rim_radius_meters = cup.number("rim_radius_meters");
     tuning.cup.contact.rim_restitution = cup.number("rim_restitution");
-    tuning.cup.contact.rim_friction = cup.number("rim_friction");
+    tuning.cup.contact.rim_grip = cup.number("rim_grip");
+    tuning.cup.contact.wall_grip = cup.number("wall_grip");
     tuning.cup.contact.liner_restitution = cup.number("liner_restitution");
     tuning.cup.contact.liner_friction = cup.number("liner_friction");
     tuning.cup.flagstick_radius_meters = cup.number("flagstick_radius_meters");
@@ -287,9 +312,6 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.setup.pull_counts_per_step = setup.integer("pull_counts_per_step");
     tuning.setup.swipe_drag_counts = setup.integer("swipe_drag_counts");
     tuning.setup.swipe_wheel_amount = setup.number("swipe_wheel_amount");
-    tuning.setup.face_line_half_length_meters = setup.number("face_line_half_length_meters");
-    tuning.setup.stick_out_meters = setup.number("stick_out_meters");
-    tuning.setup.stick_half_length_meters = setup.number("stick_half_length_meters");
 
     const section_reader player = section("player");
     tuning.player.walk_speed = player.number("walk_speed");
@@ -385,11 +407,19 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.rangefinder.false_return_meters = rangefinder.number("false_return_meters");
 
     const section_reader pacing = section("pacing");
+    tuning.pacing.walk_factor = pacing.number("walk_factor");
+    if (!std::isfinite(tuning.pacing.walk_factor) || tuning.pacing.walk_factor <= 0.0f || tuning.pacing.walk_factor >= 1.0f) {
+        missing.push_back("pacing.walk_factor");
+    }
     tuning.pacing.pace_meters = pacing.number("pace_meters");
     tuning.pacing.popup_ahead_meters = pacing.number("popup_ahead_meters");
     tuning.pacing.popup_drop_meters = pacing.number("popup_drop_meters");
 
     const section_reader green_read = section("green_read");
+    tuning.green_read.walk_factor = green_read.number("walk_factor");
+    if (!std::isfinite(tuning.green_read.walk_factor) || tuning.green_read.walk_factor <= 0.0f || tuning.green_read.walk_factor >= 1.0f) {
+        missing.push_back("green_read.walk_factor");
+    }
     tuning.green_read.eye_height = green_read.number("eye_height");
     tuning.green_read.crouch_seconds = green_read.number("crouch_seconds");
     tuning.green_read.spacing_meters = green_read.number("spacing_meters");
@@ -420,14 +450,14 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     const section_reader shot_numbers = section("shot_numbers");
     tuning.shot_numbers.crit_share = shot_numbers.number("crit_share");
     tuning.shot_numbers.lifetime_seconds = shot_numbers.number("lifetime_seconds");
-    tuning.shot_numbers.rise = shot_numbers.number("rise");
+    tuning.shot_numbers.fall = shot_numbers.number("fall");
     tuning.shot_numbers.fade_share = shot_numbers.number("fade_share");
     tuning.shot_numbers.half_height = shot_numbers.number("half_height");
     tuning.shot_numbers.long_half_height = shot_numbers.number("long_half_height");
     tuning.shot_numbers.long_meters = shot_numbers.number("long_meters");
     tuning.shot_numbers.crit_size = shot_numbers.number("crit_size");
-    tuning.shot_numbers.crit_pop_size = shot_numbers.number("crit_pop_size");
-    tuning.shot_numbers.crit_pop_seconds = shot_numbers.number("crit_pop_seconds");
+    tuning.shot_numbers.start_size = shot_numbers.number("start_size");
+    tuning.shot_numbers.end_size = shot_numbers.number("end_size");
 
     const section_reader net = section("net");
     tuning.net.cart_reconcile_distance = net.number("cart_reconcile_distance");
@@ -442,7 +472,6 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.net.shot_correction_distance = net.number("shot_correction_distance");
     tuning.net.shot_correction_seconds = net.number("shot_correction_seconds");
     tuning.net.remote_trail_fade_seconds = net.number("remote_trail_fade_seconds");
-    tuning.net.group_join_distance = net.number("group_join_distance");
     tuning.net.notice_seconds = net.number("notice_seconds");
     tuning.net.ride_motion_interval_seconds = net.number("ride_motion_interval_seconds");
     tuning.net.ride_correction_seconds = net.number("ride_correction_seconds");
@@ -452,8 +481,21 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     if (!(tuning.server.motion_cell_meters > 0.0f) || !std::isfinite(tuning.server.motion_cell_meters)) {
         missing.push_back("server.motion_cell_meters (positive)");
     }
-    tuning.server.room_capacity = server.integer("room_capacity");
     tuning.server.group_capacity = server.integer("group_capacity");
+    tuning.server.group_tee_spacing_meters = server.number("group_tee_spacing_meters");
+    tuning.server.tee_book_days = server.integer("tee_book_days");
+    tuning.server.warmup_distance_meters = server.number("warmup_distance_meters");
+    tuning.server.warmup_reach_meters = server.number("warmup_reach_meters");
+    tuning.server.bus_reach_meters = server.number("bus_reach_meters");
+    tuning.server.bus_early_minutes = server.integer("bus_early_minutes");
+    tuning.server.tee_expiry_minutes = server.integer("tee_expiry_minutes");
+    tuning.server.tee_interval_minutes = server.integer("tee_interval_minutes");
+    if (tuning.server.group_capacity <= 0 || tuning.server.tee_interval_minutes <= 0 ||
+        tuning.server.tee_expiry_minutes <= 0 || tuning.server.tee_book_days <= 0 ||
+        tuning.server.bus_early_minutes < 0 || !(tuning.server.bus_reach_meters > 0) || !(tuning.server.warmup_distance_meters > 0.0f) ||
+        !(tuning.server.warmup_reach_meters > 0.0f) || !(tuning.server.group_tee_spacing_meters > 0.0f)) {
+        missing.push_back("server tee times (positive interval, expiry, horizon, capacity and spacing; nonnegative bus lead)");
+    }
     tuning.server.name_min_length = server.integer("name_min_length");
     tuning.server.name_max_length = server.integer("name_max_length");
     tuning.server.link_code_minutes = server.number("link_code_minutes");
@@ -485,8 +527,11 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.hole_sign.post_radius = hole_sign.number("post_radius");
 
     const section_reader way_sign = section("way_sign");
-    tuning.way_sign.green_reach = way_sign.number("green_reach");
+    tuning.way_sign.path_reach = way_sign.number("path_reach");
     tuning.way_sign.green_offset = way_sign.number("green_offset");
+    tuning.way_sign.behind_reach = way_sign.number("behind_reach");
+    tuning.way_sign.behind_spread = way_sign.number("behind_spread");
+    tuning.way_sign.tee_clearance = way_sign.number("tee_clearance");
     tuning.way_sign.path_offset = way_sign.number("path_offset");
     tuning.way_sign.junction_lead = way_sign.number("junction_lead");
     tuning.way_sign.board_width = way_sign.number("board_width");

@@ -133,21 +133,14 @@ struct flag_pose {
     float flap = 0.0f;
 };
 
-// Standing over my ball, the setup on the ground (game/address_view.h
-// address_marks): the alignment stick with its stock tick, the face's line,
-// and my shoes, toes towards the ball.
-struct render_address_marks {
-    glm::vec3 face_heel{0.0f};
-    glm::vec3 face_toe{0.0f};
-    glm::vec3 stick_back{0.0f};
-    glm::vec3 stick_front{0.0f};
-    glm::vec3 stock_tick{0.0f};
+// My shoes at address, toes towards the ball.
+struct render_address_feet {
     glm::vec3 lead_foot{0.0f};
     glm::vec3 trail_foot{0.0f};
     glm::vec3 ball{0.0f};
 };
 
-void append_address_marks(world_marker_batch& batch, const render_address_marks& marks, const scene_colors& colors);
+void append_address_feet(world_marker_batch& batch, const render_address_feet& marks, const scene_colors& colors);
 
 // A collectible lying out on the course: a lost ball. `index` is its place in
 // the course's list, so each keeps its paint (marker_colors) frame to frame.
@@ -173,12 +166,13 @@ struct world_marker_scene {
     float cup_depth_meters = 0.0f;
     float pin_visual_height_meters = 0.0f;
     flag_pose flag;
-    // Where the camera is, and how wide one scene pixel is a metre from it:
-    // flagsticks are drawn at least a pixel wide.
+    // A flagstick's real radius; where the camera is, and how wide one scene
+    // pixel is a metre from it: flagsticks are drawn at least a pixel wide.
+    float flagstick_radius_meters = 0.0f;
     glm::vec3 camera_position{0.0f};
     float pixel_per_meter = 0.0f;
 
-    const render_address_marks* address_marks = nullptr;
+    const render_address_feet* address_feet = nullptr;
 
     float ball_visual_radius_meters = 0.0f;
 
@@ -205,12 +199,19 @@ void append_tee_box(world_marker_batch& batch, const tee_box& box, const marker_
 // cylinder marking its opening, then every one's inside in the cup's colour.
 void append_cup_holes(world_marker_batch& batch, const std::vector<glm::vec3>& centres, float radius, float depth,
                       const marker_colors& colors, const glow_floors& glow);
-// The pole, and its flag flying as `flag` says from the top of it in two
-// panels, hoist to fly. The pole is never narrower than about a scene pixel
-// (`pixel_meters` wide where it stands), so far off it still shows.
+// How a standing flagstick's pole is seen: its real radius, the way from it
+// towards the eye, and how wide a scene pixel is where it stands.
+struct pole_view {
+    float radius_meters = 0.0f;
+    glm::vec3 toward_eye{0.0f, 0.0f, 1.0f};
+    float pixel_meters = 0.0f;
+};
+// The pole, one panel turned to the eye at its real width, or a scene pixel
+// wide where that is thinner, so far off it still shows; then its flag flying
+// as `flag` says from the top of it in two panels, hoist to fly.
 void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, float pin_visual_height_meters,
                           const marker_colors& colors, const glow_floors& glow, const flag_pose& flag = flag_pose{},
-                          float pixel_meters = 0.0f);
+                          const pole_view& pole = pole_view{});
 // A flagstick taken out, lying on the green from `foot` to `tip`, its flag
 // flat on the ground at the tip end.
 void append_lying_flagstick(world_marker_batch& batch, const glm::vec3& foot, const glm::vec3& tip,

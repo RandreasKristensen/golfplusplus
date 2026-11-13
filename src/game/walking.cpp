@@ -3,9 +3,11 @@
 #include "game/body_contact.h"
 #include "game/effects.h"
 #include "game/game_state.h"
+#include "game/green_read.h"
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
 #include "game/movement_step.h"
+#include "game/pacing.h"
 #include "game/play_area.h"
 #include "game/player_jump.h"
 #include "game/world_sounds.h"
@@ -26,19 +28,22 @@ float rise_over_ground(const game_state& state, const glm::vec3& feet, frame_pro
 void walk_steps(game_state& state, const game_input& input, const float dt, frame_profile* profile) {
     player_state& player = state.player;
     const float rise_before = rise_over_ground(state, player.position, profile);
-    player.hop_pending = player.hop_pending || input.jump;
+    const bool crouched = crouch_held(state, input);
+    player.hop_pending = !crouched && (player.hop_pending || input.jump);
     player.unstepped_seconds += dt;
     const std::vector<solid> moving = walking_obstacles(state);
     const float walk_speed = effective_value(state.tuning.player.walk_speed, effect_target_walk_speed, current_effects(state),
                                              shot_unix_ms(state));
-    const walk_world world{state.area, moving, state.tuning.player, walk_speed, profile};
+    const walk_world world{state.area, moving, state.tuning, walk_speed, profile};
     while (player.unstepped_seconds >= move_step_seconds - step_rounding) {
         player.unstepped_seconds -= move_step_seconds;
         move_input step;
         step.kind = move_kind::walk;
         step.forward = static_cast<std::int8_t>(walk_direction(input));
         step.side = static_cast<std::int8_t>(strafe_direction(input));
-        step.run = input.run_held;
+        step.run = input.run_held && !crouched;
+        step.paced = state.pacing.has_value();
+        step.crouched = crouched;
         step.jump = player.hop_pending;
         step.yaw = quantise_yaw(player.yaw);
         player.hop_pending = false;
@@ -46,8 +51,10 @@ void walk_steps(game_state& state, const game_input& input, const float dt, fram
         const walk_step walked = step_walker(
             walker{player.position, player.vertical, player.step_speed, player.step_move_angle, player.against_obstacle}, step,
             world);
+        const float traveled = horizontal_distance(player.position, walked.after.position) * state.tuning.scale.meters_per_world_unit;
         player.position = walked.after.position;
         player.vertical = walked.after.vertical;
+        count_paces(state, traveled);
         player.step_speed = walked.after.speed;
         player.step_move_angle = walked.after.move_angle;
         player.against_obstacle = walked.after.against_obstacle;

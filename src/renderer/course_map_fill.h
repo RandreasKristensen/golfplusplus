@@ -48,6 +48,9 @@ struct course_map_layout {
     glm::vec2 center{0.0f, 0.02f};
     glm::vec2 half_size{0.68f, 0.76f};
     glm::vec3 world_center{0.0f};
+    // The map turned about world_center (cosine, sine; counter-clockwise on
+    // the paper), so the course's widest way lies across it.
+    glm::vec2 turn{1.0f, 0.0f};
     // Clip units per world unit along x and y: equal on screen, so different
     // in clip units unless the target is square.
     glm::vec2 scale{0.01f};
@@ -56,9 +59,12 @@ struct course_map_layout {
 // True when both layouts produce exactly the same map-space geometry.
 bool course_map_layouts_match(const course_map_layout& a, const course_map_layout& b);
 
-// World position -> overlay clip space. The paper map reads from the player's
-// perspective, so world +X maps left.
+// World position -> overlay clip space. Unturned, the paper map reads from
+// the player's perspective: world +X maps left and +Z up.
 glm::vec2 map_point(const course_map_layout& layout, const glm::vec3& position);
+
+// Clip units between the paper's edge and the ground printed on it.
+inline constexpr float course_map_fill_inset = 0.025f;
 
 // Appends the clipped scan-converted strip quads of one map-space triangle;
 // one thinner than a strip still gets one, so small triangles (the ground's

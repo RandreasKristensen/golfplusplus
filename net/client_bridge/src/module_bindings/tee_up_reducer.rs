@@ -7,6 +7,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct TeeUpArgs {
+    pub expected_room: u64,
     pub hole_index: i32,
     pub give_up: bool,
 }
@@ -14,6 +15,7 @@ pub(super) struct TeeUpArgs {
 impl From<TeeUpArgs> for super::Reducer {
     fn from(args: TeeUpArgs) -> Self {
         Self::TeeUp {
+            expected_room: args.expected_room,
             hole_index: args.hole_index,
             give_up: args.give_up,
         }
@@ -35,8 +37,8 @@ pub trait tee_up {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`tee_up:tee_up_then`] to run a callback after the reducer completes.
-    fn tee_up(&self, hole_index: i32, give_up: bool) -> __sdk::Result<()> {
-        self.tee_up_then(hole_index, give_up, |_, _| {})
+    fn tee_up(&self, expected_room: u64, hole_index: i32, give_up: bool) -> __sdk::Result<()> {
+        self.tee_up_then(expected_room, hole_index, give_up, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `tee_up` to run as soon as possible,
@@ -47,6 +49,7 @@ pub trait tee_up {
     ///  and its status can be observed with the `callback`.
     fn tee_up_then(
         &self,
+        expected_room: u64,
         hole_index: i32,
         give_up: bool,
 
@@ -59,6 +62,7 @@ pub trait tee_up {
 impl tee_up for super::RemoteReducers {
     fn tee_up_then(
         &self,
+        expected_room: u64,
         hole_index: i32,
         give_up: bool,
 
@@ -68,6 +72,7 @@ impl tee_up for super::RemoteReducers {
     ) -> __sdk::Result<()> {
         self.imp.invoke_reducer_with_callback(
             TeeUpArgs {
+                expected_room,
                 hole_index,
                 give_up,
             },

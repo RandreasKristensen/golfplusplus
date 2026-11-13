@@ -1,4 +1,5 @@
 {
+  "dap_xp": { "skill": "social", "xp": 10 },
   "shot_xp": { "skill": "golf_swing", "xp": 25 },
   "movement_xp": {
     "walking": { "skill": "fitness", "meters_per_xp": 10.0 },

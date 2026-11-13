@@ -3,6 +3,7 @@
 #include "sync_harness.h"
 #include "game/address_play.h"
 #include "game/body_contact.h"
+#include "game/group_round.h"
 #include "game/online_play.h"
 #include "game/remote_players.h"
 #include "game/server_errors.h"
@@ -17,6 +18,39 @@
 
 namespace {
 game_input forward() { game_input input; input.forward_held = true; return input; }
+}
+
+TEST_CASE("sync: dismissing completed results lets the server follow my walk to the bus") {
+    sync_harness link;
+    for (std::size_t hole = 0; hole < link.client.round->strokes.size(); ++hole) {
+        link.client.round = complete_hole(*link.client.round, hole, 3);
+    }
+    const auto scores = link.client.round->strokes;
+    REQUIRE(round_results_shown(link.client));
+    const auto before = link.mover.position;
+    link.run(0.5f, forward());
+    CHECK(near(link.mover.position, before));
+
+    link.client.results_dismissed = true;
+    link.run(1.0f, forward());
+    link.run(0.5f);
+    CHECK(horizontal_distance(before, link.mover.position) > 0.5f);
+    CHECK(near(link.client.player.position, link.mover.position, 0.1f));
+    CHECK(link.client.round->strokes == scores);
+    CHECK(link.refusals.empty());
+    CHECK(link.client.motion_sync.breaches == 0);
+}
+
+TEST_CASE("sync: walking after a long idle sends accepted steps without a refusal") {
+    sync_harness link;
+    link.run(25.0f);
+    const auto before = link.mover.position;
+    link.run(1.0f, forward());
+    link.run(0.5f);
+    CHECK(link.refusals.empty());
+    CHECK(horizontal_distance(before, link.mover.position) > 0.5f);
+    CHECK(link.client.motion_sync.breaches == 0);
+    CHECK(near(link.client.player.position, link.mover.position, 0.1f));
 }
 
 TEST_CASE("sync: no online cart exists before its row arrives") {
@@ -353,4 +387,60 @@ TEST_CASE("sync: others follow every small turn of my aim at my ball") {
         CHECK(theirs->setup.club_id == club);
     }
     CHECK(link.refusals.empty());
+}
+
+
+TEST_CASE("sync: walking correction preserves later pacing and crouched steps") {
+    sync_harness link;
+    link.client.player.yaw = 0.0f;
+    net_command sent;
+    sent.motion = current_motion(link.client);
+    sent.motion.mode = motion_mode::walk;
+    motion_sent(link.client, sent, 20.0);
+    link.client.net_commands.clear();
+    const glm::vec3 from = link.client.player.position;
+    game_input pace = forward();
+    pace.toggle_pacing = true;
+    update_game(link.client, pace, move_step_seconds);
+    pace.toggle_pacing = false;
+    update_game(link.client, pace, move_step_seconds);
+    game_input crouch;
+    crouch.crouch_held = true;
+    crouch.strafe_left_held = true;
+    update_game(link.client, crouch, move_step_seconds);
+    const glm::vec3 travel = link.client.player.position - from;
+    CHECK(near(travel.z, link.client.tuning.player.walk_speed * link.client.tuning.pacing.walk_factor *
+                        2.0f * move_step_seconds, 0.00001f));
+    CHECK(near(travel.x, link.client.tuning.player.walk_speed *
+                        link.client.tuning.green_read.walk_factor * move_step_seconds, 0.00001f));
+    net_motion authoritative = sent.motion;
+    authoritative.client_time = 20.0;
+    authoritative.position.x += 0.2f;
+    link.client.online.players.at(1).motion = authoritative;
+    reconcile_motion(link.client, 0.0f);
+    CHECK(near(link.client.player.position, authoritative.position + travel, 0.00001f));
+    CHECK(link.client.motion_sync.breaches == 0);
+}
+
+TEST_CASE("sync: slow walking styles stay authoritative through changing input and latency") {
+    sync_harness link;
+    link.latency = 0.08f;
+    link.jitter = 0.04f;
+    game_input pace = forward();
+    pace.toggle_pacing = true;
+    link.tick(pace);
+    pace.toggle_pacing = false;
+    link.run(0.6f, pace);
+    game_input read = pace;
+    read.crouch_held = true;
+    read.strafe_left_held = true;
+    link.run(0.6f, read);
+    CHECK(link.avatar.crouched);
+    link.run(0.6f, pace);
+    pace.toggle_pacing = true;
+    link.tick(pace);
+    link.run(1.0f);
+    CHECK(near(link.avatar.position, link.client.player.position, 0.001f));
+    CHECK(link.refusals.empty());
+    CHECK(link.client.motion_sync.breaches == 0);
 }

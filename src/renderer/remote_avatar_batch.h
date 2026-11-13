@@ -8,6 +8,7 @@
 // at their mouth (held_props.h). GL-free.
 
 #include "game/gear_paint.h"
+#include "renderer/dap_pose.h"
 #include "renderer/held_props.h"
 #include "renderer/swing_club.h"
 #include "renderer/world_marker_batch.h"
@@ -36,9 +37,11 @@ struct render_remote_avatar {
     std::string bag_model;
     gear_paint bag_paint;
     std::string carried_club_model;
+    float carried_club_loft_degrees = 0.0f;
     bool left_handed = false;
     // Handling their bag or a club: their hand reaching to this point.
     std::optional<glm::vec3> reach;
+    std::optional<dap_hand_pose> dap;
     // How far they bend their knees (0 to 1): handling a bag or a club, or
     // crouched reading the green.
     float crouch = 0.0f;

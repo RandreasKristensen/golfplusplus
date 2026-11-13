@@ -38,11 +38,17 @@ set(sources
   src/physics/ground_contact.cpp
   src/physics/turf_contact.cpp
   src/physics/ground_mesh.cpp
+  src/physics/ground_pad.cpp
   src/physics/material_zone.cpp
   src/physics/terrain.cpp
   src/physics/solid.cpp
   src/physics/wind.cpp
   src/game/area_solids.cpp
+  src/game/hub_loader.cpp
+  src/game/hub_scene.cpp
+  src/game/prop_loader.cpp
+  src/game/model_kinds.cpp
+  src/game/cart_path.cpp
   src/game/content_files.cpp
   src/game/content_hash.cpp
   src/game/course_loader.cpp
@@ -61,6 +67,7 @@ set(sources
   src/game/movement_step.cpp
   src/game/floodlights.cpp
   src/game/hole_sign.cpp
+  src/game/way_sign.cpp
   src/game/json_util.cpp
   src/game/pixel_font_data.cpp
   src/game/play_area.cpp

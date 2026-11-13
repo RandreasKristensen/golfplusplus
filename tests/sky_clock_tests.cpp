@@ -7,6 +7,7 @@
 #include "game/mode_dispatch.h"
 #include "game/sky_clock.h"
 #include "game/sun_lighting.h"
+#include "game/weather_lighting.h"
 #include "test_support.h"
 
 #include <algorithm>
@@ -311,13 +312,13 @@ TEST_CASE("the frame's light comes from the course's sky and the palette") {
     CHECK(noon.star_visibility == 0.0f);
     CHECK(midnight.star_visibility == star_visibility(palette.sky, glm::degrees(std::asin(midnight.sun_direction.y))));
     const sky_state sky = compute_sky_state(
-        frame_game_day(state.tuning.sky_clock, state.course.sky, controls, 0),
+        frame_game_day(state.tuning.sky_clock, state.place.sky, controls, 0),
         state.world.latitude_deg, state.world.longitude_deg);
     CHECK(near(midnight.moon_direction, sky.moon_direction, 0.0001f));
     CHECK(midnight.moon_phase == sky.moon_phase);
 
     // A course with a floor under its sun lights its midnight at the floor.
-    state.course.sky.lowest_sun_deg = 3.0f;
+    state.place.sky.lowest_sun_deg = 3.0f;
     const render_lighting white_night = make_render_lighting(state, palette, controls, 0);
     CHECK(near(glm::degrees(std::asin(white_night.sun_direction.y)), 3.0f, 0.01f));
     CHECK(white_night.ambient_sky == lighting_at(palette, glm::degrees(std::asin(white_night.sun_direction.y))).ambient_sky);
@@ -339,6 +340,25 @@ TEST_CASE("the stars fade in as the sun sinks past the palette's elevations") {
         CHECK(shown >= previous);
         previous = shown;
     }
+}
+
+TEST_CASE("a sun shower's rainbow needs the sun up: none at night, faded near the horizon") {
+    const lighting_palette palette = *parse_lighting_from_text(fixture_lighting_text());
+    const sky_style& sky = palette.sky;
+    CHECK(rainbow_sun_share(sky, -10.0f) == 0.0f);
+    CHECK(rainbow_sun_share(sky, 0.0f) == 0.0f);
+    CHECK(near(rainbow_sun_share(sky, 0.5f * sky.rainbow_sun_full_deg), 0.5f, 0.0001f));
+    CHECK(rainbow_sun_share(sky, sky.rainbow_sun_full_deg) == 1.0f);
+    CHECK(rainbow_sun_share(sky, 30.0f) == 1.0f);
+
+    game_state state = started_game(fixture_hub_course());
+    shown_weather shower;
+    shower.rainbow = 1.0f;
+    sky_controls controls;
+    controls.pinned_hour = 12.0f;
+    CHECK(make_render_lighting(state, palette, controls, 0, shower).weather.rainbow == 1.0f);
+    controls.pinned_hour = 0.0f;
+    CHECK(make_render_lighting(state, palette, controls, 0, shower).weather.rainbow == 0.0f);
 }
 
 TEST_CASE("the lighting palette needs every field, keys rising within -90 to 90") {

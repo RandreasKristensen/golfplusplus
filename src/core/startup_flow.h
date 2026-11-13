@@ -1,7 +1,7 @@
 #pragma once
 
-// Menu flow: main menu, help, settings (core/settings_menu.h), the offline
-// course picker, the visual tour's (core/visual_tour.h), the online screens (core/online_menus.h) and the in-round "leave
+// Menu flow: main menu, help, settings (core/settings_menu.h), the visual
+// tour picker (core/visual_tour.h), the online screens (core/online_menus.h) and the in-round "leave
 // the round?" menu, which also opens settings. Turns input
 // into state changes plus actions, online requests and UI sounds for app to
 // carry out, and builds the menu render data. No SDL and no network: app
@@ -48,16 +48,13 @@ enum class startup_flow {
     main,
     help,
     settings,
-    course_picker,  // PLAY OFFLINE
     online_login,          // PLAY ONLINE: signing in, until my account is known
     name_entry,            // a new account picks its name...
     link_code_entry,       // ...or links this login to an account it already has
     link_code_show,        // LINK ANOTHER LOGIN: the code to enter on the other login
-    online_course_picker,
     joining,               // join_course sent, waiting for the room
     exit_prompt,           // Escape on the main menu: quit the game? Opens on NO
     natural_shape_picker,  // before a save's first round: its golfer's natural shot
-    transport_picker,      // before a round on a course with carts: take one, or carry my bag
     tour_picker,           // VISUAL TOUR: the course to fly round
     touring,               // the visual tour, until Escape
     playing
@@ -128,6 +125,9 @@ struct startup_flow_state {
     std::optional<std::size_t> confirm_give_up_hole;
     // The in-round menu shows settings instead.
     bool confirm_settings = false;
+    bool confirm_leave_group = false;
+    // On a course: the pause menu offers the bus back to the hub, after leave group.
+    bool confirm_return_hub = false;
     // The settings screen's, from the main menu or the in-round menu.
     ::settings_view settings_view;
     // The player's settings: app loads them, applies them when a menu
@@ -201,6 +201,8 @@ struct startup_menu_result {
 };
 
 struct confirm_menu_result {
+    bool leave_group = false;
+    bool return_hub = false;
     bool leave_round = false;  // the player confirmed leaving for the main menu
     bool give_up_hole = false;  // the player gave up confirm_give_up_hole
     std::vector<ui_sound> sounds;
@@ -220,12 +222,8 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
 void enter_playing(startup_flow_state& state);
 void enter_touring(startup_flow_state& state);
 // Asks for the golfer's natural shot, then starts `course` as `play`
-// says; offline Escape goes back to the course picker.
+// says; offline Escape returns to the main menu.
 void open_natural_shape_picker(startup_flow_state& state, const course_definition& course, play_mode play);
-// `course` picked to play as `play`: where it has carts, asks first whether
-// to take one or carry my bag (Escape back to that course picker); then
-// starts it offline, or online joins its room.
-void pick_transport(startup_flow_state& state, const course_definition& course, play_mode play, startup_menu_result& result);
 void return_to_main_menu(startup_flow_state& state);
 // Back to the online sign-in screen, which shows how the connection is.
 void open_online_login(startup_flow_state& state);

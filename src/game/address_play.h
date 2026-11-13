@@ -30,5 +30,5 @@ void refresh_shot_preview(game_state& state);
 
 // Where my eyes are and look at address.
 eye_view my_address_eye(const game_state& state);
-// The setup on the ground at address; needs a club in hand.
-address_marks my_address_marks(const game_state& state);
+// My shoes on the ground at address.
+address_feet my_address_feet(const game_state& state);

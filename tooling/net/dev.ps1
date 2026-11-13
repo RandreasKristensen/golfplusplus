@@ -4,10 +4,11 @@ The local development server, on demand.
   tooling\net\dev.ps1          bring it up for testing (what gb -m runs)
   tooling\net\dev.ps1 -Down    stop it
 
-Up: starts `spacetime start` in its own minimised window when nothing listens
+Up: starts `spacetime start` hidden in the background when nothing listens
 on port 3000; builds the server module (quick when nothing changed);
 publishes it as `golfpp` when the database is missing or the build changed
-since the last publish here, then regenerates the client bindings; and turns
+since the last publish here (migrating it, else replacing the disposable
+local database), then regenerates the client bindings; and turns
 on anonymous logins (admin_set_config, as the publisher) keeping the issuer
 and client id from assets/play/online.json and the database's link secret (a new
 one for a new database). The database lives in SpacetimeDB's own data
@@ -134,8 +135,8 @@ function Start-Server {
         Say "local server is up on port $server_port"
         return
     }
-    Say "starting the local server (spacetime start) in its own minimised window"
-    Start-Process -FilePath $spacetime -ArgumentList "start" -WindowStyle Minimized
+    Say "starting the local server (spacetime start) in the background"
+    Start-Process -FilePath $spacetime -ArgumentList "start" -WindowStyle Hidden
     for ($i = 0; $i -lt 60; $i++) {
         Start-Sleep -Milliseconds 500
         if (Test-Server) {
@@ -178,11 +179,16 @@ function Publish-Module {
         return
     }
     Say ($(if ($exists) { "publishing the changed module" } else { "publishing $database" }))
-    # migrate: update in place; never deletes data (a change that would is refused).
+    # The local golfpp database is disposable: try migration, then republish cleanly.
     $result = Invoke-Spacetime @("publish", $database, "--server", "local", "--bin-path", $wasm_path, "--yes=migrate")
     if (-not $result.ok) {
         $result.messages | ForEach-Object { Write-Host $_ }
-        throw "Publishing failed. A change that needs the data deleted is never done here: run spacetime publish yourself."
+        Say "migration refused; replacing the disposable local database"
+        $result = Invoke-Spacetime @("publish", $database, "--server", "local", "--bin-path", $wasm_path, "--delete-data", "--yes")
+        if (-not $result.ok) {
+            $result.messages | ForEach-Object { Write-Host $_ }
+            throw "Publishing the disposable local database failed."
+        }
     }
     New-Item -ItemType Directory -Force -Path (Split-Path $stamp_path) | Out-Null
     Set-Content -LiteralPath $stamp_path -Value $hash -Encoding ascii
@@ -200,7 +206,7 @@ function Enable-Anonymous {
         Say "anonymous logins are on"
         return
     }
-    $online = Get-Content -LiteralPath (Join-Path $repo_root "assets\online.json") -Raw | ConvertFrom-Json
+    $online = Get-Content -LiteralPath (Join-Path $repo_root "assets\play\online.json") -Raw | ConvertFrom-Json
     $secret = Get-ConfigValue "server_secret"
     if (-not $secret) {
         # A new database: link codes and shot seeds need a secret of at least 32 characters.

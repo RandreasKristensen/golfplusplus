@@ -77,13 +77,23 @@ walk_step step_walker(const walker& in, const move_input& input, const walk_worl
         after.against_obstacle = false;
         return out;
     }
-    const player_tuning& tuning = world.tuning;
+    const player_tuning& tuning = world.tuning.player;
     const float forward = static_cast<float>(std::clamp<int>(input.forward, -1, 1));
     const float side = static_cast<float>(std::clamp<int>(input.side, -1, 1));
     if (forward != 0.0f || side != 0.0f) {
         const float sign = forward < 0.0f ? -1.0f : 1.0f;
         after.move_angle = det_atan2(side * sign, forward * sign);
-        const float speed = input.run ? world.walk_speed * tuning.run_factor : world.walk_speed;
+        float factor = input.run && !input.crouched ? tuning.run_factor : 1.0f;
+        if (input.paced && !input.run && !input.jump) {
+            factor = std::min(factor, world.tuning.pacing.walk_factor);
+        }
+        if (input.crouched) {
+            factor = std::min(factor, world.tuning.green_read.walk_factor);
+            if (input.paced) {
+                factor = std::min(factor, world.tuning.pacing.walk_factor);
+            }
+        }
+        const float speed = world.walk_speed * factor;
         after.speed = speed * sign;
         after.position += yaw_direction(yaw_of(input.yaw) + after.move_angle) * (after.speed * move_step_seconds);
     }
@@ -93,7 +103,7 @@ walk_step step_walker(const walker& in, const move_input& input, const walk_worl
     out.bumped = moved.touched && walking_on && !in.against_obstacle;
     after.against_obstacle = moved.touched && walking_on;
     after.position = moved.position;
-    const vertical_body taking_off = input.jump ? hopped(in.vertical, tuning) : in.vertical;
+    const vertical_body taking_off = input.jump && !input.crouched ? hopped(in.vertical, tuning) : in.vertical;
     after.vertical = settle_on_foot(taking_off, after.position.y, terrain_height(world.area, after.position, world.profile),
                                     tuning, move_step_seconds);
     after.position.y = after.vertical.y;

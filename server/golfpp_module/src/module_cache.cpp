@@ -40,7 +40,8 @@ const std::string& content_error() {
 const server_course* cached_course(const std::string& course_id) {
     module_cache& loaded = loaded_cache();
     // Only known ids are memoised, so made-up ones cannot grow the cache.
-    if (!loaded.content.content || find_server_course(*loaded.content.content, course_id) == nullptr) {
+    if (!loaded.content.content || (find_server_course(*loaded.content.content, course_id) == nullptr &&
+        (!loaded.content.content->hub || loaded.content.content->hub->id != course_id))) {
         return nullptr;
     }
     auto found = loaded.courses.find(course_id);

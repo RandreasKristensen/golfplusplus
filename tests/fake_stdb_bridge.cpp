@@ -157,23 +157,19 @@ void stdb_join_course(stdb_client*, const char* course_id, const size_t len, con
     fake_bridge().calls.back().flag = takes_cart;
 }
 
-void stdb_leave_room(stdb_client*) {
+void stdb_leave_room(stdb_client*, uint64_t) {
     record("stdb_leave_room");
 }
 
-void stdb_create_group(stdb_client*) {
-    record("stdb_create_group");
-}
+void stdb_open_tee_book(stdb_client*, uint64_t room, const char* course, size_t len) { record("stdb_open_tee_book", text_of(course, len), static_cast<int64_t>(room)); }
+void stdb_book_tee(stdb_client*, uint64_t, uint64_t booking, const char* course, size_t len, int64_t) { record("stdb_book_tee", text_of(course, len), static_cast<int64_t>(booking)); }
+void stdb_cancel_tee(stdb_client*, uint64_t, uint64_t booking) { record("stdb_cancel_tee", {}, static_cast<int64_t>(booking)); }
+void stdb_take_bus(stdb_client*, uint64_t, uint64_t booking, bool) { record("stdb_take_bus", {}, static_cast<int64_t>(booking)); }
+void stdb_return_to_hub(stdb_client*, uint64_t room) { record("stdb_return_to_hub", {}, static_cast<int64_t>(room)); }
+void stdb_start_booked_round(stdb_client*, uint64_t, uint64_t booking) { record("stdb_start_booked_round", {}, static_cast<int64_t>(booking)); }
+void stdb_leave_group(stdb_client*, uint64_t, uint64_t booking) { record("stdb_leave_group", {}, static_cast<int64_t>(booking)); }
 
-void stdb_join_group(stdb_client*, const uint64_t group_id) {
-    record("stdb_join_group", {}, static_cast<std::int64_t>(group_id));
-}
-
-void stdb_leave_group(stdb_client*) {
-    record("stdb_leave_group");
-}
-
-bool stdb_update_motion(stdb_client*, const stdb_motion* motion, const stdb_steps* steps) {
+bool stdb_update_motion(stdb_client*, uint64_t, const stdb_motion* motion, const stdb_steps* steps) {
     record("stdb_update_motion");
     fake_bridge().calls.back().motion = *motion;
     fake_bridge().calls.back().first_step = steps->first_step;
@@ -181,52 +177,54 @@ bool stdb_update_motion(stdb_client*, const stdb_motion* motion, const stdb_step
     return fake_bridge().connected;
 }
 
-void stdb_update_ride(stdb_client*, const stdb_motion* motion) {
+void stdb_update_ride(stdb_client*, uint64_t, const stdb_motion* motion) {
     record("stdb_update_ride");
     fake_bridge().calls.back().motion = *motion;
 }
 
-void stdb_tee_up(stdb_client*, const int32_t hole_index, const bool give_up) {
+void stdb_tee_up(stdb_client*, uint64_t, const int32_t hole_index, const bool give_up) {
     record("stdb_tee_up", {}, hole_index);
     fake_bridge().calls.back().flag = give_up;
 }
 
-void stdb_give_up_hole(stdb_client*) {
+void stdb_give_up_hole(stdb_client*, uint64_t) {
     record("stdb_give_up_hole");
 }
 
-void stdb_pick_up_ball(stdb_client*) {
+void stdb_pick_up_ball(stdb_client*, uint64_t) {
     record("stdb_pick_up_ball");
 }
 
-void stdb_take_wheel(stdb_client*) { record("stdb_take_wheel"); }
-void stdb_leave_wheel(stdb_client*) { record("stdb_leave_wheel"); }
+void stdb_take_wheel(stdb_client*, uint64_t) { record("stdb_take_wheel"); }
+void stdb_leave_wheel(stdb_client*, uint64_t) { record("stdb_leave_wheel"); }
 
-void stdb_board_cart(stdb_client*, const uint64_t owner) {
+void stdb_dap_up(stdb_client*, uint64_t, const uint64_t target) { record("stdb_dap_up", {}, static_cast<std::int64_t>(target)); }
+
+void stdb_board_cart(stdb_client*, uint64_t, const uint64_t owner) {
     record("stdb_board_cart", {}, static_cast<std::int64_t>(owner));
 }
 
-void stdb_leave_cart(stdb_client*) {
+void stdb_leave_cart(stdb_client*, uint64_t) {
     record("stdb_leave_cart");
 }
 
-void stdb_right_cart(stdb_client*, const uint64_t owner) {
+void stdb_right_cart(stdb_client*, uint64_t, const uint64_t owner) {
     record("stdb_right_cart", {}, static_cast<std::int64_t>(owner));
 }
 
-void stdb_take_shot(stdb_client*, const stdb_shot* shot) {
+void stdb_take_shot(stdb_client*, uint64_t, const stdb_shot* shot) {
     record("stdb_take_shot");
     fake_bridge().calls.back().shot = *shot;
     fake_bridge().calls.back().club_id = text_of(shot->club_id.data, shot->club_id.len);
     fake_bridge().calls.back().flags_out.assign(shot->flags_out, shot->flags_out + shot->flags_out_count);
 }
 
-void stdb_set_flag(stdb_client*, const int32_t hole, const bool out) {
+void stdb_set_flag(stdb_client*, uint64_t, const int32_t hole, const bool out) {
     record("stdb_set_flag", {}, hole);
     fake_bridge().calls.back().flag = out;
 }
 
-void stdb_place_bag(stdb_client*, const uint8_t place, const uint8_t seat, const uint64_t cart_owner, const float x, const float y,
+void stdb_place_bag(stdb_client*, uint64_t, const uint8_t place, const uint8_t seat, const uint64_t cart_owner, const float x, const float y,
                     const float z, const float yaw) {
     record("stdb_place_bag", {}, place * 256 + seat);
     fake_stdb_bridge::call& call = fake_bridge().calls.back();
@@ -237,7 +235,7 @@ void stdb_place_bag(stdb_client*, const uint8_t place, const uint8_t seat, const
     call.position[3] = yaw;
 }
 
-void stdb_take_club(stdb_client*, const char* club_id, const size_t len) {
+void stdb_take_club(stdb_client*, uint64_t, const char* club_id, const size_t len) {
     record("stdb_take_club", text_of(club_id, len));
 }
 
@@ -246,11 +244,11 @@ void stdb_set_golfer(stdb_client*, const uint8_t hand, const uint8_t natural_sha
     fake_bridge().calls.back().extra = favourite_colour;
 }
 
-void stdb_use_item(stdb_client*, const char* item_id, const size_t len) {
+void stdb_use_item(stdb_client*, uint64_t, const char* item_id, const size_t len) {
     record("stdb_use_item", text_of(item_id, len));
 }
 
-void stdb_claim_collectible(stdb_client*, const char* collectible_id, const size_t len) {
+void stdb_claim_collectible(stdb_client*, uint64_t, const char* collectible_id, const size_t len) {
     record("stdb_claim_collectible", text_of(collectible_id, len));
 }
 
@@ -261,4 +259,10 @@ void stdb_create_link_code(stdb_client*) {
 void stdb_redeem_link_code(stdb_client*, const char* code, const size_t len) {
     record("stdb_redeem_link_code", text_of(code, len));
 }
+}
+
+extern "C" void stdb_place_practice_ball(stdb_client*, uint64_t room, float x, float y, float z) {
+    record("stdb_place_practice_ball", {}, static_cast<std::int64_t>(room));
+    auto& call = fake_bridge().calls.back();
+    call.position[0] = x; call.position[1] = y; call.position[2] = z;
 }

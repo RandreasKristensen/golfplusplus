@@ -27,10 +27,6 @@ loadout loadout_of(const stdb_player_loadout& row) {
     return equipped;
 }
 
-handedness hand_of(const std::uint8_t number) {
-    return number == static_cast<std::uint8_t>(handedness::left) ? handedness::left : handedness::right;
-}
-
 room_shot shot_of(const stdb_shot_event& event) {
     room_shot shot;
     shot.account_id = event.account_id;
@@ -92,7 +88,7 @@ bool room_rows::apply(const stdb_event& event,
                       const std::uint64_t my_account,
                       const std::int64_t local_now,
                       server_clock& clock,
-                      game_state&) {
+                      game_state& state) {
     const stdb_row& row = event.row;
     const stdb_row_change change = event.change;
     std::uint64_t room = room_id_;
@@ -100,6 +96,7 @@ bool room_rows::apply(const stdb_event& event,
     case STDB_TABLE_ROOM_MEMBER: room = row.room_member.room_id; break;
     case STDB_TABLE_GOLF_GROUP: room = row.golf_group.room_id; break;
     case STDB_TABLE_AVATAR_MOTION: room = row.avatar_motion.room_id; break;
+    case STDB_TABLE_DAP: room = row.dap.room_id; break;
     case STDB_TABLE_BALL: room = row.ball.room_id; break;
     case STDB_TABLE_GOLF_CART: room = row.golf_cart.room_id; break;
     case STDB_TABLE_PLAYER_BAG: room = row.player_bag.room_id; break;
@@ -121,7 +118,7 @@ bool room_rows::apply(const stdb_event& event,
     case STDB_TABLE_ROOM_MEMBER: {
         const stdb_room_member& m = row.room_member;
         apply_change(members_, m.account_id, change,
-                     member{m.group_id, std::vector<int>(m.round_strokes, m.round_strokes + m.round_strokes_count)});
+                     member{m.group_id, std::vector<int>(m.round_strokes, m.round_strokes + m.round_strokes_count), m.round_started});
         break;
     }
     case STDB_TABLE_GOLF_GROUP:
@@ -157,7 +154,8 @@ bool room_rows::apply(const stdb_event& event,
     }
     case STDB_TABLE_BALL: {
         const stdb_ball& b = row.ball;
-        apply_change(balls_, b.account_id, change, room_ball{b.hole, glm::vec3(b.x, b.y, b.z), b.stroke_count, b.in_cup});
+        if (b.account_id == my_account) { ++state.online.ball_updates; }
+        apply_change(balls_, b.account_id, change, room_ball{b.hole, glm::vec3(b.x, b.y, b.z), b.stroke_count, b.in_cup, static_cast<ball_kind>(b.kind), b.tee_mat});
         break;
     }
     case STDB_TABLE_GOLF_CART: {
@@ -187,6 +185,12 @@ bool room_rows::apply(const stdb_event& event,
     case STDB_TABLE_GREEN_FLAG:
         apply_change(flags_, row.green_flag.id, change, static_cast<int>(row.green_flag.hole));
         break;
+    case STDB_TABLE_DAP: {
+        const auto& d = row.dap;
+        apply_change(daps_, d.id, change, room_dap{d.id, d.first, d.second, d.started_at,
+            glm::vec3(d.first_x, d.first_y, d.first_z), glm::vec3(d.second_x, d.second_y, d.second_z)});
+        break;
+    }
     case STDB_TABLE_ITEM_USE_EVENT: {
         // Mine played as I used it.
         const std::uint64_t account = row.item_use_event.account_id;
@@ -220,6 +224,7 @@ void room_rows::publish(game_state& state) {
             player.favourite_colour = name->second.favourite_colour;
         }
         player.group_id = m.group_id;
+        player.round_started = m.round_started;
         player.round_strokes = m.round_strokes;
         const auto moved = motions_.find(account);
         if (moved != motions_.end()) {
@@ -235,6 +240,7 @@ void room_rows::publish(game_state& state) {
     state.online.item_uses.insert(state.online.item_uses.end(), item_uses_.begin(), item_uses_.end());
     shots_.clear();
     item_uses_.clear();
+    state.online.daps = daps_;
     state.online.balls = balls_;
     state.online.carts = carts_;
     state.online.loadouts = loadouts_;
@@ -262,6 +268,7 @@ void room_rows::clear(game_state& state) {
     members_.clear();
     names_.clear();
     motions_.clear();
+    daps_.clear(); state.online.daps.clear(); state.dap_pending.reset();
     balls_.clear();
     carts_.clear();
     loadouts_.clear();

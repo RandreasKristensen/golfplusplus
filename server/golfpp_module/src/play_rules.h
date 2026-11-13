@@ -15,6 +15,7 @@
 #include "physics/cart_dynamics.h"
 #include "server_content.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -27,11 +28,15 @@
 struct room_candidate {
     std::uint64_t room_id = 0;
     int player_count = 0;
+    std::uint32_t world_id = 1;
 };
 
-// The fullest room with space, so rooms fill before new ones open; the
-// oldest (lowest id) among equals. nullopt when every room is full.
-std::optional<std::uint64_t> choose_room(const std::vector<room_candidate>& rooms, int capacity);
+// The persistent room of this explicit world, regardless of population.
+std::optional<std::uint64_t> choose_room(const std::vector<room_candidate>& rooms, std::uint32_t world_id = 1);
+
+// A tee-up keeps a partial round's scores. A completed round is retained
+// for its scorecard until this first tee-up of the next round replaces it.
+std::vector<int> tee_round_strokes(const std::vector<int>& strokes, std::size_t hole_count);
 
 // --- Movement ------------------------------------------------------------------
 

@@ -482,7 +482,7 @@ def outputs() -> dict[Path, bytes]:
     files = {assets / "world" / "ground" / "rough_grass.bmp": bmp_bytes(GRASS_SIZE, GRASS_SIZE, grass_texture()),
              assets / "world" / "ground" / "cart_path.bmp": bmp_bytes(PATH_SIZE, PATH_SIZE, path_texture()),
              assets / "world" / "props" / "fence_net.bmp": bmp_bytes_with_alpha(NET_SIZE, NET_SIZE, net_texture())}
-    for course_file in sorted((assets / "world" / "courses").glob("*/course.json")):
+    for course_file in sorted((assets / "world" / "courses").glob("*/course.json")) + [assets / "world" / "hub" / "hub.json"]:
         course = json.loads(course_file.read_text(encoding="utf-8"))
         theme = course_theme(course)
         sky = course_file.parent / course["backdrop"]["sky"]

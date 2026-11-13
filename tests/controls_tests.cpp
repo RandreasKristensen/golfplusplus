@@ -760,7 +760,7 @@ TEST_CASE("jumping onto a platform the hop keeps its arc over its edge and lands
 
 TEST_CASE("P on a green in reach of its cup takes the flag out and puts it back, offline only") {
     game_state state = started_hole();
-    const std::size_t hole = state.ball->hole;
+    const std::size_t hole = *state.ball->hole;
     const cup& target = state.area.cups[hole];
     state.player.position = anchor_on_terrain(state.area, target.centre + glm::vec3(1.0f, 0.0f, 0.0f));
     REQUIRE(sample_area(state.area, state.player.position).material == terrain_material::green);

@@ -24,6 +24,10 @@ const std::vector<model_kind>& model_kinds() {
         {"fence", {"post"}, {}, {}, {}},
         {"floodlight", {"pole", "head"}, {}, {}, {}},
         {"hole_sign", {"board", "post"}, {}, {}, {}},
+        // Board points frame the label the renderer writes on it.
+        {"hub_book", {}, {"approach", "body_min", "body_max", "board_center", "board_size", "board_normal"}, {}, {}},
+        {"hub_bus", {}, {"approach", "door", "body_min", "body_max", "board_center", "board_size", "board_normal",
+                         "wheel_contact_fl", "wheel_contact_fr", "wheel_contact_rl", "wheel_contact_rr"}, {}, {}},
     };
     return kinds;
 }

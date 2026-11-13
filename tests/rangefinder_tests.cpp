@@ -237,7 +237,7 @@ TEST_CASE("the rangefinder shows what the slope makes it play like: longer uphil
 
 TEST_CASE("the rangefinder's flag reading shrinks walking towards the pin") {
     game_state state = dry_hole();
-    const glm::vec3 pin = pin_anchor_position(state, state.ball->hole);
+    const glm::vec3 pin = pin_anchor_position(state, *state.ball->hole);
     const glm::vec3 eye = first_person_eye(state);
     const glm::vec3 to_pin = pin + world_up - eye;
     state.player.yaw = yaw_towards(state.player.position, pin);

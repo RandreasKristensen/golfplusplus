@@ -2847,7 +2847,7 @@ function buildJSON() {
   h.spline.control_points = h.spline.control_points.map(p=>p.map(r2));
   // A level hole leaves bank out, as hand-made holes always have.
   if (h.spline.bank.every(b => b === 0)) delete h.spline.bank;
-  h.material_zones = h.material_zones.map(z => ({ type: z.type, outline: zoneShape(z).pts.map(q => [r2(q.x), r2(q.z)]) }));
+  h.material_zones = h.material_zones.map(z => ({ ...z, outline: zoneShape(z).pts.map(q => [r2(q.x), r2(q.z)]) }));
   h.trees = (h.trees || []).map(t => {
     t.position = t.position.map(r2);
     t.trunk_radius = r2(t.trunk_radius);

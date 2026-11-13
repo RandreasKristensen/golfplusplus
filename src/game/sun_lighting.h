@@ -1,8 +1,8 @@
 #pragma once
 
 // The lighting palette (game/lighting_loader.h) evaluated at a sun
-// elevation: the light, and how far the stars, the sun's shadows and the
-// night lights show.
+// elevation: the light, and how far the stars, the rainbow, the sun's
+// shadows and the night lights show.
 
 #include "game/lighting_loader.h"
 
@@ -13,6 +13,10 @@ lighting_key lighting_at(const lighting_palette& palette, float sun_elevation_de
 // How much the stars show with the sun at `sun_elevation_deg`: 0 above
 // stars_appear_deg, 1 below stars_full_deg, smooth between.
 float star_visibility(const sky_style& sky, float sun_elevation_deg);
+
+// How much of the rain's rainbow shows with the sun at `sun_elevation_deg`:
+// 0 with it on or below the horizon, 1 from rainbow_sun_full_deg, smooth between.
+float rainbow_sun_share(const sky_style& sky, float sun_elevation_deg);
 
 // How much of their shadow the sun casts at `sun_elevation_deg`: 0 below
 // sun_fade_start_deg, 1 above sun_fade_full_deg, smooth between.

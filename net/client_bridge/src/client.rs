@@ -125,7 +125,9 @@ impl StdbClient {
 
     pub fn sign_out(&mut self) {
         self.disconnect();
-        login::forget_refresh_token(&self.auth);
+        if !self.anonymous {
+            login::forget_refresh_token(&self.auth);
+        }
     }
 
     fn start_connecting(&mut self, token: Option<String>) {
@@ -195,11 +197,15 @@ impl StdbClient {
             }};
         }
         watch_keyed!(player, Player);
+        watch!(my_tee_slots, TeeSlot);
+        watch!(my_tee_reservation, MyTeeReservation);
+        watch!(my_tee_book_status, MyTeeBookStatus);
         watch_keyed!(room, Room);
         watch_keyed!(room_member, RoomMember);
         watch_keyed!(golf_group, GolfGroup);
         watch!(my_avatar_motion, AvatarMotion);
         watch_keyed!(ball, Ball);
+        watch_keyed!(dap_pair, Dap);
         watch!(my_golf_carts, GolfCart);
         watch_keyed!(player_loadout, PlayerLoadout);
         watch_keyed!(running_effect, RunningEffect);

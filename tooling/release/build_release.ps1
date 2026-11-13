@@ -12,8 +12,9 @@ folder (build\installer, the release preset), stages it with
 `cmake --install` (the exe, assets\ and the DLLs it loads), writes
 THIRD_PARTY.txt next to it (third_party.py) and compiles the installer.
 Then builds the server module and stages it with the hosting guide, the
-licence and THIRD_PARTY.txt. The version is project(VERSION) in
-CMakeLists.txt.
+licence and THIRD_PARTY.txt, and publishes that module to the local server
+(tooling\net\dev.ps1) so it always matches the shipped client. The version
+is project(VERSION) in CMakeLists.txt.
 
 Needs what the game's build needs (MSYS2's MinGW-w64, CMake, Ninja, Rust),
 Python 3, Inno Setup 6 (ISCC.exe on the PATH or in its default folder), the
@@ -158,6 +159,11 @@ try {
     }
     Say "zipping $server_zip_path"
     Compress-Archive -Path $server_stage_dir -DestinationPath $server_zip_path
+
+    # dev.ps1 publishes the module just built (its build is quick when nothing changed).
+    Invoke-Checked "publishing the module to the local server" {
+        powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo_root "tooling\net\dev.ps1") -Emsdk $Emsdk
+    }
 
     Say "done: $(Join-Path $dist_dir "golfpp-setup-$version.exe"), $zip_path and $server_zip_path"
 }

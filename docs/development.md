@@ -60,11 +60,19 @@ tooling\net\check_determinism.ps1 -Emsdk <emsdk>         # golden shots, drives 
 spacetime generate --lang rust --bin-path server/golfpp_module/build/lib.wasm --out-dir net/client_bridge/src/module_bindings
 ```
 
+`.\tooling\gb -r` (`-rr` stops a running copy first) brings up the local server
+(`tooling\net\dev.ps1`) and launches one client on it, so PLAY OFFLINE and PLAY
+ONLINE both work; if the server fails it still launches for offline play.
 `.\tooling\gb -m` runs local multiplayer (server, publish, two anonymous
-clients); `.\tooling\gb -x` stops it. Hosting is `server/hosting.md`, shipped
-to owners who run their own server. The module's plain C++ (all of
-`server/golfpp_module/src` but `lib.cpp` and `module_cache`) is in the native
-test build. The module compiles content in: republish it after content
+clients); `.\tooling\gb -x` stops the clients and the server. A release build
+(`tooling\release\build_release.ps1`) also publishes its module locally through
+`dev.ps1`. Hosting is `server/hosting.md`, shipped
+to owners who run their own server. The module's plain C++ rule `.cpp` files in
+`server/golfpp_module/src` (excluding `lib.cpp` and `module_cache`) are in the
+native test build. `tee_schema.h`, `tee_support.h` and `tee_reducers.h` are
+SpacetimeDB adapters included only in `lib.cpp`; native `tee_rules_tests` test
+the shared UTC guards and lane placement, and `net_client_tests` exercise
+booking snapshots, commands and reconnect through the paired C bridge. The module compiles content in: republish it after content
 changes. Online needs Rust (`net/client_bridge`; on Windows the target
 `x86_64-pc-windows-gnu`, on macOS `aarch64-apple-darwin` and
 `x86_64-apple-darwin`); the test preset builds with `-DGOLFPP_NET=OFF` and
@@ -73,9 +81,12 @@ links `src/net/` against `tests/fake_stdb_bridge.h`. `--server <uri> --db
 
 The native `"sync:"` tests run a client and observer against the module's
 movement and cart rules with latency, reordering, loss and disconnects, including a seeded
-three-minute soak with 5% loss and 200 ms jitter. `online_check` also enters
-the wheel, drives and steps out, checking the parked row and sync counter,
-and walks, checking the server's steps put it where its own did.
+three-minute soak with 5% loss and 200 ms jitter. The real SDK/database lifecycle
+check is `tooling/net/online_check/README.md`: six anonymous clients enter the
+hub, book and travel by accepted walking inputs, dap and play at a natural UTC
+quarter hour. Use a new disposable local database, never the existing `golfpp`
+database. Its fail-fast diagnostics and nonzero exit status are release evidence;
+the fake bridge and native rules alone do not execute database transactions.
 
 The version is `project(VERSION)` in `CMakeLists.txt`. Players' builds set
 `GOLFPP_NO_CONSOLE` (errors only in SDL's log): debug from the presets.
@@ -88,3 +99,32 @@ pinned SDL2, SDL2_mixer and GLM sources in `tooling/release/build_deps.sh`,
 and numpy, scipy and Pillow for the importer's aerial reading (tooling only).
 The Steamworks SDK is approved but **blocked** until the owner has a Steam
 app id.
+
+Hub flow regression coverage lives in `tests/hub_flow_tests.cpp` (physical
+approach/model projection, book controls and pending acknowledgements, warmup and
+first-ball adoption, leave-menu preservation and aspect-ratio layout). Travel and
+reconnect snapshot boundaries also run through `online_session_tests` and the fake
+bridge. Regenerate the code-drawn hub models with
+`py -3 tooling/practice_ground/make_hub_props.py` (`--check` verifies the shipped
+JSON; `MODEL --stage NAME` writes one build stage), then photograph them:
+`cmake --build build/test --target golfpp-preview-prop` and
+`py -3 tooling/art/preview_prop/preview_prop.py hub_bus --out build/prop_preview/bus`
+(`views.png` holds the four inspection views; `rear.png`, `board.png` extra). Open
+every view after each change. These models' bounds are compiled into server
+content, so rebuild the module after changing them, and copy them to the frozen
+golden props in `tests/fixtures/golden_shots/world/props/`.
+
+Social regressions are `tests/social_dap_tests.cpp`: shared validation boundaries,
+clock/ack/refusal/session behavior, both recipients' effective XP, paired snapshots,
+and projected fist contact/orientation for both hands at 4:3, 16:9 and 21:9.
+`net_client_tests` also checks the actual C transport and scoped subscription.
+The SDK dap adapters run in `online_check` with two participants and an observer;
+both recipients must receive exactly one reward per accepted row. Native tests
+cover individual XP effects and exact duration/expiry boundaries. Named-account
+reconnect and full-round completion need their own live evidence when changed;
+anonymous lifecycle checks cannot prove named persistence.
+
+**Disposable local server (owner decision).** `tooling/net/dev.ps1` republishes
+`golfpp` whenever the built module changes. It first tries migration; if refused,
+it republishes with `--delete-data --yes`, then restores anonymous login support
+and regenerates bindings. Local accounts, bookings and scores may be deleted.

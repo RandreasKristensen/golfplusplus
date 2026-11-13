@@ -11,6 +11,8 @@ pub struct RoomRow {
     pub course_id: String,
     pub player_count: i32,
     pub created_at: __sdk::Timestamp,
+    pub world_id: u32,
+    pub kind: u8,
 }
 
 impl __sdk::InModule for RoomRow {
@@ -25,6 +27,8 @@ pub struct RoomRowCols {
     pub course_id: __sdk::__query_builder::Col<RoomRow, String>,
     pub player_count: __sdk::__query_builder::Col<RoomRow, i32>,
     pub created_at: __sdk::__query_builder::Col<RoomRow, __sdk::Timestamp>,
+    pub world_id: __sdk::__query_builder::Col<RoomRow, u32>,
+    pub kind: __sdk::__query_builder::Col<RoomRow, u8>,
 }
 
 impl __sdk::__query_builder::HasCols for RoomRow {
@@ -35,6 +39,8 @@ impl __sdk::__query_builder::HasCols for RoomRow {
             course_id: __sdk::__query_builder::Col::new(table_name, "course_id"),
             player_count: __sdk::__query_builder::Col::new(table_name, "player_count"),
             created_at: __sdk::__query_builder::Col::new(table_name, "created_at"),
+            world_id: __sdk::__query_builder::Col::new(table_name, "world_id"),
+            kind: __sdk::__query_builder::Col::new(table_name, "kind"),
         }
     }
 }

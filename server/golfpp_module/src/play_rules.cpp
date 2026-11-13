@@ -12,18 +12,23 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
 
-std::optional<std::uint64_t> choose_room(const std::vector<room_candidate>& rooms, const int capacity) {
-    std::optional<room_candidate> best;
+std::optional<std::uint64_t> choose_room(const std::vector<room_candidate>& rooms, const std::uint32_t world_id) {
+    std::optional<std::uint64_t> chosen;
     for (const room_candidate& room : rooms) {
-        if (room.player_count >= capacity) {
-            continue;
-        }
-        if (!best || room.player_count > best->player_count ||
-            (room.player_count == best->player_count && room.room_id < best->room_id)) {
-            best = room;
+        if (room.world_id == world_id && (!chosen || room.room_id < *chosen)) {
+            chosen = room.room_id;
         }
     }
-    return best ? std::optional<std::uint64_t>(best->room_id) : std::nullopt;
+    return chosen;
+}
+
+std::vector<int> tee_round_strokes(const std::vector<int>& strokes, const std::size_t hole_count) {
+    std::vector<int> next = strokes;
+    next.resize(hole_count, 0);
+    if (!next.empty() && std::all_of(next.begin(), next.end(), [](const int score) { return score > 0; })) {
+        std::fill(next.begin(), next.end(), 0);
+    }
+    return next;
 }
 
 movement_limits movement_limits_for(const game_tuning& tuning, const cart_spec& cart,

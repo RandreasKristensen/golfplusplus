@@ -9,6 +9,7 @@
 #include "physics/turf_contact.h"
 #include "physics/vector_math.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -83,4 +84,9 @@ std::optional<shot_number> shot_number_for(const shot_record& record, const golf
         number.crit = off <= tuning.shot_numbers.crit_share * horizontal_distance(planned, glm::vec3(0.0f));
     }
     return number;
+}
+
+float shot_number_size(const shot_number_tuning& tuning, const float age) {
+    const float progress = clamp01(age / std::max(0.001f, tuning.lifetime_seconds));
+    return tuning.start_size + (tuning.end_size - tuning.start_size) * progress;
 }

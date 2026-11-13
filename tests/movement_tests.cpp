@@ -11,6 +11,7 @@
 #include "physics/vector_math.h"
 #include "test_support.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -351,4 +352,72 @@ TEST_CASE("movement XP is paid for at most the hour's meters") {
     CHECK(server.walk_xp_meters_per_hour >= shipped_content().tuning.player.walk_speed * 3600.0f);
     CHECK(server.cart_xp_meters_per_hour > 0.0f);
     CHECK(motion_mode_count == 6U);
+}
+
+
+TEST_CASE("paced and crouched walking runs replay on the server with item-modified speed") {
+    game_state state = online_walker();
+    state.online.effects.push_back(active_effect{"test", item_effect{effect_target_walk_speed,
+        effect_bucket::increased, 0.5f, effect_duration::equipped}, 0, effect_never_ends});
+    const mover_state joined = joined_at(state.player.position, state.tuning);
+    for (int frame = 0; frame < 90; ++frame) {
+        game_input input = walking_forward();
+        input.toggle_pacing = frame == 0 || frame == 60;
+        input.crouch_held = frame >= 30 && frame < 75;
+        input.run_held = frame >= 75;
+        input.strafe_left_held = frame >= 45;
+        update_game(state, input, move_step_seconds);
+    }
+    send_motion_now(state);
+    move_world world = server_world(state);
+    world.walk_speed = effective_value(state.tuning.player.walk_speed, effect_target_walk_speed,
+                                       current_effects(state), shot_unix_ms(state));
+    mover_state mover = joined;
+    double id = 1.0;
+    bool saw_paced = false;
+    bool saw_crouched = false;
+    for (const net_command& command : motions_from(state)) {
+        for (const move_run& run : command.runs) {
+            saw_paced = saw_paced || run.input.paced;
+            saw_crouched = saw_crouched || run.input.crouched;
+        }
+        const move_outcome moved = play_move(mover, state.online.carts.at(me), me, request_of(command, id += 1.0), 1.0f, world);
+        REQUIRE(moved.error.empty());
+        CHECK(near(moved.shown.position, command.motion.position, 0.00001f));
+        CHECK(near(moved.shown.speed, command.motion.speed));
+        CHECK(moved.shown.crouched == command.motion.crouched);
+        mover = moved.mover;
+    }
+    CHECK(saw_paced);
+    CHECK(saw_crouched);
+    CHECK(near(mover.position, state.player.position, 0.00001f));
+}
+
+TEST_CASE("walking styles split runs and the server suppresses crouched running and jumps") {
+    move_input input = walk_step_input(0.0f);
+    std::vector<move_run> runs;
+    append_step(runs, input);
+    input.paced = true;
+    append_step(runs, input);
+    input.crouched = true;
+    append_step(runs, input);
+    append_step(runs, input);
+    REQUIRE(runs.size() == 3U);
+    CHECK(runs.back().steps == 2);
+    game_state state = online_walker();
+    const std::vector<solid> obstacles;
+    const walk_world world{state.area, obstacles, state.tuning, state.tuning.player.walk_speed};
+    input.run = true;
+    input.jump = true;
+    const walker before{state.player.position, state.player.vertical};
+    const walker after = step_walker(before, input, world).after;
+    CHECK(after.vertical.grounded);
+    CHECK(near(after.speed, state.tuning.player.walk_speed *
+        std::min(state.tuning.pacing.walk_factor, state.tuning.green_read.walk_factor)));
+    input.kind = move_kind::cart;
+    net_motion motion = current_motion(state);
+    motion.client_time = 1.0;
+    const move_request invalid{motion, 1, before.position, {move_run{input, 1}}};
+    CHECK(play_move(joined_at(before.position, state.tuning), std::nullopt, me, invalid, 1.0f,
+                    server_world(state)).error == error_invalid_motion);
 }

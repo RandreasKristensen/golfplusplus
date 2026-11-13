@@ -79,6 +79,14 @@ inline const scene_colors& test_scene_colors() {
     return colors;
 }
 
+// A shadow map whose texels are `texel_meters` wide, reaching 300 m.
+inline shadow_style test_shadow_map(const float texel_meters) {
+    shadow_style map;
+    map.map_extent = 300.0f;
+    map.map_resolution = static_cast<int>(map.map_extent / texel_meters);
+    return map;
+}
+
 // The shipped props (assets/world/props).
 // Relative luminance (Rec. 709), how bright a colour reads.
 inline float luminance(const glm::vec3& color) {
@@ -291,7 +299,7 @@ inline void swing_through(game_state& state) {
 // Online: the server's answer to the swing over my ball, its shot as set up
 // (no dice, nothing in its way), resting at `rest` (else where it flies).
 inline void answer_my_swing(game_state& state, const std::optional<glm::vec3>& rest = std::nullopt) {
-    room_shot shot = played_shot(state.online.account_id, static_cast<int>(state.ball->hole), state.ball->strokes + 1,
+    room_shot shot = played_shot(state.online.account_id, (state.ball->hole ? static_cast<int>(*state.ball->hole) : -1), state.ball->strokes + 1,
                                  state.address.setup, glm::vec3(0.0f), false);
     shot.rest = rest ? *rest : room_shot_result(state, shot).rest_position;
     state.online.shots.push_back(shot);

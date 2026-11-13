@@ -42,12 +42,15 @@ bool course_map_layouts_match(const course_map_layout& a, const course_map_layou
     return a.center == b.center &&
            a.half_size == b.half_size &&
            a.world_center == b.world_center &&
+           a.turn == b.turn &&
            a.scale == b.scale;
 }
 
 glm::vec2 map_point(const course_map_layout& layout, const glm::vec3& position) {
     const glm::vec2 delta(layout.world_center.x - position.x, position.z - layout.world_center.z);
-    return layout.center + delta * layout.scale;
+    const glm::vec2 turned(delta.x * layout.turn.x - delta.y * layout.turn.y,
+                           delta.x * layout.turn.y + delta.y * layout.turn.x);
+    return layout.center + turned * layout.scale;
 }
 
 void append_map_fill_triangle(overlay_batch& batch,
@@ -56,9 +59,8 @@ void append_map_fill_triangle(overlay_batch& batch,
                               const glm::vec2 b,
                               const glm::vec2 c,
                               const glm::vec3 color) {
-    const float inset = 0.025f;
-    const glm::vec2 clip_min = layout.center - layout.half_size + glm::vec2(inset);
-    const glm::vec2 clip_max = layout.center + layout.half_size - glm::vec2(inset);
+    const glm::vec2 clip_min = layout.center - layout.half_size + glm::vec2(course_map_fill_inset);
+    const glm::vec2 clip_max = layout.center + layout.half_size - glm::vec2(course_map_fill_inset);
 
     const float min_x = std::min({a.x, b.x, c.x});
     const float max_x = std::max({a.x, b.x, c.x});

@@ -5,7 +5,8 @@
 // its colours by name, and for a thing of fixed shape the parts it is built
 // from in its own frame (x left, y up, z forward), named points the code
 // animates from (where a cigarette's smoke rises) and mounts other models
-// hang at (a trinket on a cart). A file may name a `base` model of its kind
+// hang at (a trinket on a cart). Static hub models also supply shared
+// approach and collision points (game/hub_scene.h). A file may name a `base` model of its kind
 // and give only what differs: its colours, points and mounts replace the
 // base's of the same name, its parts all of the base's. What is fitted to the
 // course (a tree's size, a fence's line, a floodlight's pole) or moves (a

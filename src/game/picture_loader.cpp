@@ -61,6 +61,7 @@ constexpr float_field<tape_style> tape_fields[] = {
     {"tracking_skew", &tape_style::tracking_skew, 0.0f, 0.2f},
     {"tracking_burst_seconds", &tape_style::tracking_burst_seconds, 0.0f, 10.0f},
     {"tracking_fade_seconds", &tape_style::tracking_fade_seconds, 0.01f, 10.0f},
+    {"travel_fade_seconds", &tape_style::travel_fade_seconds, 0.01f, 10.0f},
 };
 
 constexpr float_field<tv_style> tv_fields[] = {

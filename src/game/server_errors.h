@@ -22,9 +22,7 @@ inline constexpr const char* error_guest_cannot_link = "guest_cannot_link";
 // Rooms and groups
 inline constexpr const char* error_unknown_course = "unknown_course";
 inline constexpr const char* error_not_in_room = "not_in_room";
-inline constexpr const char* error_unknown_group = "unknown_group";
 inline constexpr const char* error_group_full = "group_full";
-inline constexpr const char* error_in_group = "in_group";
 inline constexpr const char* error_not_in_group = "not_in_group";
 
 // Playing
@@ -55,3 +53,13 @@ inline constexpr const char* error_bag_on_back = "bag_on_back";
 inline constexpr const char* error_flag_changed = "flag_changed";
 inline constexpr const char* error_bag_out_of_reach = "bag_out_of_reach";
 inline constexpr const char* error_bag_spot_taken = "bag_spot_taken";
+
+// Tee times
+inline constexpr const char* error_stale_booking = "stale_booking";
+inline constexpr const char* error_invalid_slot = "invalid_slot";
+inline constexpr const char* error_booking_required = "booking_required";
+inline constexpr const char* error_booking_expired = "booking_expired";
+inline constexpr const char* error_tee_too_early = "tee_too_early";
+inline constexpr const char* error_bus_too_early = "bus_too_early";
+inline constexpr const char* error_hub_only = "hub_only";
+inline constexpr const char* error_first_tee_required = "first_tee_required";

@@ -15,6 +15,8 @@ pub struct MoveRunRow {
     pub jump: bool,
     pub yaw: u16,
     pub steer: i16,
+    pub paced: bool,
+    pub crouched: bool,
 }
 
 impl __sdk::InModule for MoveRunRow {

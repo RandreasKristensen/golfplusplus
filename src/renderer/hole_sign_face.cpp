@@ -247,6 +247,15 @@ void draw_way_sign_face(overlay_batch& batch, const text_assets& text, const std
                texels(frame_texels, frame_texels, way_sign_face_width - frame_texels * 2, way_sign_face_height - frame_texels * 2));
 }
 
+void draw_prop_board_face(overlay_batch& batch, const text_assets& text, const std::string& label, const int width) {
+    batch.grid = overlay_grid{width, prop_board_face_height};
+    const float texel_x = 2.0f / static_cast<float>(width);
+    const float texel_y = 2.0f / static_cast<float>(prop_board_face_height);
+    draw_label(batch, text.font, find_text_style(text, style_prop_board), label,
+               rect_from_edges(-1.0f + frame_texels * texel_x, -1.0f + frame_texels * texel_y,
+                               1.0f - frame_texels * texel_x, 1.0f - frame_texels * texel_y));
+}
+
 void draw_hole_sign_face(overlay_batch& batch,
                          const text_assets& text,
                          const hole_sign_labels& labels,

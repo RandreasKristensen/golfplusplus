@@ -11,7 +11,6 @@
 #include <utility>
 #include <vector>
 
-namespace {
 // Trees smaller than this are treated as authoring mistakes.
 constexpr float min_tree_dimension = 0.01f;
 // A zone smaller than this (square metres) is a broken one.
@@ -54,11 +53,16 @@ std::optional<material_zone> material_zone_from_json(const json& object) {
         }
         outline.push_back(xz);
     }
-    const material_zone zone =
+    material_zone zone =
         make_material_zone(material_type_from_string(json_string(object, "type").value_or("")),
                            rounded_outline(outline, zone_curve_tolerance));
     if (!(zone_area(zone) >= min_zone_area)) {
         return std::nullopt;
+    }
+    if (object.contains("green_stimp_feet")) {
+        const auto speed = json_float(object, "green_stimp_feet");
+        if (!speed || *speed <= 0 || zone.type != material_zone_type::green) { return std::nullopt; }
+        zone.green_stimp_feet = *speed;
     }
     return zone;
 }
@@ -105,7 +109,6 @@ std::vector<tree_instance> trees_from_json(const json& root) {
         trees.push_back(tree);
     }
     return trees;
-}
 }
 
 std::optional<hole_data> parse_hole_from_text(const std::string& text) {

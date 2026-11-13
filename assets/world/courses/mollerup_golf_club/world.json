@@ -1542,17 +1542,97 @@
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/192625523",
+      "osm_ref": "way/192625519",
       "polyline": [
         [
-          265.49,
+          101.49,
           0.0,
-          -113.26
+          -141.26
         ],
         [
-          267.49,
+          92.74,
           0.0,
-          -109.26
+          -139.35
+        ],
+        [
+          88.03,
+          0.0,
+          -138.01
+        ],
+        [
+          85.33,
+          0.0,
+          -136.99
+        ],
+        [
+          83.6,
+          0.0,
+          -136.19
+        ],
+        [
+          81.16,
+          0.0,
+          -134.79
+        ],
+        [
+          79.64,
+          0.0,
+          -133.71
+        ],
+        [
+          78.23,
+          0.0,
+          -132.51
+        ],
+        [
+          76.94,
+          0.0,
+          -131.2
+        ],
+        [
+          75.78,
+          0.0,
+          -129.8
+        ],
+        [
+          74.76,
+          0.0,
+          -128.31
+        ],
+        [
+          73.86,
+          0.0,
+          -126.75
+        ],
+        [
+          73.07,
+          0.0,
+          -125.15
+        ],
+        [
+          70.46,
+          0.0,
+          -118.97
+        ],
+        [
+          69.35,
+          0.0,
+          -117.05
+        ],
+        [
+          68.5,
+          0.0,
+          -115.94
+        ],
+        [
+          67.56,
+          0.0,
+          -114.96
+        ],
+        [
+          65.49,
+          0.0,
+          -113.26
         ]
       ]
     },
@@ -1583,14 +1663,14 @@
       "osm_ref": "way/192625523",
       "polyline": [
         [
-          267.49,
+          265.49,
           0.0,
-          -109.26
+          -113.26
         ],
         [
           267.49,
           0.0,
-          -107.26
+          -109.26
         ]
       ]
     },
@@ -1604,12 +1684,12 @@
         [
           267.49,
           0.0,
-          -107.26
+          -109.26
         ],
         [
-          269.49,
+          267.49,
           0.0,
-          -103.26
+          -107.26
         ]
       ]
     },
@@ -1640,14 +1720,14 @@
       "osm_ref": "way/192625523",
       "polyline": [
         [
-          269.49,
+          267.49,
           0.0,
-          -103.26
+          -107.26
         ],
         [
           269.49,
           0.0,
-          -101.26
+          -103.26
         ]
       ]
     },
@@ -1661,12 +1741,12 @@
         [
           269.49,
           0.0,
-          -101.26
+          -103.26
         ],
         [
-          271.49,
+          269.49,
           0.0,
-          -97.26
+          -101.26
         ]
       ]
     },
@@ -1697,6 +1777,25 @@
       "osm_ref": "way/192625523",
       "polyline": [
         [
+          269.49,
+          0.0,
+          -101.26
+        ],
+        [
+          271.49,
+          0.0,
+          -97.26
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_030",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/192625523",
+      "polyline": [
+        [
           271.49,
           0.0,
           -97.26
@@ -1709,7 +1808,7 @@
       ]
     },
     {
-      "id": "cart_path_030",
+      "id": "cart_path_031",
       "source": "generated",
       "surface": "gravel",
       "width": 3.0,
@@ -1767,7 +1866,7 @@
       ]
     },
     {
-      "id": "cart_path_031",
+      "id": "cart_path_032",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -1936,7 +2035,7 @@
       ]
     },
     {
-      "id": "cart_path_032",
+      "id": "cart_path_033",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -1955,7 +2054,7 @@
       ]
     },
     {
-      "id": "cart_path_033",
+      "id": "cart_path_034",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -2104,7 +2203,7 @@
       ]
     },
     {
-      "id": "cart_path_034",
+      "id": "cart_path_035",
       "source": "generated",
       "surface": "gravel",
       "width": 3.0,
@@ -2122,7 +2221,7 @@
       ]
     },
     {
-      "id": "cart_path_035",
+      "id": "cart_path_036",
       "source": "generated",
       "surface": "gravel",
       "width": 3.0,
@@ -2265,7 +2364,7 @@
       ]
     },
     {
-      "id": "cart_path_036",
+      "id": "cart_path_037",
       "source": "generated",
       "surface": "gravel",
       "width": 3.0,
@@ -2283,7 +2382,7 @@
       ]
     },
     {
-      "id": "cart_path_037",
+      "id": "cart_path_038",
       "source": "generated",
       "surface": "gravel",
       "width": 3.0,
@@ -2376,7 +2475,7 @@
       ]
     },
     {
-      "id": "cart_path_038",
+      "id": "cart_path_039",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -2400,7 +2499,7 @@
       ]
     },
     {
-      "id": "cart_path_039",
+      "id": "cart_path_040",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -2504,7 +2603,7 @@
       ]
     },
     {
-      "id": "cart_path_040",
+      "id": "cart_path_041",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -2573,7 +2672,7 @@
       ]
     },
     {
-      "id": "cart_path_041",
+      "id": "cart_path_042",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -2592,7 +2691,7 @@
       ]
     },
     {
-      "id": "cart_path_042",
+      "id": "cart_path_043",
       "source": "generated",
       "surface": "gravel",
       "width": 3.0,
@@ -2640,7 +2739,7 @@
       ]
     },
     {
-      "id": "cart_path_043",
+      "id": "cart_path_044",
       "source": "generated",
       "surface": "gravel",
       "width": 3.0,
@@ -2673,7 +2772,7 @@
       ]
     },
     {
-      "id": "cart_path_044",
+      "id": "cart_path_045",
       "source": "generated",
       "surface": "gravel",
       "width": 3.0,
@@ -2811,7 +2910,7 @@
       ]
     },
     {
-      "id": "cart_path_045",
+      "id": "cart_path_046",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -2885,7 +2984,7 @@
       ]
     },
     {
-      "id": "cart_path_046",
+      "id": "cart_path_047",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -4122,6 +4221,14 @@
       "content_id": "clubhouse_notice"
     }
   ],
+  "bus_stop": {
+    "position": [
+      59.62,
+      0.0,
+      -110.46
+    ],
+    "heading": 3.1235
+  },
   "ground": {
     "origin": [
       -907.51,

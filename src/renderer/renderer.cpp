@@ -207,12 +207,17 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
         return;
     }
 
+    if (world_props_revision_ != data.trees_revision) {
+        world_props_.clear();
+        if (data.world_props) { append_world_props(world_props_, *data.world_props, props_, colors_.glow); }
+        world_props_revision_ = data.trees_revision;
+    }
     const glm::mat4 proj = scene_projection(data.camera_fov_degrees, data.area_extent);
     const glm::mat4 view = glm::lookAt(data.camera_position, data.camera_target, glm::vec3(0.0f, 1.0f, 0.0f));
     if (!data.vcr.still_frame || !camcorder_pass_.has_frame()) {
         const profile_scope scene_timer(profile, profile_stage::render_scene);
         const std::vector<tree_body> no_trees;
-        build_shadow_casters(shadow_casters_, shadow_models_, data, colors_, props_);
+        build_shadow_casters(shadow_casters_, shadow_models_, data, colors_, props_, shadow_map_pass_.style(), &world_props_);
         shadow_map_pass_.draw(tree_renderer_, data.trees != nullptr ? *data.trees : no_trees, data.trees_revision,
                               floodlight_renderer_, data.floodlights, shadow_casters_, shadow_models_,
                               data.lighting.sun_direction, data.lighting.shadows.sun_share, data.camera_position,
@@ -408,7 +413,8 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     gpu_timers_.end();
 
     gpu_timers_.begin(gpu_profile_stage::trees);
-    cull_stats_.trees_visible = tree_renderer_.draw(data.trees != nullptr ? *data.trees : std::vector<tree_body>{},
+    const std::vector<tree_body> no_trees;
+    cull_stats_.trees_visible = tree_renderer_.draw(data.trees != nullptr ? *data.trees : no_trees,
                                                     data.trees_revision, view, proj, frustum, props_.at(tree_model), profile);
     hole_sign_renderer_.draw(data.hole_signs, view_proj, profile);
     fence_renderer_.draw_posts(data.fences, view_proj, profile);
@@ -425,11 +431,12 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     markers.cup_radius_meters = data.cup_radius_meters;
     markers.cup_depth_meters = data.cup_depth_meters;
     markers.pin_visual_height_meters = data.pin_visual_height_meters;
+    markers.flagstick_radius_meters = data.flagstick_radius_meters;
     markers.flag = flag_pose{data.weather.flag_wind, data.weather.flag_lift, data.weather.flag_phase, data.weather.flag_flap};
     markers.camera_position = data.camera_position;
     markers.pixel_per_meter = 2.0f * std::tan(glm::radians(std::max(1.0f, data.camera_fov_degrees)) * 0.5f) /
         static_cast<float>(picture_.height);
-    markers.address_marks = data.address_marks ? &*data.address_marks : nullptr;
+    markers.address_feet = data.address_feet ? &*data.address_feet : nullptr;
     markers.ball_visual_radius_meters = data.ball_visual_radius_meters;
     markers.remote_avatars = &data.remote_avatars;
     markers.remote_balls = &data.remote_balls;
@@ -445,6 +452,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     // After the sky: smoke and beer blend over it.
     build_prop_batch(data);
     draw_props(prop_batch_, view_proj, profile);
+    draw_props(world_props_, view_proj, profile);
     render_flight_path(view, proj, data, profile);
 
     if (data.show_ball) {
@@ -494,6 +502,7 @@ void renderer::build_prop_batch(const render_data& data) {
         return found != props_.end() ? &found->second : nullptr;
     };
     append_carts_and_bags(prop_batch_, data, props_, colors_);
+    if (data.dap_hand) { append_dap_hand(prop_batch_, *data.dap_hand, colors_.figures.skin, remote_tint(colors_.figures, data.my_figure ? data.my_figure->player_id : 0)); }
     if (data.my_club) {
         if (const prop_model* club = model(data.my_club->club_model)) {
             append_swing_club(prop_batch_, *data.my_club, data.ball_visual_radius_meters, *club, colors_.glow);

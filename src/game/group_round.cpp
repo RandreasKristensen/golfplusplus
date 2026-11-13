@@ -6,43 +6,14 @@
 
 #include <algorithm>
 
-namespace {
-std::vector<int>& seen_strokes(game_state& state, const std::uint64_t account) {
-    std::vector<int>& strokes = state.group_strokes[account];
-    strokes.resize(state.course_holes.size(), 0);
-    return strokes;
-}
-}
-
-void note_round_strokes(game_state& state) {
-    for (const auto& [account, player] : state.online.players) {
-        for (std::size_t i = 0; i < player.round_strokes.size() && i < state.course_holes.size(); ++i) {
-            if (player.round_strokes[i] > 0) {
-                seen_strokes(state, account)[i] = player.round_strokes[i];
-            }
-        }
-    }
-}
-
-void note_holed_shot(game_state& state, const room_shot& shot) {
-    if (shot.holed && shot.hole >= 0 && static_cast<std::size_t>(shot.hole) < state.course_holes.size()) {
-        seen_strokes(state, shot.account_id)[static_cast<std::size_t>(shot.hole)] = shot.stroke;
-    }
-}
-
 std::vector<int> member_round_strokes(const game_state& state, const std::uint64_t account) {
     std::vector<int> strokes(state.course_holes.size(), 0);
+    if (!state.round) { return strokes; }
     if (account == state.online.account_id) {
         for (std::size_t i = 0; i < strokes.size(); ++i) {
-            strokes[i] = hole_played(state.round, i) ? *state.round.strokes[i] : 0;
+            strokes[i] = hole_played(*state.round, i) ? *state.round->strokes[i] : 0;
         }
         return strokes;
-    }
-    const auto seen = state.group_strokes.find(account);
-    if (seen != state.group_strokes.end()) {
-        for (std::size_t i = 0; i < strokes.size() && i < seen->second.size(); ++i) {
-            strokes[i] = seen->second[i];
-        }
     }
     const auto player = state.online.players.find(account);
     if (player != state.online.players.end()) {
@@ -57,7 +28,7 @@ std::vector<int> member_round_strokes(const game_state& state, const std::uint64
 }
 
 bool waiting_for_group(const game_state& state) {
-    if (!is_online(state) || !round_finished(state.round) || !state.ball) {
+    if (!is_online(state) || !(state.round && round_finished(*state.round)) || !state.ball) {
         return false;
     }
     const room_player* me = my_room_player(state);
@@ -65,7 +36,7 @@ bool waiting_for_group(const game_state& state) {
         return false;
     }
     // My ball waits in the cup of the hole the round finished on.
-    const int last_hole = static_cast<int>(state.ball->hole);
+    const int last_hole = (state.ball->hole ? static_cast<int>(*state.ball->hole) : -1);
     const auto shooting = [&state](const std::uint64_t account) {
         const auto playing = state.remote_shots.find(account);
         if (playing != state.remote_shots.end() && remote_shot_playing(playing->second)) {
@@ -89,5 +60,5 @@ bool waiting_for_group(const game_state& state) {
 }
 
 bool round_results_shown(const game_state& state) {
-    return round_finished(state.round) && !waiting_for_group(state);
+    return !state.results_dismissed && (state.round && round_finished(*state.round)) && !waiting_for_group(state);
 }

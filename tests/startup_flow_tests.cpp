@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "core/startup_flow.h"
+#include "game/text_ids.h"
 #include "game/text_assets.h"
 #include "renderer/menu_overlay.h"
 
@@ -40,8 +41,10 @@ TEST_CASE("main menu opens online, offline, the visual tour, help and settings, 
 
     return_to_main_menu(state);
     state.selection = 1;
-    update_startup_menu(state, input, menu_pointer{}, catalog);
-    CHECK(state.flow == startup_flow::course_picker);
+    const auto offline = update_startup_menu(state, input, menu_pointer{}, catalog);
+    CHECK(offline.action == startup_action::start_course);
+    CHECK(offline.course.id == online_hub_course);
+    CHECK(offline.play == play_mode::offline);
 
     return_to_main_menu(state);
     state.selection = 2;
@@ -109,13 +112,13 @@ TEST_CASE("a guest's main menu has signing out but no linking") {
 TEST_CASE("Escape leaves a sub-menu for the main menu, and there asks before quitting; backspace never goes back") {
     const startup_catalog catalog = two_courses();
     startup_flow_state state;
-    state.flow = startup_flow::course_picker;
+    state.flow = startup_flow::tour_picker;
     state.selection = 1;
 
     input_state backspace;
     backspace.backspace.pressed = true;
     update_startup_menu(state, backspace, menu_pointer{}, catalog);
-    CHECK(state.flow == startup_flow::course_picker);
+    CHECK(state.flow == startup_flow::tour_picker);
 
     input_state input;
     input.escape.pressed = true;
@@ -176,37 +179,9 @@ TEST_CASE("the natural shot picker opens on straight, starts its course with the
     const startup_menu_result back = update_startup_menu(state, escape, menu_pointer{}, catalog);
     CHECK(back.action == startup_action::none);
     CHECK(!back.natural);
-    CHECK(state.flow == startup_flow::course_picker);
+    CHECK(state.flow == startup_flow::main);
 }
 
-TEST_CASE("course picker asks app to start the selected course without leaving the menu") {
-    const startup_catalog catalog = two_courses();
-    startup_flow_state state;
-    state.flow = startup_flow::course_picker;
-
-    input_state input;
-    input.right.pressed = true;
-    startup_menu_result result = update_startup_menu(state, input, menu_pointer{}, catalog);
-    CHECK(state.selection == 1);
-    CHECK(has_sound(result.sounds, ui_sound::move));
-    CHECK(result.action == startup_action::none);
-
-    input = input_state{};
-    input.enter.pressed = true;
-    result = update_startup_menu(state, input, menu_pointer{}, catalog);
-    // A course with carts asks how I get round first: a cart, picked.
-    CHECK(result.action == startup_action::none);
-    REQUIRE(state.flow == startup_flow::transport_picker);
-    result = update_startup_menu(state, input, menu_pointer{}, catalog);
-    CHECK(result.action == startup_action::start_course);
-    CHECK(result.course.id == "second");
-    CHECK(result.play == play_mode::offline);
-    CHECK(state.takes_cart);
-    CHECK(state.flow == startup_flow::transport_picker);
-
-    enter_playing(state);
-    CHECK(state.flow == startup_flow::playing);
-}
 
 TEST_CASE("clicking a tile selects and accepts it") {
     const startup_catalog catalog = two_courses();
@@ -266,6 +241,27 @@ TEST_CASE("confirm menu opens on NO and only YES leaves the round") {
     CHECK(has_sound(result.sounds, ui_sound::back));
 }
 
+TEST_CASE("pause menu on a course offers RETURN TO HUB after give up and leave group") {
+    const startup_catalog catalog;
+    const std::optional<text_assets> text = load_text_assets(GOLFPP_ASSETS_DIR);
+    REQUIRE(text.has_value());
+    startup_flow_state state;
+    enter_playing(state);
+    open_confirm_menu(state, std::size_t{2});
+    state.confirm_leave_group = true;
+    state.confirm_return_hub = true;
+    const render_startup_menu menu = make_confirm_menu_render_data(state, *text, {});
+    REQUIRE(menu.tiles.size() == 6U);
+    CHECK(menu.tiles[4].title == lookup_text(*text, text_hub_leave_group));
+    CHECK(menu.tiles[5].title == lookup_text(*text, text_hub_return));
+    input_state down, accept;
+    down.down.pressed = true; accept.enter.pressed = true;
+    for (int i = 0; i < 4; ++i) { update_confirm_menu(state, down, menu_pointer{}, catalog); }
+    CHECK(state.confirm_selection == 5);
+    const confirm_menu_result result = update_confirm_menu(state, accept, menu_pointer{}, catalog);
+    CHECK(result.return_hub); CHECK(!result.leave_group); CHECK(!result.give_up_hole); CHECK(!result.leave_round);
+}
+
 TEST_CASE("menu render data takes its text from the string table") {
     const std::optional<text_assets> text = load_text_assets(GOLFPP_ASSETS_DIR);
     REQUIRE(text.has_value());
@@ -292,7 +288,7 @@ TEST_CASE("menu render data takes its text from the string table") {
     CHECK(signed_in.tiles[3].title == "LINK ANOTHER LOGIN");
     CHECK(signed_in.tiles[4].title == "SIGN OUT");
 
-    state.flow = startup_flow::course_picker;
+    state.flow = startup_flow::tour_picker;
     const render_startup_menu courses = make_startup_menu_render_data(state, two_courses(), *text);
     CHECK(courses.tiles.size() == 2U);
     CHECK(courses.tiles[1].title == "Second");
@@ -319,55 +315,3 @@ TEST_CASE("the catalog totals each course's par and previews hole 1") {
     }
 }
 
-TEST_CASE("the course picker shows nine courses in its box and scrolls a row at a time to the rest") {
-    startup_catalog catalog;
-    for (int i = 0; i < 13; ++i) {
-        course_definition course;
-        course.id = "course_" + std::to_string(i);
-        course.name = "Course " + std::to_string(i);
-        catalog.courses.push_back(startup_course_option{course, 0, std::nullopt});
-    }
-    startup_flow_state state;
-    state.flow = startup_flow::course_picker;
-    const text_assets& text = shipped_text_assets();
-    const auto shown = [&]() { return make_startup_menu_render_data(state, catalog, text); };
-    render_startup_menu menu = shown();
-    REQUIRE(menu.tiles.size() == 9U);
-    CHECK(menu.tiles.front().title == "Course 0");
-    CHECK(!menu.more_above);
-    CHECK(menu.more_below);
-
-    // Down the rows: the view follows the selection into the fourth row.
-    input_state down;
-    down.down.pressed = true;
-    for (int i = 0; i < 3; ++i) {
-        update_startup_menu(state, down, menu_pointer{}, catalog);
-    }
-    CHECK(state.selection == 9);
-    menu = shown();
-    REQUIRE(menu.tiles.size() == 9U);
-    CHECK(menu.tiles.front().title == "Course 3");
-    CHECK(menu.more_above);
-    CHECK(menu.more_below);
-    CHECK(std::count_if(menu.tiles.begin(), menu.tiles.end(), [](const render_startup_tile& tile) { return tile.selected; }) == 1);
-
-    // The wheel scrolls to the last row, the selection kept in view; the last row shows its one course.
-    input_state wheel;
-    wheel.wheel_steps = -5;
-    update_startup_menu(state, wheel, menu_pointer{}, catalog);
-    menu = shown();
-    REQUIRE(menu.tiles.size() == 7U);
-    CHECK(menu.tiles.front().title == "Course 6");
-    CHECK(!menu.more_below);
-    CHECK(state.selection >= 6);
-
-    // A click on the first tile shown picks that course, not the first of all.
-    const glm::vec2 first_tile = startup_tile_center(startup_menu_screen::course_picker, 0, 7);
-    update_startup_menu(state, input_state{}, menu_pointer{first_tile, first_tile}, catalog);
-    REQUIRE(state.flow == startup_flow::transport_picker);
-    input_state enter;
-    enter.enter.pressed = true;
-    const startup_menu_result result = update_startup_menu(state, enter, menu_pointer{}, catalog);
-    CHECK(result.action == startup_action::start_course);
-    CHECK(result.course.id == "course_6");
-}

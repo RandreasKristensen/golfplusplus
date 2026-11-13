@@ -7,12 +7,14 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct TakeClubArgs {
+    pub expected_room: u64,
     pub club_id: String,
 }
 
 impl From<TakeClubArgs> for super::Reducer {
     fn from(args: TakeClubArgs) -> Self {
         Self::TakeClub {
+            expected_room: args.expected_room,
             club_id: args.club_id,
         }
     }
@@ -33,8 +35,8 @@ pub trait take_club {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`take_club:take_club_then`] to run a callback after the reducer completes.
-    fn take_club(&self, club_id: String) -> __sdk::Result<()> {
-        self.take_club_then(club_id, |_, _| {})
+    fn take_club(&self, expected_room: u64, club_id: String) -> __sdk::Result<()> {
+        self.take_club_then(expected_room, club_id, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `take_club` to run as soon as possible,
@@ -45,6 +47,7 @@ pub trait take_club {
     ///  and its status can be observed with the `callback`.
     fn take_club_then(
         &self,
+        expected_room: u64,
         club_id: String,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
@@ -56,13 +59,19 @@ pub trait take_club {
 impl take_club for super::RemoteReducers {
     fn take_club_then(
         &self,
+        expected_room: u64,
         club_id: String,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
-        self.imp
-            .invoke_reducer_with_callback(TakeClubArgs { club_id }, callback)
+        self.imp.invoke_reducer_with_callback(
+            TakeClubArgs {
+                expected_room,
+                club_id,
+            },
+            callback,
+        )
     }
 }

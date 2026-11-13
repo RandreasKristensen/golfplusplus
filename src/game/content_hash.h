@@ -13,7 +13,7 @@
 using content_files = std::map<std::string, std::string_view>;
 
 // Keep the module's GOLFPP_CONTENT_PATTERNS in step with these folders.
-inline constexpr std::array<const char*, 5> simulation_content_folders = {
-    "play/tuning", "play/progression", "play/items", "interface/fonts", "world/courses"};
+inline constexpr std::array<const char*, 7> simulation_content_folders = {
+    "play/tuning", "play/progression", "play/items", "interface/fonts", "world/courses", "world/props", "world/hub"};
 
 std::uint64_t simulation_content_hash(const content_files& files);

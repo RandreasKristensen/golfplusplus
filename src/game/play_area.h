@@ -19,20 +19,32 @@
 #include "physics/tree_body.h"
 #include "profiling/profiling.h"
 
+#include <optional>
+#include <string>
 #include <vector>
 
 #include <glm/vec3.hpp>
 
+inline constexpr float solid_grid_cell_size = 16.0f;
+
+struct static_prop {
+    std::string model;
+    glm::vec3 position{0.0f};
+    float heading = 0.0f;
+};
+
 struct play_area {
+    std::vector<static_prop> props;
+    std::optional<hub_anchor> bus;
     float ground_y = 0.0f;  // height used where there is no terrain
     // XZ centre and half-size of the terrain and ground, for the camera's far
     // plane, the backdrop ground and the course map.
     glm::vec3 center{0.0f};
     float extent = 0.0f;
-    // The XZ box around every hole's ribbon and zones: the course itself,
-    // without the land around it (what the course map fits to its paper).
-    glm::vec3 holes_low{0.0f};
-    glm::vec3 holes_high{0.0f};
+    // The XZ outline (convex, counter-clockwise) around every hole's ribbon
+    // and zones: the course itself, without the land around it (what the
+    // course map turns and fits to its paper).
+    std::vector<glm::vec3> holes_outline;
     std::vector<tree_instance> trees;
     // Each hole's ribbon: where the ground takes hole heights from (on land,
     // its lift over the land), and the fairway or rough at any point. Never
@@ -87,7 +99,7 @@ play_area place_course_holes(const std::vector<hole_data>& holes,
 // space before placing, so turned zones shape it the same way.
 play_area build_course_area(const std::vector<hole_data>& holes,
                             const course_world_definition& world,
-                            const game_tuning& tuning);
+                            const game_tuning& tuning, const std::optional<ground_pad>& arrival_pad = std::nullopt);
 
 // The one surface: the height and normal at `position` of the ground or of
 // a walkable solid's top over it, whichever is higher, with
@@ -120,3 +132,7 @@ cart_ground cart_ground_at(const play_area& area, const game_tuning& tuning, flo
 
 // The area's trees standing on its terrain, as shots hit them.
 std::vector<tree_body> standing_trees(const play_area& area, frame_profile* profile = nullptr);
+
+struct hub_definition;
+play_area build_hub_area(const hub_definition& hub, const course_world_definition& world, const game_tuning& tuning,
+                         const std::optional<ground_pad>& arrival_pad = std::nullopt);

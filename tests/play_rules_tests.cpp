@@ -62,11 +62,12 @@ movement_limits shipped_limits() {
 }
 }
 
-TEST_CASE("rooms fill the fullest room with space, oldest first, else none") {
-    CHECK(choose_room({}, 40) == std::nullopt);
-    CHECK(choose_room({{1, 3}, {2, 39}, {3, 12}}, 40) == std::optional<std::uint64_t>(2));
-    CHECK(choose_room({{1, 40}, {2, 40}}, 40) == std::nullopt);
-    CHECK(choose_room({{5, 10}, {4, 10}}, 40) == std::optional<std::uint64_t>(4));
+TEST_CASE("one course world stays selected beyond forty, without fullest-room allocation") {
+    CHECK(choose_room({}) == std::nullopt);
+    CHECK(choose_room({{1, 400}, {2, 0}}) == std::optional<std::uint64_t>(1));
+    CHECK(choose_room({{5, 1000, 2}, {4, 70, 1}}) == std::optional<std::uint64_t>(4));
+    CHECK(choose_room({{5, 1000, 2}}, 1) == std::nullopt);
+    CHECK(choose_room({{5, 1000, 2}}, 2) == std::optional<std::uint64_t>(5));
 }
 
 TEST_CASE("motion may not outrun its mode's speed, with slack that does not add up") {

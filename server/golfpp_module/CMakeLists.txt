@@ -93,6 +93,12 @@ set(GOLFPP_SHARED_SOURCES
   src/physics/solid.cpp
   src/physics/wind.cpp
   src/game/bag_place.cpp
+  src/game/dap_rules.cpp
+  src/game/hub_ball_rules.cpp
+  src/game/hub_loader.cpp
+  src/game/hub_scene.cpp
+  src/game/prop_loader.cpp
+  src/game/model_kinds.cpp
   src/game/cart_seats.cpp
   src/game/content_hash.cpp
   src/game/course_loader.cpp
@@ -134,7 +140,7 @@ list(TRANSFORM GOLFPP_SHARED_SOURCES PREPEND "${GOLFPP_ROOT}/")
 # Every asset file matching these patterns is compiled in: the play
 # content, the font, and every course's manifest, world and holes.
 set(GOLFPP_CONTENT_PATTERNS
-  play/tuning/*.json play/progression/*.json play/items/*.json interface/fonts/*.json world/courses/*.json)
+  play/tuning/*.json play/progression/*.json play/items/*.json interface/fonts/*.json world/courses/*.json world/props/*.json world/hub/*.json)
 set(GOLFPP_ASSET_ROOT "${GOLFPP_ROOT}/assets")
 set(GOLFPP_CONTENT_FILES "")
 foreach(pattern IN LISTS GOLFPP_CONTENT_PATTERNS)
@@ -162,6 +168,7 @@ add_executable(lib
   src/progress_rollup.cpp
   src/lib.cpp
   src/module_cache.cpp
+  src/tee_rules.cpp
   src/play_rules.cpp
   src/cart_rules.cpp
   src/movement_rules.cpp
@@ -182,8 +189,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   target_compile_options(lib PRIVATE -fno-exceptions -O2 -g0)
   target_compile_options(spacetimedb_cpp_library PRIVATE -fno-exceptions -O2 -g0)
 
-  # A course's terrain is the largest thing the module holds (module_cache.h),
-  # so memory may grow past the template's fixed 16 MB.
+  # Size initial memory for the embedded content plus this heap reserve;
+  # cached course terrain (module_cache.h) can grow the heap further.
   target_link_options(lib PRIVATE
     "SHELL:-sSTANDALONE_WASM=1"
     "SHELL:-sWASM=1"
@@ -193,7 +200,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     "SHELL:-sFILESYSTEM=0"
     "SHELL:-sDISABLE_EXCEPTION_CATCHING=1"
     "SHELL:-sALLOW_MEMORY_GROWTH=1"
-    "SHELL:-sINITIAL_MEMORY=16MB"
+    "SHELL:-sINITIAL_HEAP=16MB"
     "SHELL:-sSUPPORT_LONGJMP=0"
     "SHELL:-sSUPPORT_ERRNO=0"
     "SHELL:-std=c++20"

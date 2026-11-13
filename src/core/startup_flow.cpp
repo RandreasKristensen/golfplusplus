@@ -42,25 +42,6 @@ startup_course_option make_course_option(const std::string& asset_root, const co
     return option;
 }
 
-// The transport picker's tiles, top to bottom.
-constexpr int transport_cart = 0;
-constexpr int transport_carry = 1;
-
-// Offline: starts `course`. Online: joins its room, with a cart or not as
-// picked, and waits there.
-void begin_course(startup_flow_state& state, const course_definition& course, const play_mode play,
-                  startup_menu_result& result) {
-    if (play == play_mode::offline) {
-        result.action = startup_action::start_course;
-        result.course = course;
-        result.play = play;
-        return;
-    }
-    result.requests.push_back(online_request{online_request_type::join_course, course.id, state.takes_cart});
-    open_screen(state, startup_flow::joining);
-    state.joining_course = course;
-}
-
 startup_menu_screen screen_for_flow(const startup_flow flow) {
     switch (flow) {
     case startup_flow::main:
@@ -68,9 +49,7 @@ startup_menu_screen screen_for_flow(const startup_flow flow) {
         return startup_menu_screen::main;
     case startup_flow::help:
         return startup_menu_screen::help;
-    case startup_flow::course_picker:
     case startup_flow::tour_picker:
-    case startup_flow::online_course_picker:
         return startup_menu_screen::course_picker;
     case startup_flow::online_login:
     case startup_flow::name_entry:
@@ -80,7 +59,6 @@ startup_menu_screen screen_for_flow(const startup_flow flow) {
         return startup_menu_screen::form;
     case startup_flow::exit_prompt:
     case startup_flow::natural_shape_picker:
-    case startup_flow::transport_picker:
         return startup_menu_screen::confirm;
     case startup_flow::touring:
     case startup_flow::playing:
@@ -130,15 +108,12 @@ int item_count(const startup_flow flow, const startup_catalog& catalog, const on
     switch (flow) {
     case startup_flow::main:
         return static_cast<int>(main_menu_items(online).size());
-    case startup_flow::course_picker:
     case startup_flow::tour_picker:
         return static_cast<int>(catalog.courses.size());
     case startup_flow::exit_prompt:
         return 2;
     case startup_flow::natural_shape_picker:
         return 3;
-    case startup_flow::transport_picker:
-        return 2;
     default:
         return 0;
     }
@@ -150,7 +125,9 @@ void accept_main_menu(startup_flow_state& state, const online_menu_status& onlin
         open_play_online(state, online, result);
         break;
     case main_menu_item::play_offline:
-        open_screen(state, startup_flow::course_picker);
+        result.action = startup_action::start_course;
+        result.course.id = online_hub_course;
+        result.play = play_mode::offline;
         break;
     case main_menu_item::visual_tour:
         open_screen(state, startup_flow::tour_picker);
@@ -216,7 +193,7 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
     }
 
     const int count = item_count(state.flow, catalog, online);
-    const int hit = state.flow == startup_flow::course_picker || state.flow == startup_flow::tour_picker
+    const int hit = state.flow == startup_flow::tour_picker
         ? select_course(state.selection, state.picker_top_row, count, input, pointer, result.sounds)
         : select_with_input(screen_for_flow(state.flow), 1, state.selection, count, input, pointer, result.sounds);
 
@@ -225,13 +202,10 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
         if (state.flow == startup_flow::main) {
             open_screen(state, startup_flow::exit_prompt);
             state.selection = exit_no;
-        } else if (state.flow == startup_flow::transport_picker) {
-            open_screen(state, state.picking_for_play == play_mode::online ? startup_flow::online_course_picker
-                                                                           : startup_flow::course_picker);
         } else if (state.flow == startup_flow::natural_shape_picker) {
             // Online the room is joined already: a shape must be picked.
             if (state.picking_for_play == play_mode::offline) {
-                open_screen(state, startup_flow::course_picker);
+                return_to_main_menu(state);
             }
         } else {
             return_to_main_menu(state);
@@ -247,13 +221,6 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
     switch (state.flow) {
     case startup_flow::main:
         accept_main_menu(state, online, result);
-        break;
-    case startup_flow::course_picker:
-        pick_transport(state, catalog.courses[selected].course, play_mode::offline, result);
-        break;
-    case startup_flow::transport_picker:
-        state.takes_cart = state.selection == transport_cart;
-        begin_course(state, state.picking_for_course, state.picking_for_play, result);
         break;
     case startup_flow::tour_picker:
         result.action = startup_action::start_tour;
@@ -276,19 +243,6 @@ startup_menu_result update_startup_menu(startup_flow_state& state,
         break;
     }
     return result;
-}
-
-void pick_transport(startup_flow_state& state, const course_definition& course, const play_mode play,
-                    startup_menu_result& result) {
-    if (!course.carts) {
-        state.takes_cart = false;
-        begin_course(state, course, play, result);
-        return;
-    }
-    open_screen(state, startup_flow::transport_picker);
-    state.selection = transport_cart;
-    state.picking_for_course = course;
-    state.picking_for_play = play;
 }
 
 void open_natural_shape_picker(startup_flow_state& state, const course_definition& course, const play_mode play) {
@@ -341,7 +295,9 @@ confirm_menu_result update_confirm_menu(startup_flow_state& state,
         state.confirm_settings = !outcome.back;
         return result;
     }
-    const int item_count = state.confirm_give_up_hole ? confirm_give_up_item + 1 : confirm_settings_item + 1;
+    const int base_count = state.confirm_give_up_hole ? confirm_give_up_item + 1 : confirm_settings_item + 1;
+    const int return_item = base_count + (state.confirm_leave_group ? 1 : 0);
+    const int item_count = return_item + (state.confirm_return_hub ? 1 : 0);
     const int hit = select_with_input(startup_menu_screen::confirm, 1, state.confirm_selection, item_count,
                                       input, pointer, result.sounds);
 
@@ -354,7 +310,9 @@ confirm_menu_result update_confirm_menu(startup_flow_state& state,
         }
         state.confirm_active = false;
         result.leave_round = state.confirm_selection == 0;
-        result.give_up_hole = state.confirm_selection == confirm_give_up_item;
+        result.leave_group = state.confirm_leave_group && state.confirm_selection == base_count;
+        result.return_hub = state.confirm_return_hub && state.confirm_selection == return_item;
+        result.give_up_hole = state.confirm_give_up_hole && state.confirm_selection == confirm_give_up_item;
     } else if (input.escape.pressed) {
         result.sounds.push_back(ui_sound::back);
         state.confirm_active = false;
@@ -402,14 +360,6 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
         add_tile(menu, lookup_text(text, text_menu_confirm_yes), "", selected(exit_yes));
         add_tile(menu, lookup_text(text, text_menu_confirm_no), "", selected(exit_no));
         break;
-    case startup_flow::transport_picker:
-        menu.title = lookup_text(text, text_menu_transport_title);
-        menu.subtitle = lookup_text(text, text_menu_transport_subtitle);
-        add_tile(menu, lookup_text(text, text_menu_transport_cart), lookup_text(text, text_menu_transport_cart_hint),
-                 selected(static_cast<std::size_t>(transport_cart)));
-        add_tile(menu, lookup_text(text, text_menu_transport_carry), lookup_text(text, text_menu_transport_carry_hint),
-                 selected(static_cast<std::size_t>(transport_carry)));
-        break;
     case startup_flow::natural_shape_picker:
         menu.title = lookup_text(text, text_menu_natural_shape_title);
         menu.subtitle = lookup_text(text, text_menu_natural_shape_subtitle);
@@ -425,12 +375,6 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
         menu.title = lookup_text(text, text_menu_help_title);
         menu.subtitle = lookup_text(text, text_menu_help_subtitle);
         menu.footer = lookup_text(text, text_menu_help_footer);
-        break;
-    case startup_flow::course_picker:
-        menu.title = lookup_text(text, text_menu_course_picker_title);
-        menu.subtitle = lookup_text(text, text_menu_course_picker_subtitle);
-        menu.footer = lookup_text(text, text_menu_course_picker_footer);
-        add_course_tiles(menu, catalog, text, state.selection, state.picker_top_row);
         break;
     case startup_flow::tour_picker:
         menu.title = lookup_text(text, text_menu_tour_picker_title);
@@ -459,6 +403,14 @@ render_startup_menu make_confirm_menu_render_data(const startup_flow_state& stat
     if (state.confirm_give_up_hole) {
         add_tile(menu, format_text(text, text_menu_confirm_give_up, {{"hole", std::to_string(*state.confirm_give_up_hole + 1)}}),
                  "", state.confirm_selection == confirm_give_up_item);
+    }
+    const int group_item = state.confirm_give_up_hole ? confirm_give_up_item + 1 : confirm_settings_item + 1;
+    if (state.confirm_leave_group) {
+        add_tile(menu, lookup_text(text, text_hub_leave_group), "", state.confirm_selection == group_item);
+    }
+    if (state.confirm_return_hub) {
+        add_tile(menu, lookup_text(text, text_hub_return), "",
+                 state.confirm_selection == group_item + (state.confirm_leave_group ? 1 : 0));
     }
     return menu;
 }

@@ -97,6 +97,7 @@ inline constexpr bounded_field<sky_style> sky_fields[] = {
     {"rainbow_brightness", &sky_style::rainbow_brightness, 0.0f, 4.0f},
     {"rainbow_inner_glow", &sky_style::rainbow_inner_glow, 0.0f, 1.0f},
     {"rainbow_band_darkening", &sky_style::rainbow_band_darkening, 0.0f, 1.0f},
+    {"rainbow_sun_full_deg", &sky_style::rainbow_sun_full_deg, 0.1f, 90.0f},
 };
 
 inline constexpr float max_caster_metres = 10.0f;
@@ -195,8 +196,8 @@ inline constexpr bounded_field<weather_style> weather_fields[] = {
     {"rain_forwardness", &weather_style::rain_forwardness, 0.0f, max_forwardness},
     {"fog_visibility_meters", &weather_style::fog_visibility_meters, 1.0f, max_visibility_meters},
     {"fog_forwardness", &weather_style::fog_forwardness, 0.0f, max_forwardness},
-    {"sun_glow", &weather_style::sun_glow, 0.0f, 1.0f},
-    {"sun_forwardness", &weather_style::sun_forwardness, 0.0f, max_forwardness},
+    {"sun_glow_at_sun", &weather_style::sun_glow_at_sun, 0.0f, 20.0f},
+    {"sun_glow_spread", &weather_style::sun_glow_spread, 1.0f - max_forwardness, 1.0f},
     {"mist", &weather_style::mist, 0.0f, 1.0f},
     {"fog_mist_density", &weather_style::fog_mist_density, 0.0f, max_mist_density},
     {"rain_mist_density", &weather_style::rain_mist_density, 0.0f, max_mist_density},
@@ -262,8 +263,6 @@ inline constexpr share_field<glow_floors> glow_fields[] = {
     {"cup", &glow_floors::cup},
     {"pin_pole", &glow_floors::pin_pole},
     {"flag", &glow_floors::flag},
-    {"alignment_stick", &glow_floors::alignment_stick},
-    {"face_line", &glow_floors::face_line},
     {"ember", &glow_floors::ember},
     {"flight_path", &glow_floors::flight_path},
 };
@@ -288,8 +287,6 @@ inline constexpr color_field<marker_colors> marker_fields[] = {
     {"cup", &marker_colors::cup},
     {"pin_pole", &marker_colors::pin_pole},
     {"flag", &marker_colors::flag},
-    {"alignment_stick", &marker_colors::alignment_stick},
-    {"face_line", &marker_colors::face_line},
 };
 
 inline constexpr color_field<figure_colors> figure_fields[] = {

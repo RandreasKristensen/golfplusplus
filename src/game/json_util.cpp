@@ -1,6 +1,8 @@
 #include "game/json_util.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 std::optional<json> parse_json(const std::string& text) {
     json parsed = json::parse(text, nullptr, false);
@@ -18,6 +20,17 @@ const json* member(const json& object, const char* key) {
     const auto it = object.find(key);
     return it == object.end() ? nullptr : &*it;
 }
+
+std::optional<float> number_as_float(const json& value) {
+    if (!value.is_number()) {
+        return std::nullopt;
+    }
+    const double number = value.get<double>();
+    if (!std::isfinite(number) || std::abs(number) > std::numeric_limits<float>::max()) {
+        return std::nullopt;
+    }
+    return value.get<float>();
+}
 }
 
 std::optional<std::string> json_string(const json& object, const char* key) {
@@ -33,23 +46,32 @@ std::optional<int> json_int(const json& object, const char* key) {
     if (value == nullptr || !value->is_number_integer()) {
         return std::nullopt;
     }
-    return value->get<int>();
+    if (value->is_number_unsigned()) {
+        const auto number = value->get<std::uint64_t>();
+        return number <= static_cast<std::uint64_t>(std::numeric_limits<int>::max())
+            ? std::optional<int>(static_cast<int>(number)) : std::nullopt;
+    }
+    const auto number = value->get<std::int64_t>();
+    return number >= std::numeric_limits<int>::min() && number <= std::numeric_limits<int>::max()
+        ? std::optional<int>(static_cast<int>(number)) : std::nullopt;
 }
 
 std::optional<std::uint32_t> json_uint32(const json& object, const char* key) {
     const json* value = member(object, key);
-    if (value == nullptr || !value->is_number_unsigned()) {
+    if (value == nullptr || !value->is_number_integer()) {
         return std::nullopt;
     }
-    return value->get<std::uint32_t>();
+    if (!value->is_number_unsigned() && value->get<std::int64_t>() < 0) {
+        return std::nullopt;
+    }
+    const auto number = value->get<std::uint64_t>();
+    return number <= std::numeric_limits<std::uint32_t>::max()
+        ? std::optional<std::uint32_t>(static_cast<std::uint32_t>(number)) : std::nullopt;
 }
 
 std::optional<float> json_float(const json& object, const char* key) {
     const json* value = member(object, key);
-    if (value == nullptr || !value->is_number()) {
-        return std::nullopt;
-    }
-    return value->get<float>();
+    return value != nullptr ? number_as_float(*value) : std::nullopt;
 }
 
 std::optional<bool> json_bool(const json& object, const char* key) {
@@ -72,23 +94,22 @@ const json* json_array(const json& object, const char* key) {
 
 std::optional<glm::vec2> json_vec2(const json& object, const char* key) {
     const json* value = member(object, key);
-    if (value == nullptr || !value->is_array() || value->size() != 2 || !(*value)[0].is_number() ||
-        !(*value)[1].is_number()) {
+    if (value == nullptr || !value->is_array() || value->size() != 2) {
         return std::nullopt;
     }
-    return glm::vec2((*value)[0].get<float>(), (*value)[1].get<float>());
+    const auto x = number_as_float((*value)[0]);
+    const auto y = number_as_float((*value)[1]);
+    return x && y ? std::optional<glm::vec2>(glm::vec2(*x, *y)) : std::nullopt;
 }
 
 std::optional<glm::vec3> json_vec3(const json& value) {
     if (!value.is_array() || value.size() != 3) {
         return std::nullopt;
     }
-    for (const json& component : value) {
-        if (!component.is_number()) {
-            return std::nullopt;
-        }
-    }
-    return glm::vec3(value[0].get<float>(), value[1].get<float>(), value[2].get<float>());
+    const auto x = number_as_float(value[0]);
+    const auto y = number_as_float(value[1]);
+    const auto z = number_as_float(value[2]);
+    return x && y && z ? std::optional<glm::vec3>(glm::vec3(*x, *y, *z)) : std::nullopt;
 }
 
 std::optional<glm::vec3> json_vec3(const json& object, const char* key) {

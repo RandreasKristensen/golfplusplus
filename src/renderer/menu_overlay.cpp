@@ -27,7 +27,6 @@ enum class help_control_icon {
     escape,
     key_1,
     key_2,
-    key_g,
     key_p,
     key_k,
     key_c
@@ -107,9 +106,6 @@ void draw_help_control_icon(overlay_batch& batch,
     case help_control_icon::key_2:
         draw_key_cap(batch, text, text_controls_key_2, center, key_half);
         break;
-    case help_control_icon::key_g:
-        draw_key_cap(batch, text, text_controls_key_g, center, key_half);
-        break;
     case help_control_icon::key_p:
         draw_key_cap(batch, text, text_controls_key_p, center, key_half);
         break;
@@ -166,7 +162,6 @@ void draw_startup_help_screen(overlay_batch& batch, const text_assets& text) {
             {help_control_icon::key_p, glm::vec2(0.30f, -0.26f), -0.21f, text_help_key_p},
             {help_control_icon::key_1, glm::vec2(0.30f, -0.40f), -0.35f, text_help_key_1},
             {help_control_icon::key_2, glm::vec2(0.30f, -0.52f), -0.47f, text_help_key_2},
-            {help_control_icon::key_g, glm::vec2(0.30f, -0.64f), -0.59f, text_help_key_g},
         }},
     };
 
@@ -311,7 +306,7 @@ bool single_column(const startup_menu_screen screen) {
 }
 
 bool picker(const startup_menu_screen screen) {
-    return screen == startup_menu_screen::course_picker;
+    return screen == startup_menu_screen::course_picker || screen == startup_menu_screen::tee_book;
 }
 
 // A picker's grid: three by three tiles.
@@ -354,7 +349,7 @@ glm::vec2 startup_tile_center(const startup_menu_screen screen, const int index,
     const int row = index / columns;
     const int column = index % columns;
     return glm::vec2(-0.58f + static_cast<float>(column) * 0.58f,
-                     0.36f - static_cast<float>(row) * 0.38f);
+                     (screen == startup_menu_screen::tee_book ? 0.28f : 0.36f) - static_cast<float>(row) * 0.38f);
 }
 
 glm::vec2 startup_tile_half_size(const startup_menu_screen screen, const int count) {
@@ -385,14 +380,15 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
     draw_overlay_quad(batch, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.0f, 0.0f, 0.0f), 0.72f);
     draw_overlay_quad(batch, glm::vec2(0.0f, 0.0f), glm::vec2(0.86f, 0.88f), glm::vec3(0.012f, 0.014f, 0.014f), 0.30f);
     draw_label(batch, text.font, find_text_style(text, style_title), menu.title, ui_rect{glm::vec2(0.0f, 0.80f), glm::vec2(0.78f, 0.10f)});
-    const ui_rect subtitle_box{glm::vec2(0.0f, 0.66f), glm::vec2(0.70f, 0.045f)};
+    const bool book = menu.screen == startup_menu_screen::tee_book;
+    const ui_rect subtitle_box{glm::vec2(0.0f, book ? 0.62f : 0.66f), glm::vec2(0.76f, book ? 0.07f : 0.045f)};
     const text_style& message_style = find_text_style(text, menu.message_is_error ? style_error : style_subtitle);
-    if (picker(menu.screen) && !menu.message.empty()) {
+    if (picker(menu.screen) && !book && !menu.message.empty()) {
         draw_label(batch, text.font, message_style, menu.message, subtitle_box);
     } else {
         draw_label(batch, text.font, find_text_style(text, style_subtitle), menu.subtitle, subtitle_box);
         if (!menu.message.empty()) {
-            draw_label(batch, text.font, message_style, menu.message, message_box);
+            draw_label(batch, text.font, message_style, menu.message, book ? ui_rect{glm::vec2(0,0.49f),glm::vec2(.76f,.04f)} : message_box);
         }
     }
     if (menu.field) {

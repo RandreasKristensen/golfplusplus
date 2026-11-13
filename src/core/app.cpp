@@ -15,6 +15,8 @@
 #include "game/course_session.h"
 #include "game/golf_cart.h"
 #include "game/group_round.h"
+#include "game/hub_flow.h"
+#include "game/online_play.h"
 #include "game/lighting_loader.h"
 #include "game/mode_dispatch.h"
 #include "game/model_kinds.h"
@@ -24,9 +26,6 @@
 #include "game/settings.h"
 #include "game/text_ids.h"
 #include "game/world_sounds.h"
-#include "renderer/cart_path_mesh.h"
-#include "renderer/sky_visibility.h"
-#include "renderer/terrain_render_mesh.h"
 
 #include <SDL.h>
 
@@ -322,23 +321,19 @@ void app::run() {
             update_tour(dt, profile);
         } else if (menu_.flow != startup_flow::playing) {
             update_menu(dt, profile);
+        } else if (game_.hub_flow.screen != hub_screen::none || !game_.hub_flow.travel_course.empty()) {
+            update_hub_menu(dt, profile);
         } else if (round_results_shown(game_)) {
             set_mouse_captured(false);
-            // Online the server has started the next round already; offline
-            // the round ends at the menu.
-            const bool next = input_.enter.pressed || input_.space.pressed;
-            if (next && is_online(game_)) {
+            if (input_.enter.pressed || input_.space.pressed || input_.escape.pressed) {
                 audio_.play(sound_ui_select);
-                start_next_round(game_);
-            } else if (next || input_.escape.pressed) {
-                audio_.play(sound_ui_select);
-                return_to_menu();
+                game_.results_dismissed = true;
             }
             render_data data = make_frame(dt, menu_.flow != startup_flow::playing, profile);
             present_frame(data, profile);
         } else if (menu_.confirm_active ||
                    (input_.escape.pressed && game_.mode == game_mode::walking && !game_.give_up_prompt && !game_.picker &&
-                    !game_.pacing)) {
+                    !game_.pacing && !game_.hub_flow.ball_request)) {
             if (is_online(game_)) {
                 update_game(game_, game_input{}, dt, profile);
             }
@@ -458,19 +453,7 @@ void app::update_menu(const float dt, frame_profile* profile) {
         // A golfer's first round starts once they have picked a natural shot.
         open_natural_shape_picker(menu_, result.course, result.play);
     } else if (result.action == startup_action::start_course) {
-        game_.play = result.play;
-        game_.takes_cart = menu_.takes_cart;
-        if (start_course(game_, result.course)) {
-            touring_.reset();
-            enter_playing(menu_);
-            audio_.start_ambience(sound_ambience_course_day);
-        } else {
-            SDL_Log("Course %s failed to load", result.course.id.c_str());
-            if (result.play == play_mode::online) {
-                carry_out({online_request{online_request_type::leave_room, {}}});
-                return_to_main_menu(menu_);
-            }
-        }
+        start_play(result);
     }
     // Typing only reaches input_state::text_typed while a text field shows.
     set_text_input_enabled(wants_text_input(menu_));
@@ -501,33 +484,14 @@ void app::carry_out(const std::vector<online_request>& requests) {
 #endif
 }
 
-void app::watch_online_round() {
-#if GOLFPP_NET
-    if (menu_.flow != startup_flow::playing || !is_online(game_)) {
-        return;
-    }
-    for (const reducer_failure& failure : online_->refusals()) {
-        SDL_Log("The server refused %s: %s", failure.reducer.c_str(), failure.error.c_str());
-    }
-    const online_round_status round = online_->watch_round(game_);
-    if (round.event == online_round_event::restart) {
-        start_course(game_, game_.course);
-    } else if (round.event == online_round_event::lost) {
-        return_to_menu();
-        if (round.message_key.empty()) {
-            open_online_login(menu_);
-        } else {
-            menu_.message_key = round.message_key;
-        }
-    }
-#endif
-}
-
 void app::update_confirm_menu(frame_profile* profile) {
     set_mouse_captured(false);
     if (!menu_.confirm_active) {
         // Opened this frame; the same key press must not also answer it.
-        open_confirm_menu(menu_, ball_in_play(game_) ? std::optional<std::size_t>(game_.ball->hole) : std::nullopt);
+        open_confirm_menu(menu_, game_.round && ball_in_play(game_) && !first_tee_required(game_) ? std::optional<std::size_t>(game_.ball->hole) : std::nullopt);
+        const auto me = my_room_player(game_);
+        menu_.confirm_leave_group = is_online(game_) && me && me->group_id != 0;
+        menu_.confirm_return_hub = game_.kind == place_kind::course;
     } else {
         show_golfer_settings();
         const confirm_menu_result result =
@@ -539,6 +503,8 @@ void app::update_confirm_menu(frame_profile* profile) {
         if (result.leave_round) {
             return_to_menu();
         }
+        if (result.leave_group) { request_leave_group(game_); }
+        if (result.return_hub) { request_bus_travel(game_, false); }
         if (result.give_up_hole) {
             give_up_hole(game_);
         }
@@ -659,24 +625,6 @@ void app::stop_motor_loops() {
     motor_loops_.clear();
 }
 
-void app::refresh_render_meshes() {
-    if (render_meshes_revision_ == game_.terrain_render_revision) {
-        return;
-    }
-    const std::uint64_t revision = game_.terrain_render_revision;
-    const scene_colors& colors = lighting_.colors;
-    const ground_light_bake light = bake_ground_light(game_.area.ground);
-    terrain_render_mesh_ = make_terrain_render_mesh({&game_.area.ground}, revision, colors.ground, light);
-    material_overlay_render_mesh_ =
-        with_cart_paths(make_terrain_render_mesh({&game_.area.material_overlay}, revision, colors.ground, light),
-                        game_.area, colors.ground.cart_path, light);
-    refresh_render_hole_signs(hole_signs_, game_.area, hole_sign_texts(game_), text_, colors, props_.at(hole_sign_model), revision);
-    fences_ = build_render_fences(game_.area, revision, props_.at(fence_model).color("post"), game_.tuning.fence.pole_radius);
-    water_ = build_render_water(game_.area, revision);
-    floodlights_ = build_render_floodlights(game_.area, revision, props_.at(floodlight_model));
-    render_meshes_revision_ = revision;
-}
-
 render_data app::make_frame(const float dt, const bool snap_camera, frame_profile* profile,
                             const std::optional<camera_view>& fixed_camera) {
     {
@@ -748,6 +696,7 @@ void app::present_frame(render_data& data, frame_profile* profile) {
     }
     data.clock_seconds = static_cast<float>(std::fmod(static_cast<double>(ticks) / 1000.0, clock_wrap_seconds));
     data.tape_tracking = tape_tracking_.level;
+    data.lighting.fade = tape_tracking_.fade;
     show_look_tuning(data, look_tuning_, lighting_, text_);
 
     renderer_.render(data, text_, profile);

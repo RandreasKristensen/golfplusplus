@@ -1,7 +1,8 @@
 #pragma once
 
 // The shadow map: while the sun is up, the instanced tree batch, the
-// floodlights' mesh and the figures and carts (renderer/shadow_casters.h)
+// floodlights' mesh and the figures, carts, flagsticks, signs and fence posts
+// (renderer/shadow_casters.h)
 // drawn once a frame into a small depth texture looking down the sun over the
 // ground around the camera (shadow_map_fit.h), which terrain.frag and
 // tee_box.frag sample in a few soft taps (shadow_map_light.glsl) and multiply
@@ -45,6 +46,7 @@ public:
     // How much of the sun this frame's map takes away where it shades, 0
     // with no map.
     float strength() const { return strength_; }
+    const shadow_style& style() const { return style_; }
 
 private:
     void draw_figures(const world_marker_batch& figures, frame_profile* profile);

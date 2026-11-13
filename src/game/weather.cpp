@@ -279,7 +279,7 @@ weather_state with_weather_kind(weather_state weather, const weather_kind kind, 
     return weather;
 }
 
-float temperature_at(const weather_tuning& tuning, const course_definition& course, const double hours, const float cloud,
+float temperature_at(const weather_tuning& tuning, const place_definition& course, const double hours, const float cloud,
                      const float rain, const float noise) {
     const temperature_tuning& t = tuning.temperature;
     // Local hour of the day, then how far round from the coldest hour to the
@@ -299,7 +299,7 @@ float temperature_at(const weather_tuning& tuning, const course_definition& cour
 weather_state weather_at(const weather_tuning& weather,
                          const wind_tuning& wind,
                          const sky_timeline& clock,
-                         const course_definition& course,
+                         const place_definition& course,
                          const std::int64_t unix_ms) {
     const std::uint32_t seed = course_weather_seed(course.id);
     const double hours = game_day_at(clock, unix_ms) * hours_per_day;

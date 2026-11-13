@@ -54,6 +54,10 @@ float star_visibility(const sky_style& sky, const float sun_elevation_deg) {
     return elevation_share(sky.stars_appear_deg, sky.stars_full_deg, sun_elevation_deg);
 }
 
+float rainbow_sun_share(const sky_style& sky, const float sun_elevation_deg) {
+    return elevation_share(0.0f, sky.rainbow_sun_full_deg, sun_elevation_deg);
+}
+
 float sun_shadow_share(const shadow_style& shadows, const float sun_elevation_deg) {
     if (!(shadows.sun_fade_start_deg < shadows.sun_fade_full_deg)) {
         return sun_elevation_deg >= shadows.sun_fade_full_deg ? 1.0f : 0.0f;

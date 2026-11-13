@@ -6,11 +6,15 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub(super) struct LeaveCartArgs {}
+pub(super) struct LeaveCartArgs {
+    pub expected_room: u64,
+}
 
 impl From<LeaveCartArgs> for super::Reducer {
     fn from(args: LeaveCartArgs) -> Self {
-        Self::LeaveCart
+        Self::LeaveCart {
+            expected_room: args.expected_room,
+        }
     }
 }
 
@@ -29,8 +33,8 @@ pub trait leave_cart {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`leave_cart:leave_cart_then`] to run a callback after the reducer completes.
-    fn leave_cart(&self) -> __sdk::Result<()> {
-        self.leave_cart_then(|_, _| {})
+    fn leave_cart(&self, expected_room: u64) -> __sdk::Result<()> {
+        self.leave_cart_then(expected_room, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `leave_cart` to run as soon as possible,
@@ -41,6 +45,7 @@ pub trait leave_cart {
     ///  and its status can be observed with the `callback`.
     fn leave_cart_then(
         &self,
+        expected_room: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -51,12 +56,13 @@ pub trait leave_cart {
 impl leave_cart for super::RemoteReducers {
     fn leave_cart_then(
         &self,
+        expected_room: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
         self.imp
-            .invoke_reducer_with_callback(LeaveCartArgs {}, callback)
+            .invoke_reducer_with_callback(LeaveCartArgs { expected_room }, callback)
     }
 }

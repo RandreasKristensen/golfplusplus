@@ -28,3 +28,6 @@ std::optional<std::string> course_folder_of(const std::string& path);
 // Hole `hole_index`'s file: holes/<id>.json for a bare id, else the
 // reference as written. Empty when out of range.
 std::string course_hole_reference(const course_definition& course, std::size_t hole_index);
+
+// Shared environment fields; every required key must be present.
+std::optional<place_definition> parse_place_from_text(const std::string& text);

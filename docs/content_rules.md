@@ -44,3 +44,36 @@ interaction system.
   `NATIVE_PACKAGES` and `third_party_header.txt`).
 - Flag AI-generated art, audio, text or trailer content to the owner (Steam
   requires disclosure). AI-written code, and what it draws, needs none.
+
+Every place has a `world.bus_stop` {position, heading}: the importer chooses each
+course's (`tooling/osm_import/osm_bus_stop.py`: a car park, else a service road,
+nearest the first tee and a bus length clear of play, solids and cart paths, with
+a path to the first tee); no clear spot is an import error. A course whose own
+boundary has no clear car park or service road uses its club's, through a per-course
+`bus_stop.reach_m` in `osm_golf_config.json` (Jelling Par 3, Marienlyst). The practice ground
+generator authors the hub's, and the tee book's `world.hub.book` anchor. The bus
+stands on a pad flattened like a tee; its box, turned with its heading, is in the
+one solids list.
+
+`tooling/practice_ground/make_hub_props.py` draws the tee book and course bus as
+JSON boxes, built and checked stage by stage with the prop preview
+(`tooling/art/preview_prop/`). Named points (`approach`, `door`, `body_min`,
+`body_max`, the bus's `wheel_contact_*`, `board_center`/`board_size`/`board_normal`)
+define placement, collision and where the renderer writes board text (the bus's
+destination, TEE BOOK) with the sign text path; no letters are geometry. These
+models are simulation content because their bounds enter `play_area::solids`.
+
+Dap reach, duration, timeline and hand geometry are the required `dap` section
+of `play/tuning/player.json`; `dap_xp` in progression rewards pays `social`.
+It uses the standard level curve and existing generic icon. Both files are
+already simulation fingerprint inputs and embedded in the server.
+
+The hub generator authors a flat, tiered and breaking short-game green, with
+separate green speeds (`green_stimp_feet` on a green zone), six flat range bays
+and three hill bays. Ranges fire away from the short game and arrival. Tee mats
+share tee-pad flattening; the hub's authored land is used at its authored height.
+The first cart-road polyline is the walking approach behind the hill's tee line.
+Arrival, book and bus sit together behind the flat firing line beside the
+short-game approach; their access paths bypass the lectern and parked bus.
+The elevated tee targets the owner's 15-25 m drop; lower targets play shorter
+because the unchanged ball simulation carries a given launch farther downhill.

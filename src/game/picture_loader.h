@@ -45,6 +45,7 @@ struct tape_style {
     float tracking_skew = 0.0f;
     float tracking_burst_seconds = 0.0f;  // after a hole starts or ends
     float tracking_fade_seconds = 0.0f;
+    float travel_fade_seconds = 0.0f;  // the camcorder's fade to black and back, for bus travel
     tape_look fresh;
     tape_look worn;
 };

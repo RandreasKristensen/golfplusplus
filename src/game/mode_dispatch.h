@@ -37,7 +37,8 @@ bool natural_shape_picked(const game_state& state);
 void record_natural_shape(game_state& state, natural_shape shape);
 
 // Online, my player row keeps my hand and favourite colour as my settings
-// have them: set_golfer when they differ (once per change). Offline nothing.
+// have them: set_golfer when they differ (once per change), once the row has
+// my natural shot. Offline nothing.
 void sync_golfer(game_state& state);
 
 // The dice of the shot I hit next offline: the round's next (round_shot_seed).
@@ -105,9 +106,7 @@ void record_cart_left(game_state& state);
 // the server's own steps decide.)
 void record_cart_righted(game_state& state, std::uint64_t owner);
 
-// G: join the group of the nearest player (net.group_join_distance) when it
-// has space, else start a group. Shift+G leaves. Online only.
-void request_group(game_state& state);
+// Leave the tee-time group from the menu, preserving play state.
 void request_leave_group(game_state& state);
 
 // UTC now in milliseconds this frame, as shared_unix_ms has it from the
@@ -136,3 +135,13 @@ void record_hole_completed(game_state& state);
 // Online progress from the server. Skills that gained XP since the last
 // snapshot show as XP drops; the first snapshot only sets where they start.
 void receive_online_progress(game_state& state, const save_data& progress);
+
+// Captures the current room and booking and flushes steps before a physical hub action.
+void request_tee_action(game_state& state, net_command command);
+
+// Every arrival loads through this boundary. Online travel waits for its full
+// destination snapshot; offline entry loads immediately.
+bool enter_place(game_state& state, const std::string& place_id);
+
+// The active mode's transient booking. Offline carries a course choice only.
+const std::optional<tee_reservation_info>& active_booking(const game_state& state);

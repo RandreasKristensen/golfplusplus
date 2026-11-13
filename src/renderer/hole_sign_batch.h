@@ -4,7 +4,9 @@
 // (hole_sign_face.h) and every sign's model in one vertex list, its board
 // with the texture on the face and wood elsewhere, on two posts. Painting
 // the faces samples the ground for every texel, so it is rebuilt only when
-// the signs themselves change (a new course), never per frame or per hole.
+// what the signs say or where they stand changes (a new course, a new
+// destination on the bus board), never per frame or per hole. Prop boards
+// (the bus destination, the tee book title) are written the same way.
 // GL-free; renderer/hole_sign_renderer draws it.
 
 #include "game/hole_sign.h"
@@ -17,6 +19,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -44,16 +47,31 @@ struct hole_sign_text {
     bool practice = false;  // a practice ground's bay (make_hole_sign_labels)
 };
 
+// A label written on a placed model's board: the model's board_center,
+// board_size and board_normal points, posed with the prop, on its "board"
+// (else "paper") colour.
+struct prop_board {
+    glm::vec3 center{0.0f};
+    glm::vec3 normal{0.0f, 0.0f, 1.0f};
+    glm::vec2 half_size{0.0f};
+    glm::vec3 paint{0.0f};
+    std::string label;
+};
+
+// The boards of area.props whose labels[i] is not empty.
+std::vector<prop_board> prop_boards(const play_area& area, const prop_catalog& props, const std::vector<std::string>& labels);
+
 // What a sign was built from: what it says, and where it stands.
 struct hole_sign_source {
     hole_sign_text text;
     glm::vec3 board_center{0.0f};
+    std::string label;  // a prop board's
 };
 
 struct render_hole_signs {
     std::vector<hole_sign_vertex> vertices;  // triangles
     std::vector<render_hole_sign> signs;
-    std::vector<hole_sign_source> sources;  // one per sign of the play area, then per way sign
+    std::vector<hole_sign_source> sources;  // one per sign of the play area, then per way sign and prop board
     // Bumped when rebuilt; the GL side re-uploads only when it changes.
     std::uint64_t revision = 0;
     // Labels on the faces that did not fit their boxes (tests want none).
@@ -67,9 +85,10 @@ void append_hole_sign_model(std::vector<hole_sign_vertex>& vertices, const hole_
 void append_way_sign_model(std::vector<hole_sign_vertex>& vertices, const way_sign& sign, const prop_model& model);
 
 // Every sign of `area`, each saying `texts[i]` (one per area.signs[i]), then
-// its way signs, each saying the hole it points to.
+// its way signs, each saying the hole it points to, then `boards`.
 render_hole_signs build_render_hole_signs(const play_area& area,
                                           const std::vector<hole_sign_text>& texts,
+                                          const std::vector<prop_board>& boards,
                                           const text_assets& text,
                                           const scene_colors& colors,
                                           const prop_model& model,
@@ -79,6 +98,7 @@ render_hole_signs build_render_hole_signs(const play_area& area,
 bool refresh_render_hole_signs(render_hole_signs& signs,
                                const play_area& area,
                                const std::vector<hole_sign_text>& texts,
+                               const std::vector<prop_board>& boards,
                                const text_assets& text,
                                const scene_colors& colors,
                                const prop_model& model,

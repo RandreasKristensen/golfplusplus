@@ -13,6 +13,8 @@
 
 #include "game/game_state.h"
 
+void adopt_online_arrival(game_state& state);
+
 void update_online_play(game_state& state, float dt);
 // While my finished round waits for the group (game/group_round.h): others'
 // shots and item uses play, notices age, and a refused move of mine puts me back.

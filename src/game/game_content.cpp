@@ -26,6 +26,13 @@ game_content_load_result load_game_content(const std::string& asset_root) {
         return fail(tuning.error);
     }
     content.tuning = *tuning.tuning;
+    for (const char* id : {"tee_book", "hub_bus"}) {
+        const auto source = read_text_file(root / "world/props" / (std::string(id) + ".json"));
+        const auto model = source ? parse_prop_from_text(*source) : std::nullopt;
+        if (!model || model->kind != (std::string(id) == "hub_bus" ? "hub_bus" : "hub_book")) { return fail(std::string("cannot load hub prop ") + id); }
+        content.hub_props.emplace(id, *model);
+    }
+
 
     const std::optional<std::string> skills_text = read_text_file(root / skills_path);
     const std::optional<std::string> curves_text = read_text_file(root / curves_path);
@@ -70,6 +77,9 @@ game_content_load_result load_game_content(const std::string& asset_root) {
     if (content.clubs.empty()) {
         return fail(std::string("no clubs in ") + items_path);
     }
+    const auto hub = load_hub(asset_root);
+    if (!hub) { return fail(std::string("cannot load ") + hub_manifest_path); }
+    content.hub = *hub;
     content.courses = load_courses(asset_root);
     if (content.courses.empty()) {
         return fail(std::string("no valid courses in ") + courses_path);

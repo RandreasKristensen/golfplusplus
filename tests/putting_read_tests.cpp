@@ -11,6 +11,7 @@
 
 #include "test_support.h"
 
+#include <algorithm>
 #include <cmath>
 #include <optional>
 
@@ -152,19 +153,22 @@ TEST_CASE("running, a hop and Esc each stop pacing") {
     CHECK(state.pacing.has_value());
 }
 
-TEST_CASE("crouched I stay put, my eyes low over the green") {
+TEST_CASE("crouched I move slowly, my eyes low over the green") {
     game_state state = on_green(3.0f);
     const glm::vec3 standing = state.player.position;
     for (int frame = 0; frame < 20; ++frame) {
         game_input input = crouching();
         input.forward_held = true;
         input.jump = true;
+        input.run_held = true;
         update_game(state, input, 0.05f);
     }
-    CHECK(near(state.player.position, standing, 0.0001f));
+    CHECK(near(horizontal_distance(state.player.position, standing),
+               state.tuning.player.walk_speed * state.tuning.green_read.walk_factor, 0.001f));
+    CHECK(state.player.vertical.grounded);
     CHECK(near(state.crouch, 1.0f));
     const render_data data = frame_for(state);
-    CHECK(near(data.camera_position.y - standing.y, state.tuning.green_read.eye_height, 0.001f));
+    CHECK(near(data.camera_position.y - state.player.position.y, state.tuning.green_read.eye_height, 0.001f));
     // My figure crouches with me, as others see me.
     REQUIRE(data.my_figure.has_value());
     CHECK(near(data.my_figure->crouch, 1.0f));
@@ -241,4 +245,128 @@ TEST_CASE("on a level green the dots stay put") {
     for (std::size_t i = 0; i < before.green_read_dots.size(); ++i) {
         CHECK(near(before.green_read_dots[i].position, after.green_read_dots[i].position, 0.0001f));
     }
+}
+
+
+TEST_CASE("pacing and crouching change the very next step and restore normal speed immediately") {
+    game_state state = on_green(0.0f);
+    const float walk = state.tuning.player.walk_speed;
+    game_input paced = forward();
+    paced.toggle_pacing = true;
+    const glm::vec3 start = state.player.position;
+    update_game(state, paced, move_step_seconds);
+    REQUIRE(state.pacing);
+    CHECK(near(state.player.speed, walk * state.tuning.pacing.walk_factor));
+    CHECK(near(state.pacing->meters, horizontal_distance(start, state.player.position)));
+    update_game(state, paced, move_step_seconds);
+    CHECK(!state.pacing);
+    CHECK(near(state.player.speed, walk));
+
+    game_input read = forward();
+    read.crouch_held = true;
+    read.run_held = true;
+    read.jump = true;
+    update_game(state, read, move_step_seconds);
+    CHECK(near(state.player.speed, walk * state.tuning.green_read.walk_factor));
+    CHECK(state.player.vertical.grounded);
+    CHECK(!state.player.hop_pending);
+    update_game(state, forward(), move_step_seconds);
+    CHECK(near(state.player.speed, walk));
+    CHECK(state.player.vertical.grounded);
+
+    for (const int cancel : {0, 1, 2}) {
+        game_state stopped = on_green(0.0f);
+        update_game(stopped, paced, move_step_seconds);
+        game_input breaks = forward();
+        breaks.run_held = cancel == 0;
+        breaks.jump = cancel == 1;
+        breaks.cancel = cancel == 2;
+        update_game(stopped, breaks, move_step_seconds);
+        CHECK(!stopped.pacing);
+        CHECK(near(stopped.player.speed, walk * (breaks.run_held ? stopped.tuning.player.run_factor : 1.0f)));
+        CHECK(stopped.player.vertical.grounded == !breaks.jump);
+        // A toggle cannot restart pacing in the same step as a cancellation.
+        breaks.toggle_pacing = true;
+        update_game(stopped, breaks, move_step_seconds);
+        CHECK(!stopped.pacing);
+    }
+}
+
+TEST_CASE("pacing and green reading preserve normalized directional movement and walking effects") {
+    for (const bool paced : {false, true}) {
+        for (const bool crouched : {false, true}) {
+            for (const bool boosted : {false, true}) {
+                for (const int forward_sign : {-1, 0, 1}) {
+                    for (const int side_sign : {-1, 0, 1}) {
+                        if (forward_sign == 0 && side_sign == 0) { continue; }
+                        game_state state = on_green(0.0f);
+                        if (boosted) {
+                            state.effects.push_back(active_effect{"test", item_effect{effect_target_walk_speed,
+                                effect_bucket::increased, 0.5f, effect_duration::equipped}, 0, effect_never_ends});
+                        }
+                        game_input input;
+                        input.forward_held = forward_sign == 1;
+                        input.back_held = forward_sign == -1;
+                        input.strafe_left_held = side_sign == 1;
+                        input.strafe_right_held = side_sign == -1;
+                        input.toggle_pacing = paced;
+                        input.crouch_held = crouched;
+                        const glm::vec3 from = state.player.position;
+                        update_game(state, input, move_step_seconds);
+                        float factor = paced ? state.tuning.pacing.walk_factor : 1.0f;
+                        if (crouched) { factor = std::min(factor, state.tuning.green_read.walk_factor); }
+                        const float distance = state.tuning.player.walk_speed * factor * (boosted ? 1.5f : 1.0f) * move_step_seconds;
+                        CHECK(near(horizontal_distance(from, state.player.position), distance, 0.00001f));
+                        const glm::vec3 travel = state.player.position - from;
+                        const glm::vec3 direction = glm::normalize(glm::vec3(
+                            static_cast<float>(side_sign), 0.0f, static_cast<float>(forward_sign)));
+                        CHECK(near(travel, direction * distance, 0.00001f));
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+TEST_CASE("pacing counts only the distance collision permits") {
+    game_state state = on_green(0.0f);
+    const glm::vec3 from = state.player.position;
+    solid wall;
+    wall.base = from + glm::vec3(0.0f, 0.0f, 1.0f);
+    wall.radius = 0.5f;
+    wall.height = 4.0f;
+    wall.stops_walker = true;
+    state.area.solids.push_back(wall);
+    state.area.solids_grid = build_solid_grid(state.area.solids, 8.0f);
+    game_input input = forward();
+    input.toggle_pacing = true;
+    for (int frame = 0; frame < 40; ++frame) {
+        update_game(state, input, 0.05f);
+        input.toggle_pacing = false;
+    }
+    REQUIRE(state.pacing);
+    CHECK(state.pacing->meters > 0.0f);
+    CHECK(state.pacing->meters < 0.3f);
+    CHECK(near(state.pacing->meters, horizontal_distance(from, state.player.position), 0.0001f));
+    CHECK(state.pace_count->paces == 0);
+}
+
+TEST_CASE("pacing stops at the first airborne step within a frame") {
+    game_state state = on_green(0.0f);
+    // Just past a ledge, the feet still have its height until the next step.
+    state.player.position.y += state.tuning.player.step_up + 1.0f;
+    state.player.vertical = vertical_body{state.player.position.y, 0.0f, true};
+    const glm::vec3 from = state.player.position;
+    game_input input = forward();
+    input.toggle_pacing = true;
+    update_game(state, input, 3.0f * move_step_seconds);
+    CHECK(!state.player.vertical.grounded);
+    CHECK(!state.pacing);
+    REQUIRE(state.pace_count.has_value());
+    CHECK(state.pace_count->paces == 0);
+    CHECK(near(state.player.speed, state.tuning.player.walk_speed));
+    const float distance = state.tuning.player.walk_speed * move_step_seconds *
+        (state.tuning.pacing.walk_factor + 2.0f);
+    CHECK(near(horizontal_distance(from, state.player.position), distance, 0.00001f));
 }

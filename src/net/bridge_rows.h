@@ -1,8 +1,9 @@
 #pragma once
 
 // Reading what the bridge (net/stdb_bridge.h) hands over: its strings as
-// std::string, and a row change applied to rows kept by id.
+// std::string, its hands, and a row change applied to rows kept by id.
 
+#include "game/shot_setup.h"
 #include "net/stdb_bridge.h"
 
 #include <cstdint>
@@ -12,6 +13,11 @@
 
 inline std::string text_of(const stdb_string& text) {
     return text.data != nullptr ? std::string(text.data, text.len) : std::string();
+}
+
+// A row's hand: anything but left reads right.
+inline handedness hand_of(const std::uint8_t number) {
+    return number == static_cast<std::uint8_t>(handedness::left) ? handedness::left : handedness::right;
 }
 
 // A deleted row leaves `rows`; an inserted or updated one is `value`.

@@ -16,6 +16,7 @@
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
+#include <glm/vector_relational.hpp>
 
 namespace {
 render_static_mesh make_test_terrain_mesh(const float span, const std::uint64_t revision) {
@@ -55,6 +56,11 @@ course_map_layout make_test_layout(const float scale) {
     layout.world_center = glm::vec3(3.0f, 0.0f, -2.0f);
     layout.scale = glm::vec2(scale);
     return layout;
+}
+
+// The four corners of an XZ box, as a course's outline.
+std::vector<glm::vec3> box_outline(const glm::vec3& low, const glm::vec3& high) {
+    return {low, glm::vec3(high.x, 0.0f, low.z), high, glm::vec3(low.x, 0.0f, high.z)};
 }
 
 bool same_vertices(const std::vector<overlay_vertex>& a, const std::vector<overlay_vertex>& b) {
@@ -164,18 +170,19 @@ TEST_CASE("the map prints water in its own ink, never the bunkers'") {
 
 TEST_CASE("the course map fits the course's holes to its paper, square on screen, at every aspect") {
     render_data data;
-    data.course_map_low = glm::vec3(-100.0f, 0.0f, 50.0f);
-    data.course_map_high = glm::vec3(300.0f, 0.0f, 950.0f);
+    data.course_map_outline = box_outline(glm::vec3(-100.0f, 0.0f, 50.0f), glm::vec3(300.0f, 0.0f, 950.0f));
     data.player_position = glm::vec3(0.0f, 0.0f, 100.0f);
     for (const overlay_grid grid : {overlay_grid{554, 416}, overlay_grid{640, 360}, overlay_grid{733, 314}}) {
         const course_map_layout layout = make_course_map_layout(data, grid);
         // One world unit is as many pixels across as up.
         CHECK(std::abs(layout.scale.x * static_cast<float>(grid.width) - layout.scale.y * static_cast<float>(grid.height)) <
               0.0001f);
-        const glm::vec2 a = map_point(layout, data.course_map_low);
-        const glm::vec2 b = map_point(layout, data.course_map_high);
-        const glm::vec2 low = glm::min(a, b);
-        const glm::vec2 high = glm::max(a, b);
+        glm::vec2 low(1.0e9f);
+        glm::vec2 high(-1.0e9f);
+        for (const glm::vec3& corner : data.course_map_outline) {
+            low = glm::min(low, map_point(layout, corner));
+            high = glm::max(high, map_point(layout, corner));
+        }
         const glm::vec2 paper_low = layout.center - layout.half_size;
         const glm::vec2 paper_high = layout.center + layout.half_size;
         CHECK(low.x > paper_low.x);
@@ -185,13 +192,61 @@ TEST_CASE("the course map fits the course's holes to its paper, square on screen
         // The course fills the paper along its longer side, less a small margin.
         const glm::vec2 fill = (high - low) / (layout.half_size * 2.0f);
         CHECK(std::max(fill.x, fill.y) > 0.8f);
+        // Its 900 m way lies across the paper, its 400 m way up it.
+        const glm::vec2 pixels = (high - low) * glm::vec2(static_cast<float>(grid.width), static_cast<float>(grid.height));
+        CHECK(pixels.x > pixels.y * 2.0f);
     }
+}
+
+TEST_CASE("the course map turns a course lying corner to corner so its length lies across the paper") {
+    render_data data;
+    // 1000 m long and 150 m wide, running north-east.
+    const glm::vec3 along = glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f));
+    const glm::vec3 across(-along.z, 0.0f, along.x);
+    data.course_map_outline = {-along * 500.0f - across * 75.0f, along * 500.0f - across * 75.0f,
+                               along * 500.0f + across * 75.0f, -along * 500.0f + across * 75.0f};
+    for (const overlay_grid grid : {overlay_grid{554, 416}, overlay_grid{640, 360}, overlay_grid{733, 314}}) {
+        const course_map_layout layout = make_course_map_layout(data, grid);
+        const glm::vec2 pixels(static_cast<float>(grid.width), static_cast<float>(grid.height));
+        const glm::vec2 length = (map_point(layout, along * 500.0f) - map_point(layout, -along * 500.0f)) * pixels;
+        // Within a degree of level on screen.
+        CHECK(std::abs(length.y) < std::abs(length.x) * 0.02f);
+        // Unturned, it would run corner to corner.
+        CHECK(std::abs(layout.turn.y) > 0.6f);
+    }
+}
+
+TEST_CASE("the course map draws no tree off its paper") {
+    render_data data;
+    data.course_map_outline = box_outline(glm::vec3(0.0f), glm::vec3(400.0f, 0.0f, 400.0f));
+    data.player_position = glm::vec3(200.0f, 0.0f, 200.0f);
+    std::vector<tree_body> trees(2);
+    trees[0].base = glm::vec3(200.0f, 0.0f, 200.0f);
+    trees[1].base = glm::vec3(200.0f, 0.0f, 2000.0f);
+    data.trees = &trees;
+    overlay_batch batch;
+    batch.grid = overlay_grid{640, 360};
+    const course_map_layout layout = make_course_map_layout(data, batch.grid);
+    draw_course_map_marks(batch, shipped_text_assets(), layout, data);
+    std::size_t tree_quads = 0;
+    for (std::size_t i = 0; i + overlay_vertices_per_quad <= batch.vertices.size(); i += overlay_vertices_per_quad) {
+        if (glm::length(glm::vec3(batch.vertices[i].color) - course_map_tree_ink) > 0.001f) {
+            continue;
+        }
+        ++tree_quads;
+        for (std::size_t k = 0; k < overlay_vertices_per_quad; ++k) {
+            const glm::vec2 corner = batch.vertices[i + k].position;
+            CHECK(glm::all(glm::greaterThanEqual(corner, layout.center - layout.half_size)));
+            CHECK(glm::all(glm::lessThanEqual(corner, layout.center + layout.half_size)));
+        }
+    }
+    // The one on the course.
+    CHECK(tree_quads == 1U);
 }
 
 TEST_CASE("walking about the course map never moves a hole's number; I am drawn under them") {
     render_data data;
-    data.course_map_low = glm::vec3(0.0f);
-    data.course_map_high = glm::vec3(400.0f, 0.0f, 400.0f);
+    data.course_map_outline = box_outline(glm::vec3(0.0f), glm::vec3(400.0f, 0.0f, 400.0f));
     for (int i = 0; i < 4; ++i) {
         const glm::vec3 tee(static_cast<float>(i) * 100.0f, 0.0f, 0.0f);
         data.map_holes.push_back(render_map_hole{std::to_string(i + 1), {tee, tee + glm::vec3(0.0f, 0.0f, 300.0f)}});
@@ -213,8 +268,8 @@ TEST_CASE("walking about the course map never moves a hole's number; I am drawn 
 
 TEST_CASE("every hole's number sits in the middle of its hole on the course map, inside the paper and clear of the others") {
     render_data data;
-    data.course_map_low = glm::vec3(0.0f);
-    data.course_map_high = glm::vec3(600.0f, 0.0f, 750.0f);
+    // Wider than long, so the map is not turned.
+    data.course_map_outline = box_outline(glm::vec3(-100.0f, 0.0f, 0.0f), glm::vec3(700.0f, 0.0f, 750.0f));
     const auto straight = [](const glm::vec3 tee, const glm::vec3 pin) {
         return std::vector<glm::vec3>{tee, (tee + pin) * 0.5f, pin};
     };
@@ -234,8 +289,10 @@ TEST_CASE("every hole's number sits in the middle of its hole on the course map,
             const std::vector<glm::vec3>& line = data.map_holes[i].line_of_play;
             const glm::vec2 tee = map_point(layout, line.front());
             const glm::vec2 pin = map_point(layout, line.back());
-            CHECK(std::abs(boxes[i].center.x - tee.x) < 0.001f);
-            const float along = (boxes[i].center.y - tee.y) / (pin.y - tee.y);
+            const glm::vec2 offset = boxes[i].center - tee;
+            const glm::vec2 hole = pin - tee;
+            CHECK(std::abs(offset.x * hole.y - offset.y * hole.x) / glm::length(hole) < 0.001f);
+            const float along = glm::dot(offset, hole) / glm::dot(hole, hole);
             CHECK(along >= 0.25f);
             CHECK(along <= 0.75f);
             CHECK(rect_left(boxes[i]) >= layout.center.x - layout.half_size.x - 0.0001f);
@@ -256,8 +313,7 @@ TEST_CASE("every hole's number sits in the middle of its hole on the course map,
 
 TEST_CASE("every hole's tee box is drawn on the course map at its tee, lying across its hole") {
     render_data data;
-    data.course_map_low = glm::vec3(0.0f);
-    data.course_map_high = glm::vec3(400.0f, 0.0f, 400.0f);
+    data.course_map_outline = box_outline(glm::vec3(0.0f), glm::vec3(400.0f, 0.0f, 400.0f));
     const auto box_at = [](const glm::vec3& center, const glm::vec3& down_hole) {
         tee_box box;
         box.center = center;

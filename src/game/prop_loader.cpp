@@ -198,6 +198,11 @@ std::optional<prop_model> parse_prop(const json& root) {
         !has_all(kind->mounts, model.mounts) || !has_tags) {
         return std::nullopt;
     }
+    if ((model.kind == "hub_book" || model.kind == "hub_bus") &&
+        (glm::any(glm::greaterThanEqual(model.point("body_min"), model.point("body_max"))) ||
+         glm::length(model.point("board_normal")) < .5f)) {
+        return std::nullopt;
+    }
     return model;
 }
 }

@@ -9,6 +9,7 @@
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
 #include "game/net_types.h"
+#include "game/online_play.h"
 #include "game/player_jump.h"
 #include "game/swing.h"
 #include "game/remote_players.h"
@@ -48,6 +49,7 @@ game_state online_hub() {
     state.online.server_now = start_time;
     room_player self;
     self.name = "ME";
+    self.round_started = true;
     self.round_strokes = std::vector<int>(state.course_holes.size(), 0);
     self.motion = current_motion(state);
     self.motion_at = start_time;
@@ -226,29 +228,55 @@ TEST_CASE("online the hole ends when the server says: scored when it holed my ba
     game_state state = online_hub();
     on_hole(state);
     // Holed here: the hole stays open until the server answers.
-    const glm::vec3 cup = pin_anchor_position(state, state.ball->hole);
+    const glm::vec3 cup = pin_anchor_position(state, *state.ball->hole);
     const glm::vec3 stance = state.player.position;
     state.ball->strokes = 2;
     play_shot(state, shot_result{cup, true, 0.05f, {state.ball->position, cup}, {}});
     play_out_shot(state);
     CHECK(ball_in_play(state));
-    CHECK(!hole_played(state.round, 0));
+    CHECK(!hole_played(*state.round, 0));
 
     state.online.shots.push_back(played_shot(me, 0, 2, shot_setup{}, cup, true));
     state.online.balls[me] = room_ball{0, cup, 2, true};
     update_game(state, game_input{}, 0.016f);
     REQUIRE(state.ball.has_value());
     CHECK(state.ball->place == ball_place::in_cup);
-    REQUIRE(hole_played(state.round, 0));
-    CHECK(*state.round.strokes[0] == 2);
+    REQUIRE(hole_played(*state.round, 0));
+    CHECK(*state.round->strokes[0] == 2);
     // The server leaves the player where they hit from, as offline.
     CHECK(near(horizontal(state.player.position), horizontal(stance), 0.001f));
+}
+
+TEST_CASE("online a holed answer plays the putt out before the ball is in the cup") {
+    game_state state = online_hub();
+    on_hole(state);
+    address_looking_down(state);
+    start_swing_on_time(state);
+    REQUIRE(state.address.swing_elapsed.has_value());
+    // The answer and my holed ball row arrive together, the club still at the top.
+    const glm::vec3 cup = pin_anchor_position(state, *state.ball->hole);
+    const glm::vec3 start = state.ball->position;
+    state.online.shots.push_back(played_shot(me, 0, 1, state.address.setup, cup, true));
+    state.online.balls[me] = room_ball{0, cup, 1, true};
+    update_game(state, game_input{}, 0.016f);
+    REQUIRE(ball_in_play(state));
+    CHECK(near(state.ball->position, start, 0.001f));
+    CHECK(!hole_played(*state.round, 0));
+    swing_through(state);
+    REQUIRE(shot_playing(state));
+    CHECK(ball_in_play(state));
+    play_out_shot(state);
+    update_game(state, game_input{}, 0.016f);
+    REQUIRE(state.ball.has_value());
+    CHECK(state.ball->place == ball_place::in_cup);
+    REQUIRE(hole_played(*state.round, 0));
+    CHECK(*state.round->strokes[0] == 1);
 }
 
 TEST_CASE("online holing out keeps the view on the cup, and where I turned before the server answered") {
     game_state state = online_hub();
     on_hole(state);
-    const glm::vec3 cup = pin_anchor_position(state, state.ball->hole);
+    const glm::vec3 cup = pin_anchor_position(state, *state.ball->hole);
     const glm::vec3 stance = state.player.position;
     state.player.yaw = wrap_angle(state.player.yaw + 1.0f);
     state.ball->strokes = 1;
@@ -261,7 +289,7 @@ TEST_CASE("online holing out keeps the view on the cup, and where I turned befor
     state.online.shots.push_back(played_shot(me, 0, 1, shot_setup{}, cup, true));
     state.online.balls[me] = room_ball{0, cup, 1, true};
     update_game(state, game_input{}, 0.016f);
-    REQUIRE(hole_played(state.round, 0));
+    REQUIRE(hole_played(*state.round, 0));
     CHECK(near(state.player.yaw, yaw, 0.0001f));
     CHECK(near(horizontal(state.player.position), horizontal(stance), 0.001f));
 }
@@ -273,7 +301,7 @@ TEST_CASE("online a hole the server ends without holing my ball is given up, me 
     state.online.balls.erase(me);
     update_game(state, game_input{}, 0.016f);
     CHECK(!state.ball.has_value());
-    CHECK(!hole_played(state.round, 0));
+    CHECK(!hole_played(*state.round, 0));
     CHECK(near(state.player.position, standing, 0.001f));
 }
 
@@ -362,6 +390,11 @@ TEST_CASE("a tee is in use while another player's ball waits on it for the tee s
     CHECK(tee_in_use(balls, me, 1));
     balls[other].stroke_count = 1;
     CHECK(!tee_in_use(balls, me, 1));  // teed off: the tee is free
+    balls[other].stroke_count = 0;
+    balls[other].kind = ball_kind::warmup;
+    CHECK(!tee_in_use(balls, me, 1)); // a course warmup ball is by the green
+    balls[other].tee_mat = 1;
+    CHECK(tee_in_use(balls, me, 1, true)); // a practice-ground station is occupied
 }
 
 TEST_CASE("online, a tee another player is using is not taken up and says why") {
@@ -397,56 +430,25 @@ TEST_CASE("moving too fast snaps back to the last accepted position, keeping my 
     CHECK(ball_in_play(state));
 }
 
-TEST_CASE("G groups me with the nearest player wherever their ball and mine are played") {
+TEST_CASE("menu group leave captures booking and preserves ball, scores and seat") {
     game_state state = online_hub();
     on_hole(state);
-    const float reach = state.tuning.net.group_join_distance;
-    add_other(state, glm::vec3(reach * 0.5f, 0.0f, 0.0f), 5);
-    state.online.balls[other] = room_ball{2, state.player.position, 3, false};
-    state.online.group_sizes[5] = 1;
-    game_input g;
-    g.group = true;
-    update_game(state, g, 0.0f);
-    const net_command* join = find_command(state, net_command_type::join_group);
-    REQUIRE(join != nullptr);
-    CHECK(join->group_id == 5U);
-}
-
-TEST_CASE("G joins the nearest player's group when it has space, else starts one; Shift+G leaves") {
-    game_state state = online_hub();
-    const float reach = state.tuning.net.group_join_distance;
-    add_other(state, glm::vec3(reach * 0.5f, 0.0f, 0.0f), 5);
-    state.online.group_sizes[5] = state.tuning.server.group_capacity - 1;
-
-    game_input g;
-    g.group = true;
-    update_game(state, g, 0.0f);
-    REQUIRE(has_command(state, net_command_type::join_group));
-    CHECK(find_command(state, net_command_type::join_group)->group_id == 5U);
-
-    state.net_commands.clear();
-    state.online.group_sizes[5] = state.tuning.server.group_capacity;
-    update_game(state, g, 0.0f);
-    CHECK(has_command(state, net_command_type::create_group));
-    CHECK(!has_command(state, net_command_type::join_group));
-
-    state.net_commands.clear();
-    state.online.group_sizes[5] = 1;
-    add_other(state, glm::vec3(reach * 2.0f, 0.0f, 0.0f), 5);
-    update_game(state, g, 0.0f);
-    CHECK(has_command(state, net_command_type::create_group));
-
-    state.net_commands.clear();
+    state.online.room_ready = true;
+    state.online.room = online_room{7, state.place.id, 1};
+    state.online.reservation = tee_reservation_info{};
+    state.online.reservation->reservation_id = 9;
+    const auto ball = state.ball;
+    const auto position = state.player.position;
     game_input leave;
     leave.leave_group = true;
     update_game(state, leave, 0.0f);
-    CHECK(has_command(state, net_command_type::leave_group));
-
-    state.play = play_mode::offline;
-    state.net_commands.clear();
-    update_game(state, g, 0.0f);
-    update_game(state, leave, 0.0f);
-    CHECK(state.net_commands.empty());
+    const auto command = find_command(state, net_command_type::leave_group);
+    REQUIRE(command);
+    CHECK(command->reservation_id == 9);
+    CHECK(command->room_id == state.online.room->room_id);
+    REQUIRE(state.ball);
+    CHECK(state.ball->strokes == ball->strokes);
+    CHECK(state.player.position == position);
 }
 
 TEST_CASE("others are carried on along their motion, capped, on the ground, with corrections blended in") {
@@ -787,7 +789,7 @@ TEST_CASE("my swing tells the server it started, where I stand, then my setup") 
 TEST_CASE("the scorecard has a row per member of my group from the server") {
     game_state state = online_hub();
     state.online.players[me].group_id = 3;
-    state.round = complete_hole(state.round, 0, state.course_holes[0].par + 1);
+    state.round = complete_hole(*state.round, 0, state.course_holes[0].par + 1);
     add_other(state, glm::vec3(0.0f), 3);
     state.online.players[other].round_strokes = std::vector<int>(state.course_holes.size(), 0);
     room_player stranger = state.online.players[other];
@@ -812,7 +814,7 @@ TEST_CASE("the scorecard has a row per member of my group from the server") {
     CHECK(alone[0].total_strokes == state.course_holes[0].par + 1);
 }
 
-TEST_CASE("a finished round goes on to the next where the player stands") {
+TEST_CASE("a finished online round retains its card where the player stands") {
     game_state state = online_hub();
     for (std::size_t i = 0; i < state.course_holes.size(); ++i) {
         tee_up(state, i, false);
@@ -820,11 +822,11 @@ TEST_CASE("a finished round goes on to the next where the player stands") {
         complete_current_hole(state);
         pick_up_from_cup(state);
     }
-    REQUIRE(round_finished(state.round));
+    REQUIRE(round_finished(*state.round));
     const glm::vec3 standing = state.player.position;
     REQUIRE(horizontal_distance(standing, state.holes.back().tee_position) < 5.0f);
     start_next_round(state);
-    CHECK(!round_finished(state.round));
+    CHECK(round_finished(*state.round));
     CHECK(!ball_in_play(state));
     CHECK(near(horizontal(state.player.position), horizontal(standing), 0.001f));
 }
@@ -852,13 +854,13 @@ std::size_t finished_before_group(game_state& state) {
 TEST_CASE("a finished round's results wait while my group still plays the hole") {
     game_state state = online_hub();
     const std::size_t last = finished_before_group(state);
-    REQUIRE(round_finished(state.round));
+    REQUIRE(round_finished(*state.round));
     CHECK(waiting_for_group(state));
     CHECK(!round_results_shown(state));
     update_game(state, game_input{}, 0.0f);  // their round so far arrives
 
     // The room plays on while I wait: their holing shot plays, and the
-    // server has ended their round (cleared its strokes).
+    // server has ended their round, retaining its scores for the card.
     const course_hole& marker = state.holes[last];
     shot_setup input;
     input.ball_start = resting_ball_position(state.area, marker.pin_position + glm::vec3(2.0f, 0.0f, 0.0f), state.tuning.scale.ball_physics_radius_meters);
@@ -868,6 +870,8 @@ TEST_CASE("a finished round's results wait while my group still plays the hole")
     state.online.shots.push_back(played_shot(other, static_cast<int>(last), 4, input, marker.pin_position, true));
     state.online.balls[other] = room_ball{static_cast<int>(last), marker.pin_position, 4, true};
     state.online.players[other].round_strokes = std::vector<int>(state.course_holes.size(), 0);
+    state.online.players[other].round_strokes[0] = 5;
+    state.online.players[other].round_strokes[last] = 4;
     update_game(state, game_input{}, 0.0f);
     CHECK(state.online.shots.empty());
     REQUIRE(state.remote_shots.count(other) == 1U);
@@ -888,7 +892,7 @@ TEST_CASE("a finished round's results wait while my group still plays the hole")
     CHECK(rows[1].total_strokes == 9);
 
     start_next_round(state);
-    CHECK(state.group_strokes.empty());
+    CHECK(member_round_strokes(state, me) == std::vector<int>(state.course_holes.size(), 3));
 }
 
 TEST_CASE("waiting for the group I can walk, but play nothing") {
@@ -1293,15 +1297,28 @@ TEST_CASE("online my bag and club start as my row has them; moves and clubs are 
     CHECK(!state.handling.has_value());
 }
 
-TEST_CASE("online my player row keeps my hand, natural shape and favourite colour, each change sent once") {
+TEST_CASE("online my player row keeps my hand, natural shape and favourite colour, each change sent once, never an unset shot") {
     game_state state = online_hub();
-    state.online.players[me].natural_shape = natural_shape_unset;
+    // Before my player row arrives: nothing is asked and nothing sent, so a
+    // different hand never sends an unset shot over the one on the server.
+    state.online.golfer.reset();
+    CHECK(natural_shape_picked(state));
+    state.hand = handedness::left;
+    update_game(state, game_input{}, 0.016f);
+    CHECK(find_command(state, net_command_type::set_golfer) == nullptr);
+
+    state.online.golfer = golfer_row{};
     CHECK(!natural_shape_picked(state));
+    update_game(state, game_input{}, 0.016f);
+    CHECK(find_command(state, net_command_type::set_golfer) == nullptr);
+    state.hand = handedness::right;
     record_natural_shape(state, natural_shape::draw);
     const net_command* picked = find_command(state, net_command_type::set_golfer);
     REQUIRE(picked != nullptr);
     CHECK(picked->golfer.natural == static_cast<std::uint8_t>(natural_shape_index(natural_shape::draw)));
-    state.online.players[me].natural_shape = picked->golfer.natural;
+    // Picked once sent, so the picker is not asked again while the row catches up.
+    CHECK(natural_shape_picked(state));
+    state.online.golfer = picked->golfer;
     CHECK(natural_shape_picked(state));
     CHECK(my_golfer(state).natural == natural_shape::draw);
 
@@ -1311,8 +1328,8 @@ TEST_CASE("online my player row keeps my hand, natural shape and favourite colou
     const net_command* hand = find_command(state, net_command_type::set_golfer);
     REQUIRE(hand != nullptr);
     CHECK(hand->golfer.hand == handedness::left);
-    CHECK(hand->golfer.natural == state.online.players[me].natural_shape);
-    state.online.players[me].hand = handedness::left;
+    CHECK(hand->golfer.natural == state.online.golfer->natural);
+    state.online.golfer->hand = handedness::left;
     state.net_commands.clear();
     update_game(state, game_input{}, 0.016f);
     CHECK(find_command(state, net_command_type::set_golfer) == nullptr);
@@ -1323,6 +1340,15 @@ TEST_CASE("online my player row keeps my hand, natural shape and favourite colou
     REQUIRE(colour != nullptr);
     CHECK(colour->golfer.colour == 3U);
     CHECK(colour->golfer.hand == handedness::left);
+}
+
+TEST_CASE("online my natural shape comes from my own player row, not my room's copy of it") {
+    game_state state = online_hub();
+    state.online.golfer = golfer_row{state.hand, static_cast<std::uint8_t>(natural_shape_index(natural_shape::fade)),
+                                     state.favourite_colour};
+    state.online.players[me].natural_shape = natural_shape_unset;
+    CHECK(natural_shape_picked(state));
+    CHECK(my_golfer(state).natural == natural_shape::fade);
 }
 
 TEST_CASE("a room shot replays here bit for bit as the server played it") {
@@ -1343,4 +1369,28 @@ TEST_CASE("a room shot replays here bit for bit as the server played it") {
     const shot_result direct = simulate_struck_shot(shot.record, shot.golfer, course, state.tuning, state.clubs);
     CHECK(here.rest_position == direct.rest_position);
     CHECK(here.trajectory == direct.trajectory);
+}
+
+TEST_CASE("online reconnect restores completed holes from the member snapshot without inventing unplayed scores") {
+    auto state = online_hub();
+    state.online.room_ready = true;
+    REQUIRE(state.round->strokes.size() >= 3);
+    state.online.players[me].round_strokes = {4, 0, 6};
+    update_online_play(state, 0.0f);
+    CHECK(state.round->strokes[0] == std::optional<int>(4));
+    CHECK(!state.round->strokes[1]);
+    CHECK(state.round->strokes[2] == std::optional<int>(6));
+}
+
+TEST_CASE("online live score rows cannot finish my round before the holed shot has played") {
+    auto state = online_hub();
+    on_hole(state);
+    state.online.room_ready = true;
+    auto& scores = state.online.players[me].round_strokes;
+    std::fill(scores.begin(), scores.end(), 4);
+    update_online_play(state, 0.0f);
+    CHECK(!round_finished(*state.round));
+    CHECK(!state.round->strokes[0]);
+    REQUIRE(state.ball);
+    CHECK(state.ball->place != ball_place::in_cup);
 }

@@ -4,6 +4,7 @@
 #include "game/course_loader.h"
 #include "game/course_world_loader.h"
 #include "game/hole_loader.h"
+#include "game/hub_definition.h"
 
 #include <algorithm>
 #include <fstream>
@@ -25,6 +26,7 @@ std::string under_asset_root(const std::string& asset_root, const std::string& r
 bool write_text_file(const std::filesystem::path& path, const std::string& text) {
     std::ofstream file(path, std::ios::binary | std::ios::trunc);
     file << text;
+    file.close();
     return static_cast<bool>(file);
 }
 
@@ -216,4 +218,9 @@ item_catalog_load_result load_items(const std::string& asset_root) {
         texts[relative.generic_string()] = *text;
     }
     return parse_item_catalog(texts);
+}
+
+std::optional<hub_definition> load_hub(const std::string& asset_root) {
+    const auto text = read_text_file(std::filesystem::path(asset_root) / hub_manifest_path);
+    return text ? parse_hub_from_text(*text) : std::nullopt;
 }

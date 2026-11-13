@@ -38,6 +38,7 @@
 
     "hole_sign_number": { "fill": 0.60, "color": [0.95, 0.90, 0.70], "align": "center" },
     "hole_sign_detail": { "fill": 0.70, "color": [0.86, 0.82, 0.64], "align": "center" },
+    "prop_board": { "fill": 0.70, "color": [0.10, 0.08, 0.05], "align": "center" },
     "course_map_hole_number": { "fill": 0.80, "max_scale": 2, "color": [0.12, 0.08, 0.04], "align": "center" },
 
     "panel_title": { "fill": 0.92, "color": [0.95, 0.78, 0.28], "align": "center" },

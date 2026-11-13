@@ -20,6 +20,7 @@ struct movement_xp_rate {
 };
 
 struct reward_rules {
+    xp_reward dap; // each participant, once per accepted paired greeting
     xp_reward shot;  // per stroke taken
     movement_xp_rate walking;
     movement_xp_rate cart_on_road;

@@ -1,0 +1,345 @@
+{
+  "id": "practice_ground",
+  "name": "Practice Ground",
+  "carts": false,
+  "backdrop": {
+    "sky": "sky.bmp",
+    "land": "land.bmp",
+    "haze_color": [
+      0.75,
+      0.8,
+      0.83
+    ],
+    "haze_amount": 1.0,
+    "haze_distance": 700.0
+  },
+  "sky": {
+    "date": "06-21",
+    "utc_offset_hours": 2
+  },
+  "green_stimp_feet": 9.5,
+  "air": {
+    "elevation_meters": 30.0,
+    "mean_temperature_c": 15.5,
+    "daily_temperature_range_c": 8.5
+  },
+  "world": "world.json",
+  "arrival": [
+    45.0,
+    0.0,
+    39.0
+  ],
+  "hub": {
+    "book": {
+      "position": [
+        45.0,
+        0.0,
+        35.0
+      ],
+      "reach": 2.0
+    }
+  },
+  "tee_mats": [
+    {
+      "position": [
+        -30.0,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -14.0,
+        0.0,
+        -50.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        -18.0,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        12.0,
+        0.0,
+        -80.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        -6.0,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -6.0,
+        0.0,
+        -110.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        6.0,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        16.0,
+        0.0,
+        -140.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        18.0,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -12.0,
+        0.0,
+        -175.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        30.0,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        4.0,
+        0.0,
+        -210.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        198.0,
+        20.0,
+        -50.0
+      ],
+      "aim": [
+        210.0,
+        3.12,
+        -130.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        210.0,
+        20.0,
+        -50.0
+      ],
+      "aim": [
+        195.0,
+        1.2,
+        -210.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        222.0,
+        20.0,
+        -50.0
+      ],
+      "aim": [
+        230.0,
+        3.0,
+        -285.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        81.0,
+        0.0,
+        39.0
+      ],
+      "aim": [
+        86.0,
+        0.0,
+        43.0
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    },
+    {
+      "position": [
+        60.0,
+        0.0,
+        42.0
+      ],
+      "aim": [
+        86.0,
+        0.0,
+        43.0
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    },
+    {
+      "position": [
+        146.0,
+        0.0,
+        49.0
+      ],
+      "aim": [
+        151.0,
+        0.1,
+        53.0
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    },
+    {
+      "position": [
+        125.0,
+        7.92,
+        52.0
+      ],
+      "aim": [
+        151.0,
+        0.1,
+        53.0
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    },
+    {
+      "position": [
+        131.0,
+        -0.41,
+        109.0
+      ],
+      "aim": [
+        136.0,
+        -0.17,
+        113.0
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    },
+    {
+      "position": [
+        110.0,
+        0.38,
+        112.0
+      ],
+      "aim": [
+        136.0,
+        -0.17,
+        113.0
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    }
+  ],
+  "targets": [
+    {
+      "position": [
+        -14.0,
+        0.0,
+        -50.0
+      ],
+      "radius": 7.0
+    },
+    {
+      "position": [
+        12.0,
+        0.0,
+        -80.0
+      ],
+      "radius": 8.0
+    },
+    {
+      "position": [
+        -6.0,
+        0.0,
+        -110.0
+      ],
+      "radius": 9.0
+    },
+    {
+      "position": [
+        16.0,
+        0.0,
+        -140.0
+      ],
+      "radius": 10.0
+    },
+    {
+      "position": [
+        -12.0,
+        0.0,
+        -175.0
+      ],
+      "radius": 11.0
+    },
+    {
+      "position": [
+        4.0,
+        0.0,
+        -210.0
+      ],
+      "radius": 12.0
+    },
+    {
+      "position": [
+        210.0,
+        3.12,
+        -130.0
+      ],
+      "radius": 9.0
+    },
+    {
+      "position": [
+        195.0,
+        1.2,
+        -210.0
+      ],
+      "radius": 12.0
+    },
+    {
+      "position": [
+        230.0,
+        3.0,
+        -285.0
+      ],
+      "radius": 14.0
+    }
+  ],
+  "practice_cups": [
+    [
+      86.0,
+      0.0,
+      43.0
+    ],
+    [
+      151.0,
+      0.1,
+      53.0
+    ],
+    [
+      136.0,
+      -0.17,
+      113.0
+    ]
+  ]
+}

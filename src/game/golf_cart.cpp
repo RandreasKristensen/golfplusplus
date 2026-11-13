@@ -328,7 +328,7 @@ void park_cart(game_state& state) {
 }
 
 bool own_cart(const game_state& state) {
-    return state.course.carts && state.takes_cart &&
+    return state.place.carts && state.takes_cart &&
         (!is_online(state) || server_cart(state, state.online.account_id) != nullptr);
 }
 

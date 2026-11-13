@@ -10,6 +10,7 @@
 #include "core/look_tuning.h"
 #include "core/sky_frame.h"
 #include "core/startup_flow.h"
+#include "core/tee_book.h"
 #include "core/startup_options.h"
 #include "core/tape_tracking.h"
 #include "core/visual_tour.h"
@@ -61,6 +62,9 @@ private:
     void update_menu(float dt, frame_profile* profile);
     void update_confirm_menu(frame_profile* profile);
     void update_round(float dt, frame_profile* profile);
+    void update_hub_menu(float dt, frame_profile* profile);
+    bool arrive_at_place(const std::string& place_id);
+    void start_play(const startup_menu_result& result);
     // The visual tour on `course` from stop `first`; false when the course
     // fails to load.
     bool begin_tour(const course_definition& course, std::size_t first);
@@ -100,6 +104,7 @@ private:
     text_assets text_;
     startup_catalog catalog_;
     startup_flow_state menu_;
+    tee_book_state tee_book_;
     game_state game_;
     // When the existing save could not be read and could not be backed up,
     // saving is disabled so the unreadable file is never overwritten.

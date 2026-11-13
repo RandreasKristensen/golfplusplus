@@ -52,14 +52,13 @@ python tooling/art/make_art.py
 
 ## practice_ground/make_practice_ground.py
 
-Writes `assets/world/courses/practice_ground/` (`course.json`, `world.json`,
-`holes/`) from code, the same every run: not a real place, so not an import.
-Every hole is a practice station (`"practice": true`, no carts): six range
-bays on tee boxes, each aimed at its own target green inside a ball-stop net,
-and six stations dropped round one green with no tee box (`"tee_box": false`):
-two putts, a chip off the apron, a chip out of the rough and two bunker shots.
-Change the layout in the script and rerun it, then `art/make_art.py` for its
-backdrops; never edit its output.
+Writes the hole-free hub in `assets/world/hub/` from code, the same every run:
+three short-game greens, six flat range bays, three hill bays, tee mats,
+targets, arrival, book and bus anchors. This is an authored place, not an OSM
+import or scored course. Change its layout in the generator, then regenerate;
+never edit the output. `--check` checks layout invariants and generated files
+without rewriting them. The book and bus models have their own generator,
+`practice_ground/make_hub_props.py` (`--check` verifies their shipped JSON).
 
 ```
 python tooling/practice_ground/make_practice_ground.py
@@ -89,8 +88,8 @@ Run from the repo root:
 
 ```pwrshl
 .\tooling\gb      # configure + build release
-.\tooling\gb -r   # build release, then launch golf++
-.\tooling\gb -rr  # stop the running golf++ from this build, rebuild, relaunch
+.\tooling\gb -r   # local server up (net/dev.ps1), build, launch golf++ on it (offline if the server fails)
+.\tooling\gb -rr  # the same, stopping the running golf++ from this build first
 .\tooling\gb -m   # local server up (net/dev.ps1), build, launch two anonymous clients on it
 .\tooling\gb -mm  # the same, stopping the running golf++ from this build first
 .\tooling\gb -x   # stop golf++ from this build and the local server
@@ -98,8 +97,8 @@ Run from the repo root:
 
 ### Local multiplayer
 
-`gb -m` is all it takes: `net/dev.ps1` starts `spacetime start` in its own
-minimised window when nothing listens on port 3000, builds the server module
+`gb -m` is all it takes: `net/dev.ps1` starts `spacetime start` hidden in the
+background when nothing listens on port 3000, builds the server module
 (a few seconds when nothing changed), publishes it as `golfpp` when the
 database is missing or the module changed since the last publish (then
 regenerates the client bindings, before the game builds), and turns on
@@ -110,10 +109,10 @@ server.
 
 The server only runs while you test: the database lives in SpacetimeDB's data
 directory, so it, its accounts and its settings survive `gb -x`, and the next
-`gb -m` starts in a few seconds. Republishing is an in-place update that
-never deletes data; a module change that would need that fails with a message,
-and then `spacetime publish golfpp --server local --delete-data` (by hand)
-starts the local database over.
+`gb -m` starts in a few seconds. Republishing tries an in-place migration;
+when the module change refuses one, the local database is disposable (owner
+decision) and is replaced with `--delete-data`, losing local accounts, bookings
+and scores.
 
 `net/dev.ps1` on its own: no arguments brings the server up, `-Down` stops it.
 It needs the spacetime CLI and the Emscripten SDK (`-Emsdk`, else `EMSDK`,
@@ -215,6 +214,10 @@ editor will read `assets/world/courses/*/course.json`, show the holes referenced
 selected course manifest, and save the current hole back to its file in the
 course's `holes/` folder. Browsers without the File System Access API can still use the
 paste import/export workflow.
+
+Run `node tooling/hole_editor/test_serialization.cjs` from the repo root to
+check that an unrelated touch-up preserves material-zone gameplay and source
+metadata. It uses the Node runtime also used by the determinism runner.
 
 ### Canvas controls
 

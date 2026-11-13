@@ -188,9 +188,9 @@ vec3 spectrum(float t) {
 }
 
 // A sun shower's rainbow round the point opposite the sun, as strong as
-// weather.y: the primary red outside, the secondary reversed, the sky
-// lighter inside the primary and darker between the two. In the sun's
-// light, so it goes with the sun.
+// weather.y (none with the sun down): the primary red outside, the
+// secondary reversed, the sky lit inside the primary and darker between
+// the two. All in the sun's light, so it goes with the sun.
 vec3 add_rainbow(vec3 sky, vec3 direction) {
     float angle = angle_between(direction, -sun_direction.xyz);
     float r1 = u_rainbow.x;
@@ -201,8 +201,8 @@ vec3 add_rainbow(vec3 sky, vec3 direction) {
     float inside = 1.0 - smoothstep(r1 - w1, r1 - 0.5 * w1, angle);
     float between = smoothstep(r1, r1 + 0.5 * w1, angle) * (1.0 - smoothstep(r2 - w2, r2 - 0.5 * w2, angle));
     float strength = weather.y;
-    sky *= 1.0 + strength * (inside * u_rainbow_look.z - between * u_rainbow_look.w);
-    return sky + bow * sun_color.rgb * (u_rainbow_look.y * strength);
+    sky *= 1.0 - strength * between * u_rainbow_look.w;
+    return sky + (bow * u_rainbow_look.y + inside * u_rainbow_look.z) * sun_color.rgb * strength;
 }
 
 float bolt_hash(float seed, float i) {

@@ -7,6 +7,7 @@
 #include "game/prop_loader.h"
 
 #include <cstddef>
+#include <optional>
 #include <vector>
 
 #include <glm/mat4x4.hpp>
@@ -25,7 +26,14 @@ struct prop_piece {
     const prop_part* part = nullptr;  // its glow and tag
 };
 
+// An animated part's frame within its model, selected by its data tag.
+struct prop_part_pose {
+    const char* tag = "";
+    glm::mat4 frame{1.0f};
+};
+
 // Every part of `model` in `frame` (the prop's own frame in the world).
-std::vector<prop_piece> prop_pieces(const prop_model& model, const glm::mat4& frame);
+std::vector<prop_piece> prop_pieces(const prop_model& model, const glm::mat4& frame,
+                                     const std::optional<prop_part_pose>& pose = std::nullopt);
 // How many pieces prop_pieces gives for `model`.
 std::size_t prop_piece_count(const prop_model& model, prop_mesh mesh);

@@ -30,7 +30,7 @@ const lighting_palette& fixture_palette() {
 }
 
 tuning_entry entry(const std::string& path, const double step) {
-    return tuning_entry{"look.sun_glow", *parse_json_path(path), step};
+    return tuning_entry{"look.sun_glow_at_sun", *parse_json_path(path), step};
 }
 
 // `text` with `from` (which it holds once) written as `to`; empty when it
@@ -105,11 +105,11 @@ TEST_CASE("a JSON value is replaced at its path and every other byte stays as it
 
 TEST_CASE("a lighting number is found by its path with the range its loader allows") {
     const lighting_palette& palette = fixture_palette();
-    const std::optional<lighting_number> glow = lighting_number_at(palette, *parse_json_path("weather/sun_glow"));
+    const std::optional<lighting_number> glow = lighting_number_at(palette, *parse_json_path("weather/sun_glow_at_sun"));
     REQUIRE(glow.has_value());
-    CHECK(near(glow->value, 0.03f));
+    CHECK(near(glow->value, 0.6f));
     CHECK(glow->low == 0.0f);
-    CHECK(glow->high == 1.0f);
+    CHECK(glow->high == 20.0f);
     CHECK(!glow->whole);
 
     const std::optional<lighting_number> mist = lighting_number_at(palette, *parse_json_path("keys/2/mist_density"));
@@ -133,21 +133,21 @@ TEST_CASE("a lighting number is found by its path with the range its loader allo
 
 TEST_CASE("a tuning step writes only that number, within the loader's range") {
     const std::string& text = fixture_lighting();
-    const tuning_entry glow = entry("weather/sun_glow", 0.005);
+    const tuning_entry glow = entry("weather/sun_glow_at_sun", 0.05);
     const std::optional<std::string> up = step_lighting_text(text, glow, glow.path, 1, false);
     REQUIRE(up.has_value());
-    CHECK(*up == with(text, "\"sun_glow\": 0.03,", "\"sun_glow\": 0.035,"));
-    CHECK(near(parse_lighting_from_text(*up)->weather.sun_glow, 0.035f));
+    CHECK(*up == with(text, "\"sun_glow_at_sun\": 0.6,", "\"sun_glow_at_sun\": 0.65,"));
+    CHECK(near(parse_lighting_from_text(*up)->weather.sun_glow_at_sun, 0.65f));
     // Shift: a tenth of a step.
-    CHECK(written_at(*step_lighting_text(text, glow, glow.path, -1, true), "weather/sun_glow") == "0.0295");
+    CHECK(written_at(*step_lighting_text(text, glow, glow.path, -1, true), "weather/sun_glow_at_sun") == "0.595");
 
     // Clamped at the top of the range, then no further.
-    const tuning_entry forward = entry("weather/sun_forwardness", 0.2);
+    const tuning_entry forward = entry("weather/clear_forwardness", 0.2);
     std::string stepped = text;
     for (int i = 0; i < 2; ++i) {
         stepped = *step_lighting_text(stepped, forward, forward.path, 1, false);
     }
-    CHECK(written_at(stepped, "weather/sun_forwardness") == "0.95");
+    CHECK(written_at(stepped, "weather/clear_forwardness") == "0.95");
     CHECK(!step_lighting_text(stepped, forward, forward.path, 1, false));
 
     // Counts step by whole numbers, from 0 up to their most.
@@ -190,7 +190,7 @@ TEST_CASE("the tuning panel's list names only ranged numbers of lighting.json") 
 
 TEST_CASE("the tuning panel opens only where allowed, its rows wrap, and arrows step") {
     look_tuning_state state;
-    state.entries = {entry("weather/mist", 0.05), entry("weather/sun_glow", 0.005), entry("shafts/steps", 1)};
+    state.entries = {entry("weather/mist", 0.05), entry("weather/sun_glow_at_sun", 0.05), entry("shafts/steps", 1)};
     look_tuning_keys toggle;
     toggle.toggle = true;
     CHECK(update_look_panel(state, toggle, false) == 0);
@@ -291,15 +291,15 @@ TEST_CASE("a panel step is written to lighting.json and shown once, without the 
     look_start start = start_look(folder.root.string());
     REQUIRE(start.loaded.has_value());
     state.watch = std::move(start.watch);
-    state.entries = {entry("weather/sun_glow", 0.005)};
+    state.entries = {entry("weather/sun_glow_at_sun", 0.05)};
     state.open = true;
 
     look_tuning_keys right;
     right.right = true;
     const std::optional<look_reload> reload = run_look_tuning(state, right, true, fixture_palette(), 0.0f);
     REQUIRE(reload.has_value());
-    CHECK(near(reload->next.lighting.weather.sun_glow, 0.035f));
-    CHECK(*read_text_file(folder.lighting) == with(fixture_lighting(), "\"sun_glow\": 0.03,", "\"sun_glow\": 0.035,"));
+    CHECK(near(reload->next.lighting.weather.sun_glow_at_sun, 0.65f));
+    CHECK(*read_text_file(folder.lighting) == with(fixture_lighting(), "\"sun_glow_at_sun\": 0.6,", "\"sun_glow_at_sun\": 0.65,"));
     CHECK(!state.unwritten);
 
     // Later polls find the step already shown, even once its write time moves.

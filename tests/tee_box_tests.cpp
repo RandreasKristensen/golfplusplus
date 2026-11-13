@@ -106,7 +106,7 @@ TEST_CASE("a tee box on a slope is levelled into the ground at the land's mean, 
 TEST_CASE("a teed-up ball rests on the tee box, flush with the ground") {
     const game_state state = started_hole();
     REQUIRE(state.area.tee_boxes.size() == state.course_holes.size());
-    const tee_box& box = state.area.tee_boxes[state.ball->hole];
+    const tee_box& box = state.area.tee_boxes[*state.ball->hole];
     CHECK(on_tee_box(box, state.ball->position));
     CHECK(near(box.center.y, ground_height(state.area, box.center), 1e-4f));
     CHECK(std::abs(state.ball->position.y - (box.center.y + state.tuning.scale.ball_physics_radius_meters)) < 1e-4f);

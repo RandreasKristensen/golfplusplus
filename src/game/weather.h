@@ -99,7 +99,7 @@ weather_state with_weather_kind(weather_state weather, weather_kind kind, const 
 weather_state weather_at(const weather_tuning& weather,
                          const wind_tuning& wind,
                          const sky_timeline& clock,
-                         const course_definition& course,
+                         const place_definition& course,
                          std::int64_t unix_ms);
 
 // The air's temperature on `course` at `hours` into the game's day count
@@ -108,7 +108,7 @@ weather_state weather_at(const weather_tuning& weather,
 // temperature.warmest_hour, a smooth curve between, by plain arithmetic, so
 // the server matches), the cycle damped by cloud, less rain's cooling, plus
 // `noise` (0..1) of temperature.noise_c either way.
-float temperature_at(const weather_tuning& tuning, const course_definition& course, double hours, float cloud, float rain,
+float temperature_at(const weather_tuning& tuning, const place_definition& course, double hours, float cloud, float rain,
                      float noise);
 
 // The wind's speed (m/s) and the direction it blows towards (radians, as

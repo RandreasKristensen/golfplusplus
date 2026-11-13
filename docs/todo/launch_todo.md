@@ -30,8 +30,12 @@ us nothing and grow the game. Goal: the game pays for itself while it is develop
 a side income better, a living best.
 
 Measured so far: about 3 TeV per player-hour on Maincloud with 2 players in a room
-($10 buys 25,000 TeV). Every update fans out to the whole room, so busier rooms cost
-more per player.
+($10 buys 25,000 TeV). That historical measurement predates spatial motion interest. Hot avatars and
+carts now use indexed neighbouring cells plus group/passenger retention; crowded
+cells still include everyone. Membership, names/loadouts, bags, balls, flags,
+shots and item-use events still fan out room-wide, and simulation collision
+inputs/shot snapshots scan room state. Course worlds are uncapped; native tests
+at 200 players prove selection/interest semantics only, not production capacity.
 
 ### Open decisions
 - [ ] Prices: the game with its first month, a month's renewal, the 3 and 6 month
@@ -170,8 +174,10 @@ drawn by AI-written code needs no AI disclosure on Steam.
   Chat, if added later, needs the same.
 
 ### Cheating
-- [x] The server decides shots, scores, movement and XP. Strike timing stays the
-  client's measurement, range-checked only, with no flagging (owner decision).
+- [ ] Close the claimed-movement authority gaps in
+  [review task A1](codebase_review.md#a1), then revalidate server-owned shots,
+  scores, movement and XP. Strike timing stays the client's measurement,
+  range-checked only, with no flagging (owner decision).
 
 ### Credits screen
 - [ ] A credits screen in the menu: the data credits on the main menu and the
@@ -198,7 +204,8 @@ drawn by AI-written code needs no AI disclosure on Steam.
 - [ ] Every release is then published to `golfpp-test` before `golfpp`, so a
   module change that needs a manual migration shows there first: local
   (`gb -m`), `golfpp-test`, `golfpp`, then the installer.
-- [ ] Measure TeV per player-hour against room size (2, 4, 8+ players), then set
+- [ ] Measure TeV, bandwidth and reducer time against uncapped world populations
+  (2, 8, 40, 80, 200 players, both spread and crowded), then set
   prices and watch the dashboard. The server is a permanent obligation once the
   game is sold.
 

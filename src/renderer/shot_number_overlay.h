@@ -1,7 +1,7 @@
 #pragma once
 
 // My shot's number over my ball as it is struck, damage-number style: the
-// number in its box above where the ball is seen, rising and fading, a
+// number in its box above where the ball is seen, falling, shrinking and fading, a
 // one-font-pixel black edge round it so it reads against sky and grass; a
 // crit in its own colour. GL-free.
 

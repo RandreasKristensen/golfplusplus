@@ -4,7 +4,9 @@
 // ball, and the green round me within green_read.radius_meters shows its
 // slope as a lattice of dots every spacing_meters, each sliding downhill
 // faster the steeper it is and still where it is level. It shows the
-// ground, never the putt: no line, break or pace. Crouched I stand still.
+// ground, never the putt: no line, break or pace. Crouched I can move at
+// green_read.walk_factor of my item-modified walking speed, without hopping
+// or running.
 // Presentation only: it never changes a shot.
 
 #include "game/game_input.h"

@@ -6,11 +6,15 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub(super) struct TakeWheelArgs {}
+pub(super) struct TakeWheelArgs {
+    pub expected_room: u64,
+}
 
 impl From<TakeWheelArgs> for super::Reducer {
     fn from(args: TakeWheelArgs) -> Self {
-        Self::TakeWheel
+        Self::TakeWheel {
+            expected_room: args.expected_room,
+        }
     }
 }
 
@@ -29,8 +33,8 @@ pub trait take_wheel {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`take_wheel:take_wheel_then`] to run a callback after the reducer completes.
-    fn take_wheel(&self) -> __sdk::Result<()> {
-        self.take_wheel_then(|_, _| {})
+    fn take_wheel(&self, expected_room: u64) -> __sdk::Result<()> {
+        self.take_wheel_then(expected_room, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `take_wheel` to run as soon as possible,
@@ -41,6 +45,7 @@ pub trait take_wheel {
     ///  and its status can be observed with the `callback`.
     fn take_wheel_then(
         &self,
+        expected_room: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -51,12 +56,13 @@ pub trait take_wheel {
 impl take_wheel for super::RemoteReducers {
     fn take_wheel_then(
         &self,
+        expected_room: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
         self.imp
-            .invoke_reducer_with_callback(TakeWheelArgs {}, callback)
+            .invoke_reducer_with_callback(TakeWheelArgs { expected_room }, callback)
     }
 }

@@ -24,6 +24,9 @@ bool valid(const move_request& request, const server_tuning& tuning) {
         if (run.steps == 0 || static_cast<std::uint8_t>(run.input.kind) > static_cast<std::uint8_t>(move_kind::cart)) {
             return false;
         }
+        if (run.input.kind == move_kind::cart && (run.input.paced || run.input.crouched)) {
+            return false;
+        }
         steps += run.steps;
     }
     return steps <= max_steps_per_motion(tuning);
@@ -115,7 +118,7 @@ move_outcome play_move(const mover_state& mover, const std::optional<room_cart>&
         body.vertical = m.cart_vertical;
         body.vertical.y = my_cart->position.y;
     }
-    const walk_world walking{world.area, world.walker_obstacles, tuning.player, world.walk_speed, nullptr};
+    const walk_world walking{world.area, world.walker_obstacles, tuning, world.walk_speed, nullptr};
     const cart_world driving_world{world.area, tuning, world.spec, world.wetness, world.grip_scale,
                                    world.cart_obstacles, nullptr};
     // My cart's row and my mover as its steps so far leave them.

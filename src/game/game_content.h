@@ -4,6 +4,8 @@
 // not run with partial content.
 
 #include "game/club_definition.h"
+#include "game/hub_definition.h"
+#include "game/prop_loader.h"
 #include "game/course_definition.h"
 #include "game/game_tuning.h"
 #include "game/item_catalog.h"
@@ -21,7 +23,9 @@ struct game_content {
     std::string asset_root;
     std::uint64_t content_hash = 0;
     game_tuning tuning;
+    prop_catalog hub_props;
     std::vector<club_definition> clubs;      // the club items, in bag order
+    hub_definition hub;
     std::vector<course_definition> courses;  // sorted by file name
     skill_catalog skills;
     reward_rules rewards;

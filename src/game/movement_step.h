@@ -33,7 +33,7 @@ enum class move_kind : std::uint8_t {
 };
 
 // One step's controls. On foot: W/S and A/D (+1, -1 or 0; `side` positive
-// left), Shift, a hop (Space) and where I face; at the wheel the pedal
+// left), Shift, a hop (Space), pacing, crouching and where I face; at the wheel the pedal
 // (`forward`) and the steering wheel's turn.
 struct move_input {
     move_kind kind = move_kind::walk;
@@ -43,11 +43,13 @@ struct move_input {
     bool jump = false;
     std::uint16_t yaw = 0;    // quantise_yaw
     std::int16_t steer = 0;   // quantise_steer
+    bool paced = false;
+    bool crouched = false;
 };
 
 inline bool operator==(const move_input& a, const move_input& b) {
     return a.kind == b.kind && a.forward == b.forward && a.side == b.side && a.run == b.run && a.jump == b.jump &&
-        a.yaw == b.yaw && a.steer == b.steer;
+        a.yaw == b.yaw && a.steer == b.steer && a.paced == b.paced && a.crouched == b.crouched;
 }
 
 // Steps in a row with the same input, as they are sent. A hop is always a
@@ -83,7 +85,7 @@ struct walker {
 struct walk_world {
     const play_area& area;
     const std::vector<solid>& moving;  // walker_obstacles
-    const player_tuning& tuning;
+    const game_tuning& tuning;
     float walk_speed = 0.0f;  // player.walk_speed with what items do to it now
     frame_profile* profile = nullptr;
 };
@@ -94,7 +96,9 @@ struct walk_step {
 };
 
 // W and S walk where I face, A and D step sideways, at walking speed in any
-// direction, run_factor times it running; backwards I keep facing forward.
+// direction, run_factor times it running; pacing and crouching use their
+// tuned fractions of walking speed (the slower if both). Crouching prevents
+// running and hopping. Backwards I keep facing forward.
 // Kept clear of what stands in my way; a hop leaves the ground, and off an
 // edge higher than a step I fall.
 walk_step step_walker(const walker& in, const move_input& input, const walk_world& world);

@@ -15,9 +15,11 @@
 
 #include "test_support.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include <glm/geometric.hpp>
 
@@ -194,22 +196,22 @@ TEST_CASE("render hole signs are rebuilt only when the signs change") {
     game_state state = started_game(fixture_hub_course());
     const text_assets& text = shipped_text_assets();
     render_hole_signs signs;
-    CHECK(refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, test_scene_colors(), test_props().at("hole_sign"), 1));
+    CHECK(refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), {}, text, test_scene_colors(), test_props().at("hole_sign"), 1));
     CHECK(signs.revision == 1U);
     REQUIRE(tee_up(state, 1, false));
-    CHECK(!refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), text, test_scene_colors(), test_props().at("hole_sign"), 2));
+    CHECK(!refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), {}, text, test_scene_colors(), test_props().at("hole_sign"), 2));
     CHECK(signs.revision == 1U);
 
     std::vector<hole_sign_text> renumbered = hole_sign_texts(state);
     renumbered.front().par += 1;
-    CHECK(refresh_render_hole_signs(signs, state.area, renumbered, text, test_scene_colors(), test_props().at("hole_sign"), 3));
+    CHECK(refresh_render_hole_signs(signs, state.area, renumbered, {}, text, test_scene_colors(), test_props().at("hole_sign"), 3));
     CHECK(signs.revision == 3U);
 }
 
 TEST_CASE("render hole signs carry a face and a model per sign, numbered by course hole") {
     game_state state = started_game(fixture_hub_course());
     const render_hole_signs signs =
-        build_render_hole_signs(state.area, hole_sign_texts(state), shipped_text_assets(), test_scene_colors(), test_props().at("hole_sign"), 7);
+        build_render_hole_signs(state.area, hole_sign_texts(state), {}, shipped_text_assets(), test_scene_colors(), test_props().at("hole_sign"), 7);
     CHECK(signs.revision == 7U);
     // The hole signs, then the way signs.
     REQUIRE(signs.signs.size() == state.area.signs.size() + state.area.way_signs.size());
@@ -236,6 +238,40 @@ TEST_CASE("render hole signs carry a face and a model per sign, numbered by cour
         }
     }
     CHECK(textured == 6U);
+}
+
+TEST_CASE("a way sign's pointed end runs on from the end of its face, flush with it") {
+    way_sign sign;
+    sign.points = glm::normalize(glm::vec3(3.0f, 0.0f, 4.0f));
+    sign.face_normal = glm::vec3(-sign.points.z, 0.0f, sign.points.x);
+    sign.post_foot = glm::vec3(10.0f, 2.0f, -5.0f);
+    sign.board_half_width = 0.5f;
+    sign.board_half_height = 0.2f;
+    sign.board_thickness = 0.05f;
+    sign.post_radius = 0.06f;
+    sign.board_center = sign.post_foot + sign.face_normal * 0.085f + glm::vec3(0.0f, 1.0f, 0.0f);
+    std::vector<hole_sign_vertex> vertices;
+    append_way_sign_model(vertices, sign, test_props().at("hole_sign"));
+
+    const glm::vec3 front = sign.board_center + sign.face_normal * (sign.board_thickness * 0.5f);
+    float face_end = -1.0f;
+    for (const hole_sign_vertex& vertex : vertices) {
+        if (vertex.textured > 0.5f) {
+            CHECK(std::abs(glm::dot(vertex.position - front, sign.face_normal)) < 0.0001f);
+            face_end = std::max(face_end, glm::dot(vertex.position - sign.board_center, sign.points));
+        }
+    }
+    CHECK(std::abs(face_end - sign.board_half_width) < 0.0001f);
+    // Both of the face's end corners are corners of the pointed end, whose tip
+    // lies on in the face's plane.
+    const glm::vec3 end = front + sign.points * sign.board_half_width;
+    const glm::vec3 tip = end + sign.points * sign.board_half_height;
+    for (const glm::vec3& corner : {end + glm::vec3(0.0f, sign.board_half_height, 0.0f), end - glm::vec3(0.0f, sign.board_half_height, 0.0f), tip}) {
+        const bool shared = std::any_of(vertices.begin(), vertices.end(), [&](const hole_sign_vertex& vertex) {
+            return vertex.textured < 0.5f && glm::length(vertex.position - corner) < 0.0001f;
+        });
+        CHECK(shared);
+    }
 }
 
 

@@ -47,6 +47,14 @@ function Invoke-Checked([string]$what, [scriptblock]$command) {
 Write-Host 'Building natively...'
 Invoke-Checked 'native configure' { cmake -S $source -B $nativeBuild -G Ninja -DCMAKE_BUILD_TYPE=Release }
 Invoke-Checked 'native build' { cmake --build $nativeBuild }
+# Run before the Emscripten environment changes PATH, so the native program
+# finds the compiler's own runtime libraries.
+$nativeExe = Get-ChildItem $nativeBuild -Filter 'golden_shots*' | Where-Object { $_.Extension -in '.exe', '' } | Select-Object -First 1
+if (-not $nativeExe) {
+    throw "No native golden_shots program in $nativeBuild."
+}
+$native = @(& $nativeExe.FullName $repo)
+if ($LASTEXITCODE -ne 0) { throw 'The native golden shots failed to run.' }
 
 Write-Host 'Building with Emscripten...'
 $env:EMSDK_QUIET = '1'
@@ -59,12 +67,6 @@ $node = if ($env:EMSDK_NODE) { $env:EMSDK_NODE } else { 'node' }
 if (-not (Get-Command $node -ErrorAction SilentlyContinue)) {
     throw "node not found ($node)."
 }
-$nativeExe = Get-ChildItem $nativeBuild -Filter 'golden_shots*' | Where-Object { $_.Extension -in '.exe', '' } | Select-Object -First 1
-if (-not $nativeExe) {
-    throw "No native golden_shots program in $nativeBuild."
-}
-$native = @(& $nativeExe.FullName $repo)
-if ($LASTEXITCODE -ne 0) { throw 'The native golden shots failed to run.' }
 $wasm = @(& $node (Join-Path $wasmBuild 'golden_shots.js') $repo)
 if ($LASTEXITCODE -ne 0) { throw 'The WASM golden shots failed to run.' }
 

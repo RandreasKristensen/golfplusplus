@@ -90,7 +90,7 @@ std::map<std::string, int> skill_levels(const skill_catalog& catalog, const skil
 }
 
 std::string unpayable_skill(const skill_catalog& catalog, const reward_rules& rewards, const item_catalog& items) {
-    std::vector<std::string> paid{rewards.shot.skill_id, rewards.walking.skill_id, rewards.cart_on_road.skill_id};
+    std::vector<std::string> paid{rewards.shot.skill_id, rewards.walking.skill_id, rewards.cart_on_road.skill_id, rewards.dap.skill_id};
     for (const auto& [id, item] : items.items) {
         if (item.use && item.use->xp_per_use) {
             paid.push_back(item.use->xp_per_use->skill_id);

@@ -5,6 +5,8 @@
 // it pushes audio_events: it never talks to the network itself.
 
 #include "game/bag_place.h"
+#include "game/ball_kind.h"
+#include "game/place_definition.h"
 #include "game/effects.h"
 #include "game/golfer.h"
 #include "game/golf_cart.h"
@@ -86,11 +88,17 @@ enum class net_command_type {
     motion,
     take_shot,
     tee_up,
+    place_practice_ball,
     claim_collectible,
     use_item,
+    dap,
     pick_up_ball,
-    create_group,
-    join_group,
+    open_tee_book,
+    book_tee,
+    cancel_tee,
+    take_bus,
+    return_to_hub,
+    start_booked_round,
     leave_group,
     give_up_hole,
     board_cart,
@@ -110,12 +118,12 @@ enum class net_command_type {
 inline constexpr const char* reducer_update_motion = "update_motion";
 inline constexpr const char* reducer_take_shot = "take_shot";
 inline constexpr const char* reducer_tee_up = "tee_up";
+inline constexpr const char* reducer_place_practice_ball = "place_practice_ball";
 inline constexpr const char* reducer_claim_collectible = "claim_collectible";
+inline constexpr const char* reducer_dap = "dap";
 inline constexpr const char* reducer_use_item = "use_item";
 inline constexpr const char* reducer_pick_up_ball = "pick_up_ball";
 inline constexpr const char* reducer_give_up_hole = "give_up_hole";
-inline constexpr const char* reducer_create_group = "create_group";
-inline constexpr const char* reducer_join_group = "join_group";
 inline constexpr const char* reducer_leave_group = "leave_group";
 inline constexpr const char* reducer_take_wheel = "take_wheel";
 inline constexpr const char* reducer_leave_wheel = "leave_wheel";
@@ -166,7 +174,12 @@ struct net_command {
     bool give_up = false;        // tee_up: giving up the hole my ball is in play on
     std::string collectible_id;  // claim_collectible
     std::string item_id;         // use_item
-    std::uint64_t group_id = 0;  // join_group
+    std::string course_id;       // book/list
+    std::int64_t scheduled_at = 0; // UTC microseconds, book_tee
+    std::uint64_t room_id = 0;     // booking/travel/leave: room where intent originated
+    std::uint64_t reservation_id = 0; // expected current booking (0: none)
+    std::uint64_t target_account = 0; // dap
+    bool takes_cart = false;       // take_bus
     std::uint64_t cart_owner = 0;  // board_cart: whose cart's passenger seat; right_cart: whose cart
 };
 
@@ -185,7 +198,8 @@ enum class net_status {
 // only on a server with the same, else asks for an update
 // (net_failure_outdated_game). Bump it with every change to the module's
 // tables, views or reducers; the server_protocol view itself never changes.
-inline constexpr std::uint32_t protocol_version = 19;
+inline constexpr std::uint32_t protocol_version = 27;
+inline constexpr const char* online_hub_course = "practice_ground";
 
 // The failure ids the bridge and the client give (src/net/stdb_bridge.h,
 // net_client), besides the server's (server_errors.h). One per line: a test
@@ -223,11 +237,35 @@ inline constexpr int link_code_length = 8;
 // No 0/O or 1/I, which are easy to mix up when typed from the screen.
 inline constexpr const char* link_code_alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
-// The room I am in: one course, shared with up to the server's room_capacity.
+// The persistent course world I am in; population is uncapped.
+// Book rows use UTC microseconds and the explicit world id.
+struct tee_slot_info {
+    std::uint64_t slot_id = 0;
+    std::string course_id;
+    std::uint32_t world_id = 0;
+    std::uint64_t room_id = 0;
+    std::int64_t scheduled_at = 0;
+    int booked_count = 0;
+};
+struct tee_reservation_info {
+    std::uint64_t reservation_id = 0;
+    std::uint64_t slot_id = 0;
+    std::int64_t started_at = 0;
+    bool grouped = false;
+    bool completed = false;
+    std::uint64_t revision = 0;
+    std::string course_id;
+    std::uint32_t world_id = 0;
+    std::uint64_t room_id = 0;
+    std::int64_t scheduled_at = 0;
+};
+
 struct online_room {
     std::uint64_t room_id = 0;
     std::string course_id;
     int player_count = 0;
+    std::uint32_t world_id = 1;
+    place_kind kind = place_kind::course;
 };
 
 // Server times are microseconds since the Unix epoch, on the server's clock.
@@ -246,6 +284,7 @@ struct room_player {
     std::uint8_t favourite_colour = 0;
     std::uint64_t group_id = 0;  // 0: none
     std::vector<int> round_strokes;    // per hole this round, 0: not played
+    bool round_started = false;
     // Where the server last accepted them, and when (server time).
     std::optional<net_motion> motion;
     std::int64_t motion_at = 0;
@@ -258,14 +297,17 @@ struct room_ball {
     glm::vec3 position{0.0f};
     int stroke_count = 0;
     bool in_cup = false;
+    ball_kind kind = ball_kind::scored;
+    int tee_mat = -1;
 };
 
 // A tee is in use while another player's ball waits on it: they teed up on
 // that hole and have not hit their tee shot. Nobody else tees up there until
 // then: the server's tee_up refuses it, and the client before asking.
-inline bool tee_in_use(const std::map<std::uint64_t, room_ball>& balls, const std::uint64_t me, const int hole) {
+inline bool tee_in_use(const std::map<std::uint64_t, room_ball>& balls, const std::uint64_t me, const int hole,
+    const bool practice_ground = false) {
     for (const auto& [account_id, ball] : balls) {
-        if (account_id != me && ball.hole == hole && ball.stroke_count == 0 && !ball.in_cup) {
+        if (account_id != me && (practice_ground ? ball.tee_mat : ball.hole) == hole && ball.stroke_count == 0 && !ball.in_cup && (ball.kind == ball_kind::scored || practice_ground)) {
             return true;
         }
     }
@@ -330,11 +372,30 @@ struct room_item_use {
 
 // The latest server data the game reads in online mode. Only ever filled from
 // the server (net_client, and receive_online_progress in game/mode_dispatch.h).
+// A persistent paired row, never an event to replay on subscription.
+struct room_dap {
+    std::uint64_t id = 0;
+    std::uint64_t first = 0;
+    std::uint64_t second = 0;
+    std::int64_t started_at = 0; // server UTC microseconds
+    glm::vec3 first_position{0.0f};
+    glm::vec3 second_position{0.0f};
+};
+
 struct online_view {
+    std::map<std::uint64_t, room_dap> daps;
     net_status status = net_status::signed_out;
     std::uint64_t account_id = 0;  // 0 until my account arrives
     std::string display_name;      // empty until claimed
+    // My player row's golfer, as the server keeps it with my account; nullopt
+    // until the row arrives. Read from my own subscription, never my room's.
+    std::optional<golfer_row> golfer;
+    std::optional<tee_reservation_info> reservation;
+    std::map<std::uint64_t, tee_slot_info> tee_slots;
+    std::string book_course_id;
+    bool book_ready = false; // complete scoped slot subscription + server book acknowledgement
     std::optional<online_room> room;
+    std::uint64_t ball_updates = 0;
     bool room_ready = false;  // the current room subscription has applied
     // Everyone in my room by account id, me included; their balls; how many
     // players each group has; their carts.

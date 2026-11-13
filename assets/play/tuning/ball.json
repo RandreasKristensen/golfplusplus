@@ -42,10 +42,11 @@
     "leniency": 2.25,
     "rim_radius_meters": 0.003,
     "rim_restitution": 0.4,
-    "rim_friction": 0.05,
+    "rim_grip": 0.5,
+    "wall_grip": 0.4,
     "liner_restitution": 0.2,
     "liner_friction": 0.3,
-    "flagstick_radius_meters": 0.0095,
+    "flagstick_radius_meters": 0.00635,
     "wrong_cup_drop_distance_meters": 0.3
   },
   "lies": {

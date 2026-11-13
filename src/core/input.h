@@ -52,11 +52,11 @@ struct input_state {
     button_state key_s;
     button_state key_d;
     button_state key_f;
+    button_state key_g;
     button_state key_r;
     button_state key_m;
     button_state key_1;
     button_state key_2;
-    button_state key_g;
     button_state key_k;
     button_state key_p;
     button_state key_t;  // also, with the profiler shown, scrubs the sky (core/sky_frame.h)

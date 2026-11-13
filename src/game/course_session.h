@@ -24,13 +24,10 @@ bool start_course(game_state& state, const course_definition& course);
 // while my ball is in a cup (state.ball in_cup), while it is in play on
 // another hole unless `give_up` (which gives that hole up, with no score),
 // or, online, while another player's ball waits on that tee (tee_in_use).
-// On a practice ground only the range and tee_in_use hold: the fresh ball
-// takes the place of mine wherever it is.
 bool tee_up(game_state& state, std::size_t hole_index, bool give_up);
 
 // Records my ball's hole's strokes; the ball stays in the cup, where it
-// dropped (lying_in_cup), until it is picked up. After the last hole the round is finished. On a practice
-// ground nothing is recorded: the ball only lies in its cup.
+// dropped (lying_in_cup), until it is picked up. The last hole finishes the round.
 void complete_current_hole(game_state& state);
 
 // Where a ball holed on `hole` lies: at `near` when that is down in the
@@ -41,8 +38,8 @@ glm::vec3 lying_in_cup(const game_state& state, std::size_t hole, const glm::vec
 // pocket, me where I stand. Online the server gives it up too.
 void give_up_hole(game_state& state);
 
-// After a finished round: a new round where I stand. Online the server starts
-// it there by itself.
+// Offline only: after a finished round, a new round where I stand. Online
+// a completed booking/card is retained until a replacement is booked at the hub.
 void start_next_round(game_state& state);
 
 // My ball is in its cup within player.ball_interact_radius (XZ) of me.

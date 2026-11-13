@@ -9,7 +9,6 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub struct GolfGroupRow {
     pub group_id: u64,
     pub room_id: u64,
-    pub leader: u64,
     pub member_count: i32,
 }
 
@@ -23,7 +22,6 @@ impl __sdk::InModule for GolfGroupRow {
 pub struct GolfGroupRowCols {
     pub group_id: __sdk::__query_builder::Col<GolfGroupRow, u64>,
     pub room_id: __sdk::__query_builder::Col<GolfGroupRow, u64>,
-    pub leader: __sdk::__query_builder::Col<GolfGroupRow, u64>,
     pub member_count: __sdk::__query_builder::Col<GolfGroupRow, i32>,
 }
 
@@ -33,7 +31,6 @@ impl __sdk::__query_builder::HasCols for GolfGroupRow {
         GolfGroupRowCols {
             group_id: __sdk::__query_builder::Col::new(table_name, "group_id"),
             room_id: __sdk::__query_builder::Col::new(table_name, "room_id"),
-            leader: __sdk::__query_builder::Col::new(table_name, "leader"),
             member_count: __sdk::__query_builder::Col::new(table_name, "member_count"),
         }
     }

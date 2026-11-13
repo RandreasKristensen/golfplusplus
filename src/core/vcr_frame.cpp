@@ -51,7 +51,7 @@ render_vcr make_render_vcr(const text_assets& text, const game_state& game, cons
     vcr.show_offline = !signals.in_menu && !signals.touring && !is_online(game);
     if (vcr.show_datestamp) {
         vcr.datestamp = make_datestamp(text, course_game_day(game, controls, local_unix_ms),
-                                       static_cast<double>(game.course.sky.utc_offset_hours));
+                                       static_cast<double>(game.place.sky.utc_offset_hours));
     }
     return vcr;
 }

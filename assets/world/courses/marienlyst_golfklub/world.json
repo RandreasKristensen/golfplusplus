@@ -103,6 +103,44 @@
     },
     {
       "id": "cart_path_002",
+      "source": "bus_stop",
+      "surface": "gravel",
+      "width": 3.0,
+      "polyline": [
+        [
+          188.62,
+          0.0,
+          -25.04
+        ],
+        [
+          292.56,
+          0.0,
+          78.9
+        ],
+        [
+          293.56,
+          0.0,
+          78.96
+        ],
+        [
+          320.56,
+          0.0,
+          78.97
+        ],
+        [
+          321.28,
+          0.0,
+          79.66
+        ],
+        [
+          350.62,
+          0.0,
+          110.96
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_003",
       "source": "aerial",
       "surface": "gravel",
       "width": 3.0,
@@ -222,6 +260,14 @@
       "content_id": "clubhouse_notice"
     }
   ],
+  "bus_stop": {
+    "position": [
+      343.75,
+      0.0,
+      114.57
+    ],
+    "heading": 2.9324
+  },
   "ground": {
     "origin": [
       -240.38,

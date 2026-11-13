@@ -171,9 +171,10 @@ shot_result room_shot_result(const game_state& state, const room_shot& shot) {
             flags_in[static_cast<std::size_t>(out)] = false;
         }
     }
-    const shot_course course = make_shot_course(state.area, static_cast<std::size_t>(std::max(0, shot.hole)),
-                                                course_weather_at(state, shot.record.setup.shot_at), state.course, flags_in,
+    shot_course course = make_shot_course(state.area, static_cast<std::size_t>(std::max(0, shot.hole)),
+                                                course_weather_at(state, shot.record.setup.shot_at), state.place, flags_in,
                                                 state.tuning);
+    course.practice = state.kind == place_kind::hub;
     return simulate_struck_shot(shot.record, shot.golfer, course, state.tuning, state.clubs);
 }
 
@@ -185,7 +186,9 @@ void start_remote_shot(game_state& state, const room_shot& shot) {
     if (avatar != state.remote_avatars.end() && player != state.online.players.end()) {
         avatar->second.hit_motion_at = player->second.motion_at;
     }
-    if (shot.hole < 0 || static_cast<std::size_t>(shot.hole) >= state.holes.size()) {
+    const bool valid_hole = state.kind == place_kind::hub ? shot.hole == -1
+        : shot.hole >= 0 && static_cast<std::size_t>(shot.hole) < state.holes.size();
+    if (!valid_hole) {
         return;
     }
     const shot_setup& setup = shot.record.setup;

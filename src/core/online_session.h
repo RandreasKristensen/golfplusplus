@@ -4,8 +4,8 @@
 // menus how the connection is (online_menu_status), carries out what they
 // ask (online_request), and keeps an online round in its room. After a
 // silent reconnect the server has ended the room state, so the session joins
-// the course again and app restarts the round where the server puts the
-// player: hole 1's start, a fresh round. Owned by app; built only with
+// the hub again; app adopts the complete snapshot before presenting it.
+// Intentional bus travel uses the same snapshot boundary. Owned by app; built only with
 // online play (tests drive it through the fake bridge).
 
 #include "core/startup_flow.h"
@@ -20,7 +20,7 @@
 // What an online round has to do this frame.
 enum class online_round_event {
     none,
-    restart,  // back in the room after reconnecting: start the course over
+    restart,  // adopt a complete destination snapshot after travel/reconnect
     lost      // the connection or the room is gone: back to the menus
 };
 

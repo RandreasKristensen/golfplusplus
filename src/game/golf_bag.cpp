@@ -1,6 +1,7 @@
 #include "game/golf_bag.h"
 
 #include "game/bag_handling.h"
+#include "game/hub_flow.h"
 #include "game/golf_cart.h"
 #include "game/mode_dispatch.h"
 #include "game/text_ids.h"

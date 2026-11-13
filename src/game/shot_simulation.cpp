@@ -99,7 +99,7 @@ air_state shot_air(const shot_course& course, const game_tuning& tuning) {
 }
 
 shot_course make_shot_course(const play_area& area, const std::size_t hole, const weather_state& weather,
-                             const course_definition& course, const std::vector<bool>& flags_in,
+                             const place_definition& course, const std::vector<bool>& flags_in,
                              const game_tuning& tuning) {
     const glm::vec3 pin = hole < area.cups.size() ? area.cups[hole].centre : glm::vec3(0.0f);
     shot_course made{area, shot_hole{pin, hole}, weather, course.air.elevation_meters, course.green_stimp_feet, {}, std::nullopt, 0};
@@ -233,12 +233,13 @@ shot_step step_shot(const ball_state& ball,
     step.ball = step_ball_flight(ball, wind, shot_air(course, tuning), ball_in_water(ball, ground), dt, tuning.physics);
     const terrain_sample after = sample_area(area, step.ball.position);
     const std::optional<std::size_t> over = cup_over(step.ball, area.cups);
+    const float green_speed = after.green_stimp_feet > 0 ? after.green_stimp_feet : course.green_stimp_feet;
     const bool on_path = after.top_solid >= 0 && area.solids[static_cast<std::size_t>(after.top_solid)].kind == solid_kind::path;
     if (after.material == terrain_material::water && !on_path) {
         step.ball = resolve_terrain_collision(step.ball, after, rules.water_restitution, rules.water_friction, dt);
     } else if (!over) {
         const turf surface = on_path ? path_turf(area.solids[static_cast<std::size_t>(after.top_solid)], tuning)
-                                     : turf_for(after.material, weather.wetness, course.green_stimp_feet, tuning);
+                                     : turf_for(after.material, weather.wetness, green_speed, tuning);
         const turf_step met = turf_contact(step.ball, after, surface, rules.settle_speed, dt);
         step.ball = met.ball;
         step.landed = met.bounced && !ball_is_grounded(ball, ground);
@@ -256,7 +257,7 @@ shot_step step_shot(const ball_state& ball,
                 const glm::vec3 level = horizontal(step.ball.velocity);
                 const float speed = glm::length(level);
                 if (speed > 0.0f) {
-                    const float lost = std::min(speed, rolling_deceleration(speed, course.green_stimp_feet) * dt /
+                    const float lost = std::min(speed, rolling_deceleration(speed, green_speed) * dt /
                                                            tuning.scale.meters_per_world_unit);
                     step.ball.velocity -= level * (lost / speed);
                 }
@@ -365,7 +366,7 @@ shot_result simulate_ball(const ball_state& launched, const shot_course& course,
     }
 
     result.duration = static_cast<float>(steps) * shot_step_seconds;
-    result.holed = resting_cup && *resting_cup == course.hole.index;
+    result.holed = resting_cup && (course.practice || *resting_cup == course.hole.index);
     result.rest_position = result.lost ? launched.position : ball.position;
     result.penalty_strokes = (result.lost ? 1 : 0) + (hit_ball_on_green ? 2 : 0);
     if (resting_cup && !result.holed) {

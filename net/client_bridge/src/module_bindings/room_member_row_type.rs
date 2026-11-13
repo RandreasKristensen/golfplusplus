@@ -11,6 +11,7 @@ pub struct RoomMemberRow {
     pub room_id: u64,
     pub group_id: u64,
     pub round_strokes: Vec<i32>,
+    pub round_started: bool,
 }
 
 impl __sdk::InModule for RoomMemberRow {
@@ -25,6 +26,7 @@ pub struct RoomMemberRowCols {
     pub room_id: __sdk::__query_builder::Col<RoomMemberRow, u64>,
     pub group_id: __sdk::__query_builder::Col<RoomMemberRow, u64>,
     pub round_strokes: __sdk::__query_builder::Col<RoomMemberRow, Vec<i32>>,
+    pub round_started: __sdk::__query_builder::Col<RoomMemberRow, bool>,
 }
 
 impl __sdk::__query_builder::HasCols for RoomMemberRow {
@@ -35,6 +37,7 @@ impl __sdk::__query_builder::HasCols for RoomMemberRow {
             room_id: __sdk::__query_builder::Col::new(table_name, "room_id"),
             group_id: __sdk::__query_builder::Col::new(table_name, "group_id"),
             round_strokes: __sdk::__query_builder::Col::new(table_name, "round_strokes"),
+            round_started: __sdk::__query_builder::Col::new(table_name, "round_started"),
         }
     }
 }

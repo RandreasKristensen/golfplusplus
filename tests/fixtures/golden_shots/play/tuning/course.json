@@ -27,8 +27,11 @@
     "post_radius": 0.06
   },
   "way_sign": {
-    "green_reach": 50.0,
+    "path_reach": 50.0,
     "green_offset": 4.0,
+    "behind_reach": 20.0,
+    "behind_spread": 60.0,
+    "tee_clearance": 15.0,
     "path_offset": 1.2,
     "junction_lead": 6.0,
     "board_width": 1.0,

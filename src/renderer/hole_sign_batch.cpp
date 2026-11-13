@@ -4,13 +4,19 @@
 #include "renderer/hole_sign_face.h"
 #include "renderer/overlay_raster.h"
 
+#include "game/hub_scene.h"
+
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <utility>
 
 #include <glm/geometric.hpp>
 
 namespace {
+// How far a prop board's face stands off the model's board, in world units.
+constexpr float prop_board_proud = 0.01f;
+
 // One rectangle facing `normal`: centre +/- `u` +/- `v`, counter-clockwise
 // seen from the front, with uv (0, 0) at centre - u - v.
 void append_rect(std::vector<hole_sign_vertex>& vertices,
@@ -74,20 +80,24 @@ void append_triangle(std::vector<hole_sign_vertex>& vertices, const glm::vec3& a
     }
 }
 
-std::vector<hole_sign_source> hole_sign_sources(const play_area& area, const std::vector<hole_sign_text>& texts) {
+std::vector<hole_sign_source> hole_sign_sources(const play_area& area, const std::vector<hole_sign_text>& texts,
+                                                const std::vector<prop_board>& boards) {
     std::vector<hole_sign_source> sources;
     for (std::size_t i = 0; i < area.signs.size() && i < texts.size(); ++i) {
-        sources.push_back(hole_sign_source{texts[i], area.signs[i].board_center});
+        sources.push_back(hole_sign_source{texts[i], area.signs[i].board_center, {}});
     }
     for (const way_sign& sign : area.way_signs) {
-        sources.push_back(hole_sign_source{hole_sign_text{static_cast<int>(sign.to_hole) + 1, 0, 0, false}, sign.board_center});
+        sources.push_back(hole_sign_source{hole_sign_text{static_cast<int>(sign.to_hole) + 1, 0, 0, false}, sign.board_center, {}});
+    }
+    for (const prop_board& board : boards) {
+        sources.push_back(hole_sign_source{hole_sign_text{}, board.center, board.label});
     }
     return sources;
 }
 
 bool same_source(const hole_sign_source& a, const hole_sign_source& b) {
     return a.text.number == b.text.number && a.text.par == b.text.par && a.text.meters == b.text.meters &&
-        a.text.practice == b.text.practice &&
+        a.text.practice == b.text.practice && a.label == b.label &&
         a.board_center == b.board_center;
 }
 }
@@ -95,16 +105,34 @@ bool same_source(const hole_sign_source& a, const hole_sign_source& b) {
 bool refresh_render_hole_signs(render_hole_signs& signs,
                                const play_area& area,
                                const std::vector<hole_sign_text>& texts,
+                               const std::vector<prop_board>& boards,
                                const text_assets& text,
                                const scene_colors& colors,
                                const prop_model& model,
                                const std::uint64_t revision) {
-    const std::vector<hole_sign_source> sources = hole_sign_sources(area, texts);
+    const std::vector<hole_sign_source> sources = hole_sign_sources(area, texts, boards);
     if (std::equal(sources.begin(), sources.end(), signs.sources.begin(), signs.sources.end(), same_source)) {
         return false;
     }
-    signs = build_render_hole_signs(area, texts, text, colors, model, revision);
+    signs = build_render_hole_signs(area, texts, boards, text, colors, model, revision);
     return true;
+}
+
+std::vector<prop_board> prop_boards(const play_area& area, const prop_catalog& props, const std::vector<std::string>& labels) {
+    std::vector<prop_board> boards;
+    for (std::size_t i = 0; i < area.props.size() && i < labels.size(); ++i) {
+        const auto found = props.find(area.props[i].model);
+        if (labels[i].empty() || found == props.end() || found->second.points.count("board_center") == 0) {
+            continue;
+        }
+        const static_prop& placed = area.props[i];
+        const prop_model& model = found->second;
+        const glm::vec3 normal = prop_point(placed, model.point("board_normal")) - placed.position;
+        boards.push_back(prop_board{prop_point(placed, model.point("board_center")), safe_normalize(normal, world_up),
+                                    glm::vec2(model.point("board_size")) * 0.5f,
+                                    model.color(model.colors.count("board") != 0 ? "board" : "paper"), labels[i]});
+    }
+    return boards;
 }
 
 void append_hole_sign_model(std::vector<hole_sign_vertex>& vertices, const hole_sign& sign, const prop_model& model) {
@@ -143,13 +171,14 @@ void append_way_sign_model(std::vector<hole_sign_vertex>& vertices, const way_si
 
 render_hole_signs build_render_hole_signs(const play_area& area,
                                           const std::vector<hole_sign_text>& texts,
+                                          const std::vector<prop_board>& boards,
                                           const text_assets& text,
                                           const scene_colors& colors,
                                           const prop_model& model,
                                           const std::uint64_t revision) {
     render_hole_signs signs;
     signs.revision = revision;
-    signs.sources = hole_sign_sources(area, texts);
+    signs.sources = hole_sign_sources(area, texts, boards);
     overlay_batch batch;
     for (std::size_t i = 0; i < area.signs.size() && i < texts.size(); ++i) {
         const hole_sign& sign = area.signs[i];
@@ -174,6 +203,24 @@ render_hole_signs build_render_hole_signs(const play_area& area,
         drawn.face = rasterize_overlay_batch(batch, model.color("board"));
         drawn.first_vertex = signs.vertices.size();
         append_way_sign_model(signs.vertices, sign, model);
+        drawn.vertex_count = signs.vertices.size() - drawn.first_vertex;
+        signs.signs.push_back(std::move(drawn));
+    }
+    for (const prop_board& board : boards) {
+        const float aspect = board.half_size.x / std::max(board.half_size.y, 0.001f);
+        clear_overlay_batch(batch);
+        draw_prop_board_face(batch, text, board.label,
+                             std::max(1, static_cast<int>(std::lround(static_cast<float>(prop_board_face_height) * aspect))));
+        signs.truncated_text_count += batch.truncated_text_count;
+
+        render_hole_sign drawn;
+        drawn.face = rasterize_overlay_batch(batch, board.paint);
+        drawn.first_vertex = signs.vertices.size();
+        // Read by someone facing the board; just proud of the model's own board.
+        const glm::vec3 right = safe_normalize(glm::cross(-board.normal, world_up), glm::vec3(1.0f, 0.0f, 0.0f));
+        const glm::vec3 up = glm::cross(right, -board.normal);
+        append_rect(signs.vertices, board.center + board.normal * prop_board_proud, board.normal, right * board.half_size.x,
+                    up * board.half_size.y, glm::vec3(1.0f), true);
         drawn.vertex_count = signs.vertices.size() - drawn.first_vertex;
         signs.signs.push_back(std::move(drawn));
     }

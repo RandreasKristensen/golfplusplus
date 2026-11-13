@@ -23,6 +23,10 @@ struct shot_number {
 
 // `record` struck by `golfer` from `lie`, a putt on greens of
 // `green_stimp_feet`; none for an unknown club.
+// How big a popped-up number is at `age` seconds, as a share of its box:
+// start_size, shrinking evenly to end_size over its lifetime.
+float shot_number_size(const shot_number_tuning& tuning, float age);
+
 std::optional<shot_number> shot_number_for(const shot_record& record, const golfer_profile& golfer, ball_lie lie,
                                            float green_stimp_feet, const game_tuning& tuning,
                                            const std::vector<club_definition>& clubs);

@@ -16,3 +16,6 @@ inline constexpr float default_cart_road_width = 4.0f;
 std::optional<course_world_definition> parse_course_world_from_text(const std::string& text,
                                                                     const course_definition& course);
 
+
+// Shared land/props/path loader. Hubs supply no course or hole starts.
+std::optional<course_world_definition> parse_world_from_text(const std::string& text, const course_definition* course = nullptr);

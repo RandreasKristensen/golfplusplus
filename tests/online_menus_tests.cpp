@@ -179,7 +179,7 @@ TEST_CASE("name entry claims the typed name, shows refusals inline and moves on 
     CHECK(menu.field->value == "ANN A");
 
     update(state, input_state{}, signed_in_as("ANN A"));
-    CHECK(state.flow == startup_flow::online_course_picker);
+    CHECK(state.flow == startup_flow::joining);
     CHECK(!wants_text_input(state));
 }
 
@@ -231,57 +231,35 @@ TEST_CASE("a link code from another login switches to that account") {
     CHECK(state.flow == startup_flow::link_code_entry);
 
     update(state, input_state{}, signed_in_as("BOB", 9));
-    CHECK(state.flow == startup_flow::online_course_picker);
+    CHECK(state.flow == startup_flow::joining);
 }
 
-TEST_CASE("joining a course starts it online once the room is there") {
+TEST_CASE("online entry sends only a hub join and waits for the complete hub room") {
     startup_flow_state state;
     const online_menu_status named = signed_in_as("ANNA");
-    update(state, enter(), named);
-    REQUIRE(state.flow == startup_flow::online_course_picker);
-
-    startup_menu_result result = update(state, enter(), named);
-    REQUIRE(state.flow == startup_flow::transport_picker);
-    result = update(state, enter(), named);
-    CHECK(requested(result, online_request_type::join_course, "first"));
-    CHECK(state.flow == startup_flow::joining);
-    CHECK(render(state, named).message == "JOINING First...");
-
-    result = update(state, input_state{}, named);
-    CHECK(result.action == startup_action::none);
-
+    auto result = update(state, enter(), named);
+    REQUIRE(state.flow == startup_flow::joining);
+    CHECK(requested(result, online_request_type::join_course, online_hub_course));
+    CHECK(update(state, input_state{}, named).action == startup_action::none);
     online_menu_status in_room = named;
-    in_room.room_course_id = "first";
+    in_room.room_course_id = online_hub_course;
     result = update(state, input_state{}, in_room);
     CHECK(result.action == startup_action::start_course);
     CHECK(result.play == play_mode::online);
-    CHECK(result.course.id == "first");
 }
-
-TEST_CASE("a refused join goes back to the course picker and says why") {
+TEST_CASE("a refused or cancelled hub entry returns to main") {
     startup_flow_state state;
-    const online_menu_status named = signed_in_as("ANNA");
+    const auto named = signed_in_as("ANNA");
     update(state, enter(), named);
-    update(state, enter(), named);
-    update(state, enter(), named);
-    REQUIRE(state.flow == startup_flow::joining);
-
-    online_menu_status refused = named;
+    auto refused = named;
     refused.reducer_failures = {reducer_failure{"join_course", "unknown_course"}};
     update(state, input_state{}, refused);
-    CHECK(state.flow == startup_flow::online_course_picker);
-    const render_startup_menu menu = render(state, named);
-    CHECK(menu.message == "NO SUCH COURSE ON THIS SERVER");
-
-    // Cancelling a join leaves the room it may have got.
+    CHECK(state.flow == startup_flow::main);
     update(state, enter(), named);
-    update(state, enter(), named);
-    REQUIRE(state.flow == startup_flow::joining);
-    input_state escape;
-    escape.escape.pressed = true;
-    const startup_menu_result result = update(state, escape, named);
+    input_state escape; escape.escape.pressed = true;
+    const auto result = update(state, escape, named);
     CHECK(requested(result, online_request_type::leave_room));
-    CHECK(state.flow == startup_flow::online_course_picker);
+    CHECK(state.flow == startup_flow::main);
 }
 
 TEST_CASE("losing the connection on an online screen goes back to signing in") {

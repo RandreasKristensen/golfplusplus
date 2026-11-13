@@ -2,9 +2,13 @@
 
 #include "fake_stdb_bridge.h"
 #include "game/mode_dispatch.h"
+#include "game/hub_ball.h"
+#include "game/server_errors.h"
+#include "game/online_play.h"
 #include "game/net_types.h"
 #include "game/progression.h"
 #include "game/remote_players.h"
+#include "game/scorecard.h"
 #include "net/net_client.h"
 #include "net/online_config.h"
 
@@ -615,6 +619,35 @@ TEST_CASE("linking this login to another account never mixes their progress") {
     CHECK(state.xp_drops.empty());
 }
 
+TEST_CASE("my golfer comes from my own player row, which my room's subscription never inserts again") {
+    game_state state = started_hole();
+    state.play = play_mode::online;
+    net_client client = connected_client(state, 42);
+    const std::uint8_t fade = static_cast<std::uint8_t>(natural_shape_index(natural_shape::fade));
+    stdb_row row{};
+    row.player = stdb_player{42, fake_text("ME"), true, static_cast<std::uint8_t>(handedness::left), fade, 3};
+    queue_event(row_event(STDB_TABLE_PLAYER, STDB_ROW_INSERT, row));
+    row.player = stdb_player{43, fake_text("OTHER"), true, 0, natural_shape_unset, 0};
+    queue_event(row_event(STDB_TABLE_PLAYER, STDB_ROW_INSERT, row));
+    client.update(state);
+    REQUIRE(state.online.golfer.has_value());
+    CHECK((*state.online.golfer == golfer_row{handedness::left, fade, 3}));
+
+    // Into a room: my row is already held, so no insert of it follows.
+    queue_event(member_row(42, 7, STDB_ROW_INSERT));
+    queue_event(applied(5));
+    client.update(state);
+    REQUIRE(state.online.room_ready);
+    CHECK(natural_shape_picked(state));
+    CHECK(my_golfer(state).natural == natural_shape::fade);
+
+    stdb_event lost = fake_event(STDB_EVENT_DISCONNECTED);
+    lost.retrying = true;
+    queue_event(lost);
+    client.update(state);
+    CHECK(!state.online.golfer.has_value());
+}
+
 TEST_CASE("my room's rows become its players, balls, carts, loadouts, groups, shots and item uses") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
@@ -632,7 +665,7 @@ TEST_CASE("my room's rows become its players, balls, carts, loadouts, groups, sh
     const std::string fuzzy_dice = "fuzzy_dice";
     const std::vector<std::int32_t> strokes{4, 0};
     stdb_row row{};
-    row.room_member = stdb_room_member{43, 7, 9, strokes.data(), strokes.size()};
+    row.room_member = stdb_room_member{43, 7, 9, strokes.data(), strokes.size(), false};
     queue_event(row_event(STDB_TABLE_ROOM_MEMBER, STDB_ROW_INSERT, row));
     row = stdb_row{};
     row.player = stdb_player{42, fake_text(me), true, 0};
@@ -647,13 +680,13 @@ TEST_CASE("my room's rows become its players, balls, carts, loadouts, groups, sh
     row.avatar_motion = stdb_avatar_motion{42, 7, stdb_motion{0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0}, 9000000000};
     queue_event(row_event(STDB_TABLE_AVATAR_MOTION, STDB_ROW_INSERT, row));
     row = stdb_row{};
-    row.ball = stdb_ball{43, 7, 1, 4.0f, 5.0f, 6.0f, 2, 1500, true};
+    row.ball = stdb_ball{43, 7, 1, 4.0f, 5.0f, 6.0f, 2, 1500, true, false};
     queue_event(row_event(STDB_TABLE_BALL, STDB_ROW_INSERT, row));
     row = stdb_row{};
     row.golf_cart = stdb_golf_cart{43, 7, 10.0f, 1.0f, -3.0f, 0.75f, 42, static_cast<std::uint8_t>(cart_condition::on_left_side)};
     queue_event(row_event(STDB_TABLE_GOLF_CART, STDB_ROW_INSERT, row));
     row = stdb_row{};
-    row.golf_group = stdb_golf_group{9, 7, 43, 1};
+    row.golf_group = stdb_golf_group{9, 7, 1};
     queue_event(row_event(STDB_TABLE_GOLF_GROUP, STDB_ROW_INSERT, row));
     row = stdb_row{};
     const std::int32_t flags_out[] = {3};
@@ -836,26 +869,23 @@ TEST_CASE("stepping into and out of another's cart reaches its reducers, whose r
     CHECK(state.online.refusals[0].reducer == reducer_board_cart);
 }
 
-TEST_CASE("group and give-up commands reach their reducers") {
+TEST_CASE("booking, bus, start, group leave and give-up reach their reducers") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
-    for (const net_command_type type : {net_command_type::create_group, net_command_type::join_group,
-                                        net_command_type::leave_group, net_command_type::give_up_hole}) {
+    for (const auto type : {net_command_type::open_tee_book, net_command_type::book_tee, net_command_type::cancel_tee,
+        net_command_type::take_bus, net_command_type::return_to_hub, net_command_type::start_booked_round,
+        net_command_type::leave_group, net_command_type::give_up_hole}) {
         net_command command;
         command.type = type;
-        command.group_id = 9;
+        command.reservation_id = 9;
         state.net_commands.push_back(command);
     }
     fake_bridge().calls.clear();
     client.update(state);
-    const std::vector<std::string> names = fake_bridge().call_names();
-    CHECK(std::find(names.begin(), names.end(), "stdb_create_group") != names.end());
-    CHECK(std::find(names.begin(), names.end(), "stdb_leave_group") != names.end());
-    CHECK(std::find(names.begin(), names.end(), "stdb_give_up_hole") != names.end());
-    for (const fake_stdb_bridge::call& call : fake_bridge().calls) {
-        if (call.name == "stdb_join_group") {
-            CHECK(call.number == 9);
-        }
+    const auto names = fake_bridge().call_names();
+    for (const auto name : {"stdb_open_tee_book", "stdb_book_tee", "stdb_cancel_tee", "stdb_take_bus", "stdb_return_to_hub",
+        "stdb_start_booked_round", "stdb_leave_group", "stdb_give_up_hole"}) {
+        CHECK(std::find(names.begin(), names.end(), name) != names.end());
     }
 }
 
@@ -1052,4 +1082,269 @@ TEST_CASE("sync: a bridge send failure never marks a motion sent or delays its r
     client.update(state);
     CHECK(state.motion_sync.last_sent.has_value());
     CHECK(state.motion_sync.history.size() == 1);
+}
+
+
+TEST_CASE("paced and crouched fixed steps survive the network bridge") {
+    game_state state = started_hole();
+    net_client client = connected_client(state, 42);
+    state.play = play_mode::online;
+    fake_bridge().calls.clear();
+    net_command command;
+    command.type = net_command_type::motion;
+    command.first_step = 51;
+    command.last_step = 58;
+    for (const int style : {0, 1, 2, 3}) {
+        move_input input;
+        input.forward = -1;
+        input.side = 1;
+        input.paced = (style & 1) != 0;
+        input.crouched = (style & 2) != 0;
+        input.yaw = quantise_yaw(0.5f);
+        command.runs.push_back(move_run{input, 2});
+    }
+    state.net_commands.push_back(command);
+    client.update(state);
+    REQUIRE(fake_bridge().calls.size() == 1U);
+    const auto& call = fake_bridge().calls.front();
+    CHECK(call.name == "stdb_update_motion");
+    CHECK(call.first_step == 51);
+    REQUIRE(call.runs.size() == command.runs.size());
+    for (std::size_t i = 0; i < call.runs.size(); ++i) {
+        CHECK(call.runs[i].paced == command.runs[i].input.paced);
+        CHECK(call.runs[i].crouched == command.runs[i].input.crouched);
+        CHECK(call.runs[i].steps == 2);
+        CHECK(call.runs[i].forward == -1);
+        CHECK(call.runs[i].side == 1);
+        CHECK(call.runs[i].yaw == command.runs[i].input.yaw);
+    }
+}
+
+TEST_CASE("scorecard: room snapshots preserve my account name and replace previous room scores") {
+    game_state state = started_game(fixture_hub_course());
+    state.play = play_mode::online;
+    net_client client = connected_client(state, 42);
+    state.round = complete_hole(*state.round, 0, 4);
+    REQUIRE(tee_up(state, 1, false));
+    state.ball->strokes = 2;
+
+    const std::string name = "ME";
+    const std::string other = "OTHER";
+    stdb_row row{};
+    row.player = stdb_player{42, fake_text(name), true, 0};
+    queue_event(row_event(STDB_TABLE_MY_ACCOUNT, STDB_ROW_UPDATE, row));
+    // The self player row can precede the room subscription; its duplicate
+    // in the room join is not guaranteed to arrive again.
+    queue_event(row_event(STDB_TABLE_PLAYER, STDB_ROW_INSERT, row));
+    row = stdb_row{};
+    const std::vector<std::int32_t> my_scores{4, 0, 0};
+    row.room_member = stdb_room_member{42, 7, 9, my_scores.data(), my_scores.size(), true};
+    queue_event(row_event(STDB_TABLE_ROOM_MEMBER, STDB_ROW_INSERT, row));
+    const std::vector<std::int32_t> scored{4, 0, 3};
+    row.room_member = stdb_room_member{43, 7, 9, scored.data(), scored.size(), false};
+    queue_event(row_event(STDB_TABLE_ROOM_MEMBER, STDB_ROW_INSERT, row));
+    row = stdb_row{};
+    row.player = stdb_player{43, fake_text(other), true, 0};
+    queue_event(row_event(STDB_TABLE_PLAYER, STDB_ROW_INSERT, row));
+    row = stdb_row{}; row.ball.account_id = 42; row.ball.room_id = 7; row.ball.hole = 1;
+    row.ball.stroke_count = 2;
+    queue_event(row_event(STDB_TABLE_BALL, STDB_ROW_INSERT, row));
+    queue_event(applied(5));
+    client.update(state);
+    REQUIRE(state.online.room_ready);
+    adopt_online_arrival(state);
+    scorecard_data card = build_scorecard_data(state, shipped_text_assets().strings);
+    REQUIRE(card.players.size() == 2U);
+    CHECK(card.players[0].name == "ME");
+    CHECK(card.players[0].total_strokes == 4);
+    REQUIRE(card.players[0].current_hole);
+    CHECK(card.players[0].current_hole->index == 1U);
+    CHECK(card.players[0].current_hole->strokes == 2);
+    CHECK(card.players[1].total_strokes == 7);
+
+    row = stdb_row{};
+    row.room_member = stdb_room_member{42, 8, 9, nullptr, 0, false};
+    queue_event(row_event(STDB_TABLE_ROOM_MEMBER, STDB_ROW_UPDATE, row));
+    const std::vector<std::int32_t> blank(3, 0);
+    row.room_member = stdb_room_member{43, 8, 9, blank.data(), blank.size(), false};
+    queue_event(row_event(STDB_TABLE_ROOM_MEMBER, STDB_ROW_INSERT, row));
+    // A late row from the previous subscription cannot fill this card.
+    row.room_member = stdb_room_member{43, 7, 9, scored.data(), scored.size(), false};
+    queue_event(row_event(STDB_TABLE_ROOM_MEMBER, STDB_ROW_UPDATE, row));
+    client.update(state);
+    CHECK(!state.online.room_ready);
+    CHECK(state.online.players.empty());
+    queue_event(applied(6));
+    client.update(state);
+    REQUIRE(state.online.room_ready);
+    card = build_scorecard_data(state, shipped_text_assets().strings);
+    REQUIRE(card.players.size() == 2U);
+    CHECK(card.players[0].name == "ME");
+    CHECK(card.players[1].total_strokes == 0);
+    CHECK((card.players[1].strokes == std::vector<int>{0, 0, 0}));
+}
+
+TEST_CASE("tee book rows: scoped views, full snapshot and refresh acknowledgement") {
+    game_state state = started_hole();
+    auto client = connected_client(state, 42);
+    const auto& queries = fake_bridge().subscriptions.at(3);
+    CHECK(any_query_contains(queries, "FROM my_tee_reservation"));
+    CHECK(any_query_contains(queries, "FROM my_tee_slots"));
+    CHECK(any_query_contains(queries, "FROM my_tee_book_status"));
+    CHECK(!(any_query_contains(queries, "FROM tee_slot")));
+    CHECK(!(any_query_contains(queries, "FROM tee_reservation")));
+    net_command open;
+    open.type = net_command_type::open_tee_book;
+    open.course_id = "first";
+    state.net_commands.push_back(open);
+    client.update(state);
+    stdb_row slot{};
+    slot.tee_slot = stdb_tee_slot{2, fake_text("first"), 1, 7, 1800000000, 3};
+    queue_event(row_event(STDB_TABLE_TEE_SLOT, STDB_ROW_INSERT, slot));
+    stdb_row status{};
+    status.tee_book_status = stdb_tee_book_status{fake_text("first"), 1000000000};
+    queue_event(row_event(STDB_TABLE_MY_TEE_BOOK_STATUS, STDB_ROW_INSERT, status));
+    client.update(state);
+    CHECK(!(state.online.book_ready));
+    CHECK(state.online.tee_slots.empty()); // self subscription not yet complete
+    queue_event(applied(4));
+    client.update(state);
+    REQUIRE(state.online.book_ready);
+    REQUIRE(state.online.tee_slots.size() == 1);
+    CHECK(state.online.tee_slots.at(2).booked_count == 3);
+    CHECK(state.online.server_now >= 1000000000);
+    state.net_commands.push_back(open);
+    client.update(state);
+    CHECK(!(state.online.book_ready));
+    queue_event(row_event(STDB_TABLE_MY_TEE_BOOK_STATUS, STDB_ROW_INSERT, status)); // stale acknowledgement
+    client.update(state);
+    CHECK(!(state.online.book_ready));
+    status.tee_book_status.server_now += 100;
+    queue_event(row_event(STDB_TABLE_MY_TEE_BOOK_STATUS, STDB_ROW_INSERT, status));
+    client.update(state);
+    CHECK(state.online.book_ready);
+}
+TEST_CASE("tee reservation rows: replacement eviction, completion, teardown and reconnect") {
+    game_state state = started_hole();
+    auto client = connected_client(state, 42);
+    stdb_row booking{};
+    booking.tee_reservation = stdb_tee_reservation{9, 3, 0, true, false, 1, fake_text("first"), 1, 7, 1800000000};
+    queue_event(row_event(STDB_TABLE_MY_TEE_RESERVATION, STDB_ROW_INSERT, booking));
+    client.update(state);
+    CHECK(!(state.online.reservation));
+    queue_event(applied(4));
+    client.update(state);
+    REQUIRE(state.online.reservation);
+    CHECK(state.online.reservation->course_id == "first");
+    CHECK(state.online.reservation->scheduled_at == 1800000000);
+    auto changed = booking;
+    changed.tee_reservation.revision = 2; // completed score update, otherwise same visible status
+    queue_event(row_event(STDB_TABLE_MY_TEE_RESERVATION, STDB_ROW_INSERT, changed));
+    queue_event(row_event(STDB_TABLE_MY_TEE_RESERVATION, STDB_ROW_DELETE, booking));
+    client.update(state);
+    REQUIRE(state.online.reservation);
+    CHECK(state.online.reservation->revision == 2);
+    changed.tee_reservation.completed = true;
+    changed.tee_reservation.revision = 3;
+    queue_event(row_event(STDB_TABLE_MY_TEE_RESERVATION, STDB_ROW_INSERT, changed));
+    client.update(state);
+    REQUIRE(state.online.reservation);
+    CHECK(state.online.reservation->completed);
+    queue_event(fake_event(STDB_EVENT_DISCONNECTED));
+    client.update(state);
+    CHECK(!(state.online.reservation));
+    CHECK(state.online.tee_slots.empty());
+    net_command bus;
+    bus.type = net_command_type::take_bus;
+    bus.reservation_id = 9;
+    state.net_commands.push_back(bus);
+    fake_bridge().calls.clear();
+    client.update(state);
+    CHECK(state.net_commands.empty());
+    const auto calls = fake_bridge().call_names();
+    CHECK(std::find(calls.begin(), calls.end(), "stdb_take_bus") == calls.end());
+    // Reconnect must handshake and await a new complete snapshot; no bus replay.
+    queue_event(fake_event(STDB_EVENT_CONNECTED));
+    queue_event(server_protocol_event(protocol_version));
+    queue_event(server_content_event(shipped_content().content_hash));
+    stdb_row account{};
+    account.player.account_id = 42;
+    queue_event(row_event(STDB_TABLE_MY_ACCOUNT, STDB_ROW_INSERT, account));
+    queue_event(row_event(STDB_TABLE_MY_TEE_RESERVATION, STDB_ROW_INSERT, changed));
+    client.update(state);
+    CHECK(!(state.online.reservation));
+    queue_event(applied(static_cast<std::uint32_t>(fake_bridge().subscriptions.size())));
+    client.update(state);
+    REQUIRE(state.online.reservation);
+    CHECK(state.online.reservation->reservation_id == 9);
+}
+TEST_CASE("tee commands from another room are discarded before dispatch") {
+    game_state state = started_hole();
+    auto client = connected_client(state, 42);
+    queue_event(member_row(42, 7, STDB_ROW_INSERT));
+    queue_event(applied(5));
+    client.update(state);
+    net_command stale;
+    stale.type = net_command_type::take_bus;
+    stale.room_id = 6;
+    stale.reservation_id = 8;
+    state.net_commands.push_back(stale);
+    fake_bridge().calls.clear();
+    client.update(state);
+    const auto names = fake_bridge().call_names();
+    CHECK(std::find(names.begin(), names.end(), "stdb_take_bus") == names.end());
+    CHECK(state.net_commands.empty());
+}
+
+TEST_CASE("dap C transport is room scoped and refusal or room teardown releases pending") {
+    game_state state=started_hole(); state.play=play_mode::online; auto client=connected_client(state,42);
+    queue_event(member_row(42,7,STDB_ROW_INSERT)); client.update(state);
+    CHECK(any_query_contains(fake_bridge().subscriptions.back(),"FROM dap_pair WHERE room_id = 7"));
+    net_command command; command.type=net_command_type::dap; command.room_id=7; command.target_account=43;
+    fake_bridge().calls.clear(); state.net_commands.push_back(command); client.update(state);
+    REQUIRE(fake_bridge().calls.size()==1); CHECK(fake_bridge().calls[0].name=="stdb_dap_up"); CHECK(fake_bridge().calls[0].number==43);
+    state.dap_pending=43;
+    auto refusal=fake_event(STDB_EVENT_REDUCER_FAILED); refusal.reducer=fake_text("dap"); refusal.text=fake_text("not_available");
+    queue_event(refusal); client.update(state); update_online_play(state,0); CHECK(!(state.dap_pending));
+    state.dap_pending=43; state.net_commands.push_back(command);
+    queue_event(member_row(42,8,STDB_ROW_UPDATE)); client.update(state);
+    CHECK(!(state.dap_pending)); CHECK(state.net_commands.empty()); CHECK(state.online.daps.empty());
+    fake_bridge().calls.clear(); state.net_commands.push_back(command); client.update(state); CHECK(fake_bridge().calls.empty());
+}
+
+TEST_CASE("practice drop crosses the paired C bridge with its originating room and position") {
+    auto state = started_game(fixture_hub_course()); state.play = play_mode::online;
+    auto client = connected_client(state, 42);
+    stdb_row member{}; member.room_member = stdb_room_member{42, 7, 0, nullptr, 0, false};
+    queue_event(row_event(STDB_TABLE_ROOM_MEMBER, STDB_ROW_INSERT, member)); client.update(state);
+    net_command drop; drop.type = net_command_type::place_practice_ball; drop.room_id = 7; drop.placed = {3,4,5};
+    state.net_commands.push_back(drop); client.update(state);
+    const auto& calls = fake_bridge().calls;
+    const auto found = std::find_if(calls.begin(), calls.end(), [](const auto& call) { return call.name == "stdb_place_practice_ball"; });
+    REQUIRE(found != calls.end()); CHECK(found->number == 7);
+    CHECK(found->position[0] == 3); CHECK(found->position[1] == 4); CHECK(found->position[2] == 5);
+}
+
+TEST_CASE("a practice drop refused through the bridge releases the pending action") {
+    auto state = started_game(fixture_hub_course());
+    state.play = play_mode::online;
+    state.kind = place_kind::hub;
+    auto client = connected_client(state, 42);
+    queue_event(member_row(42, 7, STDB_ROW_INSERT));
+    queue_event(applied(5));
+    client.update(state);
+    REQUIRE(state.online.room_ready);
+    request_practice_drop(state);
+    REQUIRE(state.hub_flow.ball_request);
+    client.update(state);
+    auto refusal = fake_event(STDB_EVENT_REDUCER_FAILED);
+    refusal.reducer = fake_text(reducer_place_practice_ball);
+    refusal.text = fake_text(error_not_available);
+    queue_event(refusal);
+    client.update(state);
+    update_online_play(state, 0);
+    CHECK(!state.hub_flow.ball_request);
+    CHECK(!state.ball);
+    request_practice_drop(state);
+    CHECK(state.hub_flow.ball_request == net_command_type::place_practice_ball);
 }

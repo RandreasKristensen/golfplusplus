@@ -40,53 +40,52 @@
     "horsens_golfklub": {
       "name": "Horsens Golfklub",
       "osm": "way/87897258",
-      "tees": "yellow",
+      "tees": "back (tee 64)",
       "sources": [
-        "https://www.golfingrecord.com/golf-scorecard/f992ef19-68c2-4608-8990-56b803dd8a5f"
+        "https://www.horsensgolfklub.dk/wp-content/uploads/2023/01/Scorekort-18-huls-banen.jpg"
       ],
-      "confidence": "Medium. Pars and yellow-tee lengths from a third-party scorecard, not the club's own. The site labels them yards, but they are metres: they match OSM's hole lines to a few metres. Its hole 14 (125 m) is shorter than its own blue tee (145 m); OSM's line for 14 (168 m) matches the white tee (173 m).",
+      "confidence": "High. Metres and pars from the club's own scorecard, tee 64, matching the importer's back-tee line selection. Hole 14's mapped line is about 171 m against this tee's 173 m; tee 58 is 125 m.",
       "total_par": 72,
       "holes": {
-        "1": {"par": 5, "metres": 453},
-        "2": {"par": 4, "metres": 382},
-        "3": {"par": 4, "metres": 372},
-        "4": {"par": 3, "metres": 155},
-        "5": {"par": 4, "metres": 363},
-        "6": {"par": 3, "metres": 168},
-        "7": {"par": 5, "metres": 464},
-        "8": {"par": 3, "metres": 143},
-        "9": {"par": 5, "metres": 460},
-        "10": {"par": 4, "metres": 364},
-        "11": {"par": 3, "metres": 140},
-        "12": {"par": 4, "metres": 334},
-        "13": {"par": 4, "metres": 371},
-        "14": {"par": 3, "metres": 125},
-        "15": {"par": 5, "metres": 476},
-        "16": {"par": 4, "metres": 323},
-        "17": {"par": 4, "metres": 253},
-        "18": {"par": 5, "metres": 470}
+        "1": {"par": 5, "metres": 500},
+        "2": {"par": 4, "metres": 435},
+        "3": {"par": 4, "metres": 380},
+        "4": {"par": 3, "metres": 194},
+        "5": {"par": 4, "metres": 383},
+        "6": {"par": 3, "metres": 166},
+        "7": {"par": 5, "metres": 489},
+        "8": {"par": 3, "metres": 150},
+        "9": {"par": 5, "metres": 511},
+        "10": {"par": 4, "metres": 412},
+        "11": {"par": 3, "metres": 147},
+        "12": {"par": 4, "metres": 352},
+        "13": {"par": 4, "metres": 434},
+        "14": {"par": 3, "metres": 173},
+        "15": {"par": 5, "metres": 524},
+        "16": {"par": 4, "metres": 336},
+        "17": {"par": 4, "metres": 271},
+        "18": {"par": 5, "metres": 510}
       }
     },
     "horsens_par_3": {
       "name": "Horsens Par 3",
       "osm": "way/87897258",
-      "tees": "yellow",
+      "tees": "yellow / red",
       "sources": [
-        "https://www.golfpass.com/courses/26153-horsens-golf-club-par-3-course/scorecard-and-layout",
-        "https://www.golfingrecord.com/golf-scorecard/27d71208-7d03-4618-82ec-26b5c56e249b"
+        "https://www.horsensgolfklub.dk/wp-content/uploads/2023/01/Scorekort-Par-3-bane.jpg"
       ],
-      "confidence": "Medium. Nine par 3s in metres from GolfPass; GolfingRecord agrees but for hole 1 (183 m). OSM's lines run 10-25% shorter than both, as if drawn from forward tees.",
+      "confidence": "High. Metres and pars from the club's own yellow/red scorecard, both tees identical (1384 m for nine holes). OSM lines run short on some holes.",
       "total_par": 27,
       "holes": {
-        "1": {"par": 3, "metres": 175},
-        "2": {"par": 3, "metres": 190},
-        "3": {"par": 3, "metres": 198},
-        "4": {"par": 3, "metres": 126},
-        "5": {"par": 3, "metres": 142},
-        "6": {"par": 3, "metres": 129},
-        "7": {"par": 3, "metres": 163},
-        "8": {"par": 3, "metres": 165},
-        "9": {"par": 3, "metres": 225}
+        "1": {"par": 3, "metres": 160},
+        "2": {"par": 3, "metres": 174},
+        "3": {"par": 3, "metres": 181},
+        "4": {"par": 3, "metres": 115},
+        "5": {"par": 3, "metres": 130},
+        "6": {"par": 3, "metres": 118},
+        "7": {"par": 3, "metres": 149},
+        "8": {"par": 3, "metres": 151},
+        "9": {"par": 3, "metres": 206}
       }
     },
     "marienlyst_golfklub": {

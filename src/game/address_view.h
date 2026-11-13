@@ -2,10 +2,9 @@
 
 // Standing over my ball (game_mode::addressing): where I stand for a setup,
 // where my eyes are and which way they look, the two framed looks R turns
-// between, and the setup as it shows on the ground at my feet. One place
+// between, and my feet on the ground. One place
 // for all of it, so others see me stand where I stand. Pure.
 
-#include "game/club_definition.h"
 #include "game/game_tuning.h"
 #include "game/play_area.h"
 #include "game/shot_setup.h"
@@ -71,23 +70,11 @@ struct eye_view {
 eye_view address_eye(const play_area& area, const shot_setup& setup, const address_look& look,
                      const game_tuning& tuning);
 
-// The setup as it shows on the ground at address.
-struct address_marks {
+// My shoes at address, on the ground either side of the stance.
+struct address_feet {
     glm::vec3 ball{0.0f};
-    // The clubface's leading edge soled behind the ball, past the head
-    // both ways: it turns with the face.
-    glm::vec3 face_heel{0.0f};
-    glm::vec3 face_toe{0.0f};
-    // An alignment stick along my toes, parallel to the aim (the path).
-    glm::vec3 stick_back{0.0f};
-    glm::vec3 stick_front{0.0f};
-    // On the stick, across from where the club's stock setup puts the ball.
-    glm::vec3 stock_tick{0.0f};
-    glm::vec3 stance{0.0f};  // address_stance_position
-    // My feet either side of it along the aim (the lies' stance width).
     glm::vec3 lead_foot{0.0f};
     glm::vec3 trail_foot{0.0f};
 };
 
-address_marks address_marks_for(const play_area& area, const shot_setup& setup, const club_definition& club,
-                                const game_tuning& tuning);
+address_feet address_feet_for(const play_area& area, const shot_setup& setup, const game_tuning& tuning);

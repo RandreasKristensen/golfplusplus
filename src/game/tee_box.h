@@ -35,6 +35,8 @@ ground_pad tee_box_pad(const tee_box& box);
 
 // True when `position` (horizontally) is on the box's top.
 bool on_tee_box(const tee_box& box, const glm::vec3& position);
+// How far `position` is (horizontally) from the box's edge; 0 on it.
+float distance_from_tee_box(const tee_box& box, const glm::vec3& position);
 
 // Hole `hole`'s box among `boxes`, or null when it has none.
 const tee_box* hole_tee_box(const std::vector<tee_box>& boxes, std::size_t hole);

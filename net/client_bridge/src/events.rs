@@ -13,6 +13,9 @@ pub enum Row {
     MyCompletedCourses(CompletedCourseRow),
     MyCollected(CollectedRow),
     MyWorldFlags(WorldFlagRow),
+    TeeSlot(TeeSlotRow),
+    MyTeeReservation(TeeReservationView),
+    MyTeeBookStatus(TeeBookStatusRow),
     Room(RoomRow),
     RoomMember(RoomMemberRow),
     GolfGroup(GolfGroupRow),
@@ -20,6 +23,7 @@ pub enum Row {
     Ball(BallRow),
     ShotEvent(ShotEventRow),
     ItemUseEvent(ItemUseEventRow),
+    Dap(DapRow),
     PlayerLoadout(PlayerLoadoutRow),
     RunningEffect(RunningEffectRow),
     PlayerBag(PlayerBagRow),
@@ -127,7 +131,7 @@ fn empty_event(kind: StdbEventKind) -> StdbEvent {
         table: StdbTable::Player,
         change: StdbRowChange::Insert,
         row: StdbRow {
-            ball: StdbBall { account_id: 0, room_id: 0, hole: 0, x: 0.0, y: 0.0, z: 0.0, stroke_count: 0, last_shot_at: 0, in_cup: false },
+            ball: StdbBall { account_id: 0, room_id: 0, hole: 0, x: 0.0, y: 0.0, z: 0.0, stroke_count: 0, last_shot_at: 0, in_cup: false, kind: 0, tee_mat: -1 },
         },
     }
 }
@@ -183,9 +187,17 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
             StdbTable::MyWorldFlags,
             StdbRow { world_flag: StdbWorldFlag { id: r.id, golfer_id: r.golfer_id, flag: arena.text(&r.flag) } },
         ),
+        Row::TeeSlot(r) => (StdbTable::TeeSlot, StdbRow { tee_slot: StdbTeeSlot {
+            slot_id: r.slot_id, course_id: arena.text(&r.course_id), world_id: r.world_id, room_id: r.room_id,
+            scheduled_at: r.scheduled_at, booked_count: r.booked_count } }),
+        Row::MyTeeReservation(r) => (StdbTable::MyTeeReservation, StdbRow { tee_reservation: StdbTeeReservation {
+            reservation_id: r.reservation_id, slot_id: r.slot_id, started_at: r.started_at, grouped: r.grouped, completed: r.completed, revision: r.revision, course_id: arena.text(&r.course_id),
+            world_id: r.world_id, room_id: r.room_id, scheduled_at: r.scheduled_at } }),
+        Row::MyTeeBookStatus(r) => (StdbTable::MyTeeBookStatus, StdbRow { tee_book_status: StdbTeeBookStatus {
+            course_id: arena.text(&r.course_id), server_now: r.server_now } }),
         Row::Room(r) => (
             StdbTable::Room,
-            StdbRow { room: StdbRoom { room_id: r.room_id, course_id: arena.text(&r.course_id), player_count: r.player_count } },
+            StdbRow { room: StdbRoom { room_id: r.room_id, course_id: arena.text(&r.course_id), player_count: r.player_count, world_id: r.world_id, kind: r.kind } },
         ),
         Row::RoomMember(r) => {
             let (strokes, count) = arena.ints(&r.round_strokes);
@@ -198,13 +210,14 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                         group_id: r.group_id,
                         round_strokes: strokes,
                         round_strokes_count: count,
+                        round_started: r.round_started,
                     },
                 },
             )
         }
         Row::GolfGroup(r) => (
             StdbTable::GolfGroup,
-            StdbRow { golf_group: StdbGolfGroup { group_id: r.group_id, room_id: r.room_id, leader: r.leader, member_count: r.member_count } },
+            StdbRow { golf_group: StdbGolfGroup { group_id: r.group_id, room_id: r.room_id, member_count: r.member_count } },
         ),
         Row::AvatarMotion(r) => (
             StdbTable::AvatarMotion,
@@ -246,6 +259,8 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                     stroke_count: r.stroke_count,
                     last_shot_at: r.last_shot_at,
                     in_cup: r.in_cup,
+                    kind: r.kind,
+                    tee_mat: r.tee_mat,
                 },
             },
         ),
@@ -291,6 +306,7 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
             },
             )
         }
+        Row::Dap(r) => (StdbTable::Dap, StdbRow { dap: StdbDap { id: r.id, room_id: r.room_id, first: r.first, second: r.second, started_at: r.started_at, first_x: r.first_x, first_y: r.first_y, first_z: r.first_z, second_x: r.second_x, second_y: r.second_y, second_z: r.second_z } }),
         Row::ItemUseEvent(r) => (
             StdbTable::ItemUseEvent,
             StdbRow {

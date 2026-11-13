@@ -8,7 +8,9 @@
 // interactables) that the game does not read.
 
 #include "physics/ground_mesh.h"
+#include "game/hole_data.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -62,7 +64,25 @@ struct course_world_collectible {
     std::vector<course_world_skill_reward> skill_rewards;
 };
 
+struct hub_anchor {
+    glm::vec3 position{0.0f};
+    float reach = 0.0f;
+};
+
+struct hub_anchors {
+    hub_anchor book;
+};
+
+struct bus_stop {
+    glm::vec3 position{0.0f};
+    float heading = 0.0f;  // radians, yaw_direction: zero faces +Z
+};
+
 struct course_world_definition {
+    std::optional<::bus_stop> bus_stop;
+    std::optional<hub_anchors> hub;
+    std::vector<material_zone> zones;
+    std::vector<tree_instance> trees;
     std::string id;
     std::string name;
     // Where the course is on Earth (projection.origin_lat/lon): the sky over

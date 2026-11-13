@@ -10,6 +10,8 @@
 
 #include "game/golf_bag.h"
 #include "game/interactables.h"
+#include "game/hub_flow.h"
+#include "core/tee_book.h"
 #include "game/mode_dispatch.h"
 #include "game/net_types.h"
 #include "game/play_area.h"
@@ -20,6 +22,7 @@
 #include "game/group_round.h"
 #include "game/scorecard.h"
 #include "game/shot_ability.h"
+#include "game/shot_number.h"
 #include "game/shot_simulation.h"
 #include "game/swing.h"
 #include "game/text_ids.h"
@@ -85,6 +88,7 @@ render_remote_avatar my_figure(const game_state& game, const render_data& data) 
         me.yaw = stance_at_address(game.area, game.address.setup, game.tuning).facing;
     } else if (const club_definition* club = club_in_hand(game)) {
         me.carried_club_model = club->model;
+        me.carried_club_loft_degrees = club->spec.static_loft_degrees;
     }
     if (bag_on_back(game)) {
         me.bag_model = bag_model_of(game, 0);
@@ -120,8 +124,8 @@ std::vector<render_xp_drop> xp_drop_rows(const game_state& game, const skill_cat
     return rows;
 }
 
-// My shot's number over my drawn ball: rising, fading over its last
-// part, a crit bigger, bigger still as it pops up.
+// My shot's number over my drawn ball: falling and shrinking, fading over
+// its last part, a crit bigger.
 render_shot_number shot_number_row(const game_state& game, const shot_number_popup& popup, const glm::vec3& ball,
                                    const text_assets& text) {
     const shot_number_tuning& tuning = game.tuning.shot_numbers;
@@ -129,14 +133,15 @@ render_shot_number shot_number_row(const game_state& game, const shot_number_pop
     const float length = clamp01(popup.number.meters / std::max(1.0f, tuning.long_meters));
     float half_height = tuning.half_height + (tuning.long_half_height - tuning.half_height) * length;
     if (popup.number.crit) {
-        half_height *= popup.age < tuning.crit_pop_seconds ? tuning.crit_pop_size : tuning.crit_size;
+        half_height *= tuning.crit_size;
     }
+    half_height *= shot_number_size(tuning, popup.age);
     render_shot_number row;
     row.position = ball;
     row.label = format_text(text, text_hud_shot_number, {{"meters", std::to_string(std::lround(popup.number.meters))}});
     row.crit = popup.number.crit;
     row.half_height = half_height;
-    row.rise = tuning.rise * progress;
+    row.lift = tuning.fall * (1.0f - progress);
     const float fade_from = 1.0f - tuning.fade_share;
     row.alpha = progress > fade_from ? clamp01((1.0f - progress) / std::max(0.001f, tuning.fade_share)) : 1.0f;
     return row;
@@ -157,8 +162,7 @@ std::vector<glm::vec3> other_pin_markers(const game_state& game) {
 // What the course map shows: the course's holes, each numbered along its
 // line of play, with its tee box.
 void add_course_map(render_data& data, const game_state& game, const text_assets& text) {
-    data.course_map_low = game.area.holes_low;
-    data.course_map_high = game.area.holes_high;
+    data.course_map_outline = game.area.holes_outline;
     if (!bag_on_back(game)) {
         data.map_bag_position = bag_position(game);
     }
@@ -205,7 +209,7 @@ void add_rangefinder(render_data& data, const game_state& game, const text_asset
     }
 }
 
-// Standing over my ball: my club at it, the setup on the ground, the OSD's
+// Standing over my ball: my club at it, my shoes on the ground, the OSD's
 // preview and setup word, the swing clock and the key hints.
 void add_address(render_data& data, const game_state& game, const club_definition& club, const text_assets& text,
                  const prop_catalog& props) {
@@ -217,17 +221,12 @@ void add_address(render_data& data, const game_state& game, const club_definitio
         : 0.0f;
     data.my_club = club_pose_at(game, address.setup, raise, club.model, props);
 
-    const address_marks marks = my_address_marks(game);
-    render_address_marks shown;
-    shown.face_heel = marks.face_heel;
-    shown.face_toe = marks.face_toe;
-    shown.stick_back = marks.stick_back;
-    shown.stick_front = marks.stick_front;
-    shown.stock_tick = marks.stock_tick;
+    const address_feet marks = my_address_feet(game);
+    render_address_feet shown;
     shown.lead_foot = marks.lead_foot;
     shown.trail_foot = marks.trail_foot;
     shown.ball = marks.ball;
-    data.address_marks = shown;
+    data.address_feet = shown;
     const bool swinging = address.swing_elapsed || address.meter_elapsed;
     if (!swinging) {
         data.key_hints = text_hud_address_hints;
@@ -314,10 +313,9 @@ std::string mode_label(const game_state& game, const text_assets& text) {
         return lookup_text(text, text_hud_mode_reconnecting);
     }
     return format_text(text, text_hud_mode_online,
-                       {{"course", game.course.name},
+                       {{"course", game.place.name},
                         {"room", std::to_string(room->room_id)},
-                        {"players", std::to_string(room->player_count)},
-                        {"capacity", std::to_string(game.tuning.server.room_capacity)}});
+                        {"players", std::to_string(room->player_count)}});
 }
 }
 
@@ -360,11 +358,12 @@ std::optional<render_club_pose> club_pose_at(const game_state& game, const shot_
         pose.shaft_lean =
             glm::radians(game.tuning.swing.ball_position_loft_degrees) * (club->spec.stock_ball_position - setup.ball_position);
         pose.putt = club->club_class == "putter";
+        pose.loft_degrees = club->spec.static_loft_degrees;
     }
     pose.raise = raise;
     pose.left_handed = setup.hand == handedness::left;
     pose.club_model = club_model;
-    pose.fit = club_fit_of(model->second);
+    pose.fit = club_fit_of(model->second, pose.loft_degrees);
     return pose;
 }
 
@@ -373,7 +372,7 @@ std::vector<hole_sign_text> hole_sign_texts(const game_state& game) {
     for (const hole_sign& sign : game.area.signs) {
         const int par = sign.area_hole < game.course_holes.size() ? game.course_holes[sign.area_hole].par : 0;
         const int meters = rounded_rangefinder_meters(sign.length * game.tuning.scale.meters_per_world_unit);
-        texts.push_back(hole_sign_text{static_cast<int>(sign.area_hole) + 1, par, meters, game.course.practice});
+        texts.push_back(hole_sign_text{static_cast<int>(sign.area_hole) + 1, par, meters, false});
     }
     return texts;
 }
@@ -398,7 +397,7 @@ render_data make_render_data(const game_state& game,
     data.fences = meshes.fences;
     data.floodlights = meshes.floodlights;
     data.water = meshes.water;
-    data.backdrop = &game.course.backdrop;
+    data.backdrop = &game.place.backdrop;
     data.trees = &game.static_anchors.trees;
     data.trees_revision = game.static_anchors.revision;
     data.area_center = game.area.center;
@@ -410,14 +409,18 @@ render_data make_render_data(const game_state& game,
     data.cup_radius_meters = game.tuning.cup.radius_meters * game.tuning.cup.leniency;
     data.cup_depth_meters = game.tuning.cup.depth_meters;
     data.pin_visual_height_meters = scale.pin_visual_height_meters;
+    data.flagstick_radius_meters = game.tuning.cup.flagstick_radius_meters;
     data.show_ball = game.ball.has_value();
-    data.show_hole = ball_in_play(game);
+    data.show_hole = ball_in_play(game) && game.ball->hole.has_value();
     if (game.ball) {
         data.ball_position = drawn_ball_center(game.ball->position, scale, game.area.cups);
-        data.tee_position = tee_anchor_position(game, game.ball->hole);
-        data.pin_position = pin_anchor_position(game, game.ball->hole);
+        if (game.ball->hole) {
+            data.tee_position = tee_anchor_position(game, *game.ball->hole);
+            data.pin_position = pin_anchor_position(game, *game.ball->hole);
+        }
     }
     data.tee_boxes = &game.area.tee_boxes;
+    data.world_props = &game.area.props;
     data.pin_markers = other_pin_markers(game);
     for (std::size_t i = 0; i < game.flags_in.size() && i < game.static_anchors.pins.size(); ++i) {
         if (!game.flags_in[i]) {
@@ -457,6 +460,17 @@ render_data make_render_data(const game_state& game,
 
     data.mode_label = mode_label(game, text);
     data.show_interact_prompt = interact_prompt && interact_available(game);
+    if (game.hub && !game.ball && on_foot(game)) { data.key_hints = text_hub_drop_hint; }
+    if (const auto near = nearest_interactable(game); near && data.show_interact_prompt) {
+        if (near->kind == interactable_kind::practice_ball) { data.key_hints = text_hub_ball_hint; }
+        if (near->kind == interactable_kind::dap) { data.key_hints = text_dap_hint; }
+        if (near->kind == interactable_kind::tee_book) { data.key_hints = text_hub_book_hint; }
+        if (near->kind == interactable_kind::bus) { data.key_hints = text_hub_bus_hint; }
+        if (near->kind == interactable_kind::warmup) { data.key_hints = text_hub_warmup_hint; }
+        if (near->kind == interactable_kind::booked_start) { data.key_hints = text_hub_start_hint; }
+    }
+    if (game.hub_flow.ball_request) { data.notice_label = lookup_text(text, text_hub_pending); }
+    if (!game.hub_flow.travel_course.empty()) { data.notice_label = lookup_text(text, text_hub_travel); }
     data.show_bag_hints = interact_available(game) && nearest_interactable(game)->kind == interactable_kind::bag;
     // At a seat's door: walking in sits me down, at the wheel or beside it.
     if (const std::optional<seat_door> door = data.key_hints == nullptr ? seat_door_at(game) : std::nullopt) {
@@ -471,7 +485,7 @@ render_data make_render_data(const game_state& game,
         data.show_interact_prompt = false;
     }
     if (game.give_up_prompt && game.ball) {
-        data.give_up_label = format_text(text, text_hud_give_up, {{"hole", std::to_string(game.ball->hole + 1)}});
+        data.give_up_label = format_text(text, text_hud_give_up, {{"hole", std::to_string(*game.ball->hole + 1)}});
     }
     data.stroke_count = game.ball ? game.ball->strokes : 0;
     if (club != nullptr) {

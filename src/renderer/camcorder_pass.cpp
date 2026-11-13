@@ -175,6 +175,7 @@ void camcorder_pass::draw(const unsigned int scene_texture, const render_lightin
     record_.set_vec4("u_tone", glm::vec4(style_.shoulder, style_.toe, light.saturation, style_.bloom_strength));
     record_.set_vec4("u_gain", glm::vec4(light.gain_noise, style_.gain_grain, style_.gain_chroma, style_.smear_strength));
     record_.set_float("u_field", std::floor(seconds * fields_per_second_));
+    record_.set_float("u_fade", light.fade);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, bloom_target_.color_texture());
     glActiveTexture(GL_TEXTURE2);

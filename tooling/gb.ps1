@@ -1,7 +1,10 @@
 # Release build helper.
 #   .\tooling\gb        configure and build build/release
-#   .\tooling\gb -r     build, then launch golf++
-#   .\tooling\gb -rr    stop a running golf++ from this build, build, launch
+#   .\tooling\gb -r     bring up the local server (tooling\net\dev.ps1), build,
+#                       then launch golf++ on it, so PLAY OFFLINE and PLAY
+#                       ONLINE both work; if the server does not come up it
+#                       still launches, and offline play works
+#   .\tooling\gb -rr    the same, stopping running golf++ from this build first
 #   .\tooling\gb -m     bring up the local server (tooling\net\dev.ps1), build,
 #                       then launch two clients on it signed in anonymously
 #   .\tooling\gb -mm    the same, stopping running golf++ from this build first
@@ -30,7 +33,8 @@ $repo_root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path
 $build_dir = Join-Path $repo_root "build\release"
 $exe_path = Join-Path $build_dir "golf++.exe"
 $dev_script = Join-Path $repo_root "tooling\net\dev.ps1"
-$client_args = @("--server", "http://localhost:3000", "--db", "golfpp", "--anonymous")
+$server_args = @("--server", "http://localhost:3000", "--db", "golfpp")
+$client_args = $server_args + @("--anonymous")
 $client_count = 2
 
 function Stop-GolfProcess {
@@ -52,13 +56,14 @@ function Stop-GolfProcess {
 }
 
 # In its own process: the Emscripten environment it sets up stays out of
-# this build.
+# this build. True when it succeeded; `Required` stops here when it did not.
 function Invoke-DevServer {
-    param([string[]]$Arguments)
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $dev_script @Arguments
-    if ($LASTEXITCODE -ne 0) {
+    param([string[]]$Arguments, [switch]$Required)
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $dev_script @Arguments | Out-Host
+    if ($LASTEXITCODE -ne 0 -and $Required) {
         exit $LASTEXITCODE
     }
+    return $LASTEXITCODE -eq 0
 }
 
 $modes = @($Run, $Rerun, $Multiplayer, $Remultiplayer, $Stop) | Where-Object { $_ }
@@ -70,7 +75,7 @@ Push-Location $repo_root
 try {
     if ($Stop) {
         Stop-GolfProcess -TargetPath $exe_path
-        Invoke-DevServer @("-Down")
+        Invoke-DevServer @("-Down") -Required | Out-Null
         return
     }
 
@@ -80,8 +85,15 @@ try {
 
     # Before the game's build: a new module regenerates the client bindings
     # it compiles.
+    $server_up = $false
     if ($Multiplayer -or $Remultiplayer) {
-        Invoke-DevServer @()
+        $server_up = Invoke-DevServer @() -Required
+    }
+    elseif ($Run -or $Rerun) {
+        $server_up = Invoke-DevServer @()
+        if (-not $server_up) {
+            Write-Host "[gb] the local server did not come up: launching anyway; PLAY OFFLINE works, PLAY ONLINE will not"
+        }
     }
 
     Write-Host "[gb] configuring release preset"
@@ -107,7 +119,12 @@ try {
 
     if ($Run -or $Rerun) {
         Write-Host "[gb] launching golf++"
-        Start-Process -FilePath $exe_path -WorkingDirectory $build_dir
+        if ($server_up) {
+            Start-Process -FilePath $exe_path -WorkingDirectory $build_dir -ArgumentList $server_args
+        }
+        else {
+            Start-Process -FilePath $exe_path -WorkingDirectory $build_dir
+        }
         return
     }
 

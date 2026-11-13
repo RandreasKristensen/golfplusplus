@@ -4,6 +4,7 @@
 // game state. Plain data; the renderer never reads game state itself.
 
 #include "game/course_definition.h"
+#include "game/play_area.h"
 #include "game/lighting_loader.h"
 #include "game/remote_players.h"
 #include "game/scorecard.h"
@@ -61,7 +62,7 @@ struct render_shot_number {
     std::string label;
     bool crit = false;
     float half_height = 0.0f;
-    float rise = 0.0f;
+    float lift = 0.0f;  // clip units over where it lands, falling to none
     float alpha = 1.0f;
 };
 
@@ -106,6 +107,7 @@ struct render_handled_prop {
     glm::mat4 to{1.0f};
     float t = 0.0f;
     float arc = 0.0f;
+    float club_loft_degrees = 0.0f;
 };
 
 struct render_name_tag {
@@ -212,6 +214,7 @@ struct render_lighting {
     float mist_density = 0.0f;
     // The camcorder's (renderer/camcorder_pass.h).
     float exposure = 0.0f;
+    float fade = 0.0f;  // 0..1 to black, bus travel's cut (core/tape_tracking.h)
     glm::vec3 white_balance{0.0f};
     float gain_noise = 0.0f;
     float saturation = 0.0f;
@@ -307,6 +310,7 @@ struct render_eyepiece {
 };
 
 struct render_data {
+    const std::vector<static_prop>* world_props = nullptr;
     glm::vec3 camera_position{0.0f};
     glm::vec3 camera_target{0.0f, 0.0f, 1.0f};
     float camera_fov_degrees = 0.0f;
@@ -353,6 +357,7 @@ struct render_data {
     float cup_radius_meters = 0.0f;
     float cup_depth_meters = 0.0f;
     float pin_visual_height_meters = 0.0f;
+    float flagstick_radius_meters = 0.0f;
     // The hole my ball is in play on (its cup and flag; its tee for the
     // course map); unset while my ball is in my pocket or a cup.
     bool show_hole = false;
@@ -375,11 +380,9 @@ struct render_data {
     // setup's shape in a word, empty for the stock shot.
     std::vector<glm::vec3> osd_line;
     std::string setup_word;
-    // Over my ball: the club in my hands at it, the setup on the ground
-    // (the alignment stick, the face's line, my shoes), and what the wheel
-    // would change, outlined on the overlay round these points.
+    // Over my ball: the club in my hands and my shoes on the ground.
     std::optional<render_club_pose> my_club;
-    std::optional<render_address_marks> address_marks;
+    std::optional<render_address_feet> address_feet;
 
     bool show_flight_path = false;
     const std::vector<glm::vec3>* flight_path_points = nullptr;
@@ -402,6 +405,7 @@ struct render_data {
     // My figure on foot as others see it: never drawn (I look out of its
     // eyes), only into the shadow map (renderer/shadow_casters.h).
     std::optional<render_remote_avatar> my_figure;
+    std::optional<dap_hand_pose> dap_hand;
     // Other players in my room (online).
     std::vector<render_remote_avatar> remote_avatars;
     std::vector<render_remote_ball> remote_balls;
@@ -452,10 +456,10 @@ struct render_data {
     // positive to the left (as yaw); nullopt in still air.
     std::optional<float> rangefinder_wind_angle;
     bool show_course_map = false;
-    // The course map: the XZ box around every hole's ribbon and zones that it
-    // fits to its paper, and each hole's number at its tee.
-    glm::vec3 course_map_low{0.0f};
-    glm::vec3 course_map_high{0.0f};
+    // The course map: the XZ outline around every hole's ribbon and zones
+    // (play_area::holes_outline) that it turns and fits to its paper, and
+    // each hole's number along its line of play.
+    std::vector<glm::vec3> course_map_outline;
     std::vector<render_map_hole> map_holes;
     // My bag, when it is not on my back.
     std::optional<glm::vec3> map_bag_position;

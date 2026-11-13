@@ -20,7 +20,7 @@ void draw_shot_number(overlay_batch& batch, const text_assets& text, const rende
         return;
     }
     const text_style& style = find_text_style(text, number.crit ? style_shot_number_crit : style_shot_number);
-    const ui_rect box{*seen + glm::vec2(0.0f, number.half_height + number.rise), glm::vec2(box_half_width, number.half_height)};
+    const ui_rect box{*seen + glm::vec2(0.0f, number.half_height + number.lift), glm::vec2(box_half_width, number.half_height)};
     // The text a font pixel short of the box each way, for its edge.
     const float height = static_cast<float>(text.font.height);
     const ui_rect inside{box.center, glm::vec2(box.half_size.x, box.half_size.y * height / (height + 2.0f))};

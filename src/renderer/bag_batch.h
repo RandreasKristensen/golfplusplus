@@ -22,7 +22,18 @@ glm::mat4 carried_club_frame(const render_remote_avatar& figure, float eye_heigh
 
 // A club stood head up in the bag whose frame is `bag_frame`, its grip down
 // in the bag, its head just out of `bag`'s mouth.
-glm::mat4 club_in_bag_frame(const glm::mat4& bag_frame, const prop_model& bag);
+glm::mat4 club_in_bag_frame(const glm::mat4& bag_frame, const prop_model& bag, const prop_model& club);
+
+// The club and the hand holding it during a return (grip first) or draw
+// (lifted by its head, then turned and passed to the grip). Progress is 0..1
+// for that half of a swap. The figure may keep walking throughout.
+struct handled_club_pose {
+    glm::mat4 frame{1.0f};
+    glm::vec3 hand{0.0f};
+};
+handled_club_pose handling_club_pose(const render_remote_avatar& figure, float eye_height,
+                                    const glm::mat4& bag_frame, const prop_model& bag, const prop_model& club,
+                                    float progress, bool drawing);
 // Where `prop` is on its way: `t` of the way from its `from` frame to its
 // `to`, turning between them, lifted by its arc.
 glm::mat4 handled_prop_frame(const render_handled_prop& prop);

@@ -29,6 +29,7 @@ struct material_zone {
     std::vector<glm::vec2> outline;
     glm::vec3 center{0.0f};
     glm::vec2 half_size{0.0f};
+    float green_stimp_feet = 0.0f;  // zero inherits the place's green speed
 };
 
 // The zone of `type` round `outline`, its box worked out.

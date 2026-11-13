@@ -112,8 +112,10 @@ render_sky_weather make_render_sky_weather(const shown_weather& shown, const wea
     const air_scattering air = scattering_under_weather(style, shown);
     sky.scatter_per_meter = air.per_meter;
     sky.scatter_forwardness = air.forwardness;
-    sky.sun_glow = style.sun_glow;
-    sky.sun_forwardness = style.sun_forwardness;
+    // Henyey-Greenstein at the sun is glow (1 + g) / (1 - g)^2.
+    const float spread = style.sun_glow_spread;
+    sky.sun_forwardness = 1.0f - spread;
+    sky.sun_glow = style.sun_glow_at_sun * spread * spread / (2.0f - spread);
     sky.mist = style.mist;
     return sky;
 }

@@ -1,6 +1,6 @@
 #include "core/app.h"
 
-#include "game/course_session.h"
+#include "game/mode_dispatch.h"
 
 #include <SDL.h>
 
@@ -24,7 +24,7 @@ void app::apply_look(const look_reload& reload) {
     // a course builds: the tour loads its course again, a round shows them
     // from the next course.
     if (reload.changes.ground && menu_.flow == startup_flow::touring) {
-        const course_definition course = game_.course;
-        start_course(game_, course);
+        const std::string place_id = game_.place.id;
+        enter_place(game_, place_id);
     }
 }

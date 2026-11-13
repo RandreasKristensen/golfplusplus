@@ -24,6 +24,10 @@
 #include "movement_rules.h"
 #include "physics/vector_math.h"
 #include "play_rules.h"
+#include "game/hub_scene.h"
+#include "game/hub_ball.h"
+#include "tee_rules.h"
+#include "game/dap_rules.h"
 #include "progress_rollup.h"
 #include "game/server_errors.h"
 
@@ -36,6 +40,7 @@
 #include <iterator>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -281,44 +286,49 @@ SPACETIMEDB_TABLE(world_flag_row, world_flag, Private)
 FIELD_PrimaryKeyAutoInc(world_flag, id)
 FIELD_Index(world_flag, golfer_id)
 
-// A course's room: up to server.room_capacity players walking and playing
-// the same course together.
+// A persistent course world. World 1 is the only world allocated today.
 struct room_row {
     std::uint64_t room_id;
     std::string course_id;
     std::int32_t player_count;
     Timestamp created_at;
+    std::uint32_t world_id;
+    std::uint8_t kind;
 };
-SPACETIMEDB_STRUCT(room_row, room_id, course_id, player_count, created_at)
+SPACETIMEDB_STRUCT(room_row, room_id, course_id, player_count, created_at, world_id, kind)
 SPACETIMEDB_TABLE(room_row, room, Public)
 FIELD_PrimaryKeyAutoInc(room, room_id)
 FIELD_Index(room, course_id)
 
 // A player in a room. round_strokes is this round's score per hole (0: not
-// played yet), which the group's scorecard shows.
+// played yet), which the group's scorecard shows. Completed scores stay
+// until the member tees up the next round.
 struct room_member_row {
     std::uint64_t account_id;
     std::uint64_t room_id;
     std::uint64_t group_id;  // 0: none
     std::vector<std::int32_t> round_strokes;
+    bool round_started;
 };
-SPACETIMEDB_STRUCT(room_member_row, account_id, room_id, group_id, round_strokes)
+SPACETIMEDB_STRUCT(room_member_row, account_id, room_id, group_id, round_strokes, round_started)
 SPACETIMEDB_TABLE(room_member_row, room_member, Public)
 FIELD_PrimaryKey(room_member, account_id)
 FIELD_Index(room_member, room_id)
 FIELD_Index(room_member, group_id)
 
-// Players who share a scorecard, up to server.group_capacity.
+// Present players sharing a booked slot's scorecard. Offline reservations
+// count in tee_slot.booked_count, never in this presence count.
 struct golf_group_row {
     std::uint64_t group_id;
     std::uint64_t room_id;
-    std::uint64_t leader;
     std::int32_t member_count;
 };
-SPACETIMEDB_STRUCT(golf_group_row, group_id, room_id, leader, member_count)
+SPACETIMEDB_STRUCT(golf_group_row, group_id, room_id, member_count)
 SPACETIMEDB_TABLE(golf_group_row, golf_group, Public)
-FIELD_PrimaryKeyAutoInc(golf_group, group_id)
+FIELD_PrimaryKey(golf_group, group_id)
 FIELD_Index(golf_group, room_id)
+
+#include "tee_schema.h"
 
 // Where a player is and how they move (game/net_types.h net_motion), for
 // others to carry on between updates.
@@ -352,6 +362,8 @@ FIELD_PrimaryKey(avatar_motion, account_id)
 FIELD_Index(avatar_motion, room_id)
 FIELD_Index(avatar_motion, area_key)
 
+#include "dap_schema.h"
+
 // A player's ball, as game_state::ball offline: in play on its hole, or
 // in_cup (the cup's centre on the ground, with the strokes it was holed in)
 // until they pick it up (pick_up_ball). Deleted when picked up or given up,
@@ -369,8 +381,10 @@ struct ball_row {
     std::int64_t last_shot_at;  // UTC milliseconds
     Timestamp rests_at;
     bool in_cup;
+    std::uint8_t kind;
+    std::int32_t tee_mat;
 };
-SPACETIMEDB_STRUCT(ball_row, account_id, room_id, hole, x, y, z, stroke_count, last_shot_at, rests_at, in_cup)
+SPACETIMEDB_STRUCT(ball_row, account_id, room_id, hole, x, y, z, stroke_count, last_shot_at, rests_at, in_cup, kind, tee_mat)
 SPACETIMEDB_TABLE(ball_row, ball, Public)
 FIELD_PrimaryKey(ball, account_id)
 FIELD_Index(ball, room_id)
@@ -951,6 +965,8 @@ void store_progress(ReducerContext& ctx, golfer_progress_row owner, const save_d
     }
 }
 
+void erase_reservation(ReducerContext& ctx, const tee_reservation_row& booking);
+
 // --- Rooms
 
 // Deletes `rows` (from an index) through their table's primary key `by_id`.
@@ -985,19 +1001,11 @@ void leave_group_state(ReducerContext& ctx, room_member_row& member) {
         ctx.db[golf_group_group_id].delete_by_key(group->group_id);
         return;
     }
-    if (group->leader == member.account_id) {
-        for (const room_member_row& other : ctx.db[room_member_room_id].filter(member.room_id)) {
-            if (other.group_id == group->group_id) {
-                group->leader = other.account_id;
-                break;
-            }
-        }
-    }
     ctx.db[golf_group_group_id].update(*group);
 }
 
 // Takes the account out of its room: group, avatar, ball (abandoning the
-// hole, so no score) and membership; an empty room closes.
+// hole, so no score) and membership; the course world remains when empty.
 // Every bag strapped on `owner`'s cart set down on the ground beside where
 // it stands (`cart`), at its driver's door.
 void set_down_bags_from(ReducerContext& ctx, const std::uint64_t room_id, const std::uint64_t owner, const cart_pose& cart,
@@ -1022,10 +1030,20 @@ void set_down_bags_from(ReducerContext& ctx, const std::uint64_t room_id, const 
     }
 }
 
+#include "dap_support.h"
+
 void leave_room_state(ReducerContext& ctx, const std::uint64_t account_id) {
+    erase_daps(ctx, account_id);
     std::optional<room_member_row> member = ctx.db[room_member_account_id].find(account_id);
     if (!member) {
         return;
+    }
+    if (auto booking = ctx.db[tee_reservation_account_id].find(account_id)) {
+        if (auto slot = ctx.db[tee_slot_slot_id].find(booking->slot_id); slot && slot->room_id == member->room_id) {
+            booking->round_strokes = member->round_strokes;
+            ++booking->revision;
+            ctx.db[tee_reservation_reservation_id].update(*booking);
+        }
     }
     leave_group_state(ctx, *member);
     leave_passenger_seat(ctx, member->room_id, account_id);
@@ -1045,12 +1063,7 @@ void leave_room_state(ReducerContext& ctx, const std::uint64_t account_id) {
     ctx.db[room_member_account_id].delete_by_key(account_id);
     if (std::optional<room_row> joined = ctx.db[room_room_id].find(member->room_id)) {
         joined->player_count -= 1;
-        if (joined->player_count <= 0) {
-            delete_rows(ctx.db[green_flag_room_id].filter(joined->room_id), ctx.db[green_flag_id]);
-            ctx.db[room_room_id].delete_by_key(joined->room_id);
-        } else {
-            ctx.db[room_room_id].update(*joined);
-        }
+        ctx.db[room_room_id].update(*joined);
     }
 }
 
@@ -1114,7 +1127,8 @@ ball_on_hole ball_in_play_of(ReducerContext& ctx, const std::uint64_t account, c
     if (!ball || ball->in_cup || course == nullptr) {
         return {};
     }
-    if (ball->hole >= 0 && static_cast<std::size_t>(ball->hole) < course->holes.size()) {
+    if ((ball->kind == static_cast<std::uint8_t>(ball_kind::practice) && course->kind == place_kind::hub) ||
+        (ball->hole >= 0 && static_cast<std::size_t>(ball->hole) < course->holes.size())) {
         return {ball, false};
     }
     ctx.db[ball_account_id].delete_by_key(account);
@@ -1272,8 +1286,12 @@ cart_pose free_parking(ReducerContext& ctx, const std::uint64_t room_id, const s
 // Deletes the account and everything keyed by it: its room state, session,
 // logins, link rows and every golfer's progress.
 void delete_account(ReducerContext& ctx, const std::uint64_t account_id) {
+    if (auto booking = ctx.db[tee_reservation_account_id].find(account_id)) {
+        erase_reservation(ctx, *booking);
+    }
     leave_room_state(ctx, account_id);
     ctx.db[session_account_id].delete_by_key(account_id);
+    ctx.db[tee_book_status_account_id].delete_by_key(account_id);
     delete_link_code(ctx, account_id);
     ctx.db[link_budget_account_id].delete_by_key(account_id);
     std::vector<Identity> logins;
@@ -1734,122 +1752,7 @@ SPACETIMEDB_REDUCER(redeem_link_code, ReducerContext ctx, std::string typed_code
 // Rooms and groups
 // =============================================================================
 
-// Joins the fullest room of the course with space, or opens one, standing at
-// hole 1's start with no ball out, as offline; with a cart of my own when I
-// take one and the course has carts.
-SPACETIMEDB_REDUCER(join_course, ReducerContext ctx, std::string course_id, bool takes_cart) {
-    const caller_result me = caller(ctx);
-    if (!me.player) {
-        return Err(me.error);
-    }
-    if (me.player->display_name.empty()) {
-        return Err(error_needs_name);
-    }
-    const server_course* course = cached_course(course_id);
-    if (course == nullptr) {
-        return Err(error_unknown_course);
-    }
-    const std::uint64_t account = me.player->account_id;
-    leave_room_state(ctx, account);
-    ensure_loadout(ctx, account);
-
-    std::vector<room_candidate> candidates;
-    for (const room_row& open : ctx.db[room_course_id].filter(course_id)) {
-        candidates.push_back(room_candidate{open.room_id, open.player_count});
-    }
-    const int capacity = cached_content()->tuning.server.room_capacity;
-    std::optional<room_row> joined;
-    if (const std::optional<std::uint64_t> chosen = choose_room(candidates, capacity)) {
-        joined = ctx.db[room_room_id].find(*chosen);
-    } else {
-        joined = ctx.db[room].insert(room_row{0, course_id, 0, ctx.timestamp});
-    }
-    joined->player_count += 1;
-    ctx.db[room_room_id].update(*joined);
-
-    const glm::vec3 spawn = anchor_on_terrain(course->area, course->world.hole_starts.front().position);
-    const std::vector<std::int32_t> unplayed(course->holes.size(), 0);
-    ctx.db[room_member].insert(room_member_row{account, joined->room_id, 0, unplayed});
-    ctx.db[motion_state].insert(joined_motion_state(account, spawn, ctx.timestamp));
-    avatar_motion_row avatar{account, joined->room_id, static_cast<std::uint8_t>(motion_mode::idle),
-                             spawn.x, spawn.y, spawn.z, 0.0f, 0.0f, 0.0f, 0.0, 0, 0, 0, 0, false, ctx.timestamp, 0, 0, {}};
-    index_motion(avatar);
-    ctx.db[avatar_motion].insert(avatar);
-
-    // A cart of their own, parked beside hole 1 next to the others in the
-    // room, their bag on it; carrying it, or where the course has no carts,
-    // the bag on their back. The longest club in hand.
-    bag_where bag = bag_where::on_back;
-    if (course->course.carts && takes_cart) {
-        const cart_pose cart = free_parking(ctx, joined->room_id, *course);
-        golf_cart_row row{account, joined->room_id, cart.position.x, cart.position.y, cart.position.z,
-                          cart.yaw, 0, static_cast<std::uint8_t>(cart_condition::upright), 0, 0.0, 0, 0, {}};
-        index_motion(row);
-        ctx.db[golf_cart].insert(row);
-        bag = bag_where::on_cart;
-    }
-    ctx.db[player_bag].insert(player_bag_row{account, joined->room_id, static_cast<std::uint8_t>(bag),
-                                             static_cast<std::uint8_t>(cart_seat::driver), 0, 0.0f, 0.0f, 0.0f, 0.0f,
-                                             cached_content()->clubs.front().id});
-    return Ok();
-}
-
-SPACETIMEDB_REDUCER(leave_room, ReducerContext ctx) {
-    const caller_result me = caller(ctx);
-    if (!me.player) {
-        return Err(me.error);
-    }
-    leave_room_state(ctx, me.player->account_id);
-    return Ok();
-}
-
-SPACETIMEDB_REDUCER(create_group, ReducerContext ctx) {
-    member_result me = caller_member(ctx);
-    if (!me.member) {
-        return refused(me);
-    }
-    if (me.member->group_id != 0) {
-        return Err(error_in_group);
-    }
-    const golf_group_row group = ctx.db[golf_group].insert(golf_group_row{0, me.member->room_id, me.member->account_id, 1});
-    me.member->group_id = group.group_id;
-    ctx.db[room_member_account_id].update(*me.member);
-    return Ok();
-}
-
-SPACETIMEDB_REDUCER(join_group, ReducerContext ctx, std::uint64_t group_id) {
-    member_result me = caller_member(ctx);
-    if (!me.member) {
-        return refused(me);
-    }
-    if (me.member->group_id != 0) {
-        return Err(error_in_group);
-    }
-    std::optional<golf_group_row> group = ctx.db[golf_group_group_id].find(group_id);
-    if (!group || group->room_id != me.member->room_id) {
-        return Err(error_unknown_group);
-    }
-    if (group->member_count >= cached_content()->tuning.server.group_capacity) {
-        return Err(error_group_full);
-    }
-    group->member_count += 1;
-    ctx.db[golf_group_group_id].update(*group);
-    me.member->group_id = group_id;
-    ctx.db[room_member_account_id].update(*me.member);
-    return Ok();
-}
-
-SPACETIMEDB_REDUCER(leave_group, ReducerContext ctx) {
-    member_result me = caller_member(ctx);
-    if (!me.member) {
-        return refused(me);
-    }
-    if (me.member->group_id == 0) {
-        return Err(error_not_in_group);
-    }
-    leave_group_state(ctx, *me.member);
-    return Ok();
-}
+#include "tee_reducers.h"
 
 // =============================================================================
 // Playing
@@ -1995,11 +1898,13 @@ struct move_run_row {
     bool jump;
     std::uint16_t yaw;
     std::int16_t steer;
+    bool paced;
+    bool crouched;
 };
-SPACETIMEDB_STRUCT(move_run_row, kind, steps, forward, side, run, jump, yaw, steer)
+SPACETIMEDB_STRUCT(move_run_row, kind, steps, forward, side, run, jump, yaw, steer, paced, crouched)
 
 SPACETIMEDB_REDUCER(update_motion,
-                    ReducerContext ctx,
+                    ReducerContext ctx, std::uint64_t expected_room,
                     std::uint8_t mode,
                     float x,
                     float y,
@@ -2022,6 +1927,7 @@ SPACETIMEDB_REDUCER(update_motion,
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
     if (mode >= motion_mode_count) {
         return Err(error_invalid_motion);
     }
@@ -2048,8 +1954,19 @@ SPACETIMEDB_REDUCER(update_motion,
     request.runs.reserve(runs.size());
     for (const move_run_row& run : runs) {
         request.runs.push_back(move_run{move_input{static_cast<move_kind>(run.kind), run.forward, run.side, run.run, run.jump,
-                                                   run.yaw, run.steer},
+                                                   run.yaw, run.steer, run.paced, run.crouched},
                                         run.steps});
+    }
+    if (dap_busy(ctx, account)) {
+        request.motion.mode = motion_mode::idle;
+        request.motion.position = position_of(*mover);
+        request.motion.speed = 0.0f; request.motion.turn_rate = 0.0f;
+        request.motion.crouched = false;
+        request.start = position_of(*mover);
+        for (auto& run : request.runs) {
+            const auto yaw = run.input.yaw;
+            run.input = move_input{}; run.input.yaw = yaw;
+        }
     }
     std::optional<golf_cart_row> own_cart = ctx.db[golf_cart_owner].find(account);
     const std::optional<room_cart> cart = own_cart ? std::optional<room_cart>(cart_value(*own_cart)) : std::nullopt;
@@ -2079,7 +1996,9 @@ SPACETIMEDB_REDUCER(update_motion,
     }
     write_mover(*mover, moved.mover);
     mover->server_time = ctx.timestamp;
-    pay_movement(ctx, *mover, account, moved.walked_meters, moved.road_meters);
+    if (course->kind == place_kind::hub || me.member->round_started) {
+        pay_movement(ctx, *mover, account, moved.walked_meters, moved.road_meters);
+    }
     ctx.db[motion_state_account_id].update(*mover);
     const net_motion& shown = moved.shown;
     const std::optional<player_bag_row> bag = ctx.db[player_bag_account_id].find(account);
@@ -2112,9 +2031,11 @@ void stand_out_of(ReducerContext& ctx, const std::uint64_t account, const cart_p
     ctx.db[motion_state_account_id].update(*mover);
 }
 
-SPACETIMEDB_REDUCER(take_wheel, ReducerContext ctx) {
+SPACETIMEDB_REDUCER(take_wheel, ReducerContext ctx, std::uint64_t expected_room) {
     const member_result me = caller_member(ctx);
     if (!me.member) { return refused(me); }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
+    if (dap_busy(ctx, me.member->account_id)) { return Err(error_not_available); }
     const std::uint64_t account = me.member->account_id;
     std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(account);
     std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(account);
@@ -2136,9 +2057,10 @@ SPACETIMEDB_REDUCER(take_wheel, ReducerContext ctx) {
     return Ok();
 }
 
-SPACETIMEDB_REDUCER(leave_wheel, ReducerContext ctx) {
+SPACETIMEDB_REDUCER(leave_wheel, ReducerContext ctx, std::uint64_t expected_room) {
     const member_result me = caller_member(ctx);
     if (!me.member) { return refused(me); }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
     std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(me.member->account_id);
     if (!cart) { return Err(error_unknown_cart); }
     const cart_decision decision = leave_wheel_rule(cart_value(*cart), me.member->account_id);
@@ -2152,11 +2074,13 @@ SPACETIMEDB_REDUCER(leave_wheel, ReducerContext ctx) {
 
 // Into the passenger seat of `owner`'s cart in my room, from beside it, when
 // nobody sits there.
-SPACETIMEDB_REDUCER(board_cart, ReducerContext ctx, std::uint64_t owner) {
+SPACETIMEDB_REDUCER(board_cart, ReducerContext ctx, std::uint64_t expected_room, std::uint64_t owner) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
+    if (dap_busy(ctx, me.member->account_id)) { return Err(error_not_available); }
     std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(owner);
     if (!cart || cart->room_id != me.member->room_id || owner == me.member->account_id) {
         return Err(error_unknown_cart);
@@ -2181,11 +2105,12 @@ SPACETIMEDB_REDUCER(board_cart, ReducerContext ctx, std::uint64_t owner) {
 }
 
 // Out of the passenger seat I sit in.
-SPACETIMEDB_REDUCER(leave_cart, ReducerContext ctx) {
+SPACETIMEDB_REDUCER(leave_cart, ReducerContext ctx, std::uint64_t expected_room) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
     std::optional<cart_pose> riding;
     for (const golf_cart_row& cart : ctx.db[golf_cart_room_id].filter(me.member->room_id)) {
         if (cart.passenger == me.member->account_id) {
@@ -2204,7 +2129,7 @@ SPACETIMEDB_REDUCER(leave_cart, ReducerContext ctx) {
 // from my last accepted motion than my cart could have gone since
 // (ride_motion_plausible). Presentation only: it moves nothing.
 SPACETIMEDB_REDUCER(update_ride,
-                    ReducerContext ctx,
+                    ReducerContext ctx, std::uint64_t expected_room,
                     float x,
                     float y,
                     float z,
@@ -2216,6 +2141,7 @@ SPACETIMEDB_REDUCER(update_ride,
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
     const bool finite = std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(yaw) &&
         std::isfinite(speed) && std::isfinite(turn_rate) && std::isfinite(client_time);
     if (!finite) {
@@ -2250,11 +2176,13 @@ SPACETIMEDB_REDUCER(update_ride,
 }
 
 // Stands `owner`'s tipped cart in my room back on its wheels, from beside it.
-SPACETIMEDB_REDUCER(right_cart, ReducerContext ctx, std::uint64_t owner) {
+SPACETIMEDB_REDUCER(right_cart, ReducerContext ctx, std::uint64_t expected_room, std::uint64_t owner) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
+    if (dap_busy(ctx, me.member->account_id)) { return Err(error_not_available); }
     std::optional<golf_cart_row> cart = ctx.db[golf_cart_owner].find(owner);
     if (!cart || cart->room_id != me.member->room_id) {
         return Err(error_unknown_cart);
@@ -2294,21 +2222,50 @@ SPACETIMEDB_REDUCER(tow_cart, ReducerContext ctx, cart_tow_row tow) {
 // it, as tee_up offline: not while the ball is in its cup (pick_up_ball
 // first), nor while it is in play on another hole unless `give_up` gives
 // that hole up (no score).
-SPACETIMEDB_REDUCER(tee_up, ReducerContext ctx, std::int32_t hole_index, bool give_up) {
+SPACETIMEDB_REDUCER(tee_up, ReducerContext ctx, std::uint64_t expected_room, std::int32_t hole_index, bool give_up) {
     member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
+    if (dap_busy(ctx, me.member->account_id)) { return Err(error_not_available); }
     const server_course* course = member_course(ctx, *me.member);
+    if (course && course->hub) {
+        if (hole_index < 0 || static_cast<std::size_t>(hole_index) >= course->hub->tee_mats.size()) { return Err(error_unknown_hole); }
+        const auto& mat = course->hub->tee_mats[static_cast<std::size_t>(hole_index)];
+        const auto mover = ctx.db[motion_state_account_id].find(me.member->account_id);
+        const auto own = ctx.db[ball_account_id].find(me.member->account_id);
+        const auto& tuning = cached_content()->tuning;
+        if (!mover || in_cart(static_cast<motion_mode>(mover->mode)) ||
+            !within_interact_reach(position_of(*mover), mat.position, mat.reach, tuning.server)) { return Err(error_too_far); }
+        std::map<std::uint64_t, room_ball> balls;
+        for (const auto& other : ctx.db[ball_room_id].filter(expected_room)) {
+            balls[other.account_id] = {other.hole, {other.x, other.y, other.z}, other.stroke_count, other.in_cup,
+                static_cast<ball_kind>(other.kind), other.tee_mat};
+        }
+        if (tee_in_use(balls, me.member->account_id, hole_index, true)) { return Err(error_tee_in_use); }
+        const auto tee = resting_ball_position(course->area, mat.position, tuning.scale.ball_physics_radius_meters);
+        const ball_row prepared{me.member->account_id, expected_room, -1, tee.x, tee.y, tee.z, 0, 0, ctx.timestamp, false,
+            static_cast<std::uint8_t>(ball_kind::practice), hole_index};
+        if (own) { ctx.db[ball_account_id].update(prepared); } else { ctx.db[ball].insert(prepared); }
+        place_player(ctx, *me.member, tee_stance_position(course->area, tee, mat.aim, tuning.player.ball_stand_off_distance));
+        return Ok();
+    }
     if (course == nullptr || hole_index < 0 || static_cast<std::size_t>(hole_index) >= course->holes.size()) {
         return Err(error_unknown_hole);
+    }
+    if (course->kind == place_kind::course && me.member->round_started) {
+        const auto booking = ctx.db[tee_reservation_account_id].find(me.member->account_id);
+        if (!booking || booking->completed) { return Err(error_booking_required); }
+        if (booking->started_at == 0) { return Err(error_first_tee_required); }
     }
     const std::size_t index = static_cast<std::size_t>(hole_index);
     // A republished course may have another hole count than this round.
     me.member->round_strokes.resize(course->holes.size(), 0);
     // On a practice ground every station drops a fresh ball any time, in
     // place of the last wherever it is (game/course_session.h tee_up).
-    const bool practice = course->course.practice;
+    const bool practice = !me.member->round_started;
+    const bool warmup = practice;
     if (!practice && hole_played(current_round(*me.member), index)) {
         return Err(error_hole_played);
     }
@@ -2326,14 +2283,16 @@ SPACETIMEDB_REDUCER(tee_up, ReducerContext ctx, std::int32_t hole_index, bool gi
     std::map<std::uint64_t, room_ball> room_balls;
     for (const ball_row& other : ctx.db[ball_room_id].filter(me.member->room_id)) {
         room_balls[other.account_id] =
-            room_ball{other.hole, glm::vec3(other.x, other.y, other.z), other.stroke_count, other.in_cup};
+            room_ball{other.hole, glm::vec3(other.x, other.y, other.z), other.stroke_count, other.in_cup, static_cast<ball_kind>(other.kind), other.tee_mat};
     }
-    if (tee_in_use(room_balls, account, hole_index)) {
+    if (!warmup && tee_in_use(room_balls, account, hole_index, course->kind == place_kind::hub)) {
         return Err(error_tee_in_use);
     }
     const course_world_hole_start& start = course->world.hole_starts[index];
     const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(account);
-    if (!mover || !within_interact_reach(position_of(*mover), start.position, start.interaction_radius,
+    const glm::vec3 station = warmup ? warmup_position(course->area, index, cached_content()->tuning) : start.position;
+    const float reach = warmup ? cached_content()->tuning.server.warmup_reach_meters / cached_content()->tuning.scale.meters_per_world_unit : start.interaction_radius;
+    if (!mover || in_cart(static_cast<motion_mode>(mover->mode)) || !within_interact_reach(position_of(*mover), station, reach,
                                           cached_content()->tuning.server)) {
         return Err(error_too_far);
     }
@@ -2341,8 +2300,18 @@ SPACETIMEDB_REDUCER(tee_up, ReducerContext ctx, std::int32_t hole_index, bool gi
     ctx.db[room_member_account_id].update(*me.member);
     const server_content& content = *cached_content();
     const float radius = content.tuning.scale.ball_physics_radius_meters;
-    const glm::vec3 tee = resting_ball_position(course->area, course->holes[index].tee_position, radius);
-    const ball_row teed{account, me.member->room_id, hole_index, tee.x, tee.y, tee.z, 0, 0, ctx.timestamp, false};
+    if (warmup) {
+        if (auto bag = ctx.db[player_bag_account_id].find(account)) {
+            for (const auto& club : content.clubs) {
+                if (club.club_class == "putter") {
+                    bag->club_in_hand = club.id;
+                    ctx.db[player_bag_account_id].update(*bag); break;
+                }
+            }
+        }
+    }
+    const glm::vec3 tee = resting_ball_position(course->area, warmup ? station : course->holes[index].tee_position, radius);
+    const ball_row teed{account, me.member->room_id, hole_index, tee.x, tee.y, tee.z, 0, 0, ctx.timestamp, false, static_cast<std::uint8_t>(warmup ? ball_kind::warmup : ball_kind::scored), -1};
     if (own) {
         ctx.db[ball_account_id].update(teed);
     } else {
@@ -2355,14 +2324,20 @@ SPACETIMEDB_REDUCER(tee_up, ReducerContext ctx, std::int32_t hole_index, bool gi
 
 // Gives up the hole the ball is in play on: no score, the ball back in the
 // pocket, the player where they stand.
-SPACETIMEDB_REDUCER(give_up_hole, ReducerContext ctx) {
+SPACETIMEDB_REDUCER(give_up_hole, ReducerContext ctx, std::uint64_t expected_room) {
     member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
     const ball_on_hole on = ball_in_play_of(ctx, me.member->account_id, member_course(ctx, *me.member));
     if (!on.ball) {
         return on.given_up ? Ok() : Err(error_not_on_hole);
+    }
+    if (on.ball->kind == static_cast<std::uint8_t>(ball_kind::scored) && me.member->round_started) {
+        if (auto booking = ctx.db[tee_reservation_account_id].find(me.member->account_id); booking && booking->started_at == 0) {
+            return Err(error_first_tee_required);
+        }
     }
     ctx.db[ball_account_id].delete_by_key(me.member->account_id);
     return Ok();
@@ -2375,7 +2350,7 @@ SPACETIMEDB_REDUCER(give_up_hole, ReducerContext ctx) {
 // decides where the ball rests, the stroke, and a holed ball's score and
 // completions, as complete_current_hole does offline.
 SPACETIMEDB_REDUCER(take_shot,
-                    ReducerContext ctx,
+                    ReducerContext ctx, std::uint64_t expected_room,
                     std::int32_t stroke,
                     float aim_angle,
                     float face_open,
@@ -2389,6 +2364,8 @@ SPACETIMEDB_REDUCER(take_shot,
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
+    if (dap_busy(ctx, me.member->account_id)) { return Err(error_not_available); }
     const server_course* course = member_course(ctx, *me.member);
     ball_on_hole on = ball_in_play_of(ctx, me.member->account_id, course);
     if (!on.ball) {
@@ -2396,6 +2373,10 @@ SPACETIMEDB_REDUCER(take_shot,
     }
     std::optional<ball_row>& ball_now = on.ball;
     const server_content& content = *cached_content();
+    if (ball_now->kind == static_cast<std::uint8_t>(ball_kind::warmup)) {
+        const club_definition* club = find_club(content.clubs, club_id);
+        if (!club || club->club_class != "putter") { return Err(error_not_available); }
+    }
     const std::uint64_t account = me.member->account_id;
     const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(account);
     const glm::vec3 player_position = mover ? position_of(*mover) : glm::vec3(ball_now->x, ball_now->y, ball_now->z);
@@ -2421,6 +2402,24 @@ SPACETIMEDB_REDUCER(take_shot,
     const shot_setup& input = *check.input;
     const std::optional<server_config_row> config = ctx.db[server_config_id].find(config_id);
     const std::string secret = config ? config->server_secret : std::string();
+    if (ball_now->kind == static_cast<std::uint8_t>(ball_kind::scored)) {
+        auto booking = ctx.db[tee_reservation_account_id].find(account);
+        if (!booking || booking->completed) { return Err(error_booking_required); }
+        if (booking->started_at == 0) {
+            const auto slot = ctx.db[tee_slot_slot_id].find(booking->slot_id);
+            if (!slot || slot->room_id != me.member->room_id) { return Err(error_stale_booking); }
+            // start_booked_round already sent this group off.
+            const std::string error = check_first_tee(slot->scheduled_at, ctx.timestamp.micros_since_epoch(),
+                                                     ball_now->hole, false, true, content.tuning.server);
+            if (!error.empty()) { return Err(error); }
+            booking->started_at = ctx.timestamp.micros_since_epoch();
+            ++booking->revision;
+            ctx.db[tee_reservation_reservation_id].update(*booking);
+            ctx.db[tee_start].insert(tee_start_row{booking->reservation_id, account, booking->slot_id,
+                slot->course_id, slot->world_id, slot->scheduled_at, booking->started_at,
+                booking->started_at - slot->scheduled_at});
+        }
+    }
     const shot_record record{input, server_shot_seed(secret, ctx.timestamp.micros_since_epoch(), account, stroke),
                              room_snapshot(ctx, me.member->room_id, account)};
     const shot_result result =
@@ -2428,7 +2427,7 @@ SPACETIMEDB_REDUCER(take_shot,
                              content.tuning, content.clubs);
 
     // Practice earns nothing: no XP, no score, no completion.
-    const bool practice = course->course.practice;
+    const bool practice = ball_now->kind != static_cast<std::uint8_t>(ball_kind::scored);
     progress_update update =
         practice ? progress_update{before, {}} : award_xp(before, content.rewards.shot, account_xp_effects(ctx, account));
     const award_event event{award_source_shot, "shot:" + std::to_string(owner.golfer_id) + ":" +
@@ -2468,33 +2467,44 @@ SPACETIMEDB_REDUCER(take_shot,
         me.member->round_strokes.resize(course->holes.size(), 0);
         me.member->round_strokes[hole] = strokes;
         if (round_finished(current_round(*me.member))) {
-            // The round completed the course. A new round starts.
+            // Retain the completed card until the next round's first tee-up.
             update.progress = apply_course_completed(update.progress, course->course.id);
-            std::fill(me.member->round_strokes.begin(), me.member->round_strokes.end(), 0);
         }
         store_progress(ctx, owner, before, update, event);
         ctx.db[room_member_account_id].update(*me.member);
+        if (auto booking = ctx.db[tee_reservation_account_id].find(account)) {
+            booking->round_strokes = me.member->round_strokes;
+            if (round_finished(current_round(*me.member)) && !booking->completed) {
+                release_slot_seat(ctx, *booking);
+                booking->completed = true;
+            }
+            ++booking->revision;
+            ctx.db[tee_reservation_reservation_id].update(*booking);
+        }
     }
     // The ball stays in the cup until it is picked up, as offline; the player
     // stays where they holed out from.
-    const glm::vec3 cup = course->area.cups[hole].centre;
+    const glm::vec3 cup = result.rest_position;
     ball_now->x = cup.x;
     ball_now->y = cup.y;
     ball_now->z = cup.z;
     ball_now->stroke_count = strokes;
     ball_now->last_shot_at = input.shot_at;
     ball_now->in_cup = true;
+    ball_now->rests_at = ctx.timestamp + TimeDuration::from_micros(static_cast<std::int64_t>(
+        static_cast<double>(result.duration) * static_cast<double>(micros_per_second)));
     ctx.db[ball_account_id].update(*ball_now);
     return Ok();
 }
 
 // Takes the flag of hole `hole`'s green out (`out`) or puts it back, for
 // everyone in the room: from within player.flag_reach of its cup, as P offline.
-SPACETIMEDB_REDUCER(set_flag, ReducerContext ctx, std::int32_t hole, bool out) {
+SPACETIMEDB_REDUCER(set_flag, ReducerContext ctx, std::uint64_t expected_room, std::int32_t hole, bool out) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
     const server_course* course = member_course(ctx, *me.member);
     if (course == nullptr || hole < 0 || static_cast<std::size_t>(hole) >= course->area.cups.size()) {
         return Err(error_unknown_hole);
@@ -2522,12 +2532,14 @@ SPACETIMEDB_REDUCER(set_flag, ReducerContext ctx, std::int32_t hole, bool out) {
 // Moves my bag (check_bag_move): `place` a bag_where, `seat` a cart_seat
 // and `cart_owner` whose cart (0 mine) onto a cart standing on its wheels,
 // the rest where it is set down.
-SPACETIMEDB_REDUCER(place_bag, ReducerContext ctx, std::uint8_t place, std::uint8_t seat, std::uint64_t cart_owner, float x,
+SPACETIMEDB_REDUCER(place_bag, ReducerContext ctx, std::uint64_t expected_room, std::uint8_t place, std::uint8_t seat, std::uint64_t cart_owner, float x,
                     float y, float z, float yaw) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
+    if (dap_busy(ctx, me.member->account_id)) { return Err(error_not_available); }
     std::optional<player_bag_row> bag = ctx.db[player_bag_account_id].find(me.member->account_id);
     const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(me.member->account_id);
     if (!bag || !mover) {
@@ -2564,11 +2576,13 @@ SPACETIMEDB_REDUCER(place_bag, ReducerContext ctx, std::uint8_t place, std::uint
 
 // Takes `club_id` from my bag into my hand (check_take_club), putting back
 // the one I held.
-SPACETIMEDB_REDUCER(take_club, ReducerContext ctx, std::string club_id) {
+SPACETIMEDB_REDUCER(take_club, ReducerContext ctx, std::uint64_t expected_room, std::string club_id) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
+    if (dap_busy(ctx, me.member->account_id)) { return Err(error_not_available); }
     std::optional<player_bag_row> bag = ctx.db[player_bag_account_id].find(me.member->account_id);
     const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(me.member->account_id);
     if (!bag || !mover) {
@@ -2603,23 +2617,49 @@ SPACETIMEDB_REDUCER(set_golfer, ReducerContext ctx, std::uint8_t hand, std::uint
     return Ok();
 }
 
+// Drops a practice ball at my feet in the hub (game/hub_ball.h), in place of
+// my last one wherever it lies, as request_practice_drop offline.
+SPACETIMEDB_REDUCER(place_practice_ball, ReducerContext ctx, std::uint64_t expected_room, float x, float y, float z) {
+    const member_result me = caller_member(ctx);
+    if (!me.member) { return refused(me); }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
+    const auto course = member_course(ctx, *me.member);
+    const auto mover = ctx.db[motion_state_account_id].find(me.member->account_id);
+    if (!course || !mover) { return Err(error_not_in_room); }
+    const std::optional<ball_row> own = ctx.db[ball_account_id].find(me.member->account_id);
+    const auto dropped_at = practice_drop_position(course->area, course->kind, position_of(*mover), {x, y, z},
+        cached_content()->tuning);
+    if (!dropped_at) { return Err(error_not_available); }
+    const auto& point = *dropped_at;
+    const ball_row dropped{me.member->account_id, expected_room, -1, point.x, point.y, point.z, 0, 0,
+        ctx.timestamp, false, static_cast<std::uint8_t>(ball_kind::practice), -1};
+    if (own) { ctx.db[ball_account_id].update(dropped); } else { ctx.db[ball].insert(dropped); }
+    return Ok();
+}
+
 // Picks the holed ball out of its cup, in reach of the last accepted position
 // (player.ball_interact_radius), as pick_up_cup_ball offline. Ok with no
 // ball out: nothing is left to pick up.
-SPACETIMEDB_REDUCER(pick_up_ball, ReducerContext ctx) {
+SPACETIMEDB_REDUCER(pick_up_ball, ReducerContext ctx, std::uint64_t expected_room) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
     const std::optional<ball_row> in_cup = ctx.db[ball_account_id].find(me.member->account_id);
     if (!in_cup) {
         return Ok();
     }
-    if (!in_cup->in_cup) {
+    if (!in_cup->in_cup && in_cup->kind != static_cast<std::uint8_t>(ball_kind::practice)) {
         return Err(error_ball_in_play);
     }
     const server_content& content = *cached_content();
     const std::optional<motion_state_row> mover = ctx.db[motion_state_account_id].find(me.member->account_id);
+    if (in_cup->kind == static_cast<std::uint8_t>(ball_kind::practice) && (!mover ||
+        !practice_pickup_in_reach(ball_kind::practice, shot_has_played(*in_cup, ctx.timestamp, content.tuning.server),
+            !in_cart(static_cast<motion_mode>(mover->mode)) && !at_ball(static_cast<motion_mode>(mover->mode)),
+            position_of(*mover), {in_cup->x, in_cup->y, in_cup->z}, content.tuning))) { return Err(error_too_far); }
+
     if (!mover || !within_interact_reach(position_of(*mover), glm::vec3(in_cup->x, in_cup->y, in_cup->z),
                                           content.tuning.player.ball_interact_radius, content.tuning.server)) {
         return Err(error_too_far);
@@ -2628,14 +2668,18 @@ SPACETIMEDB_REDUCER(pick_up_ball, ReducerContext ctx) {
     return Ok();
 }
 
+#include "dap_reducers.h"
+
 // Uses an item the caller has equipped (what they smoke or drink), as
 // offline: its XP per use and its timed effects, by the server's clock; not
 // again while a use plays. Everyone in the room sees it.
-SPACETIMEDB_REDUCER(use_item, ReducerContext ctx, std::string item_id) {
+SPACETIMEDB_REDUCER(use_item, ReducerContext ctx, std::uint64_t expected_room, std::string item_id) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
+    if (dap_busy(ctx, me.member->account_id)) { return Err(error_not_available); }
     const std::uint64_t account = me.member->account_id;
     const server_content& content = *cached_content();
     const std::int64_t now = now_unix_ms(ctx);
@@ -2687,11 +2731,12 @@ SPACETIMEDB_REDUCER(use_item, ReducerContext ctx, std::string item_id) {
 // Claims a collectible in reach of the last accepted position, with the same
 // claim_collectible rule as offline. Named apart in C++ so it does not
 // overload that rule; clients call it claim_collectible.
-SPACETIMEDB_REDUCER_NAMED(claim_collectible_reducer, "claim_collectible", ReducerContext ctx, std::string collectible_id) {
+SPACETIMEDB_REDUCER_NAMED(claim_collectible_reducer, "claim_collectible", ReducerContext ctx, std::uint64_t expected_room, std::string collectible_id) {
     const member_result me = caller_member(ctx);
     if (!me.member) {
         return refused(me);
     }
+    if (me.member->room_id != expected_room) { return Err(error_not_in_room); }
     const server_course* course = member_course(ctx, *me.member);
     if (course == nullptr) {
         return Err(error_not_in_room);

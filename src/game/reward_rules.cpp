@@ -7,7 +7,7 @@ std::optional<xp_reward> xp_reward_from_json(const json& root, const char* key) 
     const json* object = json_object(root, key);
     const std::optional<std::string> skill = object != nullptr ? json_string(*object, "skill") : std::nullopt;
     const std::optional<int> xp = object != nullptr ? json_int(*object, "xp") : std::nullopt;
-    if (!skill || !xp || *xp <= 0) {
+    if (!skill || skill->empty() || !xp || *xp <= 0) {
         return std::nullopt;
     }
     return xp_reward{*skill, *xp};
@@ -34,11 +34,13 @@ std::optional<reward_rules> parse_rewards_from_text(const std::string& text) {
     const std::optional<xp_reward> shot = xp_reward_from_json(*root, "shot_xp");
     const std::optional<movement_xp_rate> walking = movement_rate_from_json(*movement, "walking");
     const std::optional<movement_xp_rate> cart = movement_rate_from_json(*movement, "cart_on_road");
-    if (!shot || !walking || !cart) {
+    const auto dap = xp_reward_from_json(*root, "dap_xp");
+    if (!shot || !walking || !cart || !dap) {
         return std::nullopt;
     }
 
     reward_rules rules;
+    rules.dap = *dap;
     rules.shot = *shot;
     rules.walking = *walking;
     rules.cart_on_road = *cart;

@@ -28,6 +28,7 @@ import json
 import math
 from pathlib import Path
 
+import osm_bus_stop
 import osm_cart_paths
 import osm_outline
 
@@ -46,6 +47,8 @@ DEFAULT_TOLERANCES = {
     # A cart path ends within this of each pin and tee it links (it keeps
     # 12-18 m off the green's edge: osm_golf_convert's cart_paths).
     "cart_path_reach_m": 45.0,
+    # The path from the bus stop starts within this of the bus's door.
+    "bus_path_reach_m": 6.0,
     # Two pins this close are one green claimed by two holes; two tees, one tee.
     "shared_pin_m": 5.0,
     "shared_tee_m": 2.0,
@@ -514,6 +517,36 @@ def _check_cart_paths(findings: Findings, placed: list[dict], world: dict, tol: 
                          f"no cart path from green {a['number']} to tee {b['number']}", a["number"])
 
 
+def _check_bus_stop(findings: Findings, placed: list[dict], world: dict, tol: dict, bus: dict | None = None):
+    """The club's bus parks clear of every hole's zones and its line of play
+    across its rough (osm_bus_stop.py), and a path leads from it to the first
+    tee."""
+    stop = world.get("bus_stop")
+    if stop is None:
+        findings.add("error", "BUS_STOP", "no bus stop: no car park or service road near the first tee is clear")
+        return
+    bus = bus or osm_bus_stop.load_bus()
+    position = (stop["position"][0], stop["position"][2])
+    outline = osm_bus_stop.footprint(position, float(stop["heading"]), bus)
+    for p in placed:
+        for zone in p["zones"]:
+            if osm_outline.rings_gap(outline, zone["outline"]) == 0.0:
+                findings.add("error", "BUS_STOP", f"the parked bus stands on hole {p['number']}'s {zone['type']}",
+                             p["number"])
+        spline = p.get("json", {}).get("spline", {})
+        half = max(float(spline.get("width", 0.0)), float(spline.get("rough_width", 0.0))) * 0.5
+        for corridor in osm_bus_stop.play_corridors([p.get("line", [])], [half]):
+            if osm_outline.rings_gap(outline, corridor) == 0.0:
+                findings.add("error", "BUS_STOP", f"the parked bus stands in hole {p['number']}'s line of play",
+                             p["number"])
+    approach = osm_bus_stop.model_point(position, float(stop["heading"]), bus["approach"])
+    roads = world.get("cart_roads", [])
+    at_door = any(osm_outline.segment_distance(approach, (a[0], a[2]), (b[0], b[2])) <= tol["bus_path_reach_m"]
+                  for road in roads for a, b in zip(road["polyline"], road["polyline"][1:]))
+    if not at_door or not osm_cart_paths.connects(roads, approach, placed[0]["tee"], tol["cart_path_reach_m"]):
+        findings.add("error", "BUS_STOP_PATH", "no path from the bus stop to the first tee", 1)
+
+
 def check_course(course_id: str, hole_jsons: list[dict], world: dict | None,
                  scorecard: dict | None, tolerances: dict | None = None) -> Findings:
     """Every check on one course; holes in play order."""
@@ -536,6 +569,7 @@ def check_course(course_id: str, hole_jsons: list[dict], world: dict | None,
     _check_routing(findings, placed, tol)
     if world is not None and world.get("source", {}).get("type") == "osm":
         _check_cart_paths(findings, placed, world, tol)
+        _check_bus_stop(findings, placed, world, tol)
     if scorecard:
         _check_scorecard(findings, placed, scorecard, tol)
     return findings

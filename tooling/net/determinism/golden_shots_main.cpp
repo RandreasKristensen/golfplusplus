@@ -103,12 +103,14 @@ int main(int argc, char** argv) {
     const std::string fixtures = repo + "/tests/fixtures";
 
     // The golden shots' frozen tuning, items (the clubs among them) and
-    // rewards, the shipped font, and the fixture courses, as the golden test
+    // rewards, the shipped font, and the fixture courses and hub, as the golden test
     // uses them.
     std::map<std::string, std::string> texts;
     add_folder(texts, golden, "play");
+    add_folder(texts, golden, "world/props");
     add_folder(texts, repo + "/assets", "interface/fonts");
     add_folder(texts, fixtures, courses_path);
+    add_folder(texts, fixtures, "world/hub");
     content_files files;
     for (const auto& [path, text] : texts) {
         files.emplace(path, text);
@@ -207,8 +209,8 @@ int main(int argc, char** argv) {
     const std::vector<bool> flags_in(course->area.cups.size(), true);
     const std::vector<solid> walker_solids = walker_obstacles({}, course->area.cups, flags_in, content.tuning);
     const std::vector<solid> cart_solids = cart_obstacles_of({}, {}, course->area.cups, flags_in, content.tuning);
-    const walk_world on_foot{course->area, walker_solids, content.tuning.player, content.tuning.player.walk_speed, nullptr};
-    const cart_world at_wheel{course->area, course->world.cart_roads, content.tuning, spec, 0.4f, 1.0f, cart_solids, nullptr};
+    const walk_world on_foot{course->area, walker_solids, content.tuning, content.tuning.player.walk_speed, nullptr};
+    const cart_world at_wheel{course->area, content.tuning, spec, 0.4f, 1.0f, cart_solids, nullptr};
     constexpr int steps = 720;
     for (std::size_t hole = 0; hole < course->holes.size(); ++hole) {
         const glm::vec3 tee = anchor_on_terrain(course->area, course->holes[hole].tee_position);
@@ -220,6 +222,8 @@ int main(int argc, char** argv) {
             input.side = static_cast<std::int8_t>((step / 90) % 3 - 1);
             input.run = (step / 150) % 2 == 1;
             input.jump = step % 180 == 60;
+            input.paced = step >= 240 && step < 480;
+            input.crouched = step >= 360 && step < 600;
             yaw += 0.4f * move_step_seconds;
             input.yaw = quantise_yaw(yaw);
             me = step_walker(me, input, on_foot).after;

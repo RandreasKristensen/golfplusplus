@@ -15,11 +15,14 @@
 #include "renderer/held_props.h"
 #include "renderer/prop_batch.h"
 #include "renderer/remote_avatar_batch.h"
+#include "renderer/fence_batch.h"
+#include "renderer/hole_sign_batch.h"
 #include "renderer/shadow_casters.h"
 
 #include "test_support.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -262,8 +265,15 @@ TEST_CASE("my figure casts the sun's shadow where I stand, at my ball while I ad
     CHECK(data.avatar_eye_height == state.tuning.camera.walking_eye_height);
     world_marker_batch casters;
     prop_batch models;
-    build_shadow_casters(casters, models, data, test_scene_colors(), test_props());
-    CHECK(casters.vertices().size() == remote_figure_vertex_count());
+    build_shadow_casters(casters, models, data, test_scene_colors(), test_props(), test_shadow_map(0.2f));
+    // Mine, and the flagsticks.
+    render_data flags_only = data;
+    flags_only.my_figure.reset();
+    world_marker_batch flag_casters;
+    prop_batch flag_models;
+    build_shadow_casters(flag_casters, flag_models, flags_only, test_scene_colors(), test_props(), test_shadow_map(0.2f));
+    CHECK(!flag_casters.vertices().empty());
+    CHECK(casters.vertices().size() == remote_figure_vertex_count() + flag_casters.vertices().size());
     REQUIRE(!data.carts.empty());
     CHECK(data.carts[0].model == "golf_cart");
     // My cart with my bag strapped on it, and the club in my hand.
@@ -283,6 +293,70 @@ TEST_CASE("my figure casts the sun's shadow where I stand, at my ball while I ad
     state.mode = game_mode::walking;
     state.ride = cart_ride{};
     CHECK(!frame_for(state).my_figure.has_value());
+}
+
+TEST_CASE("the flagstick casts the sun's shadow, its pole square to the sun and at least a shadow texel wide") {
+    game_state state = started_hole();
+    render_data data = frame_for(state);
+    REQUIRE(data.show_hole);
+    data.my_figure.reset();
+    data.pin_markers.clear();
+    data.lying_flags.clear();
+    data.flags_out.clear();
+    data.lighting.sun_direction = glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f));
+    const float texel = 0.3f;
+    world_marker_batch casters;
+    prop_batch models;
+    build_shadow_casters(casters, models, data, test_scene_colors(), test_props(), test_shadow_map(texel));
+    REQUIRE(!casters.vertices().empty());
+    // The pole's quad, the first one: across the sun (along z), a texel wide.
+    float low = 1.0e9f;
+    float high = -1.0e9f;
+    for (std::size_t i = 0; i < 6 && i < casters.vertices().size(); ++i) {
+        const glm::vec3 offset = casters.vertices()[i].position - data.pin_position;
+        CHECK(std::abs(offset.x) < 0.001f);
+        low = std::min(low, offset.z);
+        high = std::max(high, offset.z);
+    }
+    CHECK(high - low >= texel - 0.001f);
+
+    // Taken out, it lies there and still casts; standing, nothing does.
+    data.flags_out.push_back(data.pin_position);
+    build_shadow_casters(casters, models, data, test_scene_colors(), test_props(), test_shadow_map(texel));
+    CHECK(casters.vertices().empty());
+    data.lying_flags.emplace_back(data.pin_position + glm::vec3(0.5f, 0.0f, 0.0f), data.pin_position + glm::vec3(2.5f, 0.0f, 0.0f));
+    build_shadow_casters(casters, models, data, test_scene_colors(), test_props(), test_shadow_map(texel));
+    CHECK(!casters.vertices().empty());
+}
+
+TEST_CASE("hole signs, way signs and fence posts cast the sun's shadow where the map reaches") {
+    render_data data;
+    data.camera_position = glm::vec3(0.0f, 2.0f, 0.0f);
+    const auto triangle_at = [](const float x) {
+        return std::vector<glm::vec3>{glm::vec3(x, 0.0f, 0.0f), glm::vec3(x + 1.0f, 0.0f, 0.0f), glm::vec3(x, 2.0f, 0.0f)};
+    };
+    render_hole_signs signs;
+    render_fences fences;
+    for (const float x : {10.0f, 1000.0f}) {
+        for (const glm::vec3& corner : triangle_at(x)) {
+            hole_sign_vertex sign;
+            sign.position = corner;
+            signs.vertices.push_back(sign);
+            fence_vertex post;
+            post.position = corner + glm::vec3(0.0f, 0.0f, 5.0f);
+            fences.posts.push_back(post);
+        }
+    }
+    data.hole_signs = &signs;
+    data.fences = &fences;
+    world_marker_batch casters;
+    prop_batch models;
+    build_shadow_casters(casters, models, data, test_scene_colors(), test_props(), test_shadow_map(0.3f));
+    // The near sign's and post's triangles; not the far ones.
+    REQUIRE(casters.vertices().size() == 6U);
+    for (const world_marker_vertex& vertex : casters.vertices()) {
+        CHECK(vertex.position.x < 20.0f);
+    }
 }
 
 TEST_CASE("online frames show other players, their tags, balls and trails; offline ones none") {
@@ -531,6 +605,13 @@ TEST_CASE("the course map numbers every hole of a hub course along its line of p
 
     state.course_map_active = true;
     const render_data data = frame_for(state);
+    REQUIRE(data.course_map_outline.size() >= 3U);
+    glm::vec3 outline_low(1.0e9f);
+    glm::vec3 outline_high(-1.0e9f);
+    for (const glm::vec3& point : data.course_map_outline) {
+        outline_low = glm::min(outline_low, point);
+        outline_high = glm::max(outline_high, point);
+    }
     REQUIRE(data.map_holes.size() == state.course_holes.size());
     for (std::size_t i = 0; i < data.map_holes.size(); ++i) {
         CHECK(data.map_holes[i].number == std::to_string(i + 1));
@@ -538,13 +619,13 @@ TEST_CASE("the course map numbers every hole of a hub course along its line of p
         for (std::size_t p = 0; p < data.map_holes[i].line_of_play.size(); ++p) {
             const glm::vec3 point = data.map_holes[i].line_of_play[p];
             CHECK(near(point, state.area.signs[i].line_of_play[p]));
-            CHECK((point.x >= data.course_map_low.x && point.x <= data.course_map_high.x));
-            CHECK((point.z >= data.course_map_low.z && point.z <= data.course_map_high.z));
+            CHECK((point.x >= outline_low.x && point.x <= outline_high.x));
+            CHECK((point.z >= outline_low.z && point.z <= outline_high.z));
         }
     }
     // The holes, not the land around them.
-    CHECK(data.course_map_high.x - data.course_map_low.x <= state.area.extent * 2.0f);
-    CHECK(data.course_map_high.z - data.course_map_low.z <= state.area.extent * 2.0f);
+    CHECK(outline_high.x - outline_low.x <= state.area.extent * 2.0f);
+    CHECK(outline_high.z - outline_low.z <= state.area.extent * 2.0f);
 }
 
 TEST_CASE("what is pinned to the camera keeps its tuned field of view whatever the setting") {
@@ -697,6 +778,15 @@ TEST_CASE("tracking noise eases in while paused and after a hole changes, never 
     CHECK(run(paused, {false, false, false}, 1.0f).level == 0.0f);
     CHECK(update_tape_tracking(paused, {true, false, true}, 0.05f, tape).level == 0.0f);
 
+    // Bus travel fades to black, then the new place starts with a burst.
+    tape.travel_fade_seconds = 0.5f;
+    const tape_tracking_state travelling = run({}, {false, false, false, true}, 0.6f);
+    CHECK(travelling.fade == 1.0f);
+    const tape_tracking_state arrived = update_tape_tracking(travelling, {false, false, false, false}, 0.05f, tape);
+    CHECK(arrived.burst_left == 1.0f);
+    CHECK(arrived.fade < 1.0f);
+    CHECK(run(arrived, {false, false, false, false}, 0.6f).fade == 0.0f);
+
     // A hole starting (or ending) runs a burst, then it fades out.
     const tape_tracking_state started = update_tape_tracking({}, {false, true, false}, 0.05f, tape);
     CHECK(started.burst_left == tape.tracking_burst_seconds);
@@ -815,42 +905,145 @@ TEST_CASE("in the target view the line I aim along runs out ahead into the pictu
     }
 }
 
-TEST_CASE("the down view shows the ball, the face's line and the stick, and a few degrees of face reads in scene pixels") {
+TEST_CASE("the down view shows the actual club face and ball position without setup guide lines") {
     for (const handedness hand : {handedness::right, handedness::left}) {
         game_state state = started_hole();
         state.hand = hand;
+        state.selected_club = static_cast<std::size_t>(std::find_if(state.clubs.begin(), state.clubs.end(),
+            [](const club_definition& club) { return club.id == "seven_iron"; }) - state.clubs.begin());
         enter_addressing(state);
         state.address.look = down_look(state.tuning.camera);
         const render_data data = frame_for(state);
-        REQUIRE(data.address_marks.has_value());
-        const address_marks marks = my_address_marks(state);
-
-        // Opened 5 degrees: the toe of the face's line moves back from the target.
-        game_state opened = state;
-        opened.address.setup.face_open += glm::radians(5.0f);
-        const address_marks open_marks = my_address_marks(opened);
-        // Played one step forward: the stance, and my eyes with it, move back, so the ball moves in the picture.
-        game_state forward = state;
-        forward.address.setup.ball_position += state.tuning.setup.ball_position_step;
-        const render_data forward_data = frame_for(forward);
-
-        for (const float aspect : aspects) {
-            for (const glm::vec3& point : {marks.ball, marks.face_heel, marks.face_toe, marks.stick_back, marks.stick_front,
-                                           marks.lead_foot, marks.trail_foot}) {
-                const std::optional<glm::vec2> seen = scene_pixel(data, aspect, point);
-                REQUIRE(seen.has_value());
-                CHECK(in_picture(*seen, aspect));
+        REQUIRE(data.my_club.has_value());
+        REQUIRE(data.address_feet.has_value());
+        const render_address_feet& feet = *data.address_feet;
+        const auto face = [&](const render_data& shown) {
+            const render_club_pose& pose = *shown.my_club;
+            const prop_model& model = test_props().at(pose.club_model);
+            for (const prop_piece& piece : prop_pieces(model, swing_club_frame(pose, shown.ball_visual_radius_meters, model),
+                                                       club_head_pose(model, pose.loft_degrees))) {
+                if (piece.part->shape == prop_shape::panel && piece.part->color == model.color("face")) {
+                    return piece.model;
+                }
             }
-            const glm::vec2 toe = *scene_pixel(data, aspect, marks.face_toe);
-            const glm::vec2 open_toe = *scene_pixel(data, aspect, open_marks.face_toe);
-            CHECK(glm::length(open_toe - toe) >= 2.0f);
-            const glm::vec2 ball = *scene_pixel(data, aspect, marks.ball);
-            const glm::vec2 target_side =
-                *scene_pixel(data, aspect, marks.ball + yaw_direction(state.address.setup.aim_angle) * 0.3f) - ball;
-            CHECK(glm::dot(open_toe - toe, target_side) < 0.0f);
-            CHECK(glm::length(*scene_pixel(forward_data, aspect, marks.ball) - ball) >= 2.0f);
+            CHECK(false);
+            return glm::mat4(1.0f);
+        };
+        const glm::mat4 square_face = face(data);
+        const glm::vec3 toe = glm::vec3(square_face * glm::vec4(-1.0f, -1.0f, 0.0f, 1.0f));
+        const glm::vec3 heel = glm::vec3(square_face * glm::vec4(1.0f, -1.0f, 0.0f, 1.0f));
+        // Only the two shoes remain in the address marker batch.
+        world_marker_batch shoes;
+        append_address_feet(shoes, feet, test_scene_colors());
+        CHECK(shoes.vertices().size() == 2 * prop_mesh_vertex_count(prop_mesh::sphere));
+        for (const float turn : {-1.0f, 1.0f}) {
+            game_state turned = state;
+            turned.address.setup.face_open += glm::radians(5.0f) * turn;
+            const render_data turned_data = frame_for(turned);
+            const glm::vec3 turned_toe = glm::vec3(face(turned_data) * glm::vec4(-1.0f, -1.0f, 0.0f, 1.0f));
+            for (const float aspect : aspects) {
+                for (const glm::vec3& point : {data.ball_position, toe, heel, feet.lead_foot, feet.trail_foot}) {
+                    const std::optional<glm::vec2> seen = scene_pixel(data, aspect, point);
+                    REQUIRE(seen.has_value());
+                    CHECK(in_picture(*seen, aspect));
+                }
+                const glm::vec2 moved = *scene_pixel(data, aspect, turned_toe) - *scene_pixel(data, aspect, toe);
+                const glm::vec2 ball = *scene_pixel(data, aspect, data.ball_position);
+                const glm::vec2 target_side =
+                    *scene_pixel(data, aspect, data.ball_position + yaw_direction(state.address.setup.aim_angle) * 0.3f) - ball;
+                CHECK(glm::length(moved) >= 1.0f);
+                CHECK(glm::dot(moved, target_side) * turn < 0.0f);
+            }
+        }
+        for (const float position : {-1.0f, 1.0f}) {
+            game_state moved = state;
+            moved.address.setup.ball_position += state.tuning.setup.ball_position_step * position;
+            const render_data moved_data = frame_for(moved);
+            for (const float aspect : aspects) {
+                const glm::vec2 ball = *scene_pixel(data, aspect, data.ball_position);
+                const glm::vec2 ball_moved = *scene_pixel(moved_data, aspect, data.ball_position) - ball;
+                const glm::vec2 target_side =
+                    *scene_pixel(data, aspect, data.ball_position + yaw_direction(state.address.setup.aim_angle) * 0.3f) - ball;
+                CHECK(glm::length(ball_moved) >= 2.0f);
+                CHECK(glm::dot(ball_moved, target_side) * position > 0.0f);
+            }
         }
     }
+}
+
+TEST_CASE("iron and wedge heads show their own loft while carried, handled and soled at the ball") {
+    game_state state = started_hole();
+    const prop_model& model = test_props().at("club_iron");
+    const auto panel_in = [&](const glm::mat4& frame, const float loft) {
+        for (const prop_piece& piece : prop_pieces(model, frame, club_head_pose(model, loft))) {
+            if (piece.part->shape == prop_shape::panel && piece.part->color == model.color("face")) {
+                return piece.model;
+            }
+        }
+        CHECK(false);
+        return glm::mat4(1.0f);
+    };
+    std::vector<glm::vec2> projected_edges;
+    for (const char* id : {"five_iron", "lob_wedge"}) {
+        const auto found = std::find_if(state.clubs.begin(), state.clubs.end(),
+                                        [id](const club_definition& club) { return club.id == id; });
+        REQUIRE(found != state.clubs.end());
+        state.selected_club = static_cast<std::size_t>(found - state.clubs.begin());
+        state.mode = game_mode::walking;
+        render_data walking = frame_for(state);
+        REQUIRE(walking.my_figure.has_value());
+        CHECK(walking.my_figure->carried_club_loft_degrees == found->spec.static_loft_degrees);
+        // The normal of the actual face panel inclines skywards by its spec,
+        // whichever pose holds the shaft; the shaft itself is not lofted.
+        const glm::mat4 carried = carried_club_frame(*walking.my_figure, walking.avatar_eye_height, model);
+        const glm::vec3 carried_normal = glm::normalize(glm::vec3(panel_in(carried, found->spec.static_loft_degrees)[2]));
+        const glm::vec3 local_normal = glm::vec3(glm::inverse(carried) * glm::vec4(carried_normal, 0.0f));
+        CHECK(near(glm::degrees(std::atan2(local_normal.y, local_normal.z)), found->spec.static_loft_degrees, 0.001f));
+        bag_handling handling;
+        handling.kind = handling_kind::club;
+        handling.from = state.bag;
+        handling.to = state.bag;
+        handling.club_out = "driver";
+        handling.club_in = id;
+        handling.elapsed = state.tuning.player.club_swap_seconds * 0.75f;
+        state.handling = handling;
+        const render_data swapping = frame_for(state);
+        REQUIRE(swapping.handled_props.size() == 1U);
+        CHECK(swapping.handled_props.front().club_loft_degrees == found->spec.static_loft_degrees);
+        state.handling.reset();
+        enter_addressing(state);
+        state.address.look = down_look(state.tuning.camera);
+        const render_data address = frame_for(state);
+        REQUIRE(address.my_club.has_value());
+        const render_club_pose& pose = *address.my_club;
+        CHECK(pose.loft_degrees == found->spec.static_loft_degrees);
+        const glm::mat4 frame = swing_club_frame(pose, address.ball_visual_radius_meters, model);
+        const glm::mat4 face = panel_in(frame, pose.loft_degrees);
+        const glm::vec3 face_at(face[3]);
+        const glm::vec3 normal = glm::normalize(glm::vec3(face[2]));
+        CHECK(normal.y > 0.0f);
+        CHECK(near(glm::dot(address.ball_position - face_at, normal), address.ball_visual_radius_meters, 0.001f));
+        CHECK(near(swing_club_grip(pose, address.ball_visual_radius_meters),
+                   glm::vec3(frame * glm::vec4(model.point("grip"), 1.0f)), 0.0001f));
+        prop_batch batch;
+        append_swing_club(batch, pose, address.ball_visual_radius_meters, model, test_scene_colors().glow);
+        float lowest = batch.opaque().front().position.y;
+        for (const prop_vertex& vertex : batch.opaque()) {
+            lowest = std::min(lowest, vertex.position.y);
+        }
+        CHECK(std::abs(lowest - (address.ball_position.y - address.ball_visual_radius_meters)) < 0.005f);
+        const glm::vec3 bottom(face * glm::vec4(0.0f, -1.0f, 0.0f, 1.0f));
+        const glm::vec3 top(face * glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
+        const auto bottom_pixel = scene_pixel(address, 16.0f / 9.0f, bottom);
+        const auto top_pixel = scene_pixel(address, 16.0f / 9.0f, top);
+        REQUIRE(bottom_pixel.has_value());
+        REQUIRE(top_pixel.has_value());
+        CHECK(in_picture(*bottom_pixel, 16.0f / 9.0f));
+        CHECK(in_picture(*top_pixel, 16.0f / 9.0f));
+        projected_edges.push_back(*top_pixel - *bottom_pixel);
+    }
+    REQUIRE(projected_edges.size() == 2U);
+    CHECK(glm::length(projected_edges[1] - projected_edges[0]) > 2.0f);
 }
 
 TEST_CASE("a left-hander stands, looks and opens the face mirrored, and the physics sees world angles") {
@@ -943,7 +1136,7 @@ TEST_CASE("over the ball the frame shows the key hints until the swing, then the
 
 TEST_CASE("the ball is drawn right over where it is, near a cup too, and the cup as big as it plays") {
     game_state state = started_hole();
-    const cup& hole = state.area.cups[state.ball->hole];
+    const cup& hole = state.area.cups[*state.ball->hole];
     const world_scale_tuning& scale = state.tuning.scale;
     for (const float out : {0.0f, 0.5f * hole.radius, hole.radius, 0.3f, 2.0f}) {
         const glm::vec3 at = hole.centre + glm::vec3(out, 0.0f, 0.0f);

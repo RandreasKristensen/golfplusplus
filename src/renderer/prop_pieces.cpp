@@ -16,28 +16,30 @@ const glm::vec3 ahead(0.0f, 0.0f, 1.0f);
 constexpr std::size_t box_faces = 6;
 }
 
-std::vector<prop_piece> prop_pieces(const prop_model& model, const glm::mat4& frame) {
+std::vector<prop_piece> prop_pieces(const prop_model& model, const glm::mat4& frame,
+                                     const std::optional<prop_part_pose>& pose) {
     std::vector<prop_piece> pieces;
     for (const prop_part& part : model.parts) {
+        const glm::mat4 placed = pose && part.tag == pose->tag ? frame * pose->frame : frame;
         const glm::vec3 turn = glm::radians(part.turn_degrees);
         switch (part.shape) {
         case prop_shape::cylinder:
             pieces.push_back(prop_piece{prop_mesh::cylinder,
-                                        frame * local_segment_model(origin, ahead, part.from, part.to, part.radius),
+                                        placed * local_segment_model(origin, ahead, part.from, part.to, part.radius),
                                         part.color, &part});
             break;
         case prop_shape::sphere:
-            pieces.push_back(prop_piece{prop_mesh::sphere, frame * local_sphere_model(origin, ahead, part.at, part.radius),
+            pieces.push_back(prop_piece{prop_mesh::sphere, placed * local_sphere_model(origin, ahead, part.at, part.radius),
                                         part.color, &part});
             break;
         case prop_shape::panel:
             pieces.push_back(prop_piece{prop_mesh::quad,
-                                        frame * local_panel_model(origin, ahead, part.at, turn, glm::vec2(part.size) * 0.5f),
+                                        placed * local_panel_model(origin, ahead, part.at, turn, glm::vec2(part.size) * 0.5f),
                                         part.color, &part});
             break;
         case prop_shape::box: {
             // Each face a quad in the box's own turned frame.
-            const glm::mat4 box = frame * camera_local_model(origin, ahead, part.at, turn, glm::vec3(1.0f));
+            const glm::mat4 box = placed * camera_local_model(origin, ahead, part.at, turn, glm::vec3(1.0f));
             const glm::vec3 half = part.size * 0.5f;
             const float quarter = glm::radians(90.0f);
             // `axis`: what the unit quad (facing z) turns a quarter about to face its side.

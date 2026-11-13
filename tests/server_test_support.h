@@ -35,7 +35,7 @@ inline void add_content_folder(content_fixture& fixture, const std::string& root
 
 inline content_fixture fixture_content_files() {
     content_fixture fixture;
-    for (const char* folder : {"play", "interface/fonts"}) {
+    for (const char* folder : {"play", "interface/fonts", "world/props", "world/hub"}) {
         add_content_folder(fixture, asset_root(), folder);
     }
     add_content_folder(fixture, fixture_root(), courses_path);

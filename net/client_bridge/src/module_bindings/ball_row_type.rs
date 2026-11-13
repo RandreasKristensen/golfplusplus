@@ -17,6 +17,8 @@ pub struct BallRow {
     pub last_shot_at: i64,
     pub rests_at: __sdk::Timestamp,
     pub in_cup: bool,
+    pub kind: u8,
+    pub tee_mat: i32,
 }
 
 impl __sdk::InModule for BallRow {
@@ -37,6 +39,8 @@ pub struct BallRowCols {
     pub last_shot_at: __sdk::__query_builder::Col<BallRow, i64>,
     pub rests_at: __sdk::__query_builder::Col<BallRow, __sdk::Timestamp>,
     pub in_cup: __sdk::__query_builder::Col<BallRow, bool>,
+    pub kind: __sdk::__query_builder::Col<BallRow, u8>,
+    pub tee_mat: __sdk::__query_builder::Col<BallRow, i32>,
 }
 
 impl __sdk::__query_builder::HasCols for BallRow {
@@ -53,6 +57,8 @@ impl __sdk::__query_builder::HasCols for BallRow {
             last_shot_at: __sdk::__query_builder::Col::new(table_name, "last_shot_at"),
             rests_at: __sdk::__query_builder::Col::new(table_name, "rests_at"),
             in_cup: __sdk::__query_builder::Col::new(table_name, "in_cup"),
+            kind: __sdk::__query_builder::Col::new(table_name, "kind"),
+            tee_mat: __sdk::__query_builder::Col::new(table_name, "tee_mat"),
         }
     }
 }

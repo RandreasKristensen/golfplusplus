@@ -37,6 +37,7 @@ struct game_input {
     // the cup, claim a collectible, step into or out of a cart; at address,
     // step away from the ball.
     bool interact = false;
+    bool drop_practice_ball = false;
     // At address, steps of the backswing's cap this frame by the wheel:
     // positive longer.
     int backswing_steps = 0;
@@ -74,7 +75,6 @@ struct game_input {
     bool toggle_pacing = false;
     // Crouch on foot to read the green (game/green_read.h).
     bool crouch_held = false;
-    bool group = false;        // join the nearest player's group, or start one
     bool leave_group = false;
 };
 

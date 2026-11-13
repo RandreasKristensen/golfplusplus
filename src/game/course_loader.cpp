@@ -70,17 +70,13 @@ std::optional<course_backdrop> parse_backdrop(const json& root) {
 }
 }
 
-std::optional<course_definition> parse_course_from_text(const std::string& text) {
-    const std::optional<json> root = parse_json(text);
-    if (!root || !root->is_object()) {
-        return std::nullopt;
-    }
-
-    const json* holes = json_array(*root, "holes");
+std::optional<place_definition> parse_place_from_text(const std::string& text) {
+    const auto root = parse_json(text);
+    if (!root || !root->is_object()) { return std::nullopt; }
     const std::optional<course_backdrop> backdrop = parse_backdrop(*root);
     const std::optional<course_sky> sky = parse_sky(*root);
     const std::optional<course_air> air = parse_air(*root);
-    if (holes == nullptr || holes->empty() || !backdrop || !sky || !air) {
+    if (!backdrop || !sky || !air) {
         return std::nullopt;
     }
 
@@ -91,7 +87,7 @@ std::optional<course_definition> parse_course_from_text(const std::string& text)
     if (!id || id->empty() || !name || !world || world->empty() || !stimp || *stimp <= 0.0f) {
         return std::nullopt;
     }
-    course_definition course;
+    place_definition course;
     course.id = *id;
     course.name = *name;
     course.world = *world;
@@ -99,8 +95,21 @@ std::optional<course_definition> parse_course_from_text(const std::string& text)
     course.sky = *sky;
     course.air = *air;
     course.green_stimp_feet = *stimp;
-    course.practice = json_bool(*root, "practice").value_or(false);
     course.carts = json_bool(*root, "carts").value_or(true);
+    return course;
+}
+
+std::optional<course_definition> parse_course_from_text(const std::string& text) {
+    const std::optional<json> root = parse_json(text);
+    if (!root || !root->is_object()) {
+        return std::nullopt;
+    }
+
+    const json* holes = json_array(*root, "holes");
+    const auto environment = parse_place_from_text(text);
+    if (!holes || holes->empty() || !environment || root->contains("practice")) { return std::nullopt; }
+    course_definition course;
+    static_cast<place_definition&>(course) = *environment;
     for (const json& hole : *holes) {
         if (!hole.is_string() || hole.get<std::string>().empty()) {
             return std::nullopt;

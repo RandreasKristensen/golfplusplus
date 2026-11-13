@@ -33,6 +33,7 @@
     "tracking_skew": 0.02,
     "tracking_burst_seconds": 1.2,
     "tracking_fade_seconds": 0.3,
+    "travel_fade_seconds": 1.0,
     "fresh": {
       "luma_lines": 2000,
       "chroma_lines": 1200,

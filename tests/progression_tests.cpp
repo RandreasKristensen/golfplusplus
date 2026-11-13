@@ -79,6 +79,7 @@ TEST_CASE("xp paid into a skill not listed, or retired, is refused") {
     const skill_catalog skills = test_skills();
     reward_rules rewards;
     rewards.shot = xp_reward{"fitness", 25};
+    rewards.dap = xp_reward{"fitness", 10};
     rewards.walking = movement_xp_rate{"fitness", 10.0f};
     rewards.cart_on_road = movement_xp_rate{"fitness", 20.0f};
     CHECK(unpayable_skill(skills, rewards, item_catalog{}).empty());

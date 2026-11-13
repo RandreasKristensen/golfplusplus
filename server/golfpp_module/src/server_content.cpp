@@ -1,6 +1,7 @@
 #include "server_content.h"
 
 #include "game/course_loader.h"
+#include "game/hub_scene.h"
 #include "game/course_world_loader.h"
 #include "game/hole_loader.h"
 #include "game/text_assets.h"
@@ -34,6 +35,12 @@ server_content_load_result parse_server_content(const content_files& files) {
     server_content_load_result result;
     server_content content;
     content.content_hash = simulation_content_hash(files);
+    for (const char* id : {"tee_book", "hub_bus"}) {
+        const auto source = file_text(files, std::string("world/props/") + id + ".json");
+        const auto model = source ? parse_prop_from_text(*source) : std::nullopt;
+        if (!model || model->kind != (std::string(id) == "hub_bus" ? "hub_bus" : "hub_book")) { result.error = std::string("cannot load hub prop ") + id; return result; }
+        content.hub_props.emplace(id, *model);
+    }
 
     const std::vector<std::string> tuning_texts = files_in(files, tuning_path);
     if (tuning_texts.empty()) {
@@ -116,6 +123,9 @@ server_content_load_result parse_server_content(const content_files& files) {
         return result;
     }
 
+    const auto hub_text = file_text(files, hub_manifest_path);
+    content.hub = hub_text ? parse_hub_from_text(*hub_text) : std::nullopt;
+    if (!content.hub) { result.error = "cannot load hub"; return result; }
     result.content = std::move(content);
     return result;
 }
@@ -129,8 +139,10 @@ shot_course server_shot_course(const server_course& course, const std::size_t ho
             flags_in[static_cast<std::size_t>(out)] = false;
         }
     }
-    return make_shot_course(course.area, hole, weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course.course, shot_at),
+    auto made = make_shot_course(course.area, hole, weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course.course, shot_at),
                             course.course, flags_in, tuning);
+    made.practice = course.kind == place_kind::hub;
+    return made;
 }
 
 const course_definition* find_server_course(const server_content& content, const std::string& course_id) {
@@ -142,6 +154,18 @@ const course_definition* find_server_course(const server_content& content, const
 std::optional<server_course> build_server_course(const content_files& files,
                                                  const server_content& content,
                                                  const std::string& course_id) {
+    if (content.hub && content.hub->id == course_id) {
+        const auto text = file_text(files, content.hub->world);
+        auto world = text ? parse_world_from_text(*text) : std::nullopt;
+        if (!world) { return std::nullopt; }
+        world->hub = content.hub->anchors;
+        server_course built;
+        built.kind = place_kind::hub; built.hub = content.hub; built.course = *content.hub;
+        built.world = *world;
+        built.area = build_hub_area(*content.hub, *world, content.tuning, bus_ground_pad(*world, content.hub_props));
+        place_hub_scene(built.area, *world, content.hub_props, content.tuning);
+        return built;
+    }
     const course_definition* course = find_server_course(content, course_id);
     if (course == nullptr) {
         return std::nullopt;
@@ -165,7 +189,8 @@ std::optional<server_course> build_server_course(const content_files& files,
 
     server_course built;
     built.course = *course;
-    built.area = build_course_area(holes, *world, content.tuning);
+    built.area = build_course_area(holes, *world, content.tuning, bus_ground_pad(*world, content.hub_props));
+    place_hub_scene(built.area, *world, content.hub_props, content.tuning);
     for (std::size_t i = 0; i < holes.size(); ++i) {
         hole_data placed = place_hole(holes[i], world->hole_starts[i]);
         built.holes.push_back(std::move(placed));

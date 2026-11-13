@@ -4,15 +4,41 @@
     "depth_m": { "value": 0.1016, "source": "Rules of Golf, Definitions: Hole, at least 4 in deep", "checked": true }
   },
   "capture": {
-    "dead_centre_max_speed_mps": { "value": 1.31, "source": "Holmes (1991), 'The dynamics of a golf ball falling into the cup', Am. J. Phys. 59:129-136", "checked": false },
+    "max_speed_mps": { "value": 1.63, "source": "Penner (2002), 'The physics of putting', Can. J. Phys. 80:83-96, fitting Holmes (1991), Am. J. Phys. 59:129-136: dead centre, counting capture helped by the far rim", "url": "https://www.researchgate.net/publication/237196126_The_physics_of_putting", "checked": true },
+    "free_fall_max_speed_mps": { "value": 1.31, "source": "Penner (2002): dead centre, falling a ball radius before the far wall", "checked": true },
+    "off_centre": "Penner (2002): captured below max_speed * (1 - (offset / hole radius)^2)",
     "rim_roll_studies": "Hubbard & Smith (1999), 'Dynamics of golf ball-hole interactions: rolling around the rim', J. Dyn. Sys. Meas. Control 121:88-95: the capture boundary falls as the ball arrives off centre",
     "lip_outs": "fast or off-centre balls ride the rim and spin out"
   },
   "flagstick": {
-    "diameter_m": { "value": 0.019, "source": "Rules of Equipment, Part 8 (Committee equipment): at most 0.75 in (19 mm) from 3 in above to 3 in below the putting surface", "checked": true },
+    "diameter_m": { "value": 0.0127, "source": "Tom Mase (2019), Take the Flagstick Out!, Golf Digest: tested sticks approximately half an inch in diameter at green level", "url": "https://www.golfdigest.com/story/take-the-flagstick-out", "checked": true },
+    "maximum_diameter_m": { "value": 0.019, "source": "Rules of Equipment, Part 8 (Committee equipment): at most 0.75 in (19 mm) from 3 in above to 3 in below the putting surface", "checked": true },
     "material": "fibreglass",
-    "flag_in_putting": "USGA/Pelz 2019 flag-in putting tests: centred putts hitting the flagstick mostly drop; off-centre, firm ones bounce out",
-    "checked": false
+    "pelz": {
+      "source": "Dave Pelz (2019-01-02), The science proves you should leave the flagstick in when you putt",
+      "url": "https://golf.com/news/tournaments/dave-pelz-the-science-proves-you-should-leave-the-flagstick-in-when-you-putt-2/",
+      "finding": "A fibreglass flagstick absorbs energy from the ball, giving gravity longer to pull it into the cup.",
+      "checked": true
+    },
+    "mase": {
+      "source": "Tom Mase (2019-03-28), Take the Flagstick Out!",
+      "url": "https://www.golfdigest.com/story/take-the-flagstick-out",
+      "slow_roll_past_feet": 2.5,
+      "finding": "At 2.5 feet past, direct and off-centre hits dropped with or without the pin. At 4.5 feet past, some off-centre hits were rejected. Direct hits at 9 to 12 feet past mostly dropped with fibreglass pins when they missed with the pin out.",
+      "checked": true
+    },
+    "mygolfspy": {
+      "source": "MyGolfSpy (2019-01-16), TESTED: Flagstick In (vs) Flagstick Out?",
+      "url": "https://mygolfspy.com/news-opinion/flagstick-in-flagstick-out/",
+      "roll_past_feet": [3.0, 6.0, 9.0],
+      "finding": "Machine tests used two pin rigidities and direct and off-centre strikes. A more compliant pin helped direct hits by losing more speed. Firm glancing hits could still miss.",
+      "checked": true
+    },
+    "simulation_checks": {
+      "green_stimp_feet": 10.0,
+      "note": "The experiments report roll-past distances, not entry speeds in m/s or one universal rejection speed. Tests derive speeds for this flat test green from rolling_deceleration; the source greens and exact make percentages are not reproduced. The contact restitution is a simulation fit, not a reported material measurement.",
+      "beyond_test_band_mps": 6.0
+    }
   },
   "leniency": { "cup_radius_scale": 2.25, "source": "golf++ design: the one named departure from the real cup (cup_leniency)" }
 }

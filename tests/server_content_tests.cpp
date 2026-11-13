@@ -157,7 +157,7 @@ TEST_CASE("the server builds each hole where the game plays it, and shots land i
         CHECK(server.weather.wetness == client.weather.wetness);
         CHECK(glm::length(server.weather.wind) > 0.0f);
         CHECK(same_solids(server.area.solids, client.area.solids));
-        CHECK(course->holes[i].tee_position == game.holes[game.ball->hole].tee_position);
+        CHECK(course->holes[i].tee_position == game.holes[*game.ball->hole].tee_position);
 
         for (const float aim_off : {-25.0f, -15.0f, 15.0f, 25.0f}) {
             shot_setup input;

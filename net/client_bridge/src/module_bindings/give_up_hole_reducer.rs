@@ -6,11 +6,15 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub(super) struct GiveUpHoleArgs {}
+pub(super) struct GiveUpHoleArgs {
+    pub expected_room: u64,
+}
 
 impl From<GiveUpHoleArgs> for super::Reducer {
     fn from(args: GiveUpHoleArgs) -> Self {
-        Self::GiveUpHole
+        Self::GiveUpHole {
+            expected_room: args.expected_room,
+        }
     }
 }
 
@@ -29,8 +33,8 @@ pub trait give_up_hole {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`give_up_hole:give_up_hole_then`] to run a callback after the reducer completes.
-    fn give_up_hole(&self) -> __sdk::Result<()> {
-        self.give_up_hole_then(|_, _| {})
+    fn give_up_hole(&self, expected_room: u64) -> __sdk::Result<()> {
+        self.give_up_hole_then(expected_room, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `give_up_hole` to run as soon as possible,
@@ -41,6 +45,7 @@ pub trait give_up_hole {
     ///  and its status can be observed with the `callback`.
     fn give_up_hole_then(
         &self,
+        expected_room: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -51,12 +56,13 @@ pub trait give_up_hole {
 impl give_up_hole for super::RemoteReducers {
     fn give_up_hole_then(
         &self,
+        expected_room: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
         self.imp
-            .invoke_reducer_with_callback(GiveUpHoleArgs {}, callback)
+            .invoke_reducer_with_callback(GiveUpHoleArgs { expected_room }, callback)
     }
 }

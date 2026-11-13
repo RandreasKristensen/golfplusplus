@@ -175,11 +175,11 @@ TEST_CASE("carrying my bag I have no cart; B straps it behind another's free sea
     const net_command* placed = find_command(state, net_command_type::place_bag);
     REQUIRE(placed != nullptr);
     CHECK(placed->bag.cart_owner == other);
-    // It is being strapped on: I stand still meanwhile.
+    // It is being strapped on while I keep walking.
     REQUIRE(state.handling.has_value());
     const glm::vec3 standing = state.player.position;
     update_game(state, pressing(&game_input::forward_held), 0.1f);
-    CHECK(horizontal_distance(state.player.position, standing) < 0.001f);
+    CHECK(horizontal_distance(state.player.position, standing) > 0.001f);
     finish_handling(state);
 
     // Their cart drives off with my bag on it.
@@ -344,54 +344,11 @@ TEST_CASE("riding together: the driver sends their cart to the rider alone, far 
     CHECK(horizontal_distance(seat_position(*shown_cart(rider, other), cart_seat::driver, tuning), at_wheel.position) > 0.5f);
 }
 
-TEST_CASE("before a round on a course with carts I choose to take a cart or carry my bag; online the choice goes with the join") {
-    startup_catalog catalog;
-    course_definition with_carts = fixture_hub_course();
-    with_carts.carts = true;
-    catalog.courses.push_back(startup_course_option{with_carts, 72, std::nullopt});
-    startup_flow_state menu;
-    menu.flow = startup_flow::course_picker;
-    input_state enter;
-    enter.enter.pressed = true;
-    startup_menu_result result = update_startup_menu(menu, enter, menu_pointer{}, catalog);
-    CHECK(result.action == startup_action::none);
-    REQUIRE(menu.flow == startup_flow::transport_picker);
-    input_state down;
-    down.down.pressed = true;
-    update_startup_menu(menu, down, menu_pointer{}, catalog);
-    result = update_startup_menu(menu, enter, menu_pointer{}, catalog);
-    CHECK(result.action == startup_action::start_course);
-    CHECK(!menu.takes_cart);
-
-    // Online it joins the room with the choice.
-    startup_flow_state online;
-    online.flow = startup_flow::transport_picker;
-    online.picking_for_course = with_carts;
-    online.picking_for_play = play_mode::online;
-    result = update_startup_menu(online, enter, menu_pointer{}, catalog);
-    REQUIRE(result.requests.size() == 1U);
-    CHECK(result.requests[0].type == online_request_type::join_course);
-    CHECK(result.requests[0].takes_cart);
-    CHECK(online.flow == startup_flow::joining);
-
-    // A course without carts asks nothing.
-    startup_catalog plain;
-    course_definition no_carts = fixture_hub_course();
-    no_carts.carts = false;
-    plain.courses.push_back(startup_course_option{no_carts, 72, std::nullopt});
-    startup_flow_state walking;
-    walking.flow = startup_flow::course_picker;
-    result = update_startup_menu(walking, enter, menu_pointer{}, plain);
-    CHECK(result.action == startup_action::start_course);
-    CHECK(!walking.takes_cart);
-
-    // Carrying, offline, I start with my bag on my back and no cart.
+TEST_CASE("offline carrying starts without a cart") {
     game_state state = started_game(fixture_hub_course());
     state.takes_cart = false;
-    REQUIRE(start_course(state, with_carts));
-    CHECK(!own_cart(state));
-    CHECK(bag_on_back(state));
-    CHECK(carts_in_world(state).empty());
+    REQUIRE(start_course(state, fixture_hub_course()));
+    CHECK(!own_cart(state)); CHECK(bag_on_back(state)); CHECK(carts_in_world(state).empty());
 }
 
 TEST_CASE("at a seat's door the strip at the bottom says walking in sits me down") {

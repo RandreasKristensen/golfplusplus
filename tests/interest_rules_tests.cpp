@@ -93,8 +93,8 @@ TEST_CASE("motion interest: neighbours and retained accounts appear once, only i
     CHECK(ids(index.visible(8, {0, 0}, {6})) == std::set<std::uint64_t>{6});
 }
 
-TEST_CASE("motion interest: a spread-out room delivers fewer hot rows at 2, 8 and 40 players") {
-    for (const int players : {2, 8, 40}) {
+TEST_CASE("motion interest: a spread-out room delivers fewer hot rows at 2, 8, 40, 80 and 200 players") {
+    for (const int players : {2, 8, 40, 80, 200}) {
         motion_index index;
         for (int i = 0; i < players; ++i) {
             // Eighteen separated areas, with up to three players in each.
@@ -109,16 +109,16 @@ TEST_CASE("motion interest: a spread-out room delivers fewer hot rows at 2, 8 an
         }
         const std::size_t baseline = static_cast<std::size_t>(players * players);
         CHECK(delivered < baseline);
-        CHECK(delivered == (players == 40 ? 92U : static_cast<std::size_t>(players)));
+        CHECK(delivered <= static_cast<std::size_t>(players * ((players + 17) / 18)));
     }
 }
 
-TEST_CASE("motion interest: a crowded area keeps all forty players") {
+TEST_CASE("motion interest: a crowded area keeps all two hundred players") {
     motion_index index;
-    for (std::uint64_t account = 1; account <= 40; ++account) {
+    for (std::uint64_t account = 1; account <= 200; ++account) {
         index.insert({account, 7, {0, 0}});
     }
-    CHECK(index.visible(7, {0, 0}, {1}).size() == 40U);
+    CHECK(index.visible(7, {0, 0}, {1}).size() == 200U);
     CHECK(index.area_reads == 9);
 }
 

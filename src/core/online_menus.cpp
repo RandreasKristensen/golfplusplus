@@ -59,11 +59,13 @@ void open_link_code_entry(startup_flow_state& state) {
 }
 
 // Signed in: a new account picks a name first.
-void open_signed_in(startup_flow_state& state, const startup_catalog& catalog, const online_menu_status& online) {
+void open_signed_in(startup_flow_state& state, const startup_catalog& catalog, const online_menu_status& online, startup_menu_result& result) {
     if (online.name.empty()) {
         open_name_entry(state, catalog);
     } else {
-        open_screen(state, startup_flow::online_course_picker);
+        open_screen(state, startup_flow::joining);
+        state.joining_course.id = online_hub_course;
+        request(result, online_request_type::join_course, online_hub_course);
     }
 }
 
@@ -87,20 +89,22 @@ bool follow_server(startup_flow_state& state,
     switch (state.flow) {
     case startup_flow::online_login:
         if (connected(online) && online.account_id != 0) {
-            open_signed_in(state, catalog, online);
+            open_signed_in(state, catalog, online, result);
             return true;
         }
         return false;
     case startup_flow::name_entry:
         if (!online.name.empty()) {
-            open_screen(state, startup_flow::online_course_picker);
+            open_screen(state, startup_flow::joining);
+            state.joining_course.id = online_hub_course;
+            request(result, online_request_type::join_course, online_hub_course);
             return true;
         }
         return false;
     case startup_flow::link_code_entry:
         // Linked: this login's account is now the code's.
         if (state.waiting && online.account_id != 0 && online.account_id != state.account_at_submit) {
-            open_signed_in(state, catalog, online);
+            open_signed_in(state, catalog, online, result);
             return true;
         }
         if (state.waiting && online.link_results != state.link_results_at_submit &&
@@ -119,7 +123,7 @@ bool follow_server(startup_flow_state& state,
     case startup_flow::joining:
         if (online.room_course_id == state.joining_course.id) {
             result.action = startup_action::start_course;
-            result.course = state.joining_course;
+            result.course.id = online_hub_course;
             result.play = play_mode::online;
         }
         return false;
@@ -139,7 +143,7 @@ void show_refusals(startup_flow_state& state, const online_menu_status& online) 
             continue;
         }
         if (state.flow == startup_flow::joining) {
-            open_screen(state, startup_flow::online_course_picker);
+            return_to_main_menu(state);
         }
         state.waiting = false;
         state.message_key = online_error_text_key(failure.error);
@@ -247,25 +251,6 @@ void update_link_code_entry(startup_flow_state& state,
     state.link_results_at_submit = online.link_results;
 }
 
-void update_online_course_picker(startup_flow_state& state,
-                                 const input_state& input,
-                                 const menu_pointer& pointer,
-                                 const startup_catalog& catalog,
-                                 startup_menu_result& result) {
-    const int count = static_cast<int>(catalog.courses.size());
-    const int hit = select_course(state.selection, state.picker_top_row, count, input, pointer, result.sounds);
-    if (input.escape.pressed) {
-        result.sounds.push_back(ui_sound::back);
-        return_to_main_menu(state);
-        return;
-    }
-    if (!(input.enter.pressed || input.space.pressed || hit >= 0) || count <= 0) {
-        return;
-    }
-    result.sounds.push_back(ui_sound::select);
-    pick_transport(state, catalog.courses[static_cast<std::size_t>(state.selection)].course, play_mode::online, result);
-}
-
 void update_waiting_screen(startup_flow_state& state,
                            const input_state& input,
                            const menu_pointer& pointer,
@@ -277,7 +262,7 @@ void update_waiting_screen(startup_flow_state& state,
     result.sounds.push_back(input.escape.pressed ? ui_sound::back : ui_sound::select);
     if (state.flow == startup_flow::joining) {
         request(result, online_request_type::leave_room);
-        open_screen(state, startup_flow::online_course_picker);
+        return_to_main_menu(state);
     } else {
         return_to_main_menu(state);
     }
@@ -338,16 +323,13 @@ bool is_online_flow(const startup_flow flow) {
     case startup_flow::name_entry:
     case startup_flow::link_code_entry:
     case startup_flow::link_code_show:
-    case startup_flow::online_course_picker:
     case startup_flow::joining:
         return true;
     case startup_flow::main:
     case startup_flow::help:
     case startup_flow::settings:
-    case startup_flow::course_picker:
     case startup_flow::exit_prompt:
     case startup_flow::natural_shape_picker:
-    case startup_flow::transport_picker:
     case startup_flow::tour_picker:
     case startup_flow::touring:
     case startup_flow::playing:
@@ -358,7 +340,9 @@ bool is_online_flow(const startup_flow flow) {
 
 void open_play_online(startup_flow_state& state, const online_menu_status& online, startup_menu_result& result) {
     if (connected(online) && online.account_id != 0 && !online.name.empty()) {
-        open_screen(state, startup_flow::online_course_picker);
+        open_screen(state, startup_flow::joining);
+        state.joining_course.id = online_hub_course;
+        request(result, online_request_type::join_course, online_hub_course);
         return;
     }
     open_online_login(state);
@@ -393,9 +377,6 @@ void update_online_menu(startup_flow_state& state,
     case startup_flow::link_code_entry:
         update_link_code_entry(state, input, pointer, catalog, online, result);
         break;
-    case startup_flow::online_course_picker:
-        update_online_course_picker(state, input, pointer, catalog, result);
-        break;
     case startup_flow::link_code_show:
     case startup_flow::joining:
         update_waiting_screen(state, input, pointer, result);
@@ -406,7 +387,7 @@ void update_online_menu(startup_flow_state& state,
 }
 
 void make_online_menu_render_data(const startup_flow_state& state,
-                                  const startup_catalog& catalog,
+                                  const startup_catalog&,
                                   const text_assets& text,
                                   const online_menu_status& online,
                                   render_startup_menu& menu) {
@@ -468,15 +449,9 @@ void make_online_menu_render_data(const startup_flow_state& state,
         }
         add_tile(menu, lookup_text(text, text_menu_link_code_done), lookup_text(text, text_menu_link_code_done_hint), selected(0));
         break;
-    case startup_flow::online_course_picker:
-        menu.screen = startup_menu_screen::course_picker;
-        menu.subtitle = lookup_text(text, text_menu_online_course_picker_subtitle);
-        menu.footer = lookup_text(text, text_menu_course_picker_footer);
-        add_course_tiles(menu, catalog, text, state.selection, state.picker_top_row);
-        break;
     case startup_flow::joining:
         menu.subtitle = lookup_text(text, text_menu_joining_subtitle);
-        menu.message = format_text(text, text_menu_joining_message, {{"course", state.joining_course.name}});
+        menu.message = format_text(text, text_menu_joining_message, {{"course", online_hub_course}});
         add_tile(menu, lookup_text(text, text_menu_login_cancel), lookup_text(text, text_menu_joining_cancel_hint), selected(0));
         break;
     default:

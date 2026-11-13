@@ -12735,9 +12735,9 @@
           192.18
         ],
         [
-          -8.44,
+          -4.44,
           0.0,
-          206.18
+          194.18
         ]
       ]
     },
@@ -12746,17 +12746,17 @@
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/96922264",
+      "osm_ref": "way/96922275",
       "polyline": [
         [
-          81.56,
+          -4.44,
           0.0,
-          198.18
+          194.18
         ],
         [
-          67.56,
+          -6.44,
           0.0,
-          200.18
+          198.18
         ]
       ]
     },
@@ -12765,17 +12765,17 @@
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/96922264",
+      "osm_ref": "way/96922275",
       "polyline": [
         [
-          81.56,
+          -4.44,
           0.0,
-          198.18
+          194.18
         ],
         [
-          85.56,
+          -6.44,
           0.0,
-          200.18
+          198.18
         ]
       ]
     },
@@ -12784,17 +12784,17 @@
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/96922264",
+      "osm_ref": "way/96922275",
       "polyline": [
         [
-          81.56,
+          -6.44,
           0.0,
           198.18
         ],
         [
-          85.56,
+          -8.44,
           0.0,
-          200.18
+          206.18
         ]
       ]
     },
@@ -12806,19 +12806,57 @@
       "osm_ref": "way/96922264",
       "polyline": [
         [
+          81.56,
+          0.0,
+          198.18
+        ],
+        [
           67.56,
           0.0,
           200.18
-        ],
-        [
-          63.56,
-          0.0,
-          202.18
         ]
       ]
     },
     {
       "id": "cart_path_567",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/96922264",
+      "polyline": [
+        [
+          81.56,
+          0.0,
+          198.18
+        ],
+        [
+          85.56,
+          0.0,
+          200.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_568",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/96922264",
+      "polyline": [
+        [
+          81.56,
+          0.0,
+          198.18
+        ],
+        [
+          85.56,
+          0.0,
+          200.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_569",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -12837,7 +12875,26 @@
       ]
     },
     {
-      "id": "cart_path_568",
+      "id": "cart_path_570",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/96922264",
+      "polyline": [
+        [
+          67.56,
+          0.0,
+          200.18
+        ],
+        [
+          63.56,
+          0.0,
+          202.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_571",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -12856,63 +12913,6 @@
       ]
     },
     {
-      "id": "cart_path_569",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/96922264",
-      "polyline": [
-        [
-          63.56,
-          0.0,
-          202.18
-        ],
-        [
-          53.56,
-          0.0,
-          210.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_570",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/96922264",
-      "polyline": [
-        [
-          63.56,
-          0.0,
-          202.18
-        ],
-        [
-          53.56,
-          0.0,
-          210.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_571",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/96922264",
-      "polyline": [
-        [
-          89.56,
-          0.0,
-          204.18
-        ],
-        [
-          93.56,
-          0.0,
-          210.18
-        ]
-      ]
-    },
-    {
       "id": "cart_path_572",
       "source": "osm",
       "surface": "gravel",
@@ -12920,12 +12920,12 @@
       "osm_ref": "way/96922264",
       "polyline": [
         [
-          89.56,
+          63.56,
           0.0,
-          204.18
+          202.18
         ],
         [
-          93.56,
+          53.56,
           0.0,
           210.18
         ]
@@ -12936,15 +12936,15 @@
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/96922275",
+      "osm_ref": "way/96922264",
       "polyline": [
         [
-          -8.44,
+          63.56,
           0.0,
-          206.18
+          202.18
         ],
         [
-          -10.44,
+          53.56,
           0.0,
           210.18
         ]
@@ -12952,6 +12952,44 @@
     },
     {
       "id": "cart_path_574",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/96922264",
+      "polyline": [
+        [
+          89.56,
+          0.0,
+          204.18
+        ],
+        [
+          93.56,
+          0.0,
+          210.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_575",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/96922264",
+      "polyline": [
+        [
+          89.56,
+          0.0,
+          204.18
+        ],
+        [
+          93.56,
+          0.0,
+          210.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_576",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -12970,7 +13008,26 @@
       ]
     },
     {
-      "id": "cart_path_575",
+      "id": "cart_path_577",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/96922275",
+      "polyline": [
+        [
+          -8.44,
+          0.0,
+          206.18
+        ],
+        [
+          -10.44,
+          0.0,
+          210.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_578",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -12989,7 +13046,7 @@
       ]
     },
     {
-      "id": "cart_path_576",
+      "id": "cart_path_579",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13001,14 +13058,14 @@
           210.18
         ],
         [
-          51.56,
+          43.56,
           0.0,
-          212.18
+          218.18
         ]
       ]
     },
     {
-      "id": "cart_path_577",
+      "id": "cart_path_580",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13027,91 +13084,19 @@
       ]
     },
     {
-      "id": "cart_path_578",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/630415817",
-      "polyline": [
-        [
-          113.56,
-          0.0,
-          210.18
-        ],
-        [
-          114.45,
-          0.0,
-          214.93
-        ],
-        [
-          114.99,
-          0.0,
-          218.74
-        ],
-        [
-          115.32,
-          0.0,
-          222.53
-        ],
-        [
-          115.56,
-          0.0,
-          228.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_579",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/96922275",
-      "polyline": [
-        [
-          -10.44,
-          0.0,
-          212.18
-        ],
-        [
-          -12.44,
-          0.0,
-          216.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_580",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/96922275",
-      "polyline": [
-        [
-          -10.44,
-          0.0,
-          212.18
-        ],
-        [
-          -12.44,
-          0.0,
-          216.18
-        ]
-      ]
-    },
-    {
       "id": "cart_path_581",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/96922264",
+      "osm_ref": "way/96922275",
       "polyline": [
         [
-          51.56,
+          -10.44,
           0.0,
           212.18
         ],
         [
-          45.56,
+          -12.44,
           0.0,
           216.18
         ]
@@ -13122,15 +13107,15 @@
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/96922264",
+      "osm_ref": "way/96922275",
       "polyline": [
         [
-          51.56,
+          -10.44,
           0.0,
           212.18
         ],
         [
-          45.56,
+          -12.44,
           0.0,
           216.18
         ]
@@ -13179,6 +13164,25 @@
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
+      "osm_ref": "way/630415817",
+      "polyline": [
+        [
+          115.56,
+          0.0,
+          214.18
+        ],
+        [
+          115.56,
+          0.0,
+          228.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_586",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
       "osm_ref": "way/96922275",
       "polyline": [
         [
@@ -13188,25 +13192,6 @@
         ],
         [
           -12.44,
-          0.0,
-          218.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_586",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/96922264",
-      "polyline": [
-        [
-          45.56,
-          0.0,
-          216.18
-        ],
-        [
-          43.56,
           0.0,
           218.18
         ]
@@ -13696,6 +13681,24 @@
     },
     {
       "id": "cart_path_610",
+      "source": "bus_stop",
+      "surface": "gravel",
+      "width": 3.0,
+      "polyline": [
+        [
+          115.56,
+          0.0,
+          228.18
+        ],
+        [
+          119.56,
+          0.0,
+          234.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_611",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13729,7 +13732,7 @@
       ]
     },
     {
-      "id": "cart_path_611",
+      "id": "cart_path_612",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13748,7 +13751,7 @@
       ]
     },
     {
-      "id": "cart_path_612",
+      "id": "cart_path_613",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13767,7 +13770,7 @@
       ]
     },
     {
-      "id": "cart_path_613",
+      "id": "cart_path_614",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13786,7 +13789,7 @@
       ]
     },
     {
-      "id": "cart_path_614",
+      "id": "cart_path_615",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13798,33 +13801,9 @@
           232.18
         ],
         [
-          118.77,
-          0.0,
-          236.12
-        ],
-        [
-          121.56,
-          0.0,
-          240.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_615",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418933733",
-      "polyline": [
-        [
-          121.56,
-          0.0,
-          240.18
-        ],
-        [
           119.56,
           0.0,
-          244.18
+          234.18
         ]
       ]
     },
@@ -13833,17 +13812,72 @@
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/1418933733",
+      "osm_ref": "way/630415857",
       "polyline": [
+        [
+          173.56,
+          0.0,
+          232.18
+        ],
+        [
+          169.79,
+          0.0,
+          228.97
+        ],
+        [
+          166.78,
+          0.0,
+          226.54
+        ],
+        [
+          164.51,
+          0.0,
+          224.93
+        ],
+        [
+          162.99,
+          0.0,
+          224.01
+        ],
+        [
+          160.7,
+          0.0,
+          222.95
+        ],
+        [
+          159.15,
+          0.0,
+          222.49
+        ],
+        [
+          157.59,
+          0.0,
+          222.26
+        ],
+        [
+          156.0,
+          0.0,
+          222.25
+        ],
+        [
+          154.39,
+          0.0,
+          222.45
+        ],
+        [
+          152.74,
+          0.0,
+          222.84
+        ],
+        [
+          149.35,
+          0.0,
+          224.01
+        ],
         [
           121.56,
           0.0,
-          240.18
-        ],
-        [
-          119.56,
-          0.0,
-          244.18
+          236.18
         ]
       ]
     },
@@ -13852,17 +13886,17 @@
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/1418933733",
+      "osm_ref": "way/96922264",
       "polyline": [
         [
           119.56,
           0.0,
-          244.18
+          234.18
         ],
         [
-          115.56,
+          121.56,
           0.0,
-          260.18
+          236.18
         ]
       ]
     },
@@ -13874,19 +13908,76 @@
       "osm_ref": "way/1418933733",
       "polyline": [
         [
-          115.56,
+          121.56,
           0.0,
-          260.18
+          236.18
         ],
         [
-          113.56,
+          121.56,
           0.0,
-          264.18
+          240.18
         ]
       ]
     },
     {
       "id": "cart_path_619",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418933733",
+      "polyline": [
+        [
+          121.56,
+          0.0,
+          240.18
+        ],
+        [
+          119.56,
+          0.0,
+          244.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_620",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418933733",
+      "polyline": [
+        [
+          121.56,
+          0.0,
+          240.18
+        ],
+        [
+          119.56,
+          0.0,
+          244.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_621",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418933733",
+      "polyline": [
+        [
+          119.56,
+          0.0,
+          244.18
+        ],
+        [
+          115.56,
+          0.0,
+          260.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_622",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13905,7 +13996,26 @@
       ]
     },
     {
-      "id": "cart_path_620",
+      "id": "cart_path_623",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418933733",
+      "polyline": [
+        [
+          115.56,
+          0.0,
+          260.18
+        ],
+        [
+          113.56,
+          0.0,
+          264.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_624",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13924,7 +14034,7 @@
       ]
     },
     {
-      "id": "cart_path_621",
+      "id": "cart_path_625",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13943,7 +14053,7 @@
       ]
     },
     {
-      "id": "cart_path_622",
+      "id": "cart_path_626",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13962,7 +14072,7 @@
       ]
     },
     {
-      "id": "cart_path_623",
+      "id": "cart_path_627",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -13981,7 +14091,7 @@
       ]
     },
     {
-      "id": "cart_path_624",
+      "id": "cart_path_628",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14045,7 +14155,7 @@
       ]
     },
     {
-      "id": "cart_path_625",
+      "id": "cart_path_629",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14099,7 +14209,7 @@
       ]
     },
     {
-      "id": "cart_path_626",
+      "id": "cart_path_630",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14118,7 +14228,7 @@
       ]
     },
     {
-      "id": "cart_path_627",
+      "id": "cart_path_631",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14137,7 +14247,7 @@
       ]
     },
     {
-      "id": "cart_path_628",
+      "id": "cart_path_632",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14156,7 +14266,7 @@
       ]
     },
     {
-      "id": "cart_path_629",
+      "id": "cart_path_633",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14190,7 +14300,7 @@
       ]
     },
     {
-      "id": "cart_path_630",
+      "id": "cart_path_634",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14214,7 +14324,7 @@
       ]
     },
     {
-      "id": "cart_path_631",
+      "id": "cart_path_635",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14568,95 +14678,19 @@
       ]
     },
     {
-      "id": "cart_path_632",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -510.44,
-          0.0,
-          376.18
-        ],
-        [
-          -512.44,
-          0.0,
-          380.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_633",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -510.44,
-          0.0,
-          376.18
-        ],
-        [
-          -510.44,
-          0.0,
-          378.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_634",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944424",
-      "polyline": [
-        [
-          -510.44,
-          0.0,
-          378.18
-        ],
-        [
-          -506.44,
-          0.0,
-          378.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_635",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -510.44,
-          0.0,
-          378.18
-        ],
-        [
-          -512.44,
-          0.0,
-          380.18
-        ]
-      ]
-    },
-    {
       "id": "cart_path_636",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/1418944424",
+      "osm_ref": "way/1418944423",
       "polyline": [
         [
-          -506.44,
+          -510.44,
           0.0,
-          378.18
+          376.18
         ],
         [
-          -502.44,
+          -512.44,
           0.0,
           380.18
         ]
@@ -14667,17 +14701,17 @@
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/1418944424",
+      "osm_ref": "way/1418944423",
       "polyline": [
         [
-          -506.44,
+          -510.44,
           0.0,
-          378.18
+          376.18
         ],
         [
-          -502.44,
+          -510.44,
           0.0,
-          380.18
+          378.18
         ]
       ]
     },
@@ -14689,14 +14723,14 @@
       "osm_ref": "way/1418944424",
       "polyline": [
         [
-          -396.44,
+          -510.44,
           0.0,
           378.18
         ],
         [
-          -400.44,
+          -506.44,
           0.0,
-          380.18
+          378.18
         ]
       ]
     },
@@ -14705,15 +14739,15 @@
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
-      "osm_ref": "way/1418944424",
+      "osm_ref": "way/1418944423",
       "polyline": [
         [
-          -396.44,
+          -510.44,
           0.0,
           378.18
         ],
         [
-          -392.44,
+          -512.44,
           0.0,
           380.18
         ]
@@ -14727,6 +14761,44 @@
       "osm_ref": "way/1418944424",
       "polyline": [
         [
+          -506.44,
+          0.0,
+          378.18
+        ],
+        [
+          -502.44,
+          0.0,
+          380.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_641",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944424",
+      "polyline": [
+        [
+          -506.44,
+          0.0,
+          378.18
+        ],
+        [
+          -502.44,
+          0.0,
+          380.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_642",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944424",
+      "polyline": [
+        [
           -396.44,
           0.0,
           378.18
@@ -14739,7 +14811,7 @@
       ]
     },
     {
-      "id": "cart_path_641",
+      "id": "cart_path_643",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14758,7 +14830,45 @@
       ]
     },
     {
-      "id": "cart_path_642",
+      "id": "cart_path_644",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944424",
+      "polyline": [
+        [
+          -396.44,
+          0.0,
+          378.18
+        ],
+        [
+          -400.44,
+          0.0,
+          380.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_645",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944424",
+      "polyline": [
+        [
+          -396.44,
+          0.0,
+          378.18
+        ],
+        [
+          -392.44,
+          0.0,
+          380.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_646",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14777,7 +14887,7 @@
       ]
     },
     {
-      "id": "cart_path_643",
+      "id": "cart_path_647",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14796,7 +14906,7 @@
       ]
     },
     {
-      "id": "cart_path_644",
+      "id": "cart_path_648",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14815,7 +14925,7 @@
       ]
     },
     {
-      "id": "cart_path_645",
+      "id": "cart_path_649",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14834,7 +14944,7 @@
       ]
     },
     {
-      "id": "cart_path_646",
+      "id": "cart_path_650",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14853,83 +14963,83 @@
       ]
     },
     {
-      "id": "cart_path_647",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -512.44,
-          0.0,
-          382.18
-        ],
-        [
-          -514.44,
-          0.0,
-          386.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_648",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -512.44,
-          0.0,
-          382.18
-        ],
-        [
-          -514.44,
-          0.0,
-          386.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_649",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944424",
-      "polyline": [
-        [
-          -492.44,
-          0.0,
-          382.18
-        ],
-        [
-          -488.44,
-          0.0,
-          384.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_650",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944424",
-      "polyline": [
-        [
-          -492.44,
-          0.0,
-          382.18
-        ],
-        [
-          -488.44,
-          0.0,
-          384.18
-        ]
-      ]
-    },
-    {
       "id": "cart_path_651",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944423",
+      "polyline": [
+        [
+          -512.44,
+          0.0,
+          382.18
+        ],
+        [
+          -514.44,
+          0.0,
+          386.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_652",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944423",
+      "polyline": [
+        [
+          -512.44,
+          0.0,
+          382.18
+        ],
+        [
+          -514.44,
+          0.0,
+          386.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_653",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944424",
+      "polyline": [
+        [
+          -492.44,
+          0.0,
+          382.18
+        ],
+        [
+          -488.44,
+          0.0,
+          384.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_654",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944424",
+      "polyline": [
+        [
+          -492.44,
+          0.0,
+          382.18
+        ],
+        [
+          -488.44,
+          0.0,
+          384.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_655",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14948,7 +15058,7 @@
       ]
     },
     {
-      "id": "cart_path_652",
+      "id": "cart_path_656",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14967,7 +15077,7 @@
       ]
     },
     {
-      "id": "cart_path_653",
+      "id": "cart_path_657",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -14986,7 +15096,7 @@
       ]
     },
     {
-      "id": "cart_path_654",
+      "id": "cart_path_658",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -15040,82 +15150,6 @@
       ]
     },
     {
-      "id": "cart_path_655",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944424",
-      "polyline": [
-        [
-          -484.44,
-          0.0,
-          386.18
-        ],
-        [
-          -474.44,
-          0.0,
-          394.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_656",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944424",
-      "polyline": [
-        [
-          -484.44,
-          0.0,
-          386.18
-        ],
-        [
-          -474.44,
-          0.0,
-          394.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_657",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944424",
-      "polyline": [
-        [
-          -460.44,
-          0.0,
-          386.18
-        ],
-        [
-          -464.44,
-          0.0,
-          388.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_658",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944424",
-      "polyline": [
-        [
-          -460.44,
-          0.0,
-          386.18
-        ],
-        [
-          -458.44,
-          0.0,
-          386.18
-        ]
-      ]
-    },
-    {
       "id": "cart_path_659",
       "source": "osm",
       "surface": "gravel",
@@ -15123,14 +15157,14 @@
       "osm_ref": "way/1418944424",
       "polyline": [
         [
-          -460.44,
+          -484.44,
           0.0,
           386.18
         ],
         [
-          -464.44,
+          -474.44,
           0.0,
-          388.18
+          394.18
         ]
       ]
     },
@@ -15142,14 +15176,14 @@
       "osm_ref": "way/1418944424",
       "polyline": [
         [
-          -458.44,
+          -484.44,
           0.0,
           386.18
         ],
         [
-          -454.44,
+          -474.44,
           0.0,
-          388.18
+          394.18
         ]
       ]
     },
@@ -15161,12 +15195,12 @@
       "osm_ref": "way/1418944424",
       "polyline": [
         [
-          -458.44,
+          -460.44,
           0.0,
           386.18
         ],
         [
-          -454.44,
+          -464.44,
           0.0,
           388.18
         ]
@@ -15180,14 +15214,14 @@
       "osm_ref": "way/1418944424",
       "polyline": [
         [
-          -420.44,
+          -460.44,
           0.0,
           386.18
         ],
         [
-          -424.44,
+          -458.44,
           0.0,
-          388.18
+          386.18
         ]
       ]
     },
@@ -15199,12 +15233,12 @@
       "osm_ref": "way/1418944424",
       "polyline": [
         [
-          -420.44,
+          -460.44,
           0.0,
           386.18
         ],
         [
-          -424.44,
+          -464.44,
           0.0,
           388.18
         ]
@@ -15218,19 +15252,76 @@
       "osm_ref": "way/1418944424",
       "polyline": [
         [
-          -464.44,
+          -458.44,
           0.0,
-          388.18
+          386.18
         ],
         [
-          -468.44,
+          -454.44,
           0.0,
-          390.18
+          388.18
         ]
       ]
     },
     {
       "id": "cart_path_665",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944424",
+      "polyline": [
+        [
+          -458.44,
+          0.0,
+          386.18
+        ],
+        [
+          -454.44,
+          0.0,
+          388.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_666",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944424",
+      "polyline": [
+        [
+          -420.44,
+          0.0,
+          386.18
+        ],
+        [
+          -424.44,
+          0.0,
+          388.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_667",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944424",
+      "polyline": [
+        [
+          -420.44,
+          0.0,
+          386.18
+        ],
+        [
+          -424.44,
+          0.0,
+          388.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_668",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -15249,7 +15340,26 @@
       ]
     },
     {
-      "id": "cart_path_666",
+      "id": "cart_path_669",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944424",
+      "polyline": [
+        [
+          -464.44,
+          0.0,
+          388.18
+        ],
+        [
+          -468.44,
+          0.0,
+          390.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_670",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -15318,7 +15428,7 @@
       ]
     },
     {
-      "id": "cart_path_667",
+      "id": "cart_path_671",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -15337,82 +15447,6 @@
       ]
     },
     {
-      "id": "cart_path_668",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -528.44,
-          0.0,
-          410.18
-        ],
-        [
-          -530.44,
-          0.0,
-          414.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_669",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -528.44,
-          0.0,
-          410.18
-        ],
-        [
-          -530.44,
-          0.0,
-          414.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_670",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -530.44,
-          0.0,
-          414.18
-        ],
-        [
-          -534.44,
-          0.0,
-          420.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_671",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -534.44,
-          0.0,
-          420.18
-        ],
-        [
-          -536.44,
-          0.0,
-          424.18
-        ]
-      ]
-    },
-    {
       "id": "cart_path_672",
       "source": "osm",
       "surface": "gravel",
@@ -15420,14 +15454,14 @@
       "osm_ref": "way/1418944423",
       "polyline": [
         [
-          -534.44,
+          -528.44,
           0.0,
-          420.18
+          410.18
         ],
         [
-          -536.44,
+          -530.44,
           0.0,
-          424.18
+          414.18
         ]
       ]
     },
@@ -15439,14 +15473,14 @@
       "osm_ref": "way/1418944423",
       "polyline": [
         [
-          -536.44,
+          -528.44,
           0.0,
-          424.18
+          410.18
         ],
         [
-          -538.44,
+          -530.44,
           0.0,
-          428.18
+          414.18
         ]
       ]
     },
@@ -15458,6 +15492,63 @@
       "osm_ref": "way/1418944423",
       "polyline": [
         [
+          -530.44,
+          0.0,
+          414.18
+        ],
+        [
+          -534.44,
+          0.0,
+          420.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_675",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944423",
+      "polyline": [
+        [
+          -534.44,
+          0.0,
+          420.18
+        ],
+        [
+          -536.44,
+          0.0,
+          424.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_676",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944423",
+      "polyline": [
+        [
+          -534.44,
+          0.0,
+          420.18
+        ],
+        [
+          -536.44,
+          0.0,
+          424.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_677",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944423",
+      "polyline": [
+        [
           -536.44,
           0.0,
           424.18
@@ -15470,7 +15561,26 @@
       ]
     },
     {
-      "id": "cart_path_675",
+      "id": "cart_path_678",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944423",
+      "polyline": [
+        [
+          -536.44,
+          0.0,
+          424.18
+        ],
+        [
+          -538.44,
+          0.0,
+          428.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_679",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -15489,82 +15599,6 @@
       ]
     },
     {
-      "id": "cart_path_676",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -546.44,
-          0.0,
-          436.18
-        ],
-        [
-          -550.44,
-          0.0,
-          438.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_677",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -546.44,
-          0.0,
-          436.18
-        ],
-        [
-          -550.44,
-          0.0,
-          438.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_678",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -550.44,
-          0.0,
-          438.18
-        ],
-        [
-          -568.44,
-          0.0,
-          442.18
-        ]
-      ]
-    },
-    {
-      "id": "cart_path_679",
-      "source": "osm",
-      "surface": "gravel",
-      "width": 3.0,
-      "osm_ref": "way/1418944423",
-      "polyline": [
-        [
-          -568.44,
-          0.0,
-          442.18
-        ],
-        [
-          -572.44,
-          0.0,
-          444.18
-        ]
-      ]
-    },
-    {
       "id": "cart_path_680",
       "source": "osm",
       "surface": "gravel",
@@ -15572,6 +15606,63 @@
       "osm_ref": "way/1418944423",
       "polyline": [
         [
+          -546.44,
+          0.0,
+          436.18
+        ],
+        [
+          -550.44,
+          0.0,
+          438.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_681",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944423",
+      "polyline": [
+        [
+          -546.44,
+          0.0,
+          436.18
+        ],
+        [
+          -550.44,
+          0.0,
+          438.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_682",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944423",
+      "polyline": [
+        [
+          -550.44,
+          0.0,
+          438.18
+        ],
+        [
+          -568.44,
+          0.0,
+          442.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_683",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944423",
+      "polyline": [
+        [
           -568.44,
           0.0,
           442.18
@@ -15584,7 +15675,26 @@
       ]
     },
     {
-      "id": "cart_path_681",
+      "id": "cart_path_684",
+      "source": "osm",
+      "surface": "gravel",
+      "width": 3.0,
+      "osm_ref": "way/1418944423",
+      "polyline": [
+        [
+          -568.44,
+          0.0,
+          442.18
+        ],
+        [
+          -572.44,
+          0.0,
+          444.18
+        ]
+      ]
+    },
+    {
+      "id": "cart_path_685",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -15603,7 +15713,7 @@
       ]
     },
     {
-      "id": "cart_path_682",
+      "id": "cart_path_686",
       "source": "osm",
       "surface": "gravel",
       "width": 3.0,
@@ -16252,6 +16362,14 @@
       "content_id": "clubhouse_notice"
     }
   ],
+  "bus_stop": {
+    "position": [
+      171.71,
+      0.0,
+      238.3
+    ],
+    "heading": -2.4213
+  },
   "ground": {
     "origin": [
       -727.44,

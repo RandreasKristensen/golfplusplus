@@ -101,8 +101,10 @@ struct sky_style {
     // the secondary further out and wider, its colours reversed,
     // rainbow_secondary_share as bright. At its brightest it adds
     // rainbow_brightness of the sun's light; the sky inside the primary is
-    // lighter by rainbow_inner_glow, and between the two darker by
-    // rainbow_band_darkening (Alexander's band).
+    // lighter by rainbow_inner_glow of the sun's light, and between the two
+    // darker by rainbow_band_darkening (Alexander's band). It needs the sun
+    // up: none with it on or below the horizon, full from
+    // rainbow_sun_full_deg above it.
     float rainbow_radius_deg = 0.0f;
     float rainbow_width_deg = 0.0f;
     float rainbow_secondary_radius_deg = 0.0f;
@@ -111,6 +113,7 @@ struct sky_style {
     float rainbow_brightness = 0.0f;
     float rainbow_inner_glow = 0.0f;
     float rainbow_band_darkening = 0.0f;
+    float rainbow_sun_full_deg = 0.0f;
 };
 
 // What the weather (game/weather.h) does to the light (game/weather_lighting.h)
@@ -136,8 +139,11 @@ struct sky_style {
 // air, rain_visibility_meters in the heaviest rain, fog_visibility_meters
 // in the thickest fog, each keeping on forwards as much as its
 // *_forwardness (Henyey-Greenstein's g).
-// The haze glows with the sun looking towards it, sun_glow of the sun's light
-// at Henyey-Greenstein's average, sun_forwardness its g; and there is always
+// The haze glows with the sun looking towards it, sun_glow_at_sun of the
+// sun's light looking straight at it, spreading round the sky as far as
+// sun_glow_spread (1 - Henyey-Greenstein's g: 1 even all round, small held
+// close to the sun; make_render_sky_weather turns the two into g and its
+// average, so the glare at the sun stays put as the spread changes); and there is always
 // some mist: the haze grows with distance from its square (mist 0) towards
 // straight (mist 1), the same at its full distance either way. The thickest
 // fog adds fog_mist_density and the heaviest rain rain_mist_density to the
@@ -175,8 +181,8 @@ struct weather_style {
     float rain_forwardness = 0.0f;
     float fog_visibility_meters = 0.0f;
     float fog_forwardness = 0.0f;
-    float sun_glow = 0.0f;
-    float sun_forwardness = 0.0f;
+    float sun_glow_at_sun = 0.0f;
+    float sun_glow_spread = 0.0f;
     float mist = 0.0f;
     float fog_mist_density = 0.0f;
     float rain_mist_density = 0.0f;
@@ -253,9 +259,6 @@ struct marker_colors {
     glm::vec3 cup{0.0f};
     glm::vec3 pin_pole{0.0f};
     glm::vec3 flag{0.0f};
-    // At address, the setup on the ground (game/address_view.h).
-    glm::vec3 alignment_stick{0.0f};
-    glm::vec3 face_line{0.0f};
 };
 
 // Other players: every figure's clothes, a shirt per player and a cap per
@@ -276,14 +279,12 @@ struct figure_colors {
 };
 
 // The least light some things show, 0..1, so they stay readable when the
-// light is gone: the ball, cup, flag and the setup's marks, and what glows of itself.
+// light is gone: the ball, cup, flag and what glows of itself.
 struct glow_floors {
     float ball = 0.0f;
     float cup = 0.0f;
     float pin_pole = 0.0f;
     float flag = 0.0f;
-    float alignment_stick = 0.0f;
-    float face_line = 0.0f;
     float ember = 0.0f;
     float flight_path = 0.0f;
 };

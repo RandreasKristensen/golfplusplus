@@ -23,6 +23,7 @@ enum class startup_menu_screen {
     main,
     help,
     course_picker,
+    tee_book,
     form,    // a message, a text field or a code, then a column of tiles
     confirm  // laid out like main
 };

@@ -1,5 +1,6 @@
 #include "physics/turf_contact.h"
 
+#include "physics/collision.h"
 #include "physics/det_math.h"
 #include "physics/flight_model.h"
 #include "physics/vector_math.h"
@@ -11,10 +12,8 @@
 #include <glm/trigonometric.hpp>
 
 namespace {
-// A golf ball's moment of inertia, as a share of m r^2: a solid sphere's.
 // Slip at the contact point changes 1 + 1/k as fast as the ball's speed.
-constexpr float inertia_share = 0.4f;
-constexpr float slip_gain = 1.0f + 1.0f / inertia_share;
+constexpr float slip_gain = 1.0f + 1.0f / ball_inertia_share;
 // Slower than this at the contact point it rolls.
 constexpr float rolling_slip = 0.01f;
 // The steepest Penner's contact angle gets (degrees): the turf gives, it does not fold.
@@ -29,7 +28,7 @@ glm::vec3 gravity() {
 void apply_tangential(ball_state& ball, const glm::vec3& to_contact, const glm::vec3& impulse) {
     const float radius = std::max(1.0e-4f, ball.radius);
     ball.velocity += impulse;
-    ball.spin += glm::cross(to_contact, impulse) / (inertia_share * radius * radius);
+    ball.spin += glm::cross(to_contact, impulse) / (ball_inertia_share * radius * radius);
 }
 
 // How fast the contact point at `to_contact` slides over the ground, along it.

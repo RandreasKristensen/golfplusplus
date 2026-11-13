@@ -14,3 +14,8 @@ inline constexpr tree_shape default_tree_shape{0.35f, 2.4f, 1.6f, 3.2f};
 // ({"center": [x, y, z], "radii": [rx, rz], "rotation_degrees": d} with
 // positive radii; a circle is [r, r]).
 std::optional<hole_data> parse_hole_from_text(const std::string& text);
+
+// Shared authored vegetation and surface zones, in hole or world coordinates.
+#include "game/json_util.h"
+std::optional<std::vector<material_zone>> material_zones_from_json(const json& root);
+std::vector<tree_instance> trees_from_json(const json& root);

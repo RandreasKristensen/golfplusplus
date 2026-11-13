@@ -14,6 +14,9 @@ struct game_state;
 // tells others I hopped.
 void walk_steps(game_state& state, const game_input& input, float dt, frame_profile* profile);
 
-// Not walking this frame (sat in a cart, handling my bag or a club): no
+// Not walking this frame (sat in a cart): no
 // time saved up for steps, and no step's speed carried over.
 void stop_walking(game_state& state);
+
+// Walking-frame look, fixed steps and physical interactions.
+void update_walking(game_state& state, const game_input& input, float dt, frame_profile* profile);

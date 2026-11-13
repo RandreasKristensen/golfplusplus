@@ -36,6 +36,7 @@ except ImportError:
     requests = None
 
 import osm_audit
+import osm_bus_stop
 import osm_cart_paths
 import osm_checks
 import osm_dhm
@@ -100,6 +101,19 @@ DEFAULT_CONFIG = {
         "default_height_m": 1.5,
         "driving_range_height_m": 12.0,
         "driving_range_reach_m": 15.0,
+    },
+    # Where the club's bus parks (osm_bus_stop.py). Owner brief: an OSM car
+    # park, else a service road, inside or touching the course (within reach_m
+    # of its boundary), nearest the first tee, at least the bus's length clear
+    # of play (every hole's zones and its line of play across its rough),
+    # solids and cart paths, and beside or behind the first tee before ahead
+    # of it (within ahead_degrees of its way).
+    "bus_stop": {
+        "reach_m": 40.0,
+        "ahead_degrees": 90.0,
+        "clearance_bus_lengths": 1.0,
+        "step_meters": 2.0,
+        "max_candidates": 4000,
     },
     "hole": {
         "fallback_width": 20.0,
@@ -1097,6 +1111,59 @@ def _fetch_fences(course_el: dict, fence_config: dict) -> tuple[list, list]:
     fences = [el for el in found if el.get("tags", {}).get("barrier") == "fence" and len(_element_geom(el)) >= 2]
     ranges = [el for el in found if el.get("tags", {}).get("golf") == "driving_range"]
     return fences, ranges
+
+
+STOP_SELECTORS = [
+    'way["amenity"="parking"]',
+    'relation["amenity"="parking"]',
+    'way["highway"="service"]',
+]
+
+
+def _fetch_stop_places(course_el: dict, reach: float) -> list:
+    """The car parks and service roads in the course or within `reach` of its
+    boundary that the public may use: where the club's bus may park. Asked
+    for by the boundary's box, not `around` it: Overpass finds nothing around
+    some boundaries (Jelling's and Mollerup's par 3s) that a box finds."""
+    bbox = _bbox_string_for_course(course_el, reach)
+    body = "\n".join(f"  {sel}({bbox});" for sel in STOP_SELECTORS)
+    elements = _query(f"[out:json][timeout:180];\n(\n{body}\n);\nout geom;").get("elements", [])
+    found = [el for el in _dedupe_elements(elements) if _element_in_course_footprint(el, course_el, reach)]
+    return [el for el in found if el.get("tags", {}).get("access") not in ("private", "no")]
+
+
+def _bus_stop(cart_holes: list[dict], hole_jsons: dict, path_elements: list, places: list, fences: list,
+              origin_lat: float, origin_lon: float, config: dict) -> dict | None:
+    """osm_bus_stop.choose over `places` (_fetch_stop_places) and the course's own service roads,
+    kept clear of every hole's zones, mapped tees and game tee box, its trees,
+    fences and mapped cart paths."""
+    rules = config["bus_stop"]
+    bus = osm_bus_stop.load_bus()
+    pad = float(config["cart_paths"]["tee_pad_radius_meters"])
+    rings = [ring for h in cart_holes for key in ("greens", "bunkers", "waters", "fairways", "tees") for ring in h[key]]
+    rings += [osm_outline.circle(h["tee"], pad) for h in cart_holes]
+    halves = [max(float(hole_jsons[num]["spline"]["width"]), float(hole_jsons[num]["spline"]["rough_width"])) * 0.5
+              for num in sorted(hole_jsons)]
+    rings += osm_bus_stop.play_corridors([h["line"] for h in cart_holes], halves)
+    trees = []
+    leaf = float(config["tree"]["leaf_radius"])
+    for h, num in zip(cart_holes, sorted(hole_jsons)):
+        trees += [(t["position"][0] + h["tee"][0], t["position"][2] + h["tee"][1], float(t.get("leaf_radius", leaf)))
+                  for t in hole_jsons[num].get("trees", [])]
+    cart = [_path_polyline(el, origin_lat, origin_lon) for el in path_elements if el.get("tags", {}).get("golf") == "cartpath"]
+    lines = [line for line in cart if line] + [[(p[0], p[2]) for p in fence["poles"]] for fence in fences]
+    service = _dedupe_elements(path_elements + places)
+    roads = [line for line in (_path_polyline(el, origin_lat, origin_lon) for el in service
+                               if el.get("tags", {}).get("highway") == "service" and el.get("tags", {}).get("golf") != "cartpath")
+             if line]
+    parks = [pts for el in places if el.get("tags", {}).get("amenity") == "parking"
+             for pts, closed in _element_shapes_xz(el, origin_lat, origin_lon) if closed and len(pts) >= 3]
+    clearance = float(rules["clearance_bus_lengths"]) * 2.0 * bus["half_length"]
+    line = cart_holes[0]["line"]
+    way = (line[1][0] - line[0][0], line[1][1] - line[0][1])
+    length = math.hypot(*way) or 1.0
+    return osm_bus_stop.choose(parks, roads, cart_holes[0]["tee"], osm_bus_stop.Obstacles(rings, lines, trees),
+                               {**rules, "clearance_meters": clearance}, bus, (way[0] / length, way[1] / length))
 
 
 def _height_tag(value) -> float | None:
@@ -2863,12 +2930,14 @@ def course_world_to_json(course_id: str,
                          config: dict | None = None,
                          fences: list | None = None,
                          aerial_paths: list | None = None,
-                         clubhouse: tuple[float, float] | None = None) -> dict:
+                         clubhouse: tuple[float, float] | None = None,
+                         stop_places: list | None = None) -> dict:
     """
     `hole_jsons` maps hole number to its generated hole JSON; `fences` are
     the course world's fences (fences_to_json); `aerial_paths` the cells the
     aerial photos read as path (osm_aerial.paths), None without them;
-    `clubhouse` where its path starts, None where OSM maps none. Each hole
+    `clubhouse` where its path starts, None where OSM maps none; `stop_places`
+    the car parks and roads the bus stop may be on (_fetch_stop_places). Each hole
     start is that hole's tee, at its height (source.tee_elevation) relative
     to the first hole's tee, which sits at y = 0; holes without a height stay
     at 0.
@@ -2899,9 +2968,13 @@ def course_world_to_json(course_id: str,
         spawn = (0.0, 0.0)
 
     shortcuts = _osm_walking_shortcuts(path_elements, origin_lat, origin_lon, hole_anchors, fairway_corridors, config)
-    cart_roads = osm_cart_paths.build_network(_cart_path_holes(holes, hole_jsons, origin_lat, origin_lon),
-                                              _osm_cart_path_lines(path_elements, origin_lat, origin_lon),
-                                              aerial_paths, clubhouse, config["cart_paths"])
+    cart_holes = _cart_path_holes(holes, hole_jsons, origin_lat, origin_lon)
+    stop = _bus_stop(cart_holes, hole_jsons, path_elements, stop_places or [], fences or [], origin_lat, origin_lon,
+                     config) if cart_holes else None
+    if cart_holes and stop is None:
+        print("  [error] no clear bus stop on a car park or service road near the first tee", file=sys.stderr)
+    cart_roads = osm_cart_paths.build_network(cart_holes, _osm_cart_path_lines(path_elements, origin_lat, origin_lon),
+                                              aerial_paths, clubhouse, config["cart_paths"], stop)
 
     tee_elevations = {num: h_json["source"].get("tee_elevation") for num, h_json in hole_jsons.items()}
     tee_elevations = {num: height for num, height in tee_elevations.items() if height is not None}
@@ -2918,7 +2991,7 @@ def course_world_to_json(course_id: str,
             "interaction_radius": float(world_config.get("hole_start_interaction_radius", 4.0))
         })
 
-    return {
+    world = {
         "id": course_id,
         "name": course_name,
         "source": {
@@ -2956,6 +3029,9 @@ def course_world_to_json(course_id: str,
             }
         ]
     }
+    if stop is not None:
+        world["bus_stop"] = osm_bus_stop.stop_json(stop)
+    return world
 
 
 def _make_elevation_sampler(args, config: dict, origin_lat: float, origin_lon: float):
@@ -3177,6 +3253,7 @@ Examples:
     print("→ Fetching golf elements...", file=sys.stderr)
     elements, tree_elements, path_elements = _fetch_elements(course_el, float(config["tree"]["outside_reach_m"]))
     fence_elements, driving_ranges = _fetch_fences(course_el, config["fence"])
+    stop_places = _fetch_stop_places(course_el, float(config["bus_stop"]["reach_m"]))
     print(f"  Retrieved {len(elements)} golf elements, {len(tree_elements)} tree/wood elements, and {len(path_elements)} path elements", file=sys.stderr)
 
     if not elements:
@@ -3281,7 +3358,8 @@ Examples:
                                       fences_to_json(fence_elements, driving_ranges, origin_lat, origin_lon,
                                                      config["fence"]),
                                       aerial_paths,
-                                      clubhouse_xz(elements, origin_lat, origin_lon))
+                                      clubhouse_xz(elements, origin_lat, origin_lon),
+                                      stop_places)
     print(f"→ Cart paths (metres by source): {osm_cart_paths.lengths_by_source(world_json['cart_roads'])}",
           file=sys.stderr)
     if not args.no_world:
@@ -3332,6 +3410,7 @@ Examples:
     if findings.count("error"):
         print("→ The import has errors: fix the importer or the course's config, "
               "not the generated files.", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
