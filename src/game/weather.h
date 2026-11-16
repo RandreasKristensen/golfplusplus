@@ -23,6 +23,7 @@
 #include "game/course_definition.h"
 #include "game/game_tuning.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -95,7 +96,8 @@ weather_state coupled_weather(weather_state weather, const weather_tuning& tunin
 weather_state with_weather_kind(weather_state weather, weather_kind kind, const weather_tuning& tuning);
 
 // The weather on `course` at `unix_ms` (real UTC milliseconds): its own
-// (course_weather_seed of its id), its temperature by its clock and air.
+// (course_weather_seed of its id), moved by its day of the year (its sky's
+// date, weather_season_tuning), its temperature by its clock and air.
 weather_state weather_at(const weather_tuning& weather,
                          const wind_tuning& wind,
                          const sky_timeline& clock,
@@ -110,6 +112,10 @@ weather_state weather_at(const weather_tuning& weather,
 // `noise` (0..1) of temperature.noise_c either way.
 float temperature_at(const weather_tuning& tuning, const place_definition& course, double hours, float cloud, float rain,
                      float noise);
+
+// A month-by-month number (weather_season_tuning) on `day` (1..365): each
+// month's at its 15th, straight between them, round the year's end.
+float season_value(const std::array<float, 12>& months, int day);
 
 // The wind's speed (m/s) and the direction it blows towards (radians, as
 // yaw_direction in physics/vector_math.h), for showing it.

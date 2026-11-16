@@ -704,49 +704,28 @@
       "type": "bunker",
       "outline": [
         [
-          131.15,
-          -314.83
+          35.04,
+          -36.35
         ],
         [
-          129.15,
-          -313.83
+          33.04,
+          -35.35
         ],
         [
-          130.15,
-          -308.83
+          33.04,
+          -25.35
         ],
         [
-          136.15,
-          -312.83
-        ]
-      ]
-    },
-    {
-      "type": "bunker",
-      "outline": [
-        [
-          34.15,
-          -35.83
+          37.04,
+          -27.35
         ],
         [
-          32.15,
-          -34.83
+          38.04,
+          -32.35
         ],
         [
-          33.15,
-          -25.83
-        ],
-        [
-          36.15,
-          -26.83
-        ],
-        [
-          38.15,
-          -32.83
-        ],
-        [
-          37.15,
-          -35.83
+          38.04,
+          -35.35
         ]
       ]
     }
@@ -754,27 +733,30 @@
   "trees": [
     {
       "position": [
-        -71.35,
+        -71.46,
         0.0,
-        -80.33
+        -80.85
       ],
-      "trunk_radius": 0.19,
-      "trunk_height": 2.22,
-      "leaf_radius": 1.36,
-      "leaf_height": 2.72
+      "trunk_radius": 0.18,
+      "trunk_height": 2.14,
+      "leaf_radius": 1.31,
+      "leaf_height": 2.62,
+      "species": "birch"
     },
     {
       "position": [
-        -97.35,
+        -97.46,
         0.0,
-        -92.33
+        -92.85
       ],
       "trunk_radius": 0.21,
-      "trunk_height": 2.5,
-      "leaf_radius": 1.53,
-      "leaf_height": 3.06
+      "trunk_height": 2.42,
+      "leaf_radius": 1.48,
+      "leaf_height": 2.96,
+      "species": "birch"
     }
   ],
+  "bushes": [],
   "source": {
     "type": "osm",
     "tee_latlon": [
@@ -791,7 +773,7 @@
     "hole_way": "way/1310868073",
     "fairway": "osm",
     "aerial": "dk",
-    "aerial_bunkers": 2,
+    "aerial_bunkers": 1,
     "aerial_waters": 0,
     "made_green": false
   }

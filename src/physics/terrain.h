@@ -35,9 +35,10 @@ enum class terrain_material : std::uint8_t {
     rough,
     green,
     bunker,
-    water
+    water,
+    heavy_rough  // long, unmown grass: the rough the mower leaves out
 };
-inline constexpr std::size_t terrain_material_count = 5;
+inline constexpr std::size_t terrain_material_count = 6;
 
 // A ribbon's rough edge sits up to this much lower than its fairway.
 inline constexpr float ribbon_edge_drop = 0.18f;
@@ -47,8 +48,9 @@ inline constexpr float ribbon_edge_drop = 0.18f;
 // `bunker_lip_meters` in from its edge; a pond's floor is `water_min_depth`
 // under its level at its edge, deepening to `water_max_depth` under it
 // `water_bank_meters` in, so a creek a few metres across stays shallow and a
-// lake is deep; outside, its shore rises from there to its level over
-// `water_shore_meters`, so no water lies on ground above its level.
+// lake is deep; outside, its shore lies at its level for half of
+// `water_shore_meters` (more than a fine cell's diagonal), then rises to the
+// ground, so the water meets the ground at its outline.
 struct terrain_zone_tuning {
     float bunker_depth = 0.0f;
     float bunker_lip_meters = 0.0f;

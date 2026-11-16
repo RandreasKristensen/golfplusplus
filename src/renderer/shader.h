@@ -89,6 +89,7 @@ public:
     void set_vec3(const char* name, const glm::vec3& value) const;
     void set_vec2(const char* name, const glm::vec2& value) const;
     void set_vec4(const char* name, const glm::vec4& value) const;
+    void set_vec4_array(const char* name, const glm::vec4* values, int count) const;
     void set_float(const char* name, float value) const;
     void set_int(const char* name, int value) const;
 

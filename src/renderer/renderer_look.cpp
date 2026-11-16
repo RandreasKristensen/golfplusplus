@@ -9,9 +9,11 @@
 bool renderer::set_look(const std::string& asset_root, const look& next, const look_changes& changes) {
     picture_style_ = next.picture;
     colors_ = next.lighting.colors;
+    water_style_ = next.lighting.water;
+    grass_style_ = next.lighting.grass;
+    bool ok = tree_renderer_.set_looks(next.lighting.trees);
     const lighting_palette& palette = next.lighting;
     const auto path = [&asset_root](const char* name) { return shader_path(asset_root, name); };
-    bool ok = true;
     if (changes.picture) {
         ok = camcorder_pass_.init(path(""), screen_vao_, next.picture.camcorder, next.picture.tape.fields_per_second) &&
             tape_pass_.init(path("crt.vert"), path("tape.frag"), screen_vao_, next.picture.tape) &&

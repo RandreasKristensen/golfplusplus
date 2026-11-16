@@ -20,7 +20,6 @@ const std::vector<model_kind>& model_kinds() {
         // Its mouth the top its clubs come out of.
         {"bag", {}, {"hang", "mouth"}, {}, {}},
         // Fitted to the course by the code: colours only.
-        {"tree", {"trunk", "leaves"}, {}, {}, {}},
         {"fence", {"post"}, {}, {}, {}},
         {"floodlight", {"pole", "head"}, {}, {}, {}},
         {"hole_sign", {"board", "post"}, {}, {}, {}},
@@ -43,7 +42,6 @@ const model_kind* find_model_kind(const std::string& name) {
 
 const std::vector<required_model>& required_models() {
     static const std::vector<required_model> models{
-        {tree_model, "tree"},
         {fence_model, "fence"},
         {floodlight_model, "floodlight"},
         {hole_sign_model, "hole_sign"},

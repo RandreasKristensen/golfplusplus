@@ -39,6 +39,9 @@ void describe_render_terrain_vertex() {
     attribute(5, 4, GL_UNSIGNED_BYTE, true, offsetof(render_terrain_vertex, horizon));
     attribute(6, 4, GL_UNSIGNED_BYTE, true, offsetof(render_terrain_vertex, horizon) + 4);
     attribute(7, 1, GL_FLOAT, false, offsetof(render_terrain_vertex, paved));
+    attribute(8, 2, GL_FLOAT, false, offsetof(render_terrain_vertex, mow));
+    attribute(9, 1, GL_FLOAT, false, offsetof(render_terrain_vertex, blades));
+    attribute(10, 1, GL_FLOAT, false, offsetof(render_terrain_vertex, mow_across));
 }
 
 void set_terrain_draw_state(const shader_program& shader, const glm::mat4& model, const glm::mat4& view_proj,
@@ -108,7 +111,8 @@ void terrain_renderer::upload(static_mesh_buffers& buffers, const render_static_
 
 terrain_cull_stats terrain_renderer::draw(const shader_program& shader, const render_static_mesh* terrain,
                                           const render_static_mesh* material_overlay, const glm::mat4& view_proj,
-                                          const view_frustum& frustum, frame_profile* profile) {
+                                          const view_frustum& frustum, const overlay_depth overlay,
+                                          frame_profile* profile) {
     upload(terrain_, terrain, profile);
     upload(material_overlay_, material_overlay, profile);
 
@@ -138,7 +142,9 @@ terrain_cull_stats terrain_renderer::draw(const shader_program& shader, const re
         }
         set_terrain_draw_state(shader, glm::mat4(1.0f), view_proj, glm::vec3(1.0f), 1.0f, 0.0f, true);
         glBindVertexArray(mesh.buffers.vao);
-        if (mesh.pulled_forward) {
+        if (mesh.pulled_forward && overlay == overlay_depth::over_all) {
+            glDepthFunc(GL_ALWAYS);
+        } else if (mesh.pulled_forward) {
             glEnable(GL_POLYGON_OFFSET_FILL);
             glPolygonOffset(material_overlay_offset_factor, material_overlay_offset_units);
         }
@@ -149,6 +155,7 @@ terrain_cull_stats terrain_renderer::draw(const shader_program& shader, const re
             record_draw_call(shader.profile());
         }
         glDisable(GL_POLYGON_OFFSET_FILL);
+        glDepthFunc(GL_LESS);
     }
     glBindVertexArray(0);
     return stats;

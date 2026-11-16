@@ -1,31 +1,59 @@
 #pragma once
 
-// GL-free per-instance data for the instanced tree draw (unit tested).
+// GL-free: the trees as the instanced draws take them (unit tested). Each
+// tree is one instance of its species' grown model (renderer/tree_model.h):
+// the model's unit frame stood at the trunk's foot, scaled to the crown's
+// radius across and the tree's height up, turned about its trunk, with a
+// tint to tell neighbours apart. Each frame the trees in view are sorted
+// into buckets, one per species, variant and detail, near ones within
+// tree_near_meters of the eye in full detail.
 
 #include "physics/tree_body.h"
-#include "renderer/render_mesh.h"
+#include "renderer/frustum.h"
+#include "renderer/tree_model.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include <glm/vec3.hpp>
 
-// Per-instance data for a unit mesh (cylinder or cone spanning y in [0, 1],
-// radius 1): world = offset + local * scale. Six packed floats, uploaded
-// straight into a GL instance buffer.
+// world = offset + turned_about_y(local * scale, yaw). Eight packed floats,
+// uploaded straight into a GL instance buffer; the shadow maps read only
+// the first six.
 struct render_tree_instance {
     glm::vec3 offset{0.0f};
     glm::vec3 scale{1.0f};
+    float yaw = 0.0f;
+    float tint = 0.0f;  // 0..1
 };
 
-struct render_tree_instance_batch {
-    std::vector<render_tree_instance> trunks;
-    std::vector<render_tree_instance> leaves;
+// Grown models per species, so a row of one species is not one tree repeated.
+inline constexpr int tree_variants = 3;
+inline constexpr float tree_near_meters = 70.0f;
+
+struct render_tree_bucket {
+    std::size_t species = 0;
+    int variant = 0;
+    tree_detail detail = tree_detail::full;
+    std::size_t first = 0;  // into render_tree_batch::instances
+    std::size_t count = 0;
 };
 
-// One trunk and one leaf instance per tree, in input order. Tree sizes are
-// already validated by the hole loader (never zero).
-render_tree_instance_batch build_tree_instances(const std::vector<tree_body>& trees);
+struct render_tree_batch {
+    std::vector<render_tree_instance> instances;  // bucket by bucket
+    std::vector<render_tree_bucket> buckets;      // none empty
+};
 
-// World bounds of every instance (unit meshes span x/z in [-1, 1], y in
-// [0, 1]). Invalid for an empty batch. Used for a whole-batch frustum cull.
-render_mesh_bounds compute_tree_instance_bounds(const render_tree_instance_batch& batch);
+render_tree_instance tree_instance_for(const tree_body& tree);
+
+// Which of its species' models a tree is, fixed by where it stands.
+int tree_variant_for(const tree_body& tree);
+
+// The trees within `frustum` (all of them when null), each near or far of
+// `eye` (all far when `all_far`: the shadow maps), in buckets.
+render_tree_batch build_tree_batch(const std::vector<tree_body>& trees, const view_frustum* frustum, const glm::vec3& eye,
+                                   bool all_far);
+
+// A unit-frame point of a tree as it stands, as tree.vert places it.
+glm::vec3 tree_world_point(const render_tree_instance& instance, const glm::vec3& local);

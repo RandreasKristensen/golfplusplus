@@ -42,6 +42,8 @@ ball_lie lie_at(const play_area& area, const glm::vec3& position) {
         return ball_lie::fairway;
     case terrain_material::rough:
         return ball_lie::rough;
+    case terrain_material::heavy_rough:
+        return ball_lie::heavy_rough;
     case terrain_material::green:
         return ball_lie::green;
     case terrain_material::bunker:
@@ -131,6 +133,7 @@ turf turf_for(const terrain_material material, const float wetness, const float 
     const surface_tuning& surface = material == terrain_material::fairway ? surfaces.fairway
         : material == terrain_material::green                            ? surfaces.green
         : material == terrain_material::bunker                           ? surfaces.bunker
+        : material == terrain_material::heavy_rough                      ? surfaces.heavy_rough
                                                                          : surfaces.rough;
     const float wet = clamp01(wetness);
     const auto blend = [wet](const float dry, const float soaked_share) { return dry * (1.0f + (soaked_share - 1.0f) * wet); };
@@ -270,7 +273,7 @@ shot_step step_shot(const ball_state& ball,
         step.cup = over;
     }
 
-    // Walls are swept from where the step began, so a fast ball cannot pass through.
+    // Solids are swept from where the step began, so a fast ball cannot pass through.
     // The one who hit it only once the grace is over.
     const float since_hit = static_cast<float>(step_number + 1) * dt;
     const std::size_t met_count = course.shooter && since_hit < tuning.solids.self_hit_grace_seconds

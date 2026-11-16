@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "test_support.h"
+#include "core/scene_signs.h"
 #include "core/tee_book.h"
 #include "core/vcr_frame.h"
 #include "game/text_ids.h"
@@ -164,7 +165,8 @@ TEST_CASE("offline tee book chooses PLAY NOW and both buses preserve solo progre
     update_tee_book(menu, game, catalog, {}, {}, {});
     const auto page = render_tee_book(menu, game, catalog, shipped_text_assets());
     REQUIRE(page.tiles.size() == 2);
-    CHECK(page.tiles.front().subtitle == "PLAY NOW");
+    // What it does, then the time of day there.
+    CHECK(page.tiles.front().subtitle.rfind("PLAY NOW - ", 0) == 0);
     update_tee_book(menu, game, catalog, accept(), {}, {});
     REQUIRE(active_booking(game));
     CHECK(active_booking(game)->course_id == fixture_hub_course().id);
@@ -237,14 +239,28 @@ TEST_CASE("bus and tee book boards: labelled by booking and place, read left to 
     const auto& sign_model = test_props().at("hole_sign");
     auto boards = prop_boards(game.area, test_props(), labels);
     REQUIRE(boards.size() == 2);
-    CHECK(refresh_render_hole_signs(signs, game.area, {}, boards, text, test_scene_colors(), sign_model, 1));
-    CHECK(!refresh_render_hole_signs(signs, game.area, {}, boards, text, test_scene_colors(), sign_model, 2));
+    CHECK(refresh_render_hole_signs(signs, game.area, 1, {}, boards, text, test_scene_colors(), sign_model, 1));
+    CHECK(!refresh_render_hole_signs(signs, game.area, 1, {}, boards, text, test_scene_colors(), sign_model, 2));
     game.kind = place_kind::course;
     labels = prop_board_labels(game, courses(), text);
     CHECK(labels[bus] == lookup_text(text, text_hub_bus_board_hub));
     boards = prop_boards(game.area, test_props(), labels);
-    CHECK(refresh_render_hole_signs(signs, game.area, {}, boards, text, test_scene_colors(), sign_model, 3));
+    CHECK(refresh_render_hole_signs(signs, game.area, 1, {}, boards, text, test_scene_colors(), sign_model, 3));
     CHECK(signs.truncated_text_count == 0);
+
+    // The scene updates the bus board by itself, and only when its text changes.
+    render_hole_signs scene_signs;
+    game.kind = place_kind::hub;
+    game.online.reservation.reset();
+    CHECK(refresh_scene_hole_signs(scene_signs, game, courses(), text, test_scene_colors(), test_props()));
+    CHECK(!refresh_scene_hole_signs(scene_signs, game, courses(), text, test_scene_colors(), test_props()));
+    const rgba_image unbooked_face = scene_signs.signs.back().face;
+    game.online.reservation = tee_reservation_info{};
+    game.online.reservation->course_id = "course";
+    CHECK(refresh_scene_hole_signs(scene_signs, game, courses(), text, test_scene_colors(), test_props()));
+    CHECK(scene_signs.revision == 2U);
+    CHECK(scene_signs.signs.back().face.pixels != unbooked_face.pixels);
+    game.kind = place_kind::course;
     // No hole sign texts were given: the way signs come first, then the boards.
     REQUIRE(signs.signs.size() == game.area.way_signs.size() + 2);
     const std::size_t first_board = signs.signs.size() - 2;
@@ -287,4 +303,31 @@ TEST_CASE("tee times read the hub's in-game clock: 15 real minutes apart, never 
     // Four real hours on is a later in-game day.
     const auto later = tee_time_text(game.online.server_now + 240 * minute, game, text);
     CHECK(later == format_text(text, text_hub_time_later_day, {{"time", make_datestamp(text, 4.0, 2.0).time}, {"days", "1"}}));
+}
+
+TEST_CASE("each course's clock runs its own hours ahead, so the tee book shows which is at sunrise") {
+    auto game = hub_game();
+    const auto& text = shipped_text_assets();
+    game.tuning.sky_clock = sky_timeline{0, 0.0, 6.0, 1989};
+    game.world.latitude_deg = 56.0f;
+    game.world.longitude_deg = 10.0f;
+    course_definition course;
+    course.sky.month = 6;
+    course.sky.day = 21;
+    course.sky.utc_offset_hours = 2.0f;
+    // Real 12:00 UTC is in-game midnight UTC: 02:00 there, a summer night.
+    const std::int64_t now_ms = 12LL * 60 * 60 * 1000;
+    const std::string night = course_time_text(course, game, text, now_ms);
+    CHECK(night.find(make_datestamp(text, 3.0, 2.0).time) == 0);
+    CHECK(night.find(lookup_text(text, text_hub_part_night)) != std::string::npos);
+    // Shifted 8 hours on, the same moment is 10:00 there: morning.
+    course.sky.clock_shift_hours = 8.0f;
+    const std::string morning = course_time_text(course, game, text, now_ms);
+    CHECK(morning.find(make_datestamp(text, 3.0 + 8.0 / 24.0, 2.0).time) == 0);
+    CHECK(morning.find(lookup_text(text, text_hub_part_morning)) != std::string::npos);
+    // The sun low before its noon is a sunrise, after it a sunset.
+    CHECK(std::string(part_of_day_key(3.0f, true, 7.0f)) == text_hub_part_sunrise);
+    CHECK(std::string(part_of_day_key(3.0f, false, 7.0f)) == text_hub_part_sunset);
+    CHECK(std::string(part_of_day_key(-3.0f, true, 9.0f)) == text_hub_part_dawn);
+    CHECK(std::string(part_of_day_key(50.0f, false, 0.5f)) == text_hub_part_midday);
 }

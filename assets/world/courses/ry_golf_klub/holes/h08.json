@@ -726,14 +726,35 @@
   "trees": [
     {
       "position": [
-        -20.84,
+        -20.95,
         0.0,
-        6.32
+        5.8
       ],
       "trunk_radius": 0.22,
-      "trunk_height": 2.52,
-      "leaf_radius": 1.54,
-      "leaf_height": 3.08
+      "trunk_height": 2.54,
+      "leaf_radius": 1.55,
+      "leaf_height": 3.11,
+      "species": "birch"
+    }
+  ],
+  "bushes": [
+    {
+      "position": [
+        -33.79,
+        0.0,
+        -37.35
+      ],
+      "radius": 2.46,
+      "height": 1.91
+    },
+    {
+      "position": [
+        -30.74,
+        0.0,
+        -45.55
+      ],
+      "radius": 2.11,
+      "height": 1.56
     }
   ],
   "source": {

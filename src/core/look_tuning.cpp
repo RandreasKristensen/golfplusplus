@@ -4,6 +4,7 @@
 #include "game/lighting_numbers.h"
 #include "game/text_ids.h"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -82,7 +83,12 @@ render_god_menu look_tuning_view(const look_tuning_state& state, const lighting_
     const std::string elevation = std::to_string(static_cast<int>(std::lround(shown.keys[key].sun_elevation_deg)));
     render_god_menu view;
     view.title = lookup_text(text, text_look_title);
-    for (std::size_t i = 0; i < state.entries.size(); ++i) {
+    // A window of the rows round the one picked, so any number of them fit.
+    const std::size_t count = state.entries.size();
+    const std::size_t shown_count = std::min(count, look_tuning_visible_rows);
+    const std::size_t first = std::min(state.selected >= shown_count / 2 ? state.selected - shown_count / 2 : 0,
+                                       count - shown_count);
+    for (std::size_t i = first; i < first + shown_count; ++i) {
         const tuning_entry& entry = state.entries[i];
         const std::optional<lighting_number> number = lighting_number_at(shown, tuning_entry_path(entry, key));
         render_god_menu_row row;

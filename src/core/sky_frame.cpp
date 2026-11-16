@@ -28,7 +28,7 @@ double frame_game_day(const sky_timeline& timeline, const course_sky& sky, const
     // The date's UTC noon is that local date on any clock within 12 hours of UTC.
     const double clock = controls.pinned_hour
         ? game_day_at_local_time(static_cast<double>(date) + 0.5, offset, static_cast<double>(*controls.pinned_hour))
-        : game_day_at(timeline, now_unix_ms);
+        : course_clock_at(timeline, sky, now_unix_ms);
     return game_day_on_date(clock + controls.scrub_game_days, date, offset);
 }
 

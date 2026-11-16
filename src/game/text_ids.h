@@ -422,6 +422,17 @@ inline constexpr const char* text_hub_time_later_day = "hub.time_later_day";
 
 
 inline constexpr const char* text_hub_play_now = "hub.play_now";
+inline constexpr const char* text_hub_course_row = "hub.course_row";
+inline constexpr const char* text_hub_course_time = "hub.course_time";
+inline constexpr const char* text_hub_slot_there = "hub.slot_there";
+inline constexpr const char* text_hub_part_night = "hub.part.night";
+inline constexpr const char* text_hub_part_dawn = "hub.part.dawn";
+inline constexpr const char* text_hub_part_sunrise = "hub.part.sunrise";
+inline constexpr const char* text_hub_part_morning = "hub.part.morning";
+inline constexpr const char* text_hub_part_midday = "hub.part.midday";
+inline constexpr const char* text_hub_part_afternoon = "hub.part.afternoon";
+inline constexpr const char* text_hub_part_sunset = "hub.part.sunset";
+inline constexpr const char* text_hub_part_dusk = "hub.part.dusk";
 inline constexpr const char* text_hub_offline_controls = "hub.offline_controls";
 
 inline constexpr const char* text_hub_drop_hint = "hub.drop_hint";

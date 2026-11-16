@@ -25,7 +25,7 @@ std::optional<hole_data> hole_with_zone(const std::string& zone) {
       "tee": [0, 0, 0], "pin": [0, 0, 40],
       "spline": { "control_points": [[0, 0, 0], [0, 0, 40]], "width": 12 },
       "material_zones": [ )" + zone + R"( ]
-    })");
+    })").value;
 }
 }
 
@@ -207,4 +207,29 @@ TEST_CASE("a hole with a fairway outline has fairway only inside it") {
     CHECK(sample_area(outlined, glm::vec3(0.0f, 0.0f, 40.0f)).material == terrain_material::rough);
     CHECK(sample_area(outlined, glm::vec3(0.0f, 0.0f, 150.0f)).material == terrain_material::fairway);
     CHECK(sample_area(outlined, glm::vec3(13.0f, 0.0f, 280.0f)).material == terrain_material::rough);
+}
+
+TEST_CASE("a hole's bushes load as low leaves with no trunk, and heavy rough as its own zone") {
+    const std::optional<hole_data> hole = parse_hole_from_text(R"({
+      "tee": [0, 0, 0], "pin": [0, 0, 40],
+      "spline": { "control_points": [[0, 0, 0], [0, 0, 40]], "width": 12 },
+      "material_zones": [ { "type": "heavy_rough", "outline": [[20, 0], [30, 0], [30, 10], [20, 10]] } ],
+      "trees": [ { "position": [-20, 0, 10] } ],
+      "bushes": [ { "position": [15, 0, 20], "radius": 1.5, "height": 1.2 } ]
+    })").value;
+    REQUIRE(hole.has_value());
+    REQUIRE(hole->trees.size() == 2U);
+    const tree_instance& bush = hole->trees.back();
+    CHECK(bush.shape.kind == tree_kind::bush);
+    CHECK(bush.shape.trunk_height == 0.0f);
+    CHECK(near(bush.shape.leaf_radius, 1.5f));
+    CHECK(near(bush.shape.leaf_height, 1.2f));
+    CHECK(hole->trees.front().shape.kind == tree_kind::tree);
+    REQUIRE(hole->material_zones.size() == 1U);
+    CHECK(hole->material_zones.front().type == material_zone_type::heavy_rough);
+    CHECK(!parse_hole_from_text(R"({
+      "tee": [0, 0, 0], "pin": [0, 0, 40],
+      "spline": { "control_points": [[0, 0, 0], [0, 0, 40]], "width": 12 },
+      "bushes": [ { "position": [15, 0, 20], "radius": 0, "height": 1.2 } ]
+    })").value.has_value());
 }

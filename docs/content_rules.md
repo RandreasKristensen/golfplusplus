@@ -9,7 +9,11 @@ text in C++: tuning in `assets/play/tuning/`, rewards and skills in
 sounds) in `assets/play/items/`, a model's colours, shape, points and mounts in
 its prop file, scene colours and light in `assets/picture/lighting.json`. A
 new cigarette, beer, cart or trinket is files, never C++. Loaders never invent
-fallbacks: missing content fails loudly at startup.
+fallbacks: missing content fails loudly at startup. Only an omitted optional
+field takes its default; a present but malformed one (a tree, road, zone or
+number) refuses its whole file, naming the field (`parsed<T>` in
+`src/game/json_util.h`). One invalid course manifest or a duplicate course id
+refuses every course, in the game and the server alike (`parse_courses`).
 
 **Text is data.** Strings in `assets/interface/text/en.json`, styles in
 `styles.json`, both through `src/game/text_ids.h`; sounds through

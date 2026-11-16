@@ -1,4 +1,5 @@
 #include "game/mode_dispatch.h"
+#include "game/bag_sync.h"
 
 #include "game/motion_sync.h"
 #include "game/content_files.h"
@@ -174,6 +175,7 @@ void record_bag_moved(game_state& state) {
     command.type = net_command_type::place_bag;
     command.bag = state.bag;
     push_command(state, std::move(command));
+    expect_bag_move(state);
 }
 
 void record_club_taken(game_state& state, const std::string& club_id) {
@@ -184,6 +186,7 @@ void record_club_taken(game_state& state, const std::string& club_id) {
     command.type = net_command_type::take_club;
     command.club_id = club_id;
     push_command(state, std::move(command));
+    expect_club_taken(state, club_id);
 }
 
 void record_item_use(game_state& state, const item_definition& item) {
@@ -371,7 +374,7 @@ const std::optional<tee_reservation_info>& active_booking(const game_state& stat
 void request_tee_action(game_state& state, net_command command) {
     if (!is_online(state)) {
         if (command.type == net_command_type::book_tee) {
-            for (const auto& course : load_courses(state.asset_root)) {
+            for (const auto& course : load_courses(state.asset_root).value.value_or(std::vector<course_definition>{})) {
                 if (course.id == command.course_id) {
                     tee_reservation_info choice; choice.course_id = course.id;
                     state.offline_booking = choice; return;

@@ -186,16 +186,16 @@ TEST_CASE("menu, HUD, thunder and ambience sounds are never placed; everything e
 }
 
 TEST_CASE("a sound must say how far it carries or that it is not placed; ambience is never placed") {
-    CHECK(!parse_audio_manifest(R"({ "sounds": [ { "id": "a", "file": "a.wav" } ] })").manifest);
-    CHECK(!parse_audio_manifest(R"({ "sounds": [ { "id": "a", "file": "a.wav", "reference_distance": 2.0 } ] })").manifest);
+    CHECK(!parse_audio_manifest(R"({ "voices": { "channels": 32, "loops": 8 }, "underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 },  "sounds": [ { "id": "a", "file": "a.wav" } ] })").manifest);
+    CHECK(!parse_audio_manifest(R"({ "voices": { "channels": 32, "loops": 8 }, "underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 },  "sounds": [ { "id": "a", "file": "a.wav", "reference_distance": 2.0 } ] })").manifest);
     CHECK(!parse_audio_manifest(
-               R"({ "sounds": [ { "id": "a", "file": "a.wav", "reference_distance": 20.0, "max_distance": 10.0 } ] })")
+               R"({ "voices": { "channels": 32, "loops": 8 }, "underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 },  "sounds": [ { "id": "a", "file": "a.wav", "reference_distance": 20.0, "max_distance": 10.0 } ] })")
                .manifest);
-    CHECK(!parse_audio_manifest(R"({ "sounds": [ { "id": "a", "file": "a.mp3", "type": "ambience",
+    CHECK(!parse_audio_manifest(R"({ "voices": { "channels": 32, "loops": 8 }, "underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 },  "sounds": [ { "id": "a", "file": "a.mp3", "type": "ambience",
                                     "reference_distance": 2.0, "max_distance": 10.0 } ] })")
                .manifest);
     const audio_manifest_parse_result unplaced =
-        parse_audio_manifest(R"({ "sounds": [ { "id": "a", "file": "a.wav", "placed": false } ] })");
+        parse_audio_manifest(R"({ "voices": { "channels": 32, "loops": 8 }, "underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 },  "sounds": [ { "id": "a", "file": "a.wav", "placed": false } ] })");
     REQUIRE(unplaced.manifest);
     CHECK(!unplaced.manifest->sounds[0].spread);
 }

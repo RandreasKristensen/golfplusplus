@@ -13,7 +13,6 @@ pub struct MotionStateRow {
     pub z: f32,
     pub mode: u8,
     pub server_time: __sdk::Timestamp,
-    pub slack_left: f32,
     pub walk_meters_pending: f32,
     pub cart_meters_pending: f32,
     pub step: u64,
@@ -46,7 +45,6 @@ pub struct MotionStateRowCols {
     pub z: __sdk::__query_builder::Col<MotionStateRow, f32>,
     pub mode: __sdk::__query_builder::Col<MotionStateRow, u8>,
     pub server_time: __sdk::__query_builder::Col<MotionStateRow, __sdk::Timestamp>,
-    pub slack_left: __sdk::__query_builder::Col<MotionStateRow, f32>,
     pub walk_meters_pending: __sdk::__query_builder::Col<MotionStateRow, f32>,
     pub cart_meters_pending: __sdk::__query_builder::Col<MotionStateRow, f32>,
     pub step: __sdk::__query_builder::Col<MotionStateRow, u64>,
@@ -75,7 +73,6 @@ impl __sdk::__query_builder::HasCols for MotionStateRow {
             z: __sdk::__query_builder::Col::new(table_name, "z"),
             mode: __sdk::__query_builder::Col::new(table_name, "mode"),
             server_time: __sdk::__query_builder::Col::new(table_name, "server_time"),
-            slack_left: __sdk::__query_builder::Col::new(table_name, "slack_left"),
             walk_meters_pending: __sdk::__query_builder::Col::new(
                 table_name,
                 "walk_meters_pending",

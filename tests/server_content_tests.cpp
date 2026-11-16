@@ -10,8 +10,12 @@
 #include "server_test_support.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <iterator>
+#include <map>
 #include <string>
+#include <system_error>
+#include <utility>
 #include <vector>
 
 #include <glm/trigonometric.hpp>
@@ -80,6 +84,67 @@ TEST_CASE("missing server content is reported, not filled in") {
     fixture.files.erase(std::string(fixture_hub_folder) + "/holes/test2.json");
     CHECK(!build_server_course(fixture.files, content, fixture_hub_course().id).has_value());
     CHECK(!build_server_course(fixture.files, content, "missing").has_value());
+}
+
+namespace {
+// The fixture courses written under a fresh asset root, with `extra` (path
+// under the root, text) beside them: the game's disk view of `extra`.
+std::string course_root_with(const std::string& name, const std::map<std::string, std::string>& extra) {
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / name;
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+    const std::string fixture_manifest = std::string(fixture_hub_folder) + "/" + course_file_name;
+    CHECK(replace_text_file(root / fixture_manifest, *read_text_file(std::filesystem::path(fixture_root()) / fixture_manifest)));
+    for (const auto& [path, text] : extra) {
+        CHECK(replace_text_file(root / path, text));
+    }
+    return root.string();
+}
+
+// What the server and the game each make of the fixture courses with `extra`.
+std::pair<std::string, std::string> course_errors(const std::string& name, const std::map<std::string, std::string>& extra) {
+    content_fixture fixture = fixture_content_files();
+    for (const auto& [path, text] : extra) {
+        fixture.files.emplace(path, text);
+    }
+    const server_content_load_result server = parse_server_content(fixture.files);
+    const std::string root = course_root_with(name, extra);
+    const parsed<std::vector<course_definition>> game = load_courses(root);
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+    CHECK(!server.content);
+    CHECK(!game.value);
+    return {server.error, game.error};
+}
+}
+
+TEST_CASE("the game and the server refuse a malformed or duplicate course manifest alike, naming it") {
+    const std::string fixture_manifest = std::string(fixture_hub_folder) + "/" + course_file_name;
+    const std::string broken = std::string(courses_path) + "/broken/" + course_file_name;
+    const auto [server_broken, game_broken] = course_errors("golfpp_test_broken_course", {{broken, R"({"holes": ["a"]})"}});
+    CHECK(server_broken == game_broken);
+    CHECK(server_broken.rfind(broken + ": ", 0) == 0);
+
+    const std::string twin = std::string(courses_path) + "/twin/" + course_file_name;
+    const std::string copy = *read_text_file(std::filesystem::path(fixture_root()) / fixture_manifest);
+    const auto [server_twin, game_twin] = course_errors("golfpp_test_twin_course", {{twin, copy}});
+    CHECK(server_twin == game_twin);
+    CHECK(server_twin.rfind(twin + ": id \"" + fixture_hub_course().id + "\"", 0) == 0);
+    CHECK(server_twin.find(fixture_manifest) != std::string::npos);
+
+    // Only the game can see a course folder without a manifest.
+    const std::string root = course_root_with("golfpp_test_bare_course", {{std::string(courses_path) + "/bare/world.json", "{}"}});
+    const parsed<std::vector<course_definition>> bare = load_courses(root);
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+    CHECK(!bare.value);
+    CHECK(bare.error == std::string(courses_path) + "/bare/" + course_file_name + ": cannot read");
+
+    const parsed<std::vector<course_definition>> fixtures = load_courses(fixture_root());
+    REQUIRE(fixtures.value);
+    CHECK(fixtures.value->size() == 1U);
+    CHECK(!parse_courses({}).value);
+    CHECK(parse_courses({{"world/courses/x/holes/course.json", copy}}).error.rfind("world/courses/x/holes/course.json: ", 0) == 0);
 }
 
 TEST_CASE("content hash: shipped files match the server and game fingerprints") {

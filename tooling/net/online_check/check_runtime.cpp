@@ -6,6 +6,7 @@
 #include "game/online_play.h"
 #include "physics/vector_math.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <thread>
 
@@ -35,17 +36,18 @@ void live_check::tick() {
         auto& p = *peer; auto& s = p.state;
         p.client.update(s);
         while (auto f = p.client.take_reducer_failure()) { p.failures.push_back(*f); }
+        // Recorded here; update_game then reacts to them as the game would.
         p.failures.insert(p.failures.end(), s.online.refusals.begin(), s.online.refusals.end());
-        s.online.refusals.clear();
         p.shots.insert(p.shots.end(), s.online.shots.begin(), s.online.shots.end());
-        if (!s.online.room_ready || !s.online.room) { p.adopted_room = 0; continue; }
+        if (!s.online.room_ready || !s.online.room) { s.online.refusals.clear(); p.adopted_room = 0; continue; }
         if (p.adopted_room != s.online.room->room_id || !s.hub_flow.travel_course.empty()) {
-            if (!s.hub_flow.travel_course.empty() && s.hub_flow.travel_course != s.online.room->course_id) { continue; }
-            if (!enter_place(s, s.online.room->course_id)) { continue; }
+            if ((!s.hub_flow.travel_course.empty() && s.hub_flow.travel_course != s.online.room->course_id) ||
+                !enter_place(s, s.online.room->course_id)) { s.online.refusals.clear(); continue; }
             s.hub_flow = hub_flow_state{}; adopt_online_arrival(s);
             p.adopted_room = s.online.room->room_id;
         }
         update_game(s, p.input, dt);
+        s.online.refusals.clear();  // each is recorded once, whether or not this frame took it
     }
 }
 bool live_check::until(const std::function<bool()>& done, const float seconds) {
@@ -79,9 +81,18 @@ bool live_check::walk(const std::size_t peer, const glm::vec3 target, const floa
         p.input.look_yaw = close ? 0.0f : wrap_angle(yaw_towards(p.state.player.position, target) - p.state.player.yaw);
         return close;
     }, seconds);
-    p.input = {}; send_motion_now(p.state); wait(0.3f);
-    const auto me = my_room_player(p.state);
-    return require("walk reaches target through accepted fixed steps", reached && me && me->motion && glm::length(me->motion->position - p.state.player.position) < 0.4f);
+    p.input = {}; send_motion_now(p.state);
+    // The server's row for those steps, however long it takes to arrive.
+    const bool agreed = until([&] {
+        const auto me = my_room_player(p.state);
+        return me && me->motion && glm::length(me->motion->position - p.state.player.position) < 0.4f;
+    }, 5.0f);
+    if (!agreed) {
+        const auto me = my_room_player(p.state);
+        const auto row = me && me->motion ? me->motion->position : glm::vec3(NAN);
+        std::printf("  walk peer %zu target (%.2f,%.2f) reached=%d row (%.2f,%.2f,%.2f)\n", peer, target.x, target.z, reached, row.x, row.y, row.z);
+    }
+    return require("walk reaches target through accepted fixed steps", reached && agreed);
 }
 void live_check::send(const std::size_t peer, net_command command) {
     auto& s = state(peer); send_motion_now(s);

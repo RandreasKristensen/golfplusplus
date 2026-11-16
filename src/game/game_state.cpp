@@ -62,7 +62,7 @@ void use_item(game_state& state, std::optional<item_use_shown>& shown, const std
 }
 
 // Any time, waiting on a rolling ball too.
-void update_item_uses(game_state& state, const game_input& input, const float dt) {
+void start_item_uses(game_state& state, const game_input& input) {
     const loadout equipped = equipped_loadout(state);
     if (input.use_smokable && !dap_holds_movement(state)) {
         use_item(state, state.smoking, equipped.smokable);
@@ -70,8 +70,6 @@ void update_item_uses(game_state& state, const game_input& input, const float dt
     if (input.use_drinkable && !dap_holds_movement(state)) {
         use_item(state, state.drinking, equipped.drinkable);
     }
-    tick_item_use(state.smoking, state.items, dt);
-    tick_item_use(state.drinking, state.items, dt);
 }
 
 void update_overlays(game_state& state, const game_input& input, const float dt) {
@@ -81,6 +79,26 @@ void update_overlays(game_state& state, const game_input& input, const float dt)
     state.course_map_active = walking && input.course_map_held;
     state.scorecard_active = walking && input.scorecard_held && state.round.has_value();
     state.skills_panel_active = input.skills_panel_held;
+}
+
+// Every way out of following a shot: I face what the shot camera was
+// watching, so the walking view takes over looking at my ball (or where it
+// was lost), never wherever I last faced.
+void stop_following(game_state& state, const glm::vec3& watched) {
+    state.mode = game_mode::walking;
+    if (horizontal_distance(state.player.position, watched) > 0.0001f) {
+        state.player.yaw = yaw_towards(state.player.position, watched);
+    }
+    state.flight_path_points.clear();
+}
+
+// Anything I do to move or act takes over from the shot camera, as it
+// breaks a pacing count (game/pacing.h); the ball plays on.
+bool takes_over_from_follow(const game_input& input) {
+    return input.forward_held || input.back_held || input.run_held || input.strafe_left_held ||
+        input.strafe_right_held || input.turn_left_held || input.turn_right_held || input.look_up_held ||
+        input.look_down_held || input.jump || input.interact || input.move_bag || input.toggle_pacing ||
+        input.crouch_held || input.toggle_flag || input.course_map_held || input.scorecard_held;
 }
 
 // Moves the ball along the playing shot; a holed shot completes the hole
@@ -96,19 +114,23 @@ void update_shot_playback(game_state& state, const float dt) {
     my_ball& ball = *state.ball;
     ball.position = shot_position_at(shot.result, shot.elapsed) + shot.correction * progress;
     shot.next_event = push_shot_events(state, shot.result, shot.correction, shot.next_event, shot.elapsed);
-    append_flight_path_point(state, ball.position);
     const bool following = state.mode == game_mode::following_shot;
+    if (following) {
+        append_flight_path_point(state, ball.position);
+    }
     if (following && shot.elapsed >= shot.follow_seconds && shot.elapsed < shot.result.duration) {
         // Rolling out: I walk again, looking at my ball, which plays on.
-        state.mode = game_mode::walking;
-        state.player.yaw = yaw_towards(state.player.position, ball.position);
-        state.flight_path_points.clear();
+        stop_following(state, ball.position);
     }
     if (shot.elapsed < shot.result.duration) {
         return;
     }
 
     const bool holed = shot.result.holed;
+    // A lost ball is back where it was hit from: the camera was watching
+    // where it went in.
+    const glm::vec3 watched =
+        shot.result.lost && !shot.result.trajectory.empty() ? shot.result.trajectory.back() + shot.correction : ball.position;
     // Lost in water, the ball is back where it was hit from, a stroke later;
     // a ball hit on the green costs two.
     ball.strokes += shot.result.penalty_strokes;
@@ -116,11 +138,8 @@ void update_shot_playback(game_state& state, const float dt) {
         state.notice = game_notice{shot.result.lost ? text_hud_water_penalty : text_hud_ball_hit_penalty, 0.0f};
     }
     state.shot.reset();
-    state.mode = game_mode::walking;
-    state.flight_path_points.clear();
-    if (holed && following) {
-        // The shot camera was watching the ball drop: walk on looking at the cup.
-        state.player.yaw = yaw_towards(state.player.position, ball.position);
+    if (following) {
+        stop_following(state, watched);
     }
     if (holed) {
         push_audio_event(state, audio_event_type::ball_cup, ball.position);
@@ -129,6 +148,58 @@ void update_shot_playback(game_state& state, const float dt) {
     if (holed && !is_online(state)) {
         if (state.hub) { finish_practice_shot(state); }
         else { complete_current_hole(state); }
+    }
+}
+
+// What this frame's input may begin; the world plays on whatever it is.
+// Roaming: my finished round waits for the group, so I walk, drive, use
+// items and handle my bag and carts, but play nothing more. None: a hub
+// screen, my ball's preparation not yet answered, or my results shown.
+enum class input_scope { play, roaming, none };
+
+input_scope input_scope_of(const game_state& state) {
+    if (state.hub_flow.screen != hub_screen::none || state.hub_flow.ball_request) {
+        return input_scope::none;
+    }
+    if (state.round && round_finished(*state.round) && !state.results_dismissed) {
+        return waiting_for_group(state) ? input_scope::roaming : input_scope::none;
+    }
+    return input_scope::play;
+}
+
+// Playing: everything the input asks for.
+void begin_play(game_state& state, const game_input& input, const float dt, frame_profile* profile) {
+    start_item_uses(state, input);
+    if (input.leave_group) {
+        request_leave_group(state);
+    }
+    // Whatever I am doing: the hub's balls are for fooling about.
+    if (input.drop_practice_ball) {
+        request_practice_drop(state);
+    }
+    if (input.cancel && state.give_up_prompt) {
+        state.give_up_prompt.reset();
+        return;
+    }
+    if (input.cancel && state.mode == game_mode::addressing && !state.address.swing_elapsed && !state.address.meter_elapsed) {
+        state.mode = game_mode::walking;
+        return;
+    }
+    if (state.mode == game_mode::following_shot && state.ball && takes_over_from_follow(input)) {
+        stop_following(state, state.ball->position);
+    }
+    switch (state.mode) {
+    case game_mode::walking:
+        update_walking(state, input, dt, profile);
+        break;
+    case game_mode::addressing:
+        update_addressing(state, input, dt, profile);
+        break;
+    case game_mode::following_shot:
+        break;
+    }
+    if (state.mode != game_mode::walking) {
+        leave_cart_at_once(state);
     }
 }
 }
@@ -162,30 +233,12 @@ game_state make_game_state(const game_content& content, const save_data& save) {
 
 void update_game(game_state& state, const game_input& input, const float raw_dt, frame_profile* profile) {
     const float dt = std::clamp(raw_dt, 0.0f, max_update_seconds);
+    // Travel and a room not yet ready wait for the complete destination snapshot.
     if (is_online(state) && ((state.online.room && !state.online.room_ready) || !state.hub_flow.travel_course.empty())) { return; }
-    if (state.hub_flow.screen != hub_screen::none || state.hub_flow.ball_request) {
+    const input_scope scope = input_scope_of(state);
+    if (scope != input_scope::play && !is_online(state)) {
+        // Offline the hub's screens and my results hold the world still.
         update_online_play(state, dt);
-        if (!state.hub_flow.ball_request) { sync_motion(state, dt); }
-        return;
-    }
-    if ((state.round && round_finished(*state.round)) && !state.results_dismissed) {
-        // Online, my results wait for the group; the room plays on meanwhile,
-        // and I can walk and drive around it, but play nothing more.
-        if (waiting_for_group(state)) {
-            state.player.speed = 0.0f;
-            state.player.turn_rate = 0.0f;
-            state.player.move_angle = 0.0f;
-            update_item_uses(state, input, dt);
-            game_input moving = input;
-            moving.interact = input.interact;
-            update_walking(state, moving, dt, profile);
-            watch_room(state, dt);
-            update_remote_players(state, dt);
-            sync_motion(state, dt);
-        } else {
-            watch_room(state, dt);
-            update_remote_players(state, dt);
-        }
         return;
     }
     refresh_static_anchor_cache(state, profile);
@@ -196,41 +249,23 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
     state.player.speed = 0.0f;
     state.player.turn_rate = 0.0f;
     state.player.move_angle = 0.0f;
-    update_item_uses(state, input, dt);
     follow_ride(state, dt);
-    if (input.leave_group) {
-        request_leave_group(state);
+    if (scope == input_scope::play) {
+        begin_play(state, input, dt, profile);
+    } else if (scope == input_scope::roaming) {
+        start_item_uses(state, input);
+        update_walking(state, input, dt, profile);
+    } else if (state.ride && state.ride->owner != 0) {
+        // A passenger stays in their seat as the driver takes the cart on.
+        update_cart(state, game_input{}, dt, profile);
     }
-    // Whatever I am doing: the hub's balls are for fooling about.
-    if (input.drop_practice_ball) {
-        request_practice_drop(state);
-    }
-
-    if (input.cancel && state.give_up_prompt) {
-        state.give_up_prompt.reset();
-    } else if (input.cancel && state.mode == game_mode::addressing && !state.address.swing_elapsed &&
-               !state.address.meter_elapsed) {
-        state.mode = game_mode::walking;
-    } else {
-        switch (state.mode) {
-        case game_mode::walking:
-            update_walking(state, input, dt, profile);
-            break;
-        case game_mode::addressing:
-            update_addressing(state, input, dt, profile);
-            break;
-        case game_mode::following_shot:
-            break;
-        }
-        if (state.mode != game_mode::walking) {
-            leave_cart_at_once(state);
-        }
-        update_shot_playback(state, dt);
-    }
+    // The world plays on: what was begun finishes, whatever the input.
+    tick_item_use(state.smoking, state.items, dt);
+    tick_item_use(state.drinking, state.items, dt);
+    update_shot_playback(state, dt);
     update_carts(state, dt);
     update_bag_handling(state, dt);
-
-    update_overlays(state, input, dt);
+    update_overlays(state, scope == input_scope::none ? game_input{} : input, dt);
     update_online_play(state, dt);
     update_remote_players(state, dt);
     if (!state.hub_flow.ball_request) { sync_motion(state, dt); }

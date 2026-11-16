@@ -29,14 +29,6 @@ glm::vec3 beside(const server_ball& ball) {
     return ball.position + glm::vec3(0.5f, 0.0f, 0.0f);
 }
 
-// Standing at `position` as the last accepted motion, in `mode`.
-net_motion was(const glm::vec3& position, const std::uint8_t mode) {
-    net_motion motion;
-    motion.mode = static_cast<motion_mode>(mode);
-    motion.position = position;
-    return motion;
-}
-
 shot_request putt(const int stroke) {
     shot_request request;
     request.stroke = stroke;
@@ -68,55 +60,6 @@ TEST_CASE("one course world stays selected beyond forty, without fullest-room al
     CHECK(choose_room({{5, 1000, 2}, {4, 70, 1}}) == std::optional<std::uint64_t>(4));
     CHECK(choose_room({{5, 1000, 2}}, 1) == std::nullopt);
     CHECK(choose_room({{5, 1000, 2}}, 2) == std::optional<std::uint64_t>(5));
-}
-
-TEST_CASE("motion may not outrun its mode's speed, with slack that does not add up") {
-    const game_tuning& tuning = shipped_content().tuning;
-    const movement_limits limits = shipped_limits();
-    const std::uint8_t walk = mode_number(motion_mode::walk);
-    const std::uint8_t cart = mode_number(motion_mode::cart);
-    const float slack = tuning.server.motion_distance_slack;
-    // On foot the fastest is running.
-    const float walking = tuning.player.walk_speed * tuning.player.run_factor * tuning.server.motion_speed_scale;
-    const float driving = limits.cart_speed * tuning.server.motion_speed_scale;
-    const glm::vec3 start(0.0f);
-
-    CHECK(check_motion(was(start, walk), glm::vec3(walking * 2.0f + slack - 0.01f, 50.0f, 0.0f), 2.0f, walk, slack, limits, tuning).allowed);
-    CHECK(!check_motion(was(start, walk), glm::vec3(walking * 2.0f + slack + 0.01f, 0.0f, 0.0f), 2.0f, walk, slack, limits, tuning).allowed);
-    // Getting into the cart allows cart speed from the start.
-    CHECK(check_motion(was(start, walk), glm::vec3(driving * 2.0f, 0.0f, 0.0f), 2.0f, cart, slack, limits, tuning).allowed);
-    CHECK(!check_motion(was(start, walk), glm::vec3(0.0f, 0.0f, slack + 0.01f), -5.0f, walk, slack, limits, tuning).allowed);
-
-    // Quick calls each a little too far use the slack up instead of adding it.
-    float slack_left = slack;
-    int accepted = 0;
-    glm::vec3 at = start;
-    for (int i = 0; i < 100; ++i) {
-        const glm::vec3 to = at + glm::vec3(walking * 0.01f + 1.0f, 0.0f, 0.0f);
-        const motion_check check = check_motion(was(at, walk), to, 0.01f, walk, slack_left, limits, tuning);
-        if (check.allowed) {
-            ++accepted;
-            at = to;
-        }
-        slack_left = check.slack_left;
-    }
-    CHECK(accepted <= static_cast<int>(slack) + 2);
-    CHECK(slack_left <= slack);
-}
-
-TEST_CASE("standing still does not save up a jump") {
-    const game_tuning& tuning = shipped_content().tuning;
-    const movement_limits limits = shipped_limits();
-    const std::uint8_t idle = mode_number(motion_mode::idle);
-    const std::uint8_t cart = mode_number(motion_mode::cart);
-    const float slack = tuning.server.motion_distance_slack;
-    const float gap = tuning.server.max_motion_gap_seconds;
-    // From standing to driving, the faster of the two counts.
-    const float fastest = std::max(limits.foot_speed, limits.cart_speed);
-    const float reach = fastest * tuning.server.motion_speed_scale * gap + slack;
-
-    CHECK(check_motion(was(glm::vec3(0.0f), idle), glm::vec3(reach - 0.01f, 0.0f, 0.0f), 30.0f, cart, slack, limits, tuning).allowed);
-    CHECK(!check_motion(was(glm::vec3(0.0f), idle), glm::vec3(reach + 0.01f, 0.0f, 0.0f), 30.0f, cart, slack, limits, tuning).allowed);
 }
 
 TEST_CASE("interaction reach is the radius plus slack, horizontally") {

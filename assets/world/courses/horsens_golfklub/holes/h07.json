@@ -170,36 +170,36 @@
       "type": "bunker",
       "outline": [
         [
-          125.0,
-          130.1
+          125.18,
+          129.8
         ],
         [
-          122.0,
-          133.1
+          122.18,
+          132.8
         ],
         [
-          122.0,
-          137.1
+          122.18,
+          136.8
         ],
         [
-          117.0,
-          140.1
+          117.18,
+          140.8
         ],
         [
-          119.0,
-          146.1
+          118.18,
+          145.8
         ],
         [
-          126.0,
-          145.1
+          126.18,
+          144.8
         ],
         [
-          133.0,
-          134.1
+          133.18,
+          133.8
         ],
         [
-          131.0,
-          130.1
+          131.18,
+          129.8
         ]
       ]
     },
@@ -207,28 +207,28 @@
       "type": "bunker",
       "outline": [
         [
-          338.0,
-          223.1
+          338.18,
+          222.8
         ],
         [
-          334.0,
-          226.1
+          334.18,
+          225.8
         ],
         [
-          333.0,
-          232.1
+          333.18,
+          231.8
         ],
         [
-          341.0,
-          235.1
+          341.18,
+          234.8
         ],
         [
-          346.0,
-          231.1
+          346.18,
+          230.8
         ],
         [
-          346.0,
-          226.1
+          346.18,
+          225.8
         ]
       ]
     },
@@ -236,20 +236,20 @@
       "type": "bunker",
       "outline": [
         [
-          377.0,
-          230.1
+          377.18,
+          229.8
         ],
         [
-          375.0,
-          233.1
+          375.18,
+          232.8
         ],
         [
-          379.0,
-          235.1
+          379.18,
+          233.8
         ],
         [
-          380.0,
-          231.1
+          380.18,
+          230.8
         ]
       ]
     },
@@ -257,32 +257,24 @@
       "type": "bunker",
       "outline": [
         [
-          362.0,
-          252.1
+          362.18,
+          251.8
         ],
         [
-          357.0,
-          257.1
+          357.18,
+          257.8
         ],
         [
-          358.0,
-          261.1
+          359.18,
+          261.8
         ],
         [
-          361.0,
-          261.1
+          363.18,
+          257.8
         ],
         [
-          362.0,
-          258.1
-        ],
-        [
-          368.0,
-          258.1
-        ],
-        [
-          367.0,
-          254.1
+          368.18,
+          257.8
         ]
       ]
     },
@@ -290,64 +282,60 @@
       "type": "fairway",
       "outline": [
         [
-          93.0,
-          101.1
+          93.18,
+          100.8
         ],
         [
-          91.0,
-          103.1
+          91.18,
+          102.8
         ],
         [
-          95.0,
-          106.1
+          95.18,
+          105.8
         ],
         [
-          95.0,
-          111.1
+          97.18,
+          113.8
         ],
         [
-          98.0,
-          114.1
+          93.18,
+          120.8
         ],
         [
-          94.0,
-          121.1
+          103.18,
+          124.8
         ],
         [
-          104.0,
-          125.1
+          111.18,
+          137.8
         ],
         [
-          105.0,
-          131.1
+          118.18,
+          137.8
         ],
         [
-          108.0,
-          132.1
+          121.18,
+          129.8
         ],
         [
-          111.0,
-          138.1
+          131.18,
+          122.8
         ],
         [
-          117.0,
-          138.1
+          115.18,
+          112.8
         ],
         [
-          123.0,
-          128.1
+          108.18,
+          112.8
         ],
         [
-          132.0,
-          124.1
+          104.18,
+          108.8
         ],
         [
-          114.0,
-          112.1
-        ],
-        [
-          98.0,
-          108.1
+          98.18,
+          107.8
         ]
       ]
     },
@@ -355,104 +343,124 @@
       "type": "fairway",
       "outline": [
         [
-          135.0,
-          136.1
+          135.18,
+          135.8
         ],
         [
-          132.0,
-          139.1
+          132.18,
+          138.8
         ],
         [
-          135.0,
-          147.1
+          131.18,
+          144.8
         ],
         [
-          148.0,
-          163.1
+          137.18,
+          147.8
         ],
         [
-          145.0,
-          166.1
+          139.18,
+          155.8
         ],
         [
-          141.0,
-          166.1
+          143.18,
+          155.8
         ],
         [
-          136.0,
-          158.1
+          147.18,
+          162.8
         ],
         [
-          134.0,
-          162.1
+          141.18,
+          166.8
         ],
         [
-          127.0,
-          164.1
+          137.18,
+          162.8
         ],
         [
-          126.0,
-          170.1
+          137.18,
+          157.8
         ],
         [
-          133.0,
-          180.1
+          132.18,
+          162.8
         ],
         [
-          139.0,
-          183.1
+          128.18,
+          161.8
         ],
         [
-          149.0,
-          183.1
+          126.18,
+          169.8
         ],
         [
-          154.0,
-          186.1
+          133.18,
+          179.8
         ],
         [
-          166.0,
-          184.1
+          138.18,
+          180.8
         ],
         [
-          168.0,
-          186.1
+          140.18,
+          183.8
         ],
         [
-          184.0,
-          187.1
+          146.18,
+          182.8
         ],
         [
-          192.0,
-          184.1
+          155.18,
+          186.8
         ],
         [
-          186.0,
-          172.1
+          162.18,
+          183.8
         ],
         [
-          177.0,
-          171.1
+          179.18,
+          185.8
         ],
         [
-          164.0,
-          163.1
+          181.18,
+          187.8
         ],
         [
-          159.0,
-          163.1
+          192.18,
+          184.8
         ],
         [
-          155.0,
-          153.1
+          187.18,
+          172.8
         ],
         [
-          145.0,
-          148.1
+          177.18,
+          170.8
         ],
         [
-          144.0,
-          144.1
+          164.18,
+          162.8
+        ],
+        [
+          158.18,
+          162.8
+        ],
+        [
+          159.18,
+          156.8
+        ],
+        [
+          154.18,
+          154.8
+        ],
+        [
+          151.18,
+          149.8
+        ],
+        [
+          145.18,
+          148.8
         ]
       ]
     },
@@ -460,96 +468,108 @@
       "type": "fairway",
       "outline": [
         [
-          228.0,
-          192.1
+          228.18,
+          192.8
         ],
         [
-          226.0,
-          196.1
+          226.18,
+          196.8
         ],
         [
-          241.0,
-          208.1
+          233.18,
+          200.8
         ],
         [
-          247.0,
-          208.1
+          234.18,
+          203.8
         ],
         [
-          257.0,
-          215.1
+          239.18,
+          204.8
         ],
         [
-          268.0,
-          216.1
+          241.18,
+          207.8
         ],
         [
-          275.0,
-          223.1
+          247.18,
+          207.8
         ],
         [
-          283.0,
-          222.1
+          256.18,
+          214.8
         ],
         [
-          286.0,
-          230.1
+          267.18,
+          215.8
         ],
         [
-          294.0,
-          235.1
+          275.18,
+          222.8
         ],
         [
-          307.0,
-          233.1
+          284.18,
+          222.8
         ],
         [
-          317.0,
-          224.1
+          286.18,
+          230.8
         ],
         [
-          307.0,
-          214.1
+          294.18,
+          234.8
         ],
         [
-          293.0,
-          217.1
+          307.18,
+          232.8
         ],
         [
-          288.0,
-          213.1
+          317.18,
+          224.8
         ],
         [
-          276.0,
-          214.1
+          307.18,
+          213.8
         ],
         [
-          268.0,
-          212.1
+          292.18,
+          216.8
         ],
         [
-          264.0,
-          210.1
+          288.18,
+          212.8
         ],
         [
-          262.0,
-          205.1
+          280.18,
+          214.8
         ],
         [
-          252.0,
-          199.1
+          269.18,
+          212.8
         ],
         [
-          247.0,
-          199.1
+          264.18,
+          209.8
         ],
         [
-          242.0,
-          195.1
+          262.18,
+          204.8
         ],
         [
-          231.0,
-          195.1
+          250.18,
+          197.8
+        ],
+        [
+          247.18,
+          198.8
+        ],
+        [
+          241.18,
+          194.8
+        ],
+        [
+          233.18,
+          195.8
         ]
       ]
     },
@@ -557,184 +577,180 @@
       "type": "fairway",
       "outline": [
         [
-          345.0,
-          219.1
+          345.18,
+          218.8
         ],
         [
-          343.0,
-          221.1
+          343.18,
+          220.8
         ],
         [
-          349.0,
-          226.1
+          349.18,
+          225.8
         ],
         [
-          347.0,
-          233.1
+          347.18,
+          232.8
         ],
         [
-          342.0,
-          237.1
+          342.18,
+          236.8
         ],
         [
-          331.0,
-          235.1
+          331.18,
+          234.8
         ],
         [
-          332.0,
-          225.1
+          332.18,
+          224.8
         ],
         [
-          330.0,
-          224.1
+          330.18,
+          223.8
         ],
         [
-          325.0,
-          231.1
+          325.18,
+          230.8
         ],
         [
-          328.0,
-          239.1
+          328.18,
+          238.8
         ],
         [
-          322.0,
-          245.1
+          319.18,
+          251.8
         ],
         [
-          320.0,
-          252.1
+          328.18,
+          250.8
         ],
         [
-          323.0,
-          253.1
+          340.18,
+          256.8
         ],
         [
-          327.0,
-          250.1
+          345.18,
+          249.8
         ],
         [
-          340.0,
-          257.1
+          349.18,
+          249.8
         ],
         [
-          346.0,
-          250.1
+          355.18,
+          254.8
         ],
         [
-          356.0,
-          254.1
+          358.18,
+          250.8
         ],
         [
-          359.0,
-          250.1
+          365.18,
+          249.8
         ],
         [
-          364.0,
-          249.1
+          371.18,
+          258.8
         ],
         [
-          371.0,
-          258.1
+          360.18,
+          263.8
         ],
         [
-          360.0,
-          263.1
+          360.18,
+          266.8
         ],
         [
-          360.0,
-          267.1
+          367.18,
+          265.8
         ],
         [
-          383.0,
-          258.1
+          383.18,
+          257.8
         ],
         [
-          383.0,
-          249.1
+          383.18,
+          248.8
         ],
         [
-          374.0,
-          252.1
+          374.18,
+          252.8
         ],
         [
-          369.0,
-          247.1
+          366.18,
+          246.8
         ],
         [
-          363.0,
-          248.1
+          354.18,
+          244.8
         ],
         [
-          355.0,
-          245.1
+          353.18,
+          240.8
         ],
         [
-          353.0,
-          241.1
+          356.18,
+          237.8
         ],
         [
-          357.0,
-          237.1
+          356.18,
+          229.8
         ],
         [
-          355.0,
-          234.1
+          369.18,
+          229.8
         ],
         [
-          356.0,
-          229.1
+          373.18,
+          226.8
         ],
         [
-          369.0,
-          230.1
+          379.18,
+          226.8
         ],
         [
-          373.0,
-          227.1
+          382.18,
+          229.8
         ],
         [
-          379.0,
-          227.1
+          382.18,
+          233.8
         ],
         [
-          382.0,
-          230.1
+          377.18,
+          238.8
         ],
         [
-          382.0,
-          234.1
+          385.18,
+          241.8
         ],
         [
-          378.0,
-          240.1
+          388.18,
+          246.8
         ],
         [
-          386.0,
-          242.1
+          393.18,
+          242.8
         ],
         [
-          388.0,
-          246.1
+          385.18,
+          233.8
         ],
         [
-          392.0,
-          245.1
+          386.18,
+          226.8
         ],
         [
-          393.0,
-          241.1
+          372.18,
+          219.8
         ],
         [
-          385.0,
-          234.1
+          354.18,
+          218.8
         ],
         [
-          386.0,
-          227.1
-        ],
-        [
-          370.0,
-          219.1
+          349.18,
+          220.8
         ]
       ]
     }
@@ -742,2205 +758,2406 @@
   "trees": [
     {
       "position": [
-        16.5,
+        3.68,
         0.0,
-        -1.4
-      ],
-      "trunk_radius": 0.54,
-      "trunk_height": 6.31,
-      "leaf_radius": 3.85,
-      "leaf_height": 7.71
-    },
-    {
-      "position": [
-        -10.5,
-        0.0,
-        10.6
-      ],
-      "trunk_radius": 0.78,
-      "trunk_height": 9.09,
-      "leaf_radius": 5.56,
-      "leaf_height": 11.12
-    },
-    {
-      "position": [
-        -6.5,
-        0.0,
-        16.6
-      ],
-      "trunk_radius": 0.77,
-      "trunk_height": 9.04,
-      "leaf_radius": 5.52,
-      "leaf_height": 11.05
-    },
-    {
-      "position": [
-        10.5,
-        0.0,
-        41.6
-      ],
-      "trunk_radius": 0.73,
-      "trunk_height": 8.58,
-      "leaf_radius": 5.24,
-      "leaf_height": 10.48
-    },
-    {
-      "position": [
-        55.5,
-        0.0,
-        48.6
-      ],
-      "trunk_radius": 0.59,
-      "trunk_height": 6.85,
-      "leaf_radius": 4.19,
-      "leaf_height": 8.37
-    },
-    {
-      "position": [
-        51.5,
-        0.0,
-        42.6
-      ],
-      "trunk_radius": 0.6,
-      "trunk_height": 6.99,
-      "leaf_radius": 4.27,
-      "leaf_height": 8.55
-    },
-    {
-      "position": [
-        4.5,
-        0.0,
-        34.6
-      ],
-      "trunk_radius": 0.78,
-      "trunk_height": 9.15,
-      "leaf_radius": 5.59,
-      "leaf_height": 11.19
-    },
-    {
-      "position": [
-        28.5,
-        0.0,
-        10.6
-      ],
-      "trunk_radius": 0.55,
-      "trunk_height": 6.42,
-      "leaf_radius": 3.92,
-      "leaf_height": 7.85
-    },
-    {
-      "position": [
-        24.5,
-        0.0,
-        4.6
-      ],
-      "trunk_radius": 0.57,
-      "trunk_height": 6.69,
-      "leaf_radius": 4.09,
-      "leaf_height": 8.18
-    },
-    {
-      "position": [
-        63.5,
-        0.0,
-        57.6
-      ],
-      "trunk_radius": 0.64,
-      "trunk_height": 7.49,
-      "leaf_radius": 4.58,
-      "leaf_height": 9.16
-    },
-    {
-      "position": [
-        306.5,
-        0.0,
-        246.6
-      ],
-      "trunk_radius": 0.53,
-      "trunk_height": 6.15,
-      "leaf_radius": 3.76,
-      "leaf_height": 7.52
-    },
-    {
-      "position": [
-        -17.5,
-        0.0,
-        4.6
-      ],
-      "trunk_radius": 0.69,
-      "trunk_height": 8.07,
-      "leaf_radius": 4.93,
-      "leaf_height": 9.86
-    },
-    {
-      "position": [
-        298.5,
-        0.0,
-        207.6
-      ],
-      "trunk_radius": 0.48,
-      "trunk_height": 5.57,
-      "leaf_radius": 3.4,
-      "leaf_height": 6.8
-    },
-    {
-      "position": [
-        181.5,
-        0.0,
-        216.6
-      ],
-      "trunk_radius": 0.78,
-      "trunk_height": 9.17,
-      "leaf_radius": 5.6,
-      "leaf_height": 11.2
-    },
-    {
-      "position": [
-        70.5,
-        0.0,
-        64.6
-      ],
-      "trunk_radius": 0.66,
-      "trunk_height": 7.72,
-      "leaf_radius": 4.72,
-      "leaf_height": 9.43
-    },
-    {
-      "position": [
-        50.5,
-        0.0,
-        36.6
-      ],
-      "trunk_radius": 0.64,
-      "trunk_height": 7.43,
-      "leaf_radius": 4.54,
-      "leaf_height": 9.08
-    },
-    {
-      "position": [
-        14.5,
-        0.0,
-        53.6
-      ],
-      "trunk_radius": 0.76,
-      "trunk_height": 8.87,
-      "leaf_radius": 5.42,
-      "leaf_height": 10.84
-    },
-    {
-      "position": [
-        31.5,
-        0.0,
-        77.6
-      ],
-      "trunk_radius": 0.6,
-      "trunk_height": 7.06,
-      "leaf_radius": 4.31,
-      "leaf_height": 8.62
-    },
-    {
-      "position": [
-        24.5,
-        0.0,
-        69.6
-      ],
-      "trunk_radius": 0.63,
-      "trunk_height": 7.39,
-      "leaf_radius": 4.52,
-      "leaf_height": 9.04
-    },
-    {
-      "position": [
-        274.5,
-        0.0,
-        198.6
-      ],
-      "trunk_radius": 0.55,
-      "trunk_height": 6.45,
-      "leaf_radius": 3.94,
-      "leaf_height": 7.88
-    },
-    {
-      "position": [
-        9.5,
-        0.0,
-        49.6
-      ],
-      "trunk_radius": 0.71,
-      "trunk_height": 8.34,
-      "leaf_radius": 5.1,
-      "leaf_height": 10.19
-    },
-    {
-      "position": [
-        59.5,
-        0.0,
-        43.6
-      ],
-      "trunk_radius": 0.53,
-      "trunk_height": 6.18,
-      "leaf_radius": 3.78,
-      "leaf_height": 7.56
-    },
-    {
-      "position": [
-        -18.5,
-        0.0,
-        12.6
-      ],
-      "trunk_radius": 0.75,
-      "trunk_height": 8.77,
-      "leaf_radius": 5.36,
-      "leaf_height": 10.72
-    },
-    {
-      "position": [
-        64.5,
-        0.0,
-        49.6
-      ],
-      "trunk_radius": 0.63,
-      "trunk_height": 7.4,
-      "leaf_radius": 4.52,
-      "leaf_height": 9.04
-    },
-    {
-      "position": [
-        0.5,
-        0.0,
-        39.6
-      ],
-      "trunk_radius": 0.83,
-      "trunk_height": 9.65,
-      "leaf_radius": 5.9,
-      "leaf_height": 11.8
-    },
-    {
-      "position": [
-        185.5,
-        0.0,
-        222.6
-      ],
-      "trunk_radius": 0.8,
-      "trunk_height": 9.35,
-      "leaf_radius": 5.71,
-      "leaf_height": 11.43
-    },
-    {
-      "position": [
-        42.5,
-        0.0,
-        98.6
-      ],
-      "trunk_radius": 0.66,
-      "trunk_height": 7.74,
-      "leaf_radius": 4.73,
-      "leaf_height": 9.46
-    },
-    {
-      "position": [
-        52.5,
-        0.0,
-        31.6
-      ],
-      "trunk_radius": 0.68,
-      "trunk_height": 7.99,
-      "leaf_radius": 4.88,
-      "leaf_height": 9.77
-    },
-    {
-      "position": [
-        4.5,
-        0.0,
-        46.6
-      ],
-      "trunk_radius": 0.77,
-      "trunk_height": 9.02,
-      "leaf_radius": 5.51,
-      "leaf_height": 11.03
-    },
-    {
-      "position": [
-        72.5,
-        0.0,
-        58.6
-      ],
-      "trunk_radius": 0.56,
-      "trunk_height": 6.57,
-      "leaf_radius": 4.02,
-      "leaf_height": 8.03
-    },
-    {
-      "position": [
-        194.5,
-        0.0,
-        225.6
-      ],
-      "trunk_radius": 0.84,
-      "trunk_height": 9.87,
-      "leaf_radius": 6.03,
-      "leaf_height": 12.06
-    },
-    {
-      "position": [
-        90.5,
-        0.0,
-        165.6
-      ],
-      "trunk_radius": 0.53,
-      "trunk_height": 6.23,
-      "leaf_radius": 3.81,
-      "leaf_height": 7.61
-    },
-    {
-      "position": [
-        240.5,
-        0.0,
-        186.6
-      ],
-      "trunk_radius": 0.5,
-      "trunk_height": 5.9,
-      "leaf_radius": 3.61,
-      "leaf_height": 7.21
-    },
-    {
-      "position": [
-        47.5,
-        0.0,
-        107.6
-      ],
-      "trunk_radius": 0.62,
-      "trunk_height": 7.26,
-      "leaf_radius": 4.44,
-      "leaf_height": 8.88
-    },
-    {
-      "position": [
-        69.5,
-        0.0,
-        52.6
-      ],
-      "trunk_radius": 0.55,
-      "trunk_height": 6.42,
-      "leaf_radius": 3.92,
-      "leaf_height": 7.84
-    },
-    {
-      "position": [
-        -7.5,
-        0.0,
-        32.6
-      ],
-      "trunk_radius": 0.76,
-      "trunk_height": 8.84,
-      "leaf_radius": 5.4,
-      "leaf_height": 10.81
-    },
-    {
-      "position": [
-        -23.5,
-        0.0,
-        10.6
-      ],
-      "trunk_radius": 0.75,
-      "trunk_height": 8.74,
-      "leaf_radius": 5.34,
-      "leaf_height": 10.68
-    },
-    {
-      "position": [
-        298.5,
-        0.0,
-        199.6
-      ],
-      "trunk_radius": 0.58,
-      "trunk_height": 6.75,
-      "leaf_radius": 4.12,
-      "leaf_height": 8.25
-    },
-    {
-      "position": [
-        173.5,
-        0.0,
-        222.6
-      ],
-      "trunk_radius": 0.75,
-      "trunk_height": 8.74,
-      "leaf_radius": 5.34,
-      "leaf_height": 10.68
-    },
-    {
-      "position": [
-        270.5,
-        0.0,
-        192.6
-      ],
-      "trunk_radius": 0.58,
-      "trunk_height": 6.73,
-      "leaf_radius": 4.11,
-      "leaf_height": 8.22
-    },
-    {
-      "position": [
-        319.5,
-        0.0,
-        204.6
-      ],
-      "trunk_radius": 0.49,
-      "trunk_height": 5.71,
-      "leaf_radius": 3.49,
-      "leaf_height": 6.97
-    },
-    {
-      "position": [
-        202.5,
-        0.0,
-        175.6
-      ],
-      "trunk_radius": 0.72,
-      "trunk_height": 8.37,
-      "leaf_radius": 5.11,
-      "leaf_height": 10.23
-    },
-    {
-      "position": [
-        308.5,
-        0.0,
-        256.6
-      ],
-      "trunk_radius": 0.42,
-      "trunk_height": 4.95,
-      "leaf_radius": 3.02,
-      "leaf_height": 6.05
-    },
-    {
-      "position": [
-        55.5,
-        0.0,
-        122.6
-      ],
-      "trunk_radius": 0.53,
-      "trunk_height": 6.23,
-      "leaf_radius": 3.81,
-      "leaf_height": 7.62
-    },
-    {
-      "position": [
-        86.5,
-        0.0,
-        71.6
-      ],
-      "trunk_radius": 0.65,
-      "trunk_height": 7.65,
-      "leaf_radius": 4.67,
-      "leaf_height": 9.35
-    },
-    {
-      "position": [
-        227.5,
-        0.0,
-        237.6
-      ],
-      "trunk_radius": 0.73,
-      "trunk_height": 8.56,
-      "leaf_radius": 5.23,
-      "leaf_height": 10.46
-    },
-    {
-      "position": [
-        92.5,
-        0.0,
-        79.6
-      ],
-      "trunk_radius": 0.71,
-      "trunk_height": 8.35,
-      "leaf_radius": 5.1,
-      "leaf_height": 10.21
-    },
-    {
-      "position": [
-        178.5,
-        0.0,
-        225.6
-      ],
-      "trunk_radius": 0.82,
-      "trunk_height": 9.61,
-      "leaf_radius": 5.87,
-      "leaf_height": 11.75
-    },
-    {
-      "position": [
-        33.5,
-        0.0,
-        93.6
-      ],
-      "trunk_radius": 0.69,
-      "trunk_height": 8.01,
-      "leaf_radius": 4.89,
-      "leaf_height": 9.79
-    },
-    {
-      "position": [
-        27.5,
-        0.0,
-        85.6
-      ],
-      "trunk_radius": 0.71,
-      "trunk_height": 8.33,
-      "leaf_radius": 5.09,
-      "leaf_height": 10.18
-    },
-    {
-      "position": [
-        81.5,
-        0.0,
-        63.6
-      ],
-      "trunk_radius": 0.58,
-      "trunk_height": 6.74,
-      "leaf_radius": 4.12,
-      "leaf_height": 8.23
-    },
-    {
-      "position": [
-        76.5,
-        0.0,
-        153.6
-      ],
-      "trunk_radius": 0.75,
-      "trunk_height": 8.82,
-      "leaf_radius": 5.39,
-      "leaf_height": 10.78
-    },
-    {
-      "position": [
-        100.5,
-        0.0,
-        88.6
-      ],
-      "trunk_radius": 0.71,
-      "trunk_height": 8.3,
-      "leaf_radius": 5.07,
-      "leaf_height": 10.15
-    },
-    {
-      "position": [
-        10.5,
-        0.0,
-        63.6
-      ],
-      "trunk_radius": 0.67,
-      "trunk_height": 7.8,
-      "leaf_radius": 4.77,
-      "leaf_height": 9.54
-    },
-    {
-      "position": [
-        -19.5,
-        0.0,
-        22.6
-      ],
-      "trunk_radius": 0.72,
-      "trunk_height": 8.4,
-      "leaf_radius": 5.13,
-      "leaf_height": 10.26
-    },
-    {
-      "position": [
-        69.5,
-        0.0,
-        144.6
-      ],
-      "trunk_radius": 0.68,
-      "trunk_height": 7.91,
-      "leaf_radius": 4.83,
-      "leaf_height": 9.66
-    },
-    {
-      "position": [
-        109.5,
-        0.0,
-        100.6
-      ],
-      "trunk_radius": 0.54,
-      "trunk_height": 6.3,
-      "leaf_radius": 3.85,
-      "leaf_height": 7.7
-    },
-    {
-      "position": [
-        291.5,
-        0.0,
-        194.6
-      ],
-      "trunk_radius": 0.58,
-      "trunk_height": 6.81,
-      "leaf_radius": 4.16,
-      "leaf_height": 8.32
-    },
-    {
-      "position": [
-        305.5,
-        0.0,
-        197.6
-      ],
-      "trunk_radius": 0.63,
-      "trunk_height": 7.41,
-      "leaf_radius": 4.53,
-      "leaf_height": 9.05
-    },
-    {
-      "position": [
-        394.5,
-        0.0,
-        234.6
-      ],
-      "trunk_radius": 0.47,
-      "trunk_height": 5.53,
-      "leaf_radius": 3.38,
-      "leaf_height": 6.76
-    },
-    {
-      "position": [
-        198.5,
-        0.0,
-        232.6
-      ],
-      "trunk_radius": 0.86,
-      "trunk_height": 10.0,
-      "leaf_radius": 6.11,
-      "leaf_height": 12.22
-    },
-    {
-      "position": [
-        -15.5,
-        0.0,
-        29.6
-      ],
-      "trunk_radius": 0.75,
-      "trunk_height": 8.75,
-      "leaf_radius": 5.35,
-      "leaf_height": 10.7
-    },
-    {
-      "position": [
-        217.5,
-        0.0,
-        175.6
-      ],
-      "trunk_radius": 0.83,
-      "trunk_height": 9.66,
-      "leaf_radius": 5.91,
-      "leaf_height": 11.81
-    },
-    {
-      "position": [
-        78.5,
-        0.0,
-        158.6
-      ],
-      "trunk_radius": 0.67,
-      "trunk_height": 7.8,
-      "leaf_radius": 4.76,
-      "leaf_height": 9.53
-    },
-    {
-      "position": [
-        234.5,
-        0.0,
-        179.6
-      ],
-      "trunk_radius": 0.64,
-      "trunk_height": 7.45,
-      "leaf_radius": 4.55,
-      "leaf_height": 9.1
-    },
-    {
-      "position": [
-        36.5,
-        0.0,
-        101.6
-      ],
-      "trunk_radius": 0.7,
-      "trunk_height": 8.21,
-      "leaf_radius": 5.02,
-      "leaf_height": 10.03
-    },
-    {
-      "position": [
-        376.5,
-        0.0,
-        214.6
-      ],
-      "trunk_radius": 0.34,
-      "trunk_height": 3.96,
-      "leaf_radius": 2.42,
-      "leaf_height": 4.84
-    },
-    {
-      "position": [
-        -8.5,
-        0.0,
-        40.6
-      ],
-      "trunk_radius": 0.8,
-      "trunk_height": 9.39,
-      "leaf_radius": 5.74,
-      "leaf_height": 11.48
-    },
-    {
-      "position": [
-        90.5,
-        0.0,
-        176.6
-      ],
-      "trunk_radius": 0.62,
-      "trunk_height": 7.21,
-      "leaf_radius": 4.41,
-      "leaf_height": 8.81
-    },
-    {
-      "position": [
-        41.5,
-        0.0,
-        109.6
-      ],
-      "trunk_radius": 0.7,
-      "trunk_height": 8.13,
-      "leaf_radius": 4.97,
-      "leaf_height": 9.94
-    },
-    {
-      "position": [
-        178.5,
-        0.0,
-        164.6
-      ],
-      "trunk_radius": 0.61,
-      "trunk_height": 7.09,
-      "leaf_radius": 4.33,
-      "leaf_height": 8.67
-    },
-    {
-      "position": [
-        100.5,
-        0.0,
-        84.6
-      ],
-      "trunk_radius": 0.73,
-      "trunk_height": 8.51,
-      "leaf_radius": 5.2,
-      "leaf_height": 10.4
-    },
-    {
-      "position": [
-        18.5,
-        0.0,
-        78.6
-      ],
-      "trunk_radius": 0.65,
-      "trunk_height": 7.56,
-      "leaf_radius": 4.62,
-      "leaf_height": 9.24
-    },
-    {
-      "position": [
-        187.5,
-        0.0,
-        231.6
-      ],
-      "trunk_radius": 0.86,
-      "trunk_height": 10.1,
-      "leaf_radius": 6.17,
-      "leaf_height": 12.35
-    },
-    {
-      "position": [
-        172.5,
-        0.0,
-        162.6
-      ],
-      "trunk_radius": 0.55,
-      "trunk_height": 6.46,
-      "leaf_radius": 3.95,
-      "leaf_height": 7.9
-    },
-    {
-      "position": [
-        281.5,
-        0.0,
-        189.6
-      ],
-      "trunk_radius": 0.51,
-      "trunk_height": 5.99,
-      "leaf_radius": 3.66,
-      "leaf_height": 7.32
-    },
-    {
-      "position": [
-        32.5,
-        0.0,
-        98.6
-      ],
-      "trunk_radius": 0.67,
-      "trunk_height": 7.81,
-      "leaf_radius": 4.78,
-      "leaf_height": 9.55
-    },
-    {
-      "position": [
-        388.5,
-        0.0,
-        220.6
-      ],
-      "trunk_radius": 0.37,
-      "trunk_height": 4.31,
-      "leaf_radius": 2.63,
-      "leaf_height": 5.26
-    },
-    {
-      "position": [
-        87.5,
-        0.0,
-        65.6
-      ],
-      "trunk_radius": 0.65,
-      "trunk_height": 7.59,
-      "leaf_radius": 4.64,
-      "leaf_height": 9.28
-    },
-    {
-      "position": [
-        -31.5,
-        0.0,
-        -6.4
-      ],
-      "trunk_radius": 0.57,
-      "trunk_height": 6.63,
-      "leaf_radius": 4.05,
-      "leaf_height": 8.1
-    },
-    {
-      "position": [
-        114.5,
-        0.0,
-        210.6
-      ],
-      "trunk_radius": 0.78,
-      "trunk_height": 9.07,
-      "leaf_radius": 5.54,
-      "leaf_height": 11.08
-    },
-    {
-      "position": [
-        229.5,
-        0.0,
-        175.6
-      ],
-      "trunk_radius": 0.69,
-      "trunk_height": 8.04,
-      "leaf_radius": 4.91,
-      "leaf_height": 9.83
-    },
-    {
-      "position": [
-        -30.5,
-        0.0,
-        12.6
-      ],
-      "trunk_radius": 0.7,
-      "trunk_height": 8.2,
-      "leaf_radius": 5.01,
-      "leaf_height": 10.03
-    },
-    {
-      "position": [
-        85.5,
-        0.0,
-        173.6
-      ],
-      "trunk_radius": 0.6,
-      "trunk_height": 7.04,
-      "leaf_radius": 4.3,
-      "leaf_height": 8.61
-    },
-    {
-      "position": [
-        90.5,
-        0.0,
-        180.6
-      ],
-      "trunk_radius": 0.62,
-      "trunk_height": 7.19,
-      "leaf_radius": 4.39,
-      "leaf_height": 8.79
-    },
-    {
-      "position": [
-        202.5,
-        0.0,
-        237.6
-      ],
-      "trunk_radius": 0.83,
-      "trunk_height": 9.7,
-      "leaf_radius": 5.93,
-      "leaf_height": 11.86
-    },
-    {
-      "position": [
-        103.5,
-        0.0,
-        199.6
-      ],
-      "trunk_radius": 0.68,
-      "trunk_height": 7.91,
-      "leaf_radius": 4.83,
-      "leaf_height": 9.67
-    },
-    {
-      "position": [
-        293.5,
-        0.0,
-        260.6
-      ],
-      "trunk_radius": 0.61,
-      "trunk_height": 7.12,
-      "leaf_radius": 4.35,
-      "leaf_height": 8.7
-    },
-    {
-      "position": [
-        267.5,
-        0.0,
-        183.6
-      ],
-      "trunk_radius": 0.61,
-      "trunk_height": 7.17,
-      "leaf_radius": 4.38,
-      "leaf_height": 8.77
-    },
-    {
-      "position": [
-        92.5,
-        0.0,
-        68.6
-      ],
-      "trunk_radius": 0.63,
-      "trunk_height": 7.36,
-      "leaf_radius": 4.5,
-      "leaf_height": 8.99
-    },
-    {
-      "position": [
-        10.5,
-        0.0,
-        72.6
-      ],
-      "trunk_radius": 0.66,
-      "trunk_height": 7.68,
-      "leaf_radius": 4.7,
-      "leaf_height": 9.39
-    },
-    {
-      "position": [
-        98.5,
-        0.0,
-        76.6
-      ],
-      "trunk_radius": 0.69,
-      "trunk_height": 8.08,
-      "leaf_radius": 4.94,
-      "leaf_height": 9.87
-    },
-    {
-      "position": [
-        -33.5,
-        0.0,
-        8.6
-      ],
-      "trunk_radius": 0.68,
-      "trunk_height": 7.89,
-      "leaf_radius": 4.82,
-      "leaf_height": 9.65
-    },
-    {
-      "position": [
-        108.5,
-        0.0,
-        89.6
-      ],
-      "trunk_radius": 0.75,
-      "trunk_height": 8.75,
-      "leaf_radius": 5.35,
-      "leaf_height": 10.7
-    },
-    {
-      "position": [
-        136.5,
-        0.0,
-        222.6
-      ],
-      "trunk_radius": 0.78,
-      "trunk_height": 9.09,
-      "leaf_radius": 5.55,
-      "leaf_height": 11.11
-    },
-    {
-      "position": [
-        261.5,
-        0.0,
-        253.6
-      ],
-      "trunk_radius": 0.66,
-      "trunk_height": 7.73,
-      "leaf_radius": 4.72,
-      "leaf_height": 9.45
-    },
-    {
-      "position": [
-        45.5,
-        0.0,
-        122.6
-      ],
-      "trunk_radius": 0.69,
-      "trunk_height": 8.03,
-      "leaf_radius": 4.91,
-      "leaf_height": 9.81
-    },
-    {
-      "position": [
-        33.5,
-        0.0,
-        106.6
-      ],
-      "trunk_radius": 0.71,
-      "trunk_height": 8.32,
-      "leaf_radius": 5.09,
-      "leaf_height": 10.17
-    },
-    {
-      "position": [
-        19.5,
-        0.0,
-        87.6
-      ],
-      "trunk_radius": 0.63,
-      "trunk_height": 7.38,
-      "leaf_radius": 4.51,
-      "leaf_height": 9.02
-    },
-    {
-      "position": [
-        27.5,
-        0.0,
-        98.6
-      ],
-      "trunk_radius": 0.76,
-      "trunk_height": 8.92,
-      "leaf_radius": 5.45,
-      "leaf_height": 10.91
-    },
-    {
-      "position": [
-        -10.5,
-        0.0,
-        46.6
-      ],
-      "trunk_radius": 0.82,
-      "trunk_height": 9.62,
-      "leaf_radius": 5.88,
-      "leaf_height": 11.76
-    },
-    {
-      "position": [
-        320.5,
-        0.0,
-        194.6
-      ],
-      "trunk_radius": 0.59,
-      "trunk_height": 6.93,
-      "leaf_radius": 4.23,
-      "leaf_height": 8.46
-    },
-    {
-      "position": [
-        123.5,
-        0.0,
-        220.6
-      ],
-      "trunk_radius": 0.81,
-      "trunk_height": 9.47,
-      "leaf_radius": 5.78,
-      "leaf_height": 11.57
-    },
-    {
-      "position": [
-        -2.5,
-        0.0,
-        58.6
-      ],
-      "trunk_radius": 0.64,
-      "trunk_height": 7.53,
-      "leaf_radius": 4.6,
-      "leaf_height": 9.21
-    },
-    {
-      "position": [
-        301.5,
-        0.0,
-        189.6
-      ],
-      "trunk_radius": 0.63,
-      "trunk_height": 7.32,
-      "leaf_radius": 4.48,
-      "leaf_height": 8.95
-    },
-    {
-      "position": [
-        -25.5,
-        0.0,
-        -26.4
-      ],
-      "trunk_radius": 0.25,
-      "trunk_height": 2.94,
-      "leaf_radius": 1.8,
-      "leaf_height": 3.59
-    },
-    {
-      "position": [
-        226.5,
-        0.0,
-        246.6
-      ],
-      "trunk_radius": 0.82,
-      "trunk_height": 9.55,
-      "leaf_radius": 5.83,
-      "leaf_height": 11.67
-    },
-    {
-      "position": [
-        217.5,
-        0.0,
-        244.6
-      ],
-      "trunk_radius": 0.79,
-      "trunk_height": 9.26,
-      "leaf_radius": 5.66,
-      "leaf_height": 11.31
-    },
-    {
-      "position": [
-        118.5,
-        0.0,
-        99.6
-      ],
-      "trunk_radius": 0.59,
-      "trunk_height": 6.95,
-      "leaf_radius": 4.25,
-      "leaf_height": 8.5
-    },
-    {
-      "position": [
-        203.5,
-        0.0,
-        164.6
-      ],
-      "trunk_radius": 0.82,
-      "trunk_height": 9.61,
-      "leaf_radius": 5.87,
-      "leaf_height": 11.75
-    },
-    {
-      "position": [
-        -19.5,
-        0.0,
-        36.6
-      ],
-      "trunk_radius": 0.72,
-      "trunk_height": 8.4,
-      "leaf_radius": 5.13,
-      "leaf_height": 10.26
-    },
-    {
-      "position": [
-        308.5,
-        0.0,
-        190.6
-      ],
-      "trunk_radius": 0.72,
-      "trunk_height": 8.42,
-      "leaf_radius": 5.14,
-      "leaf_height": 10.29
-    },
-    {
-      "position": [
-        -32.5,
-        0.0,
-        18.6
-      ],
-      "trunk_radius": 0.71,
-      "trunk_height": 8.32,
-      "leaf_radius": 5.09,
-      "leaf_height": 10.17
-    },
-    {
-      "position": [
-        243.5,
-        0.0,
-        251.6
-      ],
-      "trunk_radius": 0.81,
-      "trunk_height": 9.41,
-      "leaf_radius": 5.75,
-      "leaf_height": 11.5
-    },
-    {
-      "position": [
-        13.5,
-        0.0,
-        82.6
-      ],
-      "trunk_radius": 0.66,
-      "trunk_height": 7.67,
-      "leaf_radius": 4.69,
-      "leaf_height": 9.38
-    },
-    {
-      "position": [
-        -28.5,
-        0.0,
-        25.6
-      ],
-      "trunk_radius": 0.64,
-      "trunk_height": 7.52,
-      "leaf_radius": 4.59,
-      "leaf_height": 9.19
-    },
-    {
-      "position": [
-        76.5,
-        0.0,
-        170.6
-      ],
-      "trunk_radius": 0.57,
-      "trunk_height": 6.61,
-      "leaf_radius": 4.04,
-      "leaf_height": 8.08
-    },
-    {
-      "position": [
-        270.5,
-        0.0,
-        259.6
-      ],
-      "trunk_radius": 0.73,
-      "trunk_height": 8.52,
-      "leaf_radius": 5.21,
-      "leaf_height": 10.41
-    },
-    {
-      "position": [
-        259.5,
-        0.0,
-        176.6
-      ],
-      "trunk_radius": 0.67,
-      "trunk_height": 7.89,
-      "leaf_radius": 4.82,
-      "leaf_height": 9.64
-    },
-    {
-      "position": [
-        211.5,
-        0.0,
-        164.6
-      ],
-      "trunk_radius": 0.81,
-      "trunk_height": 9.41,
-      "leaf_radius": 5.75,
-      "leaf_height": 11.5
-    },
-    {
-      "position": [
-        189.5,
-        0.0,
-        240.6
-      ],
-      "trunk_radius": 0.87,
-      "trunk_height": 10.12,
-      "leaf_radius": 6.19,
-      "leaf_height": 12.37
-    },
-    {
-      "position": [
-        71.5,
-        0.0,
-        165.6
-      ],
-      "trunk_radius": 0.58,
-      "trunk_height": 6.74,
-      "leaf_radius": 4.12,
-      "leaf_height": 8.23
-    },
-    {
-      "position": [
-        92.5,
-        0.0,
-        194.6
-      ],
-      "trunk_radius": 0.65,
-      "trunk_height": 7.64,
-      "leaf_radius": 4.67,
-      "leaf_height": 9.33
-    },
-    {
-      "position": [
-        295.5,
-        0.0,
-        184.6
-      ],
-      "trunk_radius": 0.68,
-      "trunk_height": 7.93,
-      "leaf_radius": 4.85,
-      "leaf_height": 9.69
-    },
-    {
-      "position": [
-        287.5,
-        0.0,
-        182.6
-      ],
-      "trunk_radius": 0.66,
-      "trunk_height": 7.75,
-      "leaf_radius": 4.74,
-      "leaf_height": 9.48
-    },
-    {
-      "position": [
-        145.5,
-        0.0,
-        130.6
-      ],
-      "trunk_radius": 0.52,
-      "trunk_height": 6.08,
-      "leaf_radius": 3.71,
-      "leaf_height": 7.43
-    },
-    {
-      "position": [
-        314.5,
-        0.0,
-        188.6
-      ],
-      "trunk_radius": 0.69,
-      "trunk_height": 8.08,
-      "leaf_radius": 4.94,
-      "leaf_height": 9.87
-    },
-    {
-      "position": [
-        142.5,
-        0.0,
-        125.6
-      ],
-      "trunk_radius": 0.59,
-      "trunk_height": 6.86,
-      "leaf_radius": 4.19,
-      "leaf_height": 8.39
-    },
-    {
-      "position": [
-        81.5,
-        0.0,
-        181.6
-      ],
-      "trunk_radius": 0.68,
-      "trunk_height": 7.98,
-      "leaf_radius": 4.88,
-      "leaf_height": 9.75
-    },
-    {
-      "position": [
-        85.5,
-        0.0,
-        187.6
-      ],
-      "trunk_radius": 0.62,
-      "trunk_height": 7.25,
-      "leaf_radius": 4.43,
-      "leaf_height": 8.86
-    },
-    {
-      "position": [
-        107.5,
-        0.0,
-        216.6
-      ],
-      "trunk_radius": 0.7,
-      "trunk_height": 8.17,
-      "leaf_radius": 4.99,
-      "leaf_height": 9.99
-    },
-    {
-      "position": [
-        230.5,
-        0.0,
-        252.6
-      ],
-      "trunk_radius": 0.85,
-      "trunk_height": 9.95,
-      "leaf_radius": 6.08,
-      "leaf_height": 12.16
-    },
-    {
-      "position": [
-        17.5,
-        0.0,
-        94.6
-      ],
-      "trunk_radius": 0.67,
-      "trunk_height": 7.78,
-      "leaf_radius": 4.76,
-      "leaf_height": 9.51
-    },
-    {
-      "position": [
-        4.5,
-        0.0,
-        -41.4
-      ],
-      "trunk_radius": 0.45,
-      "trunk_height": 5.25,
-      "leaf_radius": 3.21,
-      "leaf_height": 6.41
-    },
-    {
-      "position": [
-        283.5,
-        0.0,
-        179.6
-      ],
-      "trunk_radius": 0.65,
-      "trunk_height": 7.55,
-      "leaf_radius": 4.61,
-      "leaf_height": 9.23
-    },
-    {
-      "position": [
-        96.5,
-        0.0,
-        203.6
-      ],
-      "trunk_radius": 0.71,
-      "trunk_height": 8.33,
-      "leaf_radius": 5.09,
-      "leaf_height": 10.19
-    },
-    {
-      "position": [
-        92.5,
-        0.0,
-        198.6
-      ],
-      "trunk_radius": 0.68,
-      "trunk_height": 8.0,
-      "leaf_radius": 4.89,
-      "leaf_height": 9.78
-    },
-    {
-      "position": [
-        100.5,
-        0.0,
-        209.6
-      ],
-      "trunk_radius": 0.63,
-      "trunk_height": 7.32,
-      "leaf_radius": 4.47,
-      "leaf_height": 8.95
-    },
-    {
-      "position": [
-        237.5,
-        0.0,
-        167.6
-      ],
-      "trunk_radius": 0.67,
-      "trunk_height": 7.88,
-      "leaf_radius": 4.82,
-      "leaf_height": 9.64
-    },
-    {
-      "position": [
-        152.5,
-        0.0,
-        136.6
-      ],
-      "trunk_radius": 0.56,
-      "trunk_height": 6.53,
-      "leaf_radius": 3.99,
-      "leaf_height": 7.99
-    },
-    {
-      "position": [
-        252.5,
-        0.0,
-        170.6
-      ],
-      "trunk_radius": 0.68,
-      "trunk_height": 8.0,
-      "leaf_radius": 4.89,
-      "leaf_height": 9.77
-    },
-    {
-      "position": [
-        71.5,
-        0.0,
-        171.6
-      ],
-      "trunk_radius": 0.59,
-      "trunk_height": 6.87,
-      "leaf_radius": 4.2,
-      "leaf_height": 8.4
-    },
-    {
-      "position": [
-        393.5,
-        0.0,
-        209.6
-      ],
-      "trunk_radius": 0.24,
-      "trunk_height": 2.8,
-      "leaf_radius": 1.71,
-      "leaf_height": 3.42
-    },
-    {
-      "position": [
-        322.5,
-        0.0,
-        187.6
-      ],
-      "trunk_radius": 0.65,
-      "trunk_height": 7.57,
-      "leaf_radius": 4.63,
-      "leaf_height": 9.25
-    },
-    {
-      "position": [
-        274.5,
-        0.0,
-        265.6
-      ],
-      "trunk_radius": 0.67,
-      "trunk_height": 7.79,
-      "leaf_radius": 4.76,
-      "leaf_height": 9.52
-    },
-    {
-      "position": [
-        116.5,
-        0.0,
-        225.6
-      ],
-      "trunk_radius": 0.73,
-      "trunk_height": 8.48,
-      "leaf_radius": 5.19,
-      "leaf_height": 10.37
-    },
-    {
-      "position": [
-        247.5,
-        0.0,
-        168.6
+        -11.7
       ],
       "trunk_radius": 0.69,
       "trunk_height": 8.09,
       "leaf_radius": 4.95,
-      "leaf_height": 9.89
+      "leaf_height": 9.89,
+      "species": "oak"
     },
     {
       "position": [
-        -21.5,
+        16.68,
         0.0,
-        -38.4
+        -1.7
       ],
-      "trunk_radius": 0.24,
-      "trunk_height": 2.78,
-      "leaf_radius": 1.7,
-      "leaf_height": 3.4
+      "trunk_radius": 0.55,
+      "trunk_height": 6.38,
+      "leaf_radius": 3.9,
+      "leaf_height": 7.79,
+      "species": "beech"
     },
     {
       "position": [
-        306.5,
+        -6.32,
         0.0,
-        182.6
+        16.3
       ],
-      "trunk_radius": 0.7,
-      "trunk_height": 8.2,
-      "leaf_radius": 5.01,
-      "leaf_height": 10.02
+      "trunk_radius": 0.77,
+      "trunk_height": 9.04,
+      "leaf_radius": 5.52,
+      "leaf_height": 11.05,
+      "species": "oak"
     },
     {
       "position": [
-        290.5,
+        -10.32,
         0.0,
-        178.6
+        11.3
       ],
-      "trunk_radius": 0.64,
-      "trunk_height": 7.47,
-      "leaf_radius": 4.57,
-      "leaf_height": 9.13
+      "trunk_radius": 0.77,
+      "trunk_height": 8.95,
+      "leaf_radius": 5.47,
+      "leaf_height": 10.94,
+      "species": "beech"
     },
     {
       "position": [
-        379.5,
+        55.68,
         0.0,
-        200.6
+        49.3
       ],
-      "trunk_radius": 0.23,
-      "trunk_height": 2.7,
-      "leaf_radius": 1.65,
-      "leaf_height": 3.3
+      "trunk_radius": 0.59,
+      "trunk_height": 6.87,
+      "leaf_radius": 4.2,
+      "leaf_height": 8.4,
+      "species": "oak"
     },
     {
       "position": [
-        58.5,
+        28.68,
         0.0,
-        156.6
+        11.3
+      ],
+      "trunk_radius": 0.56,
+      "trunk_height": 6.54,
+      "leaf_radius": 4.0,
+      "leaf_height": 8.0,
+      "species": "beech"
+    },
+    {
+      "position": [
+        9.68,
+        0.0,
+        41.3
+      ],
+      "trunk_radius": 0.76,
+      "trunk_height": 8.89,
+      "leaf_radius": 5.44,
+      "leaf_height": 10.87,
+      "species": "beech"
+    },
+    {
+      "position": [
+        24.68,
+        0.0,
+        5.3
       ],
       "trunk_radius": 0.57,
-      "trunk_height": 6.69,
-      "leaf_radius": 4.09,
-      "leaf_height": 8.17
+      "trunk_height": 6.67,
+      "leaf_radius": 4.08,
+      "leaf_height": 8.16,
+      "species": "oak"
     },
     {
       "position": [
-        -25.5,
+        51.68,
         0.0,
-        41.6
+        42.3
       ],
-      "trunk_radius": 0.65,
-      "trunk_height": 7.56,
-      "leaf_radius": 4.62,
-      "leaf_height": 9.24
+      "trunk_radius": 0.6,
+      "trunk_height": 6.99,
+      "leaf_radius": 4.27,
+      "leaf_height": 8.55,
+      "species": "beech"
     },
     {
       "position": [
-        175.5,
+        306.68,
         0.0,
-        149.6
+        246.3
       ],
-      "trunk_radius": 0.65,
-      "trunk_height": 7.65,
-      "leaf_radius": 4.67,
-      "leaf_height": 9.35
+      "trunk_radius": 0.52,
+      "trunk_height": 6.1,
+      "leaf_radius": 3.73,
+      "leaf_height": 7.46,
+      "species": "beech"
     },
     {
       "position": [
-        195.5,
+        3.68,
         0.0,
-        247.6
+        34.3
       ],
-      "trunk_radius": 0.9,
-      "trunk_height": 10.51,
-      "leaf_radius": 6.42,
-      "leaf_height": 12.85
+      "trunk_radius": 0.79,
+      "trunk_height": 9.21,
+      "leaf_radius": 5.63,
+      "leaf_height": 11.26,
+      "species": "beech"
     },
     {
       "position": [
-        151.5,
+        63.68,
         0.0,
-        130.6
-      ],
-      "trunk_radius": 0.61,
-      "trunk_height": 7.13,
-      "leaf_radius": 4.36,
-      "leaf_height": 8.72
-    },
-    {
-      "position": [
-        298.5,
-        0.0,
-        179.6
+        57.3
       ],
       "trunk_radius": 0.65,
       "trunk_height": 7.59,
       "leaf_radius": 4.64,
-      "leaf_height": 9.27
+      "leaf_height": 9.27,
+      "species": "beech"
     },
     {
       "position": [
-        109.5,
+        297.68,
         0.0,
-        223.6
+        207.3
       ],
-      "trunk_radius": 0.65,
-      "trunk_height": 7.61,
-      "leaf_radius": 4.65,
-      "leaf_height": 9.3
+      "trunk_radius": 0.47,
+      "trunk_height": 5.44,
+      "leaf_radius": 3.33,
+      "leaf_height": 6.65,
+      "species": "beech"
     },
     {
       "position": [
-        17.5,
+        -18.32,
         0.0,
-        101.6
-      ],
-      "trunk_radius": 0.62,
-      "trunk_height": 7.26,
-      "leaf_radius": 4.44,
-      "leaf_height": 8.88
-    },
-    {
-      "position": [
-        25.5,
-        0.0,
-        112.6
-      ],
-      "trunk_radius": 0.71,
-      "trunk_height": 8.3,
-      "leaf_radius": 5.07,
-      "leaf_height": 10.15
-    },
-    {
-      "position": [
-        220.5,
-        0.0,
-        254.6
-      ],
-      "trunk_radius": 0.79,
-      "trunk_height": 9.24,
-      "leaf_radius": 5.64,
-      "leaf_height": 11.29
-    },
-    {
-      "position": [
-        -43.5,
-        0.0,
-        15.6
-      ],
-      "trunk_radius": 0.61,
-      "trunk_height": 7.12,
-      "leaf_radius": 4.35,
-      "leaf_height": 8.71
-    },
-    {
-      "position": [
-        4.5,
-        0.0,
-        84.6
-      ],
-      "trunk_radius": 0.72,
-      "trunk_height": 8.42,
-      "leaf_radius": 5.14,
-      "leaf_height": 10.29
-    },
-    {
-      "position": [
-        243.5,
-        0.0,
-        260.6
-      ],
-      "trunk_radius": 0.87,
-      "trunk_height": 10.11,
-      "leaf_radius": 6.18,
-      "leaf_height": 12.36
-    },
-    {
-      "position": [
-        168.5,
-        0.0,
-        146.6
-      ],
-      "trunk_radius": 0.67,
-      "trunk_height": 7.83,
-      "leaf_radius": 4.78,
-      "leaf_height": 9.57
-    },
-    {
-      "position": [
-        197.5,
-        0.0,
-        153.6
+        4.3
       ],
       "trunk_radius": 0.69,
-      "trunk_height": 8.09,
-      "leaf_radius": 4.94,
-      "leaf_height": 9.88
+      "trunk_height": 8.05,
+      "leaf_radius": 4.92,
+      "leaf_height": 9.84,
+      "species": "beech"
     },
     {
       "position": [
-        162.5,
+        181.68,
         0.0,
-        143.6
+        217.3
       ],
-      "trunk_radius": 0.63,
-      "trunk_height": 7.39,
-      "leaf_radius": 4.52,
-      "leaf_height": 9.04
+      "trunk_radius": 0.79,
+      "trunk_height": 9.28,
+      "leaf_radius": 5.67,
+      "leaf_height": 11.34,
+      "species": "beech"
     },
     {
       "position": [
-        249.5,
+        70.68,
         0.0,
-        262.6
-      ],
-      "trunk_radius": 0.83,
-      "trunk_height": 9.65,
-      "leaf_radius": 5.9,
-      "leaf_height": 11.8
-    },
-    {
-      "position": [
-        312.5,
-        0.0,
-        181.6
-      ],
-      "trunk_radius": 0.74,
-      "trunk_height": 8.65,
-      "leaf_radius": 5.29,
-      "leaf_height": 10.57
-    },
-    {
-      "position": [
-        188.5,
-        0.0,
-        150.6
-      ],
-      "trunk_radius": 0.75,
-      "trunk_height": 8.72,
-      "leaf_radius": 5.33,
-      "leaf_height": 10.66
-    },
-    {
-      "position": [
-        210.5,
-        0.0,
-        253.6
-      ],
-      "trunk_radius": 0.85,
-      "trunk_height": 9.88,
-      "leaf_radius": 6.04,
-      "leaf_height": 12.08
-    },
-    {
-      "position": [
-        358.5,
-        0.0,
-        192.6
-      ],
-      "trunk_radius": 0.29,
-      "trunk_height": 3.41,
-      "leaf_radius": 2.09,
-      "leaf_height": 4.17
-    },
-    {
-      "position": [
-        237.5,
-        0.0,
-        260.6
-      ],
-      "trunk_radius": 0.89,
-      "trunk_height": 10.4,
-      "leaf_radius": 6.36,
-      "leaf_height": 12.71
-    },
-    {
-      "position": [
-        -10.5,
-        0.0,
-        66.6
-      ],
-      "trunk_radius": 0.61,
-      "trunk_height": 7.12,
-      "leaf_radius": 4.35,
-      "leaf_height": 8.71
-    },
-    {
-      "position": [
-        159.5,
-        0.0,
-        137.6
-      ],
-      "trunk_radius": 0.43,
-      "trunk_height": 5.01,
-      "leaf_radius": 3.06,
-      "leaf_height": 6.13
-    },
-    {
-      "position": [
-        123.5,
-        0.0,
-        232.6
+        64.3
       ],
       "trunk_radius": 0.67,
-      "trunk_height": 7.83,
-      "leaf_radius": 4.79,
-      "leaf_height": 9.57
+      "trunk_height": 7.81,
+      "leaf_radius": 4.77,
+      "leaf_height": 9.55,
+      "species": "beech"
     },
     {
       "position": [
-        163.5,
+        14.68,
         0.0,
-        242.6
+        53.3
       ],
-      "trunk_radius": 0.81,
-      "trunk_height": 9.43,
-      "leaf_radius": 5.76,
-      "leaf_height": 11.53
+      "trunk_radius": 0.74,
+      "trunk_height": 8.61,
+      "leaf_radius": 5.26,
+      "leaf_height": 10.52,
+      "species": "beech"
     },
     {
       "position": [
-        258.5,
+        31.68,
         0.0,
-        266.6
+        78.3
       ],
-      "trunk_radius": 0.8,
-      "trunk_height": 9.38,
-      "leaf_radius": 5.73,
-      "leaf_height": 11.46
+      "trunk_radius": 0.6,
+      "trunk_height": 7.02,
+      "leaf_radius": 4.29,
+      "leaf_height": 8.59,
+      "species": "beech"
     },
     {
       "position": [
-        94.5,
+        274.68,
         0.0,
-        212.6
+        199.3
       ],
-      "trunk_radius": 0.57,
-      "trunk_height": 6.71,
-      "leaf_radius": 4.1,
-      "leaf_height": 8.2
+      "trunk_radius": 0.56,
+      "trunk_height": 6.57,
+      "leaf_radius": 4.01,
+      "leaf_height": 8.03,
+      "species": "oak"
     },
     {
       "position": [
-        26.5,
+        24.68,
         0.0,
-        119.6
+        69.3
       ],
-      "trunk_radius": 0.62,
-      "trunk_height": 7.21,
-      "leaf_radius": 4.4,
-      "leaf_height": 8.81
+      "trunk_radius": 0.64,
+      "trunk_height": 7.47,
+      "leaf_radius": 4.56,
+      "leaf_height": 9.13,
+      "species": "beech"
     },
     {
       "position": [
-        178.5,
+        9.68,
         0.0,
-        247.6
-      ],
-      "trunk_radius": 0.87,
-      "trunk_height": 10.13,
-      "leaf_radius": 6.19,
-      "leaf_height": 12.38
-    },
-    {
-      "position": [
-        83.5,
-        0.0,
-        198.6
-      ],
-      "trunk_radius": 0.66,
-      "trunk_height": 7.69,
-      "leaf_radius": 4.7,
-      "leaf_height": 9.4
-    },
-    {
-      "position": [
-        275.5,
-        0.0,
-        169.6
+        49.3
       ],
       "trunk_radius": 0.71,
-      "trunk_height": 8.29,
-      "leaf_radius": 5.06,
-      "leaf_height": 10.13
+      "trunk_height": 8.34,
+      "leaf_radius": 5.1,
+      "leaf_height": 10.19,
+      "species": "beech"
     },
     {
       "position": [
-        118.5,
+        208.68,
         0.0,
-        233.6
+        182.3
       ],
-      "trunk_radius": 0.68,
-      "trunk_height": 7.89,
-      "leaf_radius": 4.82,
-      "leaf_height": 9.64
+      "trunk_radius": 0.71,
+      "trunk_height": 8.25,
+      "leaf_radius": 5.04,
+      "leaf_height": 10.08,
+      "species": "oak"
     },
     {
       "position": [
-        105.5,
+        63.68,
         0.0,
-        226.6
+        49.3
+      ],
+      "trunk_radius": 0.63,
+      "trunk_height": 7.35,
+      "leaf_radius": 4.49,
+      "leaf_height": 8.98,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -18.32,
+        0.0,
+        13.3
+      ],
+      "trunk_radius": 0.74,
+      "trunk_height": 8.7,
+      "leaf_radius": 5.32,
+      "leaf_height": 10.64,
+      "species": "oak"
+    },
+    {
+      "position": [
+        51.68,
+        0.0,
+        31.3
+      ],
+      "trunk_radius": 0.67,
+      "trunk_height": 7.84,
+      "leaf_radius": 4.79,
+      "leaf_height": 9.59,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -0.32,
+        0.0,
+        39.3
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 9.59,
+      "leaf_radius": 5.86,
+      "leaf_height": 11.73,
+      "species": "oak"
+    },
+    {
+      "position": [
+        42.68,
+        0.0,
+        98.3
+      ],
+      "trunk_radius": 0.66,
+      "trunk_height": 7.74,
+      "leaf_radius": 4.73,
+      "leaf_height": 9.46,
+      "species": "oak"
+    },
+    {
+      "position": [
+        -6.32,
+        0.0,
+        31.3
+      ],
+      "trunk_radius": 0.75,
+      "trunk_height": 8.77,
+      "leaf_radius": 5.36,
+      "leaf_height": 10.72,
+      "species": "beech"
+    },
+    {
+      "position": [
+        230.68,
+        0.0,
+        185.3
+      ],
+      "trunk_radius": 0.55,
+      "trunk_height": 6.42,
+      "leaf_radius": 3.92,
+      "leaf_height": 7.85,
+      "species": "oak"
+    },
+    {
+      "position": [
+        184.68,
+        0.0,
+        223.3
+      ],
+      "trunk_radius": 0.8,
+      "trunk_height": 9.37,
+      "leaf_radius": 5.72,
+      "leaf_height": 11.45,
+      "species": "beech"
+    },
+    {
+      "position": [
+        58.68,
+        0.0,
+        39.3
       ],
       "trunk_radius": 0.6,
       "trunk_height": 6.97,
       "leaf_radius": 4.26,
-      "leaf_height": 8.52
+      "leaf_height": 8.52,
+      "species": "beech"
     },
     {
       "position": [
-        300.5,
+        72.68,
         0.0,
-        174.6
+        58.3
       ],
-      "trunk_radius": 0.65,
-      "trunk_height": 7.56,
-      "leaf_radius": 4.62,
-      "leaf_height": 9.24
+      "trunk_radius": 0.57,
+      "trunk_height": 6.67,
+      "leaf_radius": 4.08,
+      "leaf_height": 8.15,
+      "species": "beech"
     },
     {
       "position": [
-        202.5,
+        194.68,
         0.0,
-        255.6
-      ],
-      "trunk_radius": 0.92,
-      "trunk_height": 10.8,
-      "leaf_radius": 6.6,
-      "leaf_height": 13.19
-    },
-    {
-      "position": [
-        379.5,
-        0.0,
-        193.6
-      ],
-      "trunk_radius": 0.27,
-      "trunk_height": 3.13,
-      "leaf_radius": 1.91,
-      "leaf_height": 3.82
-    },
-    {
-      "position": [
-        151.5,
-        0.0,
-        243.6
+        226.3
       ],
       "trunk_radius": 0.84,
-      "trunk_height": 9.81,
-      "leaf_radius": 5.99,
-      "leaf_height": 11.99
+      "trunk_height": 9.79,
+      "leaf_radius": 5.98,
+      "leaf_height": 11.96,
+      "species": "oak"
     },
     {
       "position": [
-        373.5,
+        47.68,
         0.0,
-        191.6
+        107.3
       ],
-      "trunk_radius": 0.3,
-      "trunk_height": 3.5,
-      "leaf_radius": 2.14,
-      "leaf_height": 4.28
+      "trunk_radius": 0.62,
+      "trunk_height": 7.26,
+      "leaf_radius": 4.44,
+      "leaf_height": 8.88,
+      "species": "beech"
     },
     {
       "position": [
-        -0.5,
+        69.68,
         0.0,
-        87.6
+        53.3
       ],
-      "trunk_radius": 0.7,
-      "trunk_height": 8.19,
-      "leaf_radius": 5.01,
-      "leaf_height": 10.01
+      "trunk_radius": 0.54,
+      "trunk_height": 6.35,
+      "leaf_radius": 3.88,
+      "leaf_height": 7.76,
+      "species": "beech"
     },
     {
       "position": [
-        286.5,
+        3.68,
         0.0,
-        169.6
+        47.3
       ],
-      "trunk_radius": 0.68,
-      "trunk_height": 7.93,
-      "leaf_radius": 4.85,
-      "leaf_height": 9.69
+      "trunk_radius": 0.77,
+      "trunk_height": 9.0,
+      "leaf_radius": 5.5,
+      "leaf_height": 11.0,
+      "species": "beech"
     },
     {
       "position": [
-        181.5,
+        89.68,
         0.0,
-        251.6
+        165.3
       ],
-      "trunk_radius": 0.86,
-      "trunk_height": 10.08,
-      "leaf_radius": 6.16,
-      "leaf_height": 12.32
+      "trunk_radius": 0.53,
+      "trunk_height": 6.23,
+      "leaf_radius": 3.81,
+      "leaf_height": 7.61,
+      "species": "beech"
     },
     {
       "position": [
-        229.5,
+        240.68,
         0.0,
-        263.6
+        186.3
       ],
-      "trunk_radius": 0.86,
-      "trunk_height": 10.02,
-      "leaf_radius": 6.12,
-      "leaf_height": 12.24
+      "trunk_radius": 0.5,
+      "trunk_height": 5.85,
+      "leaf_radius": 3.58,
+      "leaf_height": 7.15,
+      "species": "beech"
     },
     {
       "position": [
-        5.5,
+        201.68,
         0.0,
-        -52.4
+        176.3
+      ],
+      "trunk_radius": 0.73,
+      "trunk_height": 8.58,
+      "leaf_radius": 5.24,
+      "leaf_height": 10.49,
+      "species": "beech"
+    },
+    {
+      "position": [
+        270.68,
+        0.0,
+        193.3
+      ],
+      "trunk_radius": 0.56,
+      "trunk_height": 6.51,
+      "leaf_radius": 3.98,
+      "leaf_height": 7.96,
+      "species": "beech"
+    },
+    {
+      "position": [
+        173.68,
+        0.0,
+        222.3
+      ],
+      "trunk_radius": 0.75,
+      "trunk_height": 8.74,
+      "leaf_radius": 5.34,
+      "leaf_height": 10.68,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -23.32,
+        0.0,
+        11.3
+      ],
+      "trunk_radius": 0.74,
+      "trunk_height": 8.61,
+      "leaf_radius": 5.26,
+      "leaf_height": 10.52,
+      "species": "beech"
+    },
+    {
+      "position": [
+        318.68,
+        0.0,
+        204.3
+      ],
+      "trunk_radius": 0.48,
+      "trunk_height": 5.67,
+      "leaf_radius": 3.46,
+      "leaf_height": 6.92,
+      "species": "beech"
+    },
+    {
+      "position": [
+        298.68,
+        0.0,
+        199.3
+      ],
+      "trunk_radius": 0.58,
+      "trunk_height": 6.75,
+      "leaf_radius": 4.12,
+      "leaf_height": 8.25,
+      "species": "oak"
+    },
+    {
+      "position": [
+        307.68,
+        0.0,
+        256.3
       ],
       "trunk_radius": 0.41,
-      "trunk_height": 4.78,
+      "trunk_height": 4.77,
       "leaf_radius": 2.92,
-      "leaf_height": 5.84
+      "leaf_height": 5.83,
+      "species": "oak"
     },
     {
       "position": [
-        -22.5,
+        85.68,
         0.0,
-        58.6
+        71.3
       ],
-      "trunk_radius": 0.65,
-      "trunk_height": 7.64,
-      "leaf_radius": 4.67,
-      "leaf_height": 9.34
+      "trunk_radius": 0.68,
+      "trunk_height": 7.96,
+      "leaf_radius": 4.86,
+      "leaf_height": 9.73,
+      "species": "beech"
     },
     {
       "position": [
-        405.5,
+        178.68,
         0.0,
-        207.6
+        225.3
       ],
-      "trunk_radius": 0.22,
-      "trunk_height": 2.62,
-      "leaf_radius": 1.6,
-      "leaf_height": 3.2
+      "trunk_radius": 0.8,
+      "trunk_height": 9.34,
+      "leaf_radius": 5.71,
+      "leaf_height": 11.41,
+      "species": "beech"
     },
     {
       "position": [
-        -15.5,
+        54.68,
         0.0,
-        69.6
+        122.3
       ],
-      "trunk_radius": 0.63,
-      "trunk_height": 7.32,
-      "leaf_radius": 4.47,
-      "leaf_height": 8.95
+      "trunk_radius": 0.56,
+      "trunk_height": 6.52,
+      "leaf_radius": 3.99,
+      "leaf_height": 7.97,
+      "species": "beech"
     },
     {
       "position": [
-        164.5,
+        92.68,
         0.0,
-        248.6
+        79.3
       ],
-      "trunk_radius": 0.84,
-      "trunk_height": 9.86,
-      "leaf_radius": 6.02,
-      "leaf_height": 12.05
+      "trunk_radius": 0.71,
+      "trunk_height": 8.35,
+      "leaf_radius": 5.1,
+      "leaf_height": 10.21,
+      "species": "oak"
     },
     {
       "position": [
-        -10.5,
+        33.68,
         0.0,
-        76.6
+        94.3
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 8.18,
+      "leaf_radius": 5.0,
+      "leaf_height": 10.0,
+      "species": "oak"
+    },
+    {
+      "position": [
+        227.68,
+        0.0,
+        238.3
+      ],
+      "trunk_radius": 0.73,
+      "trunk_height": 8.59,
+      "leaf_radius": 5.25,
+      "leaf_height": 10.5,
+      "species": "beech"
+    },
+    {
+      "position": [
+        11.68,
+        0.0,
+        64.3
+      ],
+      "trunk_radius": 0.67,
+      "trunk_height": 7.81,
+      "leaf_radius": 4.77,
+      "leaf_height": 9.54,
+      "species": "beech"
+    },
+    {
+      "position": [
+        69.68,
+        0.0,
+        144.3
+      ],
+      "trunk_radius": 0.69,
+      "trunk_height": 8.12,
+      "leaf_radius": 4.96,
+      "leaf_height": 9.92,
+      "species": "beech"
+    },
+    {
+      "position": [
+        75.68,
+        0.0,
+        153.3
+      ],
+      "trunk_radius": 0.74,
+      "trunk_height": 8.68,
+      "leaf_radius": 5.31,
+      "leaf_height": 10.61,
+      "species": "oak"
+    },
+    {
+      "position": [
+        26.68,
+        0.0,
+        86.3
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 8.14,
+      "leaf_radius": 4.98,
+      "leaf_height": 9.95,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -19.32,
+        0.0,
+        23.3
+      ],
+      "trunk_radius": 0.71,
+      "trunk_height": 8.35,
+      "leaf_radius": 5.1,
+      "leaf_height": 10.2,
+      "species": "oak"
+    },
+    {
+      "position": [
+        82.68,
+        0.0,
+        63.3
+      ],
+      "trunk_radius": 0.58,
+      "trunk_height": 6.74,
+      "leaf_radius": 4.12,
+      "leaf_height": 8.23,
+      "species": "beech"
+    },
+    {
+      "position": [
+        109.68,
+        0.0,
+        100.3
+      ],
+      "trunk_radius": 0.55,
+      "trunk_height": 6.44,
+      "leaf_radius": 3.93,
+      "leaf_height": 7.87,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -15.32,
+        0.0,
+        29.3
+      ],
+      "trunk_radius": 0.73,
+      "trunk_height": 8.54,
+      "leaf_radius": 5.22,
+      "leaf_height": 10.44,
+      "species": "oak"
+    },
+    {
+      "position": [
+        291.68,
+        0.0,
+        194.3
+      ],
+      "trunk_radius": 0.58,
+      "trunk_height": 6.81,
+      "leaf_radius": 4.16,
+      "leaf_height": 8.33,
+      "species": "beech"
+    },
+    {
+      "position": [
+        376.68,
+        0.0,
+        215.3
+      ],
+      "trunk_radius": 0.34,
+      "trunk_height": 3.99,
+      "leaf_radius": 2.44,
+      "leaf_height": 4.87,
+      "species": "oak"
+    },
+    {
+      "position": [
+        36.68,
+        0.0,
+        101.3
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 8.21,
+      "leaf_radius": 5.02,
+      "leaf_height": 10.03,
+      "species": "oak"
+    },
+    {
+      "position": [
+        216.68,
+        0.0,
+        175.3
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 9.57,
+      "leaf_radius": 5.85,
+      "leaf_height": 11.69,
+      "species": "beech"
+    },
+    {
+      "position": [
+        394.68,
+        0.0,
+        234.3
+      ],
+      "trunk_radius": 0.47,
+      "trunk_height": 5.46,
+      "leaf_radius": 3.33,
+      "leaf_height": 6.67,
+      "species": "beech"
+    },
+    {
+      "position": [
+        305.68,
+        0.0,
+        197.3
       ],
       "trunk_radius": 0.63,
       "trunk_height": 7.41,
       "leaf_radius": 4.53,
-      "leaf_height": 9.05
+      "leaf_height": 9.05,
+      "species": "beech"
+    },
+    {
+      "position": [
+        77.68,
+        0.0,
+        158.3
+      ],
+      "trunk_radius": 0.64,
+      "trunk_height": 7.51,
+      "leaf_radius": 4.59,
+      "leaf_height": 9.17,
+      "species": "beech"
+    },
+    {
+      "position": [
+        90.68,
+        0.0,
+        176.3
+      ],
+      "trunk_radius": 0.62,
+      "trunk_height": 7.21,
+      "leaf_radius": 4.41,
+      "leaf_height": 8.81,
+      "species": "beech"
+    },
+    {
+      "position": [
+        41.68,
+        0.0,
+        109.3
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 8.13,
+      "leaf_radius": 4.97,
+      "leaf_height": 9.94,
+      "species": "beech"
+    },
+    {
+      "position": [
+        18.68,
+        0.0,
+        78.3
+      ],
+      "trunk_radius": 0.63,
+      "trunk_height": 7.41,
+      "leaf_radius": 4.53,
+      "leaf_height": 9.05,
+      "species": "oak"
+    },
+    {
+      "position": [
+        -9.32,
+        0.0,
+        40.3
+      ],
+      "trunk_radius": 0.81,
+      "trunk_height": 9.46,
+      "leaf_radius": 5.78,
+      "leaf_height": 11.56,
+      "species": "beech"
+    },
+    {
+      "position": [
+        32.68,
+        0.0,
+        98.3
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 7.64,
+      "leaf_radius": 4.67,
+      "leaf_height": 9.34,
+      "species": "oak"
+    },
+    {
+      "position": [
+        100.68,
+        0.0,
+        84.3
+      ],
+      "trunk_radius": 0.76,
+      "trunk_height": 8.9,
+      "leaf_radius": 5.44,
+      "leaf_height": 10.88,
+      "species": "oak"
+    },
+    {
+      "position": [
+        114.68,
+        0.0,
+        210.3
+      ],
+      "trunk_radius": 0.76,
+      "trunk_height": 8.85,
+      "leaf_radius": 5.41,
+      "leaf_height": 10.82,
+      "species": "oak"
+    },
+    {
+      "position": [
+        172.68,
+        0.0,
+        162.3
+      ],
+      "trunk_radius": 0.55,
+      "trunk_height": 6.46,
+      "leaf_radius": 3.95,
+      "leaf_height": 7.9,
+      "species": "oak"
+    },
+    {
+      "position": [
+        281.68,
+        0.0,
+        189.3
+      ],
+      "trunk_radius": 0.51,
+      "trunk_height": 5.91,
+      "leaf_radius": 3.61,
+      "leaf_height": 7.22,
+      "species": "beech"
+    },
+    {
+      "position": [
+        187.68,
+        0.0,
+        232.3
+      ],
+      "trunk_radius": 0.86,
+      "trunk_height": 10.06,
+      "leaf_radius": 6.15,
+      "leaf_height": 12.29,
+      "species": "oak"
+    },
+    {
+      "position": [
+        388.68,
+        0.0,
+        220.3
+      ],
+      "trunk_radius": 0.37,
+      "trunk_height": 4.31,
+      "leaf_radius": 2.63,
+      "leaf_height": 5.26,
+      "species": "oak"
+    },
+    {
+      "position": [
+        87.68,
+        0.0,
+        65.3
+      ],
+      "trunk_radius": 0.67,
+      "trunk_height": 7.79,
+      "leaf_radius": 4.76,
+      "leaf_height": 9.52,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -30.32,
+        0.0,
+        12.3
+      ],
+      "trunk_radius": 0.71,
+      "trunk_height": 8.3,
+      "leaf_radius": 5.07,
+      "leaf_height": 10.15,
+      "species": "beech"
+    },
+    {
+      "position": [
+        85.68,
+        0.0,
+        173.3
+      ],
+      "trunk_radius": 0.6,
+      "trunk_height": 7.04,
+      "leaf_radius": 4.3,
+      "leaf_height": 8.61,
+      "species": "oak"
+    },
+    {
+      "position": [
+        228.68,
+        0.0,
+        175.3
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 8.13,
+      "leaf_radius": 4.97,
+      "leaf_height": 9.93,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -32.32,
+        0.0,
+        -6.7
+      ],
+      "trunk_radius": 0.56,
+      "trunk_height": 6.57,
+      "leaf_radius": 4.01,
+      "leaf_height": 8.03,
+      "species": "beech"
+    },
+    {
+      "position": [
+        90.68,
+        0.0,
+        180.3
+      ],
+      "trunk_radius": 0.62,
+      "trunk_height": 7.19,
+      "leaf_radius": 4.39,
+      "leaf_height": 8.79,
+      "species": "beech"
+    },
+    {
+      "position": [
+        266.68,
+        0.0,
+        184.3
+      ],
+      "trunk_radius": 0.63,
+      "trunk_height": 7.39,
+      "leaf_radius": 4.52,
+      "leaf_height": 9.03,
+      "species": "beech"
+    },
+    {
+      "position": [
+        202.68,
+        0.0,
+        237.3
+      ],
+      "trunk_radius": 0.83,
+      "trunk_height": 9.66,
+      "leaf_radius": 5.9,
+      "leaf_height": 11.81,
+      "species": "beech"
+    },
+    {
+      "position": [
+        52.68,
+        0.0,
+        129.3
+      ],
+      "trunk_radius": 0.58,
+      "trunk_height": 6.76,
+      "leaf_radius": 4.13,
+      "leaf_height": 8.26,
+      "species": "beech"
+    },
+    {
+      "position": [
+        103.68,
+        0.0,
+        199.3
+      ],
+      "trunk_radius": 0.69,
+      "trunk_height": 8.03,
+      "leaf_radius": 4.91,
+      "leaf_height": 9.81,
+      "species": "beech"
+    },
+    {
+      "position": [
+        179.68,
+        0.0,
+        162.3
+      ],
+      "trunk_radius": 0.58,
+      "trunk_height": 6.79,
+      "leaf_radius": 4.15,
+      "leaf_height": 8.3,
+      "species": "beech"
+    },
+    {
+      "position": [
+        91.68,
+        0.0,
+        68.3
+      ],
+      "trunk_radius": 0.64,
+      "trunk_height": 7.5,
+      "leaf_radius": 4.58,
+      "leaf_height": 9.16,
+      "species": "beech"
+    },
+    {
+      "position": [
+        293.68,
+        0.0,
+        260.3
+      ],
+      "trunk_radius": 0.62,
+      "trunk_height": 7.19,
+      "leaf_radius": 4.39,
+      "leaf_height": 8.79,
+      "species": "beech"
+    },
+    {
+      "position": [
+        97.68,
+        0.0,
+        76.3
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 7.94,
+      "leaf_radius": 4.85,
+      "leaf_height": 9.71,
+      "species": "beech"
+    },
+    {
+      "position": [
+        10.68,
+        0.0,
+        72.3
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 7.6,
+      "leaf_radius": 4.64,
+      "leaf_height": 9.29,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -33.32,
+        0.0,
+        8.3
+      ],
+      "trunk_radius": 0.67,
+      "trunk_height": 7.86,
+      "leaf_radius": 4.81,
+      "leaf_height": 9.61,
+      "species": "beech"
+    },
+    {
+      "position": [
+        45.68,
+        0.0,
+        121.3
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 8.21,
+      "leaf_radius": 5.02,
+      "leaf_height": 10.04,
+      "species": "beech"
+    },
+    {
+      "position": [
+        136.68,
+        0.0,
+        222.3
+      ],
+      "trunk_radius": 0.78,
+      "trunk_height": 9.11,
+      "leaf_radius": 5.57,
+      "leaf_height": 11.13,
+      "species": "willow"
+    },
+    {
+      "position": [
+        260.68,
+        0.0,
+        253.3
+      ],
+      "trunk_radius": 0.66,
+      "trunk_height": 7.66,
+      "leaf_radius": 4.68,
+      "leaf_height": 9.36,
+      "species": "beech"
+    },
+    {
+      "position": [
+        108.68,
+        0.0,
+        89.3
+      ],
+      "trunk_radius": 0.75,
+      "trunk_height": 8.8,
+      "leaf_radius": 5.38,
+      "leaf_height": 10.76,
+      "species": "beech"
+    },
+    {
+      "position": [
+        33.68,
+        0.0,
+        106.3
+      ],
+      "trunk_radius": 0.71,
+      "trunk_height": 8.27,
+      "leaf_radius": 5.05,
+      "leaf_height": 10.1,
+      "species": "oak"
+    },
+    {
+      "position": [
+        19.68,
+        0.0,
+        87.3
+      ],
+      "trunk_radius": 0.62,
+      "trunk_height": 7.23,
+      "leaf_radius": 4.42,
+      "leaf_height": 8.84,
+      "species": "oak"
+    },
+    {
+      "position": [
+        123.68,
+        0.0,
+        220.3
+      ],
+      "trunk_radius": 0.81,
+      "trunk_height": 9.47,
+      "leaf_radius": 5.78,
+      "leaf_height": 11.57,
+      "species": "beech"
+    },
+    {
+      "position": [
+        27.68,
+        0.0,
+        99.3
+      ],
+      "trunk_radius": 0.77,
+      "trunk_height": 8.97,
+      "leaf_radius": 5.48,
+      "leaf_height": 10.96,
+      "species": "oak"
+    },
+    {
+      "position": [
+        -2.32,
+        0.0,
+        58.3
+      ],
+      "trunk_radius": 0.64,
+      "trunk_height": 7.53,
+      "leaf_radius": 4.6,
+      "leaf_height": 9.21,
+      "species": "beech"
+    },
+    {
+      "position": [
+        226.68,
+        0.0,
+        246.3
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 9.63,
+      "leaf_radius": 5.88,
+      "leaf_height": 11.76,
+      "species": "beech"
+    },
+    {
+      "position": [
+        133.68,
+        0.0,
+        223.3
+      ],
+      "trunk_radius": 0.77,
+      "trunk_height": 9.05,
+      "leaf_radius": 5.53,
+      "leaf_height": 11.06,
+      "species": "willow"
+    },
+    {
+      "position": [
+        217.68,
+        0.0,
+        244.3
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 9.26,
+      "leaf_radius": 5.66,
+      "leaf_height": 11.31,
+      "species": "beech"
+    },
+    {
+      "position": [
+        320.68,
+        0.0,
+        194.3
+      ],
+      "trunk_radius": 0.58,
+      "trunk_height": 6.82,
+      "leaf_radius": 4.17,
+      "leaf_height": 8.34,
+      "species": "oak"
+    },
+    {
+      "position": [
+        -25.32,
+        0.0,
+        -26.7
+      ],
+      "trunk_radius": 0.26,
+      "trunk_height": 3.04,
+      "leaf_radius": 1.86,
+      "leaf_height": 3.72,
+      "species": "beech"
+    },
+    {
+      "position": [
+        301.68,
+        0.0,
+        189.3
+      ],
+      "trunk_radius": 0.63,
+      "trunk_height": 7.32,
+      "leaf_radius": 4.48,
+      "leaf_height": 8.95,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -11.32,
+        0.0,
+        47.3
+      ],
+      "trunk_radius": 0.83,
+      "trunk_height": 9.69,
+      "leaf_radius": 5.92,
+      "leaf_height": 11.85,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -32.32,
+        0.0,
+        18.3
+      ],
+      "trunk_radius": 0.71,
+      "trunk_height": 8.32,
+      "leaf_radius": 5.09,
+      "leaf_height": 10.17,
+      "species": "beech"
+    },
+    {
+      "position": [
+        118.68,
+        0.0,
+        99.3
+      ],
+      "trunk_radius": 0.59,
+      "trunk_height": 6.95,
+      "leaf_radius": 4.25,
+      "leaf_height": 8.49,
+      "species": "beech"
+    },
+    {
+      "position": [
+        13.68,
+        0.0,
+        82.3
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 7.55,
+      "leaf_radius": 4.62,
+      "leaf_height": 9.23,
+      "species": "beech"
+    },
+    {
+      "position": [
+        77.68,
+        0.0,
+        170.3
+      ],
+      "trunk_radius": 0.57,
+      "trunk_height": 6.61,
+      "leaf_radius": 4.04,
+      "leaf_height": 8.08,
+      "species": "beech"
+    },
+    {
+      "position": [
+        203.68,
+        0.0,
+        164.3
+      ],
+      "trunk_radius": 0.79,
+      "trunk_height": 9.23,
+      "leaf_radius": 5.64,
+      "leaf_height": 11.29,
+      "species": "beech"
+    },
+    {
+      "position": [
+        308.68,
+        0.0,
+        190.3
+      ],
+      "trunk_radius": 0.72,
+      "trunk_height": 8.37,
+      "leaf_radius": 5.12,
+      "leaf_height": 10.24,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -20.32,
+        0.0,
+        36.3
+      ],
+      "trunk_radius": 0.73,
+      "trunk_height": 8.55,
+      "leaf_radius": 5.22,
+      "leaf_height": 10.45,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -28.32,
+        0.0,
+        26.3
+      ],
+      "trunk_radius": 0.66,
+      "trunk_height": 7.67,
+      "leaf_radius": 4.69,
+      "leaf_height": 9.38,
+      "species": "oak"
+    },
+    {
+      "position": [
+        258.68,
+        0.0,
+        176.3
+      ],
+      "trunk_radius": 0.66,
+      "trunk_height": 7.73,
+      "leaf_radius": 4.73,
+      "leaf_height": 9.45,
+      "species": "beech"
+    },
+    {
+      "position": [
+        270.68,
+        0.0,
+        260.3
+      ],
+      "trunk_radius": 0.73,
+      "trunk_height": 8.52,
+      "leaf_radius": 5.21,
+      "leaf_height": 10.41,
+      "species": "beech"
+    },
+    {
+      "position": [
+        189.68,
+        0.0,
+        240.3
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 9.94,
+      "leaf_radius": 6.08,
+      "leaf_height": 12.15,
+      "species": "beech"
+    },
+    {
+      "position": [
+        211.68,
+        0.0,
+        164.3
+      ],
+      "trunk_radius": 0.81,
+      "trunk_height": 9.41,
+      "leaf_radius": 5.75,
+      "leaf_height": 11.5,
+      "species": "beech"
+    },
+    {
+      "position": [
+        92.68,
+        0.0,
+        194.3
+      ],
+      "trunk_radius": 0.63,
+      "trunk_height": 7.37,
+      "leaf_radius": 4.5,
+      "leaf_height": 9.0,
+      "species": "beech"
+    },
+    {
+      "position": [
+        262.68,
+        0.0,
+        176.3
+      ],
+      "trunk_radius": 0.67,
+      "trunk_height": 7.83,
+      "leaf_radius": 4.79,
+      "leaf_height": 9.57,
+      "species": "oak"
+    },
+    {
+      "position": [
+        295.68,
+        0.0,
+        184.3
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 7.93,
+      "leaf_radius": 4.85,
+      "leaf_height": 9.69,
+      "species": "beech"
+    },
+    {
+      "position": [
+        287.68,
+        0.0,
+        182.3
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 7.63,
+      "leaf_radius": 4.67,
+      "leaf_height": 9.33,
+      "species": "beech"
+    },
+    {
+      "position": [
+        81.68,
+        0.0,
+        181.3
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 7.98,
+      "leaf_radius": 4.88,
+      "leaf_height": 9.75,
+      "species": "oak"
+    },
+    {
+      "position": [
+        145.68,
+        0.0,
+        130.3
+      ],
+      "trunk_radius": 0.51,
+      "trunk_height": 6.0,
+      "leaf_radius": 3.67,
+      "leaf_height": 7.34,
+      "species": "oak"
+    },
+    {
+      "position": [
+        70.68,
+        0.0,
+        166.3
+      ],
+      "trunk_radius": 0.57,
+      "trunk_height": 6.62,
+      "leaf_radius": 4.05,
+      "leaf_height": 8.09,
+      "species": "oak"
+    },
+    {
+      "position": [
+        314.68,
+        0.0,
+        188.3
+      ],
+      "trunk_radius": 0.69,
+      "trunk_height": 8.09,
+      "leaf_radius": 4.94,
+      "leaf_height": 9.88,
+      "species": "beech"
+    },
+    {
+      "position": [
+        85.68,
+        0.0,
+        187.3
+      ],
+      "trunk_radius": 0.62,
+      "trunk_height": 7.25,
+      "leaf_radius": 4.43,
+      "leaf_height": 8.86,
+      "species": "oak"
+    },
+    {
+      "position": [
+        107.68,
+        0.0,
+        216.3
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 8.0,
+      "leaf_radius": 4.89,
+      "leaf_height": 9.78,
+      "species": "beech"
+    },
+    {
+      "position": [
+        17.68,
+        0.0,
+        94.3
+      ],
+      "trunk_radius": 0.66,
+      "trunk_height": 7.77,
+      "leaf_radius": 4.75,
+      "leaf_height": 9.5,
+      "species": "beech"
+    },
+    {
+      "position": [
+        283.68,
+        0.0,
+        180.3
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 7.59,
+      "leaf_radius": 4.64,
+      "leaf_height": 9.28,
+      "species": "oak"
+    },
+    {
+      "position": [
+        142.68,
+        0.0,
+        125.3
+      ],
+      "trunk_radius": 0.6,
+      "trunk_height": 7.05,
+      "leaf_radius": 4.31,
+      "leaf_height": 8.62,
+      "species": "beech"
+    },
+    {
+      "position": [
+        4.68,
+        0.0,
+        -41.7
+      ],
+      "trunk_radius": 0.47,
+      "trunk_height": 5.48,
+      "leaf_radius": 3.35,
+      "leaf_height": 6.7,
+      "species": "beech"
+    },
+    {
+      "position": [
+        100.68,
+        0.0,
+        209.3
+      ],
+      "trunk_radius": 0.63,
+      "trunk_height": 7.39,
+      "leaf_radius": 4.52,
+      "leaf_height": 9.04,
+      "species": "beech"
+    },
+    {
+      "position": [
+        174.68,
+        0.0,
+        152.3
+      ],
+      "trunk_radius": 0.6,
+      "trunk_height": 7.07,
+      "leaf_radius": 4.32,
+      "leaf_height": 8.64,
+      "species": "beech"
+    },
+    {
+      "position": [
+        169.68,
+        0.0,
+        238.3
+      ],
+      "trunk_radius": 0.81,
+      "trunk_height": 9.44,
+      "leaf_radius": 5.77,
+      "leaf_height": 11.54,
+      "species": "beech"
+    },
+    {
+      "position": [
+        152.68,
+        0.0,
+        137.3
+      ],
+      "trunk_radius": 0.54,
+      "trunk_height": 6.36,
+      "leaf_radius": 3.89,
+      "leaf_height": 7.78,
+      "species": "beech"
+    },
+    {
+      "position": [
+        229.68,
+        0.0,
+        253.3
+      ],
+      "trunk_radius": 0.87,
+      "trunk_height": 10.18,
+      "leaf_radius": 6.22,
+      "leaf_height": 12.45,
+      "species": "beech"
+    },
+    {
+      "position": [
+        95.68,
+        0.0,
+        203.3
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 8.16,
+      "leaf_radius": 4.99,
+      "leaf_height": 9.97,
+      "species": "beech"
+    },
+    {
+      "position": [
+        91.68,
+        0.0,
+        198.3
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 8.17,
+      "leaf_radius": 4.99,
+      "leaf_height": 9.98,
+      "species": "beech"
+    },
+    {
+      "position": [
+        237.68,
+        0.0,
+        167.3
+      ],
+      "trunk_radius": 0.66,
+      "trunk_height": 7.75,
+      "leaf_radius": 4.74,
+      "leaf_height": 9.47,
+      "species": "beech"
+    },
+    {
+      "position": [
+        274.68,
+        0.0,
+        265.3
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 7.91,
+      "leaf_radius": 4.83,
+      "leaf_height": 9.66,
+      "species": "beech"
+    },
+    {
+      "position": [
+        247.68,
+        0.0,
+        169.3
+      ],
+      "trunk_radius": 0.69,
+      "trunk_height": 8.03,
+      "leaf_radius": 4.91,
+      "leaf_height": 9.82,
+      "species": "oak"
+    },
+    {
+      "position": [
+        252.68,
+        0.0,
+        170.3
+      ],
+      "trunk_radius": 0.69,
+      "trunk_height": 8.08,
+      "leaf_radius": 4.94,
+      "leaf_height": 9.88,
+      "species": "beech"
+    },
+    {
+      "position": [
+        71.68,
+        0.0,
+        172.3
+      ],
+      "trunk_radius": 0.59,
+      "trunk_height": 6.88,
+      "leaf_radius": 4.2,
+      "leaf_height": 8.4,
+      "species": "oak"
+    },
+    {
+      "position": [
+        393.68,
+        0.0,
+        209.3
+      ],
+      "trunk_radius": 0.24,
+      "trunk_height": 2.8,
+      "leaf_radius": 1.71,
+      "leaf_height": 3.42,
+      "species": "beech"
+    },
+    {
+      "position": [
+        322.68,
+        0.0,
+        187.3
+      ],
+      "trunk_radius": 0.66,
+      "trunk_height": 7.66,
+      "leaf_radius": 4.68,
+      "leaf_height": 9.36,
+      "species": "oak"
+    },
+    {
+      "position": [
+        -21.32,
+        0.0,
+        -38.7
+      ],
+      "trunk_radius": 0.22,
+      "trunk_height": 2.58,
+      "leaf_radius": 1.57,
+      "leaf_height": 3.15,
+      "species": "oak"
+    },
+    {
+      "position": [
+        116.68,
+        0.0,
+        226.3
+      ],
+      "trunk_radius": 0.73,
+      "trunk_height": 8.53,
+      "leaf_radius": 5.21,
+      "leaf_height": 10.43,
+      "species": "oak"
+    },
+    {
+      "position": [
+        220.68,
+        0.0,
+        253.3
+      ],
+      "trunk_radius": 0.8,
+      "trunk_height": 9.34,
+      "leaf_radius": 5.71,
+      "leaf_height": 11.42,
+      "species": "oak"
+    },
+    {
+      "position": [
+        195.68,
+        0.0,
+        247.3
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 10.43,
+      "leaf_radius": 6.38,
+      "leaf_height": 12.75,
+      "species": "beech"
+    },
+    {
+      "position": [
+        306.68,
+        0.0,
+        182.3
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 8.2,
+      "leaf_radius": 5.01,
+      "leaf_height": 10.02,
+      "species": "oak"
+    },
+    {
+      "position": [
+        151.68,
+        0.0,
+        131.3
+      ],
+      "trunk_radius": 0.63,
+      "trunk_height": 7.33,
+      "leaf_radius": 4.48,
+      "leaf_height": 8.95,
+      "species": "beech"
+    },
+    {
+      "position": [
+        17.68,
+        0.0,
+        101.3
+      ],
+      "trunk_radius": 0.61,
+      "trunk_height": 7.18,
+      "leaf_radius": 4.39,
+      "leaf_height": 8.77,
+      "species": "oak"
+    },
+    {
+      "position": [
+        25.68,
+        0.0,
+        112.3
+      ],
+      "trunk_radius": 0.69,
+      "trunk_height": 8.12,
+      "leaf_radius": 4.96,
+      "leaf_height": 9.93,
+      "species": "beech"
+    },
+    {
+      "position": [
+        175.68,
+        0.0,
+        149.3
+      ],
+      "trunk_radius": 0.63,
+      "trunk_height": 7.33,
+      "leaf_radius": 4.48,
+      "leaf_height": 8.96,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -26.32,
+        0.0,
+        41.3
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 7.64,
+      "leaf_radius": 4.67,
+      "leaf_height": 9.34,
+      "species": "beech"
+    },
+    {
+      "position": [
+        197.68,
+        0.0,
+        154.3
+      ],
+      "trunk_radius": 0.71,
+      "trunk_height": 8.3,
+      "leaf_radius": 5.07,
+      "leaf_height": 10.14,
+      "species": "beech"
+    },
+    {
+      "position": [
+        298.68,
+        0.0,
+        179.3
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 7.59,
+      "leaf_radius": 4.64,
+      "leaf_height": 9.27,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -43.32,
+        0.0,
+        15.3
+      ],
+      "trunk_radius": 0.61,
+      "trunk_height": 7.12,
+      "leaf_radius": 4.35,
+      "leaf_height": 8.71,
+      "species": "oak"
+    },
+    {
+      "position": [
+        57.68,
+        0.0,
+        157.3
+      ],
+      "trunk_radius": 0.58,
+      "trunk_height": 6.73,
+      "leaf_radius": 4.11,
+      "leaf_height": 8.22,
+      "species": "oak"
+    },
+    {
+      "position": [
+        109.68,
+        0.0,
+        224.3
+      ],
+      "trunk_radius": 0.67,
+      "trunk_height": 7.84,
+      "leaf_radius": 4.79,
+      "leaf_height": 9.59,
+      "species": "beech"
+    },
+    {
+      "position": [
+        248.68,
+        0.0,
+        262.3
+      ],
+      "trunk_radius": 0.83,
+      "trunk_height": 9.69,
+      "leaf_radius": 5.92,
+      "leaf_height": 11.84,
+      "species": "beech"
+    },
+    {
+      "position": [
+        168.68,
+        0.0,
+        146.3
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 7.92,
+      "leaf_radius": 4.84,
+      "leaf_height": 9.68,
+      "species": "oak"
+    },
+    {
+      "position": [
+        3.68,
+        0.0,
+        84.3
+      ],
+      "trunk_radius": 0.72,
+      "trunk_height": 8.45,
+      "leaf_radius": 5.17,
+      "leaf_height": 10.33,
+      "species": "oak"
+    },
+    {
+      "position": [
+        358.68,
+        0.0,
+        193.3
+      ],
+      "trunk_radius": 0.29,
+      "trunk_height": 3.35,
+      "leaf_radius": 2.05,
+      "leaf_height": 4.1,
+      "species": "beech"
+    },
+    {
+      "position": [
+        274.68,
+        0.0,
+        172.3
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 8.17,
+      "leaf_radius": 4.99,
+      "leaf_height": 9.99,
+      "species": "beech"
+    },
+    {
+      "position": [
+        162.68,
+        0.0,
+        143.3
+      ],
+      "trunk_radius": 0.63,
+      "trunk_height": 7.38,
+      "leaf_radius": 4.51,
+      "leaf_height": 9.02,
+      "species": "beech"
+    },
+    {
+      "position": [
+        210.68,
+        0.0,
+        253.3
+      ],
+      "trunk_radius": 0.85,
+      "trunk_height": 9.88,
+      "leaf_radius": 6.04,
+      "leaf_height": 12.08,
+      "species": "oak"
+    },
+    {
+      "position": [
+        242.68,
+        0.0,
+        261.3
+      ],
+      "trunk_radius": 0.87,
+      "trunk_height": 10.15,
+      "leaf_radius": 6.2,
+      "leaf_height": 12.41,
+      "species": "oak"
+    },
+    {
+      "position": [
+        312.68,
+        0.0,
+        181.3
+      ],
+      "trunk_radius": 0.74,
+      "trunk_height": 8.61,
+      "leaf_radius": 5.26,
+      "leaf_height": 10.52,
+      "species": "oak"
+    },
+    {
+      "position": [
+        257.68,
+        0.0,
+        265.3
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 9.59,
+      "leaf_radius": 5.86,
+      "leaf_height": 11.72,
+      "species": "oak"
+    },
+    {
+      "position": [
+        -10.32,
+        0.0,
+        66.3
+      ],
+      "trunk_radius": 0.62,
+      "trunk_height": 7.21,
+      "leaf_radius": 4.4,
+      "leaf_height": 8.81,
+      "species": "oak"
+    },
+    {
+      "position": [
+        188.68,
+        0.0,
+        150.3
+      ],
+      "trunk_radius": 0.74,
+      "trunk_height": 8.63,
+      "leaf_radius": 5.27,
+      "leaf_height": 10.55,
+      "species": "oak"
+    },
+    {
+      "position": [
+        163.68,
+        0.0,
+        242.3
+      ],
+      "trunk_radius": 0.81,
+      "trunk_height": 9.43,
+      "leaf_radius": 5.76,
+      "leaf_height": 11.53,
+      "species": "beech"
+    },
+    {
+      "position": [
+        122.68,
+        0.0,
+        232.3
+      ],
+      "trunk_radius": 0.69,
+      "trunk_height": 8.12,
+      "leaf_radius": 4.96,
+      "leaf_height": 9.93,
+      "species": "beech"
+    },
+    {
+      "position": [
+        159.68,
+        0.0,
+        137.3
+      ],
+      "trunk_radius": 0.43,
+      "trunk_height": 5.02,
+      "leaf_radius": 3.07,
+      "leaf_height": 6.14,
+      "species": "beech"
+    },
+    {
+      "position": [
+        236.68,
+        0.0,
+        261.3
+      ],
+      "trunk_radius": 0.89,
+      "trunk_height": 10.36,
+      "leaf_radius": 6.33,
+      "leaf_height": 12.66,
+      "species": "oak"
+    },
+    {
+      "position": [
+        94.68,
+        0.0,
+        212.3
+      ],
+      "trunk_radius": 0.55,
+      "trunk_height": 6.46,
+      "leaf_radius": 3.95,
+      "leaf_height": 7.9,
+      "species": "oak"
+    },
+    {
+      "position": [
+        178.68,
+        0.0,
+        247.3
+      ],
+      "trunk_radius": 0.87,
+      "trunk_height": 10.13,
+      "leaf_radius": 6.19,
+      "leaf_height": 12.38,
+      "species": "beech"
+    },
+    {
+      "position": [
+        83.68,
+        0.0,
+        198.3
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 7.56,
+      "leaf_radius": 4.62,
+      "leaf_height": 9.23,
+      "species": "beech"
+    },
+    {
+      "position": [
+        10.68,
+        0.0,
+        98.3
+      ],
+      "trunk_radius": 0.59,
+      "trunk_height": 6.85,
+      "leaf_radius": 4.19,
+      "leaf_height": 8.37,
+      "species": "beech"
+    },
+    {
+      "position": [
+        275.68,
+        0.0,
+        169.3
+      ],
+      "trunk_radius": 0.7,
+      "trunk_height": 8.17,
+      "leaf_radius": 4.99,
+      "leaf_height": 9.99,
+      "species": "beech"
+    },
+    {
+      "position": [
+        105.68,
+        0.0,
+        226.3
+      ],
+      "trunk_radius": 0.58,
+      "trunk_height": 6.83,
+      "leaf_radius": 4.17,
+      "leaf_height": 8.35,
+      "species": "oak"
+    },
+    {
+      "position": [
+        25.68,
+        0.0,
+        120.3
+      ],
+      "trunk_radius": 0.63,
+      "trunk_height": 7.35,
+      "leaf_radius": 4.49,
+      "leaf_height": 8.98,
+      "species": "oak"
+    },
+    {
+      "position": [
+        117.68,
+        0.0,
+        233.3
+      ],
+      "trunk_radius": 0.67,
+      "trunk_height": 7.84,
+      "leaf_radius": 4.79,
+      "leaf_height": 9.58,
+      "species": "beech"
+    },
+    {
+      "position": [
+        202.68,
+        0.0,
+        255.3
+      ],
+      "trunk_radius": 0.92,
+      "trunk_height": 10.71,
+      "leaf_radius": 6.55,
+      "leaf_height": 13.1,
+      "species": "beech"
+    },
+    {
+      "position": [
+        300.68,
+        0.0,
+        174.3
+      ],
+      "trunk_radius": 0.65,
+      "trunk_height": 7.56,
+      "leaf_radius": 4.62,
+      "leaf_height": 9.24,
+      "species": "oak"
+    },
+    {
+      "position": [
+        373.68,
+        0.0,
+        192.3
+      ],
+      "trunk_radius": 0.29,
+      "trunk_height": 3.41,
+      "leaf_radius": 2.08,
+      "leaf_height": 4.16,
+      "species": "oak"
+    },
+    {
+      "position": [
+        151.68,
+        0.0,
+        243.3
+      ],
+      "trunk_radius": 0.82,
+      "trunk_height": 9.62,
+      "leaf_radius": 5.88,
+      "leaf_height": 11.75,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -0.32,
+        0.0,
+        87.3
+      ],
+      "trunk_radius": 0.67,
+      "trunk_height": 7.82,
+      "leaf_radius": 4.78,
+      "leaf_height": 9.56,
+      "species": "beech"
+    },
+    {
+      "position": [
+        379.68,
+        0.0,
+        193.3
+      ],
+      "trunk_radius": 0.27,
+      "trunk_height": 3.21,
+      "leaf_radius": 1.96,
+      "leaf_height": 3.92,
+      "species": "beech"
+    },
+    {
+      "position": [
+        181.68,
+        0.0,
+        251.3
+      ],
+      "trunk_radius": 0.87,
+      "trunk_height": 10.14,
+      "leaf_radius": 6.2,
+      "leaf_height": 12.39,
+      "species": "beech"
+    },
+    {
+      "position": [
+        -22.32,
+        0.0,
+        58.3
+      ],
+      "trunk_radius": 0.68,
+      "trunk_height": 7.89,
+      "leaf_radius": 4.82,
+      "leaf_height": 9.64,
+      "species": "oak"
+    },
+    {
+      "position": [
+        3.68,
+        0.0,
+        94.3
+      ],
+      "trunk_radius": 0.55,
+      "trunk_height": 6.44,
+      "leaf_radius": 3.94,
+      "leaf_height": 7.88,
+      "species": "beech"
+    },
+    {
+      "position": [
+        235.68,
+        0.0,
+        265.3
+      ],
+      "trunk_radius": 0.88,
+      "trunk_height": 10.31,
+      "leaf_radius": 6.3,
+      "leaf_height": 12.61,
+      "species": "oak"
+    },
+    {
+      "position": [
+        4.68,
+        0.0,
+        -52.7
+      ],
+      "trunk_radius": 0.4,
+      "trunk_height": 4.66,
+      "leaf_radius": 2.84,
+      "leaf_height": 5.69,
+      "species": "beech"
+    },
+    {
+      "position": [
+        405.68,
+        0.0,
+        208.3
+      ],
+      "trunk_radius": 0.22,
+      "trunk_height": 2.63,
+      "leaf_radius": 1.61,
+      "leaf_height": 3.21,
+      "species": "beech"
     }
   ],
+  "bushes": [],
   "source": {
     "type": "osm",
     "tee_latlon": [

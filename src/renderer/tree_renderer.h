@@ -1,86 +1,77 @@
 #pragma once
 
-#include <string>
+// Draws the course's trees and bushes, each its species' model grown in code
+// (renderer/tree_model.h), and the same models into the shadow maps
+// (renderer/shadow_map_pass.h, lamp_shadow_pass.h). Every frame the trees in
+// view are sorted into one bucket per species, variant and detail
+// (renderer/render_tree.h), uploaded into one instance buffer and drawn a
+// bucket at a time: the near ones in full, the far ones and the shadows'
+// with fewer, bigger clumps. Each species is drawn in its season on the
+// course's date (render_tree_species): its leaves fresh, summer green or
+// turned, and as many of them as its crown has in leaf, so a bare crown
+// shows its branches; the shadows' crowns drop their leaves with it.
+// The models are grown again only when the palette's tree looks change.
 
 #include <cstddef>
-#include <cstdint>
+#include <string>
 #include <vector>
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
-#include "game/prop_loader.h"
+#include "game/lighting_loader.h"
 #include "profiling/profiling.h"
+#include "renderer/dynamic_buffer.h"
 #include "renderer/frustum.h"
-#include "renderer/render_mesh.h"
+#include "renderer/render_data.h"
 #include "renderer/render_tree.h"
 #include "renderer/shader.h"
 
-// Draws every course tree with two instanced draw calls (and the same two
-// into the shadow map, renderer/shadow_map_pass.h): all trunks (unit
-// cylinder) and all leaves (unit cone). Per-tree instance data is re-uploaded
-// only when the tree revision or tree count changes; trees are static per
-// course, so normal frames upload nothing.
-//
-// Culling: the whole batch is frustum culled against one AABB over every
-// instance, computed when the instance data is uploaded. Per-chunk tree culling
-// was considered and rejected: GL 3.3 glDrawArraysInstanced has no base-instance
-// parameter, so contiguous visible instance ranges would need either one
-// instance buffer (and draw call) per chunk, or a per-frame re-upload of the
-// visible instances, both costing more than drawing every tree for the tree
-// counts courses have.
-//
-// Owned by the renderer, which also owns the cylinder/cone vertex buffers this
-// shares (they must outlive this object's VAOs being used).
 class tree_renderer {
 public:
-    struct mesh_source {
-        unsigned int vbo = 0;  // interleaved vec3 position, vec3 normal
-        int vertex_count = 0;
-    };
-
-    bool init(const std::string& vertex_path,
-              const std::string& fragment_path,
-              mesh_source trunk_mesh,
-              mesh_source leaf_mesh);
+    bool init(const std::string& vertex_path, const std::string& fragment_path, const std::vector<tree_look>& looks);
     void shutdown();
+    // Grows the models again for new looks (a saved lighting.json).
+    bool set_looks(const std::vector<tree_look>& looks);
+    // This frame's species and seasons, before anything is drawn.
+    void set_seasons(const std::vector<render_tree_species>& species);
 
-    // Uploads instance data if `revision`/tree count changed, then draws in
-    // `tree`'s colours, lit and hazed by the frame_lighting block.
-    // No draw calls are issued when there are no trees, or when the whole batch
-    // is outside `frustum`. Returns true when the batch was drawn.
-    bool draw(const std::vector<tree_body>& trees,
-              std::uint64_t revision,
-              const glm::mat4& view,
-              const glm::mat4& proj,
-              const view_frustum& frustum,
-              const prop_model& tree,
-              frame_profile* profile);
-    // The same batch with `depth_shader` (already in use, instanced like
-    // tree_instanced.vert) seen through `view_proj`: the shadow map's casters.
+    // The trees `frustum` sees from `eye`, lit, shadowed (bind the shadow map
+    // into shader() first), swaying in `wind` and hazed. Returns true when
+    // any was drawn.
+    bool draw(const std::vector<tree_body>& trees, const glm::mat4& view_proj, const view_frustum& frustum,
+              const glm::vec3& eye, float clock_seconds, const glm::vec2& wind, frame_profile* profile);
+    // The trees `view_proj` sees with `depth_shader` (in use, instanced like
+    // tree.vert's first six floats): a shadow map's casters.
     void draw_casters(const std::vector<tree_body>& trees, std::uint64_t revision, const shader_program& depth_shader,
                       const glm::mat4& view_proj, frame_profile* profile);
 
+    const shader_program& shader() const { return shader_; }
+
 private:
-    struct instanced_part {
+    struct model_mesh {
         unsigned int vao = 0;
-        unsigned int instance_vbo = 0;
+        unsigned int vbo = 0;
+        int bark_count = 0;
         int vertex_count = 0;
-        std::size_t instance_count = 0;
+    };
+    // A species' season as drawn: its look and the colour its leaves are now.
+    struct species_season {
+        std::size_t look = 0;
+        float foliage = 1.0f;
+        glm::vec3 leaves{0.0f};
     };
 
-    // False when there is nothing to draw.
-    bool prepare(const std::vector<tree_body>& trees, std::uint64_t revision, frame_profile* profile);
-    bool init_part(instanced_part& part, mesh_source mesh);
-    void shutdown_part(instanced_part& part);
-    void upload_part(instanced_part& part, const std::vector<render_tree_instance>& instances, frame_profile* profile);
-    void draw_part(const instanced_part& part, frame_profile* profile) const;
+    void release_meshes();
+    const model_mesh* mesh_for(std::size_t look, int variant, tree_detail detail) const;
+    // Uploads `batch`'s instances, then draws each bucket with `draw_bucket`.
+    template <typename Draw>
+    void draw_batch(const render_tree_batch& batch, frame_profile* profile, Draw draw_bucket);
 
     shader_program shader_;
-    instanced_part trunks_;
-    instanced_part leaves_;
-    // Bounds of every uploaded instance; rebuilt with the instance data.
-    render_mesh_bounds instance_bounds_;
-    std::uint64_t uploaded_revision_ = 0;
-    std::size_t uploaded_tree_count_ = 0;
-    bool uploaded_ = false;
+    std::vector<tree_look> looks_;
+    std::vector<model_mesh> meshes_;  // look by variant by detail
+    std::vector<species_season> seasons_;
+    dynamic_vertex_buffer instances_;
 };

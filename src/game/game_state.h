@@ -7,6 +7,7 @@
 #include "game/address_view.h"
 #include "game/ball_kind.h"
 #include "game/bag_handling.h"
+#include "game/bag_sync.h"
 #include "game/bag_place.h"
 #include "game/club_definition.h"
 #include "game/course_definition.h"
@@ -172,7 +173,8 @@ struct address_state {
 };
 
 // A simulated shot shown over real time, followed by the camera until the
-// ball has rolled camera.follow_roll_meters; it plays on while I walk.
+// ball has rolled camera.follow_roll_meters, it stops, or I move or act; it
+// plays on while I walk.
 struct shot_playback {
     shot_result result;
     float elapsed = 0.0f;
@@ -400,9 +402,10 @@ struct game_state {
     // n) (game/shot_dice.h); a course starting picks the round's seed.
     std::uint64_t round_seed = 0;
     int shots_hit = 0;
-    // Online: my bag and club have been taken from my player_bag row since
-    // the course started (online_play.h); after that mine lead.
-    bool server_bag_adopted = false;
+    // Online: my player_bag row as last taken in, and the bag move or club
+    // I sent that it has yet to show (game/bag_sync.h).
+    std::optional<room_bag> bag_row_seen;
+    std::optional<bag_expectation> bag_expected;
     // Online: the hand, natural shape and favourite colour last sent to my
     // player row (set_golfer), so a change is sent once.
     std::optional<golfer_row> golfer_sent;
@@ -456,8 +459,11 @@ struct game_state {
 // start_course (game/course_session.h).
 game_state make_game_state(const game_content& content, const save_data& save);
 
-// A sound for app to play this frame.
-
+// One frame. Online the world always plays on (shots, item uses, bag and
+// cart handling, rides, others, the server's answers, my motion); a hub
+// screen, a ball preparation the server has yet to answer and my results
+// only limit what `input` may begin. Offline those hold it still, and online
+// travel or a room not yet ready freezes it until the complete snapshot.
 void update_game(game_state& state, const game_input& input, float dt, frame_profile* profile = nullptr);
 
 void update_xp_drops(game_state& state, float dt);

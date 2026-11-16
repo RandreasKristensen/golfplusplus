@@ -57,6 +57,7 @@ spacetime build --module-path server/golfpp_module
 spacetime start                                           # a local server, in another terminal
 spacetime publish golfpp --server local --bin-path server/golfpp_module/build/lib.wasm
 tooling\net\check_determinism.ps1 -Emsdk <emsdk>         # golden shots, drives and walks, native vs WASM
+tooling\net\check_determinism.ps1 -SelfTest               # that comparison fails on perturbed rows (native only)
 spacetime generate --lang rust --bin-path server/golfpp_module/build/lib.wasm --out-dir net/client_bridge/src/module_bindings
 ```
 

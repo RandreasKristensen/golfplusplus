@@ -141,6 +141,52 @@ inline constexpr int max_shaft_lamps = 8;
 inline constexpr int min_lamp_map_resolution = 16;
 inline constexpr int max_lamp_map_resolution = 512;
 
+// Per metre: 20 takes a colour out within a few centimetres.
+inline constexpr bounded_field<water_style> water_fields[] = {
+    {"absorption_red", &water_style::absorption_red, 0.0f, 20.0f},
+    {"absorption_green", &water_style::absorption_green, 0.0f, 20.0f},
+    {"absorption_blue", &water_style::absorption_blue, 0.0f, 20.0f},
+    {"max_path_meters", &water_style::max_path_meters, 0.1f, 100.0f},
+    {"ripple_slope", &water_style::ripple_slope, 0.0f, 0.5f},
+    {"ripple_wavelength_meters", &water_style::ripple_wavelength_meters, 0.05f, 50.0f},
+    {"ripple_speed", &water_style::ripple_speed, 0.0f, 10.0f},
+    {"ripple_fade_meters", &water_style::ripple_fade_meters, 1.0f, 1000.0f},
+    {"fine_slope", &water_style::fine_slope, 0.0f, 0.5f},
+    {"calm_wind_meters_per_second", &water_style::calm_wind_meters_per_second, 0.0f, 10.0f},
+    {"rough_wind_meters_per_second", &water_style::rough_wind_meters_per_second, 0.1f, 40.0f},
+    {"calm_ripple_share", &water_style::calm_ripple_share, 0.0f, 1.0f},
+    {"full_fetch_meters", &water_style::full_fetch_meters, 1.0f, 1000.0f},
+    {"gust_cell_meters", &water_style::gust_cell_meters, 1.0f, 500.0f},
+    {"gust_share", &water_style::gust_share, 0.0f, 1.0f},
+    {"rain_ring_slope", &water_style::rain_ring_slope, 0.0f, 1.0f},
+    {"rain_ring_meters", &water_style::rain_ring_meters, 0.05f, 5.0f},
+    {"refraction_pixels", &water_style::refraction_pixels, 0.0f, 16.0f},
+    {"glint_strength", &water_style::glint_strength, 0.0f, 16.0f},
+    {"glint_sharpness", &water_style::glint_sharpness, 1.0f, 10000.0f},
+    {"reflection_reach_meters", &water_style::reflection_reach_meters, 1.0f, 2000.0f},
+    {"reflection_first_step_meters", &water_style::reflection_first_step_meters, 0.01f, 10.0f},
+    {"caustic_strength", &water_style::caustic_strength, 0.0f, 16.0f},
+    {"caustic_cell_meters", &water_style::caustic_cell_meters, 0.1f, 10.0f},
+    {"wobble_height_share", &water_style::wobble_height_share, 0.0f, 0.05f},
+};
+
+inline constexpr bounded_field<grass_style> grass_fields[] = {
+    {"stripe_fairway_meters", &grass_style::stripe_fairway_meters, 0.1f, 20.0f},
+    {"stripe_green_meters", &grass_style::stripe_green_meters, 0.1f, 20.0f},
+    {"stripe_shade", &grass_style::stripe_shade, 0.0f, 1.0f},
+    {"patch_meters", &grass_style::patch_meters, 0.1f, 100.0f},
+    {"patch_share", &grass_style::patch_share, 0.0f, 1.0f},
+    {"tuft_spacing_meters", &grass_style::tuft_spacing_meters, 0.05f, 2.0f},
+    {"blade_height_meters", &grass_style::blade_height_meters, 0.0f, 2.0f},
+    {"blade_width_meters", &grass_style::blade_width_meters, 0.001f, 0.2f},
+    {"reach_meters", &grass_style::reach_meters, 1.0f, 100.0f},
+    {"blade_sway", &grass_style::blade_sway, 0.0f, 1.0f},
+    {"base_shade", &grass_style::base_shade, 0.0f, 4.0f},
+    {"tip_shade", &grass_style::tip_shade, 0.0f, 4.0f},
+    {"heavy_blade_share", &grass_style::heavy_blade_share, 0.0f, 10.0f},
+    {"rings", &grass_style::rings, 1.0f, 4.0f},
+};
+
 inline constexpr bounded_field<night_light_style> night_light_fields[] = {
     {"on_deg", &night_light_style::on_deg, -90.0f, 90.0f},
     {"full_deg", &night_light_style::full_deg, -90.0f, 90.0f},
@@ -271,11 +317,12 @@ inline constexpr color_field<ground_colors> ground_fields[] = {
     {"fairway", &ground_colors::fairway},
     {"fairway_edge", &ground_colors::fairway_edge},
     {"rough", &ground_colors::rough},
+    {"heavy_rough", &ground_colors::heavy_rough},
     {"green", &ground_colors::green},
     {"bunker", &ground_colors::bunker},
     {"water", &ground_colors::water},
     {"backdrop", &ground_colors::backdrop},
-    {"underwater", &ground_colors::underwater},
+    {"pond_bed", &ground_colors::pond_bed},
     {"cart_path", &ground_colors::cart_path},
 };
 

@@ -21,6 +21,8 @@ struct hole_spline {
 struct tree_instance {
     glm::vec3 position{0.0f};  // authored position; the height comes from the terrain
     tree_shape shape;
+    // Its species by name (assets/play/tuning/trees.json); empty for the default.
+    std::string species;
 };
 
 struct hole_data {

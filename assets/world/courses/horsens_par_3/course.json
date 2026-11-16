@@ -13,14 +13,15 @@
     "haze_distance": 800
   },
   "sky": {
-    "date": "06-21",
-    "utc_offset_hours": 2
+    "date": "10-24",
+    "utc_offset_hours": 2,
+    "clock_shift_hours": 9.25
   },
   "green_stimp_feet": 9.5,
   "air": {
-    "elevation_meters": 3,
-    "mean_temperature_c": 15.5,
-    "daily_temperature_range_c": 8.5
+    "elevation_meters": 5,
+    "mean_temperature_c": 8.4,
+    "daily_temperature_range_c": 5.2
   },
   "holes": [
     "holes/h01.json",

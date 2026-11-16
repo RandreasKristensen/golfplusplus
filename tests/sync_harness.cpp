@@ -35,7 +35,6 @@ sync_harness::sync_harness() : client(started_game(fixture_hub_course())), obser
     observer.area = client.area;
     mover = placed_mover(mover_state{}, avatar.position);
     mover.credit_seconds = client.tuning.server.max_motion_gap_seconds;
-    mover.slack_left = client.tuning.server.motion_distance_slack;
     publish();
     run(0.2f);
 }
@@ -90,12 +89,6 @@ void sync_harness::reduce(const net_command& command) {
         if (error.empty() && !moved.repeated) {
             mover = moved.mover;
             avatar = moved.shown;
-            // As update_motion keeps it: inside the club in hand's limits.
-            const club_definition* club =
-                client.selected_club < client.clubs.size() ? &client.clubs[client.selected_club] : nullptr;
-            avatar.setup = at_ball(avatar.mode) && club != nullptr
-                ? clamped_sent_setup(avatar.setup, *club, client.tuning.setup)
-                : sent_setup{};
             if (moved.cart) { cart = *moved.cart; }
             accepted_at = now;
         }
@@ -133,7 +126,7 @@ void sync_harness::reduce(const net_command& command) {
     inbound.push_back(snapshot{now + latency + roll() * jitter, ++revision, cart, avatar, reducer, error});
 }
 
-// The room as the server has it: my cart and ball, nobody else, and the client's weather.
+// The room as the server has it: my cart, ball, hand and club, nobody else, and the client's weather.
 move_world sync_harness::world() const {
     move_world moving{client.area, client.world.cart_roads, client.tuning};
     moving.walk_speed = client.tuning.player.walk_speed;
@@ -141,6 +134,8 @@ move_world sync_harness::world() const {
     moving.wetness = client.weather.wetness;
     moving.limits = movement_limits_for(client.tuning, moving.spec, {}, 0);
     moving.own_ball = ball;
+    moving.hand = client.hand;
+    moving.club = client.selected_club < client.clubs.size() ? &client.clubs[client.selected_club] : nullptr;
     moving.walker_obstacles = walker_obstacles({cart_pose{cart.position, cart.yaw}}, client.area.cups, client.flags_in,
                                                client.tuning);
     return moving;
@@ -223,7 +218,6 @@ void sync_harness::reconnect() {
     // Joining again starts the room's rows afresh.
     mover = placed_mover(mover_state{}, avatar.position);
     mover.credit_seconds = client.tuning.server.max_motion_gap_seconds;
-    mover.slack_left = client.tuning.server.motion_distance_slack;
     publish();
     run(0.5f);
 }

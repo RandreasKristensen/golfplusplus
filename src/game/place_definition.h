@@ -39,11 +39,15 @@ struct course_sky {
     // white nights of a place further north. -90 leaves it where the
     // latitude and date put it.
     float lowest_sun_deg = -90.0f;
+    // How many hours its clock runs ahead of the shared sky clock
+    // (sky_timeline), so at any moment the courses stand at different times
+    // of day: one at sunrise while another is at noon. 0 runs on it.
+    float clock_shift_hours = 0.0f;
 };
 
 // The air over a course: how high it lies (its world origin's height above
-// sea level, EU-DEM) and its climate on its date (DMI's 1991-2020 normals for
-// the Danish courses' midsummer): the day's mean temperature and how far the
+// sea level, EU-DEM) and its climate on its date (DMI's 1991-2020 Danish
+// normals for that day of the year): the day's mean temperature and how far the
 // coldest morning lies below the warmest afternoon, on a clear day.
 struct course_air {
     float elevation_meters = 0.0f;

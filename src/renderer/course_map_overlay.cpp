@@ -25,14 +25,28 @@ const glm::vec3 map_player_ink(0.22f, 0.46f, 0.72f);
 const glm::vec3 map_cup_ink(0.94f, 0.78f, 0.22f);
 const glm::vec3 map_bag_ink(0.62f, 0.2f, 0.14f);
 
-// Clip units between the paper's edge and the course on it.
-constexpr float map_margin = 0.06f;
+// The paper is this much wider than tall on any window, so the land it shows
+// round the holes is known when a course is imported (map_paper_aspect in
+// tooling/osm_import/osm_ground.py). Its half height in clip units, unless
+// that would make it wider than the most of the target's half width.
+constexpr float paper_aspect = 1.5f;
+constexpr float paper_half_height = 0.76f;
+constexpr float paper_most_half_width = 0.94f;
+// Between the paper's edge and the course on it, as a share of the paper's
+// half height, the same on screen both ways.
+constexpr float map_margin_share = 0.08f;
 // The marks' sizes, in clip units.
 constexpr float player_mark_radius = 0.024f;
 constexpr float tee_mark_radius = 0.023f;
 constexpr float ball_mark_radius = 0.020f;
 constexpr float cup_mark_radius = 0.018f;
 constexpr float bag_mark_radius = 0.018f;
+// A mark off the paper is an arrow reaching this far from its middle to its
+// tip and back, this far to either side, and outlined this much more, as
+// shares of the mark's radius.
+constexpr float arrow_length = 1.1f;
+constexpr float arrow_half_width = 0.85f;
+constexpr float arrow_outline = 0.35f;
 const glm::vec2 flagstick_offset(0.0f, 0.028f);
 const glm::vec2 flagstick_half(0.004f, 0.042f);
 const glm::vec2 flag_offset(0.022f, 0.055f);
@@ -64,6 +78,13 @@ glm::vec2 pixels_per_clip(const overlay_grid grid) {
         return glm::vec2(1.0f);
     }
     return glm::vec2(static_cast<float>(grid.width), static_cast<float>(grid.height)) * 0.5f;
+}
+
+// The paper's half size in clip units on a target of `per_clip` pixels per clip unit.
+glm::vec2 paper_half_size(const glm::vec2 per_clip) {
+    const float half_width = paper_half_height * paper_aspect * per_clip.y / per_clip.x;
+    const float shrink = std::min(1.0f, paper_most_half_width / half_width);
+    return glm::vec2(half_width, paper_half_height) * shrink;
 }
 
 // A world position on the paper's axes before scaling: world +X left, +Z
@@ -102,6 +123,53 @@ glm::vec2 course_turn(const std::vector<glm::vec3>& outline) {
 void draw_marker(overlay_batch& batch, const glm::vec2 position, const glm::vec3 color, const float radius) {
     draw_overlay_quad(batch, position, glm::vec2(radius), map_marker_outline, 0.55f);
     draw_overlay_quad(batch, position, glm::vec2(radius * 0.64f), color, 1.0f);
+}
+
+// Where a mark of `radius` at `position` is drawn: on the paper's ground
+// where it is, else at the ground's edge nearest it, as an arrow.
+struct map_mark_place {
+    glm::vec2 point{0.0f};
+    glm::vec2 away{0.0f};  // off the paper: from the arrow to the mark
+    bool off_paper = false;
+};
+
+map_mark_place mark_place(const course_map_layout& layout, const glm::vec3& position, const float radius) {
+    const glm::vec2 point = map_point(layout, position);
+    const glm::vec2 reach = layout.half_size - glm::vec2(course_map_fill_inset + radius);
+    if (glm::clamp(point, layout.center - reach, layout.center + reach) == point) {
+        return {point, glm::vec2(0.0f), false};
+    }
+    const glm::vec2 arrow_reach = layout.half_size - glm::vec2(course_map_fill_inset + radius * (arrow_length + arrow_outline));
+    const glm::vec2 arrow = glm::clamp(point, layout.center - arrow_reach, layout.center + arrow_reach);
+    return {arrow, point - arrow, true};
+}
+
+// A mark, or an arrow in its ink at the paper's edge pointing out the way to it.
+void draw_mark(overlay_batch& batch,
+               const course_map_layout& layout,
+               const glm::vec3& position,
+               const glm::vec3 color,
+               const float radius) {
+    const map_mark_place place = mark_place(layout, position, radius);
+    if (!place.off_paper) {
+        draw_marker(batch, place.point, color, radius);
+        return;
+    }
+    // Shaped in pixels, so it points true on any window.
+    const glm::vec2 per_clip = pixels_per_clip(batch.grid);
+    const glm::vec2 away = glm::normalize(place.away * per_clip);
+    const glm::vec2 side(-away.y, away.x);
+    const float size = radius * per_clip.y;
+    const auto corner = [&](const float along, const float across) {
+        return place.point + (away * along + side * across) * size / per_clip;
+    };
+    const auto triangle = [&](const float grow, const glm::vec3 ink, const float alpha) {
+        const glm::vec2 tip = corner(arrow_length + grow, 0.0f);
+        draw_overlay_corner_quad(batch, corner(-arrow_length - grow, arrow_half_width + grow), tip, tip,
+                                 corner(-arrow_length - grow, -arrow_half_width - grow), ink, alpha);
+    };
+    triangle(arrow_outline, map_marker_outline, 0.75f);
+    triangle(0.0f, color, 1.0f);
 }
 
 // The tee box's footprint on the map, grown about its middle to the least
@@ -145,12 +213,12 @@ void draw_hole_number(overlay_batch& batch, const text_assets& text, const ui_re
 std::vector<ui_rect> marks_kept_clear(const course_map_layout& layout, const render_data& data) {
     std::vector<ui_rect> marks;
     if (data.map_bag_position) {
-        marks.push_back({map_point(layout, *data.map_bag_position), glm::vec2(bag_mark_radius)});
+        marks.push_back({mark_place(layout, *data.map_bag_position, bag_mark_radius).point, glm::vec2(bag_mark_radius)});
     }
     if (data.show_hole) {
         const glm::vec2 pin = map_point(layout, data.pin_position);
-        marks.push_back({map_point(layout, data.tee_position), glm::vec2(tee_mark_radius)});
-        marks.push_back({map_point(layout, data.ball_position), glm::vec2(ball_mark_radius)});
+        marks.push_back({mark_place(layout, data.tee_position, tee_mark_radius).point, glm::vec2(tee_mark_radius)});
+        marks.push_back({mark_place(layout, data.ball_position, ball_mark_radius).point, glm::vec2(ball_mark_radius)});
         marks.push_back({pin, glm::vec2(cup_mark_radius)});
         marks.push_back({pin + flagstick_offset, flagstick_half});
         marks.push_back({pin + flag_offset, flag_half});
@@ -233,28 +301,22 @@ number_placement place_numbers(const course_map_layout& layout,
 course_map_layout make_course_map_layout(const render_data& data, const overlay_grid grid) {
     course_map_layout layout;
     const glm::vec2 per_clip = pixels_per_clip(grid);
-    const glm::vec2 drawable = (layout.half_size - glm::vec2(map_margin)) * 2.0f * per_clip;
+    layout.half_size = paper_half_size(per_clip);
+    const glm::vec2 margin = glm::vec2(map_margin_share * layout.half_size.y * per_clip.y) / per_clip;
+    const glm::vec2 drawable = (layout.half_size - margin) * 2.0f * per_clip;
     if (data.course_map_outline.size() >= 2) {
         layout.turn = course_turn(data.course_map_outline);
     }
 
-    glm::vec2 low = turned_point(data.player_position, layout.turn);
+    // Only the course: the map never moves while I walk, and what leaves it
+    // is shown by an arrow at its edge.
+    glm::vec2 low = turned_point(data.course_map_outline.empty() ? data.player_position : data.course_map_outline.front(),
+                                 layout.turn);
     glm::vec2 high = low;
-    const auto cover = [&](const glm::vec3& position) {
+    for (const glm::vec3& position : data.course_map_outline) {
         const glm::vec2 point = turned_point(position, layout.turn);
         low = glm::min(low, point);
         high = glm::max(high, point);
-    };
-    if (data.show_hole) {
-        cover(data.tee_position);
-        cover(data.pin_position);
-        cover(data.ball_position);
-    }
-    if (data.map_bag_position) {
-        cover(*data.map_bag_position);
-    }
-    for (const glm::vec3& point : data.course_map_outline) {
-        cover(point);
     }
 
     const glm::vec2 span = glm::max(high - low, glm::vec2(1.0f));
@@ -327,13 +389,13 @@ void draw_course_map_marks(overlay_batch& batch,
         }
     }
     if (data.show_hole) {
-        draw_marker(batch, map_point(layout, data.tee_position), course_map_tee_ink, tee_mark_radius);
-        draw_marker(batch, map_point(layout, data.ball_position), map_ball_ink, ball_mark_radius);
+        draw_mark(batch, layout, data.tee_position, course_map_tee_ink, tee_mark_radius);
+        draw_mark(batch, layout, data.ball_position, map_ball_ink, ball_mark_radius);
     }
     if (data.map_bag_position) {
-        draw_marker(batch, map_point(layout, *data.map_bag_position), map_bag_ink, bag_mark_radius);
+        draw_mark(batch, layout, *data.map_bag_position, map_bag_ink, bag_mark_radius);
     }
-    draw_marker(batch, map_point(layout, data.player_position), map_player_ink, player_mark_radius);
+    draw_mark(batch, layout, data.player_position, map_player_ink, player_mark_radius);
     if (data.show_hole) {
         const glm::vec2 pin = map_point(layout, data.pin_position);
         draw_overlay_quad(batch, pin + flagstick_offset, flagstick_half, course_map_flagstick_ink, 0.92f);

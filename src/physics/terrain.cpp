@@ -18,6 +18,10 @@ namespace {
 constexpr int ribbon_cross_section_count = 9;
 // The ribbon's outer 45% drops away by ribbon_edge_drop (terrain.h).
 constexpr float ribbon_flat_fraction = 0.55f;
+// A pond's shore is flat this far under its level (under water is strictly
+// below it), so a sliver of the pond in a triangle with no corner inside is
+// still water over ground.
+constexpr float shore_under_level = 0.001f;
 // Fewest rim vertices of a round zone overlay, however small the zone.
 
 float distance_xz_squared(const glm::vec3& a, const glm::vec3& b) {
@@ -44,12 +48,14 @@ float control_polygon_xz_length(const std::vector<glm::vec3>& points) {
 int material_priority(const terrain_material material) {
     switch (material) {
     case terrain_material::bunker:
-        return 3;
+        return 4;
     case terrain_material::green:
-        return 2;
+        return 3;
     case terrain_material::water:
-        return 1;
+        return 2;
     case terrain_material::fairway:
+        return 1;
+    case terrain_material::heavy_rough:
         return 0;
     case terrain_material::rough:
         return -1;
@@ -67,6 +73,8 @@ std::optional<terrain_material> material_from_zone(const material_zone_type type
         return terrain_material::water;
     case material_zone_type::fairway:
         return terrain_material::fairway;
+    case material_zone_type::heavy_rough:
+        return terrain_material::heavy_rough;
     case material_zone_type::unknown:
         return std::nullopt;
     }
@@ -817,10 +825,12 @@ float carved_height(const std::vector<carving_zone>& zones, const glm::vec3& pos
         const std::optional<float> inside = zone_depth_inside(zone, position);
         if (!inside) {
             // The shore: outside the outline the ground comes down to the
-            // water's edge, so no water is drawn over ground above its level.
+            // pond's level, flat just under it for the shore's first half so
+            // every triangle across the outline is under water inside it.
             const float out = zone_edge_distance(zone, position);
             if (out < tuning.water_shore_meters) {
-                carved = std::min(carved, carving.water_level - tuning.water_min_depth * (1.0f - eased(out / tuning.water_shore_meters)));
+                const float rise = eased(2.0f * out / tuning.water_shore_meters - 1.0f);
+                carved = std::min(carved, glm::mix(carving.water_level - shore_under_level, height, rise));
             }
             continue;
         }

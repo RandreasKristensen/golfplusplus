@@ -10,10 +10,12 @@
 #include "game/course_world_definition.h"
 #include "game/hole_data.h"
 #include "game/item_catalog.h"
+#include "game/json_util.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -27,6 +29,28 @@ std::optional<std::filesystem::file_time_type> file_write_time(const std::filesy
 // Writes `text` to `path` (creating its directory) through a temporary
 // file, so a crash never leaves a half-written file. False on failure.
 bool replace_text_file(const std::filesystem::path& path, const std::string& text);
+
+// The files replace_text_file leaves beside `path` when interrupted.
+std::filesystem::path replacement_temp_path(const std::filesystem::path& path);
+std::filesystem::path replacement_backup_path(const std::filesystem::path& path);
+
+// Which file replaced_text_file read.
+enum class replaced_source { none, primary, temp, backup };
+
+struct replaced_text {
+    std::optional<std::string> text;  // nullopt when no file held valid text
+    replaced_source source = replaced_source::none;
+};
+
+// The text of `path`, or after an interrupted replace_text_file the first of
+// its leftovers that `valid` accepts. Precedence follows the protocol: a
+// valid primary always wins; otherwise the temp file (a complete replacement,
+// written before the old file moved aside) beats the backup (the previous
+// file). When the primary is absent the chosen leftover is renamed into place
+// (best effort; the text is returned regardless). A present but invalid
+// primary is never overwritten here.
+replaced_text read_replaced_text_file(const std::filesystem::path& path,
+                                      const std::function<bool(const std::string&)>& valid);
 
 // Every *.json file directly in `directory`, sorted by path. Empty when the
 // directory is missing or unreadable.
@@ -48,8 +72,9 @@ std::optional<hole_data> load_hole_from_file(const std::string& path);
 // The course in `folder` (relative to `asset_root`), its references made
 // relative to the asset root (course_in_folder).
 std::optional<course_definition> load_course(const std::string& asset_root, const std::string& folder);
-// Every valid course under `asset_root`'s courses_path, sorted by folder.
-std::vector<course_definition> load_courses(const std::string& asset_root);
+// Every course under `asset_root`'s courses_path (parse_courses): refused,
+// naming the file, when any course folder's manifest is unreadable or invalid.
+parsed<std::vector<course_definition>> load_courses(const std::string& asset_root);
 
 // File path of hole `hole_index` (course_hole_reference under `asset_root`),
 // or empty when the index is out of range.

@@ -43,6 +43,7 @@ import osm_dhm
 import osm_elevation
 import osm_outline
 import osm_ground
+import osm_publish
 import verify_osm_import
 
 # overpass-api.de is the reference instance and is tried first. The mirrors are
@@ -88,8 +89,15 @@ DEFAULT_CONFIG = {
         "outside_reach_m": 80.0,
         # Trees reach a hole up to this far from its line of play.
         "max_distance_from_line_m": 95.0,
-        # A wood or scrub area gets one tree per this many square metres.
+        # A wood gets one tree per this many square metres.
         "wood_m2_per_tree": 150.0,
+        # Without aerial heights, mapped scrub is planted with bushes this
+        # big, one per this many square metres; a hole keeps its nearest
+        # `max_bushes_per_hole`.
+        "scrub_m2_per_bush": 12.0,
+        "bush_radius": 1.2,
+        "bush_height": 1.5,
+        "max_bushes_per_hole": 300,
     },
     # barrier=fence ways become course-world fences: poles at their nodes,
     # more where a stretch is long, a net between each pair.
@@ -254,9 +262,8 @@ DEFAULT_CONFIG = {
     # numbers go under `sources.<name>`, over these.
     "aerial": {
         "enabled": True,
+        # Read over the course world's box (osm_ground.world_box).
         "cell_meters": 1.0,
-        # How far past the holes the photos are read.
-        "margin_meters": 120.0,
         # Signature values are averaged over this, past mowing stripes.
         "smooth_meters": 5.0,
         # Lower than this above the terrain is ground; trees stand higher.
@@ -317,6 +324,33 @@ DEFAULT_CONFIG = {
             # Smaller dark patches are shadows of sheds and trees on paving.
             "least_square_meters": 200.0,
         },
+        # Heavy rough: grass within `reach_meters` of a hole's line and
+        # `clear_of_mown_meters` of its mown grass, green enough to be grass,
+        # that stands this high off the terrain or is less green and
+        # brighter than the course's rough by these; patches this big.
+        "heavy_rough": {
+            "reach_meters": 70.0,
+            "clear_of_mown_meters": 4.0,
+            "least_ndvi": 0.15,
+            "least_height_meters": 0.25,
+            "less_green_by": 0.08,
+            "brighter_by": 0.03,
+            "open_meters": 1.0,
+            "close_meters": 2.0,
+            "least_square_meters": 100.0,
+        },
+        # Bushes: green growth standing this high but short of a tree, this
+        # far clear of the trees, in clumps this big; a clump wider than
+        # the biggest bush is a thicket planted `spacing_meters` apart.
+        "bushes": {
+            "least_height_meters": 0.6,
+            "clear_of_trees_meters": 2.0,
+            "least_ndvi": 0.2,
+            "least_square_meters": 2.0,
+            "least_radius_meters": 0.6,
+            "most_radius_meters": 3.0,
+            "spacing_meters": 3.0,
+        },
         "trees": {
             "least_height_meters": 2.5,
             # Smoother than this (the curvature of the surface, metres) is a roof.
@@ -333,19 +367,34 @@ DEFAULT_CONFIG = {
             # follows its height; the aerial outline only finds the tree.
             "trunk_share": 0.45,
             "trunk_radius_per_crown": 0.14,
+            # A crown this green in the spring infrared is an evergreen (the
+            # broadleaves are bare when the photo is flown; their crowns read
+            # about 0, an evergreen's about 0.45); one this pointed (its top
+            # over its crown, as a share of its height) is a spruce. A
+            # broadleaf this close to a pond is a willow, one this small a
+            # birch, and this share of the rest oak (else beech).
+            "species": {
+                "evergreen_ndvi": 0.3,
+                "spruce_least_pointed": 0.4,
+                "willow_water_meters": 12.0,
+                "birch_most_radius_meters": 3.5,
+                "birch_most_height_meters": 13.0,
+                "oak_share": 0.4,
+            },
         },
     },
     # The course world's ground grid (see osm_ground.py): its cell when it
     # is flat (no elevation; else the elevation source's), and how far past
-    # the holes it reaches.
+    # the course map's view of the holes it reaches.
     "ground": {
         "flat_cell_size": 20.0,
-        "margin": 120.0,
+        "margin": 150.0,
     },
     # The course file's sky (src/game/course_loader.cpp): the "MM-DD" day the
     # course is always played on and the clock it shows, Danish midsummer and
-    # summer time by default, and optionally "lowest_sun_deg", how far its sun
-    # may sink.
+    # summer time by default, and optionally "clock_shift_hours", how far its
+    # clock runs ahead of the shared one, and "lowest_sun_deg", how far its
+    # sun may sink.
     "sky": {"date": "06-21", "utc_offset_hours": 2},
     # The course file's air (src/game/course_definition.h): DMI's 1991-2020
     # normals for Danish midsummer. Its elevation is the ground's height at
@@ -941,10 +990,16 @@ def _as_water_hazard(el: dict) -> dict:
     return {**el, "tags": {**tags, "golf": "water_hazard"}}
 
 
-def _is_tree_feature(el: dict) -> bool:
+def _is_long_grass(el: dict) -> bool:
+    """Grass left unmown: heath, grassland and meadow play as heavy rough."""
+    tags = el.get("tags", {})
+    return tags.get("natural") in ("heath", "grassland") or tags.get("landuse") == "meadow"
+
+
+def _is_vegetation_feature(el: dict) -> bool:
     tags = el.get("tags", {})
     return (tags.get("natural") in ("tree", "tree_row", "wood", "scrub") or
-            tags.get("landuse") == "forest")
+            tags.get("landuse") == "forest" or _is_long_grass(el))
 
 
 def _is_path_feature(el: dict) -> bool:
@@ -981,6 +1036,10 @@ VEGETATION_SELECTORS = [
     'relation["landuse"="forest"]',
     'way["natural"="scrub"]',
     'relation["natural"="scrub"]',
+    'way["natural"~"^(heath|grassland)$"]',
+    'relation["natural"~"^(heath|grassland)$"]',
+    'way["landuse"="meadow"]',
+    'relation["landuse"="meadow"]',
 ]
 COURSE_SELECTORS = [
     'way["leisure"="golf_course"]',
@@ -1086,7 +1145,7 @@ out geom;""")
     golf = _drop_other_course_features([_as_water_hazard(el) for el in scoped if _is_golf_feature(el)],
                                        course_el, other_courses)
     trees = [el for el in _dedupe_elements(vegetation)
-             if _is_tree_feature(el) and _element_in_course_footprint(el, course_el, tree_reach_m)]
+             if _is_vegetation_feature(el) and _element_in_course_footprint(el, course_el, tree_reach_m)]
     paths = [el for el in scoped if _is_path_feature(el)]
 
     if course_el.get("type") == "relation" and not used_relation_scope:
@@ -1133,10 +1192,10 @@ def _fetch_stop_places(course_el: dict, reach: float) -> list:
 
 
 def _bus_stop(cart_holes: list[dict], hole_jsons: dict, path_elements: list, places: list, fences: list,
-              origin_lat: float, origin_lon: float, config: dict) -> dict | None:
+              land_trees: list, origin_lat: float, origin_lon: float, config: dict) -> dict | None:
     """osm_bus_stop.choose over `places` (_fetch_stop_places) and the course's own service roads,
-    kept clear of every hole's zones, mapped tees and game tee box, its trees,
-    fences and mapped cart paths."""
+    kept clear of every hole's zones, mapped tees and game tee box, its trees
+    and the land's (`land_trees`, course world trees), fences and mapped cart paths."""
     rules = config["bus_stop"]
     bus = osm_bus_stop.load_bus()
     pad = float(config["cart_paths"]["tee_pad_radius_meters"])
@@ -1150,6 +1209,7 @@ def _bus_stop(cart_holes: list[dict], hole_jsons: dict, path_elements: list, pla
     for h, num in zip(cart_holes, sorted(hole_jsons)):
         trees += [(t["position"][0] + h["tee"][0], t["position"][2] + h["tee"][1], float(t.get("leaf_radius", leaf)))
                   for t in hole_jsons[num].get("trees", [])]
+    trees += [(t["position"][0], t["position"][2], float(t.get("leaf_radius", leaf))) for t in land_trees]
     cart = [_path_polyline(el, origin_lat, origin_lon) for el in path_elements if el.get("tags", {}).get("golf") == "cartpath"]
     lines = [line for line in cart if line] + [[(p[0], p[2]) for p in fence["poles"]] for fence in fences]
     service = _dedupe_elements(path_elements + places)
@@ -1530,7 +1590,7 @@ def _point_polyline_distance(pt, line_pts) -> float:
 
 def _empty_hole() -> dict:
     return {"lines": [], "tees": [], "pins": [], "fairways": [], "greens": [],
-            "bunkers": [], "waters": [], "trees_abs": [], "tags": {}}
+            "bunkers": [], "waters": [], "trees_abs": [], "bushes_abs": [], "long_grass": [], "tags": {}}
 
 
 def _classify_into(el: dict, h: dict):
@@ -2198,7 +2258,11 @@ def _stable_int_seed(*parts) -> int:
 
 def _is_wooded_area(el: dict) -> bool:
     tags = el.get("tags", {})
-    return tags.get("natural") in ("wood", "scrub") or tags.get("landuse") == "forest"
+    return tags.get("natural") == "wood" or tags.get("landuse") == "forest"
+
+
+def _is_scrub(el: dict) -> bool:
+    return el.get("tags", {}).get("natural") == "scrub"
 
 
 def _is_tree_row(el: dict) -> bool:
@@ -2292,7 +2356,9 @@ def assign_trees_to_holes(holes: dict, tree_elements: list, origin_lat: float, o
     it is nearest, up to `max_per_hole` nearest the line: the trees the
     aerial heights show, (x, z, height, crown radius), when there are
     `aerial_trees`; else mapped trees and tree rows, and trees planted
-    through mapped woods and scrub (`tree` config).
+    through mapped woods and scrub (`tree` config). Returns the rest, the
+    land's round the holes: those further from every line and past a hole's
+    `max_per_hole`.
     """
     reach = float(tree_config["max_distance_from_line_m"])
     hole_shapes = {}
@@ -2320,9 +2386,11 @@ def assign_trees_to_holes(holes: dict, tree_elements: list, origin_lat: float, o
             points.extend(_sample_wooded_polygon_trees(el, origin_lat, origin_lon, seed,
                                                        float(tree_config["wood_m2_per_tree"]), near_a_hole))
 
+    land = []
     for pt in points:
         num, dist = _nearest_hole_for_tree(pt[:2], hole_shapes)
         if num is None or dist > reach:
+            land.append(pt)
             continue
         line, _anchor = hole_shapes[num]
         if _tree_allowed_for_hole(pt[:2], holes[num], line, origin_lat, origin_lon):
@@ -2339,7 +2407,86 @@ def assign_trees_to_holes(holes: dict, tree_elements: list, origin_lat: float, o
             deduped.append(pt)
         line = hole_shapes[num][0]
         deduped.sort(key=lambda p: (_point_polyline_distance(p[:2], line) if line else 0.0, p[0], p[1]))
-        h["trees_abs"] = deduped[:max(0, int(tree_config["max_per_hole"]))]
+        kept = max(0, int(tree_config["max_per_hole"]))
+        h["trees_abs"] = deduped[:kept]
+        land.extend(deduped[kept:])
+    return land
+
+
+def _hole_shapes(holes: dict, origin_lat: float, origin_lon: float) -> dict:
+    """Each hole's line of play (else its first fairway) and anchor."""
+    shapes = {}
+    for num, h in holes.items():
+        line = _oriented_hole_line_xz(h, origin_lat, origin_lon)
+        if not line:
+            line = _to_xz_list(h["fairways"][:1], origin_lat, origin_lon)
+        shapes[num] = (line, _hole_anchor_xz(h, origin_lat, origin_lon))
+    return shapes
+
+
+def assign_bushes_to_holes(holes: dict, vegetation: list, origin_lat: float, origin_lon: float,
+                           course_key: str, tree_config: dict, aerial_bushes=None):
+    """
+    Give each hole the bushes near it, as the trees: the bushes the aerial
+    heights show, (x, z, height, radius), when there are `aerial_bushes`;
+    else bushes planted through mapped scrub, the `tree` config's size.
+    Each goes to the hole whose line it is nearest, up to
+    `max_bushes_per_hole` nearest the line.
+    """
+    reach = float(tree_config["max_distance_from_line_m"])
+    hole_shapes = _hole_shapes(holes, origin_lat, origin_lon)
+
+    def near_a_hole(pt) -> bool:
+        return _nearest_hole_for_tree(pt, hole_shapes)[1] <= reach
+
+    points = list(aerial_bushes) if aerial_bushes is not None else []
+    for el in (vegetation if aerial_bushes is None else []):
+        if _is_scrub(el):
+            seed = _stable_int_seed(course_key, "scrub", el.get("type"), el.get("id"))
+            points.extend(_sample_wooded_polygon_trees(el, origin_lat, origin_lon, seed,
+                                                       float(tree_config["scrub_m2_per_bush"]), near_a_hole))
+    for pt in points:
+        num, dist = _nearest_hole_for_tree(pt[:2], hole_shapes)
+        if num is None or dist > reach:
+            continue
+        line, _anchor = hole_shapes[num]
+        if _tree_allowed_for_hole(pt[:2], holes[num], line, origin_lat, origin_lon):
+            holes[num]["bushes_abs"].append(pt)
+    for num, h in holes.items():
+        line = hole_shapes[num][0]
+        h["bushes_abs"].sort(key=lambda p: (_point_polyline_distance(p[:2], line) if line else 0.0, p[0], p[1]))
+        h["bushes_abs"] = h["bushes_abs"][:max(0, int(tree_config["max_bushes_per_hole"]))]
+
+
+def assign_long_grass_to_holes(holes: dict, long_grass: list, origin_lat: float, origin_lon: float, tree_config: dict):
+    """Give each mapped meadow, heath or grassland near the holes to the hole
+    whose line passes nearest it, as heavy rough."""
+    reach = float(tree_config["max_distance_from_line_m"])
+    hole_shapes = _hole_shapes(holes, origin_lat, origin_lon)
+    for el in long_grass:
+        pts = _to_xz_list([el], origin_lat, origin_lon)
+        if len(pts) < 3:
+            continue
+        best_num, best_d = None, float("inf")
+        for num, (line, anchor) in hole_shapes.items():
+            near = (min(_point_polyline_distance(p, line) for p in pts) if line
+                    else min(math.hypot(p[0] - anchor[0], p[1] - anchor[1]) for p in pts))
+            if _point_in_polygon_xz(anchor, pts):
+                near = 0.0
+            if near < best_d:
+                best_num, best_d = num, near
+        if best_num is not None and best_d <= reach:
+            holes[best_num]["long_grass"].append(el)
+
+
+def _bush_json(pt, tee_x: float, tee_z: float, tree_config: dict) -> dict:
+    """A hole file's bush at `pt`: (x, z) in the `tree` config's bush size,
+    or (x, z, height, radius) as the aerial heights measured it."""
+    position = [_r(pt[0] - tee_x), 0.0, _r(pt[1] - tee_z)]
+    if len(pt) == 2:
+        return {"position": position, "radius": float(tree_config["bush_radius"]),
+                "height": float(tree_config["bush_height"])}
+    return {"position": position, "radius": _r(pt[3]), "height": _r(pt[2])}
 
 
 # ── Hole → JSON ───────────────────────────────────────────────────────────────
@@ -2349,8 +2496,8 @@ def _r(v): return round(v, 2)
 
 def _tree_json(pt, tee_x: float, tee_z: float, tree_config: dict, aerial_trees: dict | None) -> dict:
     """A hole file's tree at `pt`: (x, z) in the `tree` config's shape, or
-    (x, z, height, crown radius) as the aerial heights measured it, its
-    crown as wide as it is long."""
+    (x, z, height, crown radius, species) as the aerial heights measured it,
+    its crown as wide as it is long."""
     position = [_r(pt[0] - tee_x), 0.0, _r(pt[1] - tee_z)]
     if len(pt) == 2:
         return {"position": position,
@@ -2359,8 +2506,11 @@ def _tree_json(pt, tee_x: float, tee_z: float, tree_config: dict, aerial_trees: 
     height = pt[2]
     trunk = height * float(aerial_trees["trunk_share"])
     crown = max(float(aerial_trees["least_crown_radius_meters"]), 0.5 * (height - trunk))
-    return {"position": position, "trunk_radius": _r(crown * float(aerial_trees["trunk_radius_per_crown"])),
+    tree = {"position": position, "trunk_radius": _r(crown * float(aerial_trees["trunk_radius_per_crown"])),
             "trunk_height": _r(trunk), "leaf_radius": _r(crown), "leaf_height": _r(height - trunk)}
+    if len(pt) >= 5:
+        tree["species"] = pt[4]
+    return tree
 
 
 def _int_tag(value):
@@ -2578,6 +2728,20 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
                 zones.append(osm_outline.zone_json(zone_type, ring, (tee_x, tee_z)))
                 added[zone_type] += 1
 
+    # Heavy rough: the mapped meadows, heaths and grassland near the hole,
+    # and the photos' long grass clear of them.
+    long_rings = []
+    for el in h.get("long_grass", []):
+        for pts, closed in _element_shapes_xz(el, origin_lat, origin_lon):
+            if closed and len(pts) >= 3:
+                long_rings.append(osm_outline.simplify(pts, tolerance))
+    for ring in from_aerial.get("heavy_roughs", []):
+        if not any(_rings_overlap(ring, other) for other in long_rings):
+            long_rings.append(osm_outline.simplify(ring, tolerance))
+    for ring in long_rings:
+        if len(ring) >= 3:
+            zones.append(osm_outline.zone_json("heavy_rough", ring, (tee_x, tee_z)))
+
     # A hole OSM maps without a fairway takes the photos', else one from
     # real design numbers along its line, round the course's mapped rough;
     # the audit lists it, as mapping it is better.
@@ -2603,6 +2767,7 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
 
     trees = [_tree_json(pt, tee_x, tee_z, tree_config, aerial.rules["trees"] if aerial is not None else None)
              for pt in h.get("trees_abs", [])]
+    bushes = [_bush_json(pt, tee_x, tee_z, tree_config) for pt in h.get("bushes_abs", [])]
 
     return {
         "id": f"{course_id}_h{hole_num:02d}",
@@ -2617,6 +2782,7 @@ def hole_to_json(hole_num: int, h: dict, origin_lat: float, origin_lon: float,
         },
         "material_zones": zones,
         "trees": trees,
+        "bushes": bushes,
         # Provenance. Keeps the hole traceable back to the map it came from,
         # lets a re-import be compared against the previous one, and gives
         # verify_osm_import.py real coordinates to check the projection
@@ -2846,8 +3012,10 @@ def _cart_path_holes(holes: dict, hole_jsons: dict, origin_lat: float, origin_lo
         h_json = hole_jsons[num]
         tee, pin = _hole_world_anchors(h_json, origin_lat, origin_lon)
         rings = {"greens": [], "bunkers": [], "waters": [], "fairways": []}
+        # Heavy rough is grass a cart crosses like the rough.
         for zone in h_json["material_zones"]:
-            rings[zone["type"] + "s"].append([(x + tee[0], z + tee[1]) for x, z in zone["outline"]])
+            if zone["type"] + "s" in rings:
+                rings[zone["type"] + "s"].append([(x + tee[0], z + tee[1]) for x, z in zone["outline"]])
         tees = [pts for el in holes[num]["tees"] for pts, closed in _element_shapes_xz(el, origin_lat, origin_lon)
                 if closed and len(pts) >= 3]
         line = [(p[0] + tee[0], p[2] + tee[1]) for p in h_json["spline"]["control_points"]]
@@ -2931,13 +3099,15 @@ def course_world_to_json(course_id: str,
                          fences: list | None = None,
                          aerial_paths: list | None = None,
                          clubhouse: tuple[float, float] | None = None,
-                         stop_places: list | None = None) -> dict:
+                         stop_places: list | None = None,
+                         land_trees: list | None = None) -> dict:
     """
     `hole_jsons` maps hole number to its generated hole JSON; `fences` are
     the course world's fences (fences_to_json); `aerial_paths` the cells the
     aerial photos read as path (osm_aerial.paths), None without them;
     `clubhouse` where its path starts, None where OSM maps none; `stop_places`
-    the car parks and roads the bus stop may be on (_fetch_stop_places). Each hole
+    the car parks and roads the bus stop may be on (_fetch_stop_places);
+    `land_trees` the course world's trees, round the holes. Each hole
     start is that hole's tee, at its height (source.tee_elevation) relative
     to the first hole's tee, which sits at y = 0; holes without a height stay
     at 0.
@@ -2969,8 +3139,8 @@ def course_world_to_json(course_id: str,
 
     shortcuts = _osm_walking_shortcuts(path_elements, origin_lat, origin_lon, hole_anchors, fairway_corridors, config)
     cart_holes = _cart_path_holes(holes, hole_jsons, origin_lat, origin_lon)
-    stop = _bus_stop(cart_holes, hole_jsons, path_elements, stop_places or [], fences or [], origin_lat, origin_lon,
-                     config) if cart_holes else None
+    stop = _bus_stop(cart_holes, hole_jsons, path_elements, stop_places or [], fences or [], land_trees or [],
+                     origin_lat, origin_lon, config) if cart_holes else None
     if cart_holes and stop is None:
         print("  [error] no clear bus stop on a car park or service road near the first tee", file=sys.stderr)
     cart_roads = osm_cart_paths.build_network(cart_holes, _osm_cart_path_lines(path_elements, origin_lat, origin_lon),
@@ -3012,6 +3182,7 @@ def course_world_to_json(course_id: str,
         "hole_starts": hole_starts,
         "cart_roads": cart_roads,
         "fences": fences or [],
+        "trees": land_trees or [],
         "walking_shortcuts": shortcuts,
         "collectibles": _collectible_candidates(course_id, spawn, hole_anchors),
         "spawn_zones": [
@@ -3070,10 +3241,18 @@ def _make_elevation_sampler(args, config: dict, origin_lat: float, origin_lon: f
 AERIAL_SOURCES = ("aerial_dk",)
 
 
-def _make_aerial(args, config: dict, holes: dict, origin_lat: float, origin_lon: float):
-    """The course's ground cover from the aerial source covering it
-    (osm_aerial.Cover, its rules on it as `rules`); None where none does, or
-    with --no-aerial."""
+def _world_box(holes: dict, origin_lat: float, origin_lon: float, config: dict) -> tuple[float, float, float, float]:
+    """The box the course's land and aerial reading cover (osm_ground.world_box)."""
+    pts = [p for h in holes.values()
+           for p in _to_xz_list(h["lines"] + h["tees"] + h["greens"] + h["fairways"], origin_lat, origin_lon)]
+    return osm_ground.world_box(pts, float(config["ground"]["margin"]))
+
+
+def _make_aerial(args, config: dict, holes: dict, origin_lat: float, origin_lon: float,
+                 box: tuple[float, float, float, float]):
+    """The course's ground cover from the aerial source covering it, read
+    over `box` (osm_aerial.Cover, its rules on it as `rules`); None where
+    none does, or with --no-aerial."""
     aerial_config = config["aerial"]
     if args.no_aerial or not aerial_config["enabled"]:
         return None
@@ -3086,11 +3265,6 @@ def _make_aerial(args, config: dict, holes: dict, origin_lat: float, origin_lon:
             return None
         import osm_aerial
         rules = _deep_merge(_deep_merge({}, aerial_config), aerial_config.get("sources", {}).get(source.NAME, {}))
-        pts = [p for h in holes.values()
-               for p in _to_xz_list(h["lines"] + h["tees"] + h["greens"] + h["fairways"], origin_lat, origin_lon)]
-        margin = float(rules["margin_meters"])
-        box = (min(p[0] for p in pts) - margin, min(p[1] for p in pts) - margin,
-               max(p[0] for p in pts) + margin, max(p[1] for p in pts) + margin)
         print(f"  Reading {source.DESCRIPTION} over {box[2] - box[0]:.0f} x {box[3] - box[1]:.0f} m", file=sys.stderr)
         layers = source.layers(lambda x, z: _xz_to_latlon(x, z, origin_lat, origin_lon), box,
                                float(rules["cell_meters"]), _CACHE_DIR, _CACHE_REFRESH)
@@ -3113,14 +3287,11 @@ def _report_elevation(sampler) -> None:
               f"{sampler.tiles_from_cache} from the cache", file=sys.stderr)
 
 
-def _course_ground(world: dict, hole_jsons: list[dict], sampler,
-                   origin_lat: float, origin_lon: float, config: dict) -> dict:
-    ground_config = config.get("ground", {})
-    cell_size = sampler.ground_cell_size if sampler is not None else float(ground_config.get("flat_cell_size", 20.0))
-    return osm_ground.ground_grid(world, hole_jsons, sampler,
-                                  lambda x, z: _xz_to_latlon(x, z, origin_lat, origin_lon),
-                                  cell_size,
-                                  float(ground_config.get("margin", 120.0)))
+def _course_ground(world: dict, sampler, origin_lat: float, origin_lon: float, config: dict,
+                   box: tuple[float, float, float, float]) -> dict:
+    cell_size = sampler.ground_cell_size if sampler is not None else float(config["ground"]["flat_cell_size"])
+    return osm_ground.ground_grid(world, sampler, lambda x, z: _xz_to_latlon(x, z, origin_lat, origin_lon),
+                                  cell_size, box)
 
 
 def _write_ground_only(args) -> None:
@@ -3140,8 +3311,13 @@ def _write_ground_only(args) -> None:
     projection = world["projection"]
     origin_lat, origin_lon = float(projection["origin_lat"]), float(projection["origin_lon"])
     elevation = _make_elevation_sampler(args, config, origin_lat, origin_lon)
-    world["ground"] = _course_ground(world, hole_jsons, elevation, origin_lat, origin_lon, config)
-    world_path.write_text(osm_ground.course_world_text(world), encoding="utf-8")
+    box = osm_ground.world_box(osm_ground.placed_hole_points(world, hole_jsons), float(config["ground"]["margin"]))
+    world["ground"] = _course_ground(world, elevation, origin_lat, origin_lon, config, box)
+    try:
+        osm_publish.publish(course_folder, {course["world"]: osm_ground.course_world_text(world)})
+    except OSError as e:
+        print(f"→ Could not write the course world: {e}", file=sys.stderr)
+        sys.exit(1)
     _report_elevation(elevation)
     ground = world["ground"]
     heights = osm_ground.heights_from_rows_cm(ground["heights_cm"])
@@ -3293,24 +3469,34 @@ Examples:
         sys.exit(1)
 
     print(f"  Identified {len(holes)} hole(s)", file=sys.stderr)
-    aerial = _make_aerial(args, config, holes, origin_lat, origin_lon)
+    box = _world_box(holes, origin_lat, origin_lon, config)
+    aerial = _make_aerial(args, config, holes, origin_lat, origin_lon, box)
     aerial_trees = None
     if aerial is not None:
         import osm_aerial
         aerial_trees = osm_aerial.trees(aerial, aerial.rules)
         print(f"  {len(aerial_trees)} trees stand in the aerial heights", file=sys.stderr)
-    assign_trees_to_holes(holes,
-                          tree_elements,
-                          origin_lat,
-                          origin_lon,
-                          f"{course_el.get('type')}:{course_el.get('id')}",
-                          config["tree"],
-                          aerial_trees)
+    land_trees = assign_trees_to_holes(holes,
+                                       tree_elements,
+                                       origin_lat,
+                                       origin_lon,
+                                       f"{course_el.get('type')}:{course_el.get('id')}",
+                                       config["tree"],
+                                       aerial_trees)
+    print(f"  {len(land_trees)} trees stand on the land round the holes", file=sys.stderr)
+    aerial_bushes = None
+    if aerial is not None:
+        aerial_bushes = osm_aerial.bushes(aerial, aerial.rules)
+        print(f"  {len(aerial_bushes)} bushes stand in the aerial heights", file=sys.stderr)
+    assign_bushes_to_holes(holes, tree_elements, origin_lat, origin_lon,
+                           f"{course_el.get('type')}:{course_el.get('id')}", config["tree"], aerial_bushes)
+    assign_long_grass_to_holes(holes, [el for el in tree_elements if _is_long_grass(el)], origin_lat, origin_lon,
+                               config["tree"])
 
-    # ── 5. Write hole files ───────────────────────────────────────────────────
+    # ── 5. Build hole files (nothing is written until the import verifies) ────
     course_dir = Path(args.out) / course_id
     out_dir = course_dir / "holes"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    files: dict[str, str] = {}
     hole_paths = []
 
     elevation = _make_elevation_sampler(args, config, origin_lat, origin_lon)
@@ -3324,9 +3510,7 @@ Examples:
         print(f"  Processing hole {num}...", file=sys.stderr)
         h_json = hole_to_json(num, holes[num], origin_lat, origin_lon, course_id, config, elevation, roughs, aerial)
         fname = f"h{num:02d}.json"
-        fpath = out_dir / fname
-        with open(fpath, "w", encoding="utf-8") as f:
-            json.dump(h_json, f, indent=2)
+        files[f"holes/{fname}"] = json.dumps(h_json, indent=2)
         hole_paths.append(f"holes/{fname}")
         hole_jsons[num] = h_json
         dist = math.hypot(h_json["pin"][0], h_json["pin"][2])
@@ -3359,15 +3543,18 @@ Examples:
                                                      config["fence"]),
                                       aerial_paths,
                                       clubhouse_xz(elements, origin_lat, origin_lon),
-                                      stop_places)
+                                      stop_places,
+                                      # In course coordinates: placed by no hole.
+                                      [_tree_json(pt, 0.0, 0.0, config["tree"],
+                                                  aerial.rules["trees"] if aerial is not None else None)
+                                       for pt in sorted(land_trees, key=lambda p: (p[0], p[1]))])
     print(f"→ Cart paths (metres by source): {osm_cart_paths.lengths_by_source(world_json['cart_roads'])}",
           file=sys.stderr)
     if not args.no_world:
-        world_json["ground"] = _course_ground(world_json, list(hole_jsons.values()), elevation,
-                                              origin_lat, origin_lon, config)
-        world_file = course_dir / world_reference
-        world_file.write_text(osm_ground.course_world_text(world_json), encoding="utf-8")
-        print(f"\n-> Course world: {world_file}", file=sys.stderr)
+        world_json["ground"] = _course_ground(world_json, elevation, origin_lat, origin_lon, config, box)
+    world_text = osm_ground.course_world_text(world_json)
+    if not args.no_world:
+        files[world_reference] = world_text
 
     if not args.no_course:
         course_json = {
@@ -3389,28 +3576,37 @@ Examples:
         }
         if not args.no_world:
             course_json["world"] = world_reference
-        course_file = course_dir / "course.json"
-        with open(course_file, "w", encoding="utf-8") as f:
-            json.dump(course_json, f, indent=2)
-        print(f"\n→ Course manifest: {course_file}", file=sys.stderr)
-        print("→ Run tooling/art/make_art.py to draw its backdrop.", file=sys.stderr)
+        files["course.json"] = json.dumps(course_json, indent=2)
 
     if source_counts:
         summary = ", ".join(f"{count}x {name}" for name, count in sorted(source_counts.items()))
         print(f"\n→ Centreline sources: {summary}", file=sys.stderr)
     _report_elevation(elevation)
-    print(f"→ Done! {len(holes)} hole(s) in {out_dir}/", file=sys.stderr)
 
-    # ── 7. Verify ─────────────────────────────────────────────────────────────
+    # ── 7. Verify what would be written ───────────────────────────────────────
+    # The contact sheet and OSM to-do are diagnostics, written either way.
     findings = verify_osm_import.verify_course(
-        course_id, course_name, [hole_jsons[num] for num in sorted(hole_jsons)], world_json,
+        course_id, course_name,
+        [json.loads(files[f"holes/h{num:02d}.json"]) for num in sorted(hole_jsons)], json.loads(world_text),
         config.get("checks", {}), Path(args.sheet_out) / f"{course_id}.svg", quiet=True, audit=audit)
     verify_osm_import.write_osm_todo(course_name, course_el, audit,
                                      Path(args.sheet_out) / f"{course_id}_osm_todo.md")
     if findings.count("error"):
-        print("→ The import has errors: fix the importer or the course's config, "
-              "not the generated files.", file=sys.stderr)
+        print(f"→ The import has errors, so nothing was written to {course_dir}: fix the importer "
+              "or the course's config, not the generated files.", file=sys.stderr)
         sys.exit(1)
+
+    # ── 8. Publish ────────────────────────────────────────────────────────────
+    try:
+        osm_publish.publish(course_dir, files)
+    except OSError as e:
+        print(f"→ Could not write the course: {e}", file=sys.stderr)
+        sys.exit(1)
+    for rel in files:
+        print(f"→ Wrote {course_dir / rel}", file=sys.stderr)
+    if not args.no_course:
+        print("→ Run tooling/art/make_art.py to draw its backdrop.", file=sys.stderr)
+    print(f"→ Done! {len(holes)} hole(s) in {out_dir}/", file=sys.stderr)
 
 
 if __name__ == "__main__":

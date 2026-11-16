@@ -7,8 +7,21 @@
     {"label": "look.near_haze", "path": "weather/mist", "step": 0.05},
     {"label": "look.fog_mist", "path": "weather/fog_mist_density", "step": 0.002},
     {"label": "look.rain_mist", "path": "weather/rain_mist_density", "step": 0.001},
+    {"label": "look.water_green_loss", "path": "water/absorption_green", "step": 0.05},
+    {"label": "look.water_red_loss", "path": "water/absorption_red", "step": 0.05},
     {"label": "look.shaft_reach", "path": "shafts/reach_meters", "step": 10},
     {"label": "look.beam_near_share", "path": "night_lights/beam_near_share", "step": 0.02},
-    {"label": "look.beam_core", "path": "night_lights/beam_core_meters", "step": 0.1}
+    {"label": "look.beam_core", "path": "night_lights/beam_core_meters", "step": 0.1},
+    {"label": "look.stripe_shade", "path": "grass/stripe_shade", "step": 0.01},
+    {"label": "look.stripe_fairway", "path": "grass/stripe_fairway_meters", "step": 0.25},
+    {"label": "look.stripe_green", "path": "grass/stripe_green_meters", "step": 0.05},
+    {"label": "look.turf_patches", "path": "grass/patch_share", "step": 0.01},
+    {"label": "look.blade_height", "path": "grass/blade_height_meters", "step": 0.01},
+    {"label": "look.heavy_blades", "path": "grass/heavy_blade_share", "step": 0.1},
+    {"label": "look.blade_width", "path": "grass/blade_width_meters", "step": 0.002},
+    {"label": "look.tuft_spacing", "path": "grass/tuft_spacing_meters", "step": 0.01},
+    {"label": "look.blade_sway", "path": "grass/blade_sway", "step": 0.05},
+    {"label": "look.blade_root", "path": "grass/base_shade", "step": 0.05},
+    {"label": "look.blade_tip", "path": "grass/tip_shade", "step": 0.05}
   ]
 }

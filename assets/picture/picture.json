@@ -10,7 +10,7 @@
     "shoulder": 0.8,
     "toe": 0.03,
     "shadow_tint": [0.015, 0.02, 0.045],
-    "bloom_threshold": 1.4,
+    "bloom_threshold": 1.2,
     "bloom_strength": 0.35,
     "bloom_width": 0.02,
     "bloom_height": 0.01,

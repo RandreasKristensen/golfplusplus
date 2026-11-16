@@ -68,6 +68,8 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
     window_ = window;
     picture_style_ = picture;
     colors_ = palette.colors;
+    water_style_ = palette.water;
+    grass_style_ = palette.grass;
     props_ = props;
     if (window_ == nullptr) {
         return false;
@@ -88,10 +90,7 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
         eyepiece_pass_.init(path("crt.vert"), path("eyepiece.frag"), screen_vao_) &&
         tape_pass_.init(path("crt.vert"), path("tape.frag"), screen_vao_, picture.tape) &&
         tv_pass_.init(path("crt.vert"), path("crt.frag"), screen_vao_, picture.tv) &&
-        tree_renderer_.init(path("tree_instanced.vert"),
-                            path("lit_flat.frag"),
-                            tree_renderer::mesh_source{cylinder_.vbo, cylinder_.vertex_count},
-                            tree_renderer::mesh_source{cone_.vbo, cone_.vertex_count}) &&
+        tree_renderer_.init(path("tree.vert"), path("tree.frag"), palette.trees) &&
         world_marker_renderer_.init(path("world_marker.vert"), path("lit_flat.frag")) &&
         tee_box_renderer_.init(path("tee_box.vert"), path("tee_box.frag")) &&
         prop_renderer_.init(path("prop.vert"), path("prop.frag")) &&
@@ -102,9 +101,9 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
         hole_sign_renderer_.init(path("hole_sign.vert"), path("hole_sign.frag")) &&
         fence_renderer_.init(path("fence.vert"), path("fence.frag"),
                              (std::filesystem::path(asset_root) / fence_net_texture_path).string()) &&
-        floodlight_renderer_.init(path("floodlight.vert"), path("lit_flat.frag")) &&
-        water_renderer_.init(path("water.vert"), path("water.frag"), path("underwater.vert"), path("underwater.frag"),
-                             screen_vao_) &&
+        floodlight_renderer_.init(path("floodlight.vert"), path("floodlight.frag")) &&
+        water_renderer_.init(path("water.vert"), path("water.frag"), path("underwater.vert"), path("underwater.frag"), screen_vao_) &&
+        grass_renderer_.init(path("grass_map.vert"), path("grass_map.frag"), path("grass_blade.vert"), path("grass_blade.frag")) &&
         weather_renderer_.init(path("weather_streak.vert"), path("weather_streak.frag"),
                                std::max(palette.rain.max_drops, palette.wind.max_specks)) &&
         overlay_pass_.init(path("overlay.vert"), path("overlay.frag")) &&
@@ -155,6 +154,7 @@ void renderer::shutdown() {
     fence_renderer_.shutdown();
     floodlight_renderer_.shutdown();
     water_renderer_.shutdown();
+    grass_renderer_.shutdown();
     weather_renderer_.shutdown();
     overlay_pass_.shutdown();
     backdrop_pass_.shutdown();
@@ -170,7 +170,7 @@ void renderer::shutdown() {
     delete_vertex_array(flight_path_vao_);
 
     terrain_renderer_.shutdown();
-    for (primitive_buffers* buffers : {&ground_, &ball_, &cylinder_, &cone_}) {
+    for (primitive_buffers* buffers : {&ground_, &ball_}) {
         delete_buffer(buffers->vbo);
         delete_vertex_array(buffers->vao);
         *buffers = primitive_buffers{};
@@ -217,6 +217,7 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
     if (!data.vcr.still_frame || !camcorder_pass_.has_frame()) {
         const profile_scope scene_timer(profile, profile_stage::render_scene);
         const std::vector<tree_body> no_trees;
+        tree_renderer_.set_seasons(data.tree_species);
         build_shadow_casters(shadow_casters_, shadow_models_, data, colors_, props_, shadow_map_pass_.style(), &world_props_);
         shadow_map_pass_.draw(tree_renderer_, data.trees != nullptr ? *data.trees : no_trees, data.trees_revision,
                               floodlight_renderer_, data.floodlights, shadow_casters_, shadow_models_,
@@ -246,10 +247,10 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
             scene_fbo_.bind();
             glViewport(0, 0, picture_.width, picture_.height);
         }
-        render_viewmodel(view, data);
         if (data.camera_underwater) {
-            water_renderer_.draw_underwater(colors_.ground, profile);
+            water_renderer_.draw_underwater(proj * view, water_style_, data.camera_water_level, data.clock_seconds, gpu_timers_, profile);
         }
+        render_viewmodel(view, data);
         const unsigned int scene = data.show_rangefinder
             ? eyepiece_pass_.draw(scene_fbo_.color_texture(), data.rangefinder_eyepiece, gpu_timers_)
             : scene_fbo_.color_texture();
@@ -319,9 +320,6 @@ bool renderer::init_geometry() {
     };
     make_primitive(ground_, make_xz_quad_vertices(), true);
     make_primitive(ball_, make_sphere_vertices(primitive_sphere_latitude_segments, primitive_sphere_longitude_segments), true);
-    make_primitive(cylinder_, make_cylinder_vertices(primitive_cylinder_segments), true);
-    // Only drawn instanced by tree_renderer, which describes the buffer itself.
-    make_primitive(cone_, make_cone_vertices(primitive_cone_segments), false);
 
     glGenVertexArrays(1, &flight_path_vao_);
     glBindVertexArray(flight_path_vao_);
@@ -384,6 +382,8 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
                               data.lights, profile);
     colors_.glow = data.glow;
     terrain_shader_.use();
+    terrain_shader_.set_vec3("u_grass_look", glm::vec3(grass_style_.stripe_shade, grass_style_.patch_share, grass_style_.patch_meters));
+    terrain_shader_.set_vec2("u_mow_widths", glm::vec2(grass_style_.stripe_fairway_meters, grass_style_.stripe_green_meters));
     grass_texture_.bind(grass_texture_unit);
     path_texture_.bind(path_texture_unit);
     shadow_map_pass_.bind(terrain_shader_, shadow_map_unit);
@@ -399,7 +399,8 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
 
     const view_frustum frustum = make_view_frustum(view_proj);
     const terrain_cull_stats terrain_stats =
-        terrain_renderer_.draw(terrain_shader_, data.terrain_mesh, data.material_overlay_mesh, view_proj, frustum, profile);
+        terrain_renderer_.draw(terrain_shader_, data.terrain_mesh, data.material_overlay_mesh, view_proj, frustum,
+                               overlay_depth::pulled_forward, profile);
     cull_stats_ = renderer_cull_stats{terrain_stats.terrain, terrain_stats.material_overlay, false};
     // Under the blobs, which lie on them as on the ground.
     build_tee_box_batch(tee_box_batch_, data.tee_boxes, colors_.markers);
@@ -407,6 +408,11 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     shadow_map_pass_.bind(tee_box_renderer_.shader(), shadow_map_unit);
     tee_box_renderer_.draw(tee_box_batch_, view_proj, profile);
     gpu_timers_.end();
+    grass_renderer_.draw(grass_frame{data.terrain_mesh, data.material_overlay_mesh, data.tee_boxes, view_proj,
+                                     data.camera_position,
+                                     colors_.ground.rough, glm::vec2(data.weather.surface_wind.x, data.weather.surface_wind.z),
+                                     data.clock_seconds},
+                         grass_style_, terrain_renderer_, shadow_map_pass_, shadow_map_unit, gpu_timers_, profile);
 
     gpu_timers_.begin(gpu_profile_stage::shadows);
     blob_shadow_renderer_.draw(data.tree_shadows, data.tree_shadows_revision, data.blob_shadows, view_proj, profile);
@@ -414,8 +420,11 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
 
     gpu_timers_.begin(gpu_profile_stage::trees);
     const std::vector<tree_body> no_trees;
-    cull_stats_.trees_visible = tree_renderer_.draw(data.trees != nullptr ? *data.trees : no_trees,
-                                                    data.trees_revision, view, proj, frustum, props_.at(tree_model), profile);
+    tree_renderer_.shader().use();
+    shadow_map_pass_.bind(tree_renderer_.shader(), shadow_map_unit);
+    cull_stats_.trees_visible =
+        tree_renderer_.draw(data.trees != nullptr ? *data.trees : no_trees, view_proj, frustum, data.camera_position,
+                            data.clock_seconds, glm::vec2(data.weather.surface_wind.x, data.weather.surface_wind.z), profile);
     hole_sign_renderer_.draw(data.hole_signs, view_proj, profile);
     fence_renderer_.draw_posts(data.fences, view_proj, profile);
     floodlight_renderer_.draw(data.floodlights, view_proj, profile);
@@ -468,7 +477,7 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
         glBindVertexArray(0);
     }
     // Water and nets blend over everything solid, the ball included.
-    water_renderer_.draw_surfaces(data.water, view_proj, colors_.ground, profile);
+    water_renderer_.draw_surfaces(data.water, view_proj, water_style_, data.weather, data.clock_seconds, gpu_timers_, profile);
     fence_renderer_.draw_nets(data.fences, view_proj, profile);
     gpu_timers_.begin(gpu_profile_stage::weather);
     weather_renderer_.draw(data.weather, view_proj, profile);

@@ -3,6 +3,7 @@
 #include "core/sky_frame.h"
 #include "core/vcr_frame.h"
 #include "game/json_util.h"
+#include "game/lighting_fields.h"
 #include "game/lighting_loader.h"
 #include "game/mode_dispatch.h"
 #include "game/sky_clock.h"
@@ -615,5 +616,36 @@ TEST_CASE("shadows fade in with the sun, the night lights come on without it, an
     }
     json without = shipped;
     without.erase("shafts");
+    CHECK(!parses(without));
+}
+
+TEST_CASE("the water section loads, each number within its range, and fails loudly when one is missing") {
+    const json shipped = *parse_json(fixture_lighting_text());
+    const auto parses = [](const json& root) { return parse_lighting_from_text(root.dump()).has_value(); };
+    const std::optional<lighting_palette> palette = parse_lighting_from_text(shipped.dump());
+    REQUIRE(palette);
+    CHECK(palette->water.absorption_red > palette->water.absorption_green);
+    CHECK(palette->water.max_path_meters == shipped["water"]["max_path_meters"].get<float>());
+    CHECK(palette->water.caustic_strength == shipped["water"]["caustic_strength"].get<float>());
+    CHECK(palette->water.caustic_cell_meters > 0.0f);
+    CHECK(palette->water.wobble_height_share > 0.0f);
+    for (const auto& field : water_fields) {
+        json missing = shipped;
+        missing["water"].erase(field.key);
+        CHECK(!parses(missing));
+        for (const float outside : {field.low - 1.0f, field.high + 1.0f}) {
+            json bad = shipped;
+            bad["water"][field.key] = outside;
+            CHECK(!parses(bad));
+        }
+    }
+    json no_color = shipped;
+    no_color["water"].erase("scatter_color");
+    CHECK(!parses(no_color));
+    json bright = shipped;
+    bright["water"]["scatter_color"] = {2.0, 0.1, 0.1};
+    CHECK(!parses(bright));
+    json without = shipped;
+    without.erase("water");
     CHECK(!parses(without));
 }

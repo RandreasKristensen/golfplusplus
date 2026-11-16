@@ -3,10 +3,11 @@
 // A player's movement as the server plays it, by input: the fixed steps a
 // client sends (game/movement_step.h) are stepped from the server's own
 // state with the game's own steps, so where a player is, how far they went
-// and what that earns are the server's. Positions a client claims count
-// only where nothing is stepped (at the ball, riding along) or where it was
-// put without a step (out of a seat), each costing the time it would take
-// to get there. Plain C++ for the reducer, the native tests and the sync
+// and what that earns are the server's. Where nothing is stepped the
+// server's rows place the player: at their ball they stand to it, riding
+// along they sit in the cart's seat. A client's claim moves them only where
+// it was put without a step (out of a seat): on foot, a little, through
+// nothing solid. Plain C++ for the reducer, the native tests and the sync
 // harness. Errors are the ids in server_errors.h.
 
 #include "game/game_tuning.h"
@@ -36,7 +37,6 @@ struct mover_state {
     // server.max_motion_gap_seconds. A step spends its length; a claimed
     // move the time it takes at its mode's speed.
     float credit_seconds = 0.0f;
-    float slack_left = 0.0f;  // check_motion's
     double client_time = 0.0;  // the last motion accepted
     // My cart's motion while I drive it; its pose is its row's.
     glm::vec2 cart_velocity{0.0f};
@@ -71,8 +71,13 @@ struct move_world {
     std::vector<solid> walker_obstacles;  // walker_obstacles: every cart in the room
     std::vector<solid> cart_obstacles;    // cart_obstacles_of: the others
     movement_limits limits;
-    // My ball at rest after its shot: addressing it may step me round it.
+    // My ball at rest after its shot, the hand I play and the club in my
+    // hand: at address and in the swing I stand to it (stance_at_address).
     std::optional<glm::vec3> own_ball;
+    handedness hand = handedness::right;
+    const club_definition* club = nullptr;
+    // The cart whose passenger seat its row gives me: riding along, I sit in it.
+    std::optional<cart_pose> ridden;
 };
 
 struct move_outcome {
@@ -90,10 +95,13 @@ struct move_outcome {
 // motion, with my cart's row `cart` (if I have one). Steps already played
 // are passed over (a motion sent again), steps never received count as
 // standing, and steps beyond the time saved up are passed over unplayed.
-// On foot the steps start from `start` when it is within
-// server.step_start_tolerance and the time to get there; at the wheel from
-// my cart's row and my mover's cart motion. Walking steps take me off my
-// cart's wheel; a cart going over puts me beside it.
+// On foot the steps start from `start`'s XZ when it is within
+// server.step_start_tolerance and the time to get there, as far as nothing
+// solid stops me, my feet as the server has them; at the wheel from my
+// cart's row and my mover's cart motion. Walking steps take me off my
+// cart's wheel; a cart going over puts me beside it. At address or in the
+// swing I stand to my own ball (beside it, else refused) as the sent setup,
+// inside my club's limits, puts me; riding along, in the seat of `ridden`.
 move_outcome play_move(const mover_state& mover, const std::optional<room_cart>& cart, std::uint64_t account,
                        const move_request& request, float seconds, const move_world& world);
 

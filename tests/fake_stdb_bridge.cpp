@@ -106,19 +106,26 @@ void stdb_destroy(stdb_client*) {
 
 bool stdb_begin_login(stdb_client*, const bool silent_only) {
     record("stdb_begin_login", {}, silent_only ? 1 : 0);
-    return !fake_bridge().busy;
+    if (fake_bridge().busy) {
+        return false;
+    }
+    fake_bridge().busy = true;
+    return true;
 }
 
 void stdb_cancel_login(stdb_client*) {
     record("stdb_cancel_login");
+    fake_bridge().busy = false;
 }
 
 void stdb_disconnect(stdb_client*) {
     record("stdb_disconnect");
+    fake_bridge().busy = false;
 }
 
 void stdb_sign_out(stdb_client*) {
     record("stdb_sign_out");
+    fake_bridge().busy = false;
 }
 
 int32_t stdb_frame_tick(stdb_client*) {
@@ -129,7 +136,11 @@ size_t stdb_poll(stdb_client*, stdb_event* out, const size_t max) {
     std::size_t count = 0;
     std::deque<stdb_event>& events = fake_bridge().events;
     while (count < max && !events.empty()) {
-        out[count++] = events.front();
+        const stdb_event& event = events.front();
+        if (event.kind == STDB_EVENT_LOGIN_FAILED || (event.kind == STDB_EVENT_DISCONNECTED && !event.retrying)) {
+            fake_bridge().busy = false;
+        }
+        out[count++] = event;
         events.pop_front();
     }
     return count;

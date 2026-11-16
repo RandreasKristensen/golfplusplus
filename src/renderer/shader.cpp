@@ -160,6 +160,14 @@ void shader_program::set_vec4(const char* name, const glm::vec4& value) const {
     }
 }
 
+void shader_program::set_vec4_array(const char* name, const glm::vec4* values, const int count) const {
+    const int location = uniform_location(name);
+    if (location >= 0 && count > 0) {
+        glUniform4fv(location, count, &values[0][0]);
+        record_uniform_set(profile_);
+    }
+}
+
 void shader_program::set_float(const char* name, const float value) const {
     const int location = uniform_location(name);
     if (location >= 0) {

@@ -14,7 +14,7 @@ pub mod module_bindings;
 use client::StdbClient;
 use events::Event;
 use ffi::*;
-use login::AuthConfig;
+use login::{AuthConfig, OsCredentialStore};
 use module_bindings::*;
 use std::os::raw::c_char;
 
@@ -55,7 +55,8 @@ pub unsafe extern "C" fn stdb_create(config: *const StdbConfig) -> *mut StdbClie
         page_signed_in: config.page_signed_in.to_string(),
         page_failed: config.page_failed.to_string(),
     };
-    let client = StdbClient::new(config.server_uri.to_string(), config.database.to_string(), auth, config.anonymous);
+    let store = Box::new(OsCredentialStore::new(&auth));
+    let client = StdbClient::new(config.server_uri.to_string(), config.database.to_string(), auth, config.anonymous, store);
     Box::into_raw(Box::new(client))
 }
 
@@ -79,6 +80,9 @@ pub unsafe extern "C" fn stdb_begin_login(client: *mut StdbClient, silent_only: 
     self::client(client).is_some_and(|c| c.begin_login(silent_only))
 }
 
+/// Abandons signing in and any connection the game has not accepted, with
+/// their events, keeping the stored sign-in.
+///
 /// # Safety
 /// See `client`.
 #[no_mangle]
@@ -88,7 +92,8 @@ pub unsafe extern "C" fn stdb_cancel_login(client: *mut StdbClient) {
     }
 }
 
-/// Disconnects, keeping the stored sign-in.
+/// Disconnects, keeping the stored sign-in; retires the session's queued
+/// events, then queues Disconnected.
 ///
 /// # Safety
 /// See `client`.

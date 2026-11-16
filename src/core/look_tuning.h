@@ -53,6 +53,9 @@ std::optional<look_reload> run_look_tuning(look_tuning_state& state, const look_
                                            const lighting_palette& shown, float dt);
 
 // The open panel: each entry's label and its number in `shown`.
+// The panel shows this many rows at most, scrolling with the one picked.
+inline constexpr std::size_t look_tuning_visible_rows = 12;
+
 render_god_menu look_tuning_view(const look_tuning_state& state, const lighting_palette& shown, const text_assets& text);
 
 // Why the files on disk are not shown or a step was not written; empty

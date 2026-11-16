@@ -61,6 +61,10 @@ std::optional<civil_date> parse_month_day(const std::string& text);
 // days but is no date.
 double game_day_at(const sky_timeline& timeline, std::int64_t now_unix_ms);
 
+// The game's day count on a course with `sky` at `now_unix_ms`: the shared
+// clock, its clock_shift_hours ahead.
+double course_clock_at(const sky_timeline& timeline, const course_sky& sky, std::int64_t now_unix_ms);
+
 // The course's date: its day of the year in the timeline's year.
 std::int64_t course_date(const sky_timeline& timeline, const course_sky& sky);
 

@@ -147,6 +147,17 @@ TEST_CASE("game tuning needs every lie number") {
     CHECK(result.error.find("lies.rough_grip_share") != std::string::npos);
 }
 
+TEST_CASE("tuning curves and profiles refuse numbers beyond a float") {
+    const game_tuning_parse_result curve =
+        parse_game_tuning_from_texts(shipped_tuning_with("\"speed_share\": [[0.0, 0.15]", "\"speed_share\": [[0.0, 1e100]"));
+    CHECK(!curve.tuning.has_value());
+    CHECK(curve.error.find("swing.speed_share") != std::string::npos);
+    const game_tuning_parse_result profile =
+        parse_game_tuning_from_texts(shipped_tuning_with("\"height_profile\": [[0.03, 0.0]", "\"height_profile\": [[1e100, 0.0]"));
+    CHECK(!profile.tuning.has_value());
+    CHECK(profile.error.find("wind.height_profile") != std::string::npos);
+}
+
 TEST_CASE("the shipped sky clock runs from its anchor date, every course on its own date") {
     const game_tuning& tuning = shipped_content().tuning;
     CHECK(tuning.sky_clock.anchor_unix_ms % 86400000LL == 0);
@@ -171,15 +182,39 @@ TEST_CASE("the shipped sky clock runs from its anchor date, every course on its 
     CHECK(!result.tuning.has_value());
     CHECK(result.error.find("sky_clock.anchor_real_date") != std::string::npos);
 
-    // The Danish courses are played at midsummer.
-    const std::vector<course_definition> courses = load_courses(asset_root());
+    // Each Danish course is played on its own day of the year, on Danish
+    // summer time (UTC+2) from the end of March to the end of October, else
+    // winter time (UTC+1), the year's seasons spread among them.
+    const std::vector<course_definition> courses = load_courses(asset_root()).value.value_or(std::vector<course_definition>{});
     REQUIRE(!courses.empty());
+    std::vector<int> days;
+    bool winter = false;
+    bool summer = false;
     for (const course_definition& course : courses) {
-        CHECK(course.sky.month == 6);
-        CHECK(course.sky.day == 21);
-        CHECK(course.sky.utc_offset_hours == 2.0f);
+        const int day = day_of_year(course.sky.month, course.sky.day);
+        CHECK(std::find(days.begin(), days.end(), day) == days.end());
+        days.push_back(day);
+        const bool summer_time = day >= day_of_year(3, 29) && day <= day_of_year(10, 25);
+        CHECK(course.sky.utc_offset_hours == (summer_time ? 2.0f : 1.0f));
         CHECK(course.sky.lowest_sun_deg == -90.0f);
+        winter = winter || course.sky.month == 12 || course.sky.month <= 2;
+        summer = summer || (course.sky.month >= 6 && course.sky.month <= 8);
     }
+    CHECK(winter);
+    CHECK(summer);
+
+    // Their clocks are spread round the day: at any moment one course is
+    // near sunrise, another at noon, another at night.
+    std::vector<float> shifts;
+    for (const course_definition& course : courses) {
+        shifts.push_back(course.sky.clock_shift_hours);
+    }
+    std::sort(shifts.begin(), shifts.end());
+    float widest_gap = 24.0f - shifts.back() + shifts.front();
+    for (std::size_t i = 1; i < shifts.size(); ++i) {
+        widest_gap = std::max(widest_gap, shifts[i] - shifts[i - 1]);
+    }
+    CHECK(widest_gap <= 2.0f);
 }
 
 TEST_CASE("the shipped lighting loads, and its daylight shows the scene as it was drawn") {
@@ -558,14 +593,14 @@ TEST_CASE("every shipped item looks like a model of its kind, plays a sound ther
     }
 }
 
-TEST_CASE("holes parse with tree defaults and reject bad geometry") {
+TEST_CASE("holes default what they omit and refuse what is malformed, naming it") {
     const std::optional<hole_data> hole = parse_hole_from_text(R"({
       "id": "tree_hole", "par": 4,
       "tee": [0, 0, 0], "pin": [0, 0, 40],
       "spline": { "control_points": [[0, 0, 0], [0, 0, 40]], "width": 12, "rough_width": 24 },
-      "trees": [ { "position": [14, 0, 20], "leaf_radius": 2.5 }, { "position": ["bad", 0, 20] } ],
-      "material_zones": [ { "type": "lava", "outline": [[0, 18], [3, 18], [3, 21]] } ]
-    })");
+      "trees": [ { "position": [14, 0, 20], "leaf_radius": 2.5 } ],
+      "material_zones": [ { "type": "bunker", "outline": [[0, 18], [3, 18], [3, 21]] } ]
+    })").value;
     REQUIRE(hole.has_value());
     CHECK(hole->name == "tree_hole");
     CHECK(hole->par == 4);
@@ -574,16 +609,38 @@ TEST_CASE("holes parse with tree defaults and reject bad geometry") {
     CHECK(near(hole->trees[0].shape.trunk_radius, default_tree_shape.trunk_radius));
     CHECK(near(hole->trees[0].shape.leaf_radius, 2.5f));
     REQUIRE(hole->material_zones.size() == 1U);
-    CHECK(hole->material_zones[0].type == material_zone_type::unknown);
+    CHECK(hole->material_zones[0].type == material_zone_type::bunker);
 
-    const std::optional<hole_data> no_rough = parse_hole_from_text(R"({
+    const std::optional<hole_data> bare = parse_hole_from_text(R"({
       "tee": [0, 0, 0], "pin": [0, 0, 40], "spline": { "control_points": [[0, 0, 0], [0, 0, 40]], "width": 12 }
-    })");
-    REQUIRE(no_rough.has_value());
-    CHECK(near(no_rough->spline.rough_width, 12.0f));
+    })").value;
+    REQUIRE(bare.has_value());
+    CHECK(near(bare->spline.rough_width, 12.0f));
+    CHECK(bare->par == default_hole_par);
+    CHECK(bare->tee_box);
+    CHECK(bare->ribbon_fairway);
+    CHECK(bare->trees.empty());
+    CHECK(bare->material_zones.empty());
 
-    CHECK(!parse_hole_from_text(R"({"tee": [0, 0, 0], "pin": [0, 0, 40], "spline": {"control_points": [[0, 0, 0]], "width": 12}})"));
-    CHECK(!parse_hole_from_text(R"({"tee": [0, 0, 0], "pin": [0, 0, 40], "spline": {"control_points": [[0, 0, 0], [0, 0, 9]], "width": 0}})"));
+    CHECK(!parse_hole_from_text(R"({"tee": [0, 0, 0], "pin": [0, 0, 40], "spline": {"control_points": [[0, 0, 0]], "width": 12}})").value);
+    CHECK(!parse_hole_from_text(R"({"tee": [0, 0, 0], "pin": [0, 0, 40], "spline": {"control_points": [[0, 0, 0], [0, 0, 9]], "width": 0}})").value);
+
+    // One malformed entry or optional field refuses the whole hole, saying where.
+    const std::string start = R"({"tee": [0, 0, 0], "pin": [0, 0, 40], "spline": {"control_points": [[0, 0, 0], [0, 0, 40]], "width": 12})";
+    const auto refused = [&start](const std::string& rest, const std::string& where) {
+        const parsed<hole_data> parsed_hole = parse_hole_from_text(start + rest + "}");
+        return !parsed_hole.value && parsed_hole.error.rfind(where + ":", 0) == 0;
+    };
+    CHECK(refused(R"(, "trees": [{"position": [1, 0, 1]}, {"position": ["bad", 0, 20]}])", "trees[1].position"));
+    CHECK(refused(R"(, "trees": [{"position": [1, 0, 1], "trunk_height": "tall"}])", "trees[0].trunk_height"));
+    CHECK(refused(R"(, "trees": [{"position": [1, 0, 1], "leaf_radius": 0}])", "trees[0].leaf_radius"));
+    CHECK(refused(R"(, "trees": {"position": [1, 0, 1]})", "trees"));
+    CHECK(refused(R"(, "material_zones": [{"type": "lava", "outline": [[0, 18], [3, 18], [3, 21]]}])", "material_zones[0].type"));
+    CHECK(refused(R"(, "material_zones": [{"outline": [[0, 18], [3, 18], [3, 21]]}])", "material_zones[0].type"));
+    CHECK(refused(R"(, "material_zones": [{"type": "water", "outline": [[0, 18], [3, 18], [3, 1e100]]}])", "material_zones[0].outline[2]"));
+    CHECK(refused(R"(, "par": "four")", "par"));
+    CHECK(refused(R"(, "par": 0)", "par"));
+    CHECK(refused(R"(, "tee_box": "yes")", "tee_box"));
 }
 
 TEST_CASE("courses list holes by id or path") {
@@ -606,7 +663,7 @@ TEST_CASE("courses list holes by id or path") {
           (std::filesystem::path("root") / folder / "holes" / "test.json").make_preferred().string());
     CHECK(course_hole_path("root", *course, 3).empty());
 
-    const std::optional<course_definition> as_written = parse_course_from_text(*read_text_file(fixture_root() + "/" + folder + "/" + course_file_name));
+    const std::optional<course_definition> as_written = parse_course_from_text(*read_text_file(fixture_root() + "/" + folder + "/" + course_file_name)).value;
     REQUIRE(as_written.has_value());
     CHECK(as_written->holes.front() == "test");
     CHECK(course_hole_reference(*as_written, 0) == "holes/test.json");
@@ -619,25 +676,25 @@ TEST_CASE("courses list holes by id or path") {
         R"("sky": {"date": "06-21", "utc_offset_hours": 2}, "backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500})";
     const std::string named =
         R"("id": "ok", "name": "Ok", "world": "w.json", "green_stimp_feet": 10, "air": {"elevation_meters": 30, "mean_temperature_c": 15, "daily_temperature_range_c": 8}, )";
-    const std::optional<course_definition> parsed = parse_course_from_text("{" + named + backdrop + R"(, "holes": ["ok"]})");
+    const std::optional<course_definition> parsed = parse_course_from_text("{" + named + backdrop + R"(, "holes": ["ok"]})").value;
     REQUIRE(parsed.has_value());
     CHECK(parsed->air.elevation_meters == 30.0f);
     CHECK(parsed->air.daily_temperature_range_c == 8.0f);
     // The air over it is not guessed.
-    CHECK(!parse_course_from_text(R"({"id": "ok", "name": "Ok", "world": "w.json", )" + backdrop + R"(, "holes": ["ok"]})"));
-    CHECK(!parse_course_from_text("{" + named + backdrop + R"(, "holes": []})"));
-    CHECK(!parse_course_from_text("{" + named + backdrop + R"(, "holes": ["ok", 3]})"));
-    CHECK(!parse_course_from_text(R"({"name": "Ok", "world": "w.json", )" + backdrop + R"(, "holes": ["ok"]})"));
-    CHECK(!parse_course_from_text(R"({"id": "ok", "world": "w.json", )" + backdrop + R"(, "holes": ["ok"]})"));
-    CHECK(!parse_course_from_text(R"({"id": "ok", "name": "Ok", )" + backdrop + R"(, "holes": ["ok"]})"));
-    CHECK(!parse_course_from_text("{" + named + R"("holes": ["ok"]})"));
-    CHECK(!parse_course_from_text("{" + named + R"("backdrop": "b.bmp", "holes": ["ok"]})"));
+    CHECK(!parse_course_from_text(R"({"id": "ok", "name": "Ok", "world": "w.json", )" + backdrop + R"(, "holes": ["ok"]})").value);
+    CHECK(!parse_course_from_text("{" + named + backdrop + R"(, "holes": []})").value);
+    CHECK(parse_course_from_text("{" + named + backdrop + R"(, "holes": ["ok", 3]})").error == "holes[1]: not a hole file");
+    CHECK(!parse_course_from_text(R"({"name": "Ok", "world": "w.json", )" + backdrop + R"(, "holes": ["ok"]})").value);
+    CHECK(!parse_course_from_text(R"({"id": "ok", "world": "w.json", )" + backdrop + R"(, "holes": ["ok"]})").value);
+    CHECK(!parse_course_from_text(R"({"id": "ok", "name": "Ok", )" + backdrop + R"(, "holes": ["ok"]})").value);
+    CHECK(parse_course_from_text("{" + named + R"("holes": ["ok"]})").error == "backdrop: missing");
+    CHECK(!parse_course_from_text("{" + named + R"("backdrop": "b.bmp", "holes": ["ok"]})").value);
     CHECK(!parse_course_from_text(
-        "{" + named + R"("backdrop": {"sky": "s.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500}, "holes": ["ok"]})"));
+        "{" + named + R"("backdrop": {"sky": "s.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500}, "holes": ["ok"]})").value);
     CHECK(!parse_course_from_text(
-        "{" + named + R"("backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_amount": 1, "haze_distance": 500}, "holes": ["ok"]})"));
+        "{" + named + R"("backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_amount": 1, "haze_distance": 500}, "holes": ["ok"]})").value);
     CHECK(!parse_course_from_text(
-        "{" + named + R"("backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 0}, "holes": ["ok"]})"));
+        "{" + named + R"("backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 0}, "holes": ["ok"]})").value);
 }
 
 TEST_CASE("a course's sky is a day of the year and how low its sun may sink") {
@@ -648,7 +705,7 @@ TEST_CASE("a course's sky is a day of the year and how low its sun may sink") {
 
     const std::string start =
         R"({"id": "ok", "name": "Ok", "world": "w.json", "green_stimp_feet": 10, "holes": ["ok"], "backdrop": {"sky": "s.bmp", "land": "l.bmp", "haze_color": [1, 1, 1], "haze_amount": 1, "haze_distance": 500}, "air": {"elevation_meters": 0, "mean_temperature_c": 15, "daily_temperature_range_c": 8})";
-    const auto sky_of = [&start](const std::string& sky) { return parse_course_from_text(start + sky + "}"); };
+    const auto sky_of = [&start](const std::string& sky) { return parse_course_from_text(start + sky + "}").value; };
     const std::optional<course_definition> white_nights = sky_of(R"(, "sky": {"date": "06-24", "utc_offset_hours": 1, "lowest_sun_deg": 1.5})");
     REQUIRE(white_nights.has_value());
     CHECK(white_nights->sky.month == 6);
@@ -674,6 +731,10 @@ TEST_CASE("a course's sky is a day of the year and how low its sun may sink") {
     CHECK(!sky_of(R"(, "sky": {"date": "06-21", "utc_offset_hours": "CEST"})"));
     CHECK(!sky_of(R"(, "sky": {"date": "06-21", "utc_offset_hours": 2, "lowest_sun_deg": 31})"));
     CHECK(!sky_of(R"(, "sky": {"date": "06-21", "utc_offset_hours": 2, "lowest_sun_deg": -91})"));
+    CHECK(sky_of(R"(, "sky": {"date": "06-21", "utc_offset_hours": 2})")->sky.clock_shift_hours == 0.0f);
+    CHECK(sky_of(R"(, "sky": {"date": "06-21", "utc_offset_hours": 2, "clock_shift_hours": 6.5})")->sky.clock_shift_hours == 6.5f);
+    CHECK(!sky_of(R"(, "sky": {"date": "06-21", "utc_offset_hours": 2, "clock_shift_hours": 24})"));
+    CHECK(!sky_of(R"(, "sky": {"date": "06-21", "utc_offset_hours": 2, "clock_shift_hours": -1})"));
     CHECK(!sky_of(R"(, "sky": {"date": "06-21", "utc_offset_hours": 2, "lowest_sun_deg": "low"})"));
 }
 
@@ -887,12 +948,12 @@ TEST_CASE("course worlds need exactly one start per hole") {
 
     const course_definition one_hole = course_of({"test"});
     CHECK(!parse_course_world_from_text(
-        R"({"hole_starts": [{"hole_index": 4, "position": [0, 0, 0]}]})", one_hole));
-    CHECK(!parse_course_world_from_text(R"({"hole_starts": []})", one_hole));
+        R"({"hole_starts": [{"hole_index": 4, "position": [0, 0, 0]}]})", one_hole).value);
+    CHECK(!parse_course_world_from_text(R"({"hole_starts": []})", one_hole).value);
     const course_definition two_holes = course_of({"test", "test2"});
     CHECK(!parse_course_world_from_text(R"({"hole_starts": [
         {"hole_index": 0, "position": [0, 0, 0]},
-        {"hole_index": 0, "position": [9, 0, 0]}]})", two_holes));
+        {"hole_index": 0, "position": [9, 0, 0]}]})", two_holes).value);
 }
 
 TEST_CASE("course worlds say where they are on Earth") {
@@ -908,25 +969,26 @@ TEST_CASE("course worlds say where they are on Earth") {
         "ground": {"origin": [0, 0], "cell_size": 10, "columns": 2, "rows": 2, "heights_cm": [[0, 0], [0, 0]]})";
     const auto with_projection = [&](const std::string& projection) { return "{" + projection + rest + "}"; };
     const std::optional<course_world_definition> south =
-        parse_course_world_from_text(with_projection(R"("projection": {"origin_lat": -33.9, "origin_lon": 18.4},)"), one_hole);
+        parse_course_world_from_text(with_projection(R"("projection": {"origin_lat": -33.9, "origin_lon": 18.4},)"), one_hole).value;
     REQUIRE(south.has_value());
     CHECK(near(south->latitude_deg, -33.9f));
     CHECK(near(south->longitude_deg, 18.4f));
-    CHECK(!parse_course_world_from_text(with_projection(""), one_hole));
-    CHECK(!parse_course_world_from_text(with_projection(R"("projection": {"origin_lat": 56.2},)"), one_hole));
-    CHECK(!parse_course_world_from_text(with_projection(R"("projection": {"origin_lat": 95, "origin_lon": 10},)"), one_hole));
+    CHECK(!parse_course_world_from_text(with_projection(""), one_hole).value);
+    CHECK(!parse_course_world_from_text(with_projection(R"("projection": {"origin_lat": 56.2},)"), one_hole).value);
+    CHECK(!parse_course_world_from_text(with_projection(R"("projection": {"origin_lat": 95, "origin_lon": 10},)"), one_hole).value);
 }
 
 TEST_CASE("a hole's bank is optional, one number per control point") {
     const std::string start = R"({"tee": [0, 0, 0], "pin": [0, 0, 100], "spline": {"width": 20, "control_points": [[0, 0, 0], [0, 0, 100]])";
-    const std::optional<hole_data> level = parse_hole_from_text(start + "}}");
+    const std::optional<hole_data> level = parse_hole_from_text(start + "}}").value;
     REQUIRE(level.has_value());
     CHECK(level->spline.bank.empty());
-    const std::optional<hole_data> banked = parse_hole_from_text(start + R"(, "bank": [0.05, -0.02]}})");
+    const std::optional<hole_data> banked = parse_hole_from_text(start + R"(, "bank": [0.05, -0.02]}})").value;
     REQUIRE(banked.has_value());
     REQUIRE(banked->spline.bank.size() == 2U);
     CHECK(near(banked->spline.bank[1], -0.02f));
-    CHECK(!parse_hole_from_text(start + R"(, "bank": [0.05]}})"));
+    CHECK(!parse_hole_from_text(start + R"(, "bank": [0.05]}})").value);
+    CHECK(!parse_hole_from_text(start + R"(, "bank": [0.05, 1e100]}})").value);
 }
 
 TEST_CASE("course worlds need a complete ground grid") {
@@ -941,12 +1003,74 @@ TEST_CASE("course worlds need a complete ground grid") {
         "hole_starts": [{"hole_index": 0, "position": [0, 0, 0]}])";
     const auto with_ground = [&](const std::string& ground) { return "{" + start + ground + "}"; };
     const std::optional<course_world_definition> parsed = parse_course_world_from_text(
-        with_ground(R"(, "ground": {"origin": [5, 7], "cell_size": 10, "columns": 2, "rows": 2, "heights_cm": [[0, 100], [200, 100]]})"), one_hole);
+        with_ground(R"(, "ground": {"origin": [5, 7], "cell_size": 10, "columns": 2, "rows": 2, "heights_cm": [[0, 100], [200, 100]]})"), one_hole).value;
     REQUIRE(parsed.has_value());
     CHECK(near(sample_height_grid(parsed->ground, 10.0f, 12.0f), 1.5f));
-    CHECK(!parse_course_world_from_text(with_ground(""), one_hole));
+    CHECK(!parse_course_world_from_text(with_ground(""), one_hole).value);
     CHECK(!parse_course_world_from_text(
-        with_ground(R"(, "ground": {"origin": [0, 0], "cell_size": 10, "columns": 2, "rows": 2, "heights_cm": [[0, 100], [200]]})"), one_hole));
+        with_ground(R"(, "ground": {"origin": [0, 0], "cell_size": 10, "columns": 2, "rows": 2, "heights_cm": [[0, 100], [200]]})"), one_hole).value);
+
+    // Land below zero and steps down are ordinary; numbers no float or sum can hold are refused.
+    const auto grid = [&](const std::string& origin, const std::string& columns, const std::string& heights) {
+        return parse_course_world_from_text(with_ground(R"(, "ground": {"origin": )" + origin + R"(, "cell_size": 10, "columns": )" +
+                                                        columns + R"(, "rows": 2, "heights_cm": )" + heights + "}"),
+                                            one_hole).value;
+    };
+    const std::optional<course_world_definition> below = grid("[0, 0]", "2", "[[-500, -250], [100, -300]]");
+    REQUIRE(below.has_value());
+    REQUIRE(below->ground.heights.size() == 4U);
+    CHECK(near(below->ground.heights[1], -7.5f));
+    CHECK(near(below->ground.heights[3], -2.0f));
+    CHECK(!grid("[1e100, 0]", "2", "[[0, 0], [0, 0]]"));
+    CHECK(!parse_course_world_from_text(
+        with_ground(R"(, "ground": {"origin": [0, 1e38], "cell_size": 3e38, "columns": 2, "rows": 2, "heights_cm": [[0, 0], [0, 0]]})"), one_hole).value);
+    CHECK(!grid("[0, 0]", "2", "[[0, 1e100], [0, 0]]"));
+    CHECK(!grid("[0, 0]", "2", "[[0, 18446744073709551615], [0, 0]]"));
+    CHECK(!grid("[0, 0]", "2", "[[9223372036854775807, 9223372036854775807], [0, 0]]"));
+    CHECK(!grid("[0, 0]", "2", "[[16777216, 1], [0, 0]]"));
+    CHECK(grid("[0, 0]", "2", "[[16777216, -1], [-16777216, 0]]").has_value());
+    // A column count the rows do not have is refused before anything is allocated for it.
+    CHECK(!grid("[0, 0]", "2147483647", "[[0, 0], [0, 0]]"));
+}
+
+TEST_CASE("course worlds default what they omit and refuse a malformed tree, road or zone, naming it") {
+    const course_definition one_hole = course_of({"test"});
+    const std::string start = R"({"projection": {"origin_lat": 56.2, "origin_lon": 10.2},
+        "hole_starts": [{"hole_index": 0, "position": [0, 0, 0]}],
+        "ground": {"origin": [0, 0], "cell_size": 10, "columns": 2, "rows": 2, "heights_cm": [[0, 0], [0, 0]]})";
+    const parsed<course_world_definition> bare = parse_course_world_from_text(start + "}", one_hole);
+    REQUIRE(bare.value.has_value());
+    CHECK(bare.value->trees.empty());
+    CHECK(bare.value->zones.empty());
+    CHECK(bare.value->cart_roads.empty());
+    CHECK(bare.value->fences.empty());
+    CHECK(bare.value->collectibles.empty());
+    CHECK(near(bare.value->hole_starts[0].interaction_radius, default_hole_start_radius));
+    const std::optional<course_world_definition> road =
+        parse_course_world_from_text(start + R"(, "cart_roads": [{"polyline": [[0, 0, 0], [5, 0, 0]]}]})", one_hole).value;
+    REQUIRE(road.has_value());
+    REQUIRE(road->cart_roads.size() == 1U);
+    CHECK(near(road->cart_roads[0].width, default_cart_road_width));
+
+    const auto refused = [&](const std::string& rest, const std::string& where) {
+        const parsed<course_world_definition> world = parse_course_world_from_text(start + rest + "}", one_hole);
+        return !world.value && world.error.rfind(where + ":", 0) == 0;
+    };
+    CHECK(refused(R"(, "cart_roads": [{"polyline": [[0, 0, 0], [5, 0, 0]]}, {"polyline": [[0, 0, 0]]}])", "cart_roads[1].polyline"));
+    CHECK(refused(R"(, "cart_roads": [{"polyline": [[0, 0, 0], [5, 0, "x"]]}])", "cart_roads[0].polyline"));
+    CHECK(refused(R"(, "cart_roads": [{"polyline": [[0, 0, 0], [5, 0, 0]], "width": -3}])", "cart_roads[0].width"));
+    CHECK(refused(R"(, "trees": [{"position": [0, 0]}])", "trees[0].position"));
+    CHECK(refused(R"(, "trees": [{"position": [0, 0, 0], "trunk_radius": -1}])", "trees[0].trunk_radius"));
+    CHECK(refused(R"(, "material_zones": [{"type": "rough", "outline": [[0, 0], [9, 0], [9, 9]]}])", "material_zones[0].type"));
+    CHECK(refused(R"(, "collectibles": [{"position": [0, 0, 0]}])", "collectibles[0].id"));
+    CHECK(refused(R"(, "collectibles": [{"id": "x", "position": [0, 0, 0], "reward": {"skill_xp": {"fitness": 0}}}])",
+                  "collectibles[0].reward.skill_xp.fitness"));
+    CHECK(refused(R"(, "fences": [{"poles": [[0, 0, 0], [5, 0, 0]], "height": 0}])", "fences[0].height"));
+    const parsed<course_world_definition> radius = parse_course_world_from_text(R"({"projection": {"origin_lat": 56.2, "origin_lon": 10.2},
+        "hole_starts": [{"hole_index": 0, "position": [0, 0, 0], "interaction_radius": "wide"}],
+        "ground": {"origin": [0, 0], "cell_size": 10, "columns": 2, "rows": 2, "heights_cm": [[0, 0], [0, 0]]}})", one_hole);
+    CHECK(!radius.value);
+    CHECK(radius.error.rfind("hole_starts[0].interaction_radius:", 0) == 0);
 }
 
 TEST_CASE("every shipped course, hole, world and image loads") {
@@ -1314,6 +1438,56 @@ TEST_CASE("every shipped course's map numbers each hole in the middle of the hol
             batch.grid = grid;
             draw_course_map_marks(batch, text, layout, data);
             CHECK(batch.truncated_text_count == 0U);
+        }
+    }
+}
+
+TEST_CASE("every shipped course's map shows its holes as large as fits, on land to the paper's edges") {
+    const game_content& content = shipped_content();
+    for (const course_definition& course : content.courses) {
+        const std::optional<course_world_definition> world =
+            load_course_world_from_file(course_world_file_path(content.asset_root, course), course);
+        REQUIRE(world.has_value());
+        std::vector<hole_data> holes;
+        for (std::size_t i = 0; i < course.holes.size(); ++i) {
+            const std::optional<hole_data> hole = load_hole_from_file(course_hole_path(content.asset_root, course, i));
+            REQUIRE(hole.has_value());
+            holes.push_back(*hole);
+        }
+        const play_area placed = place_course_holes(holes, *world, content.tuning);
+        render_data data;
+        data.course_map_outline = course_outline(placed.holes, placed.zones);
+        REQUIRE(data.course_map_outline.size() >= 3U);
+        data.player_position = world->hole_starts.front().position;
+        const height_grid& land = world->ground;
+        const glm::vec2 land_low(land.origin_x, land.origin_z);
+        const glm::vec2 land_high = land_low + glm::vec2(static_cast<float>(land.columns - 1),
+                                                         static_cast<float>(land.rows - 1)) * land.cell_size;
+        for (const overlay_grid& grid : shipped_grids()) {
+            const course_map_layout layout = make_course_map_layout(data, grid);
+            // The holes reach across, or up, most of the paper.
+            glm::vec2 low(std::numeric_limits<float>::max());
+            glm::vec2 high(std::numeric_limits<float>::lowest());
+            for (const glm::vec3& point : data.course_map_outline) {
+                low = glm::min(low, map_point(layout, point));
+                high = glm::max(high, map_point(layout, point));
+            }
+            const glm::vec2 fill = (high - low) / (layout.half_size * 2.0f);
+            CHECK(std::max(fill.x, fill.y) > 0.8f);
+            // Every corner of the ground printed on the paper is on the land.
+            for (const glm::vec2 sign : {glm::vec2(-1.0f, -1.0f), glm::vec2(1.0f, -1.0f), glm::vec2(1.0f, 1.0f),
+                                         glm::vec2(-1.0f, 1.0f)}) {
+                const glm::vec2 paper = sign * (layout.half_size - glm::vec2(course_map_fill_inset)) / layout.scale;
+                const glm::vec2 delta(paper.x * layout.turn.x + paper.y * layout.turn.y,
+                                      -paper.x * layout.turn.y + paper.y * layout.turn.x);
+                const glm::vec3 corner(layout.world_center.x - delta.x, 0.0f, layout.world_center.z + delta.y);
+                CHECK(glm::length(map_point(layout, corner) - layout.center -
+                                  sign * (layout.half_size - glm::vec2(course_map_fill_inset))) < 0.0001f);
+                CHECK(corner.x >= land_low.x);
+                CHECK(corner.z >= land_low.y);
+                CHECK(corner.x <= land_high.x);
+                CHECK(corner.z <= land_high.y);
+            }
         }
     }
 }
@@ -1932,8 +2106,89 @@ TEST_CASE("shipped hub: the parked bus stands level on its pad and its door is r
     }
 }
 
-TEST_CASE("shipped courses: each has a bus standing level on its pad, door reachable on foot from its path") {
+namespace {
+
+// The shipped courses' bus access paths are carried by their cart roads. The
+// route starts 40 m back along the road nearest the bus's approach (or at the
+// road's end, if it is shorter), whichever way is longer, and follows its
+// vertices to the approach.
+std::vector<glm::vec3> route_to_bus(const game_state& state) {
+    const glm::vec3 approach = state.area.bus->position;
+    const float reach = 40.0f / state.tuning.scale.meters_per_world_unit;
+    std::vector<glm::vec3> best;
+    float nearest = std::numeric_limits<float>::max();
+    for (const course_world_cart_road& road : state.world.cart_roads) {
+        for (std::size_t i = 0; i < road.polyline.size(); ++i) {
+            const float gap = horizontal_distance(road.polyline[i], approach);
+            if (gap >= nearest) { continue; }
+            nearest = gap;
+            best.clear();
+            for (const int direction : {-1, 1}) {
+                std::vector<glm::vec3> back{road.polyline[i]};
+                float length = 0.0f;
+                for (long j = static_cast<long>(i) + direction; j >= 0 && j < static_cast<long>(road.polyline.size()); j += direction) {
+                    const float leg = horizontal_distance(back.back(), road.polyline[j]);
+                    if (length + leg > reach) {
+                        back.push_back(glm::mix(back.back(), road.polyline[j], (reach - length) / leg));
+                        break;
+                    }
+                    length += leg;
+                    back.push_back(road.polyline[j]);
+                }
+                if (back.size() > best.size()) { best = back; }
+            }
+            std::reverse(best.begin(), best.end());
+        }
+    }
+    best.push_back(approach);
+    return best;
+}
+
+// Steps a walker along `route` with plain forward input, as the game does, and
+// reports whether it ends within reach of the bus. It gives up on a leg when
+// it stops getting closer.
+bool walks_to_bus(game_state& state, const std::vector<glm::vec3>& route) {
+    const std::vector<solid> moving;
+    const walk_world world{state.area, moving, state.tuning, state.tuning.player.walk_speed, nullptr};
+    walker player;
+    player.position = anchor_on_terrain(state.area, route.front());
+    player.vertical.y = player.position.y;
+    for (const glm::vec3& target : route) {
+        float closest = horizontal_distance(player.position, target);
+        int since_closer = 0;
+        for (int steps = 0; closest > .15f && since_closer < 120 && steps < 20000; ++steps) {
+            move_input input; input.forward = 1; input.yaw = quantise_yaw(yaw_towards(player.position, target));
+            player = step_walker(player, input, world).after;
+            const float gap = horizontal_distance(player.position, target);
+            if (gap < closest - .01f) { closest = gap; since_closer = 0; } else { ++since_closer; }
+        }
+        if (closest > .15f) { return false; }
+    }
+    state.player.position = player.position;
+    const auto found = nearest_interactable(state);
+    return found && found->kind == interactable_kind::bus;
+}
+
+// A walker-stopping fence square around `centre`, `half_side` out: nothing
+// can walk in or out.
+void fence_in(game_state& state, const glm::vec3& centre, const float half_side) {
+    for (const glm::vec3 corner : {glm::vec3(-1, 0, -1), glm::vec3(1, 0, -1), glm::vec3(1, 0, 1), glm::vec3(-1, 0, 1)}) {
+        const glm::vec3 next = glm::vec3(-corner.z, 0, corner.x);
+        solid wall;
+        wall.shape = solid_shape::wall; wall.kind = solid_kind::net;
+        wall.base = anchor_on_terrain(state.area, centre + corner * half_side);
+        wall.end = anchor_on_terrain(state.area, centre + next * half_side);
+        wall.radius = .1f; wall.height = 3.0f; wall.stops_walker = true;
+        state.area.solids.push_back(wall);
+    }
+    state.area.solids_grid = build_solid_grid(state.area.solids, solid_grid_cell_size);
+}
+
+}  // namespace
+
+TEST_CASE("shipped courses: each has a bus standing level on its pad, reached by walking its path from up the road") {
     const auto& model = test_props().at("hub_bus");
+    std::vector<std::string> wrong;
     for (const course_definition& course : shipped_content().courses) {
         auto state = make_game_state(shipped_content(), save_data{});
         REQUIRE(start_course(state, course));
@@ -1946,9 +2201,20 @@ TEST_CASE("shipped courses: each has a bus standing level on its pad, door reach
             const auto contact = prop_point(*parked, model.point(wheel));
             CHECK(std::abs(contact.y - terrain_height(state.area, contact)) < .02f);
         }
-        state.player.position = anchor_on_terrain(state.area, state.area.bus->position);
-        const auto found = nearest_interactable(state);
-        REQUIRE(found); CHECK(found->kind == interactable_kind::bus);
         CHECK(sample_area(state.area, state.area.bus->position).material != terrain_material::water);
+
+        const std::vector<glm::vec3> route = route_to_bus(state);
+        REQUIRE(route.size() >= 2);
+        game_state walled = state;
+        if (!walks_to_bus(state, route)) { wrong.push_back(course.id + ": the path does not lead on foot to the bus"); }
+        // Control: the same walk, with the door fenced in (inside where it starts), must fail.
+        const float fence_half_side = std::min(6.0f / walled.tuning.scale.meters_per_world_unit,
+                                               horizontal_distance(route.front(), walled.area.bus->position) * .4f);
+        fence_in(walled, walled.area.bus->position, fence_half_side);
+        if (walks_to_bus(walled, route)) { wrong.push_back(course.id + ": walked through a fence round the bus"); }
+    }
+    CHECK(wrong.empty());
+    for (const std::string& where : wrong) {
+        std::fprintf(stderr, "%s\n", where.c_str());
     }
 }

@@ -80,7 +80,8 @@ bool start_course(game_state& state, const course_definition& course) {
     state.round_seed = round_shot_seed(static_cast<std::uint64_t>(state.local_unix_ms), 0);
     state.shots_hit = 0;
     state.picker.reset();
-    state.server_bag_adopted = false;
+    state.bag_row_seen.reset();
+    state.bag_expected.reset();
     state.xp_drops.clear();
     state.shot_number.reset();
     state.pending_xp_drop_amounts.clear();

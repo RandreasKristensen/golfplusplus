@@ -49,11 +49,10 @@ struct section_reader {
         const json* points = section != nullptr ? json_array(*section, key) : nullptr;
         bool valid = points != nullptr && !points->empty();
         for (std::size_t i = 0; valid && i < points->size(); ++i) {
-            const json& point = (*points)[i];
-            valid = point.is_array() && point.size() == 2 && point[0].is_number() && point[1].is_number() &&
-                (out.points.empty() || point[0].get<float>() > out.points.back().x);
+            const std::optional<glm::vec2> point = json_vec2((*points)[i]);
+            valid = point && (out.points.empty() || point->x > out.points.back().x);
             if (valid) {
-                out.points.emplace_back(point[0].get<float>(), point[1].get<float>());
+                out.points.push_back(*point);
             }
         }
         if (!valid) {
@@ -68,11 +67,10 @@ struct section_reader {
         const json* points = section != nullptr ? json_array(*section, key) : nullptr;
         bool valid = points != nullptr && !points->empty();
         for (std::size_t i = 0; valid && i < points->size(); ++i) {
-            const json& point = (*points)[i];
-            valid = point.is_array() && point.size() == 2 && point[0].is_number() && point[1].is_number();
+            const std::optional<glm::vec2> point = json_vec2((*points)[i]);
+            valid = point && (out.points.empty() || point->x > out.points.back().height);
             if (valid) {
-                out.points.push_back(wind_profile_point{point[0].get<float>(), point[1].get<float>()});
-                valid = i == 0 || out.points[i].height > out.points[i - 1].height;
+                out.points.push_back(wind_profile_point{point->x, point->y});
             }
         }
         if (!valid) {
@@ -214,6 +212,27 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.weather.history_hours = weather.number("history_hours");
     tuning.weather.step_hours = weather.number("step_hours");
 
+    const section_reader seasons = section("seasons");
+    const auto months = [&](const char* key, std::array<float, 12>& out) {
+        const json* values = seasons.section != nullptr ? json_array(*seasons.section, key) : nullptr;
+        if (values == nullptr || values->size() != out.size()) {
+            missing.push_back(std::string("seasons.") + key);
+            return;
+        }
+        for (std::size_t i = 0; i < out.size(); ++i) {
+            const json& value = (*values)[i];
+            if (!value.is_number()) {
+                missing.push_back(std::string("seasons.") + key);
+                return;
+            }
+            out[i] = value.get<float>();
+        }
+    };
+    months("storm_bias", tuning.weather.seasons.storm_bias);
+    months("fog_bias", tuning.weather.seasons.fog_bias);
+    months("wind_scale", tuning.weather.seasons.wind_scale);
+    months("thunder_scale", tuning.weather.seasons.thunder_scale);
+
     const section_reader temperature = section("temperature");
     tuning.weather.temperature.coldest_hour = temperature.number("coldest_hour");
     tuning.weather.temperature.warmest_hour = temperature.number("warmest_hour");
@@ -250,6 +269,7 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     };
     tuning.surfaces.fairway = surface("fairway", true);
     tuning.surfaces.rough = surface("rough", true);
+    tuning.surfaces.heavy_rough = surface("heavy_rough", true);
     tuning.surfaces.green = surface("green", false);
     tuning.surfaces.bunker = surface("bunker", true);
     const section_reader cart_surfaces{surfaces.section != nullptr ? json_object(*surfaces.section, "cart") : nullptr,
@@ -263,6 +283,7 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.surfaces.cart.path = cart_surface("path");
     tuning.surfaces.cart.fairway = cart_surface("fairway");
     tuning.surfaces.cart.rough = cart_surface("rough");
+    tuning.surfaces.cart.heavy_rough = cart_surface("heavy_rough");
     tuning.surfaces.cart.green = cart_surface("green");
     tuning.surfaces.cart.bunker = cart_surface("bunker");
     tuning.surfaces.cart.water = cart_surface("water");
@@ -578,6 +599,35 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.solids.self_hit_grace_seconds = solids.number("self_hit_grace_seconds");
     tuning.solids.leaves_drag_per_meter = solids.number("leaves_drag_per_meter");
     tuning.solids.leaves_scatter_degrees_per_meter = solids.number("leaves_scatter_degrees_per_meter");
+    tuning.solids.bush_density = solids.number("bush_density");
+
+    const section_reader trees = section("trees");
+    tuning.trees.bare_crown_density = trees.number("bare_crown_density");
+    const json* species = trees.section != nullptr ? json_array(*trees.section, "species") : nullptr;
+    for (std::size_t i = 0; species != nullptr && i < species->size(); ++i) {
+        const json& entry = (*species)[i];
+        const section_reader of{&entry, "trees.species[" + std::to_string(i) + "]", &missing};
+        tree_species kind;
+        kind.name = json_string(entry, "name").value_or("");
+        kind.evergreen = json_bool(entry, "evergreen").value_or(false);
+        kind.leaf_out_day = of.number("leaf_out_day");
+        kind.full_leaf_day = of.number("full_leaf_day");
+        kind.turned_day = of.number("turned_day");
+        kind.bare_day = of.number("bare_day");
+        if (kind.name.empty() || species_index(tuning.trees, kind.name)) {
+            missing.push_back("trees.species[" + std::to_string(i) + "].name");
+        }
+        tuning.trees.species.push_back(kind);
+    }
+    const std::optional<std::string> default_species =
+        trees.section != nullptr ? json_string(*trees.section, "default_species") : std::nullopt;
+    if (species == nullptr || species->empty() || !default_species || !species_index(tuning.trees, *default_species)) {
+        missing.push_back("trees.species");
+    } else {
+        // The default first: a tree whose hole file names no species is species 0.
+        const std::uint8_t first = *species_index(tuning.trees, *default_species);
+        std::swap(tuning.trees.species[0], tuning.trees.species[first]);
+    }
 
     const section_reader floodlights = section("floodlights");
     tuning.floodlights.spacing = floodlights.number("spacing");
@@ -629,6 +679,9 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.lies.wet_grip_loss = lies.number("wet_grip_loss");
     tuning.lies.rough_speed_loss = lies.number("rough_speed_loss");
     tuning.lies.rough_face_close_per_loft = lies.number("rough_face_close_per_loft");
+    tuning.lies.heavy_rough_grip_share = lies.number("heavy_rough_grip_share");
+    tuning.lies.heavy_rough_speed_loss = lies.number("heavy_rough_speed_loss");
+    tuning.lies.heavy_rough_face_close_per_loft = lies.number("heavy_rough_face_close_per_loft");
     tuning.lies.sand_grip_share = lies.number("sand_grip_share");
     tuning.lies.sand.speed_share = lies.number("explosion_speed_share");
     tuning.lies.sand.spin_share = lies.number("explosion_spin_share");

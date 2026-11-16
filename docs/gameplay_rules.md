@@ -59,6 +59,22 @@ The weather code is plain arithmetic (no sine, cosine or powers) so WASM
 matches. Its temperature, with the course's elevation, sets how thin the air
 a shot flies through is. The god menu's weather is offline only.
 
+**Each course has its own time of day.** Its clock runs a fixed
+`sky.clock_shift_hours` ahead of the shared sky clock, the shipped courses'
+spread round the day, so at any moment one is at sunrise and another at
+night; the hub's tee book shows each course's time and part of the day. Its
+weather (wind, temperature) runs on that clock too, the same on the server.
+
+**Each course has one day of the year, and its season is in play.** The
+course file's date (`course_sky`, never changing) moves its weather by the
+month (`weather_season_tuning`: Danish autumn and winter rainier, windier
+and foggier, thunder only in the warm months), sets its air's normals, and
+sets how much of each tree is in leaf (`game/tree_season.h`): a bare crown
+slows a ball as `bare_crown_density` of a leafy one. Heavy rough and bushes
+are real golf's: heavy rough takes more speed and spin off a strike and
+shuts the face more (`lies.heavy_rough_*`), and lets a ball roll less; a
+bush's tangle catches a ball (`solids.bush_density`).
+
 **Time of day is visual only, but for the air's temperature.** It never
 changes scoring or rewards, and physics only through the air's temperature,
 which follows the day (`temperature_at` in `src/game/weather.h`, by

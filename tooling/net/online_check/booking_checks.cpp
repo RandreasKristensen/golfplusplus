@@ -43,14 +43,16 @@ bool check_booking(live_check& run) {
     if (!run.require("F at physical book opens its course picker", s.hub_flow.screen == hub_screen::book)) { return false; }
     s.hub_flow.screen = hub_screen::none;
     if (!run.open(0)) { return false; }
-    // Leave enough real time for social/warmup checks, without changing the clock.
+    // The time before the group's is the earlier blocking group's (check_round):
+    // leave it enough real time for the practice and social checks first,
+    // without changing the clock.
+    const auto interval = s.tuning.server.tee_interval_minutes * minute_micros;
     for (const auto at : tee_times(s.online.server_now, s.tuning.server)) {
-        if (at > s.online.server_now + 120000000) { run.due = at; break; }
+        if (at - interval > s.online.server_now + 8 * minute_micros) { run.due = at; break; }
     }
     if (!run.require("natural quarter-hour available on empty database, no slot rows",
                      run.due != 0 && s.online.tee_slots.empty())) { return false; }
     std::printf("UTC due microseconds: %lld\n", static_cast<long long>(run.due));
-    const auto interval = s.tuning.server.tee_interval_minutes * 60LL * 1000000LL;
     if (!run.book(0, run.due + interval)) { return false; }
     const auto stale = s.online.reservation->reservation_id;
     if (!run.book(0, run.due)) { return false; }

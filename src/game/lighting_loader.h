@@ -6,6 +6,7 @@
 // so dusk lasts as long as it would at the course's latitude; the colours
 // are what each thing is, whatever the light.
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -239,11 +240,12 @@ struct ground_colors {
     glm::vec3 fairway{0.0f};
     glm::vec3 fairway_edge{0.0f};  // the fairway shades towards this at its edge
     glm::vec3 rough{0.0f};
+    glm::vec3 heavy_rough{0.0f};  // long grass, its seed heads lighter and drier
     glm::vec3 green{0.0f};
     glm::vec3 bunker{0.0f};
     glm::vec3 water{0.0f};
     glm::vec3 backdrop{0.0f};    // the plain under and around the course
-    glm::vec3 underwater{0.0f};  // over the picture seen from under a pond
+    glm::vec3 pond_bed{0.0f};    // the mud a pond's floor turns to away from its banks
     glm::vec3 cart_path{0.0f};   // a cart path's top (renderer/cart_path_mesh.h)
 };
 
@@ -354,6 +356,131 @@ struct shaft_style {
     float lamp_near_meters = 0.0f;
 };
 
+// A pond's water as drawn (renderer/water_renderer.h, water.frag). What lies
+// under the surface is seen through the path the light takes in the water:
+// each colour channel is absorbed per metre (red fastest), and what it loses
+// is replaced by the water's own scatter_color, lit by the light there is,
+// so deep water converges to that colour; no path counts for more than
+// max_path_meters. The wind roughens the surface as the Beaufort scale says:
+// a mirror below calm_wind_meters_per_second (still keeping
+// calm_ripple_share of its ripples), no reflection left whole from
+// rough_wind_meters_per_second (both at the wind's 10 m reference). Waves
+// grow over the open water upwind of a point, full from full_fetch_meters,
+// so the upwind shore stays glassy; gusts sweep patches of gust_cell_meters
+// across with the wind, leaving gust_share of the waves between them. At
+// full roughness the waves slope ripple_slope, ripple_wavelength_meters long
+// for the longest, moving ripple_speed m/s, with fine ripples too small to
+// draw tilting it by fine_slope more; the drawn waves fade by
+// ripple_fade_meters into the fine ones, so far water blurs rather than
+// flattening. Rain rings each cell of rain_ring_meters, sloping
+// rain_ring_slope at the heaviest. The view through wobbles by
+// refraction_pixels at most. The sun glints off the waves with
+// glint_strength times the sun, in a lobe glint_sharpness sharp. The
+// reflection looks reflection_reach_meters out along its ray, from
+// reflection_first_step_meters, each step longer than the last, before it
+// falls back on the sky. From under the surface the same absorption and
+// scatter fog the view along its path, the sun's light shimmers on what lies
+// under the surface in caustics (caustic_strength times the sun, patterns
+// caustic_cell_meters across), and the view wobbles by wobble_height_share
+// of the picture height.
+struct water_style {
+    float absorption_red = 0.0f;
+    float absorption_green = 0.0f;
+    float absorption_blue = 0.0f;
+    glm::vec3 scatter_color{0.0f};
+    float max_path_meters = 0.0f;
+    float ripple_slope = 0.0f;
+    float ripple_wavelength_meters = 0.0f;
+    float ripple_speed = 0.0f;
+    float ripple_fade_meters = 0.0f;
+    float fine_slope = 0.0f;
+    float calm_wind_meters_per_second = 0.0f;
+    float rough_wind_meters_per_second = 0.0f;
+    float calm_ripple_share = 0.0f;
+    float full_fetch_meters = 0.0f;
+    float gust_cell_meters = 0.0f;
+    float gust_share = 0.0f;
+    float rain_ring_slope = 0.0f;
+    float rain_ring_meters = 0.0f;
+    float refraction_pixels = 0.0f;
+    float glint_strength = 0.0f;
+    float glint_sharpness = 0.0f;
+    float reflection_reach_meters = 0.0f;
+    float reflection_first_step_meters = 0.0f;
+    float caustic_strength = 0.0f;
+    float caustic_cell_meters = 0.0f;
+    float wobble_height_share = 0.0f;
+};
+
+// The grass as drawn (terrain.frag). Mown grass lies in stripes the
+// mower's width, stripe_fairway_meters on fairways and stripe_green_meters on
+// greens, each pass's blades leaning the way it went, along the hole: leaning
+// away from the eye they show their lit sides and look lighter, towards it
+// darker, by stripe_shade. All grass varies in patches patch_meters across
+// by patch_share of its colour, as real turf does with soil and wear. Near
+// the eye the rough stands up in blades (renderer/grass_renderer.h): tufts
+// tuft_spacing_meters apart, blade_height_meters tall (the rough's first
+// cut), blade_width_meters wide at the root, thinning out by reach_meters,
+// and beyond in `rings` rings in all, each twice as far out with its tufts
+// twice as far apart and twice as wide, thinning into the next;
+// the wind bends them by up to blade_sway of their height; each is
+// base_shade of the rough's colour at its root and tip_shade at its tip.
+// Heavy rough's blades stand heavy_blade_share times as tall. Every number
+// here shows live when lighting.json is saved.
+struct grass_style {
+    float stripe_fairway_meters = 0.0f;
+    float stripe_green_meters = 0.0f;
+    float stripe_shade = 0.0f;
+    float patch_meters = 0.0f;
+    float patch_share = 0.0f;
+    float tuft_spacing_meters = 0.0f;
+    float blade_height_meters = 0.0f;
+    float blade_width_meters = 0.0f;
+    float reach_meters = 0.0f;
+    float blade_sway = 0.0f;
+    float base_shade = 0.0f;
+    float tip_shade = 0.0f;
+    float heavy_blade_share = 0.0f;
+    float rings = 0.0f;
+};
+
+// How a tree species is drawn (renderer/tree_model.h), by its name in
+// assets/play/tuning/trees.json: its crown's shape (round, oval, cone for a
+// spruce, umbrella for a pine's flat top, weeping, or a bush's dome from
+// the ground); the trunk's share of its height below the crown and its
+// thickness as a share of the crown's radius; how many limbs, leaf clumps
+// near and far, each clump's size as a share of the crown's radius, how
+// far a clump hangs (weeping), and how much taller than wide a grown one
+// stands; how much of the sun behind a leaf shines through it (thin
+// broadleaves about 15%, needles less); its bark, and its leaves fresh in
+// spring, in summer and turned.
+enum class crown_shape : std::uint8_t {
+    round,
+    oval,
+    cone,
+    umbrella,
+    weeping,
+    dome
+};
+
+struct tree_look {
+    std::string name;
+    crown_shape shape = crown_shape::round;
+    float trunk_share = 0.0f;
+    float trunk_radius = 0.0f;
+    int limbs = 0;
+    int clumps = 0;
+    int far_clumps = 0;
+    float clump_size = 0.0f;
+    float droop = 0.0f;
+    float aspect = 0.0f;
+    float shine_through = 0.0f;
+    glm::vec3 bark{0.0f};
+    glm::vec3 spring{0.0f};
+    glm::vec3 summer{0.0f};
+    glm::vec3 autumn{0.0f};
+};
+
 // A light after dark: its colour times its intensity (past 1 blooms), and how
 // far it reaches in metres.
 struct night_light {
@@ -428,6 +555,9 @@ struct lighting_palette {
     scene_colors colors;
     shadow_style shadows;
     shaft_style shafts;
+    water_style water;
+    grass_style grass;
+    std::vector<tree_look> trees;
     night_light_style night_lights;
     weather_style weather;
     rain_style rain;

@@ -9,8 +9,8 @@
 // allows; past it the cart slides on along its velocity. Its uphill wheels
 // lift when the turn's pull outward and the side slope's together beat its
 // static stability factor (SSF = track / (2 cg height), NHTSA), and held
-// lifted for tip_seconds it rolls onto its side. In water deeper than
-// wade_depth_m it sinks. Metres and seconds, seen from above. Pure.
+// lifted for tip_seconds it rolls onto its side. Its wheels deeper than
+// wade_depth_m under water, it sinks. Metres and seconds, seen from above. Pure.
 
 #include <cstdint>
 
@@ -31,7 +31,7 @@ struct cart_spec {
     float cg_height_m = 0.0f;
     float max_steer_degrees = 0.0f;  // the front wheels at full lock
     float tip_seconds = 0.0f;        // its uphill wheels lifted this long and it tips
-    float wade_depth_m = 0.0f;       // water deeper than this under its middle sinks it
+    float wade_depth_m = 0.0f;       // its wheels deeper than this under water under its middle sink it
     float right_seconds = 0.0f;      // standing a tipped cart back up
     float tow_seconds = 0.0f;        // a sunk cart is back at its parking spot after this
 };
@@ -53,7 +53,7 @@ struct cart_ground {
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
     float rolling_resistance = 0.0f;  // Crr
     float grip = 0.0f;                // the tyres' friction coefficient
-    float water_depth = 0.0f;         // metres of water over the ground
+    float immersion = 0.0f;           // metres its wheels are under the water's surface
     bool on_ground = true;            // false: in the air off an edge
 };
 

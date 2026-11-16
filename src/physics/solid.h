@@ -4,9 +4,8 @@
 // shape with a height, a kind and what it stops. A course's static solids are
 // built once with its area (play_area::solids) on a grid; what moves (carts,
 // people) is made into solids of the same kinds from game state when needed.
-// The ball meets them in flight (resolve_solid_contacts, then
-// resolve_swept_walls), a body moving over the ground meets them seen from
-// above (physics/body_collision.h). Pure.
+// The ball meets them in flight (resolve_ball_contacts), a body moving over
+// the ground meets them seen from above (physics/body_collision.h). Pure.
 
 #include "physics/ball_state.h"
 
@@ -69,6 +68,9 @@ struct solid {
     // The ball flies through it, slowed and turned (a tree's canopy), rather
     // than off it.
     bool porous = false;
+    // Porous: how many metres of a tree's canopy each metre through it
+    // counts as (a bush's tangle, many).
+    float density = 1.0f;
     // The ball off it: reflected speed into it kept, sideways speed lost.
     float restitution = 0.0f;
     float friction = 0.0f;
@@ -125,10 +127,15 @@ ball_state resolve_solid_contact(const ball_state& in, const solid& thing);
 ball_state resolve_swept_wall(const glm::vec3& previous_position, const ball_state& in, const solid& wall);
 
 // What a ball stepping from `previous_position` to `in.position` meets among
-// the `solids` that stop it (`grid` built from them), then among the first
-// `moving_count` of `moving` (each tested, no grid), in their order: first
-// everything standing, then walls swept from where the step began. Porous
-// solids it passes through (porous_path).
+// the `solids` that stop it (`grid` built from them) and the first
+// `moving_count` of `moving` (each tested, no grid). Walls, cylinders and
+// boxes are swept, so a fast ball cannot pass through a thin one between
+// steps: the first the path reaches (on a tie, the earlier of `solids`, then
+// of `moving`) stops it there, met as resolve_solid_contact or
+// resolve_swept_wall meets it, and the rest of the step is not travelled.
+// Then anything it is still in contact with where it is (one it began the
+// step against, a cone) pushes it out, in that same order. Porous solids it
+// passes through (porous_path).
 struct ball_contacts {
     ball_state ball;
     std::optional<solid_kind> hit;  // the first thing that moved it
@@ -139,5 +146,6 @@ ball_contacts resolve_ball_contacts(const glm::vec3& previous_position, const ba
                                     const std::vector<solid>& moving, std::size_t moving_count);
 
 // How far the path from `from` to `to` runs inside the porous solids among
-// `solids` (`grid` built from them): metres through foliage.
+// `solids` (`grid` built from them): metres through foliage, each metre as
+// many as the densest foliage there (solid::density).
 float porous_path(const glm::vec3& from, const glm::vec3& to, const std::vector<solid>& solids, const solid_grid& grid);

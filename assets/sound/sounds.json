@@ -1,5 +1,14 @@
 {
   "master_volume": 0.8,
+  "voices": {
+    "channels": 32,
+    "loops": 8
+  },
+  "underwater": {
+    "cutoff_hz": 350,
+    "gain": 0.4,
+    "glide_seconds": 0.2
+  },
   "categories": {
     "ui": 0.55,
     "gameplay": 0.85,

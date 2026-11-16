@@ -418,7 +418,9 @@ FIELD_Index(golf_cart, room_id)
 FIELD_Index(golf_cart, passenger)
 FIELD_Index(golf_cart, area_key)
 
-// Tows `owner`'s sunk cart back beside hole 1, its spec's tow_seconds after it sank.
+// Tows `owner`'s sunk cart back beside hole 1, its spec's tow_seconds after
+// it sank. Removing the cart cancels it (cancel_tows), so it never tows the
+// next one early.
 struct cart_tow_row {
     std::uint64_t scheduled_id;
     ScheduleAt scheduled_at;
@@ -427,13 +429,13 @@ struct cart_tow_row {
 SPACETIMEDB_STRUCT(cart_tow_row, scheduled_id, scheduled_at, owner)
 SPACETIMEDB_TABLE(cart_tow_row, cart_tow, Private)
 FIELD_PrimaryKeyAutoInc(cart_tow, scheduled_id)
+FIELD_Index(cart_tow, owner)
 SPACETIMEDB_SCHEDULE(cart_tow, 1, tow_cart)
 
 // The server's view of a player's movement (movement_rules.h mover_state):
 // where its steps have them and how they move up and down, the last step
 // played and the last motion accepted, the time saved up for more steps,
-// the claimed-move slack (check_motion), their cart's motion while they
-// drive it, and their movement XP: meters not yet earned, and earned this
+// their cart's motion while they drive it, and their movement XP: meters not yet earned, and earned this
 // hour (from hour_started).
 struct motion_state_row {
     std::uint64_t account_id;
@@ -442,7 +444,6 @@ struct motion_state_row {
     float z;
     std::uint8_t mode;  // motion_mode
     Timestamp server_time;
-    float slack_left;
     float walk_meters_pending;
     float cart_meters_pending;
     std::uint64_t step;
@@ -460,7 +461,7 @@ struct motion_state_row {
     float walk_meters_this_hour;
     float cart_meters_this_hour;
 };
-SPACETIMEDB_STRUCT(motion_state_row, account_id, x, y, z, mode, server_time, slack_left, walk_meters_pending,
+SPACETIMEDB_STRUCT(motion_state_row, account_id, x, y, z, mode, server_time, walk_meters_pending,
                    cart_meters_pending, step, credit_seconds, client_time, vertical_speed, grounded, cart_velocity_x,
                    cart_velocity_z, cart_yaw_rate, cart_lift_seconds, cart_vertical_speed, cart_grounded, hour_started,
                    walk_meters_this_hour, cart_meters_this_hour)
@@ -802,7 +803,6 @@ mover_state mover_of(const motion_state_row& row) {
     mover.vertical = vertical_body{row.y, row.vertical_speed, row.grounded};
     mover.step = row.step;
     mover.credit_seconds = row.credit_seconds;
-    mover.slack_left = row.slack_left;
     mover.client_time = row.client_time;
     mover.cart_velocity = glm::vec2(row.cart_velocity_x, row.cart_velocity_z);
     mover.cart_yaw_rate = row.cart_yaw_rate;
@@ -820,7 +820,6 @@ void write_mover(motion_state_row& row, const mover_state& mover) {
     row.grounded = mover.vertical.grounded;
     row.step = mover.step;
     row.credit_seconds = mover.credit_seconds;
-    row.slack_left = mover.slack_left;
     row.client_time = mover.client_time;
     row.cart_velocity_x = mover.cart_velocity.x;
     row.cart_velocity_z = mover.cart_velocity.y;
@@ -830,11 +829,11 @@ void write_mover(motion_state_row& row, const mover_state& mover) {
     row.cart_grounded = mover.cart_vertical.grounded;
 }
 
-// A player just in the room at `spawn`: a full slack and time saved up.
+// A player just in the room at `spawn`: a full time saved up.
 motion_state_row joined_motion_state(const std::uint64_t account, const glm::vec3& spawn, const Timestamp& now) {
     const server_tuning& tuning = cached_content()->tuning.server;
     motion_state_row row{account, spawn.x, spawn.y, spawn.z, static_cast<std::uint8_t>(motion_mode::idle), now,
-                         tuning.motion_distance_slack, 0.0f, 0.0f, 0, tuning.max_motion_gap_seconds, 0.0, 0.0f, true,
+                         0.0f, 0.0f, 0, tuning.max_motion_gap_seconds, 0.0, 0.0f, true,
                          0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, now, 0.0f, 0.0f};
     return row;
 }
@@ -847,7 +846,6 @@ void place_mover(motion_state_row& row, const glm::vec3& position, const Timesta
                                     mover.credit_seconds + std::max(0.0f, seconds_between(row.server_time, now)));
     mover = placed_mover(mover, position);
     mover.mode = motion_mode::idle;
-    mover.slack_left = cached_content()->tuning.server.motion_distance_slack;
     write_mover(row, mover);
     row.server_time = now;
 }
@@ -1032,6 +1030,17 @@ void set_down_bags_from(ReducerContext& ctx, const std::uint64_t room_id, const 
 
 #include "dap_support.h"
 
+// Cancels every tow pending for `owner`'s cart.
+void cancel_tows(ReducerContext& ctx, const std::uint64_t owner) {
+    std::vector<std::uint64_t> tows;
+    for (const cart_tow_row& tow : ctx.db[cart_tow_owner].filter(owner)) {
+        tows.push_back(tow.scheduled_id);
+    }
+    for (const std::uint64_t id : tows) {
+        ctx.db[cart_tow_scheduled_id].delete_by_key(id);
+    }
+}
+
 void leave_room_state(ReducerContext& ctx, const std::uint64_t account_id) {
     erase_daps(ctx, account_id);
     std::optional<room_member_row> member = ctx.db[room_member_account_id].find(account_id);
@@ -1056,6 +1065,7 @@ void leave_room_state(ReducerContext& ctx, const std::uint64_t account_id) {
         }
     }
     ctx.db[golf_cart_owner].delete_by_key(account_id);
+    cancel_tows(ctx, account_id);
     ctx.db[player_bag_account_id].delete_by_key(account_id);
     ctx.db[avatar_motion_account_id].delete_by_key(account_id);
     ctx.db[ball_account_id].delete_by_key(account_id);
@@ -1381,7 +1391,7 @@ std::vector<int> room_flags_out(ReducerContext& ctx, const std::uint64_t room_id
 
 // What moves in the room that `shooter`'s shot may meet, as the rows have it
 // now: everyone on foot where their last motion left them (`shooter` among
-// them), every cart not sunk, and every ball at rest but `shooter`'s.
+// them), every cart not sunk, and every other ball at rest by now (resting_balls).
 std::vector<snapshot_entry> room_snapshot(ReducerContext& ctx, const std::uint64_t room_id, const std::uint64_t shooter) {
     std::vector<snapshot_entry> entries;
     for (const avatar_motion_row& avatar : ctx.db[avatar_motion_room_id].filter(room_id)) {
@@ -1395,11 +1405,13 @@ std::vector<snapshot_entry> room_snapshot(ReducerContext& ctx, const std::uint64
             entries.push_back(snapshot_entry{snapshot_kind::cart, glm::vec3(cart.x, cart.y, cart.z), cart.yaw, false});
         }
     }
-    for (const ball_row& other : ctx.db[ball_room_id].filter(room_id)) {
-        if (other.account_id != shooter && !other.in_cup) {
-            entries.push_back(snapshot_entry{snapshot_kind::ball, glm::vec3(other.x, other.y, other.z), 0.0f, false});
-        }
+    std::vector<room_ball_rest> balls;
+    for (const ball_row& ball : ctx.db[ball_room_id].filter(room_id)) {
+        balls.push_back(room_ball_rest{ball.account_id, glm::vec3(ball.x, ball.y, ball.z), ball.rests_at.micros_since_epoch(),
+                                       ball.in_cup});
     }
+    const std::vector<snapshot_entry> resting = resting_balls(balls, shooter, ctx.timestamp.micros_since_epoch());
+    entries.insert(entries.end(), resting.begin(), resting.end());
     return entries;
 }
 
@@ -1785,7 +1797,8 @@ std::vector<bool> room_flags_in(ReducerContext& ctx, const std::uint64_t room_id
     return flags_in;
 }
 
-// What `member`'s steps meet in its room now, and what its items do.
+// What `member`'s steps meet in its room now, what its items do, and what
+// places it where nothing is stepped: its ball, hand and club, the seat it rides in.
 move_world room_move_world(ReducerContext& ctx, const room_member_row& member, const server_course& course) {
     const server_content& content = *cached_content();
     const std::uint64_t account = member.account_id;
@@ -1805,6 +1818,9 @@ move_world room_move_world(ReducerContext& ctx, const room_member_row& member, c
         if (cart.owner != account) {
             others.push_back(pose_of(cart));
         }
+        if (cart.passenger == account) {
+            world.ridden = pose_of(cart);
+        }
     }
     std::vector<glm::vec3> people;
     for (const avatar_motion_row& avatar : ctx.db[avatar_motion_room_id].filter(member.room_id)) {
@@ -1819,6 +1835,12 @@ move_world room_move_world(ReducerContext& ctx, const room_member_row& member, c
     const std::optional<ball_row> own_ball = ctx.db[ball_account_id].find(account);
     if (own_ball && !own_ball->in_cup && shot_has_played(*own_ball, ctx.timestamp, content.tuning.server)) {
         world.own_ball = glm::vec3(own_ball->x, own_ball->y, own_ball->z);
+    }
+    if (const std::optional<player_row> player = ctx.db[player_account_id].find(account)) {
+        world.hand = player->hand == static_cast<std::uint8_t>(handedness::left) ? handedness::left : handedness::right;
+    }
+    if (const std::optional<player_bag_row> bag = ctx.db[player_bag_account_id].find(account)) {
+        world.club = find_club(content.clubs, bag->club_in_hand);
     }
     return world;
 }
@@ -1937,17 +1959,9 @@ SPACETIMEDB_REDUCER(update_motion,
     if (!mover || course == nullptr) {
         return Err(error_not_in_room);
     }
-    if (mode == static_cast<std::uint8_t>(motion_mode::ride)) {
-        bool riding = false;
-        for (const golf_cart_row& cart : ctx.db[golf_cart_room_id].filter(me.member->room_id)) {
-            riding = riding || cart.passenger == account;
-        }
-        if (!riding) {
-            return Err(error_not_in_cart);
-        }
-    }
     move_request request;
     request.motion = net_motion{static_cast<motion_mode>(mode), glm::vec3(x, y, z), yaw, speed, turn_rate, false, client_time};
+    request.motion.setup = sent_setup{setup_aim, setup_face_open, setup_ball_position, setup_backswing};
     request.motion.crouched = crouched;
     request.first_step = first_step;
     request.start = glm::vec3(start_x, start_y, start_z);
@@ -2001,12 +2015,7 @@ SPACETIMEDB_REDUCER(update_motion,
     }
     ctx.db[motion_state_account_id].update(*mover);
     const net_motion& shown = moved.shown;
-    const std::optional<player_bag_row> bag = ctx.db[player_bag_account_id].find(account);
-    const club_definition* club = bag ? find_club(cached_content()->clubs, bag->club_in_hand) : nullptr;
-    const sent_setup setup = at_ball(shown.mode) && club != nullptr
-        ? clamped_sent_setup(sent_setup{setup_aim, setup_face_open, setup_ball_position, setup_backswing}, *club,
-                             cached_content()->tuning.setup)
-        : sent_setup{};
+    const sent_setup& setup = shown.setup;
     avatar_motion_row avatar{account, me.member->room_id, static_cast<std::uint8_t>(shown.mode), shown.position.x,
                              shown.position.y, shown.position.z, shown.yaw, shown.speed, shown.turn_rate, client_time,
                              setup.aim, setup.face_open, setup.ball_position, setup.backswing,

@@ -103,7 +103,7 @@ cart_motion step_cart(const cart_motion& in, const cart_controls& controls, cons
     if (in.condition != cart_condition::upright) {
         return stopped(in);
     }
-    if (ground.water_depth > spec.wade_depth_m) {
+    if (ground.immersion > spec.wade_depth_m) {
         cart_motion sunk = stopped(in);
         sunk.condition = cart_condition::sunk;
         return sunk;

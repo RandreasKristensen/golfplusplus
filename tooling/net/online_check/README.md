@@ -30,8 +30,10 @@ spacetime call $checkName admin_set_config '"https://cleanup2.invalid"' '"cleanu
 ```
 
 Run commands separately and stop on failure. The harness exits nonzero on the
-first failed check, prints each check and bounded diagnostics, and waits for the
-next natural UTC quarter hour. It never changes server time/tuning or gameplay
+first failed check, prints each check and bounded diagnostics, and waits on the
+real server clock for two natural bus windows (about 10-25 minutes): its booked
+time is at least eight minutes after the next, earlier group's time, and every
+early-start assertion states its clock precondition. It never changes server time/tuning or gameplay
 rows, and walks with actual fixed inputs at wall-clock speed. An optional third
 argument selects a shipped scored course; the default `jelling_par_3` has a
 reasonably reachable first green. Navigation timeouts fail rather than teleport.
@@ -41,14 +43,23 @@ process exit delete its temporary accounts and bookings.
 Coverage: protocol/content/name handshake, hub-only entry, scoped book/clock with
 slot rows only for booked times,
 book/change/cancel, stale cancellation, five bookings in one slot, full rebook
-preserving the sixth's prior reservation, early-bus refusal, participant/observer
-dap row/time and exactly-once Social XP, repeat refusal/acceptance, guest cleanup,
-fresh hub reconnect, accepted bus travel, unscored putter-only warmup, pre-time
-first-tee refusal, five lane balls prepared together, first actual strike/start,
-native replay agreement, give-up without a fabricated score, later-hole play and group-leave
-preservation. Unexpected reducer refusals or prediction breaches fail the run.
+preserving the sixth's prior reservation, early-bus refusal, never-refused hub
+practice drops (replacing, out-of-reach requests at the feet), malformed motion
+claims (an idle step's far start height, unseated ride, address out of reach or
+without a ball) leaving the server's body, address placed at the server's own
+stance, participant/observer dap row/time and exactly-once Social XP, repeat
+refusal/acceptance, guest cleanup, fresh hub reconnect, an earlier group's boarded
+golfer blocking an early first-tee call (`tee_too_early`) then leaving its group,
+accepted bus travel, unscored putter-only warmup whose golfer then prepares, clear
+early first-tee preparation of five lane balls, deliberately early first strikes
+(negative lateness), a ball in flight absent from another golfer's shot snapshot
+and present once at rest, native replay agreement, give-up without a fabricated
+score, later-hole play and group-leave preservation. Cart driving, seat changes
+and towing are not exercised. Unexpected reducer refusals or prediction breaches
+fail the run.
 
-For durable start audit evidence, as this disposable database's publisher only:
+Each first strike prints its expected start audit row. To confirm the private
+rows, as this disposable database's publisher only (they outlive the guests):
 
 ```powershell
 spacetime sql $checkName 'SELECT reservation_id, account_id, scheduled_at, started_at, lateness FROM tee_start' --server $checkServer

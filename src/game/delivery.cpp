@@ -43,10 +43,11 @@ delivery lie_delivery(const delivery& swing, const club_definition& club, const 
     out.dynamic_loft += on.stance.uphill;
     out.attack += on.stance.uphill;
     // A ball lying in water is played as from soaked rough.
-    if (on.lie == ball_lie::rough || on.lie == ball_lie::water) {
-        out.club_speed *= 1.0f - tuning.rough_speed_loss;
-        out.face += lead_side * glm::radians(tuning.rough_face_close_per_loft * spec.static_loft_degrees) *
-            std::max(0.0f, backswing);
+    const bool heavy = on.lie == ball_lie::heavy_rough;
+    if (heavy || on.lie == ball_lie::rough || on.lie == ball_lie::water) {
+        out.club_speed *= 1.0f - (heavy ? tuning.heavy_rough_speed_loss : tuning.rough_speed_loss);
+        const float close_per_loft = heavy ? tuning.heavy_rough_face_close_per_loft : tuning.rough_face_close_per_loft;
+        out.face += lead_side * glm::radians(close_per_loft * spec.static_loft_degrees) * std::max(0.0f, backswing);
     }
     if (on.lie != ball_lie::tee) {
         out.strike_high += std::min(0.0f, ball_radius - spec.face_centre_height_meters);
@@ -71,6 +72,9 @@ lie_contact lie_contact_for(const ball_on_lie& on, const lie_tuning& tuning) {
         break;
     case ball_lie::rough:
         contact.grip_share = tuning.rough_grip_share;
+        break;
+    case ball_lie::heavy_rough:
+        contact.grip_share = tuning.heavy_rough_grip_share;
         break;
     case ball_lie::fairway:
     case ball_lie::green:

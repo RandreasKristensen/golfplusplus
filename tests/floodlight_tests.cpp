@@ -203,8 +203,17 @@ TEST_CASE("floodlights are drawn as a pole, an arm and a lamp head whose face gl
     CHECK(drawn.vertices.size() % area.floodlights.size() == 0U);
     const auto glowing = std::count_if(drawn.vertices.begin(), drawn.vertices.end(),
                                        [](const floodlight_vertex& vertex) { return vertex.lamp > 0.0f; });
-    // Two faces of two triangles each per lamp: the lens and the rim under it.
-    CHECK(static_cast<std::size_t>(glowing) == area.floodlights.size() * 12U);
+    // Two faces per lamp, the lens and the rim under it, each four triangles
+    // glowing only from their shared centre, so the glow is hottest there and
+    // gone at the face's edge: its smear thins away from it like the sun's.
+    CHECK(static_cast<std::size_t>(glowing) == area.floodlights.size() * 8U);
+    for (std::size_t i = 0; i + 2 < drawn.vertices.size(); i += 3) {
+        if (drawn.vertices[i].lamp > 0.0f) {
+            CHECK(drawn.vertices[i].lamp == 1.0f);
+            CHECK(drawn.vertices[i + 1].lamp == 0.0f);
+            CHECK(drawn.vertices[i + 2].lamp == 0.0f);
+        }
+    }
     float top = 0.0f;
     for (const floodlight_vertex& vertex : drawn.vertices) {
         CHECK(near(glm::length(vertex.normal), 1.0f, 0.001f));

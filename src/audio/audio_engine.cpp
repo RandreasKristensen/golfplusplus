@@ -8,9 +8,8 @@
 
 namespace {
 constexpr int mixer_frequency = 44100;
-constexpr int mixer_channels = 2;
+constexpr int mixer_outputs = 2;  // stereo
 constexpr int mixer_chunk_size = 1024;
-constexpr int mixer_voices = 32;
 
 int mixer_volume(const float gain) {
     return static_cast<int>(gain * static_cast<float>(MIX_MAX_VOLUME) + 0.5f);
@@ -44,14 +43,24 @@ bool audio_engine::init() {
         warn_once("mix_init_ogg", std::string("SDL_mixer OGG support unavailable: ") + Mix_GetError());
     }
 
-    if (Mix_OpenAudio(mixer_frequency, MIX_DEFAULT_FORMAT, mixer_channels, mixer_chunk_size) != 0) {
+    if (Mix_OpenAudio(mixer_frequency, MIX_DEFAULT_FORMAT, mixer_outputs, mixer_chunk_size) != 0) {
         warn_once("mix_open_audio", std::string("SDL_mixer open audio failed: ") + Mix_GetError());
         Mix_Quit();
         return false;
     }
 
-    Mix_AllocateChannels(mixer_voices);
     mixer_open_ = true;
+    int frequency = 0;
+    Uint16 format = 0;
+    if (Mix_QuerySpec(&frequency, &format, &mix_channels_) == 0 || format != AUDIO_S16SYS) {
+        warn_once("mix_format", "audio output is not 16-bit; the underwater muffling is off");
+    } else {
+        // Configured under the audio lock once the manifest is loaded; until
+        // then the filter passes everything through.
+        filter_sample_rate_ = frequency;
+        Mix_SetPostMix(filter_mix, this);
+        filter_registered_ = true;
+    }
     return true;
 }
 
@@ -62,6 +71,17 @@ bool audio_engine::load_manifest(const std::filesystem::path& manifest_path) {
     if (!result.manifest) {
         warn_once("manifest:" + manifest_path.string(), result.error);
         return false;
+    }
+
+    if (mixer_open_) {
+        const int channels = Mix_AllocateChannels(result.manifest->voices.channels);
+        voices_.reset(channels, result.manifest->voices.loops);
+    }
+
+    if (filter_registered_) {
+        SDL_LockAudio();
+        filter_.configure(result.manifest->underwater, filter_sample_rate_);
+        SDL_UnlockAudio();
     }
 
     const std::filesystem::path audio_root = manifest_path.parent_path();
@@ -110,29 +130,57 @@ void audio_engine::set_listener(const sound_listener& listener, const float mete
     meters_per_world_unit_ = meters_per_world_unit;
 }
 
-// The channel's volume multiplies the chunk's (the mix and the player's
-// levels); its panning is the mixer's own effect, after a pitched loop's.
-void audio_engine::mix_channel(const int channel, const loaded_chunk& sound, const std::optional<glm::vec3>& position) const {
-    sound_mix mix;
-    if (position && sound.spread) {
-        mix = place_sound(*sound.spread, *position, listener_, meters_per_world_unit_);
+sound_mix audio_engine::heard(const loaded_chunk& sound, const std::optional<glm::vec3>& position) const {
+    return position && sound.spread ? place_sound(*sound.spread, *position, listener_, meters_per_world_unit_) : sound_mix{};
+}
+
+bool audio_engine::sdl_channels::playing(const int channel) const {
+    return Mix_Playing(channel) != 0;
+}
+
+// Mixed before it starts, so its first samples play at their level. A
+// pitched loop's effect rewrites the channel's samples, so the panning (the
+// mixer's own effect, run in the order registered) comes off and goes back on
+// after it. The effect goes on only once the channel plays: SDL_mixer drops a
+// channel's effects when it stops or is halted while playing, never an idle
+// channel's.
+bool audio_engine::sdl_channels::start(const int channel, const std::string& sound, const sound_mix& mix,
+                                       pitched_loop* const loop) {
+    const auto it = engine_.chunks_.find(sound);
+    if (it == engine_.chunks_.end()) {
+        return false;
     }
+    Mix_Chunk* const chunk = it->second.chunk.get();
+    this->mix(channel, mix);
+    if (Mix_PlayChannel(channel, chunk, loop != nullptr ? -1 : 0) < 0) {
+        return false;
+    }
+    int frequency = 0;
+    Uint16 format = 0;
+    int channels = 0;
+    if (loop == nullptr || Mix_QuerySpec(&frequency, &format, &channels) == 0 || format != AUDIO_S16SYS || channels != 2) {
+        return true;
+    }
+    loop->chunk = chunk;
+    Mix_SetPanning(channel, 255, 255);
+    Mix_RegisterEffect(channel, play_pitched, nullptr, loop);
+    this->mix(channel, mix);
+    return true;
+}
+
+// The channel's volume multiplies the chunk's (the mix and the player's levels).
+void audio_engine::sdl_channels::mix(const int channel, const sound_mix& mix) {
     const stereo_gains sides = stereo_for(mix.pan);
     Mix_Volume(channel, mixer_volume(mix.gain));
     Mix_SetPanning(channel, static_cast<Uint8>(sides.left * 255.0f + 0.5f), static_cast<Uint8>(sides.right * 255.0f + 0.5f));
 }
 
-// Mixed before it starts, so its first samples play at their level.
-std::optional<int> audio_engine::start(const loaded_chunk& sound, const std::optional<glm::vec3>& position, const int loops) const {
-    const int channel = Mix_GroupAvailable(-1);
-    if (channel < 0) {
-        return std::nullopt;
-    }
-    mix_channel(channel, sound, position);
-    if (Mix_PlayChannel(channel, sound.chunk.get(), loops) < 0) {
-        return std::nullopt;
-    }
-    return channel;
+// Mix_HaltChannel and Mix_UnregisterEffect each hold the audio device's lock,
+// which the audio thread holds while it mixes, so once they return the
+// channel's effects are gone and its loop is no longer read.
+void audio_engine::sdl_channels::halt(const int channel) {
+    Mix_HaltChannel(channel);
+    Mix_UnregisterEffect(channel, play_pitched);
 }
 
 void audio_engine::play(const std::string& id) {
@@ -144,9 +192,10 @@ void audio_engine::play(const std::string& id) {
         warn_once("play:" + id, "audio sound unavailable: " + id);
         return;
     }
-    start(it->second, std::nullopt, 0);
+    voices_.play(id, sound_mix{});
 }
 
+// Out of earshot it is not played at all.
 void audio_engine::play_at(const std::string& id, const glm::vec3& position) {
     if (!mixer_open_) {
         return;
@@ -156,11 +205,7 @@ void audio_engine::play_at(const std::string& id, const glm::vec3& position) {
         warn_once("play:" + id, "audio sound unavailable: " + id);
         return;
     }
-    // Out of earshot it is not played at all.
-    if (it->second.spread && place_sound(*it->second.spread, position, listener_, meters_per_world_unit_).gain <= 0.0f) {
-        return;
-    }
-    start(it->second, position, 0);
+    voices_.play(id, heard(it->second, position));
 }
 
 // The mixer's effect for a pitched loop (16-bit stereo, as the mixer opens):
@@ -190,71 +235,20 @@ void audio_engine::play_pitched(int, void* stream, const int length, void* loop_
     loop.position = position;
 }
 
-void audio_engine::play_loop(const std::string& key, const std::string& id, const glm::vec3& position) {
+void audio_engine::set_loops(const std::vector<loop_request>& loops) {
     if (!mixer_open_) {
         return;
     }
-    const auto active = loops_.find(key);
-    if (active != loops_.end() && Mix_Playing(active->second.channel) != 0) {
-        return;
+    std::vector<loop_sound> sounds;
+    for (const loop_request& loop : loops) {
+        const auto it = chunks_.find(loop.sound);
+        if (it == chunks_.end()) {
+            warn_once("loop:" + loop.sound, "audio loop unavailable: " + loop.sound);
+            continue;
+        }
+        sounds.push_back(loop_sound{loop.key, loop.sound, heard(it->second, loop.position), loop.pitch});
     }
-    const auto it = chunks_.find(id);
-    if (it == chunks_.end()) {
-        warn_once("loop:" + id, "audio loop unavailable: " + id);
-        return;
-    }
-    const std::optional<int> channel = start(it->second, position, -1);
-    if (!channel) {
-        return;
-    }
-    loops_[key] = playing_loop{*channel, id};
-    int frequency = 0;
-    Uint16 format = 0;
-    int channels = 0;
-    if (Mix_QuerySpec(&frequency, &format, &channels) == 0 || format != AUDIO_S16SYS || channels != 2) {
-        return;
-    }
-    std::unique_ptr<pitched_loop>& loop = pitched_loops_[key];
-    if (!loop) {
-        loop = std::make_unique<pitched_loop>();
-    }
-    loop->chunk = it->second.chunk.get();
-    loop->position = 0.0;
-    loop->ratio.store(1.0f);
-    // The pitched effect rewrites the channel's samples, so the panning comes
-    // off and goes back on after it.
-    Mix_SetPanning(*channel, 255, 255);
-    Mix_RegisterEffect(*channel, play_pitched, nullptr, loop.get());
-    mix_channel(*channel, it->second, position);
-}
-
-void audio_engine::place_loop(const std::string& key, const glm::vec3& position) {
-    const auto loop = loops_.find(key);
-    if (!mixer_open_ || loop == loops_.end()) {
-        return;
-    }
-    const auto it = chunks_.find(loop->second.id);
-    if (it != chunks_.end()) {
-        mix_channel(loop->second.channel, it->second, position);
-    }
-}
-
-void audio_engine::set_loop_pitch(const std::string& key, const float ratio) {
-    const auto loop = pitched_loops_.find(key);
-    if (loop != pitched_loops_.end() && std::isfinite(ratio) && ratio > 0.0f) {
-        loop->second->ratio.store(ratio);
-    }
-}
-
-void audio_engine::stop_loop(const std::string& key) {
-    const auto it = loops_.find(key);
-    if (it == loops_.end()) {
-        return;
-    }
-    if (mixer_open_) {
-        Mix_HaltChannel(it->second.channel);
-    }
-    loops_.erase(it);
+    voices_.set_loops(sounds);
 }
 
 void audio_engine::start_ambience(const std::string& id) {
@@ -292,8 +286,23 @@ void audio_engine::set_levels(const audio_levels& levels) {
     }
 }
 
+void audio_engine::set_underwater(const bool underwater) {
+    filter_.set_target(underwater);
+}
+
+// The mixer's post-mix: the whole mix, music included, on the audio thread.
+void audio_engine::filter_mix(void* const filter_data, unsigned char* const stream, const int length) {
+    auto& engine = *static_cast<audio_engine*>(filter_data);
+    const int frames = length / (static_cast<int>(sizeof(Sint16)) * engine.mix_channels_);
+    engine.filter_.process(reinterpret_cast<Sint16*>(stream), frames, engine.mix_channels_);
+}
+
 void audio_engine::shutdown() {
     unload_manifest();
+    if (filter_registered_) {
+        Mix_SetPostMix(nullptr, nullptr);
+        filter_registered_ = false;
+    }
     if (mixer_open_) {
         Mix_CloseAudio();
         mixer_open_ = false;
@@ -305,12 +314,12 @@ void audio_engine::shutdown() {
     }
 }
 
+// Every channel halts before the chunks they play and their loops are freed.
 void audio_engine::unload_manifest() {
     if (mixer_open_) {
-        Mix_HaltChannel(-1);
+        voices_.halt_all();
         Mix_HaltMusic();
     }
-    loops_.clear();
     active_ambience_.clear();
     chunks_.clear();
     music_.clear();

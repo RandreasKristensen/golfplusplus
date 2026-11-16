@@ -50,6 +50,7 @@ bool contents_match_extension(const std::filesystem::path& path) {
 
 TEST_CASE("audio manifest parser accepts valid manifest") {
     const audio_manifest_parse_result result = parse_audio_manifest(R"({
+      "voices": { "channels": 32, "loops": 8 }, "underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 }, 
       "master_volume": 0.8,
       "categories": {
         "ui": 0.55,
@@ -95,6 +96,7 @@ TEST_CASE("audio manifest parser accepts valid manifest") {
 
 TEST_CASE("audio manifest parser defaults optional fields") {
     const audio_manifest_parse_result result = parse_audio_manifest(R"({
+      "voices": { "channels": 32, "loops": 8 }, "underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 }, 
       "sounds": [
         {
           "id": "club_change",
@@ -125,6 +127,7 @@ TEST_CASE("audio manifest parser defaults optional fields") {
 
 TEST_CASE("audio manifest parser clamps negative sound multipliers") {
     const audio_manifest_parse_result result = parse_audio_manifest(R"({
+      "voices": { "channels": 32, "loops": 8 }, "underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 }, 
       "sounds": [
         { "id": "muted", "file": "sfx/muted.wav", "volume_multiplier": -2.0, "placed": false }
       ]
@@ -146,6 +149,7 @@ TEST_CASE("audio manifest parser rejects invalid json") {
 
 TEST_CASE("audio manifest parser rejects duplicate ids") {
     const audio_manifest_parse_result result = parse_audio_manifest(R"({
+      "voices": { "channels": 32, "loops": 8 }, "underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 }, 
       "sounds": [
         { "id": "ui_move", "file": "sfx/ui_move.wav", "placed": false },
         { "id": "ui_move", "file": "sfx/ui_move_alt.wav", "placed": false }
@@ -158,6 +162,7 @@ TEST_CASE("audio manifest parser rejects duplicate ids") {
 
 TEST_CASE("audio manifest parser keeps SDL_mixer asset classes explicit") {
     const audio_manifest_parse_result result = parse_audio_manifest(R"({
+      "voices": { "channels": 32, "loops": 8 }, "underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 }, 
       "sounds": [
         { "id": "ball_roll", "file": "sfx/ball_roll.wav", "type": "loop", "placed": false },
         { "id": "ambience_course_day", "file": "ambience/course_day.ogg", "type": "ambience", "category": "ambience", "placed": false }
@@ -242,6 +247,7 @@ TEST_CASE("every file in the manifest has sound in it: SDL_mixer cannot free an 
 
 TEST_CASE("the master volume scales every sound and multiplies with the music volume for the ambience") {
     const audio_manifest_parse_result result = parse_audio_manifest(R"({
+      "voices": { "channels": 32, "loops": 8 }, "underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 }, 
       "master_volume": 0.8,
       "categories": { "ui": 0.5 },
       "sounds": [ { "id": "click", "file": "click.wav", "category": "ui", "volume_multiplier": 0.5, "placed": false } ]
@@ -266,4 +272,47 @@ TEST_CASE("the master volume scales every sound and multiplies with the music vo
     levels.master = 2.0f;
     levels.music = 1.0f;
     CHECK(near(played_gain(1.0f, audio_sound_type::sfx, levels), 1.0f));
+}
+
+TEST_CASE("audio manifest parser needs the mixer's channels, with some left over from loops") {
+    const auto with_voices = [](const std::string& voices) {
+        return parse_audio_manifest("{" + voices + R"("underwater": { "cutoff_hz": 400, "gain": 0.5, "glide_seconds": 0.2 }, )" + R"("sounds": [ { "id": "a", "file": "a.wav", "placed": false } ] })");
+    };
+    const audio_manifest_parse_result shared = with_voices(R"("voices": { "channels": 16, "loops": 4 }, )");
+    REQUIRE(shared.manifest.has_value());
+    CHECK(shared.manifest->voices.channels == 16);
+    CHECK(shared.manifest->voices.loops == 4);
+    CHECK(with_voices(R"("voices": { "channels": 16, "loops": 0 }, )").manifest.has_value());
+
+    CHECK(!with_voices("").manifest);
+    CHECK(!with_voices(R"("voices": { "channels": 16 }, )").manifest);
+    CHECK(!with_voices(R"("voices": { "loops": 4 }, )").manifest);
+    CHECK(!with_voices(R"("voices": { "channels": 16, "loops": 16 }, )").manifest);
+    CHECK(!with_voices(R"("voices": { "channels": 0, "loops": 0 }, )").manifest);
+    CHECK(!with_voices(R"("voices": { "channels": 16, "loops": -1 }, )").manifest);
+    CHECK(!with_voices(R"("voices": { "channels": 16.5, "loops": 4 }, )").manifest);
+    CHECK(with_voices("").error.find("voices") != std::string::npos);
+}
+
+TEST_CASE("audio manifest parser needs an underwater section with a cutoff, gain and glide in range") {
+    const auto with_underwater = [](const std::string& underwater) {
+        return parse_audio_manifest(R"({ "voices": { "channels": 16, "loops": 4 }, )" + underwater +
+                                    R"("sounds": [ { "id": "a", "file": "a.wav", "placed": false } ] })");
+    };
+    const audio_manifest_parse_result shipped = with_underwater(R"("underwater": { "cutoff_hz": 400, "gain": 0.45, "glide_seconds": 0.2 }, )");
+    REQUIRE(shipped.manifest.has_value());
+    CHECK(near(shipped.manifest->underwater.cutoff_hz, 400.0f));
+    CHECK(near(shipped.manifest->underwater.gain, 0.45f));
+    CHECK(near(shipped.manifest->underwater.glide_seconds, 0.2f));
+
+    CHECK(!with_underwater("").manifest);
+    CHECK(!with_underwater(R"("underwater": { "gain": 0.45, "glide_seconds": 0.2 }, )").manifest);
+    CHECK(!with_underwater(R"("underwater": { "cutoff_hz": 400, "glide_seconds": 0.2 }, )").manifest);
+    CHECK(!with_underwater(R"("underwater": { "cutoff_hz": 400, "gain": 0.45 }, )").manifest);
+    CHECK(!with_underwater(R"("underwater": { "cutoff_hz": 49, "gain": 0.45, "glide_seconds": 0.2 }, )").manifest);
+    CHECK(!with_underwater(R"("underwater": { "cutoff_hz": 20001, "gain": 0.45, "glide_seconds": 0.2 }, )").manifest);
+    CHECK(!with_underwater(R"("underwater": { "cutoff_hz": 400, "gain": -0.1, "glide_seconds": 0.2 }, )").manifest);
+    CHECK(!with_underwater(R"("underwater": { "cutoff_hz": 400, "gain": 1.1, "glide_seconds": 0.2 }, )").manifest);
+    CHECK(!with_underwater(R"("underwater": { "cutoff_hz": 400, "gain": 0.45, "glide_seconds": 0 }, )").manifest);
+    CHECK(with_underwater("").error.find("underwater") != std::string::npos);
 }

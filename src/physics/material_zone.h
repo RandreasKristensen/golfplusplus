@@ -18,6 +18,7 @@ enum class material_zone_type {
     bunker,
     water,
     fairway,
+    heavy_rough,
     unknown  // unrecognised type in the data; ignored by terrain building
 };
 

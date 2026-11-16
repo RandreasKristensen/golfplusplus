@@ -4,15 +4,27 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 
 namespace {
-skill_progression skills_from_json(const json& root) {
+// nullopt when an entry is not an integer in 0..INT64_MAX: such a save is
+// refused (and backed up by load_save), never wrapped or clamped to zero.
+std::optional<skill_progression> skills_from_json(const json& root) {
     skill_progression progression;
     if (const json* skills = json_object(root, "skills")) {
         for (auto it = skills->begin(); it != skills->end(); ++it) {
-            if (it.value().is_number_integer()) {
-                progression[it.key()].xp = std::max<std::int64_t>(0, it.value().get<std::int64_t>());
+            const json& value = it.value();
+            if (!value.is_number_integer()) {
+                return std::nullopt;
             }
+            if (value.is_number_unsigned()) {
+                if (value.get<std::uint64_t>() > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
+                    return std::nullopt;
+                }
+            } else if (value.get<std::int64_t>() < 0) {
+                return std::nullopt;
+            }
+            progression[it.key()].xp = value.get<std::int64_t>();
         }
     }
     return progression;
@@ -60,7 +72,11 @@ std::optional<save_data> parse_save_data(const std::string& text) {
     }
     save.completed_course_ids = json_string_array(*root, "completed_course_ids");
     save.holes_completed = std::max(0, json_int(*root, "holes_completed").value_or(0));
-    save.skills = skills_from_json(*root);
+    const std::optional<skill_progression> skills = skills_from_json(*root);
+    if (!skills) {
+        return std::nullopt;
+    }
+    save.skills = *skills;
     save.collected_ids = json_string_array(*root, "collected_ids");
     save.repeatable_collectibles = repeatable_collectibles_from_json(*root);
     save.world_flags = json_string_array(*root, "world_flags");

@@ -199,60 +199,66 @@
   "trees": [
     {
       "position": [
-        18.85,
+        18.48,
         0.0,
-        113.29
+        113.26
       ],
-      "trunk_radius": 0.27,
-      "trunk_height": 3.13,
-      "leaf_radius": 1.91,
-      "leaf_height": 3.83
+      "trunk_radius": 0.26,
+      "trunk_height": 3.09,
+      "leaf_radius": 1.89,
+      "leaf_height": 3.78,
+      "species": "oak"
     },
     {
       "position": [
-        16.85,
+        17.48,
         0.0,
-        118.29
+        118.26
       ],
-      "trunk_radius": 0.27,
-      "trunk_height": 3.17,
-      "leaf_radius": 1.94,
-      "leaf_height": 3.87
+      "trunk_radius": 0.25,
+      "trunk_height": 2.93,
+      "leaf_radius": 1.79,
+      "leaf_height": 3.58,
+      "species": "birch"
     },
     {
       "position": [
-        -13.15,
+        -13.52,
         0.0,
-        28.29
+        28.26
       ],
-      "trunk_radius": 0.3,
-      "trunk_height": 3.49,
-      "leaf_radius": 2.13,
-      "leaf_height": 4.26
+      "trunk_radius": 0.29,
+      "trunk_height": 3.43,
+      "leaf_radius": 2.1,
+      "leaf_height": 4.2,
+      "species": "oak"
     },
     {
       "position": [
-        101.85,
+        101.48,
         0.0,
-        36.29
+        36.26
       ],
       "trunk_radius": 0.2,
       "trunk_height": 2.28,
       "leaf_radius": 1.4,
-      "leaf_height": 2.79
+      "leaf_height": 2.79,
+      "species": "birch"
     },
     {
       "position": [
-        105.85,
+        106.48,
         0.0,
-        27.29
+        27.26
       ],
-      "trunk_radius": 0.22,
-      "trunk_height": 2.54,
-      "leaf_radius": 1.55,
-      "leaf_height": 3.11
+      "trunk_radius": 0.24,
+      "trunk_height": 2.78,
+      "leaf_radius": 1.7,
+      "leaf_height": 3.4,
+      "species": "birch"
     }
   ],
+  "bushes": [],
   "source": {
     "type": "osm",
     "tee_latlon": [

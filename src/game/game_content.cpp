@@ -80,10 +80,11 @@ game_content_load_result load_game_content(const std::string& asset_root) {
     const auto hub = load_hub(asset_root);
     if (!hub) { return fail(std::string("cannot load ") + hub_manifest_path); }
     content.hub = *hub;
-    content.courses = load_courses(asset_root);
-    if (content.courses.empty()) {
-        return fail(std::string("no valid courses in ") + courses_path);
+    parsed<std::vector<course_definition>> courses = load_courses(asset_root);
+    if (!courses.value) {
+        return fail(courses.error);
     }
+    content.courses = std::move(*courses.value);
 
     const std::optional<std::uint64_t> hash = load_simulation_content_hash(asset_root);
     if (!hash) {

@@ -108,18 +108,18 @@ TEST_CASE("the ground's heights land on the sky grid, gaps at its lowest") {
 TEST_CASE("the ground's render mesh carries the sky each vertex sees") {
     const terrain_mesh level = make_ground(31, 1.0f, [](float, float) { return 0.0f; });
     const render_static_mesh open =
-        make_terrain_render_mesh({&level}, 1U, test_scene_colors().ground, bake_ground_light(level));
+        make_terrain_render_mesh({&level}, 1U, test_scene_colors().ground, bake_ground_light(level), nullptr);
     CHECK(std::all_of(open.vertices.begin(), open.vertices.end(), [](const render_terrain_vertex& v) { return v.ao == 1.0f; }));
 
     const terrain_mesh bunker = make_ground(31, 1.0f, [](const float x, const float z) { return bowl(x, z, 15.0f, 15.0f, 6.0f, 0.9f); });
     const render_static_mesh bowl_mesh =
-        make_terrain_render_mesh({&bunker}, 1U, test_scene_colors().ground, bake_ground_light(bunker));
+        make_terrain_render_mesh({&bunker}, 1U, test_scene_colors().ground, bake_ground_light(bunker), nullptr);
     const std::size_t centre = 15U * 31U + 15U;
     CHECK(bowl_mesh.vertices[centre].ao < 0.95f);
     CHECK(bowl_mesh.vertices[0].ao == 1.0f);
 
     // Without a bake every vertex sees all of the sky and nothing on its horizon.
-    const render_static_mesh unbaked = make_terrain_render_mesh({&bunker}, 1U, test_scene_colors().ground, ground_light_bake{});
+    const render_static_mesh unbaked = make_terrain_render_mesh({&bunker}, 1U, test_scene_colors().ground, ground_light_bake{}, nullptr);
     CHECK(unbaked.vertices[centre].ao == 1.0f);
     CHECK((unbaked.vertices[centre].horizon == std::array<std::uint8_t, 8>{}));
 }
@@ -163,7 +163,7 @@ TEST_CASE("level ground has nothing on its horizon; a ridge hides the low sun fr
 
     // The render mesh carries it in bytes.
     const terrain_mesh ground = make_ground(41, 4.0f, ridge);
-    const render_static_mesh mesh = make_terrain_render_mesh({&ground}, 1U, test_scene_colors().ground, bake_ground_light(ground));
+    const render_static_mesh mesh = make_terrain_render_mesh({&ground}, 1U, test_scene_colors().ground, bake_ground_light(ground), nullptr);
     const render_terrain_vertex& foot = mesh.vertices[20U * 41U + 10U];  // x = 40
     CHECK(foot.horizon[east] > 25);
     CHECK(foot.horizon[west] == 0);

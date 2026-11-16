@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
@@ -26,6 +27,20 @@ void append_quad(std::vector<floodlight_vertex>& out, const std::array<glm::vec3
     const auto vertex = [&](const glm::vec3& p) { return floodlight_vertex{p, normal, color, lamp}; };
     out.insert(out.end(), {vertex(corners[0]), vertex(corners[1]), vertex(corners[2]),
                            vertex(corners[0]), vertex(corners[2]), vertex(corners[3])});
+}
+
+// A glowing face as four triangles round its centre, the glow 1 there and
+// 0 at its corners: brightest in the middle like the sun's disc, so its
+// columns fade from the edges in and the camcorder's smear thins with
+// distance instead of running the face's full width down the picture.
+void append_glowing_quad(std::vector<floodlight_vertex>& out, const std::array<glm::vec3, 4>& corners,
+                         const glm::vec3& normal, const glm::vec3& color) {
+    const glm::vec3 center = (corners[0] + corners[1] + corners[2] + corners[3]) * 0.25f;
+    for (std::size_t i = 0; i < corners.size(); ++i) {
+        out.insert(out.end(), {floodlight_vertex{center, normal, color, 1.0f},
+                               floodlight_vertex{corners[i], normal, color, 0.0f},
+                               floodlight_vertex{corners[(i + 1) % corners.size()], normal, color, 0.0f}});
+    }
 }
 
 void append_pole(std::vector<floodlight_vertex>& out, const glm::vec3& foot, const float radius, const float height,
@@ -56,8 +71,12 @@ void append_box(std::vector<floodlight_vertex>& out, const glm::vec3& center, co
             const glm::vec3 face = center + normal_axis * side;
             const glm::vec3 normal = safe_normalize(normal_axis * side, world_up);
             const bool front = (axis == 2 && side > 0.0f) || (axis == 1 && side < 0.0f);
-            append_quad(out, {face - u - v, face + u - v, face + u + v, face - u + v}, normal, front ? front_color : color,
-                        front && lit_front ? 1.0f : 0.0f);
+            const std::array<glm::vec3, 4> corners{face - u - v, face + u - v, face + u + v, face - u + v};
+            if (front && lit_front) {
+                append_glowing_quad(out, corners, normal, front_color);
+            } else {
+                append_quad(out, corners, normal, front ? front_color : color, 0.0f);
+            }
         }
     }
 }

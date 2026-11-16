@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <map>
+#include <string>
 #include <utility>
 
 namespace {
@@ -111,17 +113,18 @@ server_content_load_result parse_server_content(const content_files& files) {
     content.font = *font;
 
 
+    std::map<std::string, std::string> manifests;
     for (const auto& [path, text] : files) {
-        const std::optional<std::string> folder = course_folder_of(path);
-        std::optional<course_definition> course = folder ? parse_course_from_text(std::string(text)) : std::nullopt;
-        if (course && !course->world.empty()) {
-            content.courses.push_back(course_in_folder(std::move(*course), *folder));
+        if (course_folder_of(path)) {
+            manifests.emplace(path, std::string(text));
         }
     }
-    if (content.courses.empty()) {
-        result.error = std::string("no valid course with a world in ") + courses_path;
+    parsed<std::vector<course_definition>> courses = parse_courses(manifests);
+    if (!courses.value) {
+        result.error = courses.error;
         return result;
     }
+    content.courses = std::move(*courses.value);
 
     const auto hub_text = file_text(files, hub_manifest_path);
     content.hub = hub_text ? parse_hub_from_text(*hub_text) : std::nullopt;
@@ -156,7 +159,7 @@ std::optional<server_course> build_server_course(const content_files& files,
                                                  const std::string& course_id) {
     if (content.hub && content.hub->id == course_id) {
         const auto text = file_text(files, content.hub->world);
-        auto world = text ? parse_world_from_text(*text) : std::nullopt;
+        auto world = text ? parse_world_from_text(*text).value : std::nullopt;
         if (!world) { return std::nullopt; }
         world->hub = content.hub->anchors;
         server_course built;
@@ -174,7 +177,7 @@ std::optional<server_course> build_server_course(const content_files& files,
     std::vector<hole_data> holes;
     for (std::size_t i = 0; i < course->holes.size(); ++i) {
         const std::optional<std::string> text = file_text(files, course_hole_reference(*course, i));
-        std::optional<hole_data> hole = text ? parse_hole_from_text(*text) : std::nullopt;
+        std::optional<hole_data> hole = text ? parse_hole_from_text(*text).value : std::nullopt;
         if (!hole) {
             return std::nullopt;
         }
@@ -182,7 +185,7 @@ std::optional<server_course> build_server_course(const content_files& files,
     }
     const std::optional<std::string> world_text = file_text(files, course->world);
     std::optional<course_world_definition> world =
-        world_text ? parse_course_world_from_text(*world_text, *course) : std::nullopt;
+        world_text ? parse_course_world_from_text(*world_text, *course).value : std::nullopt;
     if (!world || holes.empty()) {
         return std::nullopt;
     }

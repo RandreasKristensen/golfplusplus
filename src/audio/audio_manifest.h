@@ -4,9 +4,12 @@
 // ("description", "target_length_seconds") that the game ignores. Each
 // sound either carries in the world (reference_distance and max_distance,
 // metres, picked by ear) or says "placed": false and plays at full level,
-// centred (menus, the HUD, thunder, the ambience).
+// centred (menus, the HUD, thunder, the ambience). "voices" shares the
+// mixer's channels (audio/voice_pool.h); "underwater" shapes the mix
+// while the camera is under water (audio/underwater_filter.h).
 
 #include "audio/sound_placement.h"
+#include "audio/underwater_filter.h"
 #include "game/settings.h"
 
 #include <optional>
@@ -32,8 +35,17 @@ struct audio_sound_definition {
     std::optional<sound_spread> spread;  // none: not placed
 };
 
+// The mixer's channels: `channels` in all, of which loops hold at most
+// `loops`, leaving the rest for one-shot sounds.
+struct audio_voices {
+    int channels = 0;
+    int loops = 0;
+};
+
 struct audio_manifest {
     float master_volume = 1.0f;
+    audio_voices voices;
+    underwater_sound underwater;
     std::unordered_map<std::string, float> category_volumes;
     std::vector<audio_sound_definition> sounds;
 };

@@ -1,25 +1,35 @@
 #pragma once
 
 // Plays the sounds in assets/sound/sounds.json through SDL_mixer, those in
-// the world from where they happen (audio/sound_placement.h). Missing files
-// and failed loads are logged once and then ignored, so the game runs
-// without audio.
+// the world from where they happen (audio/sound_placement.h), on channels
+// shared out by audio/voice_pool.h. Missing files and failed loads are logged
+// once and then ignored, so the game runs without audio.
 
 #include "audio/audio_manifest.h"
 #include "audio/sound_placement.h"
+#include "audio/underwater_filter.h"
+#include "audio/voice_pool.h"
 
-#include <atomic>
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include <glm/vec3.hpp>
 
 struct Mix_Chunk;
 struct Mix_Music;
+
+// A looping sound heard from `position` in the world, at `pitch` times its rate.
+struct loop_request {
+    std::string key;
+    std::string sound;
+    glm::vec3 position{0.0f};
+    float pitch = 1.0f;
+};
 
 class audio_engine {
 public:
@@ -37,20 +47,18 @@ public:
     // Plays a sound from `position` in the world, if its manifest entry is
     // placed (else as play).
     void play_at(const std::string& id, const glm::vec3& position);
-    // Starts the looping sound `id` from `position` as the loop `key`, unless
-    // that loop is already playing. Several loops may play one sound.
-    void play_loop(const std::string& key, const std::string& id, const glm::vec3& position);
-    // Moves a playing loop to `position`.
-    void place_loop(const std::string& key, const glm::vec3& position);
-    void stop_loop(const std::string& key);
-    // Plays a loop faster (higher) or slower (lower) by `ratio` from now,
-    // while it plays.
-    void set_loop_pitch(const std::string& key, float ratio);
+    // The loops heard from now, by key (several may play one sound): each
+    // starts or keeps playing from its position at its pitch; any other
+    // stops. Out of earshot or past the loops' share a loop is silent.
+    void set_loops(const std::vector<loop_request>& loops);
     // Switches the background ambience (no-op if it is already playing).
     void start_ambience(const std::string& id);
     // The player's volume levels, applied live: to every loaded sound,
     // including those playing and looping now, and to the ambience.
     void set_levels(const audio_levels& levels);
+    // Whether the listener is under water: everything heard is muffled,
+    // glided in and out (audio/underwater_filter.h).
+    void set_underwater(bool underwater);
     void shutdown();
 
 private:
@@ -71,35 +79,36 @@ private:
         float mix_gain = 0.0f;  // sound_mix_gain
     };
 
-    // A loop played back at its own rate (play_loop, set_loop_pitch): the
-    // mixer's effect reads its chunk from `position` (frames) on, stepping
-    // `ratio` frames each frame.
-    struct pitched_loop {
-        const Mix_Chunk* chunk = nullptr;
-        double position = 0.0;
-        std::atomic<float> ratio{1.0f};
+    // SDL_mixer's channels as voices_ drives them.
+    class sdl_channels final : public mixer_channels {
+    public:
+        explicit sdl_channels(const audio_engine& engine) : engine_(engine) {}
+        bool playing(int channel) const override;
+        bool start(int channel, const std::string& sound, const sound_mix& mix, pitched_loop* loop) override;
+        void mix(int channel, const sound_mix& mix) override;
+        void halt(int channel) override;
+
+    private:
+        const audio_engine& engine_;
     };
 
-    struct playing_loop {
-        int channel = -1;
-        std::string id;
-    };
-
+    static void filter_mix(void* filter_data, unsigned char* stream, int length);
     static void play_pitched(int channel, void* stream, int length, void* loop_data);
-    // Sets `channel`'s level and pan for `sound` heard from `position`, or
-    // full and centred with none.
-    void mix_channel(int channel, const loaded_chunk& sound, const std::optional<glm::vec3>& position) const;
-    // Starts `sound` on a free channel mixed as mix_channel says: its channel.
-    std::optional<int> start(const loaded_chunk& sound, const std::optional<glm::vec3>& position, int loops) const;
+    // `sound` heard from `position`, or full and centred with none.
+    sound_mix heard(const loaded_chunk& sound, const std::optional<glm::vec3>& position) const;
     void unload_manifest();
     void warn_once(const std::string& key, const std::string& message);
 
     bool initialized_ = false;
     bool mixer_open_ = false;
+    bool filter_registered_ = false;
+    int mix_channels_ = 0;
+    int filter_sample_rate_ = 0;
+    underwater_filter filter_;  // run on the audio thread
     std::unordered_map<std::string, loaded_chunk> chunks_;
     std::unordered_map<std::string, loaded_music> music_;
-    std::unordered_map<std::string, playing_loop> loops_;
-    std::unordered_map<std::string, std::unique_ptr<pitched_loop>> pitched_loops_;
+    sdl_channels channels_{*this};
+    voice_pool voices_{channels_};
     std::unordered_set<std::string> warned_;
     std::string active_ambience_;
     audio_levels levels_;

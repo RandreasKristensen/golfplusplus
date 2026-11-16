@@ -41,9 +41,8 @@ struct play_area {
     // plane, the backdrop ground and the course map.
     glm::vec3 center{0.0f};
     float extent = 0.0f;
-    // The XZ outline (convex, counter-clockwise) around every hole's ribbon
-    // and zones: the course itself, without the land around it (what the
-    // course map turns and fits to its paper).
+    // course_outline of the holes and zones: what the course map turns and
+    // fits to its paper.
     std::vector<glm::vec3> holes_outline;
     std::vector<tree_instance> trees;
     // Each hole's ribbon: where the ground takes hole heights from (on land,
@@ -81,6 +80,11 @@ struct play_area {
     std::vector<cup> cups;
 };
 
+// The XZ outline (convex, counter-clockwise) around every placed hole's
+// ribbon and the greens, fairways and bunkers among `zones`: the course
+// itself, without the land around it.
+std::vector<glm::vec3> course_outline(const std::vector<terrain_mesh>& holes, const std::vector<material_zone>& zones);
+
 // Hole-space position -> course position for a hole placed at `start`
 // (its tee lands on start.position, rotated around the tee).
 glm::vec3 place_hole_point(const hole_data& hole, const course_world_hole_start& start, const glm::vec3& point);
@@ -110,6 +114,8 @@ terrain_sample sample_area(const play_area& area, const glm::vec3& position, fra
 float terrain_height(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);
 // True below the surface of a pond (a camera looking out from under it).
 bool under_water(const play_area& area, const glm::vec3& position);
+// The surface height of the pond `position` (XZ) is in, if it is in one.
+std::optional<float> water_level_at(const play_area& area, const glm::vec3& position);
 // `position` moved onto the terrain surface, keeping its XZ.
 glm::vec3 anchor_on_terrain(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);
 // Where a ball of `radius` rests on the ground at `position` (XZ).
@@ -125,8 +131,9 @@ bool on_cart_road(const std::vector<course_world_cart_road>& roads, const glm::v
 
 // What a cart's wheels are on at `position` (XZ): on a cart path's top the
 // path, else the ground's material, its rolling resistance and grip soaked
-// by `wetness` (0 dry .. 1); the surface's slope; and the water over it, in
-// metres (none on a path: it crosses water by its bridge).
+// by `wetness` (0 dry .. 1); the surface's slope; and how far under the
+// water's surface wheels at `position`'s height (or on the pond's floor,
+// when lower) are, in metres (none on a path: it crosses water by its bridge).
 cart_ground cart_ground_at(const play_area& area, const game_tuning& tuning, float wetness, const glm::vec3& position,
                            frame_profile* profile = nullptr);
 

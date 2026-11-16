@@ -147,7 +147,7 @@ void append_course_map_fill(overlay_batch& batch,
         const render_terrain_vertex& va = mesh->vertices[ia];
         const render_terrain_vertex& vb = mesh->vertices[ib];
         const render_terrain_vertex& vc = mesh->vertices[ic];
-        const glm::vec3 average_color = (va.color + vb.color + vc.color) / 3.0f;
+        const glm::vec3 average_color = (va.map_color + vb.map_color + vc.map_color) / 3.0f;
         append_map_fill_triangle(batch,
                                  layout,
                                  map_point(layout, va.position),

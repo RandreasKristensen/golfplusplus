@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "core/render_frame.h"
+#include "core/scene_signs.h"
 #include "game/course_session.h"
 #include "game/game_state.h"
 #include "game/hole_sign.h"
@@ -196,16 +197,60 @@ TEST_CASE("render hole signs are rebuilt only when the signs change") {
     game_state state = started_game(fixture_hub_course());
     const text_assets& text = shipped_text_assets();
     render_hole_signs signs;
-    CHECK(refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), {}, text, test_scene_colors(), test_props().at("hole_sign"), 1));
+    CHECK(refresh_render_hole_signs(signs, state.area, state.terrain_render_revision, hole_sign_texts(state), {}, text, test_scene_colors(), test_props().at("hole_sign"), 1));
     CHECK(signs.revision == 1U);
     REQUIRE(tee_up(state, 1, false));
-    CHECK(!refresh_render_hole_signs(signs, state.area, hole_sign_texts(state), {}, text, test_scene_colors(), test_props().at("hole_sign"), 2));
+    CHECK(!refresh_render_hole_signs(signs, state.area, state.terrain_render_revision, hole_sign_texts(state), {}, text, test_scene_colors(), test_props().at("hole_sign"), 2));
     CHECK(signs.revision == 1U);
 
     std::vector<hole_sign_text> renumbered = hole_sign_texts(state);
     renumbered.front().par += 1;
-    CHECK(refresh_render_hole_signs(signs, state.area, renumbered, {}, text, test_scene_colors(), test_props().at("hole_sign"), 3));
+    CHECK(refresh_render_hole_signs(signs, state.area, state.terrain_render_revision, renumbered, {}, text, test_scene_colors(), test_props().at("hole_sign"), 3));
     CHECK(signs.revision == 3U);
+}
+
+TEST_CASE("the scene paints its sign faces again when the course loads again, not on a hole change") {
+    const text_assets& text = shipped_text_assets();
+    const startup_catalog catalog;
+    scene_colors colors = test_scene_colors();
+    game_state state = started_game(fixture_hub_course());
+    render_hole_signs signs;
+    REQUIRE(refresh_scene_hole_signs(signs, state, catalog, text, colors, test_props()));
+    const std::uint64_t first_upload = signs.revision;
+    REQUIRE(!signs.signs.empty());
+    const rgba_image first_face = signs.signs.front().face;
+
+    // Frames and normal hole transitions leave the upload alone.
+    CHECK(!refresh_scene_hole_signs(signs, state, catalog, text, colors, test_props()));
+    REQUIRE(tee_up(state, 1, false));
+    CHECK(!refresh_scene_hole_signs(signs, state, catalog, text, colors, test_props()));
+    CHECK(signs.revision == first_upload);
+
+    // The same course again with other ground colours (the tour's F2 edit).
+    colors.ground.fairway = glm::vec3(0.9f, 0.1f, 0.1f);
+    colors.ground.rough = glm::vec3(0.1f, 0.1f, 0.9f);
+    REQUIRE(start_course(state, fixture_hub_course()));
+    CHECK(refresh_scene_hole_signs(signs, state, catalog, text, colors, test_props()));
+    CHECK(signs.revision == first_upload + 1);
+    CHECK(signs.terrain_revision == state.terrain_render_revision);
+    CHECK(signs.signs.front().face.pixels != first_face.pixels);
+    CHECK(!refresh_scene_hole_signs(signs, state, catalog, text, colors, test_props()));
+}
+
+TEST_CASE("the scene's signs follow a board turned by a course load, though its centre and text are the same") {
+    const text_assets& text = shipped_text_assets();
+    const startup_catalog catalog;
+    game_state state = started_game(fixture_hub_course());
+    render_hole_signs signs;
+    REQUIRE(refresh_scene_hole_signs(signs, state, catalog, text, test_scene_colors(), test_props()));
+    const std::vector<hole_sign_vertex> before = signs.vertices;
+
+    state.area.signs.front().face_normal = -state.area.signs.front().face_normal;
+    CHECK(!refresh_scene_hole_signs(signs, state, catalog, text, test_scene_colors(), test_props()));
+    mark_terrain_render_dirty(state);
+    CHECK(refresh_scene_hole_signs(signs, state, catalog, text, test_scene_colors(), test_props()));
+    REQUIRE(signs.vertices.size() == before.size());
+    CHECK(signs.vertices.front().normal == -before.front().normal);
 }
 
 TEST_CASE("render hole signs carry a face and a model per sign, numbered by course hole") {

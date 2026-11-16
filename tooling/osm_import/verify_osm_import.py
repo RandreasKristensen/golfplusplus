@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import osm_audit
 import osm_checks
 import osm_contact_sheet
+import osm_publish
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_ASSETS = HERE.parent.parent / "assets"
@@ -116,6 +117,10 @@ def main() -> int:
         return 2
     errors = 0
     for course_id in ids:
+        if osm_publish.interrupted(assets / COURSES / course_id):
+            print(f"\n=== {course_id}: ERROR INTERRUPTED: an import stopped part-way and left a mix of "
+                  f"files ({osm_publish.MARKER}); re-run it", file=sys.stdout)
+            errors += 1
         course, holes, world = _load_course(assets, course_id)
         config = conv.load_generation_config(args.config, course_id)
         name = course.get("name", course_id)

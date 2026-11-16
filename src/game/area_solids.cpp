@@ -48,16 +48,22 @@ solid wall(const solid_kind kind, const glm::vec3& a, const glm::vec3& b, const 
 std::vector<solid> standing_solids(const play_area& area, const game_tuning& tuning) {
     const solids_tuning& contacts = tuning.solids;
     std::vector<solid> solids;
-    // Each tree's trunk, then its leaves, which only the ball meets.
+    // Each tree's trunk, then its leaves, which only the ball meets; a bush
+    // is leaves from the ground, tangled thick; a crown out of leaf is
+    // twigs, thinner (game/tree_season.h).
     for (const tree_body& tree : standing_trees(area)) {
-        solids.push_back(stopping_all(upright(solid_kind::trunk, tree.base, tree.shape.trunk_radius, tree.shape.trunk_height),
-                                      contacts.trunk));
+        if (tree.shape.trunk_height > 0.0f) {
+            solids.push_back(stopping_all(upright(solid_kind::trunk, tree.base, tree.shape.trunk_radius, tree.shape.trunk_height),
+                                          contacts.trunk));
+        }
         if (tree.shape.leaf_height > 0.0f) {
             solid leaves = upright(solid_kind::leaves,
                                    glm::vec3(tree.base.x, tree.base.y + std::max(0.0f, tree.shape.trunk_height), tree.base.z),
                                    tree.shape.leaf_radius, tree.shape.leaf_height);
             leaves.shape = solid_shape::cone;
             leaves.porous = true;
+            leaves.density = (tree.shape.kind == tree_kind::bush ? contacts.bush_density : 1.0f) *
+                crown_density(tuning.trees, tree.shape.foliage);
             solids.push_back(leaves);
         }
     }

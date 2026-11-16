@@ -1,9 +1,13 @@
 // Plays the golden shots (tests/fixtures/golden_shots/shots.json) the way the
 // server does (server_content.h), drives the golden cart through fixed
-// manoeuvres, and walks and drives from every tee of the fixture course in
-// the shared fixed steps (game/movement_step.h), and prints each result at
-// full precision. check_determinism.ps1 builds this natively and to WASM and
-// compares the two.
+// manoeuvres, walks and drives from every tee of the fixture course in the
+// shared fixed steps (game/movement_step.h) and drops a cart into each
+// hole's first deep water, and prints every field of
+// each result, floats as their exact bits (0x then 8 hex digits), one row per
+// line: a shot's summary, then each of its trajectory points and events.
+// check_determinism.ps1 builds this natively and to WASM and compares the
+// two row by row. Exits 1 when a shot's holed, lost or penalty strokes are
+// not what shots.json expects.
 //
 // Usage: golden_shots <repo root>
 
@@ -19,7 +23,9 @@
 #include "server_content.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <map>
 #include <optional>
@@ -40,6 +46,42 @@ void add_folder(std::map<std::string, std::string>& texts, const std::string& ro
 }
 
 namespace {
+// `value`'s exact bits, printed the same whatever the locale.
+void print_bits(const float value) {
+    std::uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof bits);
+    std::printf(" 0x%08lx", static_cast<unsigned long>(bits));
+}
+
+void print_bits(const glm::vec3& value) {
+    print_bits(value.x);
+    print_bits(value.y);
+    print_bits(value.z);
+}
+
+// Every field of `result`, as rows "shot <i> ...".
+void print_shot(const std::size_t i, const shot_result& result) {
+    std::printf("shot %zu summary rest", i);
+    print_bits(result.rest_position);
+    std::printf(" holed %d duration", result.holed ? 1 : 0);
+    print_bits(result.duration);
+    std::printf(" strike");
+    print_bits(result.strike_centredness);
+    std::printf(" lost %d penalty %d points %zu events %zu\n", result.lost ? 1 : 0, result.penalty_strokes,
+                result.trajectory.size(), result.events.size());
+    for (std::size_t j = 0; j < result.trajectory.size(); ++j) {
+        std::printf("shot %zu point %zu", i, j);
+        print_bits(result.trajectory[j]);
+        std::printf("\n");
+    }
+    for (std::size_t j = 0; j < result.events.size(); ++j) {
+        const shot_event& event = result.events[j];
+        std::printf("shot %zu event %zu", i, j);
+        print_bits(event.time);
+        std::printf(" kind %d material %d\n", static_cast<int>(event.kind), static_cast<int>(event.material));
+    }
+}
+
 // A golden shot's snapshot: each entry `ahead_meters` along the aim from
 // the ball, on the ground (a ball resting there).
 std::vector<snapshot_entry> golden_snapshot(const json& shot, const play_area& area, const glm::vec3& ball, const float aim,
@@ -65,7 +107,7 @@ struct golden_drive {
     const cart_surface_tuning* surface;
     float grade;
     float side_rise;
-    float water_depth;
+    float immersion;
     cart_controls controls;
     float swing_seconds;
     float seconds;
@@ -132,6 +174,7 @@ int main(int argc, char** argv) {
     }
 
     const float radius = content.tuning.scale.ball_physics_radius_meters;
+    int unexpected = 0;
     for (std::size_t i = 0; i < shots->size(); ++i) {
         const json& shot = (*shots)[i];
         const std::size_t hole = static_cast<std::size_t>(json_int(shot, "hole").value_or(0));
@@ -166,8 +209,16 @@ int main(int argc, char** argv) {
         const shot_result result =
             simulate_struck_shot(record, golfer_profile{}, server_shot_course(*course, hole, input.shot_at, golden_flags_out(shot), content),
                                  content.tuning, content.clubs);
-        std::printf("shot %zu %.9g %.9g %.9g %d %.9g %zu\n", i, result.rest_position.x, result.rest_position.y,
-                    result.rest_position.z, result.holed ? 1 : 0, result.duration, result.events.size());
+        print_shot(i, result);
+        const std::optional<bool> holed = json_bool(shot, "holed");
+        const std::optional<bool> lost = json_bool(shot, "lost");
+        const std::optional<int> penalty = json_int(shot, "penalty_strokes");
+        if (!holed || !lost || !penalty || *holed != result.holed || *lost != result.lost ||
+            *penalty != result.penalty_strokes) {
+            std::fprintf(stderr, "golden shot %zu: holed %d, lost %d, penalty %d, not as shots.json expects\n", i,
+                         result.holed ? 1 : 0, result.lost ? 1 : 0, result.penalty_strokes);
+            ++unexpected;
+        }
     }
 
     const cart_spec& spec = *content.items.find(content.default_loadout.cart)->cart;
@@ -178,7 +229,7 @@ int main(int argc, char** argv) {
         ground.normal = glm::normalize(glm::vec3(-drive.side_rise, 1.0f, -drive.grade));
         ground.rolling_resistance = drive.surface->rolling_resistance;
         ground.grip = drive.surface->grip;
-        ground.water_depth = drive.water_depth;
+        ground.immersion = drive.immersion;
         const int steps = static_cast<int>(std::lround(drive.seconds / cart_step_seconds));
         const int swing = static_cast<int>(std::lround(drive.swing_seconds / cart_step_seconds));
         cart_motion motion;
@@ -199,8 +250,16 @@ int main(int argc, char** argv) {
                 fall = step_cart_fall(fall, spec, content.tuning.cart.fall_restitution, cart_fall_step_seconds);
             }
         }
-        std::printf("cart %zu %.9g %.9g %.9g %d %.9g %.9g\n", i, position.x, motion.yaw, position.y,
-                    static_cast<int>(motion.condition), cart_forward_speed(motion), fall.angle);
+        std::printf("cart %zu at", i);
+        print_bits(position.x);
+        print_bits(position.y);
+        std::printf(" yaw");
+        print_bits(motion.yaw);
+        std::printf(" condition %d speed", static_cast<int>(motion.condition));
+        print_bits(cart_forward_speed(motion));
+        std::printf(" fall");
+        print_bits(fall.angle);
+        std::printf("\n");
     }
 
     // On every hole of the fixture course, from its tee: a walk (turning,
@@ -228,8 +287,13 @@ int main(int argc, char** argv) {
             input.yaw = quantise_yaw(yaw);
             me = step_walker(me, input, on_foot).after;
         }
-        std::printf("walk %zu %.9g %.9g %.9g %d %.9g %.9g\n", hole, me.position.x, me.position.y, me.position.z,
-                    me.vertical.grounded ? 1 : 0, me.speed, me.vertical.speed);
+        std::printf("walk %zu at", hole);
+        print_bits(me.position);
+        std::printf(" grounded %d speed", me.vertical.grounded ? 1 : 0);
+        print_bits(me.speed);
+        std::printf(" vertical");
+        print_bits(me.vertical.speed);
+        std::printf("\n");
 
         cart_mover cart;
         cart.pose = cart_pose{tee, yaw_towards(tee, course->area.cups[hole].centre)};
@@ -239,8 +303,37 @@ int main(int argc, char** argv) {
             const float steer = step % 300 < 150 ? 0.6f : -0.6f;
             cart = step_cart_mover(cart, cart_controls{1.0f, steer_of(quantise_steer(steer))}, at_wheel).after;
         }
-        std::printf("drive %zu %.9g %.9g %.9g %d %.9g %.9g\n", hole, cart.pose.position.x, cart.pose.position.y,
-                    cart.pose.position.z, static_cast<int>(cart.motion.condition), cart.pose.yaw, cart_forward_speed(cart.motion));
+        std::printf("drive %zu at", hole);
+        print_bits(cart.pose.position);
+        std::printf(" condition %d yaw", static_cast<int>(cart.motion.condition));
+        print_bits(cart.pose.yaw);
+        std::printf(" speed");
+        print_bits(cart_forward_speed(cart.motion));
+        std::printf("\n");
+
+        // A cart a metre over the first water deeper than it wades on the
+        // way from the tee to the pin, falling in until it sinks.
+        const glm::vec3 to_pin = course->area.cups[hole].centre - tee;
+        const float unit = content.tuning.scale.meters_per_world_unit;
+        for (int metre = 0; metre < static_cast<int>(glm::length(horizontal(to_pin)) * unit); ++metre) {
+            const glm::vec3 at = tee + safe_normalize(horizontal(to_pin), glm::vec3(0.0f, 0.0f, 1.0f)) * (static_cast<float>(metre) / unit);
+            const terrain_sample pond = sample_area(course->area, at);
+            if (pond.material != terrain_material::water || (pond.water_level - pond.point.y) * unit <= spec.wade_depth_m + 0.05f) {
+                continue;
+            }
+            cart_mover sinking;
+            sinking.pose = cart_pose{glm::vec3(at.x, pond.water_level + 1.0f / unit, at.z), cart.pose.yaw};
+            sinking.motion.yaw = sinking.pose.yaw;
+            sinking.vertical = vertical_body{sinking.pose.position.y, 0.0f, false};
+            int fell = 0;
+            for (; fell < steps && sinking.motion.condition == cart_condition::upright; ++fell) {
+                sinking = step_cart_mover(sinking, cart_controls{}, at_wheel).after;
+            }
+            std::printf("sink %zu at", hole);
+            print_bits(sinking.pose.position);
+            std::printf(" condition %d steps %d\n", static_cast<int>(sinking.motion.condition), fell);
+            break;
+        }
     }
-    return 0;
+    return unexpected == 0 ? 0 : 1;
 }

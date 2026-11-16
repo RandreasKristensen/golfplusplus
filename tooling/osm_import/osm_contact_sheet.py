@@ -23,6 +23,7 @@ _ZONE_STYLE = {
     "bunker": 'fill="#efe2b0" stroke="#b49a4a" stroke-width="0.5"',
     "water": 'fill="#7fb6e6" stroke="#2f6fa8" stroke-width="0.6"',
     "fairway": 'fill="#b8dfa0" stroke="#7aa860" stroke-width="0.4"',
+    "heavy_rough": 'fill="#c9c08a" fill-opacity="0.6"',
 }
 _LINE_COLOURS = ["#c0392b", "#1f5fa8", "#7d3c98", "#b9770e", "#117a65", "#a93226"]
 _PANEL_WIDTH = 520
@@ -71,7 +72,7 @@ def render(course_name: str, placed: list[dict], scorecard: dict | None,
 
     # Zones first, so lines and labels sit on top.
     for p in placed:
-        for zone in sorted(p["zones"], key=lambda z: {"fairway": 0, "water": 1, "green": 2, "bunker": 3}.get(z["type"], 4)):
+        for zone in sorted(p["zones"], key=lambda z: {"heavy_rough": -1, "fairway": 0, "water": 1, "green": 2, "bunker": 3}.get(z["type"], 4)):
             out.append(_zone_svg(zone, to_px))
 
     # Walks from each green to the next tee.

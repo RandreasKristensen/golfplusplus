@@ -1,7 +1,10 @@
 #include "movement_rules.h"
 
+#include "game/address_view.h"
 #include "game/cart_seats.h"
 #include "game/play_area.h"
+#include "game/player_jump.h"
+#include "game/sent_setup.h"
 #include "game/server_errors.h"
 #include "physics/vector_math.h"
 
@@ -37,30 +40,37 @@ glm::vec3 on_ground(const play_area& area, const glm::vec3& feet) {
     return glm::vec3(feet.x, terrain_height(area, feet), feet.z);
 }
 
-// The speed a claimed move in `mode` costs its time at.
-float claim_speed(const motion_mode from, const motion_mode to, const move_world& world) {
-    const float speed = std::max(mode_speed(static_cast<std::uint8_t>(from), world.limits),
-                                 mode_speed(static_cast<std::uint8_t>(to), world.limits));
-    return std::max(speed * world.tuning.server.motion_speed_scale, 0.001f);
+// Steps on foot starting from where I was put (out of a seat, as the
+// client saw the cart): over to `start`'s XZ when it is near and the time to
+// get there is saved up, as far as nothing solid stops me; my feet, up or in
+// the air, stay as the server has them, settled on the surface there.
+void start_on_foot(mover_state& m, const glm::vec3& start, const move_world& world) {
+    const glm::vec3 to(start.x, m.position.y, start.z);
+    const float off = horizontal_distance(to, m.position);
+    const float spent = off / std::max(world.limits.foot_speed * world.tuning.server.motion_speed_scale, 0.001f);
+    if (off == 0.0f || off > world.tuning.server.step_start_tolerance || spent > m.credit_seconds) {
+        return;
+    }
+    const player_tuning& player = world.tuning.player;
+    const body_move moved = move_body(body_obstacles{world.area.solids, world.area.solids_grid, world.walker_obstacles,
+                                                     solid_mover::walker},
+                                      circle_body(player.body_radius, 0.0f, player.step_up), m.position, to);
+    m.credit_seconds -= spent;
+    m.vertical = settle_on_foot(m.vertical, m.vertical.y, terrain_height(world.area, moved.position), player, 0.0f);
+    m.position = glm::vec3(moved.position.x, m.vertical.y, moved.position.z);
 }
 
-// A move to `to` no step made: allowed within the time saved up and the
-// slack (check_motion), spending the time it takes.
-bool claim(mover_state& m, const glm::vec3& to, const motion_mode mode, const move_world& world) {
-    net_motion previous;
-    previous.mode = m.mode;
-    previous.position = m.position;
-    const motion_check check = check_motion(previous, to, m.credit_seconds, static_cast<std::uint8_t>(mode), m.slack_left,
-                                            world.limits, world.tuning);
-    if (!check.allowed) {
-        return false;
+// Stood to my own ball as `sent` puts me, when I am beside it.
+std::optional<glm::vec3> address_position(const glm::vec3& at, const sent_setup& sent, const move_world& world) {
+    const game_tuning& tuning = world.tuning;
+    if (!world.own_ball ||
+        !within_interact_reach(at, *world.own_ball, tuning.player.ball_interact_radius, tuning.server)) {
+        return std::nullopt;
     }
-    const float spent = horizontal_distance(m.position, to) / claim_speed(m.mode, mode, world);
-    m.credit_seconds = std::max(0.0f, m.credit_seconds - spent);
-    m.slack_left = check.slack_left;
-    m.position = to;
-    m.vertical = vertical_body{to.y, 0.0f, true};
-    return true;
+    shot_setup stood;
+    stood.ball_start = *world.own_ball;
+    stood.hand = world.hand;
+    return stance_at_address(world.area, with_sent_setup(stood, sent), tuning).position;
 }
 
 // Off my cart's wheel, standing out of its driver's door.
@@ -161,14 +171,8 @@ move_outcome play_move(const mover_state& mover, const std::optional<room_cart>&
                     driving = false;
                     out.cart = my_cart;
                 }
-                if (first_walk && number == request.first_step && request.start != m.position) {
-                    const float off = horizontal_distance(request.start, m.position);
-                    const float spent = off / claim_speed(motion_mode::walk, motion_mode::walk, world);
-                    if (off <= tuning.server.step_start_tolerance && spent <= m.credit_seconds) {
-                        m.credit_seconds -= spent;
-                        m.position = request.start;
-                        m.vertical.y = request.start.y;
-                    }
+                if (first_walk && number == request.first_step) {
+                    start_on_foot(m, request.start, world);
                 }
                 first_walk = false;
                 const glm::vec3 from = m.position;
@@ -240,19 +244,31 @@ move_outcome play_move(const mover_state& mover, const std::optional<room_cart>&
                 shown.yaw = wrap_angle(yaw_of(*walked_yaw) + walked_angle);
             }
             shown.speed = walked_speed;
-        } else if (!claim(m, asked.position, mode, world)) {
-            const bool at_own_ball = at_ball(mode) && world.own_ball &&
-                within_interact_reach(m.position, *world.own_ball, tuning.player.ball_interact_radius, tuning.server) &&
-                within_interact_reach(asked.position, *world.own_ball, tuning.player.ball_interact_radius, tuning.server);
-            if (!at_own_ball) {
+        } else {
+            // Where the rows put me, never the claim: in the seat I ride in,
+            // or stood to my own ball.
+            std::optional<glm::vec3> placed;
+            if (mode == motion_mode::ride) {
+                if (world.ridden) {
+                    placed = on_ground(world.area, seat_position(*world.ridden, cart_seat::passenger, tuning.cart));
+                }
+            } else {
+                shown.setup = world.club ? clamped_sent_setup(asked.setup, *world.club, tuning.setup) : asked.setup;
+                placed = address_position(m.position, shown.setup, world);
+            }
+            if (!placed) {
                 out = move_outcome{};
                 out.mover = mover;
-                out.error = error_too_fast;
+                out.error = mode == motion_mode::ride ? error_not_in_cart : error_too_far;
                 return out;
             }
-            m.position = asked.position;
-            m.vertical = vertical_body{asked.position.y, 0.0f, true};
+            m.position = *placed;
+            m.vertical = vertical_body{placed->y, 0.0f, true};
+            shown.position = m.position;
         }
+    }
+    if (!at_ball(mode)) {
+        shown.setup = sent_setup{};
     }
     shown.mode = mode;
     shown.speed = clamp_motion_speed(static_cast<std::uint8_t>(mode), shown.speed, world.limits, tuning.server);

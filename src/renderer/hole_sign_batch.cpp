@@ -104,6 +104,7 @@ bool same_source(const hole_sign_source& a, const hole_sign_source& b) {
 
 bool refresh_render_hole_signs(render_hole_signs& signs,
                                const play_area& area,
+                               const std::uint64_t terrain_revision,
                                const std::vector<hole_sign_text>& texts,
                                const std::vector<prop_board>& boards,
                                const text_assets& text,
@@ -111,10 +112,12 @@ bool refresh_render_hole_signs(render_hole_signs& signs,
                                const prop_model& model,
                                const std::uint64_t revision) {
     const std::vector<hole_sign_source> sources = hole_sign_sources(area, texts, boards);
-    if (std::equal(sources.begin(), sources.end(), signs.sources.begin(), signs.sources.end(), same_source)) {
+    if (signs.terrain_revision == terrain_revision &&
+        std::equal(sources.begin(), sources.end(), signs.sources.begin(), signs.sources.end(), same_source)) {
         return false;
     }
     signs = build_render_hole_signs(area, texts, boards, text, colors, model, revision);
+    signs.terrain_revision = terrain_revision;
     return true;
 }
 

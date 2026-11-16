@@ -1,12 +1,19 @@
 import argparse
+import contextlib
+import io
+import json
 import math
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import osm_golf_convert as conv
+import osm_publish
+import verify_osm_import
 import osm_ground as ground
 import osm_dhm as dhm
 import osm_elevation as elev
@@ -105,15 +112,20 @@ class OsmGolfConvertTests(unittest.TestCase):
         side_lat = origin_lat + 40.0 / conv.EARTH_METERS_PER_DEGREE_LAT
         core_lat = origin_lat + 50.0 / conv.EARTH_METERS_PER_DEGREE_LAT
         side_lon = origin_lon + 30.0 / (conv.EARTH_METERS_PER_DEGREE_LAT * math.cos(math.radians(origin_lat)))
+        far_lon = origin_lon + 300.0 / (conv.EARTH_METERS_PER_DEGREE_LAT * math.cos(math.radians(origin_lat)))
         trees = [
             node(100, {"natural": "tree"}, core_lat, origin_lon),
             node(101, {"natural": "tree"}, side_lat, side_lon),
+            node(102, {"natural": "tree"}, side_lat, far_lon),
         ]
 
-        conv.assign_trees_to_holes(holes, trees, origin_lat, origin_lon, "course:1", conv.DEFAULT_CONFIG["tree"])
+        land = conv.assign_trees_to_holes(holes, trees, origin_lat, origin_lon, "course:1", conv.DEFAULT_CONFIG["tree"])
 
         self.assertEqual(1, len(holes[1]["trees_abs"]))
         self.assertGreater(abs(holes[1]["trees_abs"][0][0]), 20.0)
+        # The tree far from the hole stands on the land round it.
+        self.assertEqual(1, len(land))
+        self.assertAlmostEqual(300.0, land[0][0], places=0)
 
     def test_wooded_polygon_sampling_is_deterministic(self):
         wood = way(30, {"natural": "wood"}, [(56.0, 10.0), (56.0, 10.001), (56.001, 10.001), (56.001, 10.0)])
@@ -187,6 +199,28 @@ class OsmGolfConvertTests(unittest.TestCase):
         self.assertEqual(7.0, h_json["trees"][0]["trunk_height"])
         self.assertEqual(5.5, h_json["trees"][0]["leaf_radius"])
         self.assertEqual(8.5, h_json["trees"][0]["leaf_height"])
+
+    def test_mapped_scrub_is_planted_with_bushes_and_a_meadow_is_heavy_rough(self):
+        origin_lat, origin_lon = 56.0, 10.0
+        hole = way(1, {"golf": "hole", "ref": "1"}, [(56.0, 10.0), (56.002, 10.0)])
+        tee = node(2, {"golf": "tee", "ref": "1"}, 56.0, 10.0)
+        pin = node(3, {"golf": "pin", "ref": "1"}, 56.002, 10.0)
+        scrub = way(4, {"natural": "scrub"}, [(56.0005, 10.0005), (56.0005, 10.0009), (56.0009, 10.0009),
+                                              (56.0009, 10.0005), (56.0005, 10.0005)])
+        meadow = way(5, {"landuse": "meadow"}, [(56.0010, 9.9993), (56.0010, 9.9997), (56.0015, 9.9997),
+                                                (56.0015, 9.9993), (56.0010, 9.9993)])
+        holes = conv.group_holes([hole, tee, pin])
+        config = conv.load_generation_config(None)
+        conv.assign_trees_to_holes(holes, [scrub, meadow], origin_lat, origin_lon, "test", config["tree"])
+        conv.assign_bushes_to_holes(holes, [scrub, meadow], origin_lat, origin_lon, "test", config["tree"])
+        conv.assign_long_grass_to_holes(holes, [meadow], origin_lat, origin_lon, config["tree"])
+
+        h_json = conv.hole_to_json(1, holes[1], origin_lat, origin_lon, "test_course", config)
+
+        self.assertEqual([], h_json["trees"])  # scrub is no wood
+        self.assertGreater(len(h_json["bushes"]), 5)
+        self.assertTrue(all(b["radius"] == config["tree"]["bush_radius"] for b in h_json["bushes"]))
+        self.assertEqual(1, sum(1 for zone in h_json["material_zones"] if zone["type"] == "heavy_rough"))
 
     def test_an_aerial_trees_crown_is_as_wide_as_it_is_long_whatever_outline_it_was_found_by(self):
         rules = conv.load_generation_config(None)["aerial"]["trees"]
@@ -1249,6 +1283,26 @@ class PolylineTests(unittest.TestCase):
         self.assertEqual(1, len(conv._sample_polyline_points([(0.0, 0.0), (8.0, 0.0)])))
 
 
+class WorldBoxTests(unittest.TestCase):
+    def assert_box(self, box, low_x, low_z, width, depth):
+        self.assertAlmostEqual(low_x, box[0], places=3)
+        self.assertAlmostEqual(low_z, box[1], places=3)
+        self.assertAlmostEqual(width, box[2] - box[0], places=3)
+        self.assertAlmostEqual(depth, box[3] - box[1], places=3)
+
+    def test_the_box_is_the_maps_paper_round_the_holes_and_the_margin(self):
+        # 1000 m across, 100 m deep: the map is not turned, and its paper
+        # (3:2, its margin a tenth) is 1100 m across and 733 m deep.
+        box = ground.world_box([(0.0, 0.0), (1000.0, 0.0), (0.0, 100.0), (1000.0, 100.0)], 50.0)
+        depth = 1100.0 / ground.MAP_PAPER_ASPECT
+        self.assert_box(box, -100.0, 50.0 - depth * 0.5 - 50.0, 1200.0, depth + 100.0)
+
+    def test_a_course_longer_north_to_south_is_turned_across_the_paper(self):
+        box = ground.world_box([(0.0, 0.0), (0.0, 1000.0), (100.0, 0.0), (100.0, 1000.0)], 50.0)
+        width = 1100.0 / ground.MAP_PAPER_ASPECT
+        self.assert_box(box, 50.0 - width * 0.5 - 50.0, -100.0, width + 100.0, 1200.0)
+
+
 class SlugTests(unittest.TestCase):
     def test_slugs_transliterate_instead_of_dropping_letters(self):
         self.assertEqual("kalo_golf_club", conv.slugify("Kalø Golf Club"))
@@ -1284,8 +1338,8 @@ class GroundTests(unittest.TestCase):
         self.assertAlmostEqual(-100.0, x, places=4)
         self.assertAlmostEqual(300.0, z, places=4)
 
-    def test_grid_covers_every_hole_plus_the_margin(self):
-        grid = ground.ground_grid(self.WORLD, self.HOLES, None, lambda x, z: (z, x), 20.0, 50.0)
+    def test_grid_covers_its_box(self):
+        grid = ground.ground_grid(self.WORLD, None, lambda x, z: (z, x), 20.0, (-150.0, -50.0, 150.0, 350.0))
 
         self.assertEqual([-150.0, -50.0], grid["origin"])
         self.assertGreaterEqual(grid["origin"][0] + (grid["columns"] - 1) * 20.0, 150.0)
@@ -1295,7 +1349,7 @@ class GroundTests(unittest.TestCase):
         self.assertEqual({0.0}, set(ground.heights_from_rows_cm(grid["heights_cm"])))
 
     def test_heights_are_relative_to_hole_one_start(self):
-        grid = ground.ground_grid(self.WORLD, self.HOLES, self.HeightFromZ(), lambda x, z: (z, x), 20.0, 50.0)
+        grid = ground.ground_grid(self.WORLD, self.HeightFromZ(), lambda x, z: (z, x), 20.0, (-150.0, -50.0, 150.0, 350.0))
         heights = ground.heights_from_rows_cm(grid["heights_cm"])
 
         # Hole 1's start is at z = 0 and y = 2, so z = 0 maps to y = 2 and
@@ -1773,10 +1827,17 @@ class AerialTests(unittest.TestCase):
         paint(np.hypot(x - 35, z + 50) < 4, (0.85, 0.82, 0.75), 0.65, 0.80)                # sand out in the rough
         paint((abs(x - 27) < 1) & (z < -100) & (z > -250), (0.85, 0.82, 0.75), 0.65, 0.80)  # a sand path
         paint(np.hypot(x + 30, z + 200) < 12, (0.20, 0.25, 0.25), 0.08, 0.20)              # a pond
+        long_grass = (x > -45) & (x < -25) & (z > -135) & (z < -100)
+        bush = np.hypot(x + 30, z + 30) < 1.6
+        thicket = (x > 22) & (x < 34) & (z > -290) & (z < -278)
+        paint(long_grass | bush | thicket, (0.45, 0.52, 0.38), 0.70, 0.45)                  # green growth
         rgb += rng.normal(0, 0.01, rgb.shape); nir += rng.normal(0, 0.01, nir.shape); red += rng.normal(0, 0.01, red.shape)
         for tx, tz, top in ((40.5, -119.5, 9.0), (-44.5, -59.5, 6.0)):                       # two trees, tops on cells
             height = np.maximum(height, top - 1.5 * np.hypot(x - tx, z - tz))
         height[(abs(x - 45) < 5) & (abs(z + 240) < 5)] = 5.0                                 # a flat roof
+        height[long_grass] = 0.35                                                            # grass left long
+        height[bush] = 1.2                                                                   # a lone bush
+        height[thicket] = 1.6 + 0.3 * rng.random(thicket.sum())                              # a thicket
         layers = osm_aerial.Layers(x0=x0, z0=z0, cell=cell, rgb=rgb.astype("float32"), nir=nir.astype("float32"),
                                    red=red.astype("float32"), height=np.clip(height, 0, None).astype("float32"),
                                    source="test")
@@ -1815,6 +1876,19 @@ class AerialTests(unittest.TestCase):
         self.assertFalse(near(-30.0, -200.0))  # the pond
         self.assertFalse(near(0.0, -150.0))    # the fairway
 
+    def test_a_crown_green_in_spring_is_an_evergreen_and_a_bare_one_a_broadleaf(self):
+        import osm_aerial
+        rules = conv.DEFAULT_CONFIG["aerial"]["trees"]["species"]
+        far = float("inf")
+        self.assertEqual("spruce", osm_aerial._species(0.45, 0.5, 15.0, 3.0, far, 0.0, 0.0, rules))
+        self.assertEqual("pine", osm_aerial._species(0.45, 0.2, 15.0, 4.0, far, 0.0, 0.0, rules))
+        self.assertEqual("willow", osm_aerial._species(0.0, 0.3, 9.0, 5.0, 5.0, 0.0, 0.0, rules))
+        self.assertEqual("birch", osm_aerial._species(0.0, 0.3, 9.0, 3.0, far, 0.0, 0.0, rules))
+        kinds = {osm_aerial._species(0.0, 0.3, 20.0, 6.0, far, x * 7.3, x * 3.1, rules) for x in range(40)}
+        self.assertEqual({"beech", "oak"}, kinds)
+        cover, aerial_rules = self.scene()
+        self.assertTrue(all(t[4] in ("beech", "oak", "birch", "willow") for t in osm_aerial.trees(cover, aerial_rules)))
+
     def test_trees_stand_at_each_top_and_a_roof_is_no_tree(self):
         import osm_aerial
         cover, rules = self.scene()
@@ -1828,6 +1902,37 @@ class AerialTests(unittest.TestCase):
         self.assertAlmostEqual(6.0, short[2], delta=0.6)
         self.assertGreater(tall[3], short[3])
         self.assertEqual(2, len(trees))
+
+
+    def test_long_grass_beside_the_hole_is_heavy_rough_and_the_mown_grass_is_not(self):
+        import osm_aerial
+        cover, rules = self.scene()
+
+        found = osm_aerial.hole_cover(cover, [(0.0, 0.0), (0.0, -280.0)], rules)
+
+        def inside(x, z):
+            return any(osm_outline.point_in_polygon((x, z), ring) for ring in found["heavy_roughs"])
+        self.assertTrue(inside(-35.0, -118.0))
+        self.assertFalse(inside(0.0, -150.0))    # the fairway
+        self.assertFalse(inside(25.0, -60.0))    # plain rough
+        self.assertFalse(inside(-30.0, -30.0))   # the bush stands too high
+
+    def test_a_lone_bush_is_one_bush_a_thicket_many_and_neither_tree_nor_roof_is_any(self):
+        import osm_aerial
+        cover, rules = self.scene()
+
+        bushes = osm_aerial.bushes(cover, rules)
+
+        lone = [b for b in bushes if math.hypot(b[0] + 30, b[1] + 30) < 2.0]
+        self.assertEqual(1, len(lone))
+        self.assertAlmostEqual(1.2, lone[0][2], delta=0.05)
+        self.assertGreater(lone[0][3], 0.9)
+        in_thicket = [b for b in bushes if 21 < b[0] < 35 and -291 < b[1] < -277]
+        self.assertGreaterEqual(len(in_thicket), 9)
+        self.assertTrue(all(1.5 < b[2] < 2.0 for b in in_thicket))
+        self.assertFalse([b for b in bushes if math.hypot(b[0] - 40.5, b[1] + 119.5) < 8.0])  # a tree's crown
+        self.assertFalse([b for b in bushes if abs(b[0] - 45) < 6 and abs(b[1] + 240) < 6])  # the roof
+        self.assertFalse([b for b in bushes if -46 < b[0] < -24 and -136 < b[1] < -99])      # long grass
 
 
 class BusStopTests(unittest.TestCase):
@@ -1918,6 +2023,156 @@ class BusStopTests(unittest.TestCase):
         findings = osm_checks.Findings()
         osm_checks._check_bus_stop(findings, placed, world, osm_checks.DEFAULT_TOLERANCES)
         self.assertEqual(["BUS_STOP_PATH"], [f["code"] for f in findings.items if f["level"] == "error"])
+
+
+class ImportPublicationTests(unittest.TestCase):
+    """main() on a synthetic course with mocked OSM: nothing is written unless the import verifies."""
+
+    LAT, LON = 56.0, 10.0
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.assets = Path(self.tmp.name) / "assets"
+        self.out = self.assets / "world" / "courses"
+        self.sheets = Path(self.tmp.name) / "sheets"
+        self.course_dir = self.out / "test_links"
+
+    def metres_lat(self, m):
+        return m / conv.EARTH_METERS_PER_DEGREE_LAT
+
+    def metres_lon(self, m):
+        return m / (conv.EARTH_METERS_PER_DEGREE_LAT * math.cos(math.radians(self.LAT)))
+
+    def run_import(self, car_park=True, *flags):
+        lat, lon = self.metres_lat, self.metres_lon
+        course = way(1, {"leisure": "golf_course", "name": "Test Links"},
+                     [(self.LAT - lat(300), self.LON - lon(300)), (self.LAT - lat(300), self.LON + lon(300)),
+                      (self.LAT + lat(600), self.LON + lon(300)), (self.LAT + lat(600), self.LON - lon(300))])
+        hole = way(10, {"golf": "hole", "ref": "1", "par": "4"}, [(self.LAT, self.LON), (self.LAT + lat(350), self.LON)])
+        park = way(11, {"amenity": "parking"},
+                   [(self.LAT - lat(60), self.LON - lon(40)), (self.LAT - lat(60), self.LON - lon(10)),
+                    (self.LAT - lat(90), self.LON - lon(10)), (self.LAT - lat(90), self.LON - lon(40)),
+                    (self.LAT - lat(60), self.LON - lon(40))])
+        argv = ["osm_golf_convert.py", "--id", "W1", "-o", str(self.out), "--sheet-out", str(self.sheets),
+                "--no-cache", *flags]
+        with mock.patch.object(conv, "_find_course", return_value=(course, "Test Links")), \
+             mock.patch.object(conv, "_fetch_elements", return_value=([hole], [], [])), \
+             mock.patch.object(conv, "_fetch_fences", return_value=([], [])), \
+             mock.patch.object(conv, "_fetch_stop_places", return_value=[park] if car_park else []), \
+             mock.patch.object(conv, "_make_aerial", return_value=None), \
+             mock.patch.object(conv, "_make_elevation_sampler", return_value=None), \
+             mock.patch.object(sys, "argv", argv), \
+             contextlib.redirect_stderr(io.StringIO()):
+            try:
+                conv.main()
+            except SystemExit as exit_:
+                return exit_.code or 0
+        return 0
+
+    def install_prior_course(self):
+        files = {"course.json": b'{"prior": "manifest"}', "world.json": b'{"prior": "world"}',
+                 "holes/h01.json": b'{"prior": "hole 1"}', "holes/h09.json": b'{"touched up": "by hand"}',
+                 "sky.bmp": b"BM art"}
+        for rel, data in files.items():
+            (self.course_dir / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.course_dir / rel).write_bytes(data)
+        return files
+
+    def snapshot(self):
+        return {p.relative_to(self.course_dir).as_posix(): p.read_bytes()
+                for p in sorted(self.course_dir.rglob("*")) if p.is_file()}
+
+    def test_a_failed_verification_keeps_the_prior_course_and_the_diagnostics(self):
+        prior = self.install_prior_course()
+
+        status = self.run_import(car_park=False)
+
+        self.assertEqual(1, status)
+        self.assertEqual(prior, self.snapshot())
+        self.assertTrue((self.sheets / "test_links.svg").is_file())
+        self.assertTrue((self.sheets / "test_links_osm_todo.md").is_file())
+
+    def test_a_failed_first_import_creates_no_course_folder(self):
+        self.assertEqual(1, self.run_import(car_park=False))
+        self.assertFalse(self.course_dir.exists())
+
+    def test_a_successful_import_installs_a_coherent_set_and_keeps_unrelated_files(self):
+        prior = self.install_prior_course()
+
+        self.assertEqual(0, self.run_import())
+
+        after = self.snapshot()
+        self.assertEqual({"course.json", "world.json", "holes/h01.json", "holes/h09.json", "sky.bmp"}, set(after))
+        self.assertEqual(prior["sky.bmp"], after["sky.bmp"])
+        self.assertEqual(prior["holes/h09.json"], after["holes/h09.json"])
+        manifest = json.loads(after["course.json"])
+        self.assertEqual(["holes/h01.json"], manifest["holes"])
+        self.assertEqual("world.json", manifest["world"])
+        self.assertEqual(4, json.loads(after["holes/h01.json"])["par"])
+        self.assertIn("projection", json.loads(after["world.json"]))
+        self.assertFalse(osm_publish.interrupted(self.course_dir))
+
+    def test_no_world_and_no_course_leave_those_files_alone(self):
+        prior = self.install_prior_course()
+
+        self.assertEqual(0, self.run_import(True, "--no-world"))
+        after = self.snapshot()
+        self.assertEqual(prior["world.json"], after["world.json"])
+        self.assertNotIn("world", json.loads(after["course.json"]))
+        self.assertNotEqual(prior["holes/h01.json"], after["holes/h01.json"])
+
+        self.install_prior_course()
+        self.assertEqual(0, self.run_import(True, "--no-course"))
+        after = self.snapshot()
+        self.assertEqual(prior["course.json"], after["course.json"])
+        self.assertNotEqual(prior["world.json"], after["world.json"])
+
+    def test_a_failed_replacement_restores_the_files_already_replaced(self):
+        prior = self.install_prior_course()
+        real_replace = os.replace
+        calls = []
+
+        def failing_replace(source, target):
+            calls.append(target)
+            if len(calls) == 3:
+                raise PermissionError("target is open elsewhere")
+            return real_replace(source, target)
+
+        with mock.patch.object(osm_publish.os, "replace", side_effect=failing_replace):
+            status = self.run_import()
+
+        self.assertEqual(1, status)
+        self.assertEqual(prior, self.snapshot())
+
+    def test_an_interrupted_publication_is_reported_until_an_import_completes(self):
+        self.assertEqual(0, self.run_import())
+        real_replace = os.replace
+        calls = []
+
+        def dying_replace(source, target):
+            calls.append(target)
+            if len(calls) == 2:
+                raise KeyboardInterrupt
+            return real_replace(source, target)
+
+        with mock.patch.object(osm_publish.os, "replace", side_effect=dying_replace):
+            with self.assertRaises(KeyboardInterrupt):
+                self.run_import()
+
+        self.assertTrue(osm_publish.interrupted(self.course_dir))
+        self.assertEqual(1, self.verify_status())
+
+        self.assertEqual(0, self.run_import())
+        self.assertFalse(osm_publish.interrupted(self.course_dir))
+        self.assertFalse(list(self.course_dir.rglob("*" + osm_publish.STAGED_SUFFIX)))
+        self.assertEqual(0, self.verify_status())
+
+    def verify_status(self):
+        argv = ["verify_osm_import.py", "test_links", "--assets", str(self.assets), "--no-osm",
+                "--sheet-out", str(self.sheets), "--quiet"]
+        with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(io.StringIO()):
+            return verify_osm_import.main()
 
 
 if __name__ == "__main__":

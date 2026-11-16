@@ -18,7 +18,7 @@ struct floodlight_vertex {
     glm::vec3 position{0.0f};
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
     glm::vec3 color{0.0f};
-    float lamp = 0.0f;  // 1 on a lamp's face: it glows of itself
+    float lamp = 0.0f;  // how much of lamp_glow it gives off: 1 at a lens's centre, 0 at its rim and off it
 };
 
 struct render_floodlights {

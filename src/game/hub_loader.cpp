@@ -4,7 +4,7 @@
 
 std::optional<hub_definition> parse_hub_from_text(const std::string& text) {
     const auto root = parse_json(text);
-    const auto environment = parse_place_from_text(text);
+    const auto environment = parse_place_from_text(text).value;
     if (!root || !environment || root->contains("holes") || root->contains("practice")) { return std::nullopt; }
     const auto arrival = json_vec3(*root, "arrival");
     const auto mats = json_array(*root, "tee_mats");

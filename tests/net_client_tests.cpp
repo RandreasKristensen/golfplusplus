@@ -57,6 +57,35 @@ stdb_event applied(const std::uint32_t subscription) {
     return event;
 }
 
+stdb_event subscription_failed(const std::uint32_t subscription, const std::string& text) {
+    stdb_event event = fake_event(STDB_EVENT_SUBSCRIPTION_FAILED);
+    event.subscription = subscription;
+    event.text = fake_text(text);
+    return event;
+}
+
+stdb_event cart_row(const std::uint64_t owner, const std::uint64_t room_id) {
+    stdb_row row{};
+    row.golf_cart = stdb_golf_cart{owner, room_id, 1.0f, 2.0f, 3.0f, 0.0f, 0, 0, 0, 0.0};
+    return row_event(STDB_TABLE_GOLF_CART, STDB_ROW_INSERT, row);
+}
+
+// The handshake of a new connection, up to my_account.
+void queue_handshake(const std::uint64_t account_id) {
+    queue_event(fake_event(STDB_EVENT_SIGNED_IN));
+    queue_event(fake_event(STDB_EVENT_CONNECTED));
+    queue_event(server_protocol_event(protocol_version));
+    queue_event(server_content_event(shipped_content().content_hash));
+    stdb_row me{};
+    me.player.account_id = account_id;
+    queue_event(row_event(STDB_TABLE_MY_ACCOUNT, STDB_ROW_INSERT, me));
+}
+
+std::size_t calls_to(const std::string& name) {
+    const std::vector<std::string> calls = fake_bridge().call_names();
+    return static_cast<std::size_t>(std::count(calls.begin(), calls.end(), name));
+}
+
 bool any_query_contains(const std::vector<std::string>& queries, const std::string& text) {
     return std::any_of(queries.begin(), queries.end(), [&text](const std::string& q) { return q.find(text) != std::string::npos; });
 }
@@ -568,6 +597,62 @@ TEST_CASE("signing in while busy keeps the status") {
     CHECK(client.status() == net_status::connected);
 }
 
+TEST_CASE("cancelling a sign-in before or during the handshake drops its late events, and signing in again works") {
+    // Cancelled before the WebSocket connects, while checking the protocol,
+    // and while checking content.
+    for (std::size_t phase = 0; phase < 3; ++phase) {
+        fake_bridge().reset();
+        game_state state = started_hole();
+        net_client client = *net_client::create(fake_online_config(), "signed in", "failed", shipped_content().content_hash);
+        client.begin_login();
+        queue_event(fake_event(STDB_EVENT_SIGNED_IN));
+        if (phase >= 1) {
+            queue_event(fake_event(STDB_EVENT_CONNECTED));
+        }
+        if (phase >= 2) {
+            queue_event(server_protocol_event(protocol_version));
+        }
+        client.update(state);
+        CHECK(client.status() == net_status::connecting);
+        REQUIRE(fake_bridge().subscriptions.size() == phase);
+
+        client.cancel_login();
+        CHECK(client.status() == net_status::signed_out);
+        CHECK(calls_to("stdb_cancel_login") == 1);
+        // What the cancelled attempt still had on its way.
+        queue_event(fake_event(STDB_EVENT_CONNECTED));
+        queue_event(server_protocol_event(protocol_version));
+        queue_event(applied(1));
+        queue_event(server_content_event(shipped_content().content_hash));
+        queue_event(applied(2));
+        stdb_row me{};
+        me.player.account_id = 42;
+        queue_event(row_event(STDB_TABLE_MY_ACCOUNT, STDB_ROW_INSERT, me));
+        client.update(state);
+        CHECK(client.status() == net_status::signed_out);
+        CHECK(fake_bridge().subscriptions.size() == phase);
+        CHECK(state.online.account_id == 0);
+
+        client.begin_login();
+        CHECK(client.status() == net_status::signing_in);
+        queue_handshake(42);
+        client.update(state);
+        CHECK(client.status() == net_status::connected);
+        CHECK(state.online.account_id == 42);
+        REQUIRE(fake_bridge().subscriptions.size() == phase + 4);
+        CHECK(fake_bridge().subscriptions[phase] == std::vector<std::string>{"SELECT * FROM server_protocol"});
+    }
+}
+
+TEST_CASE("cancelling a sign-in once its session is accepted keeps the session") {
+    game_state state = started_hole();
+    net_client client = connected_client(state, 42);
+    client.cancel_login();
+    CHECK(client.status() == net_status::connected);
+    CHECK(state.online.account_id == 42);
+    CHECK(calls_to("stdb_cancel_login") == 0);
+}
+
 TEST_CASE("signing out, then in again, starts my progress over") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
@@ -583,6 +668,7 @@ TEST_CASE("signing out, then in again, starts my progress over") {
 
     // The same account again subscribes to its rows again.
     const std::size_t before = fake_bridge().subscriptions.size();
+    client.begin_login();
     queue_event(fake_event(STDB_EVENT_CONNECTED));
     queue_event(server_protocol_event(protocol_version));
     queue_event(server_content_event(shipped_content().content_hash));
@@ -1048,22 +1134,97 @@ TEST_CASE("sync: motion becomes sent only at dispatch, and remains due after dis
     CHECK(state.net_commands.empty());
 }
 
-TEST_CASE("sync: a failed room subscription leaves no partial state and ends the session") {
+TEST_CASE("sync: a failed account, self or room subscription leaves no partial state and ends a retryable session") {
+    // connected_client subscribes protocol 1, content 2, my account 3 and my
+    // rows 4; room 7 is 5.
+    for (const std::uint32_t failing : {3U, 4U, 5U}) {
+        game_state state = started_hole();
+        net_client client = connected_client(state, 42);
+        queue_event(skill_row(1, 42, "fitness", 500));
+        if (failing != 4U) {
+            queue_event(applied(4));
+        }
+        queue_event(member_row(42, 7, STDB_ROW_INSERT));
+        client.update(state);
+        REQUIRE(fake_bridge().subscriptions.size() == 5U);
+        queue_event(cart_row(42, 7));
+        net_command wheel;
+        wheel.type = net_command_type::take_wheel;
+        state.net_commands.push_back(wheel);
+        queue_event(subscription_failed(failing, "subscription_failed: no such view"));
+        // What the ended session still had on its way.
+        queue_event(skill_row(2, 42, "putting", 900));
+        queue_event(applied(failing));
+        queue_event(cart_row(42, 7));
+        queue_event(fake_event(STDB_EVENT_DISCONNECTED));
+        client.update(state);
+        CHECK(client.status() == net_status::failed);
+        CHECK(client.failure() == "subscription_failed: no such view");
+        CHECK(calls_to("stdb_disconnect") == 1);
+        CHECK(state.online.account_id == 0);
+        CHECK(!state.online.progress_received);
+        CHECK(state.online.progress.skills.empty());
+        CHECK(state.online.carts.empty());
+        CHECK(!state.online.room);
+        CHECK(!state.online.room_ready);
+        CHECK(state.net_commands.empty());
+        CHECK(calls_to("stdb_take_wheel") == 0);
+
+        // Signing in again: a fresh handshake and complete snapshot.
+        client.begin_login();
+        CHECK(client.status() == net_status::signing_in);
+        CHECK(client.failure().empty());
+        queue_handshake(42);
+        client.update(state);
+        REQUIRE(fake_bridge().subscriptions.size() == 9U);  // protocol 6, content 7, account 8, my rows 9
+        queue_event(skill_row(3, 42, "fitness", 700));
+        queue_event(applied(9));
+        queue_event(member_row(42, 7, STDB_ROW_INSERT));
+        client.update(state);
+        REQUIRE(fake_bridge().subscriptions.size() == 10U);
+        queue_event(cart_row(42, 7));
+        queue_event(applied(10));
+        client.update(state);
+        CHECK(client.status() == net_status::connected);
+        CHECK(state.online.progress.skills.size() == 1U);
+        CHECK(skill_xp(state.online.progress.skills, "fitness") == 700);
+        CHECK(state.online.room_ready);
+        CHECK(state.online.carts.size() == 1U);
+
+        // The ended session's subscription failing late cannot end this one.
+        queue_event(subscription_failed(failing, "subscription_failed: late"));
+        client.update(state);
+        CHECK(client.status() == net_status::connected);
+        CHECK(client.failure().empty());
+        CHECK(state.online.room_ready);
+    }
+}
+
+TEST_CASE("sync: a room subscription retired by a room change fails without ending the session") {
     game_state state = started_hole();
     net_client client = connected_client(state, 42);
     queue_event(member_row(42, 7, STDB_ROW_INSERT));
+    queue_event(applied(5));
     client.update(state);
-    stdb_row row{};
-    row.golf_cart = stdb_golf_cart{42, 7, 1.0f, 2.0f, 3.0f, 0.0f, 0, 0, 0, 0.0};
-    queue_event(row_event(STDB_TABLE_GOLF_CART, STDB_ROW_INSERT, row));
-    stdb_event failed = fake_event(STDB_EVENT_SUBSCRIPTION_FAILED);
-    failed.subscription = 5;
-    failed.text = fake_text("subscription_failed: test");
-    queue_event(failed);
+    queue_event(member_row(42, 8, STDB_ROW_UPDATE));
     client.update(state);
-    CHECK(state.online.carts.empty());
-    CHECK(!state.online.room_ready);
+    REQUIRE(fake_bridge().subscriptions.size() == 6U);
+    CHECK(std::find(fake_bridge().unsubscribed.begin(), fake_bridge().unsubscribed.end(), 5U) != fake_bridge().unsubscribed.end());
+    queue_event(cart_row(42, 8));
+    queue_event(applied(6));
+    queue_event(subscription_failed(5, "subscription_failed: old room"));
+    client.update(state);
+    CHECK(client.status() == net_status::connected);
+    CHECK(client.failure().empty());
+    CHECK(state.online.room_ready);
+    CHECK(state.online.carts.size() == 1U);
+    CHECK(calls_to("stdb_disconnect") == 0);
+
+    queue_event(subscription_failed(6, "subscription_failed: this room"));
+    client.update(state);
     CHECK(client.status() == net_status::failed);
+    CHECK(client.failure() == "subscription_failed: this room");
+    CHECK(calls_to("stdb_disconnect") == 1);
 }
 
 TEST_CASE("sync: a bridge send failure never marks a motion sent or delays its retry") {
@@ -1250,7 +1411,9 @@ TEST_CASE("tee reservation rows: replacement eviction, completion, teardown and 
     client.update(state);
     REQUIRE(state.online.reservation);
     CHECK(state.online.reservation->completed);
-    queue_event(fake_event(STDB_EVENT_DISCONNECTED));
+    stdb_event lost = fake_event(STDB_EVENT_DISCONNECTED);
+    lost.retrying = true;
+    queue_event(lost);
     client.update(state);
     CHECK(!(state.online.reservation));
     CHECK(state.online.tee_slots.empty());

@@ -16,9 +16,11 @@
 
 #include <vector>
 
-// The course's holes (render_data::course_map_low/high), the player and the
-// hole being played, fitted to the paper inside a small margin with world
-// distances equal on screen along both axes of `grid`.
+// The course's holes (render_data::course_map_outline) fitted to the paper
+// inside a small margin, with world distances equal on screen along both axes
+// of `grid`. It never moves while I play: a mark off it (me, my bag, the
+// ball) is an arrow at its edge pointing out to it. The paper is the same
+// shape on any window, so an import knows the land it shows.
 course_map_layout make_course_map_layout(const render_data& data, overlay_grid grid);
 
 void draw_course_map_paper(overlay_batch& batch, const course_map_layout& layout);

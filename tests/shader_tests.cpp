@@ -162,87 +162,16 @@ TEST_CASE("render mesh bounds cover every axis independently") {
 
 }
 
-namespace {
-// A tree's trunk and leaves as model matrices on the unit cylinder and cone.
-glm::mat4 trunk_model(const tree_body& tree) {
-    const tree_shape& shape = tree.shape;
-    return glm::scale(glm::translate(glm::mat4(1.0f), tree.base),
-                      glm::vec3(shape.trunk_radius, shape.trunk_height, shape.trunk_radius));
-}
-
-glm::mat4 leaf_model(const tree_body& tree) {
-    const tree_shape& shape = tree.shape;
-    return glm::scale(glm::translate(glm::mat4(1.0f), tree.base + glm::vec3(0.0f, shape.trunk_height, 0.0f)),
-                      glm::vec3(shape.leaf_radius, shape.leaf_height, shape.leaf_radius));
-}
-
-// What tree_instanced.vert computes for a local vertex.
-glm::vec3 instance_world_position(const render_tree_instance& instance, const glm::vec3& local) {
-    return instance.offset + local * instance.scale;
-}
-
-void check_instance_matches_model(const render_tree_instance& instance, const glm::mat4& model) {
-    const glm::mat4 instance_model = glm::scale(glm::translate(glm::mat4(1.0f), instance.offset), instance.scale);
-    for (int column = 0; column < 4; ++column) {
-        for (int row = 0; row < 4; ++row) {
-            CHECK(instance_model[column][row] == model[column][row]);
-        }
-    }
-
-    const std::vector<glm::vec3> local_points = {
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        glm::vec3(1.0f, 0.0f, 0.0f),
-        glm::vec3(0.0f, 1.0f, 0.0f),
-        glm::vec3(-0.70710677f, 1.0f, 0.70710677f),
-    };
-    for (const glm::vec3& local : local_points) {
-        const glm::vec4 expected = model * glm::vec4(local, 1.0f);
-        const glm::vec3 actual = instance_world_position(instance, local);
-        CHECK(std::abs(actual.x - expected.x) <= 1e-5f);
-        CHECK(std::abs(actual.y - expected.y) <= 1e-5f);
-        CHECK(std::abs(actual.z - expected.z) <= 1e-5f);
-    }
-}
-}
-
-TEST_CASE("tree instances match the trunk and leaf model matrices") {
-    const std::vector<tree_body> trees{
-        tree_body{glm::vec3(12.5f, 3.25f, -40.0f), tree_shape{0.35f, 2.4f, 1.6f, 3.2f}},
-        tree_body{glm::vec3(-7.0f, 0.5f, 18.0f), tree_shape{0.2f, 1.75f, 2.4f, 4.5f}},
-        tree_body{glm::vec3(0.0f), tree_shape{0.01f, 0.01f, 0.01f, 0.01f}},
-    };
-
-    const render_tree_instance_batch batch = build_tree_instances(trees);
-    REQUIRE(batch.trunks.size() == trees.size());
-    REQUIRE(batch.leaves.size() == trees.size());
-    for (std::size_t i = 0; i < trees.size(); ++i) {
-        check_instance_matches_model(batch.trunks[i], trunk_model(trees[i]));
-        check_instance_matches_model(batch.leaves[i], leaf_model(trees[i]));
-    }
-}
-
-TEST_CASE("tree instances are empty for no trees") {
-    const render_tree_instance_batch batch = build_tree_instances({});
-    CHECK(batch.trunks.empty());
-    CHECK(batch.leaves.empty());
-}
-
-TEST_CASE("tree instance packs into six floats for the instance buffer") {
-    CHECK(sizeof(render_tree_instance) == 6 * sizeof(float));
-    CHECK(offsetof(render_tree_instance, scale) == 3 * sizeof(float));
-}
-
-TEST_CASE("tree cones and trunks carry outward normals for their light") {
-    for (const std::vector<float>& mesh : {make_cone_vertices(primitive_cone_segments), make_cylinder_vertices(primitive_cylinder_segments)}) {
-        REQUIRE(mesh.size() % 6U == 0U);
-        for (std::size_t i = 0; i < mesh.size(); i += 6U) {
-            const glm::vec3 position(mesh[i], mesh[i + 1], mesh[i + 2]);
-            const glm::vec3 normal(mesh[i + 3], mesh[i + 4], mesh[i + 5]);
-            CHECK(near(glm::length(normal), 1.0f, 0.0001f));
-            // Sides face away from the axis, caps straight up or down.
-            const glm::vec3 out = std::abs(normal.y) > 0.999f ? glm::vec3(0.0f, normal.y, 0.0f) : glm::vec3(position.x, 0.0f, position.z);
-            CHECK(glm::dot(normal, out) >= 0.0f);
-        }
+TEST_CASE("cylinders carry outward normals for their light") {
+    const std::vector<float> mesh = make_cylinder_vertices(primitive_cylinder_segments);
+    REQUIRE(mesh.size() % 6U == 0U);
+    for (std::size_t i = 0; i < mesh.size(); i += 6U) {
+        const glm::vec3 position(mesh[i], mesh[i + 1], mesh[i + 2]);
+        const glm::vec3 normal(mesh[i + 3], mesh[i + 4], mesh[i + 5]);
+        CHECK(near(glm::length(normal), 1.0f, 0.0001f));
+        // Sides face away from the axis, caps straight up or down.
+        const glm::vec3 out = std::abs(normal.y) > 0.999f ? glm::vec3(0.0f, normal.y, 0.0f) : glm::vec3(position.x, 0.0f, position.z);
+        CHECK(glm::dot(normal, out) >= 0.0f);
     }
 }
 
@@ -276,8 +205,9 @@ TEST_CASE("lit scene shaders take their light from lighting.glsl, none from a un
     const std::filesystem::path shaders = std::filesystem::path(asset_root()) / "picture" / "shaders";
     const shader_include_reader read = [&shaders](const std::string& name) { return read_text_file(shaders / name); };
     for (const char* name : {"terrain.frag", "ball.frag", "hole_sign.frag", "fence.frag", "water.frag", "underwater.frag", "lit_flat.frag",
-                             "tree_instanced.vert", "world_marker.vert", "tee_box.vert", "backdrop.frag", "blob_shadow.vert",
-                             "floodlight.vert", "weather_streak.vert", "sun_shafts.frag", "sun_shafts_composite.frag"}) {
+                             "tree.vert", "tree.frag", "world_marker.vert", "tee_box.vert", "backdrop.frag", "blob_shadow.vert",
+                             "floodlight.vert", "floodlight.frag", "weather_streak.vert", "sun_shafts.frag", "sun_shafts_composite.frag",
+                             "grass_blade.vert", "grass_blade.frag"}) {
         const std::optional<std::string> source = read_text_file(shaders / name);
         REQUIRE(source.has_value());
         const std::optional<std::string> expanded = expand_shader_includes(*source, read);
@@ -298,10 +228,11 @@ TEST_CASE("everything drawn in the world fades into the haze, so nothing shows t
     const std::vector<std::pair<const char*, const char*>> programs{
         {"terrain.vert", "terrain.frag"},          {"water.vert", "water.frag"},
         {"fence.vert", "fence.frag"},              {"hole_sign.vert", "hole_sign.frag"},
-        {"prop.vert", "prop.frag"},                {"tree_instanced.vert", "lit_flat.frag"},
-        {"floodlight.vert", "lit_flat.frag"},      {"world_marker.vert", "lit_flat.frag"},
+        {"prop.vert", "prop.frag"},                {"tree.vert", "tree.frag"},
+        {"floodlight.vert", "floodlight.frag"},    {"world_marker.vert", "lit_flat.frag"},
         {"tee_box.vert", "tee_box.frag"},          {"ball.vert", "ball.frag"},
         {"weather_streak.vert", "weather_streak.frag"}, {"blob_shadow.vert", "blob_shadow.frag"},
+        {"grass_blade.vert", "grass_blade.frag"},
     };
     for (const auto& [vertex, fragment] : programs) {
         const std::optional<std::string> vertex_source = read_text_file(shaders / vertex);

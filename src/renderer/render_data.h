@@ -262,6 +262,16 @@ struct render_lightning {
     glm::vec3 color{0.0f};
 };
 
+// A tree species as drawn this frame (game/tree_season.h): its look's name,
+// the share of its crowns in leaf, how far they have turned and how fresh
+// their spring green still is.
+struct render_tree_species {
+    std::string name;
+    float foliage = 1.0f;
+    float turned = 0.0f;
+    float fresh = 0.0f;
+};
+
 // The weather's moving things this frame (core/weather_frame.h): rain, the
 // wind's specks and how every flag flies.
 struct render_weather {
@@ -274,6 +284,10 @@ struct render_weather {
     float flag_lift = 0.0f;
     float flag_phase = 0.0f;
     float flag_flap = 0.0f;
+    // What roughens the ponds and bends the grass: the wind at its
+    // reference height, level, and the rain shown, 0 .. 1.
+    glm::vec3 surface_wind{0.0f};
+    float surface_rain = 0.0f;
     render_lightning lightning;
 };
 
@@ -339,6 +353,9 @@ struct render_data {
     // What is drawn behind the course, and the haze the scene fades into.
     const course_backdrop* backdrop = nullptr;
     const std::vector<tree_body>* trees = nullptr;
+    // The species the trees are of (tree_shape::species): each one's look
+    // by name (the palette's trees) and its season on the course's date.
+    std::vector<render_tree_species> tree_species;
     // Instance data for `trees` is re-uploaded only when this changes.
     std::uint64_t trees_revision = 0;
     const render_hole_signs* hole_signs = nullptr;  // one at every tee of the area
@@ -346,6 +363,7 @@ struct render_data {
     const render_floodlights* floodlights = nullptr;  // along every hole of the area
     const render_water* water = nullptr;            // the ponds' surfaces
     bool camera_underwater = false;                 // the scene is seen from under a pond's surface
+    float camera_water_level = 0.0f;                // that surface's height, when camera_underwater
     glm::vec3 area_center{0.0f};
     float area_extent = 0.0f;
 

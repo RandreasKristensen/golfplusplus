@@ -1,8 +1,8 @@
 #pragma once
 
 // Rules for playing online, as plain functions the module's reducers call
-// and the native tests check: which room a player joins, how far a claimed
-// position may lie, what is in reach, and whether a shot is valid. The
+// and the native tests check: which room a player joins, how fast a player
+// is shown moving, what is in reach, and whether a shot is valid. The
 // server decides shots, progress and movement (stepped from inputs:
 // movement_rules.h). Errors are the ids in server_errors.h.
 
@@ -62,27 +62,6 @@ movement_limits movement_limits_for(const game_tuning& tuning, const cart_spec& 
 // The fastest the game moves a player in `mode`: running speed on foot,
 // their cart's top speed in a cart.
 float mode_speed(std::uint8_t mode, const movement_limits& limits);
-
-struct motion_check {
-    bool allowed = false;
-    // The motion slack left after this move: server.motion_distance_slack at
-    // most, refilling at that many world units per second. A move may go
-    // that much further than its speed allows, so the slack covers lag
-    // without adding up over many quick calls.
-    float slack_left = 0.0f;
-};
-
-// A claimed move from `previous.position` to `to` (XZ) in `seconds` (at
-// most server.max_motion_gap_seconds count), having moved as `previous`:
-// the faster of the two modes' speeds times server.motion_speed_scale, plus
-// the slack left.
-motion_check check_motion(const net_motion& previous,
-                          const glm::vec3& to,
-                          float seconds,
-                          std::uint8_t mode,
-                          float slack_left,
-                          const movement_limits& limits,
-                          const game_tuning& tuning);
 
 // A driver's ride motion to their passenger (update_ride): `to` no further
 // from where the server last had them (`last`, `seconds` before, at most
@@ -178,6 +157,21 @@ shot_check check_shot(const shot_request& request,
 // (account_rules.h), then the stroke, so no client can work them out before.
 // Without a secret anyone could.
 std::uint64_t server_shot_seed(const std::string& secret, std::int64_t timestamp_micros, std::uint64_t account_id, int stroke);
+
+// A ball in the room as its row has it: where its last shot comes to rest,
+// and when (UTC microseconds).
+struct room_ball_rest {
+    std::uint64_t account = 0;
+    glm::vec3 position{0.0f};
+    std::int64_t rests_at_micros = 0;
+    bool in_cup = false;
+};
+
+// The balls a shot by `shooter` at `now_micros` meets in its snapshot:
+// every other one out of its cup that has come to rest by then. One still
+// flying is not there yet, however soon it lands (no timing slack).
+std::vector<snapshot_entry> resting_balls(const std::vector<room_ball_rest>& balls, std::uint64_t shooter,
+                                          std::int64_t now_micros);
 
 // --- The bag -------------------------------------------------------------------
 

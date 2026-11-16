@@ -198,7 +198,7 @@ enum class net_status {
 // only on a server with the same, else asks for an update
 // (net_failure_outdated_game). Bump it with every change to the module's
 // tables, views or reducers; the server_protocol view itself never changes.
-inline constexpr std::uint32_t protocol_version = 27;
+inline constexpr std::uint32_t protocol_version = 28;
 inline constexpr const char* online_hub_course = "practice_ground";
 
 // The failure ids the bridge and the client give (src/net/stdb_bridge.h,

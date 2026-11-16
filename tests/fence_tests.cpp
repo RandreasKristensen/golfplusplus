@@ -69,21 +69,21 @@ TEST_CASE("course worlds carry fences, and refuse a fence that is not one") {
         "ground": {"origin": [-50, -50], "cell_size": 50, "columns": 3, "rows": 3, "heights_cm": [[0, 0, 0], [0, 0, 0], [0, 0, 0]]})";
     const auto with_fences = [&](const std::string& fences) { return "{" + start + fences + "}"; };
 
-    const std::optional<course_world_definition> none = parse_course_world_from_text(with_fences(""), one_hole);
+    const std::optional<course_world_definition> none = parse_course_world_from_text(with_fences(""), one_hole).value;
     REQUIRE(none.has_value());
     CHECK(none->fences.empty());
 
     const std::optional<course_world_definition> fenced = parse_course_world_from_text(
-        with_fences(R"(, "fences": [{"poles": [[0, 0, 0], [10, 0, 0], [10, 0, 10]], "height": 12}])"), one_hole);
+        with_fences(R"(, "fences": [{"poles": [[0, 0, 0], [10, 0, 0], [10, 0, 10]], "height": 12}])"), one_hole).value;
     REQUIRE(fenced.has_value());
     REQUIRE(fenced->fences.size() == 1U);
     CHECK(fenced->fences[0].poles.size() == 3U);
     CHECK(near(fenced->fences[0].height, 12.0f));
 
-    CHECK(!parse_course_world_from_text(with_fences(R"(, "fences": [{"poles": [[0, 0, 0]], "height": 12}])"), one_hole));
+    CHECK(!parse_course_world_from_text(with_fences(R"(, "fences": [{"poles": [[0, 0, 0]], "height": 12}])"), one_hole).value);
     CHECK(!parse_course_world_from_text(with_fences(R"(, "fences": [{"poles": [[0, 0, 0], [5, 0, 0]], "height": 0}])"),
-                                        one_hole));
-    CHECK(!parse_course_world_from_text(with_fences(R"(, "fences": [{"poles": [[0, 0, 0], [5, 0, 0]]}])"), one_hole));
+                                        one_hole).value);
+    CHECK(!parse_course_world_from_text(with_fences(R"(, "fences": [{"poles": [[0, 0, 0], [5, 0, 0]]}])"), one_hole).value);
 }
 
 TEST_CASE("a fence stands on the ground and stops a shot hit into it") {

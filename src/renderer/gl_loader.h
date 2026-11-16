@@ -21,6 +21,7 @@
     X(PFNGLBINDRENDERBUFFERPROC, glBindRenderbuffer)                \
     X(PFNGLBINDVERTEXARRAYPROC, glBindVertexArray)                  \
     X(PFNGLBLENDEQUATIONPROC, glBlendEquation)                      \
+    X(PFNGLBLITFRAMEBUFFERPROC, glBlitFramebuffer)                  \
     X(PFNGLBUFFERDATAPROC, glBufferData)                            \
     X(PFNGLBUFFERSUBDATAPROC, glBufferSubData)                      \
     X(PFNGLCHECKFRAMEBUFFERSTATUSPROC, glCheckFramebufferStatus)    \
@@ -85,6 +86,7 @@ bool load_gl_functions();
 #define glBindRenderbuffer golfpp_glBindRenderbuffer
 #define glBindVertexArray golfpp_glBindVertexArray
 #define glBlendEquation golfpp_glBlendEquation
+#define glBlitFramebuffer golfpp_glBlitFramebuffer
 #define glBufferData golfpp_glBufferData
 #define glBufferSubData golfpp_glBufferSubData
 #define glCheckFramebufferStatus golfpp_glCheckFramebufferStatus

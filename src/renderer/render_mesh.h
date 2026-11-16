@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <vector>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 // GL-free render mesh data. Kept separate from renderer.h so the pure helpers
@@ -17,9 +18,21 @@ struct render_terrain_vertex {
     float rough = 0.0f;  // 1 where the rough's grass texture shows, 0 where not
     float paved = 0.0f;  // 1 where the cart path's asphalt texture shows, 0 where not
     float ao = 1.0f;     // how much of the sky it sees (renderer/sky_visibility.h)
+    // Mown grass: the way the mower went, 2 long on a fairway and 1 on a
+    // green (their stripes' widths are the grass style's); zero unmown.
+    glm::vec2 mow{0.0f};
+    // How far across the line it was mown along it lies, signed, in metres:
+    // which pass of the mower it is in.
+    float mow_across = 0.0f;
+    // The grass's blades here: 1 rough, 2 heavy rough (as tall as the grass
+    // style says), 0 none, between where they meet.
+    float blades = 0.0f;
     // The sine of the horizon's elevation each of the 8 horizon ways
     // (sky_visibility.h), 0..255 for 0..1: where the sun is hidden behind the land.
     std::array<std::uint8_t, 8> horizon{};
+    // Its colour on a printed map (course_map_fill.h): the colour, but water
+    // over a pond's floor. Not drawn.
+    glm::vec3 map_color = glm::vec3(1.0f);
 };
 
 // Axis-aligned bounds over every vertex position. `valid` is false for an

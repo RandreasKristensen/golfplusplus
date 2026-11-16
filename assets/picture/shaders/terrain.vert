@@ -8,6 +8,8 @@ layout(location = 4) in float a_ao;
 layout(location = 5) in vec4 a_horizon_a;
 layout(location = 6) in vec4 a_horizon_b;
 layout(location = 7) in float a_paved;
+layout(location = 8) in vec2 a_mow;
+layout(location = 10) in float a_mow_across;
 
 uniform mat4 u_mvp;
 uniform mat4 u_model;
@@ -18,6 +20,8 @@ out vec3 v_normal;
 out vec3 v_color;
 out float v_rough;
 out float v_paved;
+out vec2 v_mow;
+out float v_mow_across;
 out float v_ao;
 out vec4 v_horizon_a;
 out vec4 v_horizon_b;
@@ -31,6 +35,8 @@ void main() {
     v_color = a_color;
     v_rough = a_rough;
     v_paved = a_paved;
+    v_mow = a_mow;
+    v_mow_across = a_mow_across;
     v_ao = a_ao;
     v_horizon_a = a_horizon_a;
     v_horizon_b = a_horizon_b;

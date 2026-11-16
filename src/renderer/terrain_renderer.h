@@ -32,6 +32,11 @@ void describe_render_terrain_vertex();
 void set_terrain_draw_state(const shader_program& shader, const glm::mat4& model, const glm::mat4& view_proj,
                             const glm::vec3& color, float alpha, float glow, bool use_vertex_color);
 
+// How the material overlay meets the ground under it: pulled forward in
+// depth (a view at an angle), or drawn over whatever is there (a view from
+// straight above, where depth cannot tell them apart).
+enum class overlay_depth { pulled_forward, over_all };
+
 class terrain_renderer {
 public:
     bool init();
@@ -40,7 +45,7 @@ public:
     // `shader`, already in use. Null meshes draw nothing.
     terrain_cull_stats draw(const shader_program& shader, const render_static_mesh* terrain,
                             const render_static_mesh* material_overlay, const glm::mat4& view_proj,
-                            const view_frustum& frustum, frame_profile* profile);
+                            const view_frustum& frustum, overlay_depth overlay, frame_profile* profile);
 
 private:
     struct static_mesh_buffers {

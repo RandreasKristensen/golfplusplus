@@ -45,7 +45,8 @@ frequent motion is a driver's cart to the rider in it (`src/game/ride_sync.h`),
 in a `ride_motion` row only that rider subscribes to. The client plays
 ahead and the server's answer wins (`src/game/online_play.h`), but for a
 shot: a shot is a setup plus a seed the server rolls and the snapshot of the
-room it takes from its rows (`shot_record`), written into its event; the
+room it takes from its rows (`shot_record`; other balls only once their
+`rests_at` has passed, `resting_balls`), written into its event; the
 client sends the setup at Space, holds the swing at its top for the answer and
 launches the ball from it, bit for bit as the server played it. A hole is over
 when the server says so. Others are presentation only. At their ball others
@@ -81,12 +82,16 @@ steps first. The server plays them from its own `motion_state` row
 their cart's pose, tipping and sinking, reach and the shot snapshot are its
 steps' result, never the client's claim. Steps already played are passed
 over, steps never received count as standing, and steps beyond the time
-saved up (`server.max_motion_gap_seconds`) are passed over unplayed. A claimed
-position counts only at the ball, riding along, or at the start of steps on
-foot within `server.step_start_tolerance` (put out of a seat); each claim
-spends the time it takes. The server puts a player out of a seat itself
-(leaving the wheel or a passenger seat, a cart going over). When the
-server's steps disagree with the prediction, the server wins and later steps
+saved up (`server.max_motion_gap_seconds`) are passed over unplayed. Where
+nothing is stepped the rows place a player, never their claim: at address or
+in the swing at `stance_at_address` for their own resting ball (from beside
+it) and the sent setup clamped to the club in hand; riding along in the
+confirmed passenger seat. Steps on foot may start at the claimed XZ within
+`server.step_start_tolerance` (put out of a seat), stopped by anything
+solid, with the server's vertical state, spending the time it takes. The
+server puts a player out of a seat itself (leaving the wheel or a passenger
+seat, a cart going over). When the server's steps disagree with the
+prediction, the server wins and later steps
 replay on top; motions are not refused for drifting. Movement XP comes from
 the server's steps, for at most `server.walk_xp_meters_per_hour` and
 `server.cart_xp_meters_per_hour`.
@@ -94,7 +99,13 @@ the server's steps, for at most `server.walk_xp_meters_per_hour` and
 Standing fixed steps also drain at `server.max_motion_gap_seconds` intervals,
 so interacting or walking after an idle cannot send an oversized input batch.
 Anonymous sign-out closes only the guest connection; it never deletes the
-browser login's refresh credential.
+browser login's refresh credential. Sign-in threads never touch the
+credential store: the bridge applies a sign-in's credential change on the
+game's thread only when it accepts that current sign-in's result. Cancelling
+closes an unaccepted connection and drops its late events, keeping the
+credential; a failed protocol, content, account, self or room subscription
+ends the session (keeping its failure, disconnecting, retryable), while a
+retired subscription's failure is ignored.
 
 **Every replicated thing has one truth: its server row.** Predict only the
 local action in progress; outside it, read the row. Online carts do not
@@ -110,13 +121,15 @@ network dispatch; disconnected motion remains due, while actions are never
 replayed into a different room. Room rows stay hidden until that room's
 subscription applies; room changes and reconnects discard cached prediction
 and presentation. Subscription teardown is cache eviction, never a world
-change. Online gameplay and acknowledgements keep ticking under the pause
-menu. Every frame bounds prediction by `net.max_unacked_seconds`; a
+change. The live online world keeps ticking under the pause menu, hub
+screens, an unanswered ball preparation and the results (`update_game`,
+`core/play_screen.h`); those only limit which actions input may begin. My
+bag row is reconciled whole (`game/bag_sync.h`). Every frame bounds prediction by `net.max_unacked_seconds`; a
 breach restores rows, logs both poses, the ack and refusal in the executable,
 and increments the profiler overlay's sync counter. Native sync scenarios
 assert that no unexpected breach occurs. Server cart decisions live in
 `cart_rules.h`: confirmed seats, righting and towing; driving, tipping and
-sinking are the server's steps.
+sinking are the server's steps. Removing a cart cancels its pending tow.
 
 **Progress lasts.** Skill ids are forever: one no longer earned stays in
 `skills.json` as `retired`, and saves and rows naming any id are kept. XP is

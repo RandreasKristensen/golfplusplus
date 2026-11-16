@@ -74,6 +74,10 @@ double game_day_at(const sky_timeline& timeline, const std::int64_t now_unix_ms)
     return timeline.anchor_game_day + real_days * timeline.game_days_per_real_day;
 }
 
+double course_clock_at(const sky_timeline& timeline, const course_sky& sky, const std::int64_t now_unix_ms) {
+    return game_day_at(timeline, now_unix_ms) + static_cast<double>(sky.clock_shift_hours) / 24.0;
+}
+
 std::int64_t course_date(const sky_timeline& timeline, const course_sky& sky) {
     return days_from_civil(timeline.year, sky.month, sky.day);
 }

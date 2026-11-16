@@ -474,8 +474,11 @@ void stdb_destroy(stdb_client* client);
 // a stored sign-in or (unless `silent_only`) through the system browser.
 // False when already signing in or connected.
 bool stdb_begin_login(stdb_client* client, bool silent_only);
+// Abandons signing in and any connection the game has not accepted, with
+// their events, keeping the stored sign-in.
 void stdb_cancel_login(stdb_client* client);
-// Disconnects, keeping the stored sign-in.
+// Disconnects, keeping the stored sign-in; retires the session's queued
+// events, then queues DISCONNECTED.
 void stdb_disconnect(stdb_client* client);
 // Disconnects and forgets the stored sign-in.
 void stdb_sign_out(stdb_client* client);

@@ -4,10 +4,13 @@
 //! returns to a one-shot listener on a free 127.0.0.1 port (RFC 8252: the
 //! provider registers `http://127.0.0.1/callback` and ignores the port). Each sign-in runs
 //! on its own thread and reports through a channel, so the game never waits.
+//! The thread never touches the credential store: it is handed the stored
+//! refresh token and returns what to change, which the owner (client.rs)
+//! applies only when it accepts that sign-in's result.
 //!
 //! The result is an ID token, which the server accepts as the connection's
 //! token. Another sign-in method (Steam, docs/todo/launch_todo.md) produces the same
-//! `LoginMessage::Token`.
+//! `LoginMessage::Done`.
 
 use oauth2::basic::{
     BasicErrorResponse, BasicErrorResponseType, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse, BasicTokenType,
@@ -57,15 +60,28 @@ pub struct AuthConfig {
     pub page_failed: String,
 }
 
+/// What a finished sign-in asks of the credential store.
+#[derive(Debug, PartialEq)]
+pub enum CredentialChange {
+    Keep,
+    Store(String),
+    /// The server refused this refresh token (invalid_grant): forget it,
+    /// unless another has replaced it since.
+    Forget(String),
+}
+
 pub enum LoginMessage {
     WaitingForBrowser,
-    Token(String),
-    Failed(String),
+    /// The ID token or why there is none, and the credential change.
+    Done(Result<String, String>, CredentialChange),
 }
 
 pub struct LoginJob {
     pub messages: Receiver<LoginMessage>,
     cancel: Arc<AtomicBool>,
+    /// Tests join the sign-in's thread to know it has finished.
+    #[cfg(test)]
+    pub worker: Option<thread::JoinHandle<()>>,
 }
 
 impl Drop for LoginJob {
@@ -95,15 +111,57 @@ type OidcClient = Client<
     EndpointSet,
 >;
 
-fn keyring_entry(config: &AuthConfig) -> Option<keyring::Entry> {
-    keyring::Entry::new(KEYRING_SERVICE, &format!("refresh_token:{}:{}", config.issuer, config.client_id)).ok()
+/// Where the refresh token is kept; used only by the owner, on the game's thread.
+pub trait CredentialStore {
+    /// The stored refresh token, or why there is none.
+    fn load(&self) -> Result<String, String>;
+    fn save(&self, refresh_token: &str);
+    /// Forgets it, so the next sign-in uses the browser.
+    fn forget(&self);
 }
 
-/// Forgets the stored refresh token, so the next sign-in uses the browser.
-pub fn forget_refresh_token(config: &AuthConfig) {
-    if let Some(entry) = keyring_entry(config) {
-        let _ = entry.delete_credential();
+/// The OS credential store.
+pub struct OsCredentialStore(Option<keyring::Entry>);
+
+impl OsCredentialStore {
+    pub fn new(config: &AuthConfig) -> OsCredentialStore {
+        OsCredentialStore(keyring_entry(config))
     }
+}
+
+impl CredentialStore for OsCredentialStore {
+    fn load(&self) -> Result<String, String> {
+        let entry = self.0.as_ref().ok_or("no credential store")?;
+        entry.get_password().map_err(|e| e.to_string())
+    }
+
+    fn save(&self, refresh_token: &str) {
+        if let Some(entry) = &self.0 {
+            let _ = entry.set_password(refresh_token);
+        }
+    }
+
+    fn forget(&self) {
+        if let Some(entry) = &self.0 {
+            let _ = entry.delete_credential();
+        }
+    }
+}
+
+pub fn apply(store: &dyn CredentialStore, change: CredentialChange) {
+    match change {
+        CredentialChange::Keep => {}
+        CredentialChange::Store(refresh_token) => store.save(&refresh_token),
+        CredentialChange::Forget(refused) => {
+            if store.load().is_ok_and(|stored| stored == refused) {
+                store.forget();
+            }
+        }
+    }
+}
+
+fn keyring_entry(config: &AuthConfig) -> Option<keyring::Entry> {
+    keyring::Entry::new(KEYRING_SERVICE, &format!("refresh_token:{}:{}", config.issuer, config.client_id)).ok()
 }
 
 #[cfg(all(test, target_os = "windows"))]
@@ -127,9 +185,10 @@ mod credential_tests {
         assert!(matches!(entry.get_password(), Err(keyring::Error::NoEntry)));
         entry.set_password("disposable-test-credential").unwrap();
         let entry = TestCredential(entry);
-        StdbClient::new(String::new(), String::new(), config.clone(), true).sign_out();
+        let store = |config: &AuthConfig| Box::new(OsCredentialStore::new(config));
+        StdbClient::new(String::new(), String::new(), config.clone(), true, store(&config)).sign_out();
         assert!(entry.0.get_password().is_ok());
-        StdbClient::new(String::new(), String::new(), config, false).sign_out();
+        StdbClient::new(String::new(), String::new(), config.clone(), false, store(&config)).sign_out();
         assert!(matches!(entry.0.get_password(), Err(keyring::Error::NoEntry)));
     }
 }
@@ -152,31 +211,20 @@ fn http_client() -> Result<oauth2::reqwest::blocking::Client, String> {
         .map_err(|e| failure(FAILED_SIGN_IN, e))
 }
 
-/// The ID token from a token response, storing its refresh token.
-fn take_tokens(config: &AuthConfig, response: &IdTokenResponse) -> Result<String, String> {
-    if let (Some(refresh), Some(entry)) = (response.refresh_token(), keyring_entry(config)) {
-        let _ = entry.set_password(refresh.secret());
-    }
-    response.extra_fields().id_token.clone().ok_or_else(|| failure(FAILED_SIGN_IN, "no id_token in the token response"))
-}
-
-fn refresh(config: &AuthConfig) -> Result<String, String> {
-    let entry = keyring_entry(config).ok_or_else(|| failure(FAILED_NO_STORED_SIGN_IN, "no credential store"))?;
-    let stored = entry.get_password().map_err(|e| failure(FAILED_NO_STORED_SIGN_IN, e))?;
-    let response = client(config, None)?
-        .exchange_refresh_token(&RefreshToken::new(stored))
-        .request(&http_client()?)
+/// Refreshes with the stored refresh token; a failure says whether the
+/// server refused that token.
+fn refresh(config: &AuthConfig, stored: &str) -> Result<IdTokenResponse, (String, bool)> {
+    let client = client(config, None).map_err(|e| (e, false))?;
+    client
+        .exchange_refresh_token(&RefreshToken::new(stored.to_string()))
+        .request(&http_client().map_err(|e| (e, false))?)
         .map_err(|e| {
             // Only an expired or revoked refresh token is forgotten: no
             // network or a server error must not sign the player out.
-            if let RequestTokenError::ServerResponse(response) = &e {
-                if *response.error() == BasicErrorResponseType::InvalidGrant {
-                    let _ = entry.delete_credential();
-                }
-            }
-            failure(FAILED_SIGN_IN, format!("refresh: {e}"))
-        })?;
-    take_tokens(config, &response)
+            let refused = matches!(&e, RequestTokenError::ServerResponse(response)
+                if *response.error() == BasicErrorResponseType::InvalidGrant);
+            (failure(FAILED_SIGN_IN, format!("refresh: {e}")), refused)
+        })
 }
 
 /// `%xx` and `+` decoding of one query value.
@@ -249,7 +297,7 @@ fn read_request_line(stream: &mut TcpStream) -> Option<String> {
 /// The path the browser returns to; the port is whichever was free.
 const CALLBACK_PATH: &str = "/callback";
 
-fn browser_sign_in(config: &AuthConfig, cancel: &AtomicBool, messages: &Sender<LoginMessage>) -> Result<String, String> {
+fn browser_sign_in(config: &AuthConfig, cancel: &AtomicBool, messages: &Sender<LoginMessage>) -> Result<IdTokenResponse, String> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| failure(FAILED_BROWSER, e))?;
     let port = listener.local_addr().map_err(|e| failure(FAILED_BROWSER, e))?.port();
     listener.set_nonblocking(true).map_err(|e| failure(FAILED_BROWSER, e))?;
@@ -301,7 +349,7 @@ fn browser_sign_in(config: &AuthConfig, cancel: &AtomicBool, messages: &Sender<L
                     .request(&http_client()?)
                     .map_err(|e| failure(FAILED_SIGN_IN, format!("code exchange: {e}")));
                 respond(stream, if response.is_ok() { &config.page_signed_in } else { &config.page_failed });
-                return take_tokens(config, &response?);
+                return response;
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => thread::sleep(Duration::from_millis(100)),
             Err(e) => return Err(failure(FAILED_BROWSER, e)),
@@ -309,28 +357,64 @@ fn browser_sign_in(config: &AuthConfig, cancel: &AtomicBool, messages: &Sender<L
     }
 }
 
-/// Signs in on a new thread: silently with a stored refresh token, else
-/// (unless `silent_only`) through the browser. Dropping the job cancels it.
-pub fn start(config: AuthConfig, silent_only: bool) -> LoginJob {
+/// Signs in silently with `stored` (the refresh token the owner read, or
+/// why there is none), else (unless `silent_only`) through the browser.
+fn sign_in(
+    config: &AuthConfig,
+    stored: Result<String, String>,
+    silent_only: bool,
+    cancel: &AtomicBool,
+    messages: &Sender<LoginMessage>,
+) -> (Result<String, String>, CredentialChange) {
+    let mut change = CredentialChange::Keep;
+    let refreshed = match stored {
+        Err(why) => Err(failure(FAILED_NO_STORED_SIGN_IN, why)),
+        Ok(token) => refresh(config, &token).map_err(|(reason, refused)| {
+            if refused {
+                change = CredentialChange::Forget(token.clone());
+            }
+            reason
+        }),
+    };
+    let response = refreshed.or_else(|refresh_error| {
+        if silent_only {
+            Err(refresh_error)
+        } else if cancel.load(Ordering::SeqCst) {
+            Err(failure(FAILED_CANCELLED, "by the player"))
+        } else {
+            browser_sign_in(config, cancel, messages)
+        }
+    });
+    match response {
+        Ok(response) => {
+            if let Some(refresh_token) = response.refresh_token() {
+                change = CredentialChange::Store(refresh_token.secret().clone());
+            }
+            let id_token = response.extra_fields().id_token.clone();
+            (id_token.ok_or_else(|| failure(FAILED_SIGN_IN, "no id_token in the token response")), change)
+        }
+        Err(reason) => (Err(reason), change),
+    }
+}
+
+/// Signs in on a new thread (see sign_in). Dropping the job cancels it and
+/// discards its result.
+pub fn start(config: AuthConfig, stored: Result<String, String>, silent_only: bool) -> LoginJob {
     let (sender, messages) = channel();
     let cancel = Arc::new(AtomicBool::new(false));
     let job_cancel = cancel.clone();
-    thread::spawn(move || {
-        let result = refresh(&config).or_else(|refresh_error| {
-            if silent_only {
-                Err(refresh_error)
-            } else if job_cancel.load(Ordering::SeqCst) {
-                Err(failure(FAILED_CANCELLED, "by the player"))
-            } else {
-                browser_sign_in(&config, &job_cancel, &sender)
-            }
-        });
-        let _ = sender.send(match result {
-            Ok(token) => LoginMessage::Token(token),
-            Err(reason) => LoginMessage::Failed(reason),
-        });
+    let worker = thread::spawn(move || {
+        let (token, credential) = sign_in(&config, stored, silent_only, &job_cancel, &sender);
+        let _ = sender.send(LoginMessage::Done(token, credential));
     });
-    LoginJob { messages, cancel }
+    #[cfg(not(test))]
+    drop(worker);
+    LoginJob {
+        messages,
+        cancel,
+        #[cfg(test)]
+        worker: Some(worker),
+    }
 }
 
 #[cfg(test)]

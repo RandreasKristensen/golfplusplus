@@ -15,7 +15,7 @@ bool enter_place(game_state& state, const std::string& place_id) {
         if (entered) { state.hub_flow = hub_flow_state{}; state.offline_preparing = false; }
         return entered;
     }
-    for (const auto& course : load_courses(state.asset_root)) {
+    for (const auto& course : load_courses(state.asset_root).value.value_or(std::vector<course_definition>{})) {
         if (course.id == place_id) {
             const bool entered = start_course(state, course);
             if (entered) {

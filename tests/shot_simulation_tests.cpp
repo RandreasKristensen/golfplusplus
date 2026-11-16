@@ -247,6 +247,7 @@ TEST_CASE("golden shots land where they always have") {
 
     int holed = 0;
     int lost = 0;
+    int ball_penalties = 0;
     int tree_hits = 0;
     for (std::size_t i = 0; i < shots->size(); ++i) {
         const json& shot = (*shots)[i];
@@ -272,22 +273,30 @@ TEST_CASE("golden shots land where they always have") {
                                                  state.tuning.scale.ball_physics_radius_meters)};
         const shot_result result = simulate_struck_shot(record, golfer_profile{}, course, state.tuning, state.clubs);
         const bool matches = near(result.rest_position, *json_vec3(shot, "rest"), 0.001f) &&
-            result.holed == *json_bool(shot, "holed") && near(result.duration, *json_float(shot, "duration"), 0.0001f) &&
-            event_names(result) == *json_string(shot, "events");
+            result.holed == *json_bool(shot, "holed") && result.lost == *json_bool(shot, "lost") &&
+            result.penalty_strokes == *json_int(shot, "penalty_strokes") &&
+            near(result.duration, *json_float(shot, "duration"), 0.0001f) && event_names(result) == *json_string(shot, "events");
         if (!matches) {
-            std::printf("golden shot %zu: \"rest\": [%.4f, %.4f, %.4f], \"holed\": %s, \"duration\": %.4f, \"events\": \"%s\"\n",
+            std::printf("golden shot %zu: \"rest\": [%.4f, %.4f, %.4f], \"holed\": %s, \"lost\": %s, \"penalty_strokes\": %d, "
+                        "\"duration\": %.4f, \"events\": \"%s\"\n",
                         i, result.rest_position.x, result.rest_position.y, result.rest_position.z,
-                        result.holed ? "true" : "false", result.duration, event_names(result).c_str());
+                        result.holed ? "true" : "false", result.lost ? "true" : "false", result.penalty_strokes,
+                        result.duration, event_names(result).c_str());
         }
         CHECK(matches);
-        holed += result.holed ? 1 : 0;
-        tree_hits += count_events(result, shot_event_kind::tree_hit) + count_events(result, shot_event_kind::leaves);
-        lost += result.lost ? 1 : 0;
+        // What the frozen expectations cover, whatever this run gave.
+        holed += *json_bool(shot, "holed") ? 1 : 0;
+        lost += *json_bool(shot, "lost") ? 1 : 0;
+        ball_penalties += !*json_bool(shot, "lost") && *json_int(shot, "penalty_strokes") == 2 ? 1 : 0;
+        const std::string events = *json_string(shot, "events");
+        tree_hits += static_cast<int>(std::count(events.begin(), events.end(), 'T') + std::count(events.begin(), events.end(), 'V'));
     }
-    // The shots cover the cup, the trees and the water, not only open ground.
+    // The shots cover the cup, the trees, the water (lost, a stroke) and a
+    // ball on the green (two strokes), not only open ground.
     CHECK(holed > 0);
     CHECK(tree_hits > 0);
     CHECK(lost > 0);
+    CHECK(ball_penalties > 0);
 }
 
 TEST_CASE("a ball that goes under water sinks to the floor, lies there, and goes back to where it was hit") {
@@ -397,6 +406,23 @@ TEST_CASE("rough's grass halves the spin, a flier, and closes the face, more wit
     CHECK(grassy.direction > 0.0f);
     CHECK(strike("sand_wedge", 1.0f, rough).direction > strike("five_iron", 1.0f, rough).direction);
     CHECK(strike("seven_iron", 0.5f, rough).direction < grassy.direction);
+}
+
+TEST_CASE("heavy rough takes more speed and spin than rough, shuts the face more and lets the ball roll out less") {
+    const game_state state = started_hole();
+    const ball_on_lie rough{ball_lie::rough, {}, 0.0f};
+    const ball_on_lie heavy{ball_lie::heavy_rough, {}, 0.0f};
+    const auto strike = [&](const char* club, const ball_on_lie& on) {
+        return club_strike(club_named(state, club), stock_swing(club_named(state, club), state.tuning, 1.0f, on.lie), on, state.tuning).launch;
+    };
+    const launch_conditions out_of_rough = strike("seven_iron", rough);
+    const launch_conditions out_of_heavy = strike("seven_iron", heavy);
+    CHECK(out_of_heavy.ball_speed < out_of_rough.ball_speed);
+    CHECK(out_of_heavy.spin < out_of_rough.spin);
+    CHECK(out_of_heavy.direction > out_of_rough.direction);
+    const turf rough_turf = turf_for(terrain_material::rough, 0.0f, 10.0f, state.tuning);
+    const turf heavy_turf = turf_for(terrain_material::heavy_rough, 0.0f, 10.0f, state.tuning);
+    CHECK(heavy_turf.stimp_feet < rough_turf.stimp_feet);
 }
 
 TEST_CASE("an unknown club leaves the ball where it is") {
@@ -1006,9 +1032,14 @@ TEST_CASE("flagstick reference: slow and medium direct hits drop, firm glancing 
         if (leniency == 1.0f) {
             CHECK(!missed.holed);
             CHECK(has_event(missed, shot_event_kind::flag_hit));
-            // Well outside the studies' putting speeds, even a direct hit
-            // can escape a real cup. The wider gameplay cup can catch more.
-            CHECK(!roll_at_cup(state, *too_fast, 0.0f).holed);
+            // Well outside the studies' putting speeds, a direct hit still
+            // meets the pin, between fixed steps or not: never through it.
+            const shot_result smashed = roll_at_cup(state, *too_fast, 0.0f);
+            CHECK(has_event(smashed, shot_event_kind::flag_hit));
+            const float beyond = hole.centre.z + state.tuning.cup.flagstick_radius_meters +
+                state.tuning.scale.ball_physics_radius_meters;
+            CHECK(std::all_of(smashed.trajectory.begin(), smashed.trajectory.end(),
+                              [beyond](const glm::vec3& point) { return point.z < beyond; }));
         }
     }
 }

@@ -3,6 +3,7 @@
 #include "game/content_files.h"
 #include "game/json_util.h"
 #include "game/lighting_fields.h"
+#include "game/tree_looks.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -178,6 +179,20 @@ std::optional<shaft_style> parse_shafts(const json& root) {
     return shafts;
 }
 
+std::optional<water_style> parse_water(const json& root) {
+    const json* object = json_object(root, "water");
+    water_style water;
+    if (object == nullptr || !read_bounded(*object, water_fields, water)) {
+        return std::nullopt;
+    }
+    const std::optional<glm::vec3> scatter = read_color(*object, "scatter_color");
+    if (!scatter) {
+        return std::nullopt;
+    }
+    water.scatter_color = *scatter;
+    return water;
+}
+
 std::optional<night_light> parse_night_light(const json& object, const char* key) {
     const json* light_object = json_object(object, key);
     night_light light;
@@ -330,6 +345,11 @@ std::optional<lighting_palette> parse_lighting_from_text(const std::string& text
     const std::optional<sky_style> sky = parse_sky(*root);
     const std::optional<shadow_style> shadows = parse_shadows(*root);
     const std::optional<shaft_style> shafts = parse_shafts(*root);
+    const std::optional<water_style> water = parse_water(*root);
+    grass_style grass;
+    const json* grass_object = json_object(*root, "grass");
+    const bool grass_read = grass_object != nullptr && read_bounded(*grass_object, grass_fields, grass);
+    std::optional<std::vector<tree_look>> trees = parse_tree_looks(*root);
     const std::optional<night_light_style> night_lights = parse_night_lights(*root);
     const std::optional<weather_style> weather = parse_weather(*root);
     const std::optional<rain_style> rain = parse_rain(*root);
@@ -338,7 +358,7 @@ std::optional<lighting_palette> parse_lighting_from_text(const std::string& text
     lighting_palette palette;
     scene_colors& colors = palette.colors;
     std::optional<marker_colors> markers = parse_markers(*root);
-    if (!keys || !markers || !figures || !glow || !sky || !shadows || !shafts || !night_lights || !weather || !rain || !wind ||
+    if (!keys || !markers || !figures || !glow || !sky || !shadows || !shafts || !water || !grass_read || !trees || !night_lights || !weather || !rain || !wind ||
         !lightning || !read_colors(*root, "ground", ground_fields, colors.ground)) {
         return std::nullopt;
     }
@@ -346,6 +366,9 @@ std::optional<lighting_palette> parse_lighting_from_text(const std::string& text
     palette.sky = *sky;
     palette.shadows = *shadows;
     palette.shafts = *shafts;
+    palette.water = *water;
+    palette.grass = grass;
+    palette.trees = std::move(*trees);
     palette.night_lights = *night_lights;
     palette.weather = *weather;
     palette.rain = *rain;

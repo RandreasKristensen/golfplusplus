@@ -20,17 +20,6 @@ const json* member(const json& object, const char* key) {
     const auto it = object.find(key);
     return it == object.end() ? nullptr : &*it;
 }
-
-std::optional<float> number_as_float(const json& value) {
-    if (!value.is_number()) {
-        return std::nullopt;
-    }
-    const double number = value.get<double>();
-    if (!std::isfinite(number) || std::abs(number) > std::numeric_limits<float>::max()) {
-        return std::nullopt;
-    }
-    return value.get<float>();
-}
 }
 
 std::optional<std::string> json_string(const json& object, const char* key) {
@@ -41,19 +30,27 @@ std::optional<std::string> json_string(const json& object, const char* key) {
     return value->get<std::string>();
 }
 
-std::optional<int> json_int(const json& object, const char* key) {
-    const json* value = member(object, key);
-    if (value == nullptr || !value->is_number_integer()) {
+std::optional<std::int64_t> json_int64(const json& value) {
+    if (!value.is_number_integer()) {
         return std::nullopt;
     }
-    if (value->is_number_unsigned()) {
-        const auto number = value->get<std::uint64_t>();
-        return number <= static_cast<std::uint64_t>(std::numeric_limits<int>::max())
-            ? std::optional<int>(static_cast<int>(number)) : std::nullopt;
+    if (value.is_number_unsigned()) {
+        const auto number = value.get<std::uint64_t>();
+        return number <= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
+            ? std::optional<std::int64_t>(static_cast<std::int64_t>(number)) : std::nullopt;
     }
-    const auto number = value->get<std::int64_t>();
-    return number >= std::numeric_limits<int>::min() && number <= std::numeric_limits<int>::max()
-        ? std::optional<int>(static_cast<int>(number)) : std::nullopt;
+    return value.get<std::int64_t>();
+}
+
+std::optional<int> json_int(const json& value) {
+    const std::optional<std::int64_t> number = json_int64(value);
+    return number && *number >= std::numeric_limits<int>::min() && *number <= std::numeric_limits<int>::max()
+        ? std::optional<int>(static_cast<int>(*number)) : std::nullopt;
+}
+
+std::optional<int> json_int(const json& object, const char* key) {
+    const json* value = member(object, key);
+    return value != nullptr ? json_int(*value) : std::nullopt;
 }
 
 std::optional<std::uint32_t> json_uint32(const json& object, const char* key) {
@@ -69,9 +66,20 @@ std::optional<std::uint32_t> json_uint32(const json& object, const char* key) {
         ? std::optional<std::uint32_t>(static_cast<std::uint32_t>(number)) : std::nullopt;
 }
 
+std::optional<float> json_float(const json& value) {
+    if (!value.is_number()) {
+        return std::nullopt;
+    }
+    const double number = value.get<double>();
+    if (!std::isfinite(number) || std::abs(number) > std::numeric_limits<float>::max()) {
+        return std::nullopt;
+    }
+    return value.get<float>();
+}
+
 std::optional<float> json_float(const json& object, const char* key) {
     const json* value = member(object, key);
-    return value != nullptr ? number_as_float(*value) : std::nullopt;
+    return value != nullptr ? json_float(*value) : std::nullopt;
 }
 
 std::optional<bool> json_bool(const json& object, const char* key) {
@@ -80,6 +88,18 @@ std::optional<bool> json_bool(const json& object, const char* key) {
         return std::nullopt;
     }
     return value->get<bool>();
+}
+
+std::optional<int> json_int_or(const json& object, const char* key, const int fallback) {
+    return member(object, key) != nullptr ? json_int(object, key) : fallback;
+}
+
+std::optional<float> json_float_or(const json& object, const char* key, const float fallback) {
+    return member(object, key) != nullptr ? json_float(object, key) : fallback;
+}
+
+std::optional<bool> json_bool_or(const json& object, const char* key, const bool fallback) {
+    return member(object, key) != nullptr ? json_bool(object, key) : fallback;
 }
 
 const json* json_object(const json& object, const char* key) {
@@ -92,23 +112,27 @@ const json* json_array(const json& object, const char* key) {
     return value != nullptr && value->is_array() ? value : nullptr;
 }
 
-std::optional<glm::vec2> json_vec2(const json& object, const char* key) {
-    const json* value = member(object, key);
-    if (value == nullptr || !value->is_array() || value->size() != 2) {
+std::optional<glm::vec2> json_vec2(const json& value) {
+    if (!value.is_array() || value.size() != 2) {
         return std::nullopt;
     }
-    const auto x = number_as_float((*value)[0]);
-    const auto y = number_as_float((*value)[1]);
+    const auto x = json_float(value[0]);
+    const auto y = json_float(value[1]);
     return x && y ? std::optional<glm::vec2>(glm::vec2(*x, *y)) : std::nullopt;
+}
+
+std::optional<glm::vec2> json_vec2(const json& object, const char* key) {
+    const json* value = member(object, key);
+    return value != nullptr ? json_vec2(*value) : std::nullopt;
 }
 
 std::optional<glm::vec3> json_vec3(const json& value) {
     if (!value.is_array() || value.size() != 3) {
         return std::nullopt;
     }
-    const auto x = number_as_float(value[0]);
-    const auto y = number_as_float(value[1]);
-    const auto z = number_as_float(value[2]);
+    const auto x = json_float(value[0]);
+    const auto y = json_float(value[1]);
+    const auto z = json_float(value[2]);
     return x && y && z ? std::optional<glm::vec3>(glm::vec3(*x, *y, *z)) : std::nullopt;
 }
 

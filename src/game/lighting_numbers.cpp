@@ -79,6 +79,12 @@ std::optional<lighting_number> lighting_number_at(const lighting_palette& palett
     if (section == "shafts") {
         return shaft_number(palette.shafts, key);
     }
+    if (section == "water") {
+        return bounded(palette.water, water_fields, key);
+    }
+    if (section == "grass") {
+        return bounded(palette.grass, grass_fields, key);
+    }
     if (section == "night_lights") {
         return bounded(palette.night_lights, night_light_fields, key);
     }

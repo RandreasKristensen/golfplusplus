@@ -198,6 +198,8 @@ glm::vec3 thumbnail_zone_color(const ground_colors& ground, const material_zone_
         return terrain_material_color(ground, terrain_material::water);
     case material_zone_type::fairway:
         return terrain_material_color(ground, terrain_material::fairway);
+    case material_zone_type::heavy_rough:
+        return terrain_material_color(ground, terrain_material::heavy_rough);
     case material_zone_type::unknown:
         break;
     }

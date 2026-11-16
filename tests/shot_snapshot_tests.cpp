@@ -5,6 +5,7 @@
 #include "game/shot_snapshot.h"
 #include "physics/vector_math.h"
 
+#include "play_rules.h"
 #include "test_support.h"
 
 #include <algorithm>
@@ -152,6 +153,39 @@ TEST_CASE("a putt hitting another ball at rest on the green costs two strokes an
         update_game(state, game_input{}, 0.02f);
     }
     CHECK(state.ball->strokes == 3);
+}
+
+TEST_CASE("online a ball still flying to where it will rest is not in my putt's way until it gets there") {
+    game_state state = started_hole();
+    const green_line line = line_to_pin(state);
+    REQUIRE(line.edge > 4.0f);
+    // Another golfer's ball comes to rest on my line two seconds from now;
+    // a third's is in the cup; mine is where I putt from.
+    constexpr std::uint64_t me = 1;
+    constexpr std::int64_t now = 50'000'000;
+    constexpr std::int64_t lands = now + 2'000'000;
+    const glm::vec3 other = on_ground(state, line.pin + line.back * 1.5f);
+    const glm::vec3 on_green = on_ground(state, line.pin + line.back * 4.0f);
+    const std::vector<room_ball_rest> balls{room_ball_rest{2, other, lands, false},
+                                            room_ball_rest{3, line.pin, now - 1'000'000, true},
+                                            room_ball_rest{me, on_green, now - 5'000'000, false}};
+    const shot_setup putt = aimed(state, "P", on_green, other, 0.6f);
+
+    const std::vector<snapshot_entry> flying = resting_balls(balls, me, lands - 1);
+    CHECK(flying.empty());
+    const shot_result clear = struck(state, putt, flying);
+    CHECK(!has_event(clear, shot_event_kind::ball_hit));
+    CHECK(clear.penalty_strokes == 0);
+
+    for (const std::int64_t at : {lands, lands + 1'000'000}) {
+        const std::vector<snapshot_entry> resting = resting_balls(balls, me, at);
+        REQUIRE(resting.size() == 1U);
+        CHECK(resting.front().kind == snapshot_kind::ball);
+        CHECK(near(resting.front().position, other));
+        const shot_result hit = struck(state, putt, resting);
+        CHECK(has_event(hit, shot_event_kind::ball_hit));
+        CHECK(hit.penalty_strokes == 2);
+    }
 }
 
 TEST_CASE("offline my shot meets my cart where it stands") {

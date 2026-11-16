@@ -26,6 +26,14 @@ render_startup_menu render_tee_book(const tee_book_state& menu, const game_state
 // the camcorder datestamp; a later in-game day than now says how many days on.
 // Never a real date or time.
 std::string tee_time_text(std::int64_t micros, const game_state& game, const text_assets& text);
+// The part of the day's text key for the sun `sun_elevation_deg` up, before
+// or after its noon, and this many hours from it.
+const char* part_of_day_key(float sun_elevation_deg, bool before_noon, float solar_hours_from_noon);
+// The time on `course`'s own clock at `unix_ms` (its clock_shift_hours and
+// date) and the part of its day, so a player can choose a sunrise: "6:12 AM
+// SUNRISE".
+std::string course_time_text(const course_definition& course, const game_state& game, const text_assets& text,
+                             std::int64_t unix_ms);
 std::string booking_text(const game_state& game, const startup_catalog& catalog, const text_assets& text);
 // One per game.area.props: what its board says, empty for none. The tee book
 // is titled; the bus shows where it goes (the booked course, or the hub).

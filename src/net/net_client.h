@@ -15,6 +15,11 @@
 // (net/room_rows.h). Motion comes through the server's interest views;
 // visibility changes do not replace subscriptions. Nothing subscribes to a whole table.
 //
+// A failed compatibility check or mandatory subscription (account, self,
+// room) ends the session: it disconnects, keeping the failure, and signing
+// in again starts a fresh handshake. A retired subscription's failure ends
+// nothing.
+//
 // Refused gameplay reducers (what net_commands send) go to the game in
 // game_state::online; the menus' own go to take_reducer_failure.
 
@@ -62,6 +67,9 @@ public:
     // Signs in only if that needs no browser: a failure with
     // net_failure_no_stored_sign_in means the player has to sign in.
     void begin_silent_login();
+    // Abandons signing in, including a connection not yet accepted; nothing
+    // it sends afterwards arrives. Keeps the stored sign-in and an accepted
+    // session.
     void cancel_login();
     // Disconnects, forgets the stored sign-in and clears `state.online`.
     void sign_out(game_state& state);
@@ -121,12 +129,14 @@ private:
     void handle_row(const stdb_event& event, game_state& state);
     // Gives the game the progress rows changed so far, once complete.
     void deliver_progress(game_state& state);
-    // Disconnects from incompatible rules, retaining the reason on disconnect.
-    void refuse_server(const std::string& failure, const std::string& detail, game_state& state);
+    // Ends the session after a terminal failure ("id: detail"), retaining it
+    // as the reason on disconnect.
+    void end_session(const std::string& failure, game_state& state);
     void subscribe_self();
     void subscribe_room(std::uint64_t room_id);
     // A new connection or a sign-out: its subscriptions are gone.
     void forget_session(game_state& state);
+    void forget_handshake();
     // Drops my rows and their subscriptions, and clears `state.online`.
     void forget_progress(game_state& state);
     save_data progress() const;
@@ -136,7 +146,7 @@ private:
     net_status status_ = net_status::signed_out;
     bool guest_ = false;
     std::string failure_;
-    bool server_refused_ = false;
+    bool session_ended_ = false;
     std::uint64_t content_hash_;
     std::deque<reducer_failure> reducer_failures_;  // oldest first
     std::optional<link_code_info> link_code_;
@@ -151,6 +161,7 @@ private:
     // empty protocol or content view is judged once the update's events are in.
     bool protocol_applied_ = false;
     bool content_applied_ = false;
+    std::uint32_t account_subscription_ = 0;
     std::uint32_t self_subscription_ = 0;
     std::uint32_t room_subscription_ = 0;
     std::optional<tee_reservation_info> reservation_;

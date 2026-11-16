@@ -210,12 +210,12 @@ TEST_CASE("full lock at top speed on any flat dry ground slides the cart wide an
 
 TEST_CASE("water deeper than its wade depth sinks a cart; shallower it drives through") {
     cart_ground shallow = ground_of(cart_surfaces().water);
-    shallow.water_depth = 0.8f * shipped_cart().wade_depth_m;
+    shallow.immersion = 0.8f * shipped_cart().wade_depth_m;
     const cart_motion wading = drive_for(cart_motion{}, full_throttle, shallow, 2.0f);
     CHECK(wading.condition == cart_condition::upright);
     CHECK(cart_forward_speed(wading) > 0.0f);
     cart_ground deep = shallow;
-    deep.water_depth = 1.2f * shipped_cart().wade_depth_m;
+    deep.immersion = 1.2f * shipped_cart().wade_depth_m;
     const cart_motion sunk = drive_for(wading, full_throttle, deep, cart_step_seconds);
     CHECK(sunk.condition == cart_condition::sunk);
     CHECK(sunk.velocity == glm::vec2(0.0f));
@@ -235,9 +235,17 @@ TEST_CASE("a cart on a course's ground: its material, soaked by the weather, and
     CHECK(cart_ground_at(area, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 60.0f)).rolling_resistance == surfaces.bunker.rolling_resistance);
     const cart_ground soaked = cart_ground_at(area, tuning, 1.0f, glm::vec3(0.0f, 0.0f, 40.0f));
     CHECK(near(soaked.grip, surfaces.fairway.grip * surfaces.fairway.wet_grip_scale, 0.0001f));
-    const cart_ground pond = cart_ground_at(area, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 120.0f));
-    CHECK(pond.water_depth > shipped_cart().wade_depth_m);
-    CHECK(cart_ground_at(area, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 40.0f)).water_depth == 0.0f);
+    // On the pond's floor its wheels are the pond's depth under water; in
+    // the air over it, as far under as they are, if at all.
+    const terrain_sample under = sample_area(area, glm::vec3(0.0f, 0.0f, 120.0f));
+    const float depth = under.water_level - under.point.y;
+    REQUIRE(depth > shipped_cart().wade_depth_m);
+    CHECK(near(cart_ground_at(area, tuning, 0.0f, under.point).immersion, depth));
+    CHECK(near(cart_ground_at(area, tuning, 0.0f, under.point - glm::vec3(0.0f, 1.0f, 0.0f)).immersion, depth));
+    const glm::vec3 surface(0.0f, under.water_level, 120.0f);
+    CHECK(cart_ground_at(area, tuning, 0.0f, surface + glm::vec3(0.0f, 1.0f, 0.0f)).immersion == 0.0f);
+    CHECK(near(cart_ground_at(area, tuning, 0.0f, surface - glm::vec3(0.0f, 0.2f, 0.0f)).immersion, 0.2f, 0.0001f));
+    CHECK(cart_ground_at(area, tuning, 0.0f, glm::vec3(0.0f, 0.0f, 40.0f)).immersion == 0.0f);
 }
 
 namespace {

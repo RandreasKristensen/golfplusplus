@@ -6,7 +6,7 @@
     "bunker_depth": 0.9,
     "bunker_lip_meters": 1.5,
     "water_bank_meters": 4.0,
-    "water_shore_meters": 1.5,
+    "water_shore_meters": 2.5,
     "water_min_depth": 0.6,
     "water_max_depth": 3.5,
     "fairway_cell_size": 2.0,
@@ -69,6 +69,7 @@
     "ball": { "restitution": 0.6, "friction": 0.2 },
     "self_hit_grace_seconds": 0.15,
     "leaves_drag_per_meter": 0.35,
+    "bush_density": 8.0,
     "leaves_scatter_degrees_per_meter": 12.0
   },
   "floodlights": {

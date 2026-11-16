@@ -4,6 +4,7 @@
 // for the colours). GL-free.
 
 #include "game/lighting_loader.h"
+#include "game/play_area.h"
 #include "physics/ground_mesh.h"
 #include "physics/terrain.h"
 #include "renderer/render_mesh.h"
@@ -21,6 +22,10 @@ render_terrain_vertex lit_ground_vertex(const glm::vec3& position, const glm::ve
 // Appends `meshes` in order (null entries are skipped), colours each vertex by
 // its material, gives it the sky it sees and its horizon from `light`
 // (sky_visibility.h; empty grids: all of the sky, nothing on the horizon),
-// and computes bounds and culling chunks.
+// and computes bounds and culling chunks. Under a pond of `ponds` (none when
+// null) the bank's grass fades, in patches, to the mud of its floor. With
+// `mow_stripes` too, fairways and greens are mown along the nearest hole's
+// line (render_terrain_vertex::mow).
 render_static_mesh make_terrain_render_mesh(const std::vector<const terrain_mesh*>& meshes, std::uint64_t revision,
-                                            const ground_colors& colors, const ground_light_bake& light);
+                                            const ground_colors& colors, const ground_light_bake& light,
+                                            const play_area* ponds, bool mow_stripes = false);

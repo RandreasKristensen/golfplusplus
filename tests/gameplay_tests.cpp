@@ -415,6 +415,92 @@ TEST_CASE("the camera lets go once the ball has rolled a little, and the moving 
     CHECK(state.mode == game_mode::addressing);
 }
 
+namespace {
+// A shot flown straight along +z for `meters`, ending where it comes down
+// (in sand: no roll-out, so the camera follows it to the end).
+shot_result straight_flight(const game_state& state, const float meters) {
+    const float per_meter = 1.0f / state.tuning.scale.meters_per_world_unit;
+    const float interval = static_cast<float>(shot_steps_per_trajectory_point) * shot_step_seconds;
+    const glm::vec3 start = state.ball->position;
+    shot_result result;
+    const int points = 40;
+    for (int i = 0; i <= points; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(points);
+        result.trajectory.push_back(start + glm::vec3(0.0f, 4.0f * t * (1.0f - t) * 10.0f * per_meter, t * meters * per_meter));
+    }
+    result.duration = static_cast<float>(points) * interval;
+    result.rest_position = result.trajectory.back();
+    result.events.push_back(shot_event{result.duration, shot_event_kind::land, terrain_material::bunker});
+    return result;
+}
+
+float facing_error(const game_state& state, const glm::vec3& at) {
+    return std::abs(wrap_angle(state.player.yaw - yaw_towards(state.player.position, at)));
+}
+}
+
+TEST_CASE("a shot that stops where it lands hands the view over facing my ball") {
+    game_state state = started_hole();
+    const shot_result plugged = straight_flight(state, 30.0f);
+    state.player.yaw = yaw_towards(plugged.trajectory.back(), state.player.position);
+    play_shot(state, plugged);
+    while (state.shot) {
+        update_game(state, game_input{}, 0.02f);
+    }
+    CHECK(state.mode == game_mode::walking);
+    CHECK(facing_error(state, plugged.rest_position) < 0.01f);
+}
+
+TEST_CASE("a ball lost in water hands the view over facing where it went in") {
+    game_state state = started_hole();
+    shot_result lost = straight_flight(state, 30.0f);
+    lost.lost = true;
+    lost.rest_position = lost.trajectory.front();
+    lost.penalty_strokes = 1;
+    const glm::vec3 went_in = lost.trajectory.back();
+    state.player.yaw = yaw_towards(went_in, state.player.position);
+    play_shot(state, lost);
+    while (state.shot) {
+        update_game(state, game_input{}, 0.02f);
+    }
+    CHECK(state.mode == game_mode::walking);
+    CHECK(state.ball->position == lost.rest_position);
+    CHECK(facing_error(state, went_in) < 0.01f);
+}
+
+TEST_CASE("moving or acting takes over from the shot camera, and the ball plays on") {
+    const auto taken_over_by = [](const game_input& input) -> float {
+        game_state state = started_hole();
+        play_shot(state, straight_flight(state, 30.0f));
+        update_game(state, game_input{}, 0.02f);
+        CHECK(state.mode == game_mode::following_shot);
+        const glm::vec3 stood = state.player.position;
+        update_game(state, input, 0.02f);
+        CHECK(state.mode == game_mode::walking);
+        CHECK(state.shot.has_value());
+        CHECK(state.flight_path_points.empty());
+        return horizontal_distance(state.player.position, stood);
+    };
+    game_input walk;
+    walk.forward_held = true;
+    CHECK(taken_over_by(walk) > 0.0f);  // the step is taken that same frame
+    game_input jump;
+    jump.jump = true;
+    taken_over_by(jump);
+    game_input turn;
+    turn.turn_left_held = true;
+    taken_over_by(turn);
+
+    // Doing nothing, or lighting a smoke, keeps watching.
+    game_state state = started_hole();
+    play_shot(state, straight_flight(state, 30.0f));
+    game_input smoke;
+    smoke.use_smokable = true;
+    update_game(state, smoke, 0.02f);
+    update_game(state, game_input{}, 0.02f);
+    CHECK(state.mode == game_mode::following_shot);
+}
+
 TEST_CASE("overlays show only while held, the rangefinder in a cart too") {
     game_state state = started_hole();
 

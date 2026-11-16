@@ -10,6 +10,8 @@
 #include <cmath>
 #include <map>
 
+#include <glm/trigonometric.hpp>
+
 namespace {
 enum class row_kind { play_now, course, slot, refresh, courses, cancel, close, cart, carry, return_hub };
 struct book_row { row_kind kind; std::string course; std::int64_t time = 0; int count = 0; };
@@ -65,6 +67,37 @@ std::string course_name(const startup_catalog& catalog, const std::string& id) {
     for (const auto& c : catalog.courses) { if (c.course.id == id) { return c.course.name; } }
     return id;
 }
+const course_definition* find_course(const startup_catalog& catalog, const std::string& id) {
+    for (const auto& c : catalog.courses) { if (c.course.id == id) { return &c.course; } }
+    return nullptr;
+}
+}
+
+const char* part_of_day_key(const float sun_elevation_deg, const bool before_noon, const float solar_hours_from_noon) {
+    // The sun's height (degrees) bounds of dawn's and dusk's twilight, the
+    // sunrise's and sunset's glow, and the hours round noon that are midday.
+    constexpr float twilight_deg = -6.0f;
+    constexpr float glow_deg = 6.0f;
+    constexpr float midday_hours = 1.5f;
+    if (sun_elevation_deg < twilight_deg) { return text_hub_part_night; }
+    if (sun_elevation_deg < 0.0f) { return before_noon ? text_hub_part_dawn : text_hub_part_dusk; }
+    if (sun_elevation_deg < glow_deg) { return before_noon ? text_hub_part_sunrise : text_hub_part_sunset; }
+    if (solar_hours_from_noon < midday_hours) { return text_hub_part_midday; }
+    return before_noon ? text_hub_part_morning : text_hub_part_afternoon;
+}
+
+std::string course_time_text(const course_definition& course, const game_state& game, const text_assets& text,
+                             const std::int64_t unix_ms) {
+    const sky_timeline& clock = game.tuning.sky_clock;
+    const double offset = static_cast<double>(course.sky.utc_offset_hours);
+    const double day = game_day_on_date(course_clock_at(clock, course.sky, unix_ms), course_date(clock, course.sky), offset);
+    // The sun where the player stands: every course is near enough to it
+    // for the part of the day, and its world is not loaded until played.
+    const sky_state sky = compute_sky_state(day, static_cast<double>(game.world.latitude_deg),
+                                            static_cast<double>(game.world.longitude_deg));
+    const float from_noon = 24.0f * (sky.day_fraction - 0.5f);
+    const char* part = part_of_day_key(glm::degrees(sky.sun_elevation), from_noon < 0.0f, std::abs(from_noon));
+    return format_text(text, text_hub_course_time, {{"time", make_datestamp(text, day, offset).time}, {"part", lookup_text(text, part)}});
 }
 std::string tee_time_text(const std::int64_t micros, const game_state& game, const text_assets& text) {
     const double offset = static_cast<double>(game.hub_sky.utc_offset_hours);
@@ -177,11 +210,23 @@ render_startup_menu render_tee_book(const tee_book_state& menu, const game_state
         std::string title, hint;
         const char* key = text_hub_back;
         switch (row.kind) {
-        case row_kind::play_now: title = course_name(catalog, row.course); key = text_hub_play_now; break;
-        case row_kind::course: title = course_name(catalog, row.course); key = text_hub_choose_course; break;
+        case row_kind::play_now:
+        case row_kind::course: {
+            title = course_name(catalog, row.course);
+            const course_definition* course = find_course(catalog, row.course);
+            if (course != nullptr) {
+                hint = format_text(text, text_hub_course_row, {{"action", lookup_text(text, row.kind == row_kind::play_now ? text_hub_play_now : text_hub_choose_course)},
+                    {"there", course_time_text(*course, game, text, shared_unix_ms(game, game.local_unix_ms))}});
+            }
+            key = row.kind == row_kind::play_now ? text_hub_play_now : text_hub_choose_course;
+            break;
+        }
         case row_kind::slot:
             title = tee_time_text(row.time, game, text);
             hint = format_text(text, text_hub_count, {{"count", std::to_string(row.count)}, {"capacity", std::to_string(game.tuning.server.group_capacity)}});
+            if (const course_definition* course = find_course(catalog, row.course)) {
+                hint = format_text(text, text_hub_slot_there, {{"count", hint}, {"there", course_time_text(*course, game, text, row.time / 1000)}});
+            }
             if (row.time <= game.online.server_now) { hint = lookup_text(text, text_hub_slot_elapsed); }
             else if (active_booking(game) && active_booking(game)->scheduled_at == row.time && active_booking(game)->course_id == row.course) { hint = format_text(text, text_hub_own_slot, {{"count", std::to_string(row.count)}, {"capacity", std::to_string(game.tuning.server.group_capacity)}}); }
             break;

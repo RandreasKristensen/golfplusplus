@@ -21,8 +21,7 @@ const std::vector<model_kind>& model_kinds();
 const model_kind* find_model_kind(const std::string& name);
 
 // The models the code draws by name, not through an item: the course's
-// trees, fences, floodlights and hole signs.
-inline constexpr const char* tree_model = "tree";
+// fences, floodlights and hole signs (its trees are grown, renderer/tree_model.h).
 inline constexpr const char* fence_model = "fence";
 inline constexpr const char* floodlight_model = "floodlight";
 inline constexpr const char* hole_sign_model = "hole_sign";

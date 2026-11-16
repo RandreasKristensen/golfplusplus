@@ -7,7 +7,8 @@
 enum class framebuffer_color {
     rgb8,      // what the tape records and plays
     hdr,       // R11G11B10F: brighter than white, never negative
-    signed_hdr // RGBA16F: any value, alpha too
+    signed_hdr, // RGBA16F: any value, alpha too
+    exact       // RGBA32F: any value, to a float's precision
 };
 
 enum class framebuffer_depth {
@@ -30,6 +31,7 @@ public:
     void bind() const;
     static void bind_default();
 
+    unsigned int id() const { return fbo_; }
     unsigned int color_texture() const { return color_tex_; }
     // 0 unless its depth is framebuffer_depth::sampled; read unfiltered, its
     // depth in r. Never sampled while this framebuffer is drawn into.

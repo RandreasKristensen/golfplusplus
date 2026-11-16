@@ -65,6 +65,7 @@ void clear_online_presentation(game_state& state) {
     state.mode = game_mode::walking; state.ball_correction.reset();
     state.flight_path_points.clear(); state.remote_avatars.clear(); state.remote_shots.clear();
     state.picker.reset(); state.handling.reset(); state.give_up_prompt.reset();
+    state.bag_row_seen.reset(); state.bag_expected.reset();
     state.pacing.reset(); state.ride.reset(); state.ride_shown.reset(); state.cart_falls.clear();
     state.online_hole = online_hole_state{};
     state.shot_number.reset(); state.smoking.reset(); state.drinking.reset();

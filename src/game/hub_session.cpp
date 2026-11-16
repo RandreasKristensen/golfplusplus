@@ -9,7 +9,7 @@
 
 bool start_hub(game_state& state, const hub_definition& hub) {
     const auto text = read_text_file(state.asset_root + "/" + hub.world);
-    auto world = text ? parse_world_from_text(*text) : std::nullopt;
+    auto world = text ? parse_world_from_text(*text).value : std::nullopt;
     if (!world) { return false; }
     world->hub = hub.anchors;
     state.kind = place_kind::hub;

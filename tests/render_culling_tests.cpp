@@ -6,7 +6,6 @@
 #include "renderer/frustum.h"
 #include "renderer/render_mesh.h"
 #include "renderer/render_mesh_chunks.h"
-#include "renderer/render_tree.h"
 #include "renderer/terrain_render_mesh.h"
 
 #include "test_support.h"
@@ -360,28 +359,9 @@ TEST_CASE("frustum culling of chunks keeps the chunks the camera looks at") {
     CHECK(partial.indices_drawn < mesh.indices.size());
 }
 
-TEST_CASE("tree instance bounds cover every trunk and leaf") {
-    const std::vector<tree_body> trees{
-        tree_body{glm::vec3(10.0f, 0.0f, -5.0f), tree_shape{0.4f, 3.0f, 2.0f, 4.0f}},
-        tree_body{glm::vec3(-20.0f, 1.0f, 30.0f), tree_shape{0.35f, 2.4f, 1.6f, 3.2f}},
-    };
-
-    const render_tree_instance_batch batch = build_tree_instances(trees);
-    const render_mesh_bounds bounds = compute_tree_instance_bounds(batch);
-    CHECK(bounds.valid);
-    CHECK(bounds.min.x <= 10.0f - 2.0f);
-    CHECK(bounds.max.x >= 10.0f + 2.0f);
-    CHECK(bounds.min.y <= 0.0f);
-    CHECK(bounds.max.y >= 7.0f);
-    CHECK(bounds.min.z <= -5.0f - 2.0f);
-    CHECK(bounds.max.z >= 30.0f);
-
-    CHECK(!compute_tree_instance_bounds(build_tree_instances({})).valid);
-}
-
 TEST_CASE("a hub's terrain chunks into bounded pieces that cull from ground level") {
     const game_state state = started_game(fixture_hub_course());
-    const render_static_mesh mesh = make_terrain_render_mesh({&state.area.ground}, 1U, test_scene_colors().ground, ground_light_bake{});
+    const render_static_mesh mesh = make_terrain_render_mesh({&state.area.ground}, 1U, test_scene_colors().ground, ground_light_bake{}, nullptr);
     REQUIRE(mesh.indices.size() > 1000U);
 
     const render_chunk_settings settings;

@@ -2,191 +2,200 @@
 
 #include <SDL.h>
 
-#include <glm/vec3.hpp>
-
 #include <cstddef>
 #include <type_traits>
+
+#include <glm/common.hpp>
 
 #include "renderer/gl_loader.h"
 
 namespace {
 constexpr GLuint position_location = 0;
 constexpr GLuint normal_location = 1;
+constexpr GLuint leaf_location = 2;
 constexpr GLuint instance_offset_location = 3;
 constexpr GLuint instance_scale_location = 4;
+constexpr GLuint instance_turn_location = 5;
+constexpr int detail_count = 2;
+// Below this share in leaf a crown casts only its branches' shadow.
+constexpr float casting_foliage = 0.3f;
+
+// The colour a species' leaves are on the course's date: fresh, then
+// summer green, then turned.
+glm::vec3 leaf_colour(const tree_look& look, const render_tree_species& season) {
+    const glm::vec3 green = glm::mix(look.summer, look.spring, glm::clamp(season.fresh, 0.0f, 1.0f));
+    return glm::mix(green, look.autumn, glm::clamp(season.turned, 0.0f, 1.0f));
+}
 }
 
-// The instance buffer is uploaded as raw floats: offset.xyz then scale.xyz.
-static_assert(sizeof(render_tree_instance) == 6 * sizeof(float), "render_tree_instance must be six packed floats");
+static_assert(sizeof(render_tree_instance) == 8 * sizeof(float), "render_tree_instance must be eight packed floats");
 static_assert(offsetof(render_tree_instance, scale) == 3 * sizeof(float), "render_tree_instance::scale must follow offset");
 static_assert(std::is_standard_layout<render_tree_instance>::value, "render_tree_instance must be standard layout");
+static_assert(std::is_standard_layout<grown_tree_vertex>::value, "grown_tree_vertex must be standard layout");
 
-bool tree_renderer::init(const std::string& vertex_path,
-                         const std::string& fragment_path,
-                         const mesh_source trunk_mesh,
-                         const mesh_source leaf_mesh) {
+bool tree_renderer::init(const std::string& vertex_path, const std::string& fragment_path, const std::vector<tree_look>& looks) {
     shutdown();
-
-    if (!shader_.load_from_files(vertex_path, fragment_path)) {
+    if (!shader_.load_from_files(vertex_path, fragment_path) || !instances_.init(0)) {
         shutdown();
         return false;
     }
-
-    if (!init_part(trunks_, trunk_mesh) || !init_part(leaves_, leaf_mesh)) {
-        shutdown();
-        return false;
-    }
-
-    return true;
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    return set_looks(looks);
 }
 
 void tree_renderer::shutdown() {
-    shutdown_part(trunks_);
-    shutdown_part(leaves_);
+    release_meshes();
+    instances_.shutdown();
     shader_.shutdown();
-    uploaded_revision_ = 0;
-    uploaded_tree_count_ = 0;
-    uploaded_ = false;
+    seasons_.clear();
 }
 
-bool tree_renderer::init_part(instanced_part& part, const mesh_source mesh) {
-    if (mesh.vbo == 0 || mesh.vertex_count <= 0) {
-        SDL_Log("Tree renderer needs a valid shared mesh buffer.");
-        return false;
+void tree_renderer::release_meshes() {
+    for (model_mesh& mesh : meshes_) {
+        if (mesh.vbo != 0) {
+            glDeleteBuffers(1, &mesh.vbo);
+        }
+        if (mesh.vao != 0) {
+            glDeleteVertexArrays(1, &mesh.vao);
+        }
     }
+    meshes_.clear();
+}
 
-    part.vertex_count = mesh.vertex_count;
-    glGenVertexArrays(1, &part.vao);
-    glGenBuffers(1, &part.instance_vbo);
-    if (part.vao == 0 || part.instance_vbo == 0) {
-        SDL_Log("Tree renderer failed to allocate GL objects.");
-        return false;
+bool tree_renderer::set_looks(const std::vector<tree_look>& looks) {
+    release_meshes();
+    looks_ = looks;
+    constexpr GLsizei stride = sizeof(grown_tree_vertex);
+    for (std::size_t look = 0; look < looks_.size(); ++look) {
+        for (int variant = 0; variant < tree_variants; ++variant) {
+            for (int detail = 0; detail < detail_count; ++detail) {
+                const grown_tree model = grow_tree(looks_[look], static_cast<std::uint32_t>(look * 31 + variant * 7 + 1),
+                                                         static_cast<tree_detail>(detail));
+                model_mesh mesh;
+                glGenVertexArrays(1, &mesh.vao);
+                glGenBuffers(1, &mesh.vbo);
+                if (mesh.vao == 0 || mesh.vbo == 0) {
+                    SDL_Log("Tree renderer failed to allocate GL objects.");
+                    meshes_.push_back(mesh);
+                    release_meshes();
+                    return false;
+                }
+                glBindVertexArray(mesh.vao);
+                glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+                glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(model.vertices.size() * sizeof(grown_tree_vertex)),
+                             model.vertices.data(), GL_STATIC_DRAW);
+                glEnableVertexAttribArray(position_location);
+                glVertexAttribPointer(position_location, 3, GL_FLOAT, GL_FALSE, stride,
+                                      reinterpret_cast<const void*>(offsetof(grown_tree_vertex, position)));
+                glEnableVertexAttribArray(normal_location);
+                glVertexAttribPointer(normal_location, 3, GL_FLOAT, GL_FALSE, stride,
+                                      reinterpret_cast<const void*>(offsetof(grown_tree_vertex, normal)));
+                glEnableVertexAttribArray(leaf_location);
+                glVertexAttribPointer(leaf_location, 4, GL_FLOAT, GL_FALSE, stride,
+                                      reinterpret_cast<const void*>(offsetof(grown_tree_vertex, uv)));
+                for (const GLuint location : {instance_offset_location, instance_scale_location, instance_turn_location}) {
+                    glEnableVertexAttribArray(location);
+                    glVertexAttribDivisor(location, 1);
+                }
+                glBindVertexArray(0);
+                mesh.bark_count = static_cast<int>(model.bark_count);
+                mesh.vertex_count = static_cast<int>(model.vertices.size());
+                meshes_.push_back(mesh);
+            }
+        }
     }
-
-    glBindVertexArray(part.vao);
-
-    // Shared unit mesh: interleaved position + normal.
-    glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
-    glEnableVertexAttribArray(position_location);
-    glVertexAttribPointer(position_location, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), nullptr);
-    glEnableVertexAttribArray(normal_location);
-    glVertexAttribPointer(normal_location, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
-
-    glBindBuffer(GL_ARRAY_BUFFER, part.instance_vbo);
-    glEnableVertexAttribArray(instance_offset_location);
-    glVertexAttribPointer(instance_offset_location,
-                          3,
-                          GL_FLOAT,
-                          GL_FALSE,
-                          sizeof(render_tree_instance),
-                          reinterpret_cast<void*>(offsetof(render_tree_instance, offset)));
-    glVertexAttribDivisor(instance_offset_location, 1);
-    glEnableVertexAttribArray(instance_scale_location);
-    glVertexAttribPointer(instance_scale_location,
-                          3,
-                          GL_FLOAT,
-                          GL_FALSE,
-                          sizeof(render_tree_instance),
-                          reinterpret_cast<void*>(offsetof(render_tree_instance, scale)));
-    glVertexAttribDivisor(instance_scale_location, 1);
-
-    glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     return true;
 }
 
-void tree_renderer::shutdown_part(instanced_part& part) {
-    if (part.instance_vbo != 0) {
-        glDeleteBuffers(1, &part.instance_vbo);
-        part.instance_vbo = 0;
+void tree_renderer::set_seasons(const std::vector<render_tree_species>& species) {
+    seasons_.clear();
+    for (const render_tree_species& season : species) {
+        species_season shown;
+        for (std::size_t look = 0; look < looks_.size(); ++look) {
+            if (looks_[look].name == season.name) {
+                shown.look = look;
+            }
+        }
+        shown.foliage = season.foliage;
+        shown.leaves = looks_.empty() ? glm::vec3(0.0f) : leaf_colour(looks_[shown.look], season);
+        seasons_.push_back(shown);
     }
-
-    if (part.vao != 0) {
-        glDeleteVertexArrays(1, &part.vao);
-        part.vao = 0;
-    }
-
-    part.vertex_count = 0;
-    part.instance_count = 0;
 }
 
-void tree_renderer::upload_part(instanced_part& part,
-                                const std::vector<render_tree_instance>& instances,
-                                frame_profile* profile) {
-    part.instance_count = instances.size();
-    if (instances.empty() || part.instance_vbo == 0) {
+const tree_renderer::model_mesh* tree_renderer::mesh_for(const std::size_t look, const int variant, const tree_detail detail) const {
+    const std::size_t index = (look * tree_variants + static_cast<std::size_t>(variant)) * detail_count + static_cast<std::size_t>(detail);
+    return index < meshes_.size() ? &meshes_[index] : nullptr;
+}
+
+template <typename Draw>
+void tree_renderer::draw_batch(const render_tree_batch& batch, frame_profile* profile, Draw draw_bucket) {
+    if (batch.instances.empty()) {
         return;
     }
-
-    const std::size_t bytes = instances.size() * sizeof(render_tree_instance);
-    glBindBuffer(GL_ARRAY_BUFFER, part.instance_vbo);
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(bytes), instances.data(), GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    record_buffer_upload(profile, bytes);
-}
-
-void tree_renderer::draw_part(const instanced_part& part, frame_profile* profile) const {
-    if (part.vao == 0 || part.instance_count == 0 || part.vertex_count <= 0) {
-        return;
+    instances_.upload(batch.instances.data(), batch.instances.size() * sizeof(render_tree_instance), profile);
+    constexpr GLsizei stride = sizeof(render_tree_instance);
+    for (const render_tree_bucket& bucket : batch.buckets) {
+        if (bucket.species >= seasons_.size()) {
+            continue;
+        }
+        const model_mesh* mesh = mesh_for(seasons_[bucket.species].look, bucket.variant, bucket.detail);
+        if (mesh == nullptr) {
+            continue;
+        }
+        glBindVertexArray(mesh->vao);
+        glBindBuffer(GL_ARRAY_BUFFER, instances_.id());
+        const std::size_t first = bucket.first * sizeof(render_tree_instance);
+        glVertexAttribPointer(instance_offset_location, 3, GL_FLOAT, GL_FALSE, stride,
+                              reinterpret_cast<const void*>(first + offsetof(render_tree_instance, offset)));
+        glVertexAttribPointer(instance_scale_location, 3, GL_FLOAT, GL_FALSE, stride,
+                              reinterpret_cast<const void*>(first + offsetof(render_tree_instance, scale)));
+        glVertexAttribPointer(instance_turn_location, 2, GL_FLOAT, GL_FALSE, stride,
+                              reinterpret_cast<const void*>(first + offsetof(render_tree_instance, yaw)));
+        draw_bucket(bucket, *mesh, seasons_[bucket.species]);
     }
-
-    glBindVertexArray(part.vao);
-    glDrawArraysInstanced(GL_TRIANGLES, 0, static_cast<GLsizei>(part.vertex_count), static_cast<GLsizei>(part.instance_count));
-    record_draw_call(profile);
-}
-
-bool tree_renderer::prepare(const std::vector<tree_body>& trees, const std::uint64_t revision, frame_profile* profile) {
-    if (shader_.id() == 0) {
-        return false;
-    }
-    if (!uploaded_ || uploaded_revision_ != revision || uploaded_tree_count_ != trees.size()) {
-        const render_tree_instance_batch batch = build_tree_instances(trees);
-        upload_part(trunks_, batch.trunks, profile);
-        upload_part(leaves_, batch.leaves, profile);
-        instance_bounds_ = compute_tree_instance_bounds(batch);
-        uploaded_revision_ = revision;
-        uploaded_tree_count_ = trees.size();
-        uploaded_ = true;
-    }
-    return trunks_.instance_count != 0 || leaves_.instance_count != 0;
-}
-
-void tree_renderer::draw_casters(const std::vector<tree_body>& trees, const std::uint64_t revision,
-                                 const shader_program& depth_shader, const glm::mat4& view_proj, frame_profile* profile) {
-    if (!prepare(trees, revision, profile) ||
-        (instance_bounds_.valid &&
-         !frustum_intersects_aabb(make_view_frustum(view_proj), instance_bounds_.min, instance_bounds_.max))) {
-        return;
-    }
-    depth_shader.set_mat4("u_view_proj", view_proj);
-    draw_part(trunks_, profile);
-    draw_part(leaves_, profile);
     glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-bool tree_renderer::draw(const std::vector<tree_body>& trees,
-                         const std::uint64_t revision,
-                         const glm::mat4& view,
-                         const glm::mat4& proj,
-                         const view_frustum& frustum,
-                         const prop_model& tree,
-                         frame_profile* profile) {
-    // Whole-batch cull: skips both instanced draws when no tree is on screen.
-    if (!prepare(trees, revision, profile) ||
-        (instance_bounds_.valid && !frustum_intersects_aabb(frustum, instance_bounds_.min, instance_bounds_.max))) {
+bool tree_renderer::draw(const std::vector<tree_body>& trees, const glm::mat4& view_proj, const view_frustum& frustum,
+                         const glm::vec3& eye, const float clock_seconds, const glm::vec2& wind, frame_profile* profile) {
+    if (shader_.id() == 0 || trees.empty()) {
         return false;
     }
-
+    const render_tree_batch batch = build_tree_batch(trees, &frustum, eye, false);
+    if (batch.instances.empty()) {
+        return false;
+    }
     shader_.set_profile(profile);
     shader_.use();
-    shader_.set_mat4("u_view_proj", proj * view);
-
-    shader_.set_vec3("u_color", tree.color("trunk"));
-    draw_part(trunks_, profile);
-
-    shader_.set_vec3("u_color", tree.color("leaves"));
-    draw_part(leaves_, profile);
-
-    glBindVertexArray(0);
+    shader_.set_mat4("u_view_proj", view_proj);
+    shader_.set_float("u_time", clock_seconds);
+    shader_.set_vec2("u_wind", wind);
+    draw_batch(batch, profile, [&](const render_tree_bucket& bucket, const model_mesh& mesh, const species_season& season) {
+        const tree_look& look = looks_[season.look];
+        shader_.set_vec3("u_bark_color", look.bark);
+        shader_.set_vec3("u_leaf_color", season.leaves);
+        shader_.set_float("u_foliage", season.foliage);
+        shader_.set_float("u_shine_through", look.shine_through);
+        const int count = season.foliage > 0.0f ? mesh.vertex_count : mesh.bark_count;
+        glDrawArraysInstanced(GL_TRIANGLES, 0, count, static_cast<GLsizei>(bucket.count));
+        record_draw_call(profile);
+    });
     return true;
+}
+
+void tree_renderer::draw_casters(const std::vector<tree_body>& trees, std::uint64_t, const shader_program& depth_shader,
+                                 const glm::mat4& view_proj, frame_profile* profile) {
+    if (trees.empty()) {
+        return;
+    }
+    const view_frustum frustum = make_view_frustum(view_proj);
+    const render_tree_batch batch = build_tree_batch(trees, &frustum, glm::vec3(0.0f), true);
+    depth_shader.set_mat4("u_view_proj", view_proj);
+    draw_batch(batch, profile, [&](const render_tree_bucket& bucket, const model_mesh& mesh, const species_season& season) {
+        const int count = season.foliage >= casting_foliage ? mesh.vertex_count : mesh.bark_count;
+        glDrawArraysInstanced(GL_TRIANGLES, 0, count, static_cast<GLsizei>(bucket.count));
+        record_draw_call(profile);
+    });
 }

@@ -1,0 +1,64 @@
+{
+  "trees": {
+    "bare_crown_density": 0.3,
+    "default_species": "beech",
+    "species": [
+      {
+        "name": "beech",
+        "evergreen": false,
+        "leaf_out_day": 122,
+        "full_leaf_day": 138,
+        "turned_day": 295,
+        "bare_day": 318
+      },
+      {
+        "name": "oak",
+        "evergreen": false,
+        "leaf_out_day": 130,
+        "full_leaf_day": 152,
+        "turned_day": 300,
+        "bare_day": 330
+      },
+      {
+        "name": "birch",
+        "evergreen": false,
+        "leaf_out_day": 112,
+        "full_leaf_day": 130,
+        "turned_day": 280,
+        "bare_day": 305
+      },
+      {
+        "name": "willow",
+        "evergreen": false,
+        "leaf_out_day": 105,
+        "full_leaf_day": 125,
+        "turned_day": 292,
+        "bare_day": 320
+      },
+      {
+        "name": "spruce",
+        "evergreen": true,
+        "leaf_out_day": 0,
+        "full_leaf_day": 0,
+        "turned_day": 0,
+        "bare_day": 0
+      },
+      {
+        "name": "pine",
+        "evergreen": true,
+        "leaf_out_day": 0,
+        "full_leaf_day": 0,
+        "turned_day": 0,
+        "bare_day": 0
+      },
+      {
+        "name": "scrub",
+        "evergreen": false,
+        "leaf_out_day": 110,
+        "full_leaf_day": 135,
+        "turned_day": 290,
+        "bare_day": 315
+      }
+    ]
+  }
+}

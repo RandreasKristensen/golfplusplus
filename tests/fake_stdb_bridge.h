@@ -36,7 +36,10 @@ struct fake_stdb_bridge {
     std::deque<std::string> texts;  // what fake_text's strings point into, until reset()
     bool connected = false;
     bool wrong_layout = false;  // stdb_layout disagrees with the header
-    bool busy = false;          // stdb_begin_login refuses: signing in or connected already
+    // stdb_begin_login refuses: signing in or connected already. As in the
+    // bridge, a sign-in sets it and cancel, disconnect, sign-out, a polled
+    // LOGIN_FAILED or a DISCONNECTED without retrying clear it.
+    bool busy = false;
 
     void reset();
     std::vector<std::string> call_names() const;

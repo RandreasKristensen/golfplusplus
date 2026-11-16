@@ -15,7 +15,7 @@
 
 void adopt_online_arrival(game_state& state);
 
+// Every frame of the live world, whatever input it takes (game_state.h
+// update_game). While the server prepares my ball the room plays on, but my
+// ball, motion and player row wait for its answer.
 void update_online_play(game_state& state, float dt);
-// While my finished round waits for the group (game/group_round.h): others'
-// shots and item uses play, notices age, and a refused move of mine puts me back.
-void watch_room(game_state& state, float dt);

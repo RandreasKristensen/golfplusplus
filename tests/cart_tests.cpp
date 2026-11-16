@@ -641,7 +641,7 @@ TEST_CASE("driven into a pond deeper than its wade depth my cart sinks, I wade o
     CHECK(state.cart.motion.condition == cart_condition::sunk);
     CHECK(on_foot(state));
     CHECK(has_audio(state, audio_event_type::cart_sink));
-    CHECK(cart_ground_at(state.area, state.tuning, 0.0f, state.cart.pose.position).water_depth >
+    CHECK(cart_ground_at(state.area, state.tuning, 0.0f, state.cart.pose.position).immersion >
           my_cart_spec(state).wade_depth_m);
     stand_at_door(state, state.cart.pose, cart_seat::driver);
     CHECK(!seat_door_at(state).has_value());

@@ -165,6 +165,8 @@ const char* gpu_profile_stage_label(const gpu_profile_stage stage) {
         return "SMAP";
     case gpu_profile_stage::terrain:
         return "TER";
+    case gpu_profile_stage::grass:
+        return "GRS";
     case gpu_profile_stage::shadows:
         return "SHD";
     case gpu_profile_stage::trees:
@@ -173,6 +175,8 @@ const char* gpu_profile_stage_label(const gpu_profile_stage stage) {
         return "PRP";
     case gpu_profile_stage::sky:
         return "SKY";
+    case gpu_profile_stage::water:
+        return "WAT";
     case gpu_profile_stage::weather:
         return "WTR";
     case gpu_profile_stage::shafts:
@@ -246,10 +250,11 @@ std::vector<std::string> format_profile_overlay_lines(const frame_profile& profi
 
     if (profile.gpu_timers_available) {
         lines.push_back("GPU " + gpu(gpu_profile_stage::shadow_map) + " " + gpu(gpu_profile_stage::lamp_shadows) + " " +
-                        gpu(gpu_profile_stage::terrain) + " " + gpu(gpu_profile_stage::shadows));
+                        gpu(gpu_profile_stage::terrain) + " " + gpu(gpu_profile_stage::grass) + " " +
+                        gpu(gpu_profile_stage::shadows));
         lines.push_back("GPU " + gpu(gpu_profile_stage::trees) + " " + gpu(gpu_profile_stage::props) + " " +
-                        gpu(gpu_profile_stage::sky) + " " + gpu(gpu_profile_stage::weather) + " " +
-                        gpu(gpu_profile_stage::shafts));
+                        gpu(gpu_profile_stage::sky) + " " + gpu(gpu_profile_stage::water) + " " +
+                        gpu(gpu_profile_stage::weather) + " " + gpu(gpu_profile_stage::shafts));
         lines.push_back("GPU " + gpu(gpu_profile_stage::bloom) + " " + gpu(gpu_profile_stage::smear) + " " +
                         gpu(gpu_profile_stage::camcorder) + " " +
                         gpu(gpu_profile_stage::eyepiece));

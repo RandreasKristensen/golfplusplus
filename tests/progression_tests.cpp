@@ -69,6 +69,8 @@ TEST_CASE("the skill catalog gives every skill a rising curve") {
     CHECK(!parse_skill_catalog_from_text(one_skill, R"({"curves": {"short": [0, 5, 5]}})").has_value());
     CHECK(!parse_skill_catalog_from_text(one_skill, R"({"curves": {"short": [1, 5]}})").has_value());
     CHECK(!parse_skill_catalog_from_text(one_skill, R"({"curves": {"short": [0, 2.5]}})").has_value());
+    CHECK(parse_skill_catalog_from_text(one_skill, R"({"curves": {"short": [0, 9223372036854775807]}})").has_value());
+    CHECK(!parse_skill_catalog_from_text(one_skill, R"({"curves": {"short": [0, 5, 9223372036854775808]}})").has_value());
     CHECK(!parse_skill_catalog_from_text(
                R"({"skills": [{"id": "fitness", "icon": "a", "curve": "short"}, {"id": "fitness", "icon": "b", "curve": "short"}]})",
                R"({"curves": {"short": [0, 5]}})")
@@ -186,13 +188,13 @@ TEST_CASE("save data round trips") {
 TEST_CASE("old saves migrate and newer saves are refused") {
     const std::optional<save_data> v5 = parse_save_data(R"({
       "version": 5, "money": 5, "current_hole_index": 3, "hole_scores": {"0": 4},
-      "skills": {"smoking": -12, "future_skill": 17},
+      "skills": {"smoking": 12, "future_skill": 17},
       "repeatable_collectibles": {"token": {"claim_count": 2, "last_claimed_hole_index": 5}}
     })");
     REQUIRE(v5.has_value());
     CHECK(v5->version == current_save_version);
     CHECK(v5->holes_completed == 0);
-    CHECK(skill_xp(v5->skills, "smoking") == 0);
+    CHECK(skill_xp(v5->skills, "smoking") == 12);
     CHECK(skill_xp(v5->skills, "future_skill") == 17);
     CHECK(v5->repeatable_collectibles.at("token").claim_count == 2);
     CHECK(!v5->repeatable_collectibles.at("token").claimed_at_holes_completed);

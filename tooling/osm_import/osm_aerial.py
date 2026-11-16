@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 osm_aerial.py — a course's ground cover from aerial data: fairways, bunkers,
-ponds and trees, read from an area's photos and heights where OSM maps
+ponds, heavy rough, bushes and trees, read from an area's photos and heights where OSM maps
 none (aerial_dk.py is Denmark's source; another area adds its own with the
 same interface and its numbers under the config's `aerial.sources`).
 
@@ -14,8 +14,11 @@ whole shapes its line passes near (mapped lines run straight from tee to
 green, cutting a dogleg's corner through the trees). Sand is ground brighter
 than nearly all the course's rough and much less green than its grass;
 water is ground far darker in the infrared than the grass and not green
-(a shadow is darker but still green); a tree stands at each top of what
-stands above the terrain, but for buildings' flat roofs. Shapes are traced
+(a shadow is darker but still green); heavy rough is grass the mower
+leaves, standing a little off the terrain or drier and paler than the
+course's rough; a bush is a low clump standing well off it, away from the
+trees; a tree stands at each top of what stands above the terrain, but for
+buildings' flat roofs. Shapes are traced
 on the grid into outlines in the importer's local metres (x east, z south).
 
 Uses numpy and scipy.
@@ -84,6 +87,8 @@ class Cover:
                 on_lines[window] |= _distance_to_line(layers, window, middle) <= layers.cell
         self.signature = _signature(self.smooth[on_lines & self.ground], float(mown["core_share"]))
         self.rough_bright, self.ponds, self.pond_count = np.inf, np.zeros(layers.shape, np.int32), 0
+        # The rough's typical green and brightness, what heavy rough is paler than.
+        self.rough_ndvi, self.rough_bright_middle = None, None
         if self.signature is None:
             return
         mean = self.signature[0]
@@ -93,6 +98,11 @@ class Cover:
         rough = rough[np.isfinite(rough)]
         if len(rough):
             self.rough_bright = float(np.percentile(rough, float(rules["sand"]["rough_percentile"])))
+            self.rough_bright_middle = float(np.median(rough))
+        rough_ndvi = self.raw[..., self.index("ndvi")][near & self.ground & ~alike]
+        rough_ndvi = rough_ndvi[np.isfinite(rough_ndvi)]
+        if len(rough_ndvi):
+            self.rough_ndvi = float(np.median(rough_ndvi))
         water_rules = rules["water"]
         water = (self.ground & (self.raw[..., self.index("nir")] <= float(water_rules["infrared_share"]) * mean[self.index("nir")])
                  & (self.raw[..., self.index("ndvi")] <= float(water_rules["most_ndvi"])))
@@ -211,11 +221,12 @@ def outlines(layers: Layers, window, mask: np.ndarray, tolerance: float):
 
 
 def hole_cover(cover: Cover, line, rules: dict) -> dict:
-    """The fairway, bunker and water outlines of the hole along `line` (tee to
-    pin, local metres): {"fairways", "bunkers", "waters"} lists of rings,
+    """The fairway, bunker, water and heavy rough outlines of the hole along
+    `line` (tee to pin, local metres): {"fairways", "bunkers", "waters",
+    "heavy_roughs"} lists of rings,
     empty when the photo along the line is not mostly the course's grass."""
     layers = cover.layers
-    out = {"fairways": [], "bunkers": [], "waters": []}
+    out = {"fairways": [], "bunkers": [], "waters": [], "heavy_roughs": []}
     mown_rules, sand_rules, water_rules = rules["mown"], rules["sand"], rules["water"]
     reach = float(mown_rules["corridor_meters"])
     window = _window(layers, line, reach + float(water_rules["beyond_corridor_meters"]) + 2 * layers.cell)
@@ -273,6 +284,8 @@ def hole_cover(cover: Cover, line, rules: dict) -> dict:
         keep[0] = False
         out["bunkers"] = outlines(layers, window, keep[labels], float(rules["simplify_meters"]))
 
+    out["heavy_roughs"] = _heavy_rough(cover, window, distance, alike, ground, raw, rules)
+
     # The course's ponds that come within reach, each whole, each with the
     # hole whose line passes nearest it.
     near = distance <= reach + float(water_rules["beyond_corridor_meters"])
@@ -282,6 +295,83 @@ def hole_cover(cover: Cover, line, rules: dict) -> dict:
         whole = (slice(0, layers.shape[0]), slice(0, layers.shape[1]))
         out["waters"] = outlines(layers, whole, np.isin(cover.ponds, ponds), float(rules["simplify_meters"]))
     return out
+
+
+def _heavy_rough(cover: Cover, window, distance, alike, ground, raw, rules: dict):
+    """Heavy rough within reach of a hole's line: grass clear of the mown
+    grass that stands off the terrain (long grass, not yet a bush) or is
+    paler and drier than the course's rough (seed heads, unwatered), in
+    patches big enough to be left unmown on purpose."""
+    layers, long_rules = cover.layers, rules["heavy_rough"]
+    if cover.rough_ndvi is None or cover.rough_bright_middle is None:
+        return []
+    height = np.nan_to_num(layers.height[window], nan=0.0)
+    ndvi, bright = raw[..., cover.index("ndvi")], raw[..., cover.index("bright")]
+    clear = ~ndi.binary_dilation(alike, _disk(max(1, int(round(float(long_rules["clear_of_mown_meters"]) / layers.cell)))))
+    grass = ground & (ndvi >= float(long_rules["least_ndvi"]))
+    standing = height >= float(long_rules["least_height_meters"])
+    pale = ((ndvi <= cover.rough_ndvi - float(long_rules["less_green_by"]))
+            & (bright >= cover.rough_bright_middle + float(long_rules["brighter_by"])))
+    long_grass = grass & clear & (standing | pale) & (distance <= float(long_rules["reach_meters"]))
+    long_grass = ndi.binary_opening(long_grass, _disk(max(1, int(round(float(long_rules["open_meters"]) / layers.cell)))))
+    long_grass = ndi.binary_closing(long_grass, _disk(max(1, int(round(float(long_rules["close_meters"]) / layers.cell)))))
+    labels, count = ndi.label(long_grass)
+    if count == 0:
+        return []
+    sizes = ndi.sum(np.ones_like(labels), labels, np.arange(count + 1)) * layers.cell ** 2
+    keep = sizes >= float(long_rules["least_square_meters"])
+    keep[0] = False
+    return outlines(layers, window, keep[labels], float(rules["simplify_meters"]))
+
+
+def bushes(cover: Cover, rules: dict) -> list[tuple[float, float, float, float]]:
+    """Every bush standing on the grid: (x, z, height, radius) in metres. A
+    bush is green growth standing between a bush's least height and a tree's,
+    away from the trees' crowns (whose edges slope through those heights)
+    and the buildings; a clump bigger than one bush is a thicket, planted
+    with bushes `spacing_meters` apart."""
+    layers, bush_rules, tree_rules = cover.layers, rules["bushes"], rules["trees"]
+    height = np.nan_to_num(layers.height, nan=0.0)
+    ndvi = cover.raw[..., cover.index("ndvi")]
+    tall = height >= float(tree_rules["least_height_meters"])
+    near_tree = ndi.binary_dilation(tall, _disk(max(1, int(round(float(bush_rules["clear_of_trees_meters"]) / layers.cell)))))
+    low = ((height >= float(bush_rules["least_height_meters"])) & ~tall & ~near_tree
+           & (ndvi >= float(bush_rules["least_ndvi"])))
+    low = ndi.binary_opening(low, _disk(1))
+    labels, count = ndi.label(low)
+    if count == 0:
+        return []
+    cell_area = layers.cell ** 2
+    least_radius, most_radius = float(bush_rules["least_radius_meters"]), float(bush_rules["most_radius_meters"])
+    spacing = float(bush_rules["spacing_meters"])
+    found = []
+    for label, piece in enumerate(ndi.find_objects(labels), start=1):
+        if piece is None:
+            continue
+        mask = labels[piece] == label
+        area = float(mask.sum()) * cell_area
+        if area < float(bush_rules["least_square_meters"]):
+            continue
+        rows, columns = np.nonzero(mask)
+        tops = height[piece]
+        if area <= math.pi * most_radius ** 2:
+            row, column = rows.mean() + piece[0].start, columns.mean() + piece[1].start
+            radius = min(most_radius, max(least_radius, math.sqrt(area / math.pi)))
+            found.append((layers.x0 + (column + 0.5) * layers.cell, layers.z0 + (row + 0.5) * layers.cell,
+                          float(tops[mask].max()), radius))
+            continue
+        # A thicket: bushes on a grid through it, each as tall as its patch.
+        step = max(1, int(round(spacing / layers.cell)))
+        for r in range(0, mask.shape[0], step):
+            for c in range(0, mask.shape[1], step):
+                block = mask[r:r + step, c:c + step]
+                if block.mean() < 0.5:
+                    continue
+                rr, cc = np.nonzero(block)
+                row, column = piece[0].start + r + rr.mean(), piece[1].start + c + cc.mean()
+                found.append((layers.x0 + (column + 0.5) * layers.cell, layers.z0 + (row + 0.5) * layers.cell,
+                              float(tops[r:r + step, c:c + step][block].max()), max(least_radius, 0.6 * spacing)))
+    return found
 
 
 def paths(cover: Cover, rules: dict) -> list[tuple[float, float]]:
@@ -333,9 +423,14 @@ def _nearest_hole(cover: Cover, pond: int, line) -> bool:
     return away(line) <= min(away(other) for other in cover.lines) + 1.0
 
 
-def trees(cover: Cover, rules: dict) -> list[tuple[float, float, float, float]]:
-    """Every tree standing on the grid: (x, z, height, crown radius) in metres,
-    one at each top of what stands above the terrain, buildings left out."""
+def trees(cover: Cover, rules: dict) -> list[tuple[float, float, float, float, str]]:
+    """Every tree standing on the grid: (x, z, height, crown radius) in metres
+    and its species, one at each top of what stands above the terrain,
+    buildings left out. The spring photo is flown before the broadleaves
+    leaf out, so a crown green in the infrared is an evergreen: a spruce
+    when its top is pointed, else a pine. A broadleaf by a pond is a
+    willow, a small one a birch, and the rest beech or oak, `oak_share` of
+    them oak, by a hash of where they stand."""
     layers, tree_rules = cover.layers, rules["trees"]
     height = np.nan_to_num(layers.height, nan=0.0)
     least = float(tree_rules["least_height_meters"])
@@ -372,9 +467,33 @@ def trees(cover: Cover, rules: dict) -> list[tuple[float, float, float, float]]:
     areas = np.bincount(owner.ravel(), minlength=len(top_rows) + 1)[1:] * layers.cell ** 2
     crown_min = float(tree_rules["least_crown_radius_meters"])
     tall = ndi.maximum_filter(height, size=span)
+    species_rules = tree_rules["species"]
+    ndvi = cover.raw[..., cover.index("ndvi")]
+    to_pond = (ndi.distance_transform_edt(cover.ponds == 0) * layers.cell if cover.pond_count
+               else np.full(height.shape, np.inf))
     found = []
     for i, (row, column) in enumerate(zip(top_rows, top_columns)):
         radius = min(crown_max, max(crown_min, math.sqrt(areas[i] / math.pi)))
-        found.append((layers.x0 + (column + 0.5) * layers.cell, layers.z0 + (row + 0.5) * layers.cell,
-                      float(tall[row, column]), radius))
+        x, z = layers.x0 + (column + 0.5) * layers.cell, layers.z0 + (row + 0.5) * layers.cell
+        top = float(tall[row, column])
+        inner = max(1, int(round(0.6 * radius / layers.cell)))
+        outer = max(1, int(round(radius / layers.cell)))
+        crown = (slice(max(0, row - inner), row + inner + 1), slice(max(0, column - inner), column + inner + 1))
+        around = (slice(max(0, row - outer), row + outer + 1), slice(max(0, column - outer), column + outer + 1))
+        green = float(np.nanmean(ndvi[crown])) if np.isfinite(ndvi[crown]).any() else 0.0
+        pointed = (top - float(np.mean(height[around]))) / max(top, 0.1)
+        found.append((x, z, top, radius, _species(green, pointed, top, radius, float(to_pond[row, column]), x, z,
+                                                   species_rules)))
     return found
+
+
+def _species(green: float, pointed: float, height: float, radius: float, to_pond: float, x: float, z: float,
+             rules: dict) -> str:
+    if green >= float(rules["evergreen_ndvi"]):
+        return "spruce" if pointed >= float(rules["spruce_least_pointed"]) else "pine"
+    if to_pond <= float(rules["willow_water_meters"]):
+        return "willow"
+    if radius <= float(rules["birch_most_radius_meters"]) and height <= float(rules["birch_most_height_meters"]):
+        return "birch"
+    spot = (math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1.0
+    return "oak" if spot < float(rules["oak_share"]) else "beech"

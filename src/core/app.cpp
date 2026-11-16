@@ -5,6 +5,7 @@
 #include "core/event_loop.h"
 #include "core/god_menu.h"
 #include "core/key_bindings.h"
+#include "core/play_screen.h"
 #include "core/render_frame.h"
 #include "core/screenshot.h"
 #include "core/sky_frame.h"
@@ -246,22 +247,23 @@ bool app::init(const startup_options& options) {
     const std::string pref_path = sdl_path(SDL_GetPrefPath("golfplusplus", "golf++"));
     const std::filesystem::path save_root =
         pref_path.empty() ? std::filesystem::path(asset_root) / "saves" : std::filesystem::path(pref_path);
-    save_path_ = save_file_path(save_root);
+    progress_saver_.path = save_file_path(save_root);
     settings_path_ = settings_file_path(save_root);
-    // A GOLFPP_SCREENSHOT run is reproducible and leaves the player's files
-    // alone: default settings, and the save is read but never written.
+    // A GOLFPP_SCREENSHOT run is reproducible, silent and leaves the player's
+    // files alone: default settings, and the save is read but never written.
     const bool review_run = !screenshot_path_.empty();
     menu_.settings = review_run ? settings_values{} : load_settings(settings_path_, content_.settings);
-    const save_load_result save = load_save(save_path_);
-    saving_enabled_ = !review_run;
+    const save_load_result save = load_save(progress_saver_.path);
+    progress_saver_.enabled = !review_run;
     if (save.existing_was_unreadable) {
         if (save.unreadable_backup.empty()) {
-            saving_enabled_ = false;
+            progress_saver_.enabled = false;
             SDL_Log("Save %s is unreadable and could not be backed up; progress will not be saved this session.",
-                    save_path_.string().c_str());
+                    progress_saver_.path.string().c_str());
         } else {
-            SDL_Log("Save %s is unreadable; kept a copy at %s and started a new save.",
-                    save_path_.string().c_str(), save.unreadable_backup.string().c_str());
+            SDL_Log("Save %s is unreadable; kept a copy at %s%s.", progress_saver_.path.string().c_str(),
+                    save.unreadable_backup.string().c_str(),
+                    save.loaded_existing ? " and recovered the save from an interrupted write" : " and started a new save");
         }
     }
     game_ = make_game_state(content_, save.save);
@@ -286,7 +288,10 @@ bool app::init(const startup_options& options) {
 
     // Typing only reaches input_state::text_typed while a text field is focused.
     set_text_input_enabled(false);
-    audio_.init();
+    // A screenshot run is for the picture: it opens no sound device, so it is silent.
+    if (!review_run) {
+        audio_.init();
+    }
     audio_.load_manifest(std::filesystem::path(asset_root) / sounds_path);
     apply_settings(false);
     const bool on_course = menu_.flow == startup_flow::playing || menu_.flow == startup_flow::touring;
@@ -321,20 +326,23 @@ void app::run() {
             update_tour(dt, profile);
         } else if (menu_.flow != startup_flow::playing) {
             update_menu(dt, profile);
-        } else if (game_.hub_flow.screen != hub_screen::none || !game_.hub_flow.travel_course.empty()) {
+        } else if (const play_frame frame = play_frame_for(game_, menu_.confirm_active, input_.escape.pressed);
+                   frame.screen == play_screen::hub_menu) {
             update_hub_menu(dt, profile);
-        } else if (round_results_shown(game_)) {
+        } else if (frame.screen == play_screen::results) {
             set_mouse_captured(false);
             if (input_.enter.pressed || input_.space.pressed || input_.escape.pressed) {
                 audio_.play(sound_ui_select);
                 game_.results_dismissed = true;
             }
+            if (frame.world_updates) {
+                update_game(game_, game_input{}, dt, profile);
+                play_game_audio();
+            }
             render_data data = make_frame(dt, menu_.flow != startup_flow::playing, profile);
             present_frame(data, profile);
-        } else if (menu_.confirm_active ||
-                   (input_.escape.pressed && game_.mode == game_mode::walking && !game_.give_up_prompt && !game_.picker &&
-                    !game_.pacing && !game_.hub_flow.ball_request)) {
-            if (is_online(game_)) {
+        } else if (frame.screen == play_screen::pause) {
+            if (frame.world_updates) {
                 update_game(game_, game_input{}, dt, profile);
             }
             update_confirm_menu(profile);
@@ -391,7 +399,7 @@ void app::return_to_menu() {
 #endif
     return_to_main_menu(menu_);
     reset_to_menu_backdrop();
-    stop_motor_loops();
+    audio_.set_loops({});
     audio_.start_ambience(sound_ambience_menu_vcr);
 }
 
@@ -402,9 +410,8 @@ void app::show_golfer_settings() {
 
 // Only the offline save is ever written: online progress lives on the server.
 void app::save_progress() {
-    game_.save_requested = false;
-    if (game_.play == play_mode::offline && saving_enabled_ && !write_save(save_path_, game_.save)) {
-        SDL_Log("Failed to write save %s", save_path_.string().c_str());
+    if (!::save_progress(game_, progress_saver_)) {
+        SDL_Log("Failed to write save %s", progress_saver_.path.string().c_str());
     }
 }
 
@@ -597,32 +604,17 @@ sky_controls app::shown_sky() const {
 void app::play_game_audio() {
     audio_.set_listener(listener_looking(camera_transition_.shown.position, camera_transition_.shown.target),
                         game_.tuning.scale.meters_per_world_unit);
+    audio_.set_underwater(under_water(game_.area, camera_transition_.shown.position));
     for (const audio_event& event : game_.audio_events) {
         audio_.play_at(sound_for_event(event), event.position);
     }
     game_.audio_events.clear();
 
-    std::vector<std::string> running;
+    std::vector<loop_request> motors;
     for (const running_motor& motor : running_motors(game_)) {
-        const std::string key = "cart_motor:" + std::to_string(motor.owner);
-        audio_.play_loop(key, sound_cart_drive_loop, motor.position);
-        audio_.place_loop(key, motor.position);
-        audio_.set_loop_pitch(key, motor.pitch);
-        running.push_back(key);
+        motors.push_back(loop_request{"cart_motor:" + std::to_string(motor.owner), sound_cart_drive_loop, motor.position, motor.pitch});
     }
-    for (const std::string& key : motor_loops_) {
-        if (std::find(running.begin(), running.end(), key) == running.end()) {
-            audio_.stop_loop(key);
-        }
-    }
-    motor_loops_ = std::move(running);
-}
-
-void app::stop_motor_loops() {
-    for (const std::string& key : motor_loops_) {
-        audio_.stop_loop(key);
-    }
-    motor_loops_.clear();
+    audio_.set_loops(motors);
 }
 
 render_data app::make_frame(const float dt, const bool snap_camera, frame_profile* profile,
@@ -654,6 +646,7 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
     data.camera_target = camera_transition_.shown.target;
     data.camera_fov_degrees = camera_transition_.shown.fov_degrees;
     data.camera_underwater = under_water(game_.area, data.camera_position);
+    data.camera_water_level = water_level_at(game_.area, data.camera_position).value_or(0.0f);
     // The menus' tour fades its weather too, but strikes no lightning behind them.
     const bool strikes = menu_.flow == startup_flow::playing || menu_.flow == startup_flow::touring;
     weather_shown_ = update_frame_weather(weather_shown_, game_, lighting_, data, strikes || touring_.has_value(), strikes, dt);

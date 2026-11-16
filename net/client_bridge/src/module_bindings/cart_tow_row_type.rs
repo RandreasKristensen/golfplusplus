@@ -40,6 +40,7 @@ impl __sdk::__query_builder::HasCols for CartTowRow {
 ///
 /// Provides typed access to indexed columns for query building.
 pub struct CartTowRowIxCols {
+    pub owner: __sdk::__query_builder::IxCol<CartTowRow, u64>,
     pub scheduled_id: __sdk::__query_builder::IxCol<CartTowRow, u64>,
 }
 
@@ -47,6 +48,7 @@ impl __sdk::__query_builder::HasIxCols for CartTowRow {
     type IxCols = CartTowRowIxCols;
     fn ix_cols(table_name: &'static str) -> Self::IxCols {
         CartTowRowIxCols {
+            owner: __sdk::__query_builder::IxCol::new(table_name, "owner"),
             scheduled_id: __sdk::__query_builder::IxCol::new(table_name, "scheduled_id"),
         }
     }

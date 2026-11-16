@@ -34,7 +34,7 @@ bool write_text_file(const std::filesystem::path& path, const std::string& text)
 // replacement succeeded (rename cannot overwrite an existing file everywhere).
 bool replace_file(const std::filesystem::path& temp, const std::filesystem::path& path) {
     std::error_code error;
-    const std::filesystem::path backup = path.string() + ".bak";
+    const std::filesystem::path backup = replacement_backup_path(path);
     const bool had_old = std::filesystem::exists(path, error);
     if (had_old) {
         std::filesystem::rename(path, backup, error);
@@ -59,6 +59,38 @@ bool replace_file(const std::filesystem::path& temp, const std::filesystem::path
     }
     return true;
 }
+}
+
+std::filesystem::path replacement_temp_path(const std::filesystem::path& path) {
+    return path.string() + ".tmp";
+}
+
+std::filesystem::path replacement_backup_path(const std::filesystem::path& path) {
+    return path.string() + ".bak";
+}
+
+replaced_text read_replaced_text_file(const std::filesystem::path& path,
+                                      const std::function<bool(const std::string&)>& valid) {
+    struct candidate {
+        std::filesystem::path file;
+        replaced_source source;
+    };
+    const candidate candidates[] = {{path, replaced_source::primary},
+                                    {replacement_temp_path(path), replaced_source::temp},
+                                    {replacement_backup_path(path), replaced_source::backup}};
+    std::error_code error;
+    const bool primary_present = std::filesystem::exists(path, error);
+    for (const candidate& next : candidates) {
+        std::optional<std::string> text = read_text_file(next.file);
+        if (!text || !valid(*text)) {
+            continue;
+        }
+        if (next.source != replaced_source::primary && !primary_present) {
+            std::filesystem::rename(next.file, path, error);
+        }
+        return {std::move(text), next.source};
+    }
+    return {};
 }
 
 std::optional<std::string> read_text_file(const std::filesystem::path& path) {
@@ -108,7 +140,7 @@ std::vector<std::filesystem::path> json_files_under(const std::filesystem::path&
 
 std::optional<hole_data> load_hole_from_file(const std::string& path) {
     const std::optional<std::string> text = read_text_file(path);
-    return text ? parse_hole_from_text(*text) : std::nullopt;
+    return text ? parse_hole_from_text(*text).value : std::nullopt;
 }
 
 std::optional<std::uint64_t> load_simulation_content_hash(const std::string& asset_root) {
@@ -147,28 +179,26 @@ std::vector<std::string> json_texts_in_directory(const std::filesystem::path& di
 std::optional<course_definition> load_course(const std::string& asset_root, const std::string& folder) {
     const std::optional<std::string> text =
         read_text_file(std::filesystem::path(asset_root) / folder / course_file_name);
-    std::optional<course_definition> course = text ? parse_course_from_text(*text) : std::nullopt;
+    std::optional<course_definition> course = text ? parse_course_from_text(*text).value : std::nullopt;
     return course ? std::optional<course_definition>(course_in_folder(std::move(*course), folder)) : std::nullopt;
 }
 
-std::vector<course_definition> load_courses(const std::string& asset_root) {
-    std::vector<std::string> folders;
+parsed<std::vector<course_definition>> load_courses(const std::string& asset_root) {
+    std::map<std::string, std::string> manifests;
     std::error_code error;
     std::filesystem::directory_iterator it(std::filesystem::path(asset_root) / courses_path, error);
     for (; !error && it != std::filesystem::directory_iterator(); it.increment(error)) {
         std::error_code type_error;
         if (it->is_directory(type_error)) {
-            folders.push_back(std::string(courses_path) + "/" + it->path().filename().string());
+            const std::string path = std::string(courses_path) + "/" + it->path().filename().string() + "/" + course_file_name;
+            const std::optional<std::string> text = read_text_file(std::filesystem::path(asset_root) / path);
+            if (!text) {
+                return {std::nullopt, path + ": cannot read"};
+            }
+            manifests.emplace(path, *text);
         }
     }
-    std::sort(folders.begin(), folders.end());
-    std::vector<course_definition> courses;
-    for (const std::string& folder : folders) {
-        if (std::optional<course_definition> course = load_course(asset_root, folder)) {
-            courses.push_back(std::move(*course));
-        }
-    }
-    return courses;
+    return parse_courses(manifests);
 }
 
 std::string course_hole_path(const std::string& asset_root, const course_definition& course, const std::size_t hole_index) {
@@ -179,7 +209,7 @@ std::string course_hole_path(const std::string& asset_root, const course_definit
 std::optional<course_world_definition> load_course_world_from_file(const std::string& path,
                                                                    const course_definition& course) {
     const std::optional<std::string> text = read_text_file(path);
-    return text ? parse_course_world_from_text(*text, course) : std::nullopt;
+    return text ? parse_course_world_from_text(*text, course).value : std::nullopt;
 }
 
 std::string course_world_file_path(const std::string& asset_root, const course_definition& course) {
@@ -193,7 +223,7 @@ bool replace_text_file(const std::filesystem::path& path, const std::string& tex
         return false;
     }
 
-    const std::filesystem::path temp = path.string() + ".tmp";
+    const std::filesystem::path temp = replacement_temp_path(path);
     if (!write_text_file(temp, text)) {
         std::filesystem::remove(temp, error);
         return false;

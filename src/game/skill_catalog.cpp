@@ -18,11 +18,12 @@ std::optional<std::map<std::string, level_curve>> curves_from_text(const std::st
         if (!it.value().is_array()) {
             return std::nullopt;
         }
-        for (const json& xp : it.value()) {
-            if (!xp.is_number_integer()) {
+        for (const json& value : it.value()) {
+            const std::optional<std::int64_t> xp = json_int64(value);
+            if (!xp) {
                 return std::nullopt;
             }
-            curve.level_xp.push_back(xp.get<std::int64_t>());
+            curve.level_xp.push_back(*xp);
         }
         const bool rises = std::adjacent_find(curve.level_xp.begin(), curve.level_xp.end(),
                                               [](const std::int64_t a, const std::int64_t b) { return b <= a; }) ==

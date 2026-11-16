@@ -505,71 +505,78 @@
   "trees": [
     {
       "position": [
-        -21.7,
+        -22.18,
         0.0,
-        -5.69
+        -6.34
       ],
       "trunk_radius": 0.15,
-      "trunk_height": 1.7,
-      "leaf_radius": 1.04,
-      "leaf_height": 2.08
+      "trunk_height": 1.77,
+      "leaf_radius": 1.08,
+      "leaf_height": 2.16,
+      "species": "birch"
     },
     {
       "position": [
-        -9.7,
+        -10.18,
         0.0,
-        -27.69
+        -27.34
+      ],
+      "trunk_radius": 0.19,
+      "trunk_height": 2.19,
+      "leaf_radius": 1.34,
+      "leaf_height": 2.68,
+      "species": "beech"
+    },
+    {
+      "position": [
+        98.82,
+        0.0,
+        -55.34
+      ],
+      "trunk_radius": 0.23,
+      "trunk_height": 2.73,
+      "leaf_radius": 1.67,
+      "leaf_height": 3.34,
+      "species": "beech"
+    },
+    {
+      "position": [
+        75.82,
+        0.0,
+        -13.34
       ],
       "trunk_radius": 0.2,
-      "trunk_height": 2.28,
-      "leaf_radius": 1.39,
-      "leaf_height": 2.79
+      "trunk_height": 2.37,
+      "leaf_radius": 1.45,
+      "leaf_height": 2.9,
+      "species": "beech"
     },
     {
       "position": [
-        99.3,
+        72.82,
         0.0,
-        -56.69
+        -6.34
       ],
-      "trunk_radius": 0.24,
-      "trunk_height": 2.76,
-      "leaf_radius": 1.69,
-      "leaf_height": 3.37
+      "trunk_radius": 0.21,
+      "trunk_height": 2.41,
+      "leaf_radius": 1.47,
+      "leaf_height": 2.94,
+      "species": "oak"
     },
     {
       "position": [
-        75.3,
+        69.82,
         0.0,
-        -12.69
+        0.66
       ],
       "trunk_radius": 0.2,
-      "trunk_height": 2.36,
-      "leaf_radius": 1.44,
-      "leaf_height": 2.88
-    },
-    {
-      "position": [
-        72.3,
-        0.0,
-        -5.69
-      ],
-      "trunk_radius": 0.21,
-      "trunk_height": 2.47,
-      "leaf_radius": 1.51,
-      "leaf_height": 3.02
-    },
-    {
-      "position": [
-        69.3,
-        0.0,
-        1.31
-      ],
-      "trunk_radius": 0.21,
-      "trunk_height": 2.44,
-      "leaf_radius": 1.49,
-      "leaf_height": 2.98
+      "trunk_height": 2.31,
+      "leaf_radius": 1.41,
+      "leaf_height": 2.83,
+      "species": "beech"
     }
   ],
+  "bushes": [],
   "source": {
     "type": "osm",
     "tee_latlon": [

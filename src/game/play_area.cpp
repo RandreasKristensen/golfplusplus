@@ -3,6 +3,7 @@
 #include "physics/det_math.h"
 #include "game/area_solids.h"
 #include "game/hub_definition.h"
+#include "game/tree_season.h"
 
 #include "physics/ground_mesh.h"
 #include "physics/land_relief.h"
@@ -85,23 +86,7 @@ play_area with_bounds(play_area area) {
     }
     area.center = horizontal((low + high) * 0.5f);
     area.extent = std::max(high.x - low.x, high.z - low.z) * 0.5f;
-
-    std::vector<glm::vec2> hole_points;
-    for (const terrain_mesh& hole : area.holes) {
-        for (const terrain_vertex& vertex : hole.vertices) {
-            hole_points.emplace_back(vertex.position.x, vertex.position.z);
-        }
-    }
-    for (const material_zone& zone : area.zones) {
-        const glm::vec2 half = zone_half_extent(zone);
-        for (const glm::vec2 corner : {glm::vec2(-1.0f, -1.0f), glm::vec2(1.0f, -1.0f), glm::vec2(1.0f, 1.0f), glm::vec2(-1.0f, 1.0f)}) {
-            hole_points.push_back(glm::vec2(zone.center.x, zone.center.z) + corner * half);
-        }
-    }
-    area.holes_outline.clear();
-    for (const glm::vec2 point : convex_hull(std::move(hole_points))) {
-        area.holes_outline.emplace_back(point.x, 0.0f, point.y);
-    }
+    area.holes_outline = course_outline(area.holes, area.zones);
     return area;
 }
 
@@ -246,6 +231,31 @@ terrain_mesh lift_over_land(terrain_mesh hole, const float tee_height, const flo
 }
 }
 
+std::vector<glm::vec3> course_outline(const std::vector<terrain_mesh>& holes, const std::vector<material_zone>& zones) {
+    std::vector<glm::vec2> hole_points;
+    for (const terrain_mesh& hole : holes) {
+        for (const terrain_vertex& vertex : hole.vertices) {
+            hole_points.emplace_back(vertex.position.x, vertex.position.z);
+        }
+    }
+    for (const material_zone& zone : zones) {
+        // Water and heavy rough can be the land round the course (a lake, a
+        // meadow), not the course.
+        if (zone.type == material_zone_type::water || zone.type == material_zone_type::heavy_rough) {
+            continue;
+        }
+        const glm::vec2 half = zone_half_extent(zone);
+        for (const glm::vec2 corner : {glm::vec2(-1.0f, -1.0f), glm::vec2(1.0f, -1.0f), glm::vec2(1.0f, 1.0f), glm::vec2(-1.0f, 1.0f)}) {
+            hole_points.push_back(glm::vec2(zone.center.x, zone.center.z) + corner * half);
+        }
+    }
+    std::vector<glm::vec3> outline;
+    for (const glm::vec2 point : convex_hull(std::move(hole_points))) {
+        outline.emplace_back(point.x, 0.0f, point.y);
+    }
+    return outline;
+}
+
 glm::vec3 place_hole_point(const hole_data& hole, const course_world_hole_start& start, const glm::vec3& point) {
     return start.position + rotate_about_y(point - hole.tee_position, glm::radians(start.rotation_degrees));
 }
@@ -285,10 +295,23 @@ play_area place_course_holes(const std::vector<hole_data>& holes,
     return course;
 }
 
+namespace {
+// Each tree's species, and how much of its crown is in leaf on `day`.
+void set_tree_seasons(std::vector<tree_instance>& trees, const tree_tuning& tuning, const int day) {
+    for (tree_instance& tree : trees) {
+        tree.shape.species = species_index(tuning, tree.species).value_or(0);
+        tree.shape.foliage = tuning.species.empty() ? 1.0f
+                                                    : foliage_share(tuning.species[tree.shape.species], static_cast<float>(day));
+    }
+}
+}
+
 play_area build_course_area(const std::vector<hole_data>& holes,
                             const course_world_definition& world,
                             const game_tuning& tuning, const std::optional<ground_pad>& arrival_pad) {
     play_area course = place_course_holes(holes, world, tuning);
+    // The trees of the land round the holes, beyond any hole's.
+    course.trees.insert(course.trees.end(), world.trees.begin(), world.trees.end());
     std::vector<hole_data> placed_holes;
     float margin = 0.0f;
     for (std::size_t i = 0; i < course.holes.size(); ++i) {
@@ -305,6 +328,7 @@ play_area build_course_area(const std::vector<hole_data>& holes,
                     world.fences, tuning),
         placed_holes, world.cart_roads,
         tuning);
+    set_tree_seasons(standing.trees, tuning.trees, world.day_of_year);
     standing.solids = standing_solids(standing, tuning);
     standing.solids_grid = build_solid_grid(standing.solids, solid_grid_cell_size);
     const float unit = tuning.scale.meters_per_world_unit;
@@ -340,6 +364,7 @@ play_area build_hub_area(const hub_definition& hub, const course_world_definitio
     area.material_overlay = build_material_overlay_mesh(area.ground, area.zones);
     area = with_bounds(std::move(area));
     area = with_fences(with_cart_paths(std::move(area), world.cart_roads, tuning), world.fences, tuning);
+    set_tree_seasons(area.trees, tuning.trees, world.day_of_year);
     area.solids = standing_solids(area, tuning);
     std::vector<cup> markers;
     for (const auto& target : hub.targets) { markers.push_back(cup{anchor_on_terrain(area, target.position),0,0,0}); }
@@ -358,6 +383,14 @@ play_area build_hub_area(const hub_definition& hub, const course_world_definitio
 bool under_water(const play_area& area, const glm::vec3& position) {
     const terrain_sample sample = sample_area(area, position);
     return sample.material == terrain_material::water && position.y < sample.water_level;
+}
+
+std::optional<float> water_level_at(const play_area& area, const glm::vec3& position) {
+    const std::optional<zone_hit> zone = winning_zone_at(area.zones, position);
+    if (!zone || zone->material != terrain_material::water || zone->index >= area.water_levels.size()) {
+        return std::nullopt;
+    }
+    return area.water_levels[zone->index];
 }
 
 terrain_sample sample_area(const play_area& area, const glm::vec3& position, frame_profile* profile) {
@@ -441,6 +474,8 @@ const cart_surface_tuning& cart_surface(const cart_surfaces_tuning& surfaces, co
         return surfaces.bunker;
     case terrain_material::water:
         return surfaces.water;
+    case terrain_material::heavy_rough:
+        return surfaces.heavy_rough;
     case terrain_material::rough:
         break;
     }
@@ -464,9 +499,11 @@ cart_ground cart_ground_at(const play_area& area, const game_tuning& tuning, con
     ground.normal = sample.normal;
     ground.rolling_resistance = surface.rolling_resistance * glm::mix(1.0f, surface.wet_rolling_resistance_scale, wet);
     ground.grip = surface.grip * glm::mix(1.0f, surface.wet_grip_scale, wet);
-    // A cart path over water is its bridge.
+    // A cart path over water is its bridge. Over a pond, how deep its wheels
+    // are in it as they are now: in the air over it, maybe not at all.
     if (sample.material == terrain_material::water && !on_road) {
-        ground.water_depth = std::max(0.0f, sample.water_level - sample.point.y) * tuning.scale.meters_per_world_unit;
+        const float wheels = std::max(position.y, sample.point.y);
+        ground.immersion = std::max(0.0f, sample.water_level - wheels) * tuning.scale.meters_per_world_unit;
     }
     return ground;
 }

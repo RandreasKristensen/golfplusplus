@@ -43,6 +43,7 @@
 #include "renderer/sun_shaft_pass.h"
 #include "renderer/eyepiece_pass.h"
 #include "renderer/tape_pass.h"
+#include "renderer/grass_renderer.h"
 #include "renderer/terrain_renderer.h"
 #include "renderer/texture.h"
 #include "renderer/tree_renderer.h"
@@ -150,15 +151,16 @@ private:
     renderer_cull_stats cull_stats_;
 
     terrain_renderer terrain_renderer_;
+    grass_renderer grass_renderer_;
     primitive_buffers ground_;     // unit quad backdrop under the course
     primitive_buffers ball_;       // unit sphere
-    primitive_buffers cylinder_;   // unit cylinder, shared with tree_renderer
-    primitive_buffers cone_;       // unit cone, only drawn by tree_renderer
     unsigned int screen_vao_ = 0;  // full-screen quad for the screen passes
     unsigned int screen_vbo_ = 0;
 
     picture_style picture_style_;
     prop_catalog props_;
+    water_style water_style_;
+    grass_style grass_style_;
     scene_colors colors_;  // its glow floors this frame's (render_data::glow)
     picture_size picture_;  // the scene target's, for the window's current size
 };

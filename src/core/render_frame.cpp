@@ -399,6 +399,11 @@ render_data make_render_data(const game_state& game,
     data.water = meshes.water;
     data.backdrop = &game.place.backdrop;
     data.trees = &game.static_anchors.trees;
+    const float day = static_cast<float>(game.world.day_of_year);
+    for (const tree_species& species : game.tuning.trees.species) {
+        data.tree_species.push_back(
+            render_tree_species{species.name, foliage_share(species, day), turned_share(species, day), fresh_share(species, day)});
+    }
     data.trees_revision = game.static_anchors.revision;
     data.area_center = game.area.center;
     data.area_extent = game.area.extent;

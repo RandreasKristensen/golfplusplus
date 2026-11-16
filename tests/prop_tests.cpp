@@ -25,10 +25,8 @@ std::optional<prop_model> parse(const std::string& rest) {
                                 rest + "}");
 }
 
-// The catalog's own required models (tree, fence, floodlight, hole sign),
-// plus `files`.
+// The catalog's own required models (fence, floodlight, hole sign), plus `files`.
 std::map<std::string, std::string> with_required(std::map<std::string, std::string> files) {
-    files["tree"] = R"({"kind": "tree", "colors": {"trunk": [0, 0, 0], "leaves": [0, 1, 0]}})";
     files["fence"] = R"({"kind": "fence", "colors": {"post": [0, 0, 0]}})";
     files["floodlight"] = R"({"kind": "floodlight", "colors": {"pole": [0, 0, 0], "head": [0, 0, 0]}})";
     files["hole_sign"] = R"({"kind": "hole_sign", "colors": {"board": [0, 0, 0], "post": [0, 0, 0]}})";
@@ -57,11 +55,11 @@ TEST_CASE("every shipped model loads by its file name, of its kind; a missing re
     CHECK(!missing.props.has_value());
     CHECK(missing.error.find(props_path) != std::string::npos);
 
-    std::map<std::string, std::string> no_tree = with_required({});
-    no_tree.erase("tree");
-    const prop_catalog_load_result without = parse_prop_catalog(no_tree);
+    std::map<std::string, std::string> no_fence = with_required({});
+    no_fence.erase("fence");
+    const prop_catalog_load_result without = parse_prop_catalog(no_fence);
     CHECK(!without.props.has_value());
-    CHECK(without.error.find("tree") != std::string::npos);
+    CHECK(without.error.find("fence") != std::string::npos);
 }
 
 TEST_CASE("a model's kind says what it must have: a cigarette without an ember is refused") {

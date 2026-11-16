@@ -101,7 +101,7 @@ inline const prop_catalog& test_props() {
 inline game_content fixture_content() {
     game_content content = shipped_content();
     content.asset_root = fixture_root();
-    content.courses = load_courses(fixture_root());
+    content.courses = *load_courses(fixture_root()).value;
     return content;
 }
 

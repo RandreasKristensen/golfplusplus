@@ -1,5 +1,6 @@
 #include "core/app.h"
 #include "core/event_loop.h"
+#include "core/progress_saver.h"
 #include "game/hub_flow.h"
 #include "game/mode_dispatch.h"
 #include "game/course_session.h"
@@ -11,7 +12,7 @@
 
 bool app::arrive_at_place(const std::string& place_id) {
     const std::string destination = place_id;
-    if (!enter_place(game_, destination)) { return false; }
+    if (!enter_place_saving(game_, destination, progress_saver_)) { return false; }
     tee_book_ = tee_book_state{};
     menu_.confirm_active = false;
     if (is_online(game_)) { adopt_online_arrival(game_); }

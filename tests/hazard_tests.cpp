@@ -1,7 +1,9 @@
 #include "doctest.h"
 
 #include "game/play_area.h"
+#include "renderer/terrain_render_mesh.h"
 #include "renderer/water_batch.h"
+#include "renderer/water_light.h"
 
 #include "test_support.h"
 
@@ -120,5 +122,92 @@ TEST_CASE("a pond fills its outline to its lowest rim, and overlapping zones are
     REQUIRE(!water.triangles.empty());
     CHECK(water.triangles.size() % 3U == 0U);
     CHECK(std::all_of(water.triangles.begin(), water.triangles.end(),
-                      [&](const glm::vec3& p) { return near(p.y, area.water_levels[0]); }));
+                      [&](const render_water_vertex& v) { return near(v.position.y, area.water_levels[0]); }));
+}
+
+TEST_CASE("a pond's water meets its bank at its outline, with no dry ground below its level beside it") {
+    const glm::vec3 centre(0.0f, 0.0f, 120.0f);
+    const float radius = 10.0f;
+    const play_area area = flat_area({circle_zone(material_zone_type::water, centre, radius)});
+    REQUIRE(area.water_levels.size() == 1U);
+    const float level = area.water_levels[0];
+    const terrain_zone_tuning& tuning = zone_tuning();
+    REQUIRE(tuning.water_shore_meters > 0.5f);
+    for (float out = 0.05f; out <= tuning.water_shore_meters + 1.0f; out += 0.1f) {
+        for (const glm::vec3 way : {glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.6f, 0.0f, 0.8f)}) {
+            CHECK(terrain_height(area, centre + way * (radius + out)) >= level - 0.01f);
+        }
+    }
+    // Its surface lies only over ground below it, out to where the bank meets it.
+    const render_water water = build_render_water(area, 1);
+    REQUIRE(!water.triangles.empty());
+    float reach = 0.0f;
+    for (const render_water_vertex& vertex : water.triangles) {
+        const glm::vec3& point = vertex.position;
+        CHECK(terrain_height(area, point) <= level + 0.01f);
+        reach = std::max(reach, glm::length(glm::vec2(point.x - centre.x, point.z - centre.z)));
+    }
+    // On flat ground the shore is flat at the level: the surface stops at
+    // the first fine cell's corner past the outline.
+    CHECK(reach > radius - 0.5f);
+    CHECK(reach < radius + zone_tuning().water_shore_meters);
+}
+
+TEST_CASE("a pond's fetch is nothing on its upwind shore and its width on the downwind one") {
+    const glm::vec3 centre(0.0f, 0.0f, 120.0f);
+    const float radius = 10.0f;
+    const play_area area = flat_area({circle_zone(material_zone_type::water, centre, radius)});
+    const render_water water = build_render_water(area, 1);
+    REQUIRE(!water.triangles.empty());
+    // Direction 0 blows towards +X: the west shore is upwind, the east downwind.
+    const render_water_vertex* west = &water.triangles.front();
+    const render_water_vertex* east = &water.triangles.front();
+    for (const render_water_vertex& vertex : water.triangles) {
+        west = vertex.position.x < west->position.x ? &vertex : west;
+        east = vertex.position.x > east->position.x ? &vertex : east;
+    }
+    CHECK(west->fetch[0] < 2.0f);
+    CHECK(east->fetch[0] > 1.6f * radius);
+    // The wind turned round, the shores swap.
+    CHECK(east->fetch[4] < 2.0f);
+    CHECK(west->fetch[4] > 1.6f * radius);
+    // Between the two kept directions, the fetch is between theirs.
+    const float between = water_fetch_toward(east->fetch, glm::vec2(1.0f, 0.4142f));
+    CHECK(between <= std::max(east->fetch[0], east->fetch[1]) + 0.01f);
+    CHECK(between >= std::min(east->fetch[0], east->fetch[1]) - 0.01f);
+}
+
+TEST_CASE("a pond's floor is the bank's grass at its edge, fading to mud deeper in, and water on a map") {
+    const glm::vec3 centre(0.0f, 0.0f, 150.0f);
+    const play_area area = flat_area({circle_zone(material_zone_type::water, centre, 20.0f)});
+    const ground_colors& colors = test_scene_colors().ground;
+    const render_static_mesh drawn = make_terrain_render_mesh({&area.ground}, 1U, colors, ground_light_bake{}, &area);
+    REQUIRE(drawn.vertices.size() == area.ground.vertices.size());
+    const auto mud = [&](const glm::vec3& color) {
+        return glm::length(color - colors.rough) / glm::length(colors.pond_bed - colors.rough);
+    };
+    float shallowest = 1.0f;
+    float deepest_mud = 1.0f;
+    for (std::size_t i = 0; i < drawn.vertices.size(); ++i) {
+        const terrain_vertex& vertex = area.ground.vertices[i];
+        if (vertex.material != terrain_material::water) {
+            CHECK(drawn.vertices[i].color != colors.pond_bed);
+            continue;
+        }
+        // A printed map shows it as water, whatever its floor.
+        CHECK(drawn.vertices[i].map_color == colors.water);
+        const float depth = area.water_levels[0] - vertex.position.y;
+        if (depth < 0.7f) {
+            shallowest = std::min(shallowest, mud(drawn.vertices[i].color));
+        }
+        if (depth > zone_tuning().water_max_depth - 0.1f) {
+            deepest_mud = std::min(deepest_mud, mud(drawn.vertices[i].color));
+        }
+    }
+    CHECK(shallowest < 0.5f);
+    CHECK(deepest_mud > 0.9f);
+    // No pond given: it is drawn in its material's colour.
+    const render_static_mesh plain = make_terrain_render_mesh({&area.ground}, 1U, colors, ground_light_bake{}, nullptr);
+    CHECK(std::none_of(plain.vertices.begin(), plain.vertices.end(),
+                       [&](const render_terrain_vertex& vertex) { return vertex.color == colors.pond_bed; }));
 }

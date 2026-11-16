@@ -2,7 +2,7 @@
 
 // The trees', floodlights', figures' and carts' depth seen from the sun
 // (renderer/shadow_map_pass.h), and the trees' and floodlights' from a
-// floodlight (renderer/lamp_shadow_pass.h), instanced like tree_instanced.vert; the
+// floodlight (renderer/lamp_shadow_pass.h), instanced like tree.vert (its first six floats); the
 // floodlights' and figures' meshes are one unscaled instance at the origin.
 
 layout(location = 0) in vec3 a_pos;

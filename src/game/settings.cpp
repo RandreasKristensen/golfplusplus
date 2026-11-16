@@ -147,8 +147,10 @@ std::filesystem::path settings_file_path(const std::filesystem::path& save_root)
 }
 
 settings_values load_settings(const std::filesystem::path& path, const std::vector<setting_definition>& definitions) {
-    const std::optional<std::string> text = read_text_file(path);
-    return text ? parse_settings_from_text(*text, definitions).value_or(settings_values{}) : settings_values{};
+    const replaced_text found = read_replaced_text_file(path, [&definitions](const std::string& text) {
+        return parse_settings_from_text(text, definitions).has_value();
+    });
+    return found.text ? parse_settings_from_text(*found.text, definitions).value_or(settings_values{}) : settings_values{};
 }
 
 bool write_settings(const std::filesystem::path& path, const settings_values& values,

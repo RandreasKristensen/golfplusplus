@@ -11,7 +11,9 @@
 #include "physics/turf_contact.h"
 #include "physics/land_relief.h"
 #include "physics/terrain.h"
+#include "game/tree_season.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -77,6 +79,7 @@ struct cart_surfaces_tuning {
     cart_surface_tuning path;
     cart_surface_tuning fairway;
     cart_surface_tuning rough;
+    cart_surface_tuning heavy_rough;
     cart_surface_tuning green;
     cart_surface_tuning bunker;
     cart_surface_tuning water;
@@ -88,6 +91,7 @@ struct cart_surfaces_tuning {
 struct surfaces_tuning {
     surface_tuning fairway;
     surface_tuning rough;
+    surface_tuning heavy_rough;
     surface_tuning green;
     surface_tuning bunker;
     cart_surfaces_tuning cart;
@@ -480,13 +484,12 @@ struct server_tuning {
     int link_codes_per_hour = 0;     // per account
     int link_failures_per_hour = 0;  // wrong codes per login
     // Movement is stepped from the client's inputs, at most
-    // max_motion_gap_seconds of steps saved up (movement_rules.h). Where a
-    // position is claimed it may lie as far as the mode's speed (walking or
-    // the fastest cart) times motion_speed_scale goes in the time left, plus
-    // a slack of motion_distance_slack that refills at that many world units
-    // per second (play_rules.h check_motion). Steps on foot may start
-    // step_start_tolerance from where the server has the player (put out of
-    // a seat where the client saw the cart).
+    // max_motion_gap_seconds of steps saved up (movement_rules.h). Shown
+    // speeds are clamped to the mode's speed (walking or the fastest cart)
+    // times motion_speed_scale; a driver's ride motion may lie that far in
+    // the time since, plus motion_distance_slack (play_rules.h). Steps on
+    // foot may start step_start_tolerance from where the server has the
+    // player (put out of a seat where the client saw the cart).
     float motion_speed_scale = 0.0f;
     float motion_distance_slack = 0.0f;  // world units
     float max_motion_gap_seconds = 0.0f;
@@ -595,6 +598,9 @@ struct solids_tuning {
     // metre (from the shot's dice).
     float leaves_drag_per_meter = 0.0f;
     float leaves_scatter_degrees_per_meter = 0.0f;
+    // A bush's tangle counts as this many metres of canopy for each metre
+    // through it: a ball going in seldom comes out.
+    float bush_density = 0.0f;
 };
 
 // The floodlight poles along every hole (game/floodlights.h), in world
@@ -679,6 +685,21 @@ struct temperature_tuning {
     float noise_hours = 0.0f;
 };
 
+// How the year moves the weather (game/weather.h), one number per month,
+// between the middles of the months as the course's day of the year falls,
+// over the weather the rest of weather_tuning makes, which is a Danish
+// summer's: storm_bias raises the storm (more cloud and rain, Denmark's
+// autumn and winter), fog_bias the air's damp, wind_scale the wind's speed,
+// and thunder_scale how much of a storm's thunder there is (summer's
+// convection). From DMI's 1991-2020 normals: rain days, sunshine hours,
+// fog days, mean wind and thunder days by month.
+struct weather_season_tuning {
+    std::array<float, 12> storm_bias{};
+    std::array<float, 12> fog_bias{};
+    std::array<float, 12> wind_scale{};
+    std::array<float, 12> thunder_scale{};
+};
+
 struct weather_tuning {
     float regime_hours = 0.0f;
     float regime_weight = 0.0f;
@@ -712,6 +733,7 @@ struct weather_tuning {
     float history_hours = 0.0f;
     float step_hours = 0.0f;
     temperature_tuning temperature;
+    weather_season_tuning seasons;
 };
 
 // What the ball lies on when it is hit: a tee box, else the material under it.
@@ -721,7 +743,8 @@ enum class ball_lie : std::uint8_t {
     rough,
     green,
     bunker,
-    water
+    water,
+    heavy_rough
 };
 
 // How what the ball lies on changes a strike (game/delivery.h).
@@ -736,6 +759,11 @@ struct lie_tuning {
     // at a full backswing.
     float rough_speed_loss = 0.0f;
     float rough_face_close_per_loft = 0.0f;
+    // The same out of heavy rough, the long grass the mower leaves: more
+    // grass between face and ball, more of it round the hosel.
+    float heavy_rough_grip_share = 0.0f;
+    float heavy_rough_speed_loss = 0.0f;
+    float heavy_rough_face_close_per_loft = 0.0f;
     // A ball picked clean from sand, and one exploded out of it.
     float sand_grip_share = 0.0f;
     sand_cushion sand;
@@ -826,6 +854,7 @@ struct game_tuning {
     tee_box_tuning tee_box;
     fence_tuning fence;
     solids_tuning solids;
+    tree_tuning trees;
     floodlight_tuning floodlights;
     sky_timeline sky_clock;
     lie_tuning lies;

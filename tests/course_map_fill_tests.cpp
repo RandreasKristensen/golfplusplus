@@ -29,6 +29,7 @@ render_static_mesh make_test_terrain_mesh(const float span, const std::uint64_t 
             const float fz = static_cast<float>(z) / static_cast<float>(steps);
             vertex.position = glm::vec3((fx - 0.5f) * span, 0.0f, (fz - 0.5f) * span);
             vertex.color = glm::vec3(0.18f + fx * 0.1f, 0.42f, 0.18f + fz * 0.1f);
+            vertex.map_color = vertex.color;
             mesh.vertices.push_back(vertex);
         }
     }
@@ -242,6 +243,43 @@ TEST_CASE("the course map draws no tree off its paper") {
     }
     // The one on the course.
     CHECK(tree_quads == 1U);
+}
+
+TEST_CASE("walking off the course map never moves it; an arrow at its edge points out to me") {
+    render_data data;
+    data.course_map_outline = box_outline(glm::vec3(0.0f), glm::vec3(400.0f, 0.0f, 400.0f));
+    data.player_position = glm::vec3(200.0f, 0.0f, 200.0f);
+    for (const overlay_grid grid : {overlay_grid{554, 416}, overlay_grid{640, 360}, overlay_grid{733, 314}}) {
+        const course_map_layout on_course = make_course_map_layout(data, grid);
+        for (const glm::vec3 away : {glm::vec3(1500.0f, 0.0f, 300.0f), glm::vec3(-600.0f, 0.0f, -900.0f),
+                                     glm::vec3(100.0f, 0.0f, 700.0f)}) {
+            render_data walked = data;
+            walked.player_position = away;
+            const course_map_layout layout = make_course_map_layout(walked, grid);
+            CHECK(course_map_layouts_match(layout, on_course));
+            overlay_batch batch;
+            batch.grid = grid;
+            draw_course_map_marks(batch, shipped_text_assets(), layout, walked);
+            // The arrow: the one triangle drawn (a quad with two corners at its tip), its fill last.
+            std::vector<std::size_t> triangles;
+            for (std::size_t i = 0; i + overlay_vertices_per_quad <= batch.vertices.size(); i += overlay_vertices_per_quad) {
+                if (batch.vertices[i + 1].position == batch.vertices[i + 2].position) {
+                    triangles.push_back(i);
+                }
+            }
+            REQUIRE(triangles.size() == 2U);
+            const std::size_t fill = triangles.back();
+            const glm::vec2 tip = batch.vertices[fill + 1].position;
+            const glm::vec2 back = (batch.vertices[fill].position + batch.vertices[fill + 5].position) * 0.5f;
+            CHECK(glm::all(glm::greaterThan(tip, layout.center - layout.half_size)));
+            CHECK(glm::all(glm::lessThan(tip, layout.center + layout.half_size)));
+            // Pointing at me, as the screen shows it.
+            const glm::vec2 pixels(static_cast<float>(grid.width), static_cast<float>(grid.height));
+            const glm::vec2 pointing = glm::normalize((tip - back) * pixels);
+            const glm::vec2 to_me = glm::normalize((map_point(layout, away) - back) * pixels);
+            CHECK(glm::dot(pointing, to_me) > 0.999f);
+        }
+    }
 }
 
 TEST_CASE("walking about the course map never moves a hole's number; I am drawn under them") {

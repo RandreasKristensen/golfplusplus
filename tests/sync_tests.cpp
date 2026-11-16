@@ -298,7 +298,6 @@ TEST_CASE("sync: jitter-bunched driving motions heal for both clients") {
     link.enter();
     REQUIRE(driving_cart(link.client));
     link.jitter = 0.2f;
-    link.mover.slack_left = 0.0f;
     link.run(8.0f, forward());
     link.jitter = 0.0f;
     link.run(2.5f);

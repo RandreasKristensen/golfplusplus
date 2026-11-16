@@ -4,9 +4,11 @@
 // (hole_sign_face.h) and every sign's model in one vertex list, its board
 // with the texture on the face and wood elsewhere, on two posts. Painting
 // the faces samples the ground for every texel, so it is rebuilt only when
-// what the signs say or where they stand changes (a new course, a new
-// destination on the bus board), never per frame or per hole. Prop boards
-// (the bus destination, the tee book title) are written the same way.
+// the course is loaded again (its terrain revision moves: ground colours,
+// zones and the signs' places and poses may all differ) or what a sign says
+// changes (a new destination on the bus board), never per frame or per hole.
+// Prop boards (the bus destination, the tee book title) are written the same
+// way.
 // GL-free; renderer/hole_sign_renderer draws it.
 
 #include "game/hole_sign.h"
@@ -74,6 +76,8 @@ struct render_hole_signs {
     std::vector<hole_sign_source> sources;  // one per sign of the play area, then per way sign and prop board
     // Bumped when rebuilt; the GL side re-uploads only when it changes.
     std::uint64_t revision = 0;
+    // The game's terrain_render_revision these were built for.
+    std::uint64_t terrain_revision = 0;
     // Labels on the faces that did not fit their boxes (tests want none).
     std::size_t truncated_text_count = 0;
 };
@@ -93,10 +97,13 @@ render_hole_signs build_render_hole_signs(const play_area& area,
                                           const scene_colors& colors,
                                           const prop_model& model,
                                           std::uint64_t revision);
-// Rebuilds `signs` (with `revision`) unless they were built from the same
-// signs saying the same; true when it did.
+// Rebuilds `signs` (with `revision`) when `terrain_revision` is not the one
+// they were built for, or a sign says something else than it did; true when
+// it did. Everything else a sign is drawn from (ground colours, the area's
+// geometry, the models) changes only with a new terrain revision.
 bool refresh_render_hole_signs(render_hole_signs& signs,
                                const play_area& area,
+                               std::uint64_t terrain_revision,
                                const std::vector<hole_sign_text>& texts,
                                const std::vector<prop_board>& boards,
                                const text_assets& text,

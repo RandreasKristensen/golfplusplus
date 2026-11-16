@@ -34,7 +34,7 @@
   },
   "ground": {
     "flat_cell_size": 20.0,
-    "margin": 120.0
+    "margin": 150.0
   },
   "world": {
     "hole_start_interaction_radius": 4.0,
@@ -100,7 +100,33 @@
     "boundary_slack_m": 5.0
   },
   "courses": {
+    "mollerup_par_3": {
+      "sky": {"date": "01-20", "utc_offset_hours": 1, "clock_shift_hours": 18.75},
+      "air": {"mean_temperature_c": 1.6, "daily_temperature_range_c": 4.1}
+    },
+    "kalo_golf_club": {
+      "sky": {"date": "10-20", "utc_offset_hours": 2, "clock_shift_hours": 13.25},
+      "air": {"mean_temperature_c": 9.0, "daily_temperature_range_c": 5.3}
+    },
+    "jelling_golfklub": {
+      "sky": {"date": "11-02", "utc_offset_hours": 1, "clock_shift_hours": 10.75},
+      "air": {"mean_temperature_c": 7.3, "daily_temperature_range_c": 4.9}
+    },
+    "himmerland_new_course": {
+      "sky": {"date": "08-10", "utc_offset_hours": 2, "clock_shift_hours": 5.25},
+      "air": {"mean_temperature_c": 16.9, "daily_temperature_range_c": 8.1}
+    },
+    "hedensted_golf_klub": {
+      "sky": {"date": "06-21", "utc_offset_hours": 2, "clock_shift_hours": 2.75},
+      "air": {"mean_temperature_c": 14.8, "daily_temperature_range_c": 8.5}
+    },
+    "blommenslyst_golfklub": {
+      "sky": {"date": "05-12", "utc_offset_hours": 2, "clock_shift_hours": 1.25},
+      "air": {"mean_temperature_c": 10.6, "daily_temperature_range_c": 8.9}
+    },
     "himmerland_par_3": {
+      "sky": {"date": "09-05", "utc_offset_hours": 2, "clock_shift_hours": 6.75},
+      "air": {"mean_temperature_c": 14.7, "daily_temperature_range_c": 7.3},
       "holes": [
         {"line": "W1565793223"},
         {"line": "W1565793224"},
@@ -111,6 +137,8 @@
       ]
     },
     "horsens_golfklub": {
+      "sky": {"date": "10-12", "utc_offset_hours": 2, "clock_shift_hours": 8.0},
+      "air": {"mean_temperature_c": 10.0, "daily_temperature_range_c": 5.7},
       "holes": [
         {"line": "W1327812239", "par": 5},
         {"line": "W1327812241", "par": 4},
@@ -133,6 +161,8 @@
       ]
     },
     "horsens_par_3": {
+      "sky": {"date": "10-24", "utc_offset_hours": 2, "clock_shift_hours": 9.25},
+      "air": {"mean_temperature_c": 8.4, "daily_temperature_range_c": 5.2},
       "holes": [
         {"line": "W543942750", "par": 3},
         {"line": "W543942749", "par": 3},
@@ -146,14 +176,20 @@
       ]
     },
     "jelling_par_3": {
+      "sky": {"date": "11-20", "utc_offset_hours": 1, "clock_shift_hours": 12.0},
+      "air": {"mean_temperature_c": 5.1, "daily_temperature_range_c": 4.4},
       "bus_stop": {
         "reach_m": 320.0
       }
     },
     "kalo_par_3": {
+      "sky": {"date": "03-25", "utc_offset_hours": 1, "clock_shift_hours": 14.75},
+      "air": {"mean_temperature_c": 4.6, "daily_temperature_range_c": 6.6},
       "ref_prefix": "P"
     },
     "marienlyst_golfklub": {
+      "sky": {"date": "06-05", "utc_offset_hours": 2, "clock_shift_hours": 16.0},
+      "air": {"mean_temperature_c": 13.2, "daily_temperature_range_c": 8.7},
       "bus_stop": {
         "reach_m": 400.0
       },
@@ -173,6 +209,8 @@
       }
     },
     "mollerup_golf_club": {
+      "sky": {"date": "12-10", "utc_offset_hours": 1, "clock_shift_hours": 17.25},
+      "air": {"mean_temperature_c": 3.1, "daily_temperature_range_c": 4.1},
       "holes": [
         {
           "line": "W1010266853",
@@ -249,9 +287,13 @@
       ]
     },
     "blommenslyst_9_holes": {
+      "sky": {"date": "04-28", "utc_offset_hours": 2, "clock_shift_hours": 0.0},
+      "air": {"mean_temperature_c": 8.7, "daily_temperature_range_c": 8.4},
       "ref_prefix": "P"
     },
     "hedensted_pay_play": {
+      "sky": {"date": "07-15", "utc_offset_hours": 2, "clock_shift_hours": 4.0},
+      "air": {"mean_temperature_c": 17.0, "daily_temperature_range_c": 8.5},
       "ref_prefix": "P",
       "holes": [
         {"line": "W1417421101", "par": 4},
@@ -266,12 +308,18 @@
       ]
     },
     "odense_golfklub": {
+      "sky": {"date": "02-15", "utc_offset_hours": 1, "clock_shift_hours": 20.0},
+      "air": {"mean_temperature_c": 1.5, "daily_temperature_range_c": 4.5},
       "ref_prefix": "Holluf Park"
     },
     "odense_pilebanen": {
+      "sky": {"date": "04-10", "utc_offset_hours": 2, "clock_shift_hours": 21.25},
+      "air": {"mean_temperature_c": 6.4, "daily_temperature_range_c": 7.7},
       "ref_prefix": "Pilebanen"
     },
     "ry_golf_klub": {
+      "sky": {"date": "08-28", "utc_offset_hours": 2, "clock_shift_hours": 22.75},
+      "air": {"mean_temperature_c": 15.6, "daily_temperature_range_c": 7.6},
       "holes": [
         {"line": "W1310868069", "par": 5},
         {"line": "W1310868071", "par": 4},

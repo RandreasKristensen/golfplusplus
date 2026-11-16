@@ -50,29 +50,6 @@ float mode_speed(const std::uint8_t mode, const movement_limits& limits) {
     return in_cart(static_cast<motion_mode>(mode)) ? limits.cart_speed : limits.foot_speed;
 }
 
-motion_check check_motion(const net_motion& previous,
-                          const glm::vec3& to,
-                          const float seconds,
-                          const std::uint8_t mode,
-                          const float slack_left,
-                          const movement_limits& limits,
-                          const game_tuning& tuning) {
-    // An update covers no more than max_motion_gap_seconds: standing still for
-    // a while does not save up a jump.
-    const float elapsed = std::clamp(seconds, 0.0f, tuning.server.max_motion_gap_seconds);
-    const std::uint8_t previous_mode = static_cast<std::uint8_t>(previous.mode);
-    const glm::vec3& from = previous.position;
-    const float speed = std::max(mode_speed(previous_mode, limits), mode_speed(mode, limits));
-    const float distance = horizontal_distance(from, to);
-    const float beyond_speed = std::max(0.0f, distance - speed * tuning.server.motion_speed_scale * elapsed);
-
-    motion_check check;
-    check.allowed = beyond_speed <= slack_left;
-    const float slack = tuning.server.motion_distance_slack;
-    check.slack_left = std::min(slack, std::max(0.0f, slack_left - beyond_speed) + slack * elapsed);
-    return check;
-}
-
 float clamp_motion_speed(const std::uint8_t mode, const float speed, const movement_limits& limits,
                          const server_tuning& tuning) {
     const float limit = mode_speed(mode, limits) * tuning.motion_speed_scale;
@@ -203,6 +180,17 @@ shot_check check_shot(const shot_request& request,
 std::uint64_t server_shot_seed(const std::string& secret, const std::int64_t timestamp_micros, const std::uint64_t account_id,
                                const int stroke) {
     return round_shot_seed(keyed_hash(secret, std::to_string(timestamp_micros) + ":" + std::to_string(account_id)), stroke);
+}
+
+std::vector<snapshot_entry> resting_balls(const std::vector<room_ball_rest>& balls, const std::uint64_t shooter,
+                                          const std::int64_t now_micros) {
+    std::vector<snapshot_entry> entries;
+    for (const room_ball_rest& ball : balls) {
+        if (ball.account != shooter && !ball.in_cup && ball.rests_at_micros <= now_micros) {
+            entries.push_back(snapshot_entry{snapshot_kind::ball, ball.position, 0.0f, false});
+        }
+    }
+    return entries;
 }
 
 std::string check_bag_move(const bag_place& from, const bag_place& to, const glm::vec3& player,

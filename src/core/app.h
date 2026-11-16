@@ -8,6 +8,7 @@
 #include "core/input.h"
 #include "core/light_frame.h"
 #include "core/look_tuning.h"
+#include "core/progress_saver.h"
 #include "core/sky_frame.h"
 #include "core/startup_flow.h"
 #include "core/tee_book.h"
@@ -84,7 +85,6 @@ private:
     void watch_online_round();
     // The round's sounds, heard from the camera as drawn this frame.
     void play_game_audio();
-    void stop_motor_loops();
     void refresh_render_meshes();
     // lighting.json and picture.json reloaded when saved, and the F2 panel
     // (app_look.cpp).
@@ -106,10 +106,7 @@ private:
     startup_flow_state menu_;
     tee_book_state tee_book_;
     game_state game_;
-    // When the existing save could not be read and could not be backed up,
-    // saving is disabled so the unreadable file is never overwritten.
-    bool saving_enabled_ = true;
-    std::filesystem::path save_path_;
+    progress_saver progress_saver_;
     std::filesystem::path settings_path_;
 
     // Presentation state, never read by game logic.
@@ -122,7 +119,6 @@ private:
     render_floodlights floodlights_;
     render_water water_;
     tree_shadow_cache tree_shadows_;
-    std::vector<std::string> motor_loops_;  // the keys of the carts' motor loops playing
     tape_style tape_style_;
     lighting_palette lighting_;
     std::string asset_root_;

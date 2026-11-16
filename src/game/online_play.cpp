@@ -6,6 +6,7 @@
 #include "game/hub_session.h"
 #include "game/golf_bag.h"
 #include "game/address_play.h"
+#include "game/bag_sync.h"
 #include "game/motion_sync.h"
 #include "game/mode_dispatch.h"
 #include "game/remote_players.h"
@@ -85,23 +86,6 @@ void return_to_server(game_state& state) {
     }
 }
 
-// My bag and the club in my hand as my player_bag row has them.
-void adopt_server_bag(game_state& state) {
-    const auto row = state.online.bags.find(state.online.account_id);
-    if (row == state.online.bags.end()) {
-        return;
-    }
-    state.bag = row->second.place;
-    state.picker.reset();
-    state.handling.reset();
-    for (std::size_t i = 0; i < state.clubs.size(); ++i) {
-        if (state.clubs[i].id == row->second.club_in_hand) {
-            state.selected_club = i;
-        }
-    }
-    state.server_bag_adopted = true;
-}
-
 // The swing over my ball ends where it started: no shot.
 bool swing_refused(game_state& state, const reducer_failure& refusal) {
     if (refusal.reducer != reducer_take_shot || state.mode != game_mode::addressing || !state.address.swing_elapsed) {
@@ -129,7 +113,7 @@ void take_refusals(game_state& state) {
             continue;
         }
         if (refusal.reducer == reducer_place_bag || refusal.reducer == reducer_take_club) {
-            adopt_server_bag(state);
+            adopt_bag_row(state);
         }
         state.motion_sync.last_refusal = refusal.reducer + ":" + refusal.error;
         if (cart_refused(refusal)) {
@@ -293,7 +277,7 @@ void adopt_online_arrival(game_state& state) {
     clear_online_presentation(state);
     adopt_ball_row(state);
     return_to_server(state);
-    adopt_server_bag(state);
+    adopt_bag_row(state);
     if (const auto me = my_room_player(state); me && state.round) {
         for (std::size_t i = 0; i < me->round_strokes.size() && i < state.round->strokes.size(); ++i) {
             state.round->strokes[i] = me->round_strokes[i] > 0 ? std::optional<int>(me->round_strokes[i]) : std::nullopt;
@@ -326,10 +310,12 @@ void update_online_play(game_state& state, const float dt) {
         if (course_warmup(state)) { select_putter(state); }
         if (!practice_action && ball_in_play(state)) { step_up_to_ball(state); }
     }
+    reconcile_bag_row(state, dt);
+    // The room plays on while the server prepares my ball.
+    follow_server_flags(state);
+    follow_server_carts(state);
+    take_room_events(state);
     if (state.hub_flow.ball_request) { return; }
-    if (!state.server_bag_adopted) {
-        adopt_server_bag(state);
-    }
     sync_golfer(state);
     // Restore an abandoned round on reconnect, without ending a live shot's
     // playback early when the server has already scored its result.
@@ -344,22 +330,7 @@ void update_online_play(game_state& state, const float dt) {
         !state.hub_flow.ball_request) {
         adopt_ball_row(state); return_to_server(state);
     }
-    follow_server_flags(state);
-    follow_server_carts(state);
     reconcile_motion(state, dt);
-    take_room_events(state);
     update_ball_correction(state, dt);
     follow_server_hole(state);
-}
-
-void watch_room(game_state& state, const float dt) {
-    age_notice(state, dt);
-    if (!is_online(state)) {
-        return;
-    }
-    reconcile_dap(state);
-    take_refusals(state);  // a refused move puts me back
-    follow_server_carts(state);
-    reconcile_motion(state, dt);
-    take_room_events(state);
 }

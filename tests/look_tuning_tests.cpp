@@ -308,3 +308,32 @@ TEST_CASE("a panel step is written to lighting.json and shown once, without the 
     CHECK(!run_look_tuning(state, look_tuning_keys{}, true, reload->next.lighting, look_poll_seconds));
     CHECK(!state.watch.error.has_value());
 }
+
+TEST_CASE("a long tuning panel shows a window of its rows round the one picked") {
+    look_tuning_state state;
+    for (int i = 0; i < 20; ++i) {
+        state.entries.push_back(entry("weather/mist", 0.05));
+    }
+    const text_assets text;
+    const auto picked_row = [](const render_god_menu& view) {
+        for (std::size_t i = 0; i < view.rows.size(); ++i) {
+            if (view.rows[i].selected) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    };
+    for (const std::size_t picked : {std::size_t{0}, std::size_t{9}, std::size_t{19}}) {
+        state.selected = picked;
+        const render_god_menu view = look_tuning_view(state, fixture_palette(), text);
+        CHECK(view.rows.size() == look_tuning_visible_rows);
+        CHECK(picked_row(view) >= 0);
+    }
+    state.selected = 0;
+    CHECK(picked_row(look_tuning_view(state, fixture_palette(), text)) == 0);
+    state.selected = 19;
+    CHECK(picked_row(look_tuning_view(state, fixture_palette(), text)) == static_cast<int>(look_tuning_visible_rows) - 1);
+    state.entries.resize(3);
+    state.selected = 2;
+    CHECK(look_tuning_view(state, fixture_palette(), text).rows.size() == 3U);
+}

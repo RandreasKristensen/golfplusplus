@@ -1,5 +1,6 @@
 #include "doctest.h"
 
+#include "game/tree_season.h"
 #include "game/weather.h"
 #include "test_support.h"
 
@@ -34,6 +35,13 @@ std::vector<weather_state> weather_over_days(const course_definition& course) {
         out.push_back(weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course, tuning.sky_clock.anchor_unix_ms + i * step));
     }
     return out;
+}
+
+// `course` played at midsummer instead of its own date.
+course_definition at_midsummer(course_definition course) {
+    course.sky.month = 6;
+    course.sky.day = 21;
+    return course;
 }
 
 bool foggy(const weather_kind kind) {
@@ -211,6 +219,7 @@ TEST_CASE("a round of 18 holes mostly sees at most three skies, and fog lies mos
     }
 }
 
+// These rates are a Danish summer's: the courses at midsummer.
 TEST_CASE("each kind of weather comes about as often as it should") {
     const game_tuning& tuning = shipped_content().tuning;
     const double ms_per_hour = 3600000.0 / tuning.sky_clock.game_days_per_real_day;
@@ -233,7 +242,7 @@ TEST_CASE("each kind of weather comes about as often as it should") {
         int run = 0;
         for (int hour = 0; hour < days * 24; ++hour) {
             const weather_state weather =
-                weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course_named(course),
+                weather_at(tuning.weather, tuning.wind, tuning.sky_clock, at_midsummer(course_named(course)),
                            tuning.sky_clock.anchor_unix_ms + static_cast<std::int64_t>(hour * ms_per_hour));
             const int kind = static_cast<int>(weather.kind);
             spells[static_cast<std::size_t>(kind)] += kind != previous ? 1 : 0;
@@ -297,4 +306,58 @@ TEST_CASE("each kind of weather comes about as often as it should") {
     CHECK(course_days / fog_spells > 9.0);
     CHECK(course_days / fog_spells < 25.0);
     CHECK(static_cast<double>(fog_hours) / fog_spells > 10.0);
+}
+
+TEST_CASE("a month's weather number holds at its middle and runs straight to the next, round the new year") {
+    std::array<float, 12> months{};
+    for (std::size_t i = 0; i < months.size(); ++i) {
+        months[i] = static_cast<float>(i);
+    }
+    CHECK(near(season_value(months, day_of_year(1, 15)), 0.0f));
+    CHECK(near(season_value(months, day_of_year(7, 15)), 6.0f));
+    const float late_july = season_value(months, day_of_year(7, 30));
+    CHECK(late_july > 6.0f);
+    CHECK(late_july < 7.0f);
+    // Between the middles of December and January it runs from 11 back to 0.
+    const float new_year = season_value(months, day_of_year(1, 1));
+    CHECK(new_year > 0.0f);
+    CHECK(new_year < 11.0f);
+    CHECK(near(season_value(months, day_of_year(12, 31)), season_value(months, day_of_year(1, 1)), 0.6f));
+}
+
+TEST_CASE("the same course rains and blows more in winter than in summer, and only thunders in the warm months") {
+    const game_tuning& tuning = shipped_content().tuning;
+    const double ms_per_hour = 3600000.0 / tuning.sky_clock.game_days_per_real_day;
+    struct year_part {
+        float rain = 0.0f;
+        float cloud = 0.0f;
+        float wind = 0.0f;
+        float thunder = 0.0f;
+        float fog = 0.0f;
+    };
+    const auto over = [&](const int month, const int day) {
+        course_definition course = course_named("kalo_golf_club");
+        course.sky.month = month;
+        course.sky.day = day;
+        year_part sum;
+        constexpr int hours = 120 * 24;
+        for (int hour = 0; hour < hours; ++hour) {
+            const weather_state weather = weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course,
+                                                     tuning.sky_clock.anchor_unix_ms + static_cast<std::int64_t>(hour * ms_per_hour));
+            sum.rain += weather.rain / hours;
+            sum.cloud += weather.cloud / hours;
+            sum.wind += wind_speed(weather) / hours;
+            sum.thunder += weather.thunder / hours;
+            sum.fog += weather.fog / hours;
+        }
+        return sum;
+    };
+    const year_part winter = over(12, 10);
+    const year_part summer = over(6, 10);
+    CHECK(winter.rain > summer.rain);
+    CHECK(winter.cloud > summer.cloud);
+    CHECK(winter.wind > 1.2f * summer.wind);
+    CHECK(winter.fog > summer.fog);
+    CHECK(summer.thunder > 0.0f);
+    CHECK(winter.thunder < 0.1f * summer.thunder);
 }

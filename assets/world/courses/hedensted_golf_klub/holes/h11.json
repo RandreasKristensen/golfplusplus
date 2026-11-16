@@ -712,36 +712,36 @@
       "type": "bunker",
       "outline": [
         [
-          90.59,
-          6.04
+          90.62,
+          5.98
         ],
         [
-          88.59,
-          10.04
+          88.62,
+          9.98
         ],
         [
-          94.59,
-          20.04
+          93.62,
+          18.98
         ],
         [
-          102.59,
-          25.04
+          102.62,
+          24.98
         ],
         [
-          105.59,
-          24.04
+          105.62,
+          23.98
         ],
         [
-          106.59,
-          18.04
+          106.62,
+          17.98
         ],
         [
-          100.59,
-          15.04
+          100.62,
+          14.98
         ],
         [
-          97.59,
-          8.04
+          97.62,
+          7.98
         ]
       ]
     },
@@ -749,24 +749,57 @@
       "type": "bunker",
       "outline": [
         [
-          364.59,
-          122.04
+          201.62,
+          48.98
         ],
         [
-          359.59,
-          128.04
+          198.62,
+          52.98
         ],
         [
-          361.59,
-          133.04
+          199.62,
+          55.98
         ],
         [
-          368.59,
-          129.04
+          203.62,
+          60.98
         ],
         [
-          368.59,
-          125.04
+          210.62,
+          61.98
+        ],
+        [
+          211.62,
+          56.98
+        ],
+        [
+          205.62,
+          48.98
+        ]
+      ]
+    },
+    {
+      "type": "bunker",
+      "outline": [
+        [
+          364.62,
+          121.98
+        ],
+        [
+          359.62,
+          127.98
+        ],
+        [
+          361.62,
+          132.98
+        ],
+        [
+          368.62,
+          128.98
+        ],
+        [
+          368.62,
+          124.98
         ]
       ]
     }
@@ -774,60 +807,66 @@
   "trees": [
     {
       "position": [
-        18.09,
+        18.12,
         0.0,
-        37.54
+        37.48
       ],
       "trunk_radius": 0.21,
       "trunk_height": 2.48,
       "leaf_radius": 1.51,
-      "leaf_height": 3.03
+      "leaf_height": 3.03,
+      "species": "birch"
     },
     {
       "position": [
-        157.09,
+        157.12,
         0.0,
-        45.54
+        45.48
       ],
       "trunk_radius": 0.19,
       "trunk_height": 2.21,
       "leaf_radius": 1.35,
-      "leaf_height": 2.7
+      "leaf_height": 2.7,
+      "species": "birch"
     },
     {
       "position": [
-        162.09,
+        162.12,
         0.0,
-        44.54
+        44.48
       ],
       "trunk_radius": 0.28,
       "trunk_height": 3.26,
       "leaf_radius": 1.99,
-      "leaf_height": 3.99
+      "leaf_height": 3.99,
+      "species": "birch"
     },
     {
       "position": [
-        155.09,
+        155.12,
         0.0,
-        41.54
+        41.48
       ],
       "trunk_radius": 0.2,
       "trunk_height": 2.37,
       "leaf_radius": 1.45,
-      "leaf_height": 2.89
+      "leaf_height": 2.89,
+      "species": "birch"
     },
     {
       "position": [
-        394.09,
+        394.12,
         0.0,
-        160.54
+        160.48
       ],
       "trunk_radius": 0.5,
       "trunk_height": 5.82,
       "leaf_radius": 3.56,
-      "leaf_height": 7.11
+      "leaf_height": 7.11,
+      "species": "beech"
     }
   ],
+  "bushes": [],
   "source": {
     "type": "osm",
     "tee_latlon": [
@@ -844,7 +883,7 @@
     "hole_way": "way/1249551465",
     "fairway": "osm",
     "aerial": "dk",
-    "aerial_bunkers": 2,
+    "aerial_bunkers": 3,
     "aerial_waters": 0,
     "made_green": false
   }

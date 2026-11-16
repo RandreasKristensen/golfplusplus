@@ -1,6 +1,7 @@
 #include "game/weather.h"
 
 #include "game/sky_clock.h"
+#include "game/tree_season.h"
 #include "physics/vector_math.h"
 
 #include <algorithm>
@@ -296,22 +297,44 @@ float temperature_at(const weather_tuning& tuning, const place_definition& cours
         t.noise_c * (2.0f * noise - 1.0f);
 }
 
+float season_value(const std::array<float, 12>& months, const int day) {
+    // The middle of each month, as a day of the year.
+    constexpr std::array<float, 12> middles = {15.0f, 46.0f, 74.0f, 105.0f, 135.0f, 166.0f,
+                                               196.0f, 227.0f, 258.0f, 288.0f, 319.0f, 349.0f};
+    const float at = static_cast<float>(std::clamp(day, 1, 365));
+    std::size_t before = 11;
+    for (std::size_t i = 0; i < middles.size(); ++i) {
+        if (middles[i] <= at) {
+            before = i;
+        }
+    }
+    const std::size_t after = (before + 1) % 12;
+    const float from = middles[before] > at ? middles[before] - 365.0f : middles[before];
+    const float to = middles[after] < from ? middles[after] + 365.0f : middles[after];
+    const float share = (at - from) / (to - from);
+    return months[before] + (months[after] - months[before]) * share;
+}
+
 weather_state weather_at(const weather_tuning& weather,
                          const wind_tuning& wind,
                          const sky_timeline& clock,
                          const place_definition& course,
                          const std::int64_t unix_ms) {
     const std::uint32_t seed = course_weather_seed(course.id);
-    const double hours = game_day_at(clock, unix_ms) * hours_per_day;
+    const double hours = course_clock_at(clock, course.sky, unix_ms) * hours_per_day;
+    const int day = day_of_year(course.sky.month, course.sky.day);
+    const weather_season_tuning& year = weather.seasons;
+    const float storm_bias = season_value(year.storm_bias, day);
     weather_state out;
-    const float lagged = storm_track(weather, seed).at(hours - static_cast<double>(weather.rain_lag_hours));
-    out.cloud = cloud_of(weather, storm_track(weather, seed).at(hours), lagged);
+    const float lagged = storm_track(weather, seed).at(hours - static_cast<double>(weather.rain_lag_hours)) + storm_bias;
+    out.cloud = cloud_of(weather, storm_track(weather, seed).at(hours) + storm_bias, lagged);
     out.rain = rain_of(weather, lagged, out.cloud);
-    out.wind = wind_at(wind, seed, hours, out.rain);
+    out.wind = wind_at(wind, seed, hours, out.rain) * season_value(year.wind_scale, day);
     const float damp = weather.fog_regime_weight * noise_track(seed, regime_stream, weather.regime_hours).at(hours) +
-        (1.0f - weather.fog_regime_weight) * noise_track(seed, damp_stream, weather.fog_hours).at(hours);
+        (1.0f - weather.fog_regime_weight) * noise_track(seed, damp_stream, weather.fog_hours).at(hours) +
+        season_value(year.fog_bias, day);
     out.fog = ramp(damp, weather.fog_start, weather.fog_full);
-    out.thunder = ramp(lagged, weather.thunder_start, weather.thunder_full);
+    out.thunder = ramp(lagged, weather.thunder_start, weather.thunder_full) * season_value(year.thunder_scale, day);
     out.wetness = wetness_at(weather, seed, hours);
     out = coupled_weather(out, weather);
     out.temperature_c = temperature_at(weather, course, hours, out.cloud, out.rain,

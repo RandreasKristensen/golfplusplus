@@ -9,6 +9,7 @@
 
 #include "physics/ground_mesh.h"
 #include "game/hole_data.h"
+#include "game/tree_season.h"
 
 #include <optional>
 #include <string>
@@ -89,6 +90,9 @@ struct course_world_definition {
     // it (game/sky_clock.h).
     float latitude_deg = 0.0f;
     float longitude_deg = 0.0f;
+    // The day of the year it always is there (its course's sky): how much
+    // of each tree is in leaf (game/tree_season.h).
+    int day_of_year = midsummer_day_of_year;
     // One per hole, in hole order (hole_starts[i].hole_index == i). A course
     // begins at hole 1's start.
     std::vector<course_world_hole_start> hole_starts;

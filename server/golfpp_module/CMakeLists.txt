@@ -113,6 +113,7 @@ set(GOLFPP_SHARED_SOURCES
   src/game/hole_loader.cpp
   src/game/item_catalog.cpp
   src/game/loadout.cpp
+  src/game/address_view.cpp
   src/game/movement_step.cpp
   src/game/sent_setup.cpp
   src/game/floodlights.cpp
@@ -124,6 +125,7 @@ set(GOLFPP_SHARED_SOURCES
   src/game/pixel_font_data.cpp
   src/game/area_solids.cpp
   src/game/play_area.cpp
+  src/game/tree_season.cpp
   src/game/progress_rules.cpp
   src/game/progression.cpp
   src/game/reward_rules.cpp

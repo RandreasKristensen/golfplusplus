@@ -390,7 +390,11 @@ Both are downloaded once: every later import, moved hole or new ground grid in
 the same area reads the cache with no network at all. Both require
 attribution: see `docs/todo/launch_todo.md`.
 
-The `ground` grid covers every hole plus `ground.margin`, with heights
+The `ground` grid covers the course world's box (`osm_ground.world_box`): the
+game's course map round the holes, turned and shaped as its paper shows it,
+plus `ground.margin`, so the map is land to its edges and a hole at the
+course's edge looks out over more of it. The aerial reading covers the same
+box. Its heights are
 relative to hole 1's start: each hole's tee height above sea level goes in
 `source.tee_elevation`, and the course world puts each hole start at that
 height relative to hole 1. It is stored as `heights_cm`, one line per grid row
@@ -531,6 +535,17 @@ assets by default:
     ...
 ```
 
+The import is built and verified in memory first; with any verifier error it
+returns nonzero, writes only the contact sheet and OSM to-do (under
+`--sheet-out`) and leaves the course folder untouched. A verified import is
+staged beside its targets and replaced file by file (`osm_publish.py`); a failed
+replacement restores the previous files. The converter replaces only the files
+it generates (`course.json`, `world.json`, the holes it lists, honouring
+`--no-course`/`--no-world`) and never deletes anything, so hand-made art and
+other holes stay. A process killed mid-publication leaves `.import_incomplete`
+in the folder and `verify_osm_import.py` reports that course as an error until
+an import completes.
+
 (`tooling/art/make_art.py` then adds `sky.bmp` and `land.bmp`.) The course
 manifest's references are relative to its folder:
 
@@ -619,7 +634,10 @@ OSM leaves out from photos and heights (`osm_aerial.py`, the `aerial`
 config): a hole's fairway when OSM maps none (`source.fairway` `"aerial"`),
 bunkers and ponds clear of OSM's (`source.aerial_bunkers`,
 `source.aerial_waters`), paths where OSM maps none (cart paths, above), and every tree, each at its measured height and
-crown in place of trees planted through OSM's woods. OSM's layout (hole
+crown in place of trees planted through OSM's woods: those no hole takes
+(further than `max_distance_from_line_m` from every line, or past a hole's
+`max_per_hole`) are the land's, the course world's `trees`, one per line.
+OSM's layout (hole
 lines, tees, greens) always comes first; mapping a fairway in OSM still beats
 the photo's.
 
@@ -774,6 +792,18 @@ course by its own `--id`, with `--course-name` for a better name than OSM's:
 py -3 osm_golf_convert.py --id W143371710                                    # Mollerup Golf Club
 py -3 osm_golf_convert.py --id W1010269501 --course-name "Mollerup Par 3"
 ```
+
+### A course's day of the year
+
+Every course is played on one day of the year, its own, so the courses show
+the seasons between them: the trees' leaves, colours and how much a crown
+slows a ball follow it (`assets/play/tuning/trees.json`). Its `courses` entry
+in `osm_golf_config.json` sets its `sky` (`date` as `"MM-DD"`, and
+`utc_offset_hours`: 2 in Danish summer time, else 1, and `clock_shift_hours`:
+how far its clock runs ahead of the shared one, spread round the day so the
+courses stand at different times of day at once) and its `air` (DMI's
+1991-2020 normals for that day: mean temperature and daily range, which set
+how thin the air is), so a re-import keeps them.
 
 ### Courses without hole numbers
 

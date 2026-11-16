@@ -85,30 +85,6 @@ std::vector<float> make_cylinder_vertices(const int segments) {
     return vertices;
 }
 
-std::vector<float> make_cone_vertices(const int segments) {
-    std::vector<float> vertices;
-    vertices.reserve(static_cast<std::size_t>(segments) * 54);
-
-    const glm::vec3 tip(0.0f, 1.0f, 0.0f);
-    for (int i = 0; i < segments; ++i) {
-        const float a0 = 2.0f * glm::pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
-        const float a1 = 2.0f * glm::pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
-        const glm::vec3 p0(std::cos(a0), 0.0f, std::sin(a0));
-        const glm::vec3 p1(std::cos(a1), 0.0f, std::sin(a1));
-        const glm::vec3 face_normal = glm::normalize(glm::cross(tip - p0, p1 - p0));
-
-        append_mesh_vertex(vertices, p0, face_normal);
-        append_mesh_vertex(vertices, p1, face_normal);
-        append_mesh_vertex(vertices, tip, face_normal);
-
-        append_mesh_vertex(vertices, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f));
-        append_mesh_vertex(vertices, p0, glm::vec3(0.0f, -1.0f, 0.0f));
-        append_mesh_vertex(vertices, p1, glm::vec3(0.0f, -1.0f, 0.0f));
-    }
-
-    return vertices;
-}
-
 std::vector<float> make_xy_quad_vertices() {
     std::vector<float> vertices;
     const glm::vec3 normal(0.0f, 0.0f, 1.0f);

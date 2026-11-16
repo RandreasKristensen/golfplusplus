@@ -25,6 +25,9 @@ bool framebuffer::init(const int width, const int height, const framebuffer_form
     case framebuffer_color::signed_hdr:
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width_, height_, 0, GL_RGBA, GL_FLOAT, nullptr);
         break;
+    case framebuffer_color::exact:
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width_, height_, 0, GL_RGBA, GL_FLOAT, nullptr);
+        break;
     }
     const bool mipmaps = format.linear && format.mipmaps;
     if (mipmaps) {

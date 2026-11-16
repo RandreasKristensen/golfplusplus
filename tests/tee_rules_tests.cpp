@@ -79,16 +79,16 @@ TEST_CASE("tee hub anchors: shared loader rejects incomplete or non-practice hub
     REQUIRE(root);
     (*root)["hub"] = {{"book", {{"position", {0, 0, 16}}, {"reach", 2}}}};
     (*root)["bus_stop"] = {{"position", {6, 0, 16}}, {"heading", 1.5}};
-    const auto world = parse_world_from_text(root->dump());
+    const auto world = parse_world_from_text(root->dump()).value;
     REQUIRE(world);
     REQUIRE(world->hub);
     CHECK(world->hub->book.reach == 2);
     REQUIRE(world->bus_stop);
     CHECK(world->bus_stop->position.x == 6);
     CHECK(world->bus_stop->heading == 1.5f);
-    CHECK(!parse_course_world_from_text(root->dump(), course));
+    CHECK(!parse_course_world_from_text(root->dump(), course).value);
     root->erase("hub");
-    CHECK(parse_course_world_from_text(root->dump(), course));
+    CHECK(parse_course_world_from_text(root->dump(), course).value);
     (*root)["bus_stop"].erase("heading");
-    CHECK(!parse_course_world_from_text(root->dump(), course));
+    CHECK(!parse_course_world_from_text(root->dump(), course).value);
 }

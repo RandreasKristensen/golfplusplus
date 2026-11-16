@@ -1287,3 +1287,17 @@ TEST_CASE("a body with friction scrapes to a stop along what it presses against;
     CHECK(along(1.0f) < along(0.9f));
     CHECK(along(1.0f) > 0.0f);
 }
+
+TEST_CASE("a path through a bush counts its tangle many times over a crown's leaves") {
+    solid crown = test_solid(solid_shape::cone, solid_kind::leaves, glm::vec3(0.0f, 0.0f, 0.0f), 2.0f, 2.0f);
+    crown.porous = true;
+    solid bush = crown;
+    bush.density = 8.0f;
+    const glm::vec3 from(-3.0f, 0.3f, 0.0f);
+    const glm::vec3 to(3.0f, 0.3f, 0.0f);
+    const float through_crown = porous_path(from, to, {crown}, build_solid_grid({crown}, 4.0f));
+    const float through_bush = porous_path(from, to, {bush}, build_solid_grid({bush}, 4.0f));
+    CHECK(through_crown > 1.0f);
+    CHECK(through_crown < 6.0f);
+    CHECK(near(through_bush, 8.0f * through_crown));
+}

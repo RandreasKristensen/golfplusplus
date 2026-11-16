@@ -132,6 +132,7 @@ golfpp_library(golfpp-game
     src/game/body_contact.cpp
     src/game/golf_cart.cpp
     src/game/bag_handling.cpp
+    src/game/bag_sync.cpp
     src/game/golf_bag.cpp
     src/game/gear_paint.cpp
     src/game/golfer.cpp
@@ -163,6 +164,8 @@ golfpp_library(golfpp-game
     src/game/pixel_font_data.cpp
     src/game/area_solids.cpp
     src/game/play_area.cpp
+    src/game/tree_season.cpp
+    src/game/tree_looks.cpp
     src/game/progress_rules.cpp
     src/game/progression.cpp
     src/game/rangefinder.cpp
@@ -222,6 +225,8 @@ golfpp_library(golfpp-render-data
     src/renderer/floodlight_batch.cpp
     src/renderer/hole_sign_batch.cpp
     src/renderer/water_batch.cpp
+    src/renderer/grass_field.cpp
+    src/renderer/tree_model.cpp
     src/renderer/hole_sign_face.cpp
     src/renderer/god_menu_overlay.cpp
     src/renderer/hud_overlay.cpp
@@ -341,18 +346,23 @@ endif()
 golfpp_library(golfpp-app-logic
     src/audio/audio_manifest.cpp
     src/audio/sound_placement.cpp
+    src/audio/underwater_filter.cpp
+    src/audio/voice_pool.cpp
     src/core/god_menu.cpp
     src/core/input.cpp
     src/core/key_bindings.cpp
     src/core/light_frame.cpp
     src/core/look_tuning.cpp
     src/core/menu_controls.cpp
+    src/core/progress_saver.cpp
     src/core/online_menus.cpp
+    src/core/play_screen.cpp
     src/core/tee_book.cpp
     src/core/render_frame.cpp
     src/core/render_gear.cpp
     src/core/render_online.cpp
     src/core/render_putting.cpp
+    src/core/scene_signs.cpp
     src/core/settings_menu.cpp
     src/core/sky_frame.cpp
     src/core/startup_flow.cpp
@@ -399,6 +409,7 @@ add_executable(golfpp
     src/renderer/hole_sign_renderer.cpp
     src/renderer/lighting_uniforms.cpp
     src/renderer/water_renderer.cpp
+    src/renderer/grass_renderer.cpp
     src/renderer/eyepiece_pass.cpp
     src/renderer/overlay_pass.cpp
     src/renderer/prop_renderer.cpp
@@ -538,6 +549,8 @@ if (GOLFPP_BUILD_TESTS)
         tests/account_rules_tests.cpp
         tests/audio_manifest_tests.cpp
         tests/sound_placement_tests.cpp
+        tests/underwater_filter_tests.cpp
+        tests/voice_pool_tests.cpp
         tests/shot_ability_tests.cpp
         tests/shot_number_tests.cpp
         tests/golf_bag_tests.cpp
@@ -566,6 +579,9 @@ if (GOLFPP_BUILD_TESTS)
         tests/gameplay_tests.cpp
         tests/god_menu_tests.cpp
         tests/hazard_tests.cpp
+        tests/grass_field_tests.cpp
+        tests/tree_season_tests.cpp
+        tests/tree_model_tests.cpp
         tests/hole_sign_tests.cpp
         tests/item_tests.cpp
         tests/tee_box_tests.cpp
@@ -581,6 +597,8 @@ if (GOLFPP_BUILD_TESTS)
         tests/social_dap_tests.cpp
         tests/hub_flow_tests.cpp
         tests/online_play_tests.cpp
+        tests/live_world_tests.cpp
+        tests/bag_sync_tests.cpp
         tests/scorecard_tests.cpp
         tests/sync_harness.cpp
         tests/sync_tests.cpp
@@ -589,8 +607,10 @@ if (GOLFPP_BUILD_TESTS)
         tests/tee_rules_tests.cpp
         tests/play_rules_tests.cpp
         tests/physics_tests.cpp
+        tests/swept_contact_tests.cpp
         tests/profiling_tests.cpp
         tests/progression_tests.cpp
+        tests/save_persistence_tests.cpp
         tests/rangefinder_tests.cpp
         tests/putting_read_tests.cpp
         tests/render_culling_tests.cpp
@@ -603,6 +623,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/shadow_map_tests.cpp
         tests/shot_simulation_tests.cpp
         tests/sky_clock_tests.cpp
+        tests/water_light_tests.cpp
         tests/weather_tests.cpp
         tests/weather_frame_tests.cpp
         tests/sky_visibility_tests.cpp

@@ -21,10 +21,6 @@ std::vector<float> make_cylinder_vertices(int segments);
 // Unit sphere: radius 1, poles on +/-y.
 std::vector<float> make_sphere_vertices(int latitude_segments, int longitude_segments);
 
-// Unit cone: radius 1 base in XZ at y = 0, tip at y = 1, plus a base disc;
-// each side facet carries its outward normal.
-std::vector<float> make_cone_vertices(int segments);
-
 // Two triangles covering [-1, 1] in XY at z = 0, facing +Z.
 std::vector<float> make_xy_quad_vertices();
 // Two triangles covering [-1, 1] in XZ at y = 0, facing +Y.
@@ -42,4 +38,3 @@ std::vector<glm::vec3> mesh_positions_of(const std::vector<float>& interleaved);
 inline constexpr int primitive_cylinder_segments = 8;
 inline constexpr int primitive_sphere_latitude_segments = 8;
 inline constexpr int primitive_sphere_longitude_segments = 12;
-inline constexpr int primitive_cone_segments = 10;

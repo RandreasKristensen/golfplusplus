@@ -63,6 +63,23 @@ audio_manifest_parse_result parse_audio_manifest(const std::string& text) {
     audio_manifest manifest;
     manifest.master_volume = clamped_volume(json_float(*root, "master_volume").value_or(1.0f));
 
+    const json* voices = json_object(*root, "voices");
+    const std::optional<int> channels = voices != nullptr ? json_int(*voices, "channels") : std::nullopt;
+    const std::optional<int> loops = voices != nullptr ? json_int(*voices, "loops") : std::nullopt;
+    if (!channels || !loops || *channels < 1 || *loops < 0 || *loops >= *channels) {
+        return fail("audio manifest needs voices with channels and loops (0 <= loops < channels)");
+    }
+    manifest.voices = audio_voices{*channels, *loops};
+
+    const json* underwater = json_object(*root, "underwater");
+    const std::optional<float> cutoff = underwater != nullptr ? json_float(*underwater, "cutoff_hz") : std::nullopt;
+    const std::optional<float> gain = underwater != nullptr ? json_float(*underwater, "gain") : std::nullopt;
+    const std::optional<float> glide = underwater != nullptr ? json_float(*underwater, "glide_seconds") : std::nullopt;
+    if (!cutoff || !gain || !glide || *cutoff < 50.0f || *cutoff > 20000.0f || *gain < 0.0f || *gain > 1.0f || *glide <= 0.0f) {
+        return fail("audio manifest needs underwater with cutoff_hz (50..20000), gain (0..1) and glide_seconds (> 0)");
+    }
+    manifest.underwater = underwater_sound{*cutoff, *gain, *glide};
+
     if (root->contains("categories")) {
         const json* categories = json_object(*root, "categories");
         if (categories == nullptr) {

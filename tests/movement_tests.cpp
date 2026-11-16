@@ -1,11 +1,13 @@
 #include "doctest.h"
 
+#include "game/address_view.h"
 #include "game/body_contact.h"
 #include "game/game_state.h"
 #include "game/golf_cart.h"
 #include "game/motion_sync.h"
 #include "game/movement_step.h"
 #include "game/play_area.h"
+#include "game/sent_setup.h"
 #include "game/server_errors.h"
 #include "movement_rules.h"
 #include "physics/vector_math.h"
@@ -13,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <vector>
 
 namespace {
@@ -52,7 +55,6 @@ move_world server_world(const game_state& state) {
 mover_state joined_at(const glm::vec3& position, const game_tuning& tuning) {
     mover_state mover = placed_mover(mover_state{}, position);
     mover.credit_seconds = tuning.server.max_motion_gap_seconds;
-    mover.slack_left = tuning.server.motion_distance_slack;
     return mover;
 }
 
@@ -250,21 +252,144 @@ TEST_CASE("steps on foot start where I was put when it is near the server's, els
     CHECK(horizontal_distance(claimed.shown.position, joined.position) < 0.001f);
 }
 
-TEST_CASE("addressing the ball is a claim the server checks: too far is refused, beside my resting ball is fine") {
+TEST_CASE("an idle step's start never lifts me: my feet stay the server's, settled where I start") {
+    game_state state = online_walker();
+    const mover_state joined = joined_at(state.player.position, state.tuning);
+    net_motion motion = current_motion(state);
+    motion.mode = motion_mode::idle;
+    motion.client_time = 5.0;
+    move_input stand;
+    stand.yaw = quantise_yaw(state.player.yaw);
+    for (const float height : {500.0f, -500.0f}) {
+        const glm::vec3 lifted = joined.position + glm::vec3(0.0f, height, 0.0f);
+        const move_outcome idle = play_move(joined, std::nullopt, me, move_request{motion, 1, lifted, {move_run{stand, 1}}},
+                                            1.0f, server_world(state));
+        REQUIRE(idle.error.empty());
+        CHECK(near(idle.mover.position, joined.position));
+        CHECK(near(idle.shown.position, joined.position));
+        CHECK(idle.mover.vertical.grounded);
+    }
+    // Put a little aside: there, on the surface, whatever height was claimed.
+    const glm::vec3 aside = joined.position + glm::vec3(0.4f, 500.0f, 0.0f);
+    const move_outcome put = play_move(joined, std::nullopt, me, move_request{motion, 1, aside, {move_run{stand, 1}}}, 1.0f,
+                                       server_world(state));
+    REQUIRE(put.error.empty());
+    CHECK(near(put.mover.position.x, aside.x));
+    CHECK(near(put.mover.position.y, terrain_height(state.area, aside), 0.0001f));
+    CHECK(near(put.mover.vertical.y, put.mover.position.y));
+}
+
+TEST_CASE("steps on foot cannot start on the far side of something solid") {
     game_state state = online_walker();
     const mover_state joined = joined_at(state.player.position, state.tuning);
     move_world world = server_world(state);
+    const float wall_x = joined.position.x + 0.35f;
+    solid wall;
+    wall.shape = solid_shape::wall;
+    wall.kind = solid_kind::net;
+    wall.base = glm::vec3(wall_x, joined.position.y - 1.0f, joined.position.z - 3.0f);
+    wall.end = glm::vec3(wall_x, joined.position.y - 1.0f, joined.position.z + 3.0f);
+    wall.radius = 0.02f;
+    wall.height = 4.0f;
+    wall.stops_walker = true;
+    world.walker_obstacles.push_back(wall);
+    net_motion motion = current_motion(state);
+    motion.mode = motion_mode::idle;
+    motion.client_time = 5.0;
+    move_input stand;
+    stand.yaw = quantise_yaw(state.player.yaw);
+    const glm::vec3 beyond = joined.position + glm::vec3(0.95f * state.tuning.server.step_start_tolerance, 0.0f, 0.0f);
+    REQUIRE(beyond.x > wall_x);
+    const move_outcome put = play_move(joined, std::nullopt, me, move_request{motion, 1, beyond, {move_run{stand, 1}}}, 1.0f,
+                                       world);
+    REQUIRE(put.error.empty());
+    CHECK(put.mover.position.x < wall_x - state.tuning.player.body_radius);
+}
+
+TEST_CASE("at address and in the swing I stand to my own ball as my setup puts me, never where I claim") {
+    game_state state = online_walker();
+    const mover_state joined = joined_at(state.player.position, state.tuning);
+    move_world world = server_world(state);
+    world.club = &state.clubs[state.selected_club];
+    world.hand = handedness::left;
     net_motion address = current_motion(state);
     address.mode = motion_mode::address;
     address.client_time = 5.0;
-    address.position = joined.position + glm::vec3(300.0f, 0.0f, 0.0f);
-    CHECK(play_move(joined, std::nullopt, me, move_request{address, 1, joined.position, {}}, 0.1f, world).error ==
-          error_too_fast);
+    // A slow claim a step away, with no ball of mine: nothing to stand to.
     address.position = joined.position + glm::vec3(0.5f, 0.0f, 0.0f);
-    const move_outcome at_ball = play_move(joined, std::nullopt, me, move_request{address, 1, joined.position, {}}, 0.1f, world);
-    REQUIRE(at_ball.error.empty());
-    CHECK(near(at_ball.mover.position, address.position));
-    CHECK(at_ball.mover.mode == motion_mode::address);
+    const move_outcome no_ball = play_move(joined, std::nullopt, me, move_request{address, 1, joined.position, {}}, 0.1f, world);
+    CHECK(no_ball.error == error_too_far);
+    CHECK(near(no_ball.mover.position, joined.position));
+    // My ball out of reach: the same.
+    const glm::vec3 far_ball = joined.position + glm::vec3(30.0f, 0.0f, 0.0f);
+    world.own_ball = glm::vec3(far_ball.x, terrain_height(state.area, far_ball), far_ball.z);
+    CHECK(play_move(joined, std::nullopt, me, move_request{address, 1, joined.position, {}}, 0.1f, world).error ==
+          error_too_far);
+
+    // Beside it: wherever I claim, I stand where the setup puts me, and
+    // turning my aim swings me round the ball.
+    const glm::vec3 near_ball = joined.position + glm::vec3(1.0f, 0.0f, 0.0f);
+    const glm::vec3 ball(near_ball.x, terrain_height(state.area, near_ball), near_ball.z);
+    world.own_ball = ball;
+    shot_setup stood;
+    stood.ball_start = ball;
+    stood.hand = handedness::left;
+    stood.ball_position = 0.3f;
+    mover_state mover = joined;
+    std::optional<glm::vec3> last;
+    for (int turn = 0; turn < 8; ++turn) {
+        stood.aim_angle = -2.0f + 0.5f * static_cast<float>(turn);
+        address.mode = turn % 2 == 0 ? motion_mode::address : motion_mode::swing;
+        address.setup = sent_setup_of(stood);
+        address.position = joined.position + glm::vec3(0.0f, 40.0f, -2.0f);
+        address.client_time += 1.0;
+        const move_outcome stance = play_move(mover, std::nullopt, me, move_request{address, 1, mover.position, {}}, 0.1f, world);
+        REQUIRE(stance.error.empty());
+        const sent_setup kept = clamped_sent_setup(address.setup, *world.club, state.tuning.setup);
+        CHECK(stance.shown.setup == kept);
+        const glm::vec3 expected = stance_at_address(state.area, with_sent_setup(stood, kept), state.tuning).position;
+        CHECK(near(stance.mover.position, expected));
+        CHECK(near(stance.shown.position, expected));
+        CHECK(stance.mover.mode == address.mode);
+        if (last) {
+            CHECK(horizontal_distance(*last, expected) > 0.1f);
+        }
+        last = expected;
+        mover = stance.mover;
+    }
+    // Stepping off from the stance: an idle motion keeps no setup.
+    net_motion off = current_motion(state);
+    off.mode = motion_mode::idle;
+    off.client_time = address.client_time + 1.0;
+    off.setup = address.setup;
+    const move_outcome stood_off = play_move(mover, std::nullopt, me, move_request{off, 1, mover.position, {}}, 0.1f, world);
+    REQUIRE(stood_off.error.empty());
+    CHECK(stood_off.shown.setup == sent_setup{});
+    CHECK(near(stood_off.mover.position, mover.position));
+}
+
+TEST_CASE("riding along I sit in the seat my cart's row gives me, never where I claim") {
+    game_state state = online_walker();
+    const mover_state joined = joined_at(state.player.position, state.tuning);
+    move_world world = server_world(state);
+    net_motion ride = current_motion(state);
+    ride.mode = motion_mode::ride;
+    ride.client_time = 5.0;
+    ride.position = joined.position + glm::vec3(3.0f, 2.0f, 0.0f);
+    const move_outcome unseated = play_move(joined, std::nullopt, me, move_request{ride, 1, joined.position, {}}, 0.5f, world);
+    CHECK(unseated.error == error_not_in_cart);
+    CHECK(near(unseated.mover.position, joined.position));
+
+    const glm::vec3 parked = joined.position + glm::vec3(2.0f, 0.0f, 1.0f);
+    const cart_pose ridden{glm::vec3(parked.x, terrain_height(state.area, parked), parked.z), 0.7f};
+    world.ridden = ridden;
+    const move_outcome seated = play_move(joined, std::nullopt, me, move_request{ride, 1, joined.position, {}}, 0.5f, world);
+    REQUIRE(seated.error.empty());
+    const glm::vec3 seat = seat_position(ridden, cart_seat::passenger, state.tuning.cart);
+    const glm::vec3 expected(seat.x, terrain_height(state.area, seat), seat.z);
+    CHECK(near(seated.mover.position, expected));
+    CHECK(near(seated.shown.position, expected));
+    CHECK(seated.mover.mode == motion_mode::ride);
 }
 
 TEST_CASE("at the wheel the server steps my cart, refuses steps without the wheel, and walking takes me off it") {

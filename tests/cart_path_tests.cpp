@@ -150,8 +150,108 @@ TEST_CASE("carts get the path's numbers on a cart path's top, the ground's off i
           surfaces.fairway.rolling_resistance);
     CHECK(surfaces.path.rolling_resistance < surfaces.rough.rolling_resistance);
     CHECK(surfaces.path.grip > surfaces.rough.grip);
-    CHECK(cart_ground_at(area, tuning(), 0.0f, glm::vec3(30.0f, 0.0f, 100.0f)).water_depth == 0.0f);
-    CHECK(cart_ground_at(area, tuning(), 0.0f, glm::vec3(30.0f, 0.0f, 104.0f)).water_depth > 0.0f);
+    CHECK(cart_ground_at(area, tuning(), 0.0f, anchor_on_terrain(area, glm::vec3(30.0f, 0.0f, 100.0f))).immersion == 0.0f);
+    CHECK(cart_ground_at(area, tuning(), 0.0f, anchor_on_terrain(area, glm::vec3(30.0f, 0.0f, 104.0f))).immersion > 0.0f);
+}
+
+namespace {
+const cart_spec& shipped_cart_spec() {
+    return *shipped_content().items.find(shipped_content().default_loadout.cart)->cart;
+}
+
+// How far under the pond's surface wheels at `cart`'s pose are, in metres.
+float immersion_of(const cart_mover& cart, const terrain_sample& pond) {
+    return (pond.water_level - cart.pose.position.y) * tuning().scale.meters_per_world_unit;
+}
+}
+
+TEST_CASE("a cart in the air over deep water falls on, and sinks only once its wheels are under deeper than it wades") {
+    const play_area area = area_with_roads({path_hole()}, {across_road});
+    const cart_spec& spec = shipped_cart_spec();
+    const std::vector<solid> none;
+    const cart_world world{area, tuning(), spec, 0.0f, 1.0f, none, nullptr};
+    const terrain_sample pond = sample_area(area, glm::vec3(30.0f, 0.0f, 104.0f));
+    REQUIRE(pond.material == terrain_material::water);
+    REQUIRE((pond.water_level - pond.point.y) * tuning().scale.meters_per_world_unit > 2.0f * spec.wade_depth_m);
+
+    // A metre over the water: the next step it is still upright, falling.
+    cart_mover cart;
+    cart.pose = cart_pose{glm::vec3(30.0f, pond.water_level + 1.0f / tuning().scale.meters_per_world_unit, 104.0f), 0.0f};
+    cart.vertical = vertical_body{cart.pose.position.y, 0.0f, false};
+    const cart_mover next = step_cart_mover(cart, cart_controls{}, world).after;
+    CHECK(next.motion.condition == cart_condition::upright);
+    CHECK(!next.vertical.grounded);
+    CHECK(next.pose.position.y < cart.pose.position.y);
+
+    // On down until it sinks: only as its wheels pass its wade depth under.
+    cart_mover falling = next;
+    float deepest_upright = immersion_of(cart, pond);
+    for (int step = 0; step < 1000 && falling.motion.condition == cart_condition::upright; ++step) {
+        deepest_upright = std::max(deepest_upright, immersion_of(falling, pond));
+        const cart_mover after = step_cart_mover(falling, cart_controls{}, world).after;
+        if (after.motion.condition == cart_condition::upright) {
+            falling = after;
+        } else {
+            falling.motion = after.motion;
+        }
+    }
+    REQUIRE(falling.motion.condition == cart_condition::sunk);
+    CHECK(immersion_of(falling, pond) > spec.wade_depth_m);
+    CHECK(falling.pose.position.y > pond.point.y);  // in the water, not yet on its floor
+    CHECK(deepest_upright < spec.wade_depth_m + 0.1f);
+}
+
+TEST_CASE("a cart driven off its bridge's side drops into the pond and sinks there, not at the bridge's height") {
+    const play_area area = area_with_roads({path_hole()}, {across_road});
+    const cart_spec& spec = shipped_cart_spec();
+    const std::vector<solid> none;
+    const cart_world world{area, tuning(), spec, 0.0f, 1.0f, none, nullptr};
+    const terrain_sample bridge = sample_area(area, glm::vec3(30.0f, 0.0f, 100.0f));
+    REQUIRE(path_under(area, bridge.point) != nullptr);
+    const terrain_sample pond = sample_area(area, glm::vec3(30.0f, 0.0f, 104.0f));
+
+    // On the bridge, facing across it, then full ahead off its edge.
+    cart_mover cart;
+    cart.pose = cart_pose{bridge.point, yaw_towards(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f))};
+    cart.motion.yaw = cart.pose.yaw;
+    cart.vertical = vertical_body{bridge.point.y, 0.0f, true};
+    bool left_bridge = false;
+    bool upright_off_it = false;
+    for (int step = 0; step < 2000 && cart.motion.condition == cart_condition::upright; ++step) {
+        const bool over_open_water = path_under(area, cart.pose.position) == nullptr &&
+            sample_area(area, cart.pose.position).material == terrain_material::water;
+        cart_mover after = step_cart_mover(cart, cart_controls{1.0f, 0.0f}, world).after;
+        if (over_open_water && !left_bridge) {
+            left_bridge = true;
+            upright_off_it = after.motion.condition == cart_condition::upright;
+        }
+        cart = after;
+    }
+    CHECK(left_bridge);
+    CHECK(upright_off_it);
+    REQUIRE(cart.motion.condition == cart_condition::sunk);
+    CHECK(immersion_of(cart, pond) > spec.wade_depth_m);
+    CHECK(cart.pose.position.y < bridge.point.y);
+}
+
+TEST_CASE("a cart drives along its bridge over the pond and off the far side, upright and dry") {
+    const play_area area = area_with_roads({path_hole()}, {across_road});
+    const std::vector<solid> none;
+    const cart_world world{area, tuning(), shipped_cart_spec(), 0.0f, 1.0f, none, nullptr};
+    const glm::vec3 start = anchor_on_terrain(area, glm::vec3(16.0f, 0.0f, 100.0f));
+    REQUIRE(path_under(area, start) != nullptr);
+    cart_mover cart;
+    cart.pose = cart_pose{start, yaw_towards(glm::vec3(0.0f), glm::vec3(1.0f, 0.0f, 0.0f))};
+    cart.motion.yaw = cart.pose.yaw;
+    cart.vertical = vertical_body{start.y, 0.0f, true};
+    bool crossed_water = false;
+    for (int step = 0; step < 2000 && cart.pose.position.x < 39.0f; ++step) {
+        cart = step_cart_mover(cart, cart_controls{1.0f, 0.0f}, world).after;
+        REQUIRE(cart.motion.condition == cart_condition::upright);
+        crossed_water = crossed_water || sample_area(area, cart.pose.position).material == terrain_material::water;
+    }
+    CHECK(crossed_water);
+    CHECK(cart.pose.position.x >= 39.0f);
 }
 
 TEST_CASE("a cart takes a path's edge one pair of wheels at a time: half on, its grip is halfway") {

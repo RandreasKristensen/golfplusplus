@@ -65,7 +65,7 @@ TEST_CASE("scorecard: a fresh four-player group ignores holed shot history") {
                                                      setup, setup.ball_start, true));
         }
     }
-    watch_room(state, 0.0f);
+    update_online_play(state, 0.0f);
     const scorecard_data card = frame_card(state);
     REQUIRE(card.players.size() == 4U);
     for (const scorecard_player& player : card.players) {
@@ -120,24 +120,24 @@ TEST_CASE("scorecard: joining preserves my name and current hole without complet
 TEST_CASE("scorecard: a new member round replaces all previous scores and a rejoin has no history") {
     game_state state = grouped_game();
     state.online.players[2].round_strokes = {4, 0, 3};
-    watch_room(state, 0.0f);
+    update_online_play(state, 0.0f);
     CHECK(frame_card(state).players[1].total_strokes == 7);
     state.online.players[2].round_strokes = {0, 0, 0};
     state.online.balls[2] = room_ball{1, state.holes[1].tee_position, 2, false};
-    watch_room(state, 0.0f);
+    update_online_play(state, 0.0f);
     CHECK((frame_card(state).players[1].strokes == std::vector<int>{0, 0, 0}));
     state.online.players[2].round_strokes = {0, 5, 0};
-    watch_room(state, 0.0f);
+    update_online_play(state, 0.0f);
     CHECK((frame_card(state).players[1].strokes == std::vector<int>{0, 5, 0}));
 
     const room_player returning = state.online.players[2];
     state.online.players.erase(2);
     state.online.balls.erase(2);
-    watch_room(state, 0.0f);
+    update_online_play(state, 0.0f);
     CHECK(frame_card(state).players.size() == 1U);
     state.online.players[2] = returning;
     state.online.players[2].round_strokes = {0, 0, 0};
-    watch_room(state, 0.0f);
+    update_online_play(state, 0.0f);
     CHECK(frame_card(state).players[1].total_strokes == 0);
 }
 

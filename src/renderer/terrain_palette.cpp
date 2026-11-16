@@ -8,6 +8,8 @@ glm::vec3 terrain_material_color(const ground_colors& colors, const terrain_mate
         return glm::mix(colors.fairway, colors.fairway_edge, edge_amount);
     case terrain_material::rough:
         return colors.rough;
+    case terrain_material::heavy_rough:
+        return colors.heavy_rough;
     case terrain_material::green:
         return colors.green;
     case terrain_material::bunker:
