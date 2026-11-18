@@ -136,7 +136,7 @@ std::uint64_t next_shot_seed(const game_state& state) {
 
 void record_shot(game_state& state, const shot_setup& setup) {
     if (!is_online(state)) {
-        if (state.ball && state.ball->kind == ball_kind::scored) {
+        if (state.place.rules.shot_xp && state.ball && state.ball->kind == ball_kind::scored) {
             award_skill_xp(state, state.rewards.shot);
         }
         return;
@@ -377,6 +377,7 @@ void request_tee_action(game_state& state, net_command command) {
             for (const auto& course : load_courses(state.asset_root).value.value_or(std::vector<course_definition>{})) {
                 if (course.id == command.course_id) {
                     tee_reservation_info choice; choice.course_id = course.id;
+                    choice.takes_cart = command.takes_cart && course.carts;
                     state.offline_booking = choice; return;
                 }
             }

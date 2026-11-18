@@ -19,6 +19,7 @@ pub struct BallRow {
     pub in_cup: bool,
     pub kind: u8,
     pub tee_mat: i32,
+    pub placed_at: i64,
 }
 
 impl __sdk::InModule for BallRow {
@@ -41,6 +42,7 @@ pub struct BallRowCols {
     pub in_cup: __sdk::__query_builder::Col<BallRow, bool>,
     pub kind: __sdk::__query_builder::Col<BallRow, u8>,
     pub tee_mat: __sdk::__query_builder::Col<BallRow, i32>,
+    pub placed_at: __sdk::__query_builder::Col<BallRow, i64>,
 }
 
 impl __sdk::__query_builder::HasCols for BallRow {
@@ -59,6 +61,7 @@ impl __sdk::__query_builder::HasCols for BallRow {
             in_cup: __sdk::__query_builder::Col::new(table_name, "in_cup"),
             kind: __sdk::__query_builder::Col::new(table_name, "kind"),
             tee_mat: __sdk::__query_builder::Col::new(table_name, "tee_mat"),
+            placed_at: __sdk::__query_builder::Col::new(table_name, "placed_at"),
         }
     }
 }

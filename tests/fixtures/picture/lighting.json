@@ -86,11 +86,10 @@
     "tree_radius_share": 0.45,
     "foot_share": 0.5,
     "pole_radius": 0.6,
-    "map_resolution": 1024,
+    "map_resolution": 256,
     "map_extent": 160,
-    "map_ahead": 0.3,
     "map_strength": 0.9,
-    "map_softness": 1.5,
+    "map_softness": 0.375,
     "map_edge_fade": 0.2
   },
   "shafts": {
@@ -123,8 +122,6 @@
     "refraction_pixels": 3,
     "glint_strength": 1,
     "glint_sharpness": 300,
-    "reflection_reach_meters": 150,
-    "reflection_first_step_meters": 0.3,
     "caustic_strength": 1.5,
     "caustic_cell_meters": 0.7,
     "wobble_height_share": 0.003
@@ -147,13 +144,13 @@
   },
   "trees": {
     "species": [
-      {"name": "beech", "shape": "round", "trunk_share": 0.3, "trunk_radius": 0.12, "limbs": 6, "clumps": 98, "far_clumps": 27, "clump_size": 0.32, "droop": 0.0, "aspect": 3.0, "shine_through": 0.15, "bark": [0.36, 0.35, 0.32], "spring": [0.45, 0.62, 0.22], "summer": [0.16, 0.32, 0.11], "autumn": [0.62, 0.36, 0.12]},
-      {"name": "oak", "shape": "round", "trunk_share": 0.3, "trunk_radius": 0.14, "limbs": 5, "clumps": 84, "far_clumps": 24, "clump_size": 0.34, "droop": 0.0, "aspect": 3.0, "shine_through": 0.12, "bark": [0.25, 0.21, 0.17], "spring": [0.42, 0.55, 0.2], "summer": [0.15, 0.3, 0.1], "autumn": [0.48, 0.34, 0.14]},
-      {"name": "birch", "shape": "oval", "trunk_share": 0.35, "trunk_radius": 0.07, "limbs": 5, "clumps": 70, "far_clumps": 21, "clump_size": 0.28, "droop": 0.4, "aspect": 3.5, "shine_through": 0.18, "bark": [0.8, 0.78, 0.72], "spring": [0.5, 0.66, 0.25], "summer": [0.22, 0.4, 0.14], "autumn": [0.78, 0.64, 0.16]},
-      {"name": "willow", "shape": "weeping", "trunk_share": 0.25, "trunk_radius": 0.16, "limbs": 6, "clumps": 98, "far_clumps": 27, "clump_size": 0.3, "droop": 1.5, "aspect": 2.5, "shine_through": 0.16, "bark": [0.3, 0.27, 0.2], "spring": [0.55, 0.66, 0.3], "summer": [0.3, 0.42, 0.18], "autumn": [0.62, 0.6, 0.22]},
-      {"name": "spruce", "shape": "cone", "trunk_share": 0.12, "trunk_radius": 0.08, "limbs": 14, "clumps": 70, "far_clumps": 20, "clump_size": 0.28, "droop": 0.0, "aspect": 3.5, "shine_through": 0.05, "bark": [0.24, 0.18, 0.13], "spring": [0.08, 0.2, 0.1], "summer": [0.08, 0.2, 0.1], "autumn": [0.08, 0.2, 0.1]},
-      {"name": "pine", "shape": "umbrella", "trunk_share": 0.55, "trunk_radius": 0.08, "limbs": 5, "clumps": 40, "far_clumps": 12, "clump_size": 0.34, "droop": 0.0, "aspect": 3.0, "shine_through": 0.05, "bark": [0.42, 0.26, 0.15], "spring": [0.14, 0.26, 0.12], "summer": [0.14, 0.26, 0.12], "autumn": [0.14, 0.26, 0.12]},
-      {"name": "scrub", "shape": "dome", "trunk_share": 0.0, "trunk_radius": 0.1, "limbs": 5, "clumps": 36, "far_clumps": 15, "clump_size": 0.45, "droop": 0.0, "aspect": 0.8, "shine_through": 0.12, "bark": [0.25, 0.2, 0.15], "spring": [0.4, 0.55, 0.2], "summer": [0.14, 0.3, 0.11], "autumn": [0.55, 0.32, 0.12]}
+      {"name": "beech", "shape": "round", "trunk_share": 0.3, "trunk_radius": 0.12, "limbs": 6, "clumps": 98, "clump_size": 0.32, "droop": 0.0, "aspect": 3.0, "shine_through": 0.15, "bark": [0.36, 0.35, 0.32], "spring": [0.45, 0.62, 0.22], "summer": [0.16, 0.32, 0.11], "autumn": [0.62, 0.36, 0.12]},
+      {"name": "oak", "shape": "round", "trunk_share": 0.3, "trunk_radius": 0.14, "limbs": 5, "clumps": 84, "clump_size": 0.34, "droop": 0.0, "aspect": 3.0, "shine_through": 0.12, "bark": [0.25, 0.21, 0.17], "spring": [0.42, 0.55, 0.2], "summer": [0.15, 0.3, 0.1], "autumn": [0.48, 0.34, 0.14]},
+      {"name": "birch", "shape": "oval", "trunk_share": 0.35, "trunk_radius": 0.07, "limbs": 5, "clumps": 70, "clump_size": 0.28, "droop": 0.4, "aspect": 3.5, "shine_through": 0.18, "bark": [0.8, 0.78, 0.72], "spring": [0.5, 0.66, 0.25], "summer": [0.22, 0.4, 0.14], "autumn": [0.78, 0.64, 0.16]},
+      {"name": "willow", "shape": "weeping", "trunk_share": 0.25, "trunk_radius": 0.16, "limbs": 6, "clumps": 98, "clump_size": 0.3, "droop": 1.5, "aspect": 2.5, "shine_through": 0.16, "bark": [0.3, 0.27, 0.2], "spring": [0.55, 0.66, 0.3], "summer": [0.3, 0.42, 0.18], "autumn": [0.62, 0.6, 0.22]},
+      {"name": "spruce", "shape": "cone", "trunk_share": 0.12, "trunk_radius": 0.08, "limbs": 14, "clumps": 70, "clump_size": 0.28, "droop": 0.0, "aspect": 3.5, "shine_through": 0.05, "bark": [0.24, 0.18, 0.13], "spring": [0.08, 0.2, 0.1], "summer": [0.08, 0.2, 0.1], "autumn": [0.08, 0.2, 0.1]},
+      {"name": "pine", "shape": "umbrella", "trunk_share": 0.55, "trunk_radius": 0.08, "limbs": 5, "clumps": 40, "clump_size": 0.34, "droop": 0.0, "aspect": 3.0, "shine_through": 0.05, "bark": [0.42, 0.26, 0.15], "spring": [0.14, 0.26, 0.12], "summer": [0.14, 0.26, 0.12], "autumn": [0.14, 0.26, 0.12]},
+      {"name": "scrub", "shape": "dome", "trunk_share": 0.0, "trunk_radius": 0.1, "limbs": 5, "clumps": 36, "clump_size": 0.45, "droop": 0.0, "aspect": 0.8, "shine_through": 0.12, "bark": [0.25, 0.2, 0.15], "spring": [0.4, 0.55, 0.2], "summer": [0.14, 0.3, 0.11], "autumn": [0.55, 0.32, 0.12]}
     ]
   },
   "night_lights": {
@@ -266,7 +263,8 @@
     "pin_pole": 0.5,
     "flag": 0.65,
     "ember": 1.0,
-    "flight_path": 1.0
+    "flight_path": 1.0,
+    "window": 0.6
   },
   "ground": {
     "fairway": [0.17, 0.44, 0.17],

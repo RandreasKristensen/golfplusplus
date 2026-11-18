@@ -1,4 +1,5 @@
 #include "check_runtime.h"
+#include "game/boarding.h"
 #include "game/tee_times.h"
 #include "game/hub_flow.h"
 #include "game/mode_dispatch.h"
@@ -98,10 +99,24 @@ bool check_round(live_check& run) {
         !run.book(5, earlier)) { return false; }
     if (!wait_for_clock(run, 5, earlier - bus_early, "earlier group's bus window opens on the server clock") ||
         !run.walk(5, blocker.area.bus->position) || !run.travel(5, run.course)) { return false; }
+    // Nothing was heard of this group's boarding yet: the PA calls when its window opens, from the hub.
+    for (std::size_t i = 0; i < 5; ++i) { run.state(i).audio_events.clear(); }
     if (!wait_for_clock(run, 0, run.due - bus_early, "group's bus window opens on the server clock")) { return false; }
+    if (!run.require("the starter's PA calls the group's boarding and the bus doors open", run.until([&] {
+        const auto& heard = run.state(2).audio_events;
+        return std::any_of(heard.begin(), heard.end(), [](const audio_event& event) { return event.type == audio_event_type::boarding_call; }) && bus_doors_open(run.state(2));
+    }))) { return false; }
     for (std::size_t i = 0; i < 5; ++i) {
         if (!run.walk(i, run.state(i).area.bus->position) || !run.travel(i, run.course)) { return false; }
         if (i == 0 && !run.require("travel removes paired row for remaining hub observer", run.until([&] { return run.state(2).online.daps.empty(); }))) { return false; }
+    }
+    // What each chose with the booking is what the round starts with: a cart of one's own, or the bag on one's back.
+    for (std::size_t i = 0; i < 5; ++i) {
+        const auto& o = run.state(i).online;
+        const bool cart = (i == 3 || i == 4) && run.course_has_carts();
+        const auto bag = o.bags.find(o.account_id);
+        if (!run.require("the booking's cart or carry is what the round starts with", (o.carts.count(o.account_id) != 0) == cart && bag != o.bags.end() &&
+            bag->second.place.where == (cart ? bag_where::on_cart : bag_where::on_back))) { return false; }
     }
     const auto slot = s.online.reservation->slot_id;
     if (!run.require("one course world, group of five, fresh cards contain only unplayed holes", run.until([&] {

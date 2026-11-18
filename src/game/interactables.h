@@ -1,6 +1,6 @@
 #pragma once
 
-// Everything F acts on, in reach of me on foot: my ball, my ball in its cup, a
+// Everything F acts on, in reach of me on foot: my ball (practice or scored), a
 // collectible, a nearby online golfer, an unplayed hole's tee (every station's on a practice
 // ground), my bag, my bag on a cart that has gone over, a tipped cart.
 // Anything in reach can be used at any time; the nearest wins, and where two
@@ -20,9 +20,9 @@ enum class interactable_kind {
     bus,
     booked_start,
     warmup,
-    practice_ball, // F picks it up; swing beside it addresses it
-    ball,         // my ball, teed or at rest: take it up to play it
-    cup_ball,     // my ball in its cup: pick it up
+    ball,         // my ball, teed or at rest: F steps up to it, held lifts it where the rules allow
+    spare_ball,   // one of my other balls at rest (index: its id): F plays it, held lifts it
+    cup_ball,     // my ball in its cup, a spare too: F lifts it
     collectible,  // by index into world.collectibles
     tee,          // an unplayed hole's tee, by hole index
     bag,          // my bag, set down or on a cart: its club picker
@@ -32,7 +32,7 @@ enum class interactable_kind {
 
 struct interactable {
     interactable_kind kind = interactable_kind::ball;
-    std::size_t index = 0;  // collectible and tee
+    std::size_t index = 0;  // collectible and tee; a spare ball's id
     float distance = 0.0f;  // from me (XZ)
     reachable_tipped_cart tipped;  // tipped_cart only
 };

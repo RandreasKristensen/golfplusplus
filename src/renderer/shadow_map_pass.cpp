@@ -23,7 +23,8 @@ constexpr GLuint instance_scale_location = 4;
 bool shadow_map_pass::init(const std::string& vertex_path, const std::string& fragment_path, const shadow_style& style) {
     shutdown();
     style_ = style;
-    if (!shader_.load_from_files(vertex_path, fragment_path)) {
+    if (!shader_.load_from_files(vertex_path, fragment_path) ||
+        !tree_shader_.load_from_files(vertex_path, fragment_path, "#define TREE_CASTER\n")) {
         return false;
     }
     glGenTextures(1, &depth_texture_);
@@ -99,6 +100,7 @@ void shadow_map_pass::shutdown() {
         models_vao_ = 0;
     }
     shader_.shutdown();
+    tree_shader_.shutdown();
     strength_ = 0.0f;
 }
 
@@ -106,7 +108,7 @@ void shadow_map_pass::draw(tree_renderer& tree_batch, const std::vector<tree_bod
                            floodlight_renderer& floodlight_batch, const render_floodlights* floodlights,
                            const world_marker_batch& figures, const prop_batch& models, const glm::vec3& towards_sun,
                            const float sun_share, const glm::vec3& eye,
-                           const glm::vec3& forward, gl_timer_pool& timers, frame_profile* profile) {
+                           gl_timer_pool& timers, frame_profile* profile) {
     strength_ = style_.map_strength * sun_share;
     if (fbo_ == 0 || strength_ <= 0.0f || towards_sun.y <= 0.0f ||
         (trees.empty() && (floodlights == nullptr || floodlights->vertices.empty()) && figures.empty() &&
@@ -115,7 +117,7 @@ void shadow_map_pass::draw(tree_renderer& tree_batch, const std::vector<tree_bod
         return;
     }
     const shadow_map_fit fit =
-        fit_shadow_map(towards_sun, eye, forward, style_.map_extent, style_.map_resolution, style_.map_ahead);
+        fit_shadow_map(towards_sun, eye, style_.map_extent, style_.map_resolution);
     view_proj_ = fit.view_proj;
     depth_bias_ = depth_bias_meters / fit.depth_range;
 
@@ -126,8 +128,11 @@ void shadow_map_pass::draw(tree_renderer& tree_batch, const std::vector<tree_bod
     glDepthMask(GL_TRUE);
     glClear(GL_DEPTH_BUFFER_BIT);
     shader_.set_profile(profile);
+    tree_shader_.set_profile(profile);
     shader_.use();
-    tree_batch.draw_casters(trees, trees_revision, shader_, view_proj_, profile);
+    tree_shader_.use();
+    tree_batch.draw_casters(trees, trees_revision, tree_shader_, view_proj_, profile);
+    shader_.use();
     floodlight_batch.draw_casters(floodlights, shader_, view_proj_, profile);
     draw_figures(figures, profile);
     draw_models(models, profile);

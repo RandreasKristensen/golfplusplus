@@ -12,6 +12,10 @@
     "tile_label": { "fill": 0.75, "max_scale": 3, "wrap": true, "color": [0.90, 0.88, 0.76], "align": "center" },
     "tile_hint": { "fill": 0.70, "color": [0.66, 0.67, 0.61], "align": "center" },
     "tile_label_small": { "fill": 0.95, "wrap": true, "color": [0.90, 0.88, 0.76], "align": "left" },
+    "card_name": { "fill": 1.0, "width_fill": 1.0, "max_scale": 1, "color": [0.90, 0.88, 0.76], "align": "left" },
+    "card_figures": { "fill": 1.0, "width_fill": 1.0, "max_scale": 1, "color": [0.68, 0.69, 0.62], "align": "right" },
+    "card_detail": { "fill": 1.0, "width_fill": 1.0, "max_scale": 1, "color": [0.68, 0.69, 0.62], "align": "left" },
+    "heading": { "fill": 0.80, "max_scale": 2, "color": [0.95, 0.78, 0.28], "align": "left" },
     "tile_hint_small": { "fill": 0.80, "color": [0.68, 0.69, 0.62], "align": "left" },
 
     "control_key": { "fill": 0.85, "color": [0.70, 0.72, 0.70], "align": "center" },

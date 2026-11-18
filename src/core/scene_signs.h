@@ -14,10 +14,11 @@
 
 // Rebuilds `signs` when the course was loaded again (the terrain revision
 // moved, so its ground colours and geometry may differ) or the bus board's
-// destination changed; true when it did.
+// destination or a clock's time changed; true when it did.
 bool refresh_scene_hole_signs(render_hole_signs& signs,
                               const game_state& game,
                               const startup_catalog& catalog,
                               const text_assets& text,
                               const scene_colors& colors,
-                              const prop_catalog& props);
+                              const prop_catalog& props,
+                              const std::string& clock);

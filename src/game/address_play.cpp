@@ -5,6 +5,7 @@
 #include "game/golf_cart.h"
 #include "game/hub_flow.h"
 #include "game/mode_dispatch.h"
+#include "game/my_balls.h"
 #include "game/remote_players.h"
 #include "game/shot_ability.h"
 #include "game/shot_number.h"
@@ -132,13 +133,15 @@ void stand_to_setup(game_state& state, frame_profile* profile) {
     state.player.turn_rate = 0.0f;
 }
 
-// Offline what moves that my shot may meet: me, stood at the ball, and my
-// cart where it stands (not sunk).
-std::vector<snapshot_entry> offline_snapshot(const game_state& state) {
+// Offline what moves that my shot may meet: me, stood at the ball, my cart
+// where it stands (not sunk) and my spares at rest.
+std::vector<snapshot_entry> offline_snapshot(const game_state& state, const glm::vec3& struck_from) {
     std::vector<snapshot_entry> entries{snapshot_entry{snapshot_kind::person, state.player.position, 0.0f, true}};
     if (own_cart(state) && state.cart.motion.condition != cart_condition::sunk) {
         entries.push_back(snapshot_entry{snapshot_kind::cart, state.cart.pose.position, state.cart.pose.yaw, false});
     }
+    const std::vector<snapshot_entry> spares = spares_in_snapshot(state.spare_balls, struck_from, state.tuning);
+    entries.insert(entries.end(), spares.begin(), spares.end());
     return entries;
 }
 
@@ -161,7 +164,7 @@ void launch_shot(game_state& state) {
     } else {
         shot_course course = current_shot_course(state);
         course.weather = course_weather_at(state, setup.shot_at);
-        const shot_record record{setup, next_shot_seed(state), offline_snapshot(state)};
+        const shot_record record{setup, next_shot_seed(state), offline_snapshot(state, setup.ball_start)};
         ++state.shots_hit;
         result = simulate_struck_shot(record, my_golfer(state), course, state.tuning, state.clubs);
         number = shot_number_for(record, my_golfer(state), lie, current_shot_course(state).green_stimp_feet, state.tuning, state.clubs);

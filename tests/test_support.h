@@ -259,9 +259,32 @@ inline game_input swing_input() {
     return input;
 }
 
+// F pressed and let go at once: a tap.
+inline void tap_interact(game_state& state, const float dt = 0.016f) {
+    game_input press = interact_input();
+    press.interact_held = true;
+    update_game(state, press, dt);
+    game_input release;
+    release.interact_released = true;
+    update_game(state, release, dt);
+}
+
+// F held for `seconds`, then let go.
+inline void hold_interact(game_state& state, const float seconds, const float dt = 0.02f) {
+    game_input press = interact_input();
+    press.interact_held = true;
+    update_game(state, press, dt);
+    game_input held;
+    held.interact_held = true;
+    for (float t = dt; t < seconds; t += dt) { update_game(state, held, dt); }
+    game_input release;
+    release.interact_released = true;
+    update_game(state, release, dt);
+}
+
 // F at my ball: standing over it at the club's stock setup.
 inline void enter_addressing(game_state& state) {
-    update_game(state, interact_input(), 0.016f);
+    tap_interact(state);
 }
 
 // F at my ball, then looking down at it, where the swing starts.

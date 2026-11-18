@@ -1,4 +1,5 @@
 #include "renderer/tree_renderer.h"
+#include "renderer/tree_model.h"
 
 #include <SDL.h>
 
@@ -16,9 +17,6 @@ constexpr GLuint leaf_location = 2;
 constexpr GLuint instance_offset_location = 3;
 constexpr GLuint instance_scale_location = 4;
 constexpr GLuint instance_turn_location = 5;
-constexpr int detail_count = 2;
-// Below this share in leaf a crown casts only its branches' shadow.
-constexpr float casting_foliage = 0.3f;
 
 // The colour a species' leaves are on the course's date: fresh, then
 // summer green, then turned.
@@ -68,43 +66,41 @@ bool tree_renderer::set_looks(const std::vector<tree_look>& looks) {
     constexpr GLsizei stride = sizeof(grown_tree_vertex);
     for (std::size_t look = 0; look < looks_.size(); ++look) {
         for (int variant = 0; variant < tree_variants; ++variant) {
-            for (int detail = 0; detail < detail_count; ++detail) {
-                const grown_tree model = grow_tree(looks_[look], static_cast<std::uint32_t>(look * 31 + variant * 7 + 1),
-                                                         static_cast<tree_detail>(detail));
-                model_mesh mesh;
-                glGenVertexArrays(1, &mesh.vao);
-                glGenBuffers(1, &mesh.vbo);
-                if (mesh.vao == 0 || mesh.vbo == 0) {
-                    SDL_Log("Tree renderer failed to allocate GL objects.");
-                    meshes_.push_back(mesh);
-                    release_meshes();
-                    return false;
-                }
-                glBindVertexArray(mesh.vao);
-                glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
-                glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(model.vertices.size() * sizeof(grown_tree_vertex)),
-                             model.vertices.data(), GL_STATIC_DRAW);
-                glEnableVertexAttribArray(position_location);
-                glVertexAttribPointer(position_location, 3, GL_FLOAT, GL_FALSE, stride,
-                                      reinterpret_cast<const void*>(offsetof(grown_tree_vertex, position)));
-                glEnableVertexAttribArray(normal_location);
-                glVertexAttribPointer(normal_location, 3, GL_FLOAT, GL_FALSE, stride,
-                                      reinterpret_cast<const void*>(offsetof(grown_tree_vertex, normal)));
-                glEnableVertexAttribArray(leaf_location);
-                glVertexAttribPointer(leaf_location, 4, GL_FLOAT, GL_FALSE, stride,
-                                      reinterpret_cast<const void*>(offsetof(grown_tree_vertex, uv)));
-                for (const GLuint location : {instance_offset_location, instance_scale_location, instance_turn_location}) {
-                    glEnableVertexAttribArray(location);
-                    glVertexAttribDivisor(location, 1);
-                }
-                glBindVertexArray(0);
-                mesh.bark_count = static_cast<int>(model.bark_count);
-                mesh.vertex_count = static_cast<int>(model.vertices.size());
+            const grown_tree model = grow_tree(looks_[look], static_cast<std::uint32_t>(look * 31 + variant * 7 + 1));
+            model_mesh mesh;
+            glGenVertexArrays(1, &mesh.vao);
+            glGenBuffers(1, &mesh.vbo);
+            if (mesh.vao == 0 || mesh.vbo == 0) {
+                SDL_Log("Tree renderer failed to allocate GL objects.");
                 meshes_.push_back(mesh);
+                release_meshes();
+                return false;
             }
+            glBindVertexArray(mesh.vao);
+            glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+            glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(model.vertices.size() * sizeof(grown_tree_vertex)),
+                         model.vertices.data(), GL_STATIC_DRAW);
+            glEnableVertexAttribArray(position_location);
+            glVertexAttribPointer(position_location, 3, GL_FLOAT, GL_FALSE, stride,
+                                  reinterpret_cast<const void*>(offsetof(grown_tree_vertex, position)));
+            glEnableVertexAttribArray(normal_location);
+            glVertexAttribPointer(normal_location, 3, GL_FLOAT, GL_FALSE, stride,
+                                  reinterpret_cast<const void*>(offsetof(grown_tree_vertex, normal)));
+            glEnableVertexAttribArray(leaf_location);
+            glVertexAttribPointer(leaf_location, 4, GL_FLOAT, GL_FALSE, stride,
+                                  reinterpret_cast<const void*>(offsetof(grown_tree_vertex, uv)));
+            for (const GLuint location : {instance_offset_location, instance_scale_location, instance_turn_location}) {
+                glEnableVertexAttribArray(location);
+                glVertexAttribDivisor(location, 1);
+            }
+            glBindVertexArray(0);
+            mesh.bark_count = static_cast<int>(model.bark_count);
+            mesh.vertex_count = static_cast<int>(model.vertices.size());
+            meshes_.push_back(mesh);
         }
     }
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    ++model_revision_;
     return true;
 }
 
@@ -123,8 +119,8 @@ void tree_renderer::set_seasons(const std::vector<render_tree_species>& species)
     }
 }
 
-const tree_renderer::model_mesh* tree_renderer::mesh_for(const std::size_t look, const int variant, const tree_detail detail) const {
-    const std::size_t index = (look * tree_variants + static_cast<std::size_t>(variant)) * detail_count + static_cast<std::size_t>(detail);
+const tree_renderer::model_mesh* tree_renderer::mesh_for(const std::size_t look, const int variant) const {
+    const std::size_t index = look * tree_variants + static_cast<std::size_t>(variant);
     return index < meshes_.size() ? &meshes_[index] : nullptr;
 }
 
@@ -139,7 +135,7 @@ void tree_renderer::draw_batch(const render_tree_batch& batch, frame_profile* pr
         if (bucket.species >= seasons_.size()) {
             continue;
         }
-        const model_mesh* mesh = mesh_for(seasons_[bucket.species].look, bucket.variant, bucket.detail);
+        const model_mesh* mesh = mesh_for(seasons_[bucket.species].look, bucket.variant);
         if (mesh == nullptr) {
             continue;
         }
@@ -159,11 +155,12 @@ void tree_renderer::draw_batch(const render_tree_batch& batch, frame_profile* pr
 }
 
 bool tree_renderer::draw(const std::vector<tree_body>& trees, const glm::mat4& view_proj, const view_frustum& frustum,
-                         const glm::vec3& eye, const float clock_seconds, const glm::vec2& wind, frame_profile* profile) {
+                         const float clock_seconds, const glm::vec2& wind, frame_profile* profile) {
     if (shader_.id() == 0 || trees.empty()) {
         return false;
     }
-    const render_tree_batch batch = build_tree_batch(trees, &frustum, eye, false);
+    set_motion(clock_seconds, wind);
+    const render_tree_batch batch = build_tree_batch(trees, &frustum);
     if (batch.instances.empty()) {
         return false;
     }
@@ -191,10 +188,13 @@ void tree_renderer::draw_casters(const std::vector<tree_body>& trees, std::uint6
         return;
     }
     const view_frustum frustum = make_view_frustum(view_proj);
-    const render_tree_batch batch = build_tree_batch(trees, &frustum, glm::vec3(0.0f), true);
+    const render_tree_batch batch = build_tree_batch(trees, &frustum);
     depth_shader.set_mat4("u_view_proj", view_proj);
+    depth_shader.set_float("u_time", seconds_);
+    depth_shader.set_vec2("u_wind", wind_);
     draw_batch(batch, profile, [&](const render_tree_bucket& bucket, const model_mesh& mesh, const species_season& season) {
-        const int count = season.foliage >= casting_foliage ? mesh.vertex_count : mesh.bark_count;
+        depth_shader.set_float("u_foliage", season.foliage);
+        const int count = season.foliage > 0.0f ? mesh.vertex_count : mesh.bark_count;
         glDrawArraysInstanced(GL_TRIANGLES, 0, count, static_cast<GLsizei>(bucket.count));
         record_draw_call(profile);
     });

@@ -21,6 +21,14 @@ int day_of_year(const int month, const int day) {
     return before[static_cast<std::size_t>(m - 1)] + std::clamp(day, 1, 31);
 }
 
+const year_season& season_on(const tree_tuning& trees, const int day) {
+    const year_season* found = &trees.seasons.back();
+    for (const year_season& season : trees.seasons) {
+        if (season.start_day <= day) { found = &season; }
+    }
+    return *found;
+}
+
 float foliage_share(const tree_species& species, const float day) {
     if (species.evergreen) {
         return 1.0f;

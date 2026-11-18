@@ -77,6 +77,9 @@ struct startup_course_option {
     course_definition course;
     int total_par = 0;
     std::optional<render_hole_preview> preview;  // hole 1
+    // The holes' playing lengths summed, tee to green along each hole's line
+    // of play, in metres: a scorecard's length, not the walk between holes.
+    int length_meters = 0;
 };
 
 // Everything the menus show, loaded once at startup.
@@ -183,7 +186,6 @@ enum class online_request_type {
 struct online_request {
     online_request_type type = online_request_type::begin_login;
     std::string text;  // claim_name: the name; redeem_link_code: the code; join_course: the course id
-    bool takes_cart = false;  // join_course: with a cart of my own
 };
 
 struct startup_menu_result {
@@ -210,8 +212,17 @@ struct confirm_menu_result {
 };
 
 // Every course, with name entry's rules from the font and the server tuning, and the
-// settings screen's entries.
-startup_catalog load_startup_catalog(const game_content& content, const text_assets& text);
+// settings screen's entries; no catalog, and the reason, when a course's hole cannot be read.
+// A course's length as its scorecard gives it: each hole's tee to green along
+// its line of play (the tee, the hole's control points, the pin), summed and
+// rounded to whole metres. The walk between holes is not part of it.
+int play_length_meters(const std::vector<hole_data>& holes, float meters_per_world_unit);
+
+struct startup_catalog_result {
+    std::optional<startup_catalog> catalog;
+    std::string error;
+};
+startup_catalog_result load_startup_catalog(const game_content& content, const text_assets& text);
 
 // `pointer` is this frame's mouse over the menu.
 startup_menu_result update_startup_menu(startup_flow_state& state,

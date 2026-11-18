@@ -23,6 +23,8 @@ pub mod create_link_code_reducer;
 pub mod dap_pair_table;
 pub mod dap_reducer;
 pub mod dap_row_type;
+pub mod departure_board_table;
+pub mod departure_view_type;
 pub mod give_up_hole_reducer;
 pub mod golf_cart_row_type;
 pub mod golf_group_row_type;
@@ -66,12 +68,15 @@ pub mod open_tee_book_reducer;
 pub mod pick_up_ball_reducer;
 pub mod place_bag_reducer;
 pub mod place_practice_ball_reducer;
+pub mod play_ball_reducer;
 pub mod player_bag_row_type;
 pub mod player_bag_table;
 pub mod player_loadout_row_type;
 pub mod player_loadout_table;
 pub mod player_row_type;
 pub mod player_table;
+pub mod practice_ball_row_type;
+pub mod practice_ball_table;
 pub mod redeem_link_code_reducer;
 pub mod return_to_hub_reducer;
 pub mod ride_motion_row_type;
@@ -133,6 +138,8 @@ pub use create_link_code_reducer::create_link_code;
 pub use dap_pair_table::*;
 pub use dap_reducer::dap;
 pub use dap_row_type::DapRow;
+pub use departure_board_table::*;
+pub use departure_view_type::DepartureView;
 pub use give_up_hole_reducer::give_up_hole;
 pub use golf_cart_row_type::GolfCartRow;
 pub use golf_group_row_type::GolfGroupRow;
@@ -176,12 +183,15 @@ pub use open_tee_book_reducer::open_tee_book;
 pub use pick_up_ball_reducer::pick_up_ball;
 pub use place_bag_reducer::place_bag;
 pub use place_practice_ball_reducer::place_practice_ball;
+pub use play_ball_reducer::play_ball;
 pub use player_bag_row_type::PlayerBagRow;
 pub use player_bag_table::*;
 pub use player_loadout_row_type::PlayerLoadoutRow;
 pub use player_loadout_table::*;
 pub use player_row_type::PlayerRow;
 pub use player_table::*;
+pub use practice_ball_row_type::PracticeBallRow;
+pub use practice_ball_table::*;
 pub use redeem_link_code_reducer::redeem_link_code;
 pub use return_to_hub_reducer::return_to_hub;
 pub use ride_motion_row_type::RideMotionRow;
@@ -249,6 +259,7 @@ pub enum Reducer {
         expected_booking: u64,
         course_id: String,
         scheduled_at: i64,
+        takes_cart: bool,
     },
     CancelTee {
         room_id: u64,
@@ -271,7 +282,6 @@ pub enum Reducer {
     },
     JoinCourse {
         course_id: String,
-        takes_cart: bool,
     },
     LeaveCart {
         expected_room: u64,
@@ -292,6 +302,7 @@ pub enum Reducer {
     },
     PickUpBall {
         expected_room: u64,
+        ball_id: u64,
     },
     PlaceBag {
         expected_room: u64,
@@ -308,6 +319,10 @@ pub enum Reducer {
         x: f32,
         y: f32,
         z: f32,
+    },
+    PlayBall {
+        expected_room: u64,
+        spare_id: u64,
     },
     RedeemLinkCode {
         typed_code: String,
@@ -336,7 +351,6 @@ pub enum Reducer {
     TakeBus {
         room_id: u64,
         reservation_id: u64,
-        takes_cart: bool,
     },
     TakeClub {
         expected_room: u64,
@@ -424,6 +438,7 @@ impl __sdk::Reducer for Reducer {
             Reducer::PickUpBall { .. } => "pick_up_ball",
             Reducer::PlaceBag { .. } => "place_bag",
             Reducer::PlacePracticeBall { .. } => "place_practice_ball",
+            Reducer::PlayBall { .. } => "play_ball",
             Reducer::RedeemLinkCode { .. } => "redeem_link_code",
             Reducer::ReturnToHub { .. } => "return_to_hub",
             Reducer::RightCart { .. } => "right_cart",
@@ -467,11 +482,13 @@ impl __sdk::Reducer for Reducer {
                 expected_booking,
                 course_id,
                 scheduled_at,
+                takes_cart,
             } => __sats::bsatn::to_vec(&book_tee_reducer::BookTeeArgs {
                 room_id: room_id.clone(),
                 expected_booking: expected_booking.clone(),
                 course_id: course_id.clone(),
                 scheduled_at: scheduled_at.clone(),
+                takes_cart: takes_cart.clone(),
             }),
             Reducer::CancelTee {
                 room_id,
@@ -507,13 +524,11 @@ impl __sdk::Reducer for Reducer {
                     expected_room: expected_room.clone(),
                 })
             }
-            Reducer::JoinCourse {
-                course_id,
-                takes_cart,
-            } => __sats::bsatn::to_vec(&join_course_reducer::JoinCourseArgs {
-                course_id: course_id.clone(),
-                takes_cart: takes_cart.clone(),
-            }),
+            Reducer::JoinCourse { course_id } => {
+                __sats::bsatn::to_vec(&join_course_reducer::JoinCourseArgs {
+                    course_id: course_id.clone(),
+                })
+            }
             Reducer::LeaveCart { expected_room } => {
                 __sats::bsatn::to_vec(&leave_cart_reducer::LeaveCartArgs {
                     expected_room: expected_room.clone(),
@@ -542,11 +557,13 @@ impl __sdk::Reducer for Reducer {
                     course_id: course_id.clone(),
                 })
             }
-            Reducer::PickUpBall { expected_room } => {
-                __sats::bsatn::to_vec(&pick_up_ball_reducer::PickUpBallArgs {
-                    expected_room: expected_room.clone(),
-                })
-            }
+            Reducer::PickUpBall {
+                expected_room,
+                ball_id,
+            } => __sats::bsatn::to_vec(&pick_up_ball_reducer::PickUpBallArgs {
+                expected_room: expected_room.clone(),
+                ball_id: ball_id.clone(),
+            }),
             Reducer::PlaceBag {
                 expected_room,
                 place,
@@ -576,6 +593,13 @@ impl __sdk::Reducer for Reducer {
                 x: x.clone(),
                 y: y.clone(),
                 z: z.clone(),
+            }),
+            Reducer::PlayBall {
+                expected_room,
+                spare_id,
+            } => __sats::bsatn::to_vec(&play_ball_reducer::PlayBallArgs {
+                expected_room: expected_room.clone(),
+                spare_id: spare_id.clone(),
             }),
             Reducer::RedeemLinkCode { typed_code } => {
                 __sats::bsatn::to_vec(&redeem_link_code_reducer::RedeemLinkCodeArgs {
@@ -622,11 +646,9 @@ impl __sdk::Reducer for Reducer {
             Reducer::TakeBus {
                 room_id,
                 reservation_id,
-                takes_cart,
             } => __sats::bsatn::to_vec(&take_bus_reducer::TakeBusArgs {
                 room_id: room_id.clone(),
                 reservation_id: reservation_id.clone(),
-                takes_cart: takes_cart.clone(),
             }),
             Reducer::TakeClub {
                 expected_room,
@@ -750,6 +772,7 @@ impl __sdk::Reducer for Reducer {
 pub struct DbUpdate {
     ball: __sdk::TableUpdate<BallRow>,
     dap_pair: __sdk::TableUpdate<DapRow>,
+    departure_board: __sdk::TableUpdate<DepartureView>,
     golf_group: __sdk::TableUpdate<GolfGroupRow>,
     green_flag: __sdk::TableUpdate<GreenFlagRow>,
     item_use_event: __sdk::TableUpdate<ItemUseEventRow>,
@@ -769,6 +792,7 @@ pub struct DbUpdate {
     player: __sdk::TableUpdate<PlayerRow>,
     player_bag: __sdk::TableUpdate<PlayerBagRow>,
     player_loadout: __sdk::TableUpdate<PlayerLoadoutRow>,
+    practice_ball: __sdk::TableUpdate<PracticeBallRow>,
     ride_motion: __sdk::TableUpdate<RideMotionRow>,
     room: __sdk::TableUpdate<RoomRow>,
     room_member: __sdk::TableUpdate<RoomMemberRow>,
@@ -791,6 +815,9 @@ impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
                 "dap_pair" => db_update
                     .dap_pair
                     .append(dap_pair_table::parse_table_update(table_update)?),
+                "departure_board" => db_update
+                    .departure_board
+                    .append(departure_board_table::parse_table_update(table_update)?),
                 "golf_group" => db_update
                     .golf_group
                     .append(golf_group_table::parse_table_update(table_update)?),
@@ -848,6 +875,9 @@ impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
                 "player_loadout" => db_update
                     .player_loadout
                     .append(player_loadout_table::parse_table_update(table_update)?),
+                "practice_ball" => db_update
+                    .practice_ball
+                    .append(practice_ball_table::parse_table_update(table_update)?),
                 "ride_motion" => db_update
                     .ride_motion
                     .append(ride_motion_table::parse_table_update(table_update)?),
@@ -920,6 +950,9 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.player_loadout = cache
             .apply_diff_to_table::<PlayerLoadoutRow>("player_loadout", &self.player_loadout)
             .with_updates_by_pk(|row| &row.account_id);
+        diff.practice_ball = cache
+            .apply_diff_to_table::<PracticeBallRow>("practice_ball", &self.practice_ball)
+            .with_updates_by_pk(|row| &row.id);
         diff.ride_motion = cache
             .apply_diff_to_table::<RideMotionRow>("ride_motion", &self.ride_motion)
             .with_updates_by_pk(|row| &row.rider);
@@ -936,6 +969,8 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.tee_slot = cache
             .apply_diff_to_table::<TeeSlotRow>("tee_slot", &self.tee_slot)
             .with_updates_by_pk(|row| &row.slot_id);
+        diff.departure_board =
+            cache.apply_diff_to_table::<DepartureView>("departure_board", &self.departure_board);
         diff.my_account = cache.apply_diff_to_table::<PlayerRow>("my_account", &self.my_account);
         diff.my_avatar_motion = cache
             .apply_diff_to_table::<AvatarMotionRow>("my_avatar_motion", &self.my_avatar_motion);
@@ -987,6 +1022,9 @@ impl __sdk::DbUpdate for DbUpdate {
                 "dap_pair" => db_update
                     .dap_pair
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "departure_board" => db_update
+                    .departure_board
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "golf_group" => db_update
                     .golf_group
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
@@ -1043,6 +1081,9 @@ impl __sdk::DbUpdate for DbUpdate {
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "player_loadout" => db_update
                     .player_loadout
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "practice_ball" => db_update
+                    .practice_ball
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "ride_motion" => db_update
                     .ride_motion
@@ -1087,6 +1128,9 @@ impl __sdk::DbUpdate for DbUpdate {
                 "dap_pair" => db_update
                     .dap_pair
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "departure_board" => db_update
+                    .departure_board
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "golf_group" => db_update
                     .golf_group
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
@@ -1144,6 +1188,9 @@ impl __sdk::DbUpdate for DbUpdate {
                 "player_loadout" => db_update
                     .player_loadout
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "practice_ball" => db_update
+                    .practice_ball
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "ride_motion" => db_update
                     .ride_motion
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
@@ -1185,6 +1232,7 @@ impl __sdk::DbUpdate for DbUpdate {
 pub struct AppliedDiff<'r> {
     ball: __sdk::TableAppliedDiff<'r, BallRow>,
     dap_pair: __sdk::TableAppliedDiff<'r, DapRow>,
+    departure_board: __sdk::TableAppliedDiff<'r, DepartureView>,
     golf_group: __sdk::TableAppliedDiff<'r, GolfGroupRow>,
     green_flag: __sdk::TableAppliedDiff<'r, GreenFlagRow>,
     item_use_event: __sdk::TableAppliedDiff<'r, ItemUseEventRow>,
@@ -1204,6 +1252,7 @@ pub struct AppliedDiff<'r> {
     player: __sdk::TableAppliedDiff<'r, PlayerRow>,
     player_bag: __sdk::TableAppliedDiff<'r, PlayerBagRow>,
     player_loadout: __sdk::TableAppliedDiff<'r, PlayerLoadoutRow>,
+    practice_ball: __sdk::TableAppliedDiff<'r, PracticeBallRow>,
     ride_motion: __sdk::TableAppliedDiff<'r, RideMotionRow>,
     room: __sdk::TableAppliedDiff<'r, RoomRow>,
     room_member: __sdk::TableAppliedDiff<'r, RoomMemberRow>,
@@ -1227,6 +1276,11 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
     ) {
         callbacks.invoke_table_row_callbacks::<BallRow>("ball", &self.ball, event);
         callbacks.invoke_table_row_callbacks::<DapRow>("dap_pair", &self.dap_pair, event);
+        callbacks.invoke_table_row_callbacks::<DepartureView>(
+            "departure_board",
+            &self.departure_board,
+            event,
+        );
         callbacks.invoke_table_row_callbacks::<GolfGroupRow>("golf_group", &self.golf_group, event);
         callbacks.invoke_table_row_callbacks::<GreenFlagRow>("green_flag", &self.green_flag, event);
         callbacks.invoke_table_row_callbacks::<ItemUseEventRow>(
@@ -1296,6 +1350,11 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks.invoke_table_row_callbacks::<PlayerLoadoutRow>(
             "player_loadout",
             &self.player_loadout,
+            event,
+        );
+        callbacks.invoke_table_row_callbacks::<PracticeBallRow>(
+            "practice_ball",
+            &self.practice_ball,
             event,
         );
         callbacks.invoke_table_row_callbacks::<RideMotionRow>(
@@ -1988,6 +2047,7 @@ impl __sdk::SpacetimeModule for RemoteModule {
     fn register_tables(client_cache: &mut __sdk::ClientCache<Self>) {
         ball_table::register_table(client_cache);
         dap_pair_table::register_table(client_cache);
+        departure_board_table::register_table(client_cache);
         golf_group_table::register_table(client_cache);
         green_flag_table::register_table(client_cache);
         item_use_event_table::register_table(client_cache);
@@ -2007,6 +2067,7 @@ impl __sdk::SpacetimeModule for RemoteModule {
         player_table::register_table(client_cache);
         player_bag_table::register_table(client_cache);
         player_loadout_table::register_table(client_cache);
+        practice_ball_table::register_table(client_cache);
         ride_motion_table::register_table(client_cache);
         room_table::register_table(client_cache);
         room_member_table::register_table(client_cache);
@@ -2019,6 +2080,7 @@ impl __sdk::SpacetimeModule for RemoteModule {
     const ALL_TABLE_NAMES: &'static [&'static str] = &[
         "ball",
         "dap_pair",
+        "departure_board",
         "golf_group",
         "green_flag",
         "item_use_event",
@@ -2038,6 +2100,7 @@ impl __sdk::SpacetimeModule for RemoteModule {
         "player",
         "player_bag",
         "player_loadout",
+        "practice_ball",
         "ride_motion",
         "room",
         "room_member",

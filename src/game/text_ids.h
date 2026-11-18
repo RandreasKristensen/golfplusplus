@@ -67,9 +67,10 @@ inline constexpr const char* text_menu_natural_shape_neutral_hint = "menu.natura
 inline constexpr const char* text_menu_natural_shape_fade = "menu.natural_shape.fade";
 inline constexpr const char* text_menu_natural_shape_fade_hint = "menu.natural_shape.fade_hint";
 inline constexpr const char* text_menu_transport_cart = "menu.transport.cart";
-inline constexpr const char* text_menu_transport_cart_hint = "menu.transport.cart_hint";
 inline constexpr const char* text_menu_transport_carry = "menu.transport.carry";
-inline constexpr const char* text_menu_transport_carry_hint = "menu.transport.carry_hint";
+inline constexpr const char* text_hub_transport = "hub.transport";
+inline constexpr const char* text_hub_transport_hint = "hub.transport_hint";
+inline constexpr const char* text_hub_carry_only = "hub.carry_only";
 inline constexpr const char* text_menu_confirm_yes = "menu.confirm.yes";
 inline constexpr const char* text_menu_confirm_no = "menu.confirm.no";
 inline constexpr const char* text_menu_confirm_settings = "menu.confirm.settings";
@@ -330,6 +331,10 @@ inline constexpr const char* style_tile_label = "tile_label";
 inline constexpr const char* style_tile_hint = "tile_hint";
 inline constexpr const char* style_tile_label_small = "tile_label_small";
 inline constexpr const char* style_tile_hint_small = "tile_hint_small";
+inline constexpr const char* style_card_name = "card_name";
+inline constexpr const char* style_card_figures = "card_figures";
+inline constexpr const char* style_card_detail = "card_detail";
+inline constexpr const char* style_heading = "heading";
 inline constexpr const char* style_control_key = "control_key";
 inline constexpr const char* style_hud_mode = "hud_mode";
 inline constexpr const char* style_name_tag = "name_tag";
@@ -371,6 +376,9 @@ inline constexpr const char* style_burn_in_shadow = "burn_in_shadow";
 inline constexpr const char* style_debug_fps = "debug_fps";
 inline constexpr const char* style_debug_profile = "debug_profile";
 
+inline std::string season_text_key(const std::string& season) {
+    return "hub.season." + season;
+}
 inline std::string skill_text_key(const std::string& skill_id) {
     return "skill." + skill_id;
 }
@@ -391,20 +399,20 @@ inline std::string online_link_text_key(const std::string& result_id) {
 inline constexpr const char* text_hub_book_title = "hub.book_title";
 inline constexpr const char* text_hub_bus_title = "hub.bus_title";
 inline constexpr const char* text_hub_bus_board_hub = "hub.bus_board_hub";
+inline constexpr const char* text_hub_departures_title = "hub.departures_title";
+inline constexpr const char* text_hub_departure_row = "hub.departure_row";
+inline constexpr const char* text_hub_departure_more = "hub.departure_more";
+inline constexpr const char* text_hub_distance_board = "hub.distance_board";
 inline constexpr const char* text_hub_no_booking = "hub.no_booking";
 inline constexpr const char* text_hub_booking = "hub.booking";
 inline constexpr const char* text_hub_completed = "hub.completed";
 inline constexpr const char* text_hub_expired = "hub.expired";
-inline constexpr const char* text_hub_controls = "hub.controls";
 inline constexpr const char* text_dap_hint = "hud.dap";
 inline constexpr const char* text_hub_pending = "hub.pending";
 inline constexpr const char* text_hub_slot_elapsed = "hub.slot_elapsed";
 inline constexpr const char* text_hub_slot_full = "hub.slot_full";
-inline constexpr const char* text_hub_choose_course = "hub.choose_course";
 inline constexpr const char* text_hub_count = "hub.count";
 inline constexpr const char* text_hub_own_slot = "hub.own_slot";
-inline constexpr const char* text_hub_back = "hub.back";
-inline constexpr const char* text_hub_refresh = "hub.refresh";
 inline constexpr const char* text_hub_courses = "hub.courses";
 inline constexpr const char* text_hub_cancel = "hub.cancel";
 inline constexpr const char* text_hub_return = "hub.return";
@@ -418,11 +426,14 @@ inline constexpr const char* text_online_error_booking_required = "online.error.
 inline constexpr const char* text_online_error_booking_expired = "online.error.booking_expired";
 inline constexpr const char* text_online_error_first_tee_required = "online.error.first_tee_required";
 inline constexpr const char* text_hub_started = "hub.started";
-inline constexpr const char* text_hub_time_later_day = "hub.time_later_day";
+inline constexpr const char* text_hub_time_tomorrow = "hub.time_tomorrow";
+inline constexpr const char* text_hub_book_today = "hub.book_today";
+inline constexpr const char* text_hub_book_tomorrow = "hub.book_tomorrow";
 
 
-inline constexpr const char* text_hub_play_now = "hub.play_now";
-inline constexpr const char* text_hub_course_row = "hub.course_row";
+inline constexpr const char* text_hub_course_figures = "hub.course_figures";
+inline constexpr const char* text_hub_course_detail = "hub.course_detail";
+inline constexpr const char* text_hub_course_detail_carry_only = "hub.course_detail_carry_only";
 inline constexpr const char* text_hub_course_time = "hub.course_time";
 inline constexpr const char* text_hub_slot_there = "hub.slot_there";
 inline constexpr const char* text_hub_part_night = "hub.part.night";
@@ -433,7 +444,3 @@ inline constexpr const char* text_hub_part_midday = "hub.part.midday";
 inline constexpr const char* text_hub_part_afternoon = "hub.part.afternoon";
 inline constexpr const char* text_hub_part_sunset = "hub.part.sunset";
 inline constexpr const char* text_hub_part_dusk = "hub.part.dusk";
-inline constexpr const char* text_hub_offline_controls = "hub.offline_controls";
-
-inline constexpr const char* text_hub_drop_hint = "hub.drop_hint";
-inline constexpr const char* text_hub_ball_hint = "hub.ball_hint";

@@ -16,6 +16,7 @@
 #include <algorithm>
 
 #include <glm/common.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
 
@@ -317,4 +318,21 @@ TEST_CASE("a lightning flash flickers and is gone by flash_seconds") {
         }
     }
     CHECK(make_render_lightning(lightning_presentation{}, style).flash == 0.0f);
+}
+
+TEST_CASE("weather streaks retain their projected world position when the selection box moves") {
+    const glm::vec3 size(32,16,32), seed(0.41f,0.36f,0.53f), offset(2,1,3);
+    const auto head = [&](const glm::vec3& centre) {
+        // weather_streak.vert: a periodic world lattice, selected by the eye.
+        const auto local=glm::fract(seed+(offset-centre)/size)-0.5f;
+        return centre+local*size;
+    };
+    const glm::vec3 at=head(glm::vec3(0));
+    const auto vp=glm::perspective(glm::radians(60.0f),1.5f,0.1f,100.0f)*
+        glm::lookAt(at+glm::vec3(0,1,-10),at,world_up);
+    const auto projected=[&](const glm::vec3& p) {const auto clip=vp*glm::vec4(p,1);return glm::vec3(clip)/clip.w;};
+    for(const glm::vec3 centre:{glm::vec3(0.1f,0.2f,-0.1f),glm::vec3(-0.2f,0.1f,0.2f)}) {
+        CHECK(near(head(centre),at,0.00001f));
+        CHECK(near(projected(head(centre)),projected(at),0.00001f));
+    }
 }

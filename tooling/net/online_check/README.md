@@ -42,7 +42,8 @@ process exit delete its temporary accounts and bookings.
 
 Coverage: protocol/content/name handshake, hub-only entry, scoped book/clock with
 slot rows only for booked times,
-book/change/cancel, stale cancellation, five bookings in one slot, full rebook
+book/change/cancel, the cart or carry stored with each booking (changed by booking the same time again, and what each round starts with), the
+departure board's groups and names, the PA call when a group's bus opens, F at the bus boarding with no menu, stale cancellation, five bookings in one slot, full rebook
 preserving the sixth's prior reservation, early-bus refusal, never-refused hub
 practice drops (replacing, out-of-reach requests at the feet), malformed motion
 claims (an idle step's far start height, unseated ride, address out of reach or

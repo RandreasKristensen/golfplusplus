@@ -90,3 +90,43 @@ TEST_CASE("every shipped tree and bush is of a species the tuning knows") {
         }
     }
 }
+
+TEST_CASE("seasons change on their start days and wrap through the new year") {
+    const tree_tuning& trees = shipped_content().tuning.trees;
+    const auto name_on = [&](const int month, const int day) { return season_on(trees, day_of_year(month, day)).name; };
+    CHECK(name_on(3, 19) == "winter");
+    CHECK(name_on(3, 20) == "spring");
+    CHECK(name_on(5, 31) == "spring");
+    CHECK(name_on(6, 1) == "early_summer");
+    CHECK(name_on(6, 20) == "early_summer");
+    CHECK(name_on(6, 21) == "midsummer");
+    CHECK(name_on(7, 31) == "midsummer");
+    CHECK(name_on(8, 1) == "late_summer");
+    CHECK(name_on(9, 21) == "late_summer");
+    CHECK(name_on(9, 22) == "autumn");
+    CHECK(name_on(11, 13) == "autumn");
+    CHECK(name_on(11, 14) == "winter");
+    CHECK(name_on(12, 31) == "winter");
+    CHECK(name_on(1, 1) == "winter");
+    // The hub's own day, midsummer, is the season of full leaf.
+    CHECK(season_on(trees, midsummer_day_of_year).name == "midsummer");
+}
+
+TEST_CASE("the seasons agree with the trees: no leaf before spring, full by summer, the default species turning in autumn and bare in winter") {
+    const tree_tuning& trees = shipped_content().tuning.trees;
+    const auto start = [&](const char* name) {
+        for (const year_season& season : trees.seasons) { if (season.name == name) { return static_cast<float>(season.start_day); } }
+        return -1.0f;
+    };
+    for (const char* name : {"spring", "early_summer", "midsummer", "late_summer", "autumn", "winter"}) { REQUIRE(start(name) > 0.0f); }
+    for (const tree_species& species : trees.species) {
+        if (species.evergreen) { continue; }
+        CHECK(foliage_share(species, start("spring") - 1.0f) == 0.0f);
+        CHECK(foliage_share(species, start("early_summer")) == 1.0f);
+    }
+    const tree_species& main = trees.species.front();
+    CHECK(turned_share(main, start("autumn") - 1.0f) == 0.0f);
+    CHECK(turned_share(main, start("autumn") + 14.0f) > 0.0f);
+    CHECK(foliage_share(main, start("winter")) == 0.0f);
+    CHECK(foliage_share(main, start("winter") - 1.0f) > 0.0f);
+}

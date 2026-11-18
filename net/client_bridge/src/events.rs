@@ -14,6 +14,7 @@ pub enum Row {
     MyCollected(CollectedRow),
     MyWorldFlags(WorldFlagRow),
     TeeSlot(TeeSlotRow),
+    DepartureBoard(DepartureView),
     MyTeeReservation(TeeReservationView),
     MyTeeBookStatus(TeeBookStatusRow),
     Room(RoomRow),
@@ -21,6 +22,7 @@ pub enum Row {
     GolfGroup(GolfGroupRow),
     AvatarMotion(AvatarMotionRow),
     Ball(BallRow),
+    PracticeBall(PracticeBallRow),
     ShotEvent(ShotEventRow),
     ItemUseEvent(ItemUseEventRow),
     Dap(DapRow),
@@ -192,7 +194,10 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
             scheduled_at: r.scheduled_at, booked_count: r.booked_count } }),
         Row::MyTeeReservation(r) => (StdbTable::MyTeeReservation, StdbRow { tee_reservation: StdbTeeReservation {
             reservation_id: r.reservation_id, slot_id: r.slot_id, started_at: r.started_at, grouped: r.grouped, completed: r.completed, revision: r.revision, course_id: arena.text(&r.course_id),
-            world_id: r.world_id, room_id: r.room_id, scheduled_at: r.scheduled_at } }),
+            world_id: r.world_id, room_id: r.room_id, scheduled_at: r.scheduled_at, takes_cart: r.takes_cart } }),
+        Row::DepartureBoard(r) => (StdbTable::DepartureBoard, StdbRow { departure: StdbDeparture {
+            slot_id: r.slot_id, course_id: arena.text(&r.course_id), scheduled_at: r.scheduled_at, names: arena.text(&r.names.join("
+")) } }),
         Row::MyTeeBookStatus(r) => (StdbTable::MyTeeBookStatus, StdbRow { tee_book_status: StdbTeeBookStatus {
             course_id: arena.text(&r.course_id), server_now: r.server_now } }),
         Row::Room(r) => (
@@ -261,6 +266,21 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                     in_cup: r.in_cup,
                     kind: r.kind,
                     tee_mat: r.tee_mat,
+                },
+            },
+        ),
+        Row::PracticeBall(r) => (
+            StdbTable::PracticeBall,
+            StdbRow {
+                practice_ball: StdbPracticeBall {
+                    id: r.id,
+                    account_id: r.account_id,
+                    room_id: r.room_id,
+                    x: r.x,
+                    y: r.y,
+                    z: r.z,
+                    in_cup: r.in_cup,
+                    placed_at: r.placed_at,
                 },
             },
         ),

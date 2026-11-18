@@ -350,11 +350,10 @@ play_area build_hub_area(const hub_definition& hub, const course_world_definitio
     area.zones = world.zones;
     area.trees = world.trees;
     std::vector<ground_pad> pads;
-    for (std::size_t i = 0; i < hub.tee_mats.size(); ++i) {
-        const auto& mat = hub.tee_mats[i];
-        if (!mat.raised) { continue; }
-        const auto along = safe_normalize(horizontal(mat.aim - mat.position), glm::vec3(0,0,1));
-        area.tee_boxes.push_back({i, mat.position, along, tuning.tee_box.width * .5f, tuning.tee_box.length * .5f});
+    for (std::size_t i = 0; i < hub.tee_strips.size(); ++i) {
+        const auto& strip = hub.tee_strips[i];
+        const auto along = safe_normalize(horizontal(strip.aim - strip.position), glm::vec3(0,0,1));
+        area.tee_boxes.push_back({i, strip.position, along, strip.half_width, strip.half_length});
         pads.push_back(tee_box_pad(area.tee_boxes.back()));
     }
     if (arrival_pad) { pads.push_back(*arrival_pad); }
@@ -365,6 +364,7 @@ play_area build_hub_area(const hub_definition& hub, const course_world_definitio
     area = with_bounds(std::move(area));
     area = with_fences(with_cart_paths(std::move(area), world.cart_roads, tuning), world.fences, tuning);
     set_tree_seasons(area.trees, tuning.trees, world.day_of_year);
+    for (const auto& light : hub.floodlights) { area.floodlights.push_back(aimed_floodlight(area, light.foot, light.aim, tuning)); }
     area.solids = standing_solids(area, tuning);
     std::vector<cup> markers;
     for (const auto& target : hub.targets) { markers.push_back(cup{anchor_on_terrain(area, target.position),0,0,0}); }
@@ -375,7 +375,8 @@ play_area build_hub_area(const hub_definition& hub, const course_world_definitio
         const float unit = tuning.scale.meters_per_world_unit;
         const glm::vec3 centre = anchor_on_terrain(area, point);
         area.cups.push_back(cup{centre, tuning.cup.radius_meters * tuning.cup.leniency / unit,
-            tuning.cup.depth_meters / unit, tuning.cup.rim_radius_meters / unit, sample_area(area, centre).normal});
+            tuning.cup.depth_meters / unit, tuning.cup.rim_radius_meters / unit, sample_area(area, centre).normal,
+            tuning.scale.practice_pin_visual_height_meters});
     }
     return area;
 }

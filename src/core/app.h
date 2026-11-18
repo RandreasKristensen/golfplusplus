@@ -112,6 +112,7 @@ private:
     // Presentation state, never read by game logic.
     camera_transition_state camera_transition_;
     std::uint64_t render_meshes_revision_ = 0;
+    grass_field grass_field_;
     render_static_mesh terrain_render_mesh_;
     render_static_mesh material_overlay_render_mesh_;
     render_hole_signs hole_signs_;

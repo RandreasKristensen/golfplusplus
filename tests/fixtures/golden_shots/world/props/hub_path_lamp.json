@@ -1,0 +1,89 @@
+{
+  "kind": "hub_fixture",
+  "colors": {
+    "iron": [
+      0.2,
+      0.21,
+      0.2
+    ],
+    "glass": [
+      0.95,
+      0.63,
+      0.25
+    ],
+    "light": [
+      1.0,
+      0.57,
+      0.23
+    ]
+  },
+  "points": {
+    "body_min": [
+      -0.09,
+      0,
+      -0.09
+    ],
+    "body_max": [
+      0.09,
+      3.6,
+      0.09
+    ],
+    "lamp": [
+      0,
+      3.45,
+      0
+    ]
+  },
+  "parts": [
+    {
+      "shape": "cylinder",
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        0,
+        3.35,
+        0
+      ],
+      "radius": 0.07,
+      "color": "iron"
+    },
+    {
+      "shape": "box",
+      "at": [
+        0,
+        3.45,
+        0
+      ],
+      "size": [
+        0.48,
+        0.32,
+        0.48
+      ],
+      "color": "glass",
+      "glow": "window"
+    },
+    {
+      "shape": "box",
+      "at": [
+        0,
+        3.65,
+        0
+      ],
+      "size": [
+        0.62,
+        0.1,
+        0.62
+      ],
+      "color": "iron"
+    }
+  ],
+  "numbers": {
+    "light_radius": 18.0,
+    "light_intensity": 1.8,
+    "light_cone_deg": 82.0,
+    "light_soft_deg": 18.0
+  }
+}

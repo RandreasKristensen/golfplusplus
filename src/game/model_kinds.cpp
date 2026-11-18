@@ -25,8 +25,15 @@ const std::vector<model_kind>& model_kinds() {
         {"hole_sign", {"board", "post"}, {}, {}, {}},
         // Board points frame the label the renderer writes on it.
         {"hub_book", {}, {"approach", "body_min", "body_max", "board_center", "board_size", "board_normal"}, {}, {}},
+        // Built things placed from hub.json: a box of collision, and a board for
+        // those that say something; a label is a board on a wall, nothing solid.
+        {"hub_fixture", {}, {"body_min", "body_max"}, {}, {}},
+        // A fixture whose speaker the starter's PA call is heard from.
+        {"hub_announcer", {}, {"body_min", "body_max", "speaker"}, {}, {}},
+        {"hub_sign", {}, {"body_min", "body_max", "board_center", "board_size", "board_normal"}, {}, {}},
+        {"hub_label", {}, {"board_center", "board_size", "board_normal"}, {}, {}},
         {"hub_bus", {}, {"approach", "door", "body_min", "body_max", "board_center", "board_size", "board_normal",
-                         "wheel_contact_fl", "wheel_contact_fr", "wheel_contact_rl", "wheel_contact_rr"}, {}, {}},
+                         "engine", "horn", "door_hinge", "wheel_contact_fl", "wheel_contact_fr", "wheel_contact_rl", "wheel_contact_rr"}, {}, {"door"}},
     };
     return kinds;
 }
@@ -38,6 +45,20 @@ const model_kind* find_model_kind(const std::string& name) {
         }
     }
     return nullptr;
+}
+
+const std::vector<hub_model>& hub_models() {
+    static const std::vector<hub_model> models{
+        {"tee_book", "hub_book"}, {"hub_bus", "hub_bus"},
+        {"hub_path_lamp", "hub_fixture"}, {"hub_clubhouse", "hub_fixture"}, {"hub_starter_hut", "hub_fixture"}, {"hub_pa_pole", "hub_announcer"},
+        {"hub_bin", "hub_fixture"}, {"hub_bench", "hub_fixture"}, {"hub_terrace_table", "hub_fixture"},
+        {"hub_flagpole", "hub_fixture"}, {"hub_range_divider", "hub_fixture"}, {"hub_ball_bucket", "hub_fixture"},
+        {"hub_bag_stand", "hub_fixture"}, {"hub_ball_dispenser", "hub_fixture"},
+        {"hub_car_red", "hub_fixture"}, {"hub_car_blue", "hub_fixture"}, {"hub_car_cream", "hub_fixture"}, {"hub_car_silver", "hub_fixture"},
+        {clock_model, "hub_label"}, {departure_row_model, "hub_label"},
+        {distance_board_model, "hub_sign"}, {departure_board_model, "hub_sign"},
+    };
+    return models;
 }
 
 const std::vector<required_model>& required_models() {

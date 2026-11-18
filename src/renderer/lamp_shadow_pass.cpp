@@ -19,7 +19,8 @@ bool lamp_shadow_pass::init(const std::string& vertex_path, const std::string& f
     if (style.lamps <= 0) {
         return true;
     }
-    if (!shader_.load_from_files(vertex_path, fragment_path)) {
+    if (!shader_.load_from_files(vertex_path, fragment_path) ||
+        !tree_shader_.load_from_files(vertex_path, fragment_path, "#define TREE_CASTER\n")) {
         return false;
     }
     glGenTextures(1, &depth_texture_);
@@ -60,6 +61,7 @@ void lamp_shadow_pass::shutdown() {
         depth_texture_ = 0;
     }
     shader_.shutdown();
+    tree_shader_.shutdown();
     held_.clear();
     slots_.clear();
     view_projs_.clear();
@@ -77,11 +79,17 @@ void lamp_shadow_pass::update(const std::vector<render_light>& lights, const glm
         return;
     }
     const std::uint64_t floodlights_revision = floodlights != nullptr ? floodlights->revision : 0;
-    if (!casters_known_ || trees_revision != trees_revision_ || floodlights_revision != floodlights_revision_) {
+    const bool moved = tree_batch.motion_wind() != tree_wind_ ||
+        (tree_batch.moving() && tree_batch.motion_time() != tree_motion_time_);
+    if (!casters_known_ || trees_revision != trees_revision_ || floodlights_revision != floodlights_revision_ ||
+        tree_model_revision_ != tree_batch.model_revision() || moved) {
         std::fill(held_.begin(), held_.end(), std::nullopt);
         trees_revision_ = trees_revision;
         floodlights_revision_ = floodlights_revision;
         casters_known_ = true;
+        tree_motion_time_ = tree_batch.motion_time();
+        tree_wind_ = tree_batch.motion_wind();
+        tree_model_revision_ = tree_batch.model_revision();
     }
     const lamp_tiling tiling =
         place_lamps(held_, lights, shadowed_lamps(lights, eye, style_.reach_meters, held_.size()));
@@ -100,6 +108,7 @@ void lamp_shadow_pass::update(const std::vector<render_light>& lights, const glm
     glDepthMask(GL_TRUE);
     glEnable(GL_SCISSOR_TEST);
     shader_.set_profile(profile);
+    tree_shader_.set_profile(profile);
     shader_.use();
     for (const std::size_t tile : tiling.redraw) {
         const int left = static_cast<int>(tile) * resolution;
@@ -107,7 +116,9 @@ void lamp_shadow_pass::update(const std::vector<render_light>& lights, const glm
         glScissor(left, 0, resolution, resolution);
         glClear(GL_DEPTH_BUFFER_BIT);
         const glm::mat4 view_proj = lamp_shadow_view_proj(*held_[tile], style_.lamp_near_meters);
-        tree_batch.draw_casters(trees, trees_revision, shader_, view_proj, profile);
+        tree_shader_.use();
+        tree_batch.draw_casters(trees, trees_revision, tree_shader_, view_proj, profile);
+        shader_.use();
         floodlight_batch.draw_casters(floodlights, shader_, view_proj, profile);
     }
     glDisable(GL_SCISSOR_TEST);

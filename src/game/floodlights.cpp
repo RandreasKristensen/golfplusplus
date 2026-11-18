@@ -186,16 +186,9 @@ bool open_ground(const glm::vec3& spot, const placement& at) {
 // A pole at `spot`, its lamp aimed at `target`.
 floodlight pole_at(const glm::vec3& spot, const glm::vec3& target, const std::size_t area_hole,
                    const floodlight_target kind, const placement& at) {
-    const floodlight_tuning& rules = at.tuning.floodlights;
-    floodlight light;
+    floodlight light = aimed_floodlight(at.area, spot, target, at.tuning);
     light.area_hole = area_hole;
     light.target = kind;
-    light.foot = anchor_on_terrain(at.area, spot);
-    light.radius = rules.pole_radius;
-    const glm::vec3 lit = anchor_on_terrain(at.area, target);
-    const glm::vec3 towards = safe_normalize(horizontal(lit - light.foot), glm::vec3(0.0f, 0.0f, 1.0f));
-    light.lamp = light.foot + world_up * rules.pole_height + towards * rules.arm_length;
-    light.aim = safe_normalize(lit - light.lamp, -world_up);
     return light;
 }
 
@@ -307,6 +300,19 @@ void place_hole_floodlights(std::vector<floodlight>& lights, const play_area& ar
                        pin, area_hole, floodlight_target::green, at));
     }
 }
+}
+
+floodlight aimed_floodlight(const play_area& area, const glm::vec3& spot, const glm::vec3& target, const game_tuning& tuning) {
+    const floodlight_tuning& rules = tuning.floodlights;
+    floodlight light;
+    light.target = floodlight_target::range;
+    light.foot = anchor_on_terrain(area, spot);
+    light.radius = rules.pole_radius;
+    const glm::vec3 lit = anchor_on_terrain(area, target);
+    const glm::vec3 towards = safe_normalize(horizontal(lit - light.foot), glm::vec3(0.0f, 0.0f, 1.0f));
+    light.lamp = light.foot + world_up * rules.pole_height + towards * rules.arm_length;
+    light.aim = safe_normalize(lit - light.lamp, -world_up);
+    return light;
 }
 
 std::vector<floodlight> place_floodlights(const play_area& area,

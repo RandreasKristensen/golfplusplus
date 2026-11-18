@@ -1,8 +1,9 @@
 #include "game/game_state.h"
 #include "game/address_play.h"
+#include "game/ball_lift.h"
 #include "game/course_session.h"
 #include "game/golf_bag.h"
-#include "game/hub_ball.h"
+#include "game/my_balls.h"
 #include "game/hub_flow.h"
 #include "game/hub_session.h"
 #include "game/interactables.h"
@@ -32,7 +33,9 @@ void interact(game_state& state) {
     case interactable_kind::tee_book:
         state.hub_flow.screen = hub_screen::book; return;
     case interactable_kind::bus:
-        state.hub_flow.screen = hub_screen::bus; return;
+        // At the hub the bus just boards (cart or carry was chosen with the booking); on a course it offers the way back.
+        if (state.kind == place_kind::hub) { request_bus_travel(state); } else { state.hub_flow.screen = hub_screen::bus; }
+        return;
     case interactable_kind::booked_start:
         request_ball_preparation(state, net_command_type::start_booked_round); return;
     case interactable_kind::warmup:
@@ -43,24 +46,20 @@ void interact(game_state& state) {
     case interactable_kind::tipped_cart:
         start_righting(state, near->tipped);
         return;
-    case interactable_kind::practice_ball:
-        pick_up_practice_ball(state); return;
     case interactable_kind::ball:
-        step_up_to_ball(state);
+    case interactable_kind::spare_ball:
+    case interactable_kind::cup_ball:
+        begin_ball_hold(state);
         return;
     case interactable_kind::bag:
         open_club_picker(state);
-        return;
-    case interactable_kind::cup_ball:
-        send_motion_now(state);
-        pick_up_cup_ball(state);
         return;
     case interactable_kind::collectible:
         send_motion_now(state);
         record_collectible_claim(state, state.world.collectibles[near->index]);
         return;
     case interactable_kind::tee: {
-        if (state.hub) {
+        if (state.place.rules.stations) {
             const bool again = state.ball && state.ball->tee_mat == near->index;
             const address_state last = state.address;
             send_motion_now(state);
@@ -141,12 +140,6 @@ void update_walking(game_state& state, const game_input& input, const float dt, 
         stop_walking(state);
         return;
     }
-    if (!picking && !state.handling && input.swing && state.ball && state.ball->kind == ball_kind::practice &&
-        state.ball->place != ball_place::in_cup && !state.shot &&
-        practice_pickup_in_reach(state.ball->kind, true, on_foot(state), state.player.position, state.ball->position, state.tuning)) {
-        step_up_to_ball(state);
-        return;
-    }
     const glm::vec3 before = state.player.position;
     // Reading the green keeps its slow steps, without a sprint or hop.
     game_input moving = input;
@@ -167,8 +160,11 @@ void update_walking(game_state& state, const game_input& input, const float dt, 
     const float meters = horizontal_distance(state.player.position, before) * state.tuning.scale.meters_per_world_unit;
     record_movement(state, state.rewards.walking, state.walk_meters_pending, meters);
 
-    if (!picking && !state.handling && !answer_give_up_prompt(state, input) && input.interact) {
-        interact(state);
+    if (!picking && !state.handling && !answer_give_up_prompt(state, input)) {
+        if (input.interact) {
+            interact(state);
+        }
+        update_ball_hold(state, input, dt);
     }
     // Taking up the ball or a seat puts me back on my feet.
     if (!state.player.vertical.grounded && (state.mode != game_mode::walking || state.ride)) {

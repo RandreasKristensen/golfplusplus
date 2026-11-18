@@ -11,10 +11,15 @@
 struct tee_book_state {
     hub_screen screen = hub_screen::none;
     std::string course;
+    // Cart or carry when no booking decides it (a booking's own choice is shown otherwise).
+    bool takes_cart = true;
     int selection = 0;
     int top = 0;
     std::optional<net_command_type> pending;
     std::int64_t scheduled = 0;
+    // What the pending book_tee asked for: its course and whether it takes a cart.
+    std::string pending_course;
+    bool pending_cart = false;
     std::int64_t refreshed_at = 0;
     std::string message;
 };
@@ -23,8 +28,9 @@ std::vector<ui_sound> update_tee_book(tee_book_state& menu, game_state& game, co
 render_startup_menu render_tee_book(const tee_book_state& menu, const game_state& game,
     const startup_catalog& catalog, const text_assets& text);
 // A tee time (real UTC microseconds) as the hub's in-game clock reads it, like
-// the camcorder datestamp; a later in-game day than now says how many days on.
-// Never a real date or time.
+// the camcorder datestamp, with TOMORROW before a time on the next in-game
+// day. Never a real date or time.
+std::string tee_clock_text(std::int64_t micros, const game_state& game, const text_assets& text);  // the time alone
 std::string tee_time_text(std::int64_t micros, const game_state& game, const text_assets& text);
 // The part of the day's text key for the sun `sun_elevation_deg` up, before
 // or after its noon, and this many hours from it.
@@ -34,7 +40,14 @@ const char* part_of_day_key(float sun_elevation_deg, bool before_noon, float sol
 // SUNRISE".
 std::string course_time_text(const course_definition& course, const game_state& game, const text_assets& text,
                              std::int64_t unix_ms);
+// A number with a comma between its thousands: 5912 reads "5,912".
+std::string with_thousands(int value);
+std::string course_name(const startup_catalog& catalog, const std::string& id);
 std::string booking_text(const game_state& game, const startup_catalog& catalog, const text_assets& text);
 // One per game.area.props: what its board says, empty for none. The tee book
-// is titled; the bus shows where it goes (the booked course, or the hub).
-std::vector<std::string> prop_board_labels(const game_state& game, const startup_catalog& catalog, const text_assets& text);
+// is titled; the bus shows where it goes (the booked course, or the hub); the
+// clocks say `clock` (the hub's in-game time, as the datestamp reads it); a
+// target's board its distance; the departure board's rows the next departures
+// (core/departure_board.h).
+std::vector<std::string> prop_board_labels(const game_state& game, const startup_catalog& catalog, const text_assets& text,
+                                           const std::string& clock);

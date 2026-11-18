@@ -115,7 +115,7 @@ TEST_CASE("a golfer setting is listed with the rest but never kept in the settin
 }
 
 TEST_CASE("the settings list scrolls, and the mouse hovers, clicks the side of each arrow and wheels it") {
-    const startup_catalog catalog = load_startup_catalog(shipped_content(), shipped_text_assets());
+    const startup_catalog catalog = *load_startup_catalog(shipped_content(), shipped_text_assets()).catalog;
     const std::vector<setting_definition>& definitions = catalog.settings;
     const auto index_of = [&definitions](const char* id) {
         return static_cast<int>(find_setting(definitions, id) - definitions.data());
@@ -178,7 +178,7 @@ TEST_CASE("the settings list scrolls, and the mouse hovers, clicks the side of e
 }
 
 TEST_CASE("typing on the settings screen searches the settings by name, backspace takes it back, and never leaves") {
-    const startup_catalog catalog = load_startup_catalog(shipped_content(), shipped_text_assets());
+    const startup_catalog catalog = *load_startup_catalog(shipped_content(), shipped_text_assets()).catalog;
     settings_view view;
     settings_values values;
     std::vector<ui_sound> sounds;

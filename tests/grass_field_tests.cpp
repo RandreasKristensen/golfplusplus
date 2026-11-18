@@ -3,41 +3,14 @@
 #include "renderer/grass_field.h"
 #include "test_support.h"
 
+#include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdint>
+#include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/vec4.hpp>
-
-TEST_CASE("the grass map covers the blades round the eye and is mapped again only once the eye nears its edge") {
-    const float reach = 20.0f;
-    const glm::vec3 eye(103.3f, 12.6f, -47.9f);
-    const grass_window window = grass_window_around(eye, reach);
-    CHECK(window.min.x < eye.x - reach);
-    CHECK(window.min.y < eye.z - reach);
-    CHECK(window.min.x + window.size > eye.x + reach);
-    CHECK(window.min.y + window.size > eye.z + reach);
-    // Its corner is on a whole texel, so the map does not crawl.
-    const float texel = window.size / static_cast<float>(grass_map_texels);
-    CHECK(std::abs(window.min.x / texel - std::round(window.min.x / texel)) < 1.0e-3f);
-    CHECK(grass_window_serves(window, eye, reach));
-    CHECK(grass_window_serves(window, eye + glm::vec3(3.0f, 0.0f, -3.0f), reach));
-    CHECK(!grass_window_serves(window, eye + glm::vec3(reach, 0.0f, 0.0f), reach));
-    CHECK(!grass_window_serves(grass_window{}, eye, reach));
-}
-
-TEST_CASE("the grass map looks straight down: x and z across it, higher ground nearer") {
-    const grass_window window = grass_window_around(glm::vec3(0.0f, 5.0f, 0.0f), 20.0f);
-    const glm::mat4 view_proj = grass_window_view_proj(window);
-    const auto at = [&](const glm::vec3& point) { return glm::vec3(view_proj * glm::vec4(point, 1.0f)); };
-    const glm::vec2 corner = window.min;
-    const glm::vec2 far_corner = window.min + glm::vec2(window.size);
-    CHECK(near(at(glm::vec3(corner.x, 5.0f, corner.y)).x, -1.0f));
-    CHECK(near(at(glm::vec3(corner.x, 5.0f, corner.y)).y, -1.0f));
-    CHECK(near(at(glm::vec3(far_corner.x, 5.0f, far_corner.y)).x, 1.0f));
-    CHECK(near(at(glm::vec3(far_corner.x, 5.0f, far_corner.y)).y, 1.0f));
-    CHECK(at(glm::vec3(0.0f, 9.0f, 0.0f)).z < at(glm::vec3(0.0f, 1.0f, 0.0f)).z);
-    CHECK(std::abs(at(glm::vec3(0.0f, 60.0f, 0.0f)).z) < 1.0f);
-}
 
 TEST_CASE("the tufts stand on a world-fixed grid round the eye") {
     const float spacing = 0.16f;
@@ -62,7 +35,7 @@ TEST_CASE("only the blocks of tufts the eye may see over ground are drawn") {
     const grass_grid grid = grass_grid_around(eye, 60.0f, 0.5f);
     const float side = grid.spacing * static_cast<float>(grass_block_tufts);
     const int blocks = grid.per_row / grass_block_tufts;
-    const std::vector<glm::vec2> seen = grass_visible_blocks(grid, frustum, {&ground}, 0.3f, eye, 0.0f);
+    const std::vector<glm::vec2> seen = grass_visible_blocks(grid, frustum, {&ground}, 0.3f);
     CHECK(!seen.empty());
     CHECK(static_cast<int>(seen.size()) < blocks * blocks / 2);
     bool ahead = false;
@@ -73,14 +46,7 @@ TEST_CASE("only the blocks of tufts the eye may see over ground are drawn") {
         ahead = ahead || (corner.x <= 0.0f && corner.x + side > 0.0f && corner.y > 10.0f);
     }
     CHECK(ahead);
-    // An outer ring leaves out the blocks wholly inside the ring within.
-    const std::vector<glm::vec2> hollow = grass_visible_blocks(grid, frustum, {&ground}, 0.3f, eye, 20.0f);
-    CHECK(hollow.size() < seen.size());
-    for (const glm::vec2& corner : hollow) {
-        const glm::vec2 far_corner = corner + glm::vec2(side + grid.spacing);
-        CHECK(glm::length(glm::max(glm::abs(corner), glm::abs(far_corner))) >= 20.0f);
-    }
-    CHECK(grass_visible_blocks(grid, frustum, {}, 0.3f, eye, 0.0f).empty());
+    CHECK(grass_visible_blocks(grid, frustum, {}, 0.3f).empty());
 }
 
 TEST_CASE("a tuft is three tapering blades, each standing from its root to its tip") {
@@ -96,21 +62,96 @@ TEST_CASE("a tuft is three tapering blades, each standing from its root to its t
     CHECK(tips == 3);
 }
 
-TEST_CASE("a tee box's top is bare on the grass map, a little past its edges and nowhere else") {
-    tee_box box;
-    box.center = glm::vec3(30.0f, 4.0f, -12.0f);
-    box.down_hole = glm::vec3(0.0f, 0.0f, 1.0f);
-    box.half_width = 1.5f;
-    box.half_length = 2.5f;
-    const std::vector<render_terrain_vertex> top = grass_bare_tee_tops({box});
-    REQUIRE(top.size() == 6U);
-    for (const render_terrain_vertex& v : top) {
-        CHECK(v.blades == 0.0f);
-        CHECK(v.position.y == 4.0f);
-        // Across the hole is x here, down it z.
-        CHECK(std::abs(v.position.x - 30.0f) > 1.5f);
-        CHECK(std::abs(v.position.x - 30.0f) < 1.8f);
-        CHECK(std::abs(v.position.z + 12.0f) > 2.5f);
-        CHECK(std::abs(v.position.z + 12.0f) < 2.8f);
+namespace {
+render_static_mesh flat_ground() {
+    render_static_mesh mesh;
+    for (const glm::vec2 p : {glm::vec2(-12,-12), glm::vec2(12,-12), glm::vec2(12,12), glm::vec2(-12,12)}) {
+        render_terrain_vertex v; v.position = glm::vec3(p.x, 3 + 0.1f*p.x, p.y); v.blades = 1;
+        mesh.vertices.push_back(v);
+    }
+    mesh.indices = {0,1,2,0,2,3};
+    mesh.bounds = compute_render_mesh_bounds(mesh.vertices);
+    mesh.revision = 17;
+    return mesh;
+}
+}
+
+TEST_CASE("grass field edges are conservative at every interpolation alignment, including thin slivers and tee tops") {
+    const auto ground = flat_ground();
+    render_static_mesh bare;
+    // A diagonal bare sliver much narrower than a field cell.
+    for (const glm::vec2 p : {glm::vec2(-8,-7), glm::vec2(8,7), glm::vec2(8,7.03f)}) {
+        render_terrain_vertex v; v.position = glm::vec3(p.x, 3, p.y); bare.vertices.push_back(v);
+    }
+    bare.indices = {0,1,2};
+    tee_box tee; tee.center = glm::vec3(-5,3,5); tee.half_width = 1; tee.half_length = 2;
+    tee.down_hole = glm::normalize(glm::vec3(1,0,1));
+    const auto field = bake_grass_field(ground, bare, {tee});
+    REQUIRE(!field.samples.empty());
+    CHECK(field.revision == ground.revision);
+    for (float t = 0; t < 1; t += 0.007f) {
+        const glm::vec2 p = glm::mix(glm::vec2(-8,-7), glm::vec2(8,7.01f), t);
+        CHECK(sample_grass_field(field,p).y <= grass_field_error + 0.001f);
+    }
+    CHECK(sample_grass_field(field, {-5,5}).y == 0);
+    CHECK(sample_grass_field(field, {5,-5}).y > 2);
+    CHECK(near(sample_grass_field(field,{5,-5}).x, 3.5f));
+    CHECK(sample_grass_field(field, {100,100}).y == 0);
+    // At all subcell alignments an accepted blade has its full reach clear.
+    const material_zone sliver = make_material_zone(material_zone_type::fairway, {{-8,-7},{8,7},{8,7.03f}});
+    for (float x = -9; x < 9; x += 0.137f) {
+        for (float z = -9; z < 9; z += 0.171f) {
+            const float distance = sample_grass_field(field,{x,z}).y;
+            const float exact = zone_distance_outside(sliver, {x,0,z});
+            CHECK(distance <= exact + grass_field_error + 0.002f);
+        }
+    }
+}
+
+TEST_CASE("coarse grass representatives are nested members of the finest world grid, including negative blocks") {
+    for (int z = -12; z < 12; ++z) {
+        for (int x = -12; x < 12; ++x) {
+            for (int level = 1; level < grass_max_rings; ++level) {
+                const glm::ivec2 block(x,z);
+                const auto parent = grass_representative(block,level);
+                for (int dz = 0; dz < (1<<level); ++dz) {
+                    for (int dx = 0; dx < (1<<level); ++dx) {
+                        const auto cell=block*(1<<level)+glm::ivec2(dx,dz);
+                        CHECK(grass_cell_rank(parent.x,parent.y)<=grass_cell_rank(cell.x,cell.y));
+                    }
+                }
+                bool child = false;
+                for (int dz = 0; dz < 2; ++dz) {
+                    for (int dx = 0; dx < 2; ++dx) {
+                        child = child || parent == grass_representative(block*2 + glm::ivec2(dx,dz),level-1);
+                    }
+                }
+                CHECK(child);
+                CHECK(parent.x >= x*(1<<level)); CHECK(parent.x < (x+1)*(1<<level));
+                CHECK(parent.y >= z*(1<<level)); CHECK(parent.y < (z+1)*(1<<level));
+            }
+        }
+    }
+}
+
+TEST_CASE("grass distance nodes match overlapping bare outlines, including duplicate triangles") {
+    const auto ground=flat_ground();
+    render_static_mesh bare;
+    const std::vector<material_zone> zones{
+        make_material_zone(material_zone_type::fairway,{{-2,-1},{2,-1},{2,1},{-2,1}}),
+        make_material_zone(material_zone_type::bunker,{{1,-0.5f},{5,-0.5f},{5,1.5f},{1,1.5f}})};
+    for(const auto& zone:zones) {
+        const auto first=static_cast<std::uint32_t>(bare.vertices.size());
+        for(const auto& p:zone.outline) {render_terrain_vertex v;v.position={p.x,3,p.y};bare.vertices.push_back(v);}
+        for(const auto i:{0u,1u,2u,0u,2u,3u,0u,1u,2u}) {bare.indices.push_back(first+i);}
+    }
+    const auto field=bake_grass_field(ground,bare,{});
+    for(float z=-10;z<=10;z+=0.5f) {
+        for(float x=-10;x<=10;x+=0.5f) {
+            const glm::vec3 p(x,0,z);
+            const float exact=std::min({zone_distance_outside(zones[0],p),zone_distance_outside(zones[1],p),
+                                        12-std::abs(x),12-std::abs(z)});
+            CHECK(near(sample_grass_field(field,{x,z}).y,exact,0.0001f));
+        }
     }
 }

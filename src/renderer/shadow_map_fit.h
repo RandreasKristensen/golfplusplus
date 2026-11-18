@@ -19,7 +19,6 @@ struct shadow_map_fit {
 glm::mat3 shadow_light_rotation(const glm::vec3& towards_sun);
 
 // The map `resolution` texels across over `extent` metres square, looking
-// down `towards_sun` (unit) onto the ground `ahead` of the extent in front of
-// `eye` along `forward`'s level part.
-shadow_map_fit fit_shadow_map(const glm::vec3& towards_sun, const glm::vec3& eye, const glm::vec3& forward, float extent,
-                              int resolution, float ahead);
+// down `towards_sun` (unit), centred on `eye`. Camera orientation is not an
+// input: turning must not move the map's coverage or its shadow fade.
+shadow_map_fit fit_shadow_map(const glm::vec3& towards_sun, const glm::vec3& eye, float extent, int resolution);

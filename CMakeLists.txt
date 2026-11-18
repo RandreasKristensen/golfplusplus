@@ -118,15 +118,17 @@ golfpp_library(golfpp-game
     src/game/effects.cpp
     src/game/game_content.cpp
     src/game/game_walking.cpp
+    src/game/ball_lift.cpp
     src/game/game_state.cpp
     src/game/interactables.cpp
     src/game/dap_rules.cpp
     src/game/social_dap.cpp
     src/game/place_entry.cpp
-    src/game/hub_ball.cpp
+    src/game/my_balls.cpp
     src/game/hub_session.cpp
+    src/game/boarding.cpp
     src/game/hub_flow.cpp
-    src/game/hub_ball_rules.cpp
+    src/game/my_balls_rules.cpp
     src/game/hub_loader.cpp
     src/game/hub_scene.cpp
     src/game/body_contact.cpp
@@ -224,7 +226,9 @@ golfpp_library(golfpp-render-data
     src/renderer/fence_batch.cpp
     src/renderer/floodlight_batch.cpp
     src/renderer/hole_sign_batch.cpp
+    src/renderer/water_reflection.cpp
     src/renderer/water_batch.cpp
+    src/renderer/grass_bake.cpp
     src/renderer/grass_field.cpp
     src/renderer/tree_model.cpp
     src/renderer/hole_sign_face.cpp
@@ -358,6 +362,7 @@ golfpp_library(golfpp-app-logic
     src/core/online_menus.cpp
     src/core/play_screen.cpp
     src/core/tee_book.cpp
+    src/core/departure_board.cpp
     src/core/render_frame.cpp
     src/core/render_gear.cpp
     src/core/render_online.cpp
@@ -408,11 +413,13 @@ add_executable(golfpp
     src/renderer/floodlight_renderer.cpp
     src/renderer/hole_sign_renderer.cpp
     src/renderer/lighting_uniforms.cpp
+    src/renderer/reflection_pass.cpp
     src/renderer/water_renderer.cpp
     src/renderer/grass_renderer.cpp
     src/renderer/eyepiece_pass.cpp
     src/renderer/overlay_pass.cpp
     src/renderer/prop_renderer.cpp
+    src/renderer/renderer_scene.cpp
     src/renderer/renderer.cpp
     src/renderer/renderer_look.cpp
     src/renderer/shader.cpp
@@ -491,6 +498,21 @@ add_executable(golfpp-preview-prop EXCLUDE_FROM_ALL
 target_compile_definitions(golfpp-preview-prop PRIVATE SDL_MAIN_HANDLED GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
 target_link_libraries(golfpp-preview-prop PRIVATE golfpp-app-logic golfpp-warnings ${GOLFPP_SDL2} OpenGL::GL)
 
+# Rendered checks of the picture through the same GL renderer (tooling/picture_check).
+add_executable(golfpp-picture-check EXCLUDE_FROM_ALL
+    tooling/picture_check/picture_check_main.cpp
+    tooling/picture_check/check_support.cpp
+    tooling/picture_check/grass_check.cpp
+    tooling/picture_check/grass_ground_check.cpp
+    tooling/picture_check/water_check.cpp
+    tooling/picture_check/water_scene_check.cpp
+    tooling/picture_check/tree_check.cpp
+    tooling/picture_check/profile_check.cpp
+    src/core/window.cpp ${GOLFPP_GL_SOURCES})
+target_compile_definitions(golfpp-picture-check PRIVATE SDL_MAIN_HANDLED GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}"
+    GOLFPP_BUILD_DIR="${CMAKE_BINARY_DIR}")
+target_link_libraries(golfpp-picture-check PRIVATE golfpp-app-logic golfpp-warnings ${GOLFPP_SDL2} OpenGL::GL)
+
 if (GOLFPP_NET)
     # A headless client that checks a running server (tooling/net/online_check).
     add_executable(golfpp-online-check EXCLUDE_FROM_ALL
@@ -556,6 +578,8 @@ if (GOLFPP_BUILD_TESTS)
         tests/golf_bag_tests.cpp
         tests/bag_handling_tests.cpp
         tests/practice_tests.cpp
+        tests/ball_lift_tests.cpp
+        tests/my_balls_tests.cpp
         tests/osd_tests.cpp
         tests/shot_snapshot_tests.cpp
         tests/camera_transition_tests.cpp
@@ -596,6 +620,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/online_menus_tests.cpp
         tests/social_dap_tests.cpp
         tests/hub_flow_tests.cpp
+        tests/hub_built_tests.cpp
         tests/online_play_tests.cpp
         tests/live_world_tests.cpp
         tests/bag_sync_tests.cpp

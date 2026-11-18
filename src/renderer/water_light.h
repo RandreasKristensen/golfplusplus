@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -43,6 +44,22 @@ inline glm::vec3 water_seen_through(const water_style& style, const glm::vec3& b
 inline float water_fresnel(const float cos_view) {
     const float away = 1.0f - std::clamp(cos_view, 0.0f, 1.0f);
     return water_f0 + (1.0f - water_f0) * away * away * away * away * away;
+}
+
+// Projected-area quadrature of the undrawn wave faces, matching water.frag.
+// Their slope must survive the distance fade of the resolved ripple normal.
+inline float water_filtered_fresnel(const float cos_view, const float slope) {
+    const float c = std::clamp(cos_view, 0.0f, 1.0f);
+    const float side = slope * std::sqrt(std::max(1.0f - c * c, 0.0f));
+    const float length = std::sqrt(1.0f + slope * slope);
+    float area = 0.0f;
+    float reflected = 0.0f;
+    for (const float face : {c + side, c - side, c, c}) {
+        const float facing = std::clamp(face / length, 0.0f, 1.0f);
+        area += facing;
+        reflected += facing * water_fresnel(facing);
+    }
+    return area > 0.0f ? reflected / area : 1.0f;
 }
 
 // Water's refractive index, and the cosine (to straight up) of the critical
@@ -83,41 +100,6 @@ inline glm::vec3 water_light_at_depth(const water_style& style, const float dept
     return water_transmittance(style, std::max(depth_meters, 0.0f));
 }
 
-// The part of the segment from `from` to `to` (screen positions, -1 to 1 each
-// way) inside the screen, as shares of it: nothing to march when low >= high.
-struct water_screen_span {
-    float low = 0.0f;
-    float high = 0.0f;
-};
-
-inline water_screen_span water_reflection_screen_span(const glm::vec2& from, const glm::vec2& to) {
-    glm::vec2 d = to - from;
-    for (int axis = 0; axis < 2; ++axis) {
-        if (std::abs(d[axis]) < 1.0e-6f) {
-            d[axis] = 1.0e-6f;
-        }
-    }
-    water_screen_span span{0.0f, 1.0f};
-    for (int axis = 0; axis < 2; ++axis) {
-        const float first = (-1.0f - from[axis]) / d[axis];
-        const float second = (1.0f - from[axis]) / d[axis];
-        span.low = std::max(span.low, std::min(first, second));
-        span.high = std::min(span.high, std::max(first, second));
-    }
-    return span;
-}
-
-// How far a reflection found at screen position `uv` (0 to 1 each way) is
-// trusted: 1 inside, falling smoothly to 0 at the picture's edge over
-// `fade_share` of it.
-inline float water_reflection_edge_confidence(const float u, const float v, const float fade_share) {
-    const auto fade = [fade_share](const float x) {
-        const float t = std::clamp(std::min(x, 1.0f - x) / fade_share, 0.0f, 1.0f);
-        return t * t * (3.0f - 2.0f * t);
-    };
-    return std::min(fade(u), fade(v));
-}
-
 // How rough the wind makes open water, 0 a mirror .. 1 no reflection left
 // whole: rising from calm to rough wind (Beaufort 1 to 3) as a smoothstep.
 inline float water_wind_roughness(const water_style& style, const float wind_meters_per_second) {
@@ -140,28 +122,6 @@ inline float water_roughness(const water_style& style, const float wind_meters_p
     const float gusting = style.gust_share + (1.0f - style.gust_share) * std::clamp(gust, 0.0f, 1.0f);
     const float windy = water_wind_roughness(style, wind_meters_per_second) * water_fetch_share(style, fetch_meters) * gusting;
     return style.calm_ripple_share + (1.0f - style.calm_ripple_share) * windy;
-}
-
-// The reflection's steps along its ray: `steps` of them from `first_meters`,
-// each `growth` times the last, reaching `reach_meters` together, so near
-// steps are fine and far ones, which cover few pixels, long. The growth by
-// bisection; 1 when even steps of first_meters reach.
-inline constexpr int water_reflection_steps = 32;
-
-inline float water_reflection_step_growth(const float first_meters, const float reach_meters, const int steps) {
-    const auto reached = [&](const float growth) {
-        return first_meters * (std::pow(growth, static_cast<float>(steps)) - 1.0f) / (growth - 1.0f);
-    };
-    if (first_meters * static_cast<float>(steps) >= reach_meters) {
-        return 1.0f;
-    }
-    float low = 1.0001f;
-    float high = 4.0f;
-    for (int i = 0; i < 48; ++i) {
-        const float middle = 0.5f * (low + high);
-        (reached(middle) > reach_meters ? high : low) = middle;
-    }
-    return high;
 }
 
 // Fetch is kept for this many directions the wind blows towards, the k-th

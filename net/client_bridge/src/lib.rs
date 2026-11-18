@@ -247,8 +247,12 @@ pub unsafe extern "C" fn stdb_place_practice_ball(client: *mut StdbClient, expec
         conn.reducers.place_practice_ball_then(expected_room, x, y, z, done)); }
 }
 #[no_mangle]
-pub unsafe extern "C" fn stdb_pick_up_ball(client: *mut StdbClient, expected_room: u64) {
-    if let Some(c) = self::client(client) { c.call("pick_up_ball", |conn, done| conn.reducers.pick_up_ball_then(expected_room, done)); }
+pub unsafe extern "C" fn stdb_pick_up_ball(client: *mut StdbClient, expected_room: u64, ball_id: u64) {
+    if let Some(c) = self::client(client) { c.call("pick_up_ball", |conn, done| conn.reducers.pick_up_ball_then(expected_room, ball_id, done)); }
+}
+#[no_mangle]
+pub unsafe extern "C" fn stdb_play_ball(client: *mut StdbClient, expected_room: u64, spare_id: u64) {
+    if let Some(c) = self::client(client) { c.call("play_ball", |conn, done| conn.reducers.play_ball_then(expected_room, spare_id, done)); }
 }
 #[no_mangle]
 pub unsafe extern "C" fn stdb_leave_cart(client: *mut StdbClient, expected_room: u64) {
@@ -259,10 +263,10 @@ reducer!(stdb_create_link_code, "create_link_code", |conn, done| conn.reducers.c
 /// # Safety
 /// `course_id` must point to `len` readable bytes.
 #[no_mangle]
-pub unsafe extern "C" fn stdb_join_course(client: *mut StdbClient, course_id: *const c_char, len: usize, takes_cart: bool) {
+pub unsafe extern "C" fn stdb_join_course(client: *mut StdbClient, course_id: *const c_char, len: usize) {
     let course = StdbString { data: course_id, len }.to_string();
     if let Some(c) = self::client(client) {
-        c.call("join_course", |conn, done| conn.reducers.join_course_then(course, takes_cart, done));
+        c.call("join_course", |conn, done| conn.reducers.join_course_then(course, done));
     }
 }
 
@@ -406,17 +410,17 @@ pub unsafe extern "C" fn stdb_open_tee_book(client: *mut StdbClient, room: u64, 
     if let Some(c) = self::client(client) { c.call("open_tee_book", |conn, done| conn.reducers.open_tee_book_then(room, course, done)); }
 }
 #[no_mangle]
-pub unsafe extern "C" fn stdb_book_tee(client: *mut StdbClient, room: u64, booking: u64, course: *const c_char, len: usize, at: i64) {
+pub unsafe extern "C" fn stdb_book_tee(client: *mut StdbClient, room: u64, booking: u64, course: *const c_char, len: usize, at: i64, cart: bool) {
     let course = StdbString { data: course, len }.to_string();
-    if let Some(c) = self::client(client) { c.call("book_tee", |conn, done| conn.reducers.book_tee_then(room, booking, course, at, done)); }
+    if let Some(c) = self::client(client) { c.call("book_tee", |conn, done| conn.reducers.book_tee_then(room, booking, course, at, cart, done)); }
 }
 #[no_mangle]
 pub unsafe extern "C" fn stdb_cancel_tee(client: *mut StdbClient, room: u64, booking: u64) {
     if let Some(c) = self::client(client) { c.call("cancel_tee", |conn, done| conn.reducers.cancel_tee_then(room, booking, done)); }
 }
 #[no_mangle]
-pub unsafe extern "C" fn stdb_take_bus(client: *mut StdbClient, room: u64, booking: u64, cart: bool) {
-    if let Some(c) = self::client(client) { c.call("take_bus", |conn, done| conn.reducers.take_bus_then(room, booking, cart, done)); }
+pub unsafe extern "C" fn stdb_take_bus(client: *mut StdbClient, room: u64, booking: u64) {
+    if let Some(c) = self::client(client) { c.call("take_bus", |conn, done| conn.reducers.take_bus_then(room, booking, done)); }
 }
 #[no_mangle]
 pub unsafe extern "C" fn stdb_return_to_hub(client: *mut StdbClient, room: u64) {

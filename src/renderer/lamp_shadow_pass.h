@@ -4,8 +4,8 @@
 // the shaft_style::lamps floodlights nearest the camera (lamp_shadows.h), in
 // tiles side by side in one depth texture, which the sun shaft pass steps
 // to take the shadowed part of those beams out of the haze. Floodlights and
-// trees never move, so a map is drawn only when its tile takes a new lamp or
-// the trees or floodlights are rebuilt, never per frame; players and carts
+// trees use the same full pose as the picture. A map is drawn when its tile
+// takes a new lamp, the casters are rebuilt or the wind moves the crown; players and carts
 // cast nothing into them. Carts' headlights are never shadowed.
 
 #include "game/lighting_loader.h"
@@ -46,7 +46,11 @@ public:
     void bind(const shader_program& receiver, int unit) const;
 
 private:
+    float tree_motion_time_ = 0.0f;
+    glm::vec2 tree_wind_{0.0f};
+    std::uint64_t tree_model_revision_ = 0;
     shader_program shader_;
+    shader_program tree_shader_;
     shaft_style style_;
     unsigned int fbo_ = 0;
     unsigned int depth_texture_ = 0;

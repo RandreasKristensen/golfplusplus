@@ -3,7 +3,7 @@
 #include "tee_support.h"
 
 // Entry/reconnect only. An existing member cannot switch courses with this reducer.
-SPACETIMEDB_REDUCER(join_course, ReducerContext ctx, std::string course_id, bool takes_cart) {
+SPACETIMEDB_REDUCER(join_course, ReducerContext ctx, std::string course_id) {
     const caller_result me = caller(ctx);
     if (!me.player) { return Err(me.error); }
     if (me.player->display_name.empty()) { return Err(error_needs_name); }
@@ -16,7 +16,7 @@ SPACETIMEDB_REDUCER(join_course, ReducerContext ctx, std::string course_id, bool
     if (course_id != online_hub_course) { return Err(error_hub_only); }
     const server_course* course = cached_course(course_id);
     if (!course || !course->world.hub) { return Err(error_unknown_course); }
-    enter_course(ctx, account, *course, takes_cart);
+    enter_course(ctx, account, *course, false);
     return Ok();
 }
 SPACETIMEDB_REDUCER(leave_room, ReducerContext ctx, std::uint64_t expected_room) {
@@ -41,7 +41,7 @@ SPACETIMEDB_REDUCER(open_tee_book, ReducerContext ctx, std::uint64_t room_id, st
     return Ok();
 }
 SPACETIMEDB_REDUCER(book_tee, ReducerContext ctx, std::uint64_t room_id, std::uint64_t expected_booking,
-                    std::string course_id, std::int64_t scheduled_at) {
+                    std::string course_id, std::int64_t scheduled_at, bool takes_cart) {
     const member_result me = caller_member(ctx);
     if (!me.member) { return refused(me); }
     if (!at_hub_anchor(ctx, *me.member, room_id, true)) { return Err(error_hub_only); }
@@ -52,10 +52,22 @@ SPACETIMEDB_REDUCER(book_tee, ReducerContext ctx, std::uint64_t room_id, std::ui
     const std::string key = course_id + ":" + std::to_string(course_world_id) + ":" + std::to_string(scheduled_at);
     const auto existing = ctx.db[tee_slot_key].find(key);
     const bool same = existing && current_slot && existing->slot_id == current_slot->slot_id;
+    // A cart only where the course has them: a bag can always be carried.
+    takes_cart = booked_takes_cart(takes_cart, course->course.carts);
     const std::string error = check_booking(expected_booking, current ? current->reservation_id : 0, scheduled_at,
-        ctx.timestamp.micros_since_epoch(), existing ? existing->booked_count : 0, same, cached_content()->tuning.server);
+        ctx.timestamp.micros_since_epoch(), existing ? existing->booked_count : 0, same, cached_content()->tuning.server,
+        cached_hub_clock());
     if (!error.empty()) { return Err(error); }
-    if (same) { return Ok(); }
+    if (same) {
+        // The same time again: only the choice of cart or carry can change.
+        if (current->takes_cart != takes_cart) {
+            auto changed = *current;
+            changed.takes_cart = takes_cart;
+            ++changed.revision;
+            ctx.db[tee_reservation_reservation_id].update(changed);
+        }
+        return Ok();
+    }
     if (current) { erase_reservation(ctx, *current); }
     tee_slot_row slot = ensure_tee_slot(ctx, course_id, scheduled_at);
     std::set<std::uint32_t> lanes;
@@ -63,7 +75,7 @@ SPACETIMEDB_REDUCER(book_tee, ReducerContext ctx, std::uint64_t room_id, std::ui
     std::uint32_t lane = 0;
     while (lanes.count(lane) != 0) { ++lane; }
     const auto booking = ctx.db[tee_reservation].insert(tee_reservation_row{0, me.member->account_id, slot.slot_id,
-        0, 1, lane, true, false, std::vector<std::int32_t>(course->holes.size(), 0)});
+        0, 1, lane, true, false, takes_cart, std::vector<std::int32_t>(course->holes.size(), 0)});
     slot.booked_count += 1;
     ctx.db[tee_slot_slot_id].update(slot);
     // Checked when the bus leaves (tee_missed) and when the first strike is due.
@@ -87,11 +99,16 @@ SPACETIMEDB_REDUCER(expire_tee, ReducerContext ctx, tee_expiry_row timer) {
     const auto slot = booking ? ctx.db[tee_slot_slot_id].find(booking->slot_id) : std::optional<tee_slot_row>{};
     const auto member = booking ? ctx.db[room_member_account_id].find(booking->account_id) : std::optional<room_member_row>{};
     const bool boarded = member && slot && member->room_id == slot->room_id;
+    if (slot && !slot->departed && bus_gone(slot->scheduled_at, ctx.timestamp.micros_since_epoch())) {
+        auto left = *slot;
+        left.departed = true;
+        ctx.db[tee_slot_slot_id].update(left);
+    }
     if (booking && slot && tee_missed(slot->scheduled_at, ctx.timestamp.micros_since_epoch(), booking->started_at != 0, boarded,
                                       cached_content()->tuning.server)) { erase_reservation(ctx, *booking); }
     return Ok();
 }
-SPACETIMEDB_REDUCER(take_bus, ReducerContext ctx, std::uint64_t room_id, std::uint64_t reservation_id, bool takes_cart) {
+SPACETIMEDB_REDUCER(take_bus, ReducerContext ctx, std::uint64_t room_id, std::uint64_t reservation_id) {
     const member_result me = caller_member(ctx);
     if (!me.member) { return refused(me); }
     if (!at_hub_anchor(ctx, *me.member, room_id, false)) { return Err(error_hub_only); }
@@ -105,7 +122,7 @@ SPACETIMEDB_REDUCER(take_bus, ReducerContext ctx, std::uint64_t room_id, std::ui
     if (!error.empty()) { return Err(error); }
     const server_course* course = cached_course(slot->course_id);
     if (!course) { return Err(error_unknown_course); }
-    enter_course(ctx, me.member->account_id, *course, takes_cart);
+    enter_course(ctx, me.member->account_id, *course, booking->takes_cart);
     return Ok();
 }
 SPACETIMEDB_REDUCER(return_to_hub, ReducerContext ctx, std::uint64_t room_id) {
@@ -175,7 +192,8 @@ SPACETIMEDB_REDUCER(start_booked_round, ReducerContext ctx, std::uint64_t room_i
     glm::vec3 tee = booked_tee_position(course->holes.front().tee_position, course->area.cups.front().centre,
                                         booking->lane, tuning);
     tee = resting_ball_position(course->area, tee, tuning.scale.ball_physics_radius_meters);
-    const ball_row teed{me.member->account_id, room_id, 0, tee.x, tee.y, tee.z, 0, 0, ctx.timestamp, false, static_cast<std::uint8_t>(ball_kind::scored), -1};
+    const ball_row teed{me.member->account_id, room_id, 0, tee.x, tee.y, tee.z, 0, 0, ctx.timestamp, false, static_cast<std::uint8_t>(ball_kind::scored), -1,
+        ctx.timestamp.micros_since_epoch()};
     if (ctx.db[ball_account_id].find(me.member->account_id)) { ctx.db[ball_account_id].update(teed); }
     else { ctx.db[ball].insert(teed); }
     me.member->round_started = true;
@@ -206,7 +224,26 @@ SPACETIMEDB_VIEW(std::optional<tee_reservation_view>, my_tee_reservation, Public
     const auto slot = booking ? ctx.db[tee_slot_slot_id].find(booking->slot_id) : std::optional<tee_slot_row>{};
     if (!booking || !slot) { return std::nullopt; }
     return tee_reservation_view{booking->reservation_id, booking->slot_id, booking->started_at, booking->grouped,
-        booking->completed, booking->revision, slot->course_id, slot->world_id, slot->room_id, slot->scheduled_at};
+        booking->completed, booking->revision, slot->course_id, slot->world_id, slot->room_id, slot->scheduled_at,
+        booking->takes_cart};
+}
+// The next groups to leave, for the hub's departure board: every booked time
+// whose bus has not gone, earliest first, with the names of who is in each.
+SPACETIMEDB_VIEW(std::vector<departure_view>, departure_board, Public, AnonymousViewContext ctx) {
+    std::vector<board_slot> waiting;
+    for (const auto& slot : ctx.db[tee_slot_departed].filter(false)) { waiting.push_back({slot.slot_id, slot.scheduled_at}); }
+    std::vector<departure_view> board;
+    for (const board_slot& next : next_departures(std::move(waiting), static_cast<std::size_t>(cached_content()->tuning.server.departure_board_rows))) {
+        const auto slot = ctx.db[tee_slot_slot_id].find(next.slot_id);
+        if (!slot) { continue; }
+        departure_view departure{slot->slot_id, slot->course_id, slot->scheduled_at, {}};
+        for (const auto& booking : ctx.db[tee_reservation_slot_id].filter(slot->slot_id)) {
+            if (const auto golfer = ctx.db[player_account_id].find(booking.account_id)) { departure.names.push_back(golfer->display_name); }
+        }
+        std::sort(departure.names.begin(), departure.names.end());
+        board.push_back(std::move(departure));
+    }
+    return board;
 }
 SPACETIMEDB_VIEW(std::optional<tee_book_status_row>, my_tee_book_status, Public, ViewContext ctx) {
     const auto login = ctx.db[account_login_identity].find(ctx.sender());
@@ -218,9 +255,10 @@ SPACETIMEDB_VIEW(std::vector<tee_slot_row>, my_tee_slots, Public, ViewContext ct
     const auto status = login ? ctx.db[tee_book_status_account_id].find(login->account_id) : std::optional<tee_book_status_row>{};
     std::vector<tee_slot_row> slots;
     if (status) {
-        const auto horizon = status->server_now + cached_content()->tuning.server.tee_book_days * 24 * 60 * minute_micros;
+        const auto& content = *cached_content();
+        const hub_clock clock = cached_hub_clock();
         for (const auto& slot : ctx.db[tee_slot_course_id].filter(status->course_id)) {
-            if (slot.scheduled_at >= status->server_now && slot.scheduled_at <= horizon) { slots.push_back(slot); }
+            if (slot.scheduled_at >= status->server_now && within_tee_book(slot.scheduled_at, status->server_now, content.tuning.server, clock)) { slots.push_back(slot); }
         }
     }
     return slots;

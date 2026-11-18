@@ -14,6 +14,7 @@
 #include "game/movement_step.h"
 #include "game/save_data.h"
 #include "game/sent_setup.h"
+#include "game/spare_ball.h"
 #include "game/shot_simulation.h"
 #include "physics/cart_dynamics.h"
 #include "physics/vector_math.h"
@@ -93,6 +94,7 @@ enum class net_command_type {
     use_item,
     dap,
     pick_up_ball,
+    play_ball,
     open_tee_book,
     book_tee,
     cancel_tee,
@@ -123,6 +125,7 @@ inline constexpr const char* reducer_claim_collectible = "claim_collectible";
 inline constexpr const char* reducer_dap = "dap";
 inline constexpr const char* reducer_use_item = "use_item";
 inline constexpr const char* reducer_pick_up_ball = "pick_up_ball";
+inline constexpr const char* reducer_play_ball = "play_ball";
 inline constexpr const char* reducer_give_up_hole = "give_up_hole";
 inline constexpr const char* reducer_leave_group = "leave_group";
 inline constexpr const char* reducer_take_wheel = "take_wheel";
@@ -179,8 +182,9 @@ struct net_command {
     std::uint64_t room_id = 0;     // booking/travel/leave: room where intent originated
     std::uint64_t reservation_id = 0; // expected current booking (0: none)
     std::uint64_t target_account = 0; // dap
-    bool takes_cart = false;       // take_bus
+    bool takes_cart = false;       // book_tee: my cart or my bag on my back for the round
     std::uint64_t cart_owner = 0;  // board_cart: whose cart's passenger seat; right_cart: whose cart
+    std::uint64_t ball_id = 0;     // play_ball: the spare to play; pick_up_ball: the spare to lift, 0 the ball in play
 };
 
 // Where the connection to the server is.
@@ -198,7 +202,7 @@ enum class net_status {
 // only on a server with the same, else asks for an update
 // (net_failure_outdated_game). Bump it with every change to the module's
 // tables, views or reducers; the server_protocol view itself never changes.
-inline constexpr std::uint32_t protocol_version = 28;
+inline constexpr std::uint32_t protocol_version = 30;
 inline constexpr const char* online_hub_course = "practice_ground";
 
 // The failure ids the bridge and the client give (src/net/stdb_bridge.h,
@@ -258,6 +262,15 @@ struct tee_reservation_info {
     std::uint32_t world_id = 0;
     std::uint64_t room_id = 0;
     std::int64_t scheduled_at = 0;
+    bool takes_cart = false;  // chosen with the booking: my own cart for the round
+};
+// One booked group on the hub's departure board: when it leaves, where to and
+// who is in it (server rows, the next `server.departure_board_rows`).
+struct departure_info {
+    std::uint64_t slot_id = 0;
+    std::string course_id;
+    std::int64_t scheduled_at = 0;
+    std::vector<std::string> names;
 };
 
 struct online_room {
@@ -392,15 +405,19 @@ struct online_view {
     std::optional<golfer_row> golfer;
     std::optional<tee_reservation_info> reservation;
     std::map<std::uint64_t, tee_slot_info> tee_slots;
+    std::vector<departure_info> departures;  // by time; the board's
     std::string book_course_id;
     bool book_ready = false; // complete scoped slot subscription + server book acknowledgement
     std::optional<online_room> room;
+    // Counts changes to my ball row and my spares, which a ball request waits on.
     std::uint64_t ball_updates = 0;
     bool room_ready = false;  // the current room subscription has applied
     // Everyone in my room by account id, me included; their balls; how many
     // players each group has; their carts.
     std::map<std::uint64_t, room_player> players;
     std::map<std::uint64_t, room_ball> balls;
+    // Every player's spares in my room by row id (practice_ball rows).
+    std::map<std::uint64_t, spare_ball> spare_balls;
     std::map<std::uint64_t, int> group_sizes;
     std::map<std::uint64_t, room_cart> carts;  // by owner
     std::map<std::uint64_t, loadout> loadouts;  // by account, as their player_loadout rows have it

@@ -98,6 +98,8 @@ pub enum StdbTable {
     MyTeeReservation = 25,
     MyTeeBookStatus = 26,
     Dap = 27,
+    PracticeBall = 28,
+    DepartureBoard = 29,
 }
 
 #[repr(C)]
@@ -285,6 +287,20 @@ pub struct StdbBall {
     pub in_cup: bool,
     pub kind: u8,
     pub tee_mat: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbPracticeBall {
+    pub id: u64,
+    pub account_id: u64,
+    pub room_id: u64,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub in_cup: bool,
+    /// Server microseconds.
+    pub placed_at: i64,
 }
 
 #[repr(C)]
@@ -501,6 +517,15 @@ pub struct StdbTeeReservation {
     pub world_id: u32,
     pub room_id: u64,
     pub scheduled_at: i64,
+    pub takes_cart: bool,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbDeparture {
+    pub slot_id: u64,
+    pub course_id: StdbString,
+    pub scheduled_at: i64,
+    pub names: StdbString,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -514,6 +539,7 @@ pub struct StdbTeeBookStatus {
 pub union StdbRow {
     pub tee_slot: StdbTeeSlot,
     pub tee_reservation: StdbTeeReservation,
+    pub departure: StdbDeparture,
     pub tee_book_status: StdbTeeBookStatus,
     pub player: StdbPlayer,
     pub golfer_skill: StdbGolferSkill,
@@ -526,6 +552,7 @@ pub union StdbRow {
     pub golf_group: StdbGolfGroup,
     pub avatar_motion: StdbAvatarMotion,
     pub ball: StdbBall,
+    pub practice_ball: StdbPracticeBall,
     pub shot_event: StdbShotEvent,
     pub item_use_event: StdbItemUseEvent,
     pub dap: StdbDap,
@@ -592,6 +619,7 @@ pub fn layout() -> Vec<usize> {
     describe!(out, StdbAvatarMotion, account_id, room_id, motion, server_time_micros);
     describe!(out, StdbRideMotion, rider, owner, motion, server_time_micros);
     describe!(out, StdbBall, account_id, room_id, hole, x, y, z, stroke_count, last_shot_at, in_cup, kind, tee_mat);
+    describe!(out, StdbPracticeBall, id, account_id, room_id, x, y, z, in_cup, placed_at);
     describe!(out, StdbGolfCart, owner, room_id, x, y, z, yaw, passenger, condition, driver, motion_id);
     describe!(out, StdbShot, stroke, aim_angle, face_open, ball_position, backswing, strike_timing, club_id, shot_at, flags_out, flags_out_count);
     describe!(out, StdbMoveRun, kind, steps, forward, side, run, jump, yaw, steer, paced, crouched);
@@ -613,7 +641,8 @@ pub fn layout() -> Vec<usize> {
     describe!(out, StdbServerProtocol, version);
     describe!(out, StdbServerContent, hash);
     describe!(out, StdbTeeSlot, slot_id, course_id, world_id, room_id, scheduled_at, booked_count);
-    describe!(out, StdbTeeReservation, reservation_id, slot_id, started_at, grouped, completed, revision, course_id, world_id, room_id, scheduled_at);
+    describe!(out, StdbTeeReservation, reservation_id, slot_id, started_at, grouped, completed, revision, course_id, world_id, room_id, scheduled_at, takes_cart);
+    describe!(out, StdbDeparture, slot_id, course_id, scheduled_at, names);
     describe!(out, StdbTeeBookStatus, course_id, server_now);
     out.push(size_of::<StdbRow>());
     describe!(out, StdbEvent, kind, text, reducer, subscription, login_method, retrying, table, change, row);

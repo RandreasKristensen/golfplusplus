@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include <glm/vec3.hpp>
@@ -31,6 +32,16 @@ void push_club_hit(game_state& state, const club_definition& club, const shot_re
 // over the shot, as it is shown). The first event not played yet.
 std::size_t push_shot_events(game_state& state, const shot_result& result, const glm::vec3& correction, std::size_t next_event,
                              float elapsed);
+
+// A looping sound standing in the world, heard from `position`.
+struct placed_loop {
+    std::string key;
+    std::string sound;  // an id of sounds.json
+    glm::vec3 position{0.0f};
+};
+// The hub's birds and terrace chatter (hub.json's ambience), wherever I stand
+// in it; the mixer plays what is in earshot (audio/voice_pool.h).
+std::vector<placed_loop> hub_ambience_loops(const game_state& state);
 
 // A cart whose motor runs: driven and moving.
 struct running_motor {

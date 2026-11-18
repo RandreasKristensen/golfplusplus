@@ -8,12 +8,14 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[sats(crate = __lib)]
 pub(super) struct PickUpBallArgs {
     pub expected_room: u64,
+    pub ball_id: u64,
 }
 
 impl From<PickUpBallArgs> for super::Reducer {
     fn from(args: PickUpBallArgs) -> Self {
         Self::PickUpBall {
             expected_room: args.expected_room,
+            ball_id: args.ball_id,
         }
     }
 }
@@ -33,8 +35,8 @@ pub trait pick_up_ball {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`pick_up_ball:pick_up_ball_then`] to run a callback after the reducer completes.
-    fn pick_up_ball(&self, expected_room: u64) -> __sdk::Result<()> {
-        self.pick_up_ball_then(expected_room, |_, _| {})
+    fn pick_up_ball(&self, expected_room: u64, ball_id: u64) -> __sdk::Result<()> {
+        self.pick_up_ball_then(expected_room, ball_id, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `pick_up_ball` to run as soon as possible,
@@ -46,6 +48,7 @@ pub trait pick_up_ball {
     fn pick_up_ball_then(
         &self,
         expected_room: u64,
+        ball_id: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -57,12 +60,18 @@ impl pick_up_ball for super::RemoteReducers {
     fn pick_up_ball_then(
         &self,
         expected_room: u64,
+        ball_id: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
-        self.imp
-            .invoke_reducer_with_callback(PickUpBallArgs { expected_room }, callback)
+        self.imp.invoke_reducer_with_callback(
+            PickUpBallArgs {
+                expected_room,
+                ball_id,
+            },
+            callback,
+        )
     }
 }

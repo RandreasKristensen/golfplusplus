@@ -23,7 +23,8 @@ enum class startup_menu_screen {
     main,
     help,
     course_picker,
-    tee_book,
+    tee_book,    // the times of one course: a grid of tiles
+    course_book,  // the courses to choose from: a column of wide cards
     form,    // a message, a text field or a code, then a column of tiles
     confirm  // laid out like main
 };
@@ -40,6 +41,11 @@ struct render_startup_tile {
     std::string title;
     std::string subtitle;
     bool selected = false;
+    // A day's heading, drawn without a tile and never selected.
+    bool heading = false;
+    // With a preview on a course_book card: line one's right side (the title
+    // is its left) over the subtitle, line two.
+    std::string figures;
     std::optional<render_hole_preview> preview;
 };
 
@@ -69,7 +75,10 @@ struct render_startup_menu {
 
 // Tile layout in overlay clip space for `count` tiles: a single column on
 // the main, form and confirm screens (closer together when there are many),
-// a grid of three by three in a box on the pickers.
+// a grid of three by three in a box on the pickers, a column of four cards on
+// the course book.
+int startup_picker_columns(startup_menu_screen screen);
+int startup_picker_rows(startup_menu_screen screen);
 glm::vec2 startup_tile_center(startup_menu_screen screen, int index, int count);
 glm::vec2 startup_tile_half_size(startup_menu_screen screen, int count);
 // Index of the tile under `point` (overlay clip space), or -1.

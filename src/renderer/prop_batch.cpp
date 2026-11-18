@@ -5,6 +5,7 @@
 #include "renderer/camera_local.h"
 #include "renderer/primitive_mesh.h"
 
+#include <algorithm>
 #include <iterator>
 
 #include <glm/common.hpp>
@@ -98,9 +99,51 @@ glm::mat4 mounted_frame(const glm::mat4& frame, const prop_mount& mount, const p
            glm::translate(glm::mat4(1.0f), -hung.point("hang"));
 }
 
+float door_swing_step(const std::optional<float>& progress, const bool open, const float elapsed, const float swing_seconds) {
+    if (!progress) { return open ? 1.0f : 0.0f; }
+    const float step = swing_seconds > 0.0f ? std::max(elapsed, 0.0f) / swing_seconds : 1.0f;
+    return glm::clamp(*progress + (open ? step : -step), 0.0f, 1.0f);
+}
+
+prop_part_pose bus_door_pose(const prop_model& bus, const float progress) {
+    const float eased = glm::smoothstep(0.0f, 1.0f, progress);
+    const glm::vec3 hinge = bus.point("door_hinge");
+    return prop_part_pose{"door", glm::translate(glm::mat4(1.0f), hinge) *
+        glm::rotate(glm::mat4(1.0f), glm::radians(bus.number("door_open_degrees")) * eased, glm::vec3(0.0f, 1.0f, 0.0f)) *
+        glm::translate(glm::mat4(1.0f), -hinge)};
+}
+
+const prop_model* placed_bus(const std::vector<static_prop>& placed, const prop_catalog& props) {
+    for (const auto& prop : placed) {
+        const prop_model& model = props.at(prop.model);
+        if (model.kind == "hub_bus") { return &model; }
+    }
+    return nullptr;
+}
+
 void append_world_props(prop_batch& batch, const std::vector<static_prop>& placed,
     const prop_catalog& props, const glow_floors& glow) {
     for (const auto& prop : placed) {
-        append_prop_model(batch, props.at(prop.model), posed_model(prop.position, world_up, yaw_direction(prop.heading), glm::vec3(1)), glow);
+        const prop_model& model = props.at(prop.model);
+        const glm::mat4 frame = posed_model(prop.position, world_up, yaw_direction(prop.heading), glm::vec3(1));
+        if (model.kind != "hub_bus") {
+            append_prop_model(batch, model, frame, glow);
+            continue;
+        }
+        for (const prop_piece& piece : prop_pieces(model, frame)) {
+            if (piece.part->tag != "door") { batch.append(piece.mesh, piece.model, piece.part->color, glow_floor(glow, piece.part->glow)); }
+        }
+    }
+}
+
+void append_bus_doors(prop_batch& batch, const std::vector<static_prop>& placed, const prop_catalog& props,
+                      const glow_floors& glow, const float progress) {
+    for (const auto& prop : placed) {
+        const prop_model& model = props.at(prop.model);
+        if (model.kind != "hub_bus") { continue; }
+        const glm::mat4 frame = posed_model(prop.position, world_up, yaw_direction(prop.heading), glm::vec3(1));
+        for (const prop_piece& piece : prop_pieces(model, frame, bus_door_pose(model, progress))) {
+            if (piece.part->tag == "door") { batch.append(piece.mesh, piece.model, piece.part->color, glow_floor(glow, piece.part->glow)); }
+        }
     }
 }

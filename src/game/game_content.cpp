@@ -2,6 +2,7 @@
 
 #include "game/content_files.h"
 #include "game/course_loader.h"
+#include "game/model_kinds.h"
 #include "game/tuning_loader.h"
 
 #include <filesystem>
@@ -26,11 +27,11 @@ game_content_load_result load_game_content(const std::string& asset_root) {
         return fail(tuning.error);
     }
     content.tuning = *tuning.tuning;
-    for (const char* id : {"tee_book", "hub_bus"}) {
-        const auto source = read_text_file(root / "world/props" / (std::string(id) + ".json"));
+    for (const hub_model& wanted : hub_models()) {
+        const auto source = read_text_file(root / "world/props" / (std::string(wanted.id) + ".json"));
         const auto model = source ? parse_prop_from_text(*source) : std::nullopt;
-        if (!model || model->kind != (std::string(id) == "hub_bus" ? "hub_bus" : "hub_book")) { return fail(std::string("cannot load hub prop ") + id); }
-        content.hub_props.emplace(id, *model);
+        if (!model || model->kind != wanted.kind) { return fail(std::string("cannot load hub prop ") + wanted.id); }
+        content.hub_props.emplace(wanted.id, *model);
     }
 
 

@@ -120,7 +120,6 @@ inline constexpr bounded_field<shadow_style> shadow_fields[] = {
     {"foot_share", &shadow_style::foot_share, 0.0f, 1.0f},
     {"pole_radius", &shadow_style::pole_radius, 0.0f, max_caster_metres},
     {"map_extent", &shadow_style::map_extent, 10.0f, 2000.0f},
-    {"map_ahead", &shadow_style::map_ahead, 0.0f, 0.5f},
     {"map_strength", &shadow_style::map_strength, 0.0f, 1.0f},
     {"map_softness", &shadow_style::map_softness, 0.0f, 8.0f},
     {"map_edge_fade", &shadow_style::map_edge_fade, 0.01f, 1.0f},
@@ -163,8 +162,6 @@ inline constexpr bounded_field<water_style> water_fields[] = {
     {"refraction_pixels", &water_style::refraction_pixels, 0.0f, 16.0f},
     {"glint_strength", &water_style::glint_strength, 0.0f, 16.0f},
     {"glint_sharpness", &water_style::glint_sharpness, 1.0f, 10000.0f},
-    {"reflection_reach_meters", &water_style::reflection_reach_meters, 1.0f, 2000.0f},
-    {"reflection_first_step_meters", &water_style::reflection_first_step_meters, 0.01f, 10.0f},
     {"caustic_strength", &water_style::caustic_strength, 0.0f, 16.0f},
     {"caustic_cell_meters", &water_style::caustic_cell_meters, 0.1f, 10.0f},
     {"wobble_height_share", &water_style::wobble_height_share, 0.0f, 0.05f},
@@ -311,6 +308,7 @@ inline constexpr share_field<glow_floors> glow_fields[] = {
     {"flag", &glow_floors::flag},
     {"ember", &glow_floors::ember},
     {"flight_path", &glow_floors::flight_path},
+    {"window", &glow_floors::window},
 };
 
 inline constexpr color_field<ground_colors> ground_fields[] = {

@@ -55,7 +55,7 @@ bool check_social(live_check& run) {
     if (!run.require("guest reconnect adopts new account", run.until([&] { return run.state(5).online.account_id && run.state(5).online.account_id != sixth; }))) { return false; }
     run[5].client.claim_name("CHECK" + std::to_string(run.state(5).online.account_id));
     if (!run.until([&] { return !run.state(5).online.display_name.empty(); })) { return false; }
-    run[5].client.join_course(online_hub_course, false);
+    run[5].client.join_course(online_hub_course);
     return run.require("reconnect adopts fresh hub snapshot without reservation or old pair", run.until([&] {
         const auto& s = run.state(5); return s.online.room_ready && run[5].adopted_room && s.online.room && s.online.room->course_id == online_hub_course && !s.online.reservation && s.online.players.size() == 6;
     }));

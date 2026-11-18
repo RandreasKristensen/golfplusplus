@@ -3,7 +3,7 @@
 #include "game/address_play.h"
 #include "game/course_session.h"
 #include "game/hub_session.h"
-#include "game/hub_ball.h"
+#include "game/my_balls.h"
 #include "game/golf_bag.h"
 #include "game/golf_cart.h"
 #include "game/interactables.h"
@@ -22,10 +22,13 @@
 #include <glm/trigonometric.hpp>
 
 namespace {
+place_rules hub_rules() { return place_rules{false, true, false, true, 10}; }
+place_rules course_rules() { return place_rules{true, false, true, false}; }
+
 // The fixture course played as a practice ground with no carts.
 game_state practice_game() {
     auto state = started_game(fixture_hub_course());
-    state.kind = place_kind::hub; state.place.carts = false;
+    state.kind = place_kind::hub; state.place.carts = false; state.place.rules = hub_rules();
     hub_definition hub;
     for (std::size_t i = 0; i < state.holes.size(); ++i) {
         hub.tee_mats.push_back({state.world.hole_starts[i].position, state.holes[i].pin_position,
@@ -155,6 +158,17 @@ TEST_CASE("hub manifest requires facilities and forbids course holes") {
     }
     auto holes = *parsed; holes["holes"] = json::array();
     CHECK(!parse_hub_from_text(holes.dump()));
+    // The arrival's heading, the pads and each target's distance board are required.
+    auto no_heading = *parsed; no_heading["arrival"].erase("heading");
+    CHECK(!parse_hub_from_text(no_heading.dump()));
+    auto no_pads = *parsed; no_pads["hub"].erase("pads");
+    CHECK(!parse_hub_from_text(no_pads.dump()));
+    auto repeated = *parsed; repeated["hub"]["pads"].push_back(repeated["hub"]["pads"][0]);
+    CHECK(!parse_hub_from_text(repeated.dump()));
+    auto no_reach = *parsed; no_reach["hub"]["pads"][0]["reach"] = 0;
+    CHECK(!parse_hub_from_text(no_reach.dump()));
+    auto no_board = *parsed; no_board["targets"][0].erase("board");
+    CHECK(!parse_hub_from_text(no_board.dump()));
 }
 
 TEST_CASE("entry and return adopt the same hole-free hub in either play mode") {
@@ -262,22 +276,24 @@ TEST_CASE("another golfer's hub practice shot flies from its event before restin
     shot.hole = 0;  // A scored-course event cannot start a hub replay.
     start_remote_shot(state, shot);
     CHECK(state.remote_shots.empty());
-    state.kind = place_kind::course;
+    state.kind = place_kind::course; state.place.rules = course_rules();
     shot.hole = -1;
     start_remote_shot(state, shot);
     CHECK(state.remote_shots.empty());
 }
 
-TEST_CASE("a practice drop replaces my ball wherever it lies or flies, whatever I am doing") {
+TEST_CASE("a practice drop puts a fresh ball in play, keeps the one at rest as a spare and throws away one in flight, whatever I am doing") {
     auto state = practice_game();
     const auto at = resting_ball_position(state.area, state.player.position, state.tuning.scale.ball_physics_radius_meters);
     state.ball = my_ball{std::nullopt, at + glm::vec3(150, 0, 0), 3, ball_place::at_rest, ball_kind::practice, std::size_t{0}};
     request_practice_drop(state);
     REQUIRE(state.ball); CHECK(near(state.ball->position, at, 0.001f)); CHECK(state.ball->strokes == 0);
     CHECK(!state.ball->tee_mat); CHECK(!state.notice);
+    REQUIRE(state.spare_balls.size() == 1U); CHECK(near(state.spare_balls.front().position, at + glm::vec3(150, 0, 0), 0.001f));
     state.ball->place = ball_place::in_cup; state.ball->position = at + glm::vec3(0, 0, 40);
     request_practice_drop(state);
     REQUIRE(state.ball); CHECK(state.ball->place == ball_place::at_rest); CHECK(near(state.ball->position, at, 0.001f));
+    REQUIRE(state.spare_balls.size() == 2U); CHECK(state.spare_balls.back().in_cup);
     // Mid-shot, addressing or in the air: a fresh ball at my feet, and I walk.
     play_shot(state, shot_result{at + glm::vec3(50, 0, 0), false, 3.0f, {at, at + glm::vec3(50, 0, 0)}, {}});
     state.player.vertical.grounded = false;
@@ -288,21 +304,23 @@ TEST_CASE("a practice drop replaces my ball wherever it lies or flies, whatever 
     state.mode = game_mode::addressing;
     update_game(state, drop, 0.016f);
     CHECK(state.mode == game_mode::walking); CHECK(!state.notice);
+    // The ball in flight went; the one addressed at rest stayed as a spare.
+    CHECK(state.spare_balls.size() == 3U);
 }
 
 TEST_CASE("a practice drop rests on whatever is under it, anywhere in the hub, never on a course") {
     auto state = practice_game();
     const auto at = state.player.position;
     const float radius = state.tuning.scale.ball_physics_radius_meters;
-    CHECK(!practice_drop_position(state.area, place_kind::course, at, at, state.tuning));
+    CHECK(!practice_drop_position(state.area, course_rules(), at, at, state.tuning));
     // A request beyond reach of where the server has me drops at my feet instead.
-    const auto far = practice_drop_position(state.area, place_kind::hub, at, at + glm::vec3(100, 0, 0), state.tuning);
+    const auto far = practice_drop_position(state.area, hub_rules(), at, at + glm::vec3(100, 0, 0), state.tuning);
     REQUIRE(far); CHECK(near(*far, resting_ball_position(state.area, at, radius), 0.001f));
-    const auto nan = practice_drop_position(state.area, place_kind::hub, at, glm::vec3(std::nanf("")), state.tuning);
+    const auto nan = practice_drop_position(state.area, hub_rules(), at, glm::vec3(std::nanf("")), state.tuning);
     REQUIRE(nan); CHECK(near(*nan, resting_ball_position(state.area, at, radius), 0.001f));
     auto hole = straight_hole({-10,0,0}, {10,0,0}, 30);
     hole.material_zones.push_back(make_material_zone(material_zone_type::water, {{-5,-5},{5,-5},{5,5},{-5,5}}));
     const auto area = hole_area(hole, state.tuning);
-    const auto wet = practice_drop_position(area, place_kind::hub, {0,0,0}, {0,0,0}, state.tuning);
+    const auto wet = practice_drop_position(area, hub_rules(), {0,0,0}, {0,0,0}, state.tuning);
     REQUIRE(wet); CHECK(near(*wet, resting_ball_position(area, {0,0,0}, radius), 0.001f));
 }

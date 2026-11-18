@@ -24,11 +24,10 @@ glm::mat3 shadow_light_rotation(const glm::vec3& towards_sun) {
     return glm::transpose(glm::mat3(x, y, z));
 }
 
-shadow_map_fit fit_shadow_map(const glm::vec3& towards_sun, const glm::vec3& eye, const glm::vec3& forward,
-                              const float extent, const int resolution, const float ahead) {
+shadow_map_fit fit_shadow_map(const glm::vec3& towards_sun, const glm::vec3& eye,
+                              const float extent, const int resolution) {
     const glm::mat3 rotation = shadow_light_rotation(towards_sun);
-    const glm::vec3 level_forward = safe_normalize(horizontal(forward), glm::vec3(0.0f, 0.0f, -1.0f));
-    const glm::vec3 middle = rotation * (eye + level_forward * (extent * ahead));
+    const glm::vec3 middle = rotation * eye;
     const float texel = extent / static_cast<float>(std::max(1, resolution));
     const float half = extent * 0.5f;
     // The corner on the texel grid; the extent is a whole number of texels.

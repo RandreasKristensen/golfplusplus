@@ -5,6 +5,8 @@
 #include "test_support.h"
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/matrix.hpp>
 #include <glm/vec4.hpp>
 
 #include <cmath>
@@ -13,7 +15,6 @@
 namespace {
 constexpr float extent = 160.0f;
 constexpr int resolution = 1024;
-constexpr float ahead = 0.3f;
 
 const glm::vec3 low_sun = glm::normalize(glm::vec3(-0.8f, 0.25f, 0.4f));
 
@@ -28,11 +29,10 @@ float fraction(const float value) {
 }
 }
 
-TEST_CASE("the shadow map looks down the sun at the ground ahead of the camera") {
+TEST_CASE("the shadow map looks down the sun centred on the camera position") {
     const glm::vec3 eye(10.0f, 3.0f, 20.0f);
-    const glm::vec3 forward(0.0f, -0.2f, -1.0f);
-    const shadow_map_fit fit = fit_shadow_map(low_sun, eye, forward, extent, resolution, ahead);
-    const glm::vec3 middle = on_map(fit, eye + glm::vec3(0.0f, 0.0f, -extent * ahead));
+    const shadow_map_fit fit = fit_shadow_map(low_sun, eye, extent, resolution);
+    const glm::vec3 middle = on_map(fit, eye);
     CHECK(std::abs(middle.x - resolution * 0.5f) <= 1.0f);
     CHECK(std::abs(middle.y - resolution * 0.5f) <= 1.0f);
     CHECK(near(middle.z, 0.5f, 0.001f));
@@ -57,12 +57,11 @@ TEST_CASE("the shadow map looks down the sun at the ground ahead of the camera")
 
 TEST_CASE("the shadow map's texels stay put on the ground as the camera moves") {
     const glm::vec3 fixed(37.3f, 1.2f, -54.9f);
-    const glm::vec3 forward(0.3f, 0.0f, -1.0f);
-    const shadow_map_fit first = fit_shadow_map(low_sun, glm::vec3(0.0f, 2.0f, 0.0f), forward, extent, resolution, ahead);
+    const shadow_map_fit first = fit_shadow_map(low_sun, glm::vec3(0.0f, 2.0f, 0.0f), extent, resolution);
     const glm::vec3 reference = on_map(first, fixed);
     for (const float step : {0.013f, 0.051f, 0.37f, 1.9f, 7.77f}) {
         const glm::vec3 eye(step, 2.0f + step * 0.1f, -step * 2.0f);
-        const glm::vec3 moved = on_map(fit_shadow_map(low_sun, eye, forward, extent, resolution, ahead), fixed);
+        const glm::vec3 moved = on_map(fit_shadow_map(low_sun, eye, extent, resolution), fixed);
         // Whole texels only: the same place within its texel.
         CHECK(std::abs(fraction(moved.x - reference.x + 0.5f) - 0.5f) < 0.01f);
         CHECK(std::abs(fraction(moved.y - reference.y + 0.5f) - 0.5f) < 0.01f);
@@ -75,8 +74,30 @@ TEST_CASE("the shadow map's light stays well defined with the sun overhead") {
         CHECK(near(rotation * sun, glm::vec3(0.0f, 0.0f, 1.0f), 0.0001f));
         CHECK(near(glm::length(rotation * glm::vec3(1.0f, 0.0f, 0.0f)), 1.0f, 0.0001f));
         const glm::vec3 middle =
-            on_map(fit_shadow_map(sun, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), extent, resolution, 0.0f), glm::vec3(0.0f));
+            on_map(fit_shadow_map(sun, glm::vec3(0.0f), extent, resolution), glm::vec3(0.0f));
         CHECK(std::isfinite(middle.x));
         CHECK(std::abs(middle.x - resolution * 0.5f) <= 1.0f);
+    }
+}
+
+TEST_CASE("panning the camera changes screen position without moving a world's shadow lookup") {
+    const glm::vec3 eye(10.0f, 3.0f, 20.0f);
+    const glm::vec3 spot = eye + glm::vec3(0.0f, 0.0f, -55.0f);
+    const glm::vec3 reference = on_map(fit_shadow_map(low_sun, eye, extent, resolution), spot);
+    const glm::mat4 projection = glm::perspective(glm::radians(70.0f), 1.0f, 0.1f, 500.0f);
+    float previous_x = 2.0f;
+    for (const float yaw : {-20.0f, 0.0f, 20.0f}) {
+        const float angle = glm::radians(yaw);
+        const glm::vec3 forward(std::sin(angle), 0.0f, -std::cos(angle));
+        const glm::mat4 view_proj = projection * glm::lookAt(eye, eye + forward, glm::vec3(0.0f, 1.0f, 0.0f));
+        const glm::vec4 clip = view_proj * glm::vec4(spot, 1.0f);
+        const glm::vec3 screen = glm::vec3(clip) / clip.w;
+        CHECK(std::abs(screen.x) < 1.0f);
+        CHECK(screen.x < previous_x);
+        previous_x = screen.x;
+        // Follow this same visible patch through each view, including its depth.
+        const glm::vec4 world = glm::inverse(view_proj) * glm::vec4(screen, 1.0f);
+        const shadow_map_fit fit = fit_shadow_map(low_sun, eye, extent, resolution);
+        CHECK(near(on_map(fit, glm::vec3(world) / world.w), reference, 0.1f));
     }
 }

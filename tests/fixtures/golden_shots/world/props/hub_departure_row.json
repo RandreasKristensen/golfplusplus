@@ -1,0 +1,43 @@
+{
+  "kind": "hub_label",
+  "colors": {
+    "board": [
+      0.86,
+      0.83,
+      0.62
+    ]
+  },
+  "points": {
+    "board_center": [
+      0,
+      0,
+      0.016
+    ],
+    "board_size": [
+      3.1,
+      0.4,
+      0
+    ],
+    "board_normal": [
+      0,
+      0,
+      1
+    ]
+  },
+  "parts": [
+    {
+      "shape": "box",
+      "at": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        3.1,
+        0.4,
+        0.03
+      ],
+      "color": "board"
+    }
+  ]
+}

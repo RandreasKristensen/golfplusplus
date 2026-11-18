@@ -26,7 +26,7 @@ struct fake_stdb_bridge {
         std::string club_id;          // shot.club_id, copied
         std::vector<int> flags_out;   // shot.flags_out, copied
         float position[4] = {0.0f, 0.0f, 0.0f, 0.0f};  // stdb_place_bag's x, y, z, yaw
-        std::uint64_t extra = 0;  // stdb_place_bag's cart owner, stdb_set_golfer's favourite colour
+        std::uint64_t extra = 0;  // stdb_place_bag's cart owner, stdb_set_golfer's favourite colour; stdb_book_tee's time
     };
 
     std::vector<call> calls;

@@ -401,9 +401,7 @@ TEST_CASE("the camera lets go once the ball has rolled a little, and the moving 
     update_game(state, forward, 0.02f);
     CHECK(horizontal_distance(state.player.position, stood) > 0.0f);
     state.player.position = state.ball->position;
-    game_input press;
-    press.interact = true;
-    update_game(state, press, 0.02f);
+    tap_interact(state, 0.02f);
     CHECK(state.mode == game_mode::walking);
     CHECK(state.shot.has_value());
 
@@ -411,7 +409,7 @@ TEST_CASE("the camera lets go once the ball has rolled a little, and the moving 
         update_game(state, game_input{}, 0.02f);
     }
     state.player.position = state.ball->position;
-    update_game(state, press, 0.02f);
+    tap_interact(state, 0.02f);
     CHECK(state.mode == game_mode::addressing);
 }
 

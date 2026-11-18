@@ -15,6 +15,7 @@ pub struct TeeReservationRow {
     pub lane: u32,
     pub grouped: bool,
     pub completed: bool,
+    pub takes_cart: bool,
     pub round_strokes: Vec<i32>,
 }
 
@@ -34,6 +35,7 @@ pub struct TeeReservationRowCols {
     pub lane: __sdk::__query_builder::Col<TeeReservationRow, u32>,
     pub grouped: __sdk::__query_builder::Col<TeeReservationRow, bool>,
     pub completed: __sdk::__query_builder::Col<TeeReservationRow, bool>,
+    pub takes_cart: __sdk::__query_builder::Col<TeeReservationRow, bool>,
     pub round_strokes: __sdk::__query_builder::Col<TeeReservationRow, Vec<i32>>,
 }
 
@@ -49,6 +51,7 @@ impl __sdk::__query_builder::HasCols for TeeReservationRow {
             lane: __sdk::__query_builder::Col::new(table_name, "lane"),
             grouped: __sdk::__query_builder::Col::new(table_name, "grouped"),
             completed: __sdk::__query_builder::Col::new(table_name, "completed"),
+            takes_cart: __sdk::__query_builder::Col::new(table_name, "takes_cart"),
             round_strokes: __sdk::__query_builder::Col::new(table_name, "round_strokes"),
         }
     }

@@ -398,3 +398,37 @@ TEST_CASE("the haze takes the course's colour in the time of day's tint, full by
     backdrop.haze_distance = 0.0f;
     CHECK(make_scene_haze(backdrop, 0.8f, eye, 0.0f, glm::vec3(1.0f)).full_distance == 1.0f);
 }
+
+TEST_CASE("tree shadow variants expand the same leaf cutouts as the visible trees") {
+    const auto shaders = std::filesystem::path(asset_root()) / "picture" / "shaders";
+    const auto read = [&](const std::string& name) { return read_text_file(shaders / name); };
+    const auto leaves = read("tree_leaf.glsl");
+    REQUIRE(leaves.has_value());
+    for (const char* name : {"tree.frag", "shadow_map.frag"}) {
+        const auto source = read(name);
+        REQUIRE(source.has_value());
+        const auto expanded = expand_shader_includes(*source, read);
+        REQUIRE(expanded.has_value());
+        CHECK(expanded->find(*leaves) != std::string::npos);
+        CHECK(expanded->find("tree_leaf_present(v_uv, v_tint, u_foliage)") != std::string::npos);
+    }
+    for (const char* name : {"shadow_map.vert", "shadow_map.frag"}) {
+        const auto source = read(name);
+        REQUIRE(source.has_value());
+        const auto expanded = expand_shader_includes(*source, read);
+        REQUIRE(expanded.has_value());
+        CHECK(with_defines(*expanded, "#define TREE_CASTER\n").find("#define TREE_CASTER") != std::string::npos);
+    }
+}
+
+TEST_CASE("visible and casting trees expand the same clock and wind pose") {
+    const auto shaders=std::filesystem::path(asset_root())/"picture"/"shaders";
+    const auto read=[&](const std::string& name){return read_text_file(shaders/name);};
+    const auto pose=read("tree_pose.glsl");REQUIRE(pose.has_value());
+    for(const char* name:{"tree.vert","shadow_map.vert"}) {
+        const auto source=read(name);REQUIRE(source.has_value());
+        const auto expanded=expand_shader_includes(*source,read);REQUIRE(expanded.has_value());
+        CHECK(expanded->find(*pose)!=std::string::npos);
+        CHECK(expanded->find("tree_world_position(a_pos,a_instance_scale,a_instance_offset,a_instance_turn.x,u_time,u_wind)")!=std::string::npos);
+    }
+}

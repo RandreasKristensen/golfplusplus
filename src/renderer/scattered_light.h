@@ -41,11 +41,11 @@ glm::vec3 haze_toward(const frame_lighting_block& block, const glm::vec3& way);
 
 // What sun_shafts.frag takes out of a pixel: the sun's glow from the haze
 // that lies in shadow along `way` from the eye out to `meters`, in `steps`
-// steps each sampling `lit_at` (the sun the shadow map lets through, 0..1)
-// `offset` (0..1, the pixel's dither) of the way through it. Each step's
+// fixed world intervals out to `reach_meters`, each sampling `lit_at` (the sun the shadow map lets through, 0..1)
+// at its centre (clipped to the visible ray). Each interval's
 // haze is exact, so a ray all in shadow takes out all of its glow.
 glm::vec3 shaft_shade(const frame_lighting_block& block, const std::function<float(const glm::vec3&)>& lit_at,
-                      const glm::vec3& way, float meters, int steps, float offset);
+                      const glm::vec3& way, float meters, float reach_meters, int steps);
 
 // The most shaft_shade could take out of any pixel out to `reach_meters`: a
 // ray all in shadow straight at the sun, through the low mist as thick as on

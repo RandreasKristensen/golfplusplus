@@ -6,8 +6,12 @@
 #include "renderer/render_data.h"
 #include "renderer/water_light.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <map>
+#include <filesystem>
+#include <vector>
 #include <string>
 
 #include <glm/geometric.hpp>
@@ -18,6 +22,7 @@ constexpr GLuint fetch_low_location = 1;
 constexpr GLuint fetch_high_location = 2;
 constexpr int beneath_color_unit = 6;
 constexpr int beneath_depth_unit = 7;
+constexpr int reflection_unit = 9;
 }
 
 bool water_renderer::init(const std::string& surface_vertex, const std::string& surface_fragment,
@@ -25,8 +30,9 @@ bool water_renderer::init(const std::string& surface_vertex, const std::string& 
                           const unsigned int screen_vao) {
     shutdown();
     screen_vao_ = screen_vao;
-    const std::string surface_defines = "#define REFLECTION_STEPS " + std::to_string(water_reflection_steps) + "\n";
-    if (!surface_shader_.load_from_files(surface_vertex, surface_fragment, surface_defines) ||
+    const auto shaders=std::filesystem::path(surface_vertex).parent_path();
+    if (!visibility_shader_.load_from_files((shaders/"water_visibility.vert").string(),(shaders/"shadow_map.frag").string()) ||
+        !surface_shader_.load_from_files(surface_vertex, surface_fragment) ||
         !underwater_shader_.load_from_files(underwater_vertex, underwater_fragment)) {
         shutdown();
         return false;
@@ -62,6 +68,9 @@ bool water_renderer::init(const std::string& surface_vertex, const std::string& 
 }
 
 void water_renderer::shutdown() {
+    if(!visibility_queries_.empty()) {glDeleteQueries(static_cast<GLsizei>(visibility_queries_.size()),visibility_queries_.data());}
+    visibility_queries_.clear();
+    visibility_shader_.shutdown();
     beneath_.shutdown();
     buffer_.shutdown();
     if (vao_ != 0) {
@@ -72,6 +81,7 @@ void water_renderer::shutdown() {
     underwater_shader_.shutdown();
     screen_vao_ = 0;
     uploaded_ = false;
+    surfaces_.clear();
 }
 
 bool water_renderer::ensure_beneath(const int width, const int height) {
@@ -104,20 +114,66 @@ void water_renderer::bind_beneath() const {
     glBindTexture(GL_TEXTURE_2D, beneath_.depth_texture());
 }
 
+void water_renderer::upload(const render_water& water,frame_profile* profile) {
+    if (!uploaded_ || uploaded_revision_ != water.revision) {
+        std::map<float,std::vector<render_water_vertex>> levels;
+        for(std::size_t i=0;i+2<water.triangles.size();i+=3) {
+            auto& vertices=levels[water.triangles[i].position.y];
+            vertices.insert(vertices.end(),water.triangles.begin()+static_cast<std::ptrdiff_t>(i),
+                             water.triangles.begin()+static_cast<std::ptrdiff_t>(i+3));
+        }
+        std::vector<render_water_vertex> vertices;
+        surfaces_.clear();
+        for(const auto& [level,points]:levels) {
+            surfaces_.push_back({level,static_cast<int>(vertices.size()),static_cast<int>(points.size())});
+            vertices.insert(vertices.end(),points.begin(),points.end());
+        }
+        buffer_.upload(vertices.data(),vertices.size()*sizeof(render_water_vertex),profile);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+        uploaded_revision_ = water.revision;
+        uploaded_ = true;
+    }
+}
+
+std::vector<float> water_renderer::visible_levels(const render_water* water,const glm::mat4& view_proj,frame_profile* profile) {
+    if(!water || water->triangles.empty()) {return {};}
+    upload(*water,profile);
+    while(visibility_queries_.size()<surfaces_.size()) {
+        GLuint query=0;glGenQueries(1,&query);visibility_queries_.push_back(query);
+    }
+    const auto candidates=visible_water_levels(*water,view_proj);
+    std::vector<std::size_t> issued;
+    visibility_shader_.set_profile(profile);
+    visibility_shader_.use();visibility_shader_.set_mat4("u_view_proj",view_proj);
+    glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LEQUAL);glDepthMask(GL_FALSE);
+    glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE);
+    glBindVertexArray(vao_);
+    for(std::size_t i=0;i<surfaces_.size();++i) {
+        const auto& surface=surfaces_[i];
+        if(std::find(candidates.begin(),candidates.end(),surface.level)==candidates.end()) {continue;}
+        glBeginQuery(GL_ANY_SAMPLES_PASSED,visibility_queries_[i]);
+        glDrawArrays(GL_TRIANGLES,surface.first,surface.count);record_draw_call(profile);
+        glEndQuery(GL_ANY_SAMPLES_PASSED);issued.push_back(i);
+    }
+    glBindVertexArray(0);glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);glDepthMask(GL_TRUE);glDepthFunc(GL_LESS);
+    std::vector<float> visible;
+    for(const auto i:issued) {
+        GLuint seen=0;glGetQueryObjectuiv(visibility_queries_[i],GL_QUERY_RESULT,&seen);
+        if(seen) {visible.push_back(surfaces_[i].level);}
+    }
+    return visible;
+}
+
 void water_renderer::draw_surfaces(const render_water* water, const glm::mat4& view_proj, const water_style& style,
-                                   const render_weather& weather, const float clock_seconds, gl_timer_pool& timers,
-                                   frame_profile* profile) {
+                                   const render_weather& weather, const std::vector<water_reflection>& reflections, const float clock_seconds,
+                                   gl_timer_pool& timers, frame_profile* profile) {
     if (water == nullptr || water->triangles.empty() || surface_shader_.id() == 0 || vao_ == 0) {
         return;
     }
+    const auto visible = visible_water_levels(*water, view_proj);
+    if (visible.empty()) { return; }
     timers.begin(gpu_profile_stage::water);
-    if (!uploaded_ || uploaded_revision_ != water->revision) {
-        buffer_.upload(water->triangles.data(), water->triangles.size() * sizeof(render_water_vertex), profile);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        vertex_count_ = water->triangles.size();
-        uploaded_revision_ = water->revision;
-        uploaded_ = true;
-    }
+    upload(*water,profile);
     if (!copy_beneath()) {
         timers.end();
         return;
@@ -130,7 +186,7 @@ void water_renderer::draw_surfaces(const render_water* water, const glm::mat4& v
     surface_shader_.set_float("u_time", clock_seconds);
     surface_shader_.set_vec3("u_absorption", glm::vec3(style.absorption_red, style.absorption_green, style.absorption_blue));
     surface_shader_.set_vec3("u_scatter_color", style.scatter_color);
-    surface_shader_.set_vec3("u_water", glm::vec3(style.max_path_meters, style.refraction_pixels, style.reflection_reach_meters));
+    surface_shader_.set_vec2("u_water", glm::vec2(style.max_path_meters, style.refraction_pixels));
     surface_shader_.set_vec4("u_ripples", glm::vec4(style.ripple_slope, style.ripple_wavelength_meters, style.ripple_speed,
                                                     style.ripple_fade_meters));
     surface_shader_.set_vec2("u_glint", glm::vec2(style.glint_strength, style.glint_sharpness));
@@ -140,16 +196,22 @@ void water_renderer::draw_surfaces(const render_water* water, const glm::mat4& v
                                                        style.calm_ripple_share, style.full_fetch_meters, style.fine_slope));
     surface_shader_.set_vec4("u_gusts", glm::vec4(style.gust_cell_meters, style.gust_share, style.rain_ring_slope,
                                                   style.rain_ring_meters));
-    surface_shader_.set_vec2("u_march", glm::vec2(style.reflection_first_step_meters,
-                                                  water_reflection_step_growth(style.reflection_first_step_meters,
-                                                                               style.reflection_reach_meters,
-                                                                               water_reflection_steps)));
     surface_shader_.set_int("u_beneath_color", beneath_color_unit);
     surface_shader_.set_int("u_beneath_depth", beneath_depth_unit);
+    surface_shader_.set_int("u_reflection", reflection_unit);
     bind_beneath();
     glBindVertexArray(vao_);
-    glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vertex_count_));
-    record_draw_call(profile);
+    for (const surface_run& surface : surfaces_) {
+        const float level = surface.level;
+        if (std::find(visible.begin(),visible.end(),level)==visible.end()) {continue;}
+        const auto reflection = std::find_if(reflections.begin(), reflections.end(),
+            [level](const water_reflection& r) { return r.level == level; });
+        surface_shader_.set_mat4("u_reflection_view_proj", reflection != reflections.end() ? reflection->view_proj : view_proj);
+        glActiveTexture(GL_TEXTURE0 + reflection_unit);
+        glBindTexture(GL_TEXTURE_2D, reflection != reflections.end() ? reflection->texture : 0);
+        glDrawArrays(GL_TRIANGLES, surface.first, surface.count);
+        record_draw_call(profile);
+    }
     glBindVertexArray(0);
     glActiveTexture(GL_TEXTURE0);
     timers.end();

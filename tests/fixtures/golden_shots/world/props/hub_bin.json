@@ -1,0 +1,59 @@
+{
+  "kind": "hub_fixture",
+  "colors": {
+    "body": [
+      0.55,
+      0.22,
+      0.11
+    ],
+    "lid": [
+      0.27,
+      0.13,
+      0.07
+    ]
+  },
+  "points": {
+    "body_min": [
+      -0.27,
+      0,
+      -0.27
+    ],
+    "body_max": [
+      0.27,
+      1.0,
+      0.27
+    ]
+  },
+  "parts": [
+    {
+      "shape": "cylinder",
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        0,
+        0.88,
+        0
+      ],
+      "radius": 0.25,
+      "color": "body"
+    },
+    {
+      "shape": "cylinder",
+      "from": [
+        0,
+        0.88,
+        0
+      ],
+      "to": [
+        0,
+        0.94,
+        0
+      ],
+      "radius": 0.27,
+      "color": "lid"
+    }
+  ]
+}

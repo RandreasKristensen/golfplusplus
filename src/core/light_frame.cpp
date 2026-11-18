@@ -2,6 +2,7 @@
 
 #include "game/golf_cart.h"
 #include "game/play_area.h"
+#include "game/hub_scene.h"
 #include "game/sun_lighting.h"
 #include "physics/vector_math.h"
 #include "renderer/cart_batch.h"
@@ -92,6 +93,15 @@ std::vector<render_light> night_lights(const render_data& data, const game_state
         if (cart.driven) {
             lights.push_back(headlight(cart, style, share));
         }
+    }
+    for (const static_prop& prop : game.area.props) {
+        const auto& model = game.hub_props.at(prop.model);
+        if (model.points.count("lamp") == 0) { continue; }
+        const night_light source{model.color("light"), model.number("light_intensity"), model.number("light_radius")};
+        render_light light = spot_light(prop_point(prop, model.point("lamp")), -world_up, source, share,
+                                       model.number("light_cone_deg"), model.number("light_soft_deg"));
+        light.fixed_lamp = true;
+        lights.push_back(light);
     }
     for (const floodlight& lamp : game.area.floodlights) {
         render_light light =

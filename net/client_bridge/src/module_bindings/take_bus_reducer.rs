@@ -9,7 +9,6 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub(super) struct TakeBusArgs {
     pub room_id: u64,
     pub reservation_id: u64,
-    pub takes_cart: bool,
 }
 
 impl From<TakeBusArgs> for super::Reducer {
@@ -17,7 +16,6 @@ impl From<TakeBusArgs> for super::Reducer {
         Self::TakeBus {
             room_id: args.room_id,
             reservation_id: args.reservation_id,
-            takes_cart: args.takes_cart,
         }
     }
 }
@@ -37,8 +35,8 @@ pub trait take_bus {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`take_bus:take_bus_then`] to run a callback after the reducer completes.
-    fn take_bus(&self, room_id: u64, reservation_id: u64, takes_cart: bool) -> __sdk::Result<()> {
-        self.take_bus_then(room_id, reservation_id, takes_cart, |_, _| {})
+    fn take_bus(&self, room_id: u64, reservation_id: u64) -> __sdk::Result<()> {
+        self.take_bus_then(room_id, reservation_id, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `take_bus` to run as soon as possible,
@@ -51,7 +49,6 @@ pub trait take_bus {
         &self,
         room_id: u64,
         reservation_id: u64,
-        takes_cart: bool,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -64,7 +61,6 @@ impl take_bus for super::RemoteReducers {
         &self,
         room_id: u64,
         reservation_id: u64,
-        takes_cart: bool,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -74,7 +70,6 @@ impl take_bus for super::RemoteReducers {
             TakeBusArgs {
                 room_id,
                 reservation_id,
-                takes_cart,
             },
             callback,
         )

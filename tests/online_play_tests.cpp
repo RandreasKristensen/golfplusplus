@@ -982,7 +982,7 @@ bool sent(const game_state& state, const net_command_type type) {
 TEST_CASE("online the ball is picked out of its cup with the server, and goes back when refused") {
     game_state state = online_hub();
     holed_at_cup(state);
-    update_game(state, interact_input(), 0.0f);
+    hold_interact(state, state.tuning.player.ball_pickup_hold_seconds + 0.1f);
     CHECK(!state.ball.has_value());
     CHECK(sent(state, net_command_type::pick_up_ball));
 
@@ -997,7 +997,7 @@ TEST_CASE("online the ball is picked out of its cup with the server, and goes ba
 TEST_CASE("online a tee-up refused for the ball in the cup puts it back there") {
     game_state state = online_hub();
     holed_at_cup(state);
-    update_game(state, interact_input(), 0.0f);
+    hold_interact(state, state.tuning.player.ball_pickup_hold_seconds + 0.1f);
     REQUIRE(!state.ball.has_value());
 
     REQUIRE(tee_up(state, 1, false));

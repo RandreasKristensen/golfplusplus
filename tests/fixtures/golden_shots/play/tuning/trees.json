@@ -1,6 +1,14 @@
 {
   "trees": {
     "bare_crown_density": 0.3,
+    "seasons": [
+      { "name": "spring", "start_day": 79 },
+      { "name": "early_summer", "start_day": 152 },
+      { "name": "midsummer", "start_day": 172 },
+      { "name": "late_summer", "start_day": 213 },
+      { "name": "autumn", "start_day": 265 },
+      { "name": "winter", "start_day": 318 }
+    ],
     "default_species": "beech",
     "species": [
       {

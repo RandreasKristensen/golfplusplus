@@ -13,10 +13,16 @@
 #include "renderer/render_data.h"
 
 #include <cstdint>
+#include <string>
 
 // The datestamp at `game_day` on a clock `utc_offset_hours` ahead of UTC, as
 // a 12-hour clock.
 render_datestamp make_datestamp(const text_assets& text, double game_day, double utc_offset_hours);
+
+// The time the place's clock shows this frame, as the datestamp's (the hub's
+// clocks write it on their boards): never the real time.
+std::string place_clock_text(const text_assets& text, const game_state& game, const sky_controls& controls,
+                             std::int64_t local_unix_ms);
 
 struct vcr_signals {
     bool in_menu = false;    // the startup menus

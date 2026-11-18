@@ -6,6 +6,7 @@
 
 #include <glm/trigonometric.hpp>
 #include "game/address_play.h"
+#include "game/boarding.h"
 #include "game/area_solids.h"
 
 #include "game/golf_bag.h"
@@ -148,15 +149,14 @@ render_shot_number shot_number_row(const game_state& game, const shot_number_pop
 }
 
 // Every hole's pin but the one my ball is in play on, which is drawn as `pin_position`.
-std::vector<glm::vec3> other_pin_markers(const game_state& game) {
-    std::vector<glm::vec3> pins;
+void add_other_pin_markers(render_data& data, const game_state& game) {
     const std::vector<glm::vec3>& all = game.static_anchors.pins;
     for (std::size_t i = 0; i < all.size(); ++i) {
         if (!ball_in_play(game) || i != game.ball->hole) {
-            pins.push_back(all[i]);
+            data.pin_markers.push_back(all[i]);
+            data.pin_marker_heights.push_back(pin_height_meters(game, i));
         }
     }
-    return pins;
 }
 
 // What the course map shows: the course's holes, each numbered along its
@@ -391,6 +391,7 @@ render_data make_render_data(const game_state& game,
     data.camera_fov_degrees = view.fov_degrees;
     data.viewmodel_fov_degrees = game.tuning.camera.viewmodel_fov_degrees;
 
+    data.grass = meshes.grass;
     data.terrain_mesh = meshes.terrain;
     data.material_overlay_mesh = meshes.material_overlay;
     data.hole_signs = meshes.hole_signs;
@@ -424,9 +425,14 @@ render_data make_render_data(const game_state& game,
             data.pin_position = pin_anchor_position(game, *game.ball->hole);
         }
     }
+    for (const spare_ball& spare : game.spare_balls) {
+        data.remote_balls.push_back(render_remote_ball{drawn_ball_center(spare.position, scale, game.area.cups), 0});
+    }
     data.tee_boxes = &game.area.tee_boxes;
     data.world_props = &game.area.props;
-    data.pin_markers = other_pin_markers(game);
+    data.bus_doors_open = bus_doors_open(game);
+    data.bus_doors_settled = !is_online(game) || game.online.server_now != 0;
+    add_other_pin_markers(data, game);
     for (std::size_t i = 0; i < game.flags_in.size() && i < game.static_anchors.pins.size(); ++i) {
         if (!game.flags_in[i]) {
             data.flags_out.push_back(game.static_anchors.pins[i]);
@@ -465,9 +471,7 @@ render_data make_render_data(const game_state& game,
 
     data.mode_label = mode_label(game, text);
     data.show_interact_prompt = interact_prompt && interact_available(game);
-    if (game.hub && !game.ball && on_foot(game)) { data.key_hints = text_hub_drop_hint; }
     if (const auto near = nearest_interactable(game); near && data.show_interact_prompt) {
-        if (near->kind == interactable_kind::practice_ball) { data.key_hints = text_hub_ball_hint; }
         if (near->kind == interactable_kind::dap) { data.key_hints = text_dap_hint; }
         if (near->kind == interactable_kind::tee_book) { data.key_hints = text_hub_book_hint; }
         if (near->kind == interactable_kind::bus) { data.key_hints = text_hub_bus_hint; }

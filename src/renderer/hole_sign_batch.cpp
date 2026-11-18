@@ -210,10 +210,8 @@ render_hole_signs build_render_hole_signs(const play_area& area,
         signs.signs.push_back(std::move(drawn));
     }
     for (const prop_board& board : boards) {
-        const float aspect = board.half_size.x / std::max(board.half_size.y, 0.001f);
         clear_overlay_batch(batch);
-        draw_prop_board_face(batch, text, board.label,
-                             std::max(1, static_cast<int>(std::lround(static_cast<float>(prop_board_face_height) * aspect))));
+        draw_prop_board_face(batch, text, board.label, prop_board_face_width(board.half_size));
         signs.truncated_text_count += batch.truncated_text_count;
 
         render_hole_sign drawn;

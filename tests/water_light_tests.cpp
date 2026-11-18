@@ -3,6 +3,8 @@
 #include "game/content_files.h"
 #include "game/lighting_loader.h"
 #include "renderer/water_light.h"
+#include "renderer/water_reflection.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include "test_support.h"
 
 #include <cmath>
@@ -75,40 +77,26 @@ TEST_CASE("the surface reflects little looking down and nearly all at a glancing
     CHECK(water_fresnel(0.2f) > water_fresnel(0.8f));
 }
 
-TEST_CASE("the reflection march is clipped to the part of its segment on screen") {
-    CHECK(shipped_water().reflection_reach_meters > 0.0f);
-    // Wholly inside: all of it.
-    water_screen_span span = water_reflection_screen_span({-0.5f, 0.0f}, {0.5f, 0.5f});
-    CHECK(near(span.low, 0.0f));
-    CHECK(near(span.high, 1.0f));
-    // Leaving through the right edge: it stops at x = 1, three quarters along.
-    span = water_reflection_screen_span({0.0f, 0.0f}, {4.0f / 3.0f, 0.0f});
-    CHECK(near(span.low, 0.0f));
-    CHECK(near(span.high, 0.75f));
-    // Coming in from the left: it starts at x = -1.
-    span = water_reflection_screen_span({-3.0f, 0.0f}, {1.0f, 0.0f});
-    CHECK(near(span.low, 0.5f));
-    CHECK(near(span.high, 1.0f));
-    // Wholly off screen: nothing to march.
-    span = water_reflection_screen_span({2.0f, 2.0f}, {3.0f, 2.5f});
-    CHECK(span.low >= span.high);
-    // Straight up from the middle: out the top.
-    span = water_reflection_screen_span({0.0f, 0.0f}, {0.0f, 3.0f});
-    CHECK(near(span.high, 1.0f / 3.0f));
-}
-
-TEST_CASE("a reflection is trusted in the picture's middle and not at its edge") {
-    CHECK(near(water_reflection_edge_confidence(0.5f, 0.5f, 0.1f), 1.0f));
-    CHECK(near(water_reflection_edge_confidence(0.0f, 0.5f, 0.1f), 0.0f));
-    CHECK(near(water_reflection_edge_confidence(0.5f, 1.0f, 0.1f), 0.0f));
-    float previous = 0.0f;
-    for (int i = 0; i <= 10; ++i) {
-        const float c = water_reflection_edge_confidence(static_cast<float>(i) * 0.01f, 0.5f, 0.1f);
-        CHECK(c >= previous);
-        previous = c;
+TEST_CASE("distant water retains the Fresnel response of unresolved waves") {
+    // A 1.7 m eye looking at water 100 m away. A flat normal would reflect
+    // almost the entire pale horizon, even with wind-driven waves present.
+    const float cosine = 1.7f / std::sqrt(100.0f * 100.0f + 1.7f * 1.7f);
+    const water_style water = shipped_water();
+    const float slope = water.ripple_slope + water.fine_slope;
+    REQUIRE(slope > 0.0f);
+    CHECK(water_fresnel(cosine) > 0.9f);
+    CHECK(water_filtered_fresnel(cosine, slope) < 0.6f);
+    CHECK(water_filtered_fresnel(cosine, slope) > water_f0);
+    // Filtering a perfectly calm surface changes nothing, including grazing.
+    for (int i = 0; i <= 100; ++i) {
+        const float c = static_cast<float>(i) / 100.0f;
+        CHECK(near(water_filtered_fresnel(c, 0.0f), water_fresnel(c)));
+        const float filtered = water_filtered_fresnel(c, slope);
+        CHECK(filtered >= water_f0);
+        CHECK(filtered <= 1.0f);
     }
-    CHECK(water_reflection_edge_confidence(0.05f, 0.5f, 0.1f) < water_reflection_edge_confidence(0.08f, 0.5f, 0.1f));
-    CHECK(water_reflection_edge_confidence(0.95f, 0.5f, 0.1f) < water_reflection_edge_confidence(0.92f, 0.5f, 0.1f));
+    CHECK(water_filtered_fresnel(0.0f, slope) < 0.6f);
+    CHECK(water_filtered_fresnel(1.0f, slope) < 0.021f);
 }
 
 namespace {
@@ -187,18 +175,39 @@ TEST_CASE("the upwind shore stays glassy and the waves grow across the pond, les
     CHECK(water_roughness(water, 6.0f, water.full_fetch_meters, 0.0f) < far_side);
 }
 
-TEST_CASE("the reflection's steps reach its reach, short near and long far") {
-    const water_style water = shipped_water();
-    const float growth = water_reflection_step_growth(water.reflection_first_step_meters, water.reflection_reach_meters,
-                                                      water_reflection_steps);
-    CHECK(growth > 1.0f);
-    float walked = 0.0f;
-    float step = water.reflection_first_step_meters;
-    for (int i = 0; i < water_reflection_steps; ++i) {
-        walked += step;
-        step *= growth;
+
+TEST_CASE("water mirrors the real world and clips below the surface, without moving projected surface points") {
+    const float level = 3;
+    const glm::vec3 eye(0,5,0);
+    const glm::mat4 view = glm::lookAt(eye, glm::vec3(0,3,20), glm::vec3(0,1,0));
+    const glm::mat4 proj = glm::perspective(glm::radians(60.0f),1.5f,0.1f,1000.0f);
+    const auto mirror = reflect_water_view(view,proj,eye,level);
+    CHECK(near(mirror.eye,glm::vec3(0,1,0)));
+    for (const glm::vec3 p : {glm::vec3(-4,3,20),glm::vec3(4,3,40)}) {
+        const glm::vec4 a = proj * view * glm::vec4(p,1);
+        const glm::vec4 b = mirror.projection * mirror.view * glm::vec4(p,1);
+        CHECK(near(a.x/a.w,b.x/b.w)); CHECK(near(a.y/a.w,b.y/b.w));
     }
-    CHECK(std::abs(walked - water.reflection_reach_meters) < 0.01f * water.reflection_reach_meters);
-    // Even steps that reach anyway need no growth.
-    CHECK(near(water_reflection_step_growth(10.0f, 100.0f, 32), 1.0f));
+    const glm::vec4 above = mirror.projection * mirror.view * glm::vec4(0,8,20,1);
+    const glm::vec4 under = mirror.projection * mirror.view * glm::vec4(0,2,20,1);
+    CHECK(above.z > -above.w); CHECK(under.z < -under.w);
+    const glm::vec4 actual = proj * view * glm::vec4(0,8,20,1);
+    // Its reflection is below the water in the picture.
+    CHECK(above.y/above.w < actual.y/actual.w);
+}
+
+TEST_CASE("visible water planes are deduplicated, sorted, and culled independently") {
+    render_water water;
+    for (const float level : {2.0f,1.0f,2.0f}) {
+        for (const glm::vec3 p : {glm::vec3(-4,level,20),glm::vec3(4,level,20),glm::vec3(0,level,30)}) {
+            render_water_vertex v; v.position=p; water.triangles.push_back(v);
+        }
+    }
+    const glm::vec3 eye(0,4,0);
+    const glm::mat4 vp = glm::perspective(glm::radians(60.0f),1.5f,0.1f,100.0f) *
+        glm::lookAt(eye,glm::vec3(0,2,20),glm::vec3(0,1,0));
+    const auto levels=visible_water_levels(water,vp);
+    REQUIRE(levels.size()==2); CHECK(levels[0]==1); CHECK(levels[1]==2);
+    for (auto& vertex:water.triangles) { vertex.position.z = -vertex.position.z; }
+    CHECK(visible_water_levels(water,vp).empty());
 }

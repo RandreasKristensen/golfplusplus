@@ -52,6 +52,7 @@ struct render_meshes {
     const render_fences* fences = nullptr;
     const render_water* water = nullptr;
     const render_floodlights* floodlights = nullptr;
+    const grass_field* grass = nullptr;
 };
 
 // The in-round frame (no menus, no debug text); `fov_degrees` is the

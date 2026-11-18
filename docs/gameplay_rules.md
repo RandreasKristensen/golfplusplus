@@ -62,7 +62,9 @@ a shot flies through is. The god menu's weather is offline only.
 **Each course has its own time of day.** Its clock runs a fixed
 `sky.clock_shift_hours` ahead of the shared sky clock, the shipped courses'
 spread round the day, so at any moment one is at sunrise and another at
-night; the hub's tee book shows each course's time and part of the day. Its
+night; the hub's tee book shows each course's time and part of the day, its
+season (`trees.seasons`, set against the trees' leaf-out, autumn colour and bare
+days), its holes, par and play length (tee to green, summed per hole). Its
 weather (wind, temperature) runs on that clock too, the same on the server.
 
 **Each course has one day of the year, and its season is in play.** The
@@ -90,7 +92,9 @@ giving up transition the state of my ball (`game_state::ball`: in my pocket, tee
 at rest, in flight, in its cup). Anything in reach can be used at any time, through the one
 interaction list. Teeing up, holing out and giving up change only the ball, its
 strokes and the shot, never the player's seat, an item in use or its effects,
-the area or its meshes. Online the ball row is the server's word on my ball.
+the area or its meshes. Holing out is one transition, `complete_current_hole`,
+on the hub and on a course: `place_rules::scored` decides whether the hole's
+strokes are recorded. Online the ball row is the server's word on my ball.
 
 Online groups form only from UTC tee-time slots, up to five (owner departure
 from four-player real-golf groups, `server.group_capacity`). Bus lead, expiry,
@@ -125,16 +129,47 @@ has tee mats, range targets and practice cups, never holes, hole signs, way sign
 or a round. `game_state::round` exists only on courses. Practice balls have no
 hole; warmup and scored balls name their course hole (`ball_kind`). Hub cups
 hold a ball for pickup and award no score or XP. Arrivals use `enter_place`.
+What play there counts for is the manifest's `rules` (`place_rules`, every field
+required): `scored` (strokes, holes, a round), `drops` (G), `shot_xp` and
+`stations` (mats that tee a fresh ball) and `balls_out` (how many balls a player may
+have out, the ball in play included: 10 in the hub, 1 on a course). Code asks the
+rule, not the place kind.
 
-Every place has a parked bus (`world.bus_stop`): F in reach of its door opens
-its menu, in both modes. Travel is a camcorder cut (a fade to black and a burst
-of tracking noise), never a drive. The pause menu on a course offers RETURN TO
-HUB at any time, leaving the round; online the completed holes' scores stay.
+Every place has a parked bus (`world.bus_stop`). In the hub F in reach of its door
+boards it, with no menu, for the booked course (without a booking a notice says so),
+in both modes; cart or carry was chosen with the booking in the tee book (a course
+without carts offers only carry). On a course F at the bus offers RETURN TO PRACTICE
+GROUND. Travel is a camcorder cut (a fade to black and a burst of tracking noise),
+never a drive: the hub's bus is always parked. Boarding is heard, never shown as text
+(`src/game/boarding.h`): from `server.bus_early_minutes` before a departure the PA
+chimes and calls and the bus's doors stand open with its engine idling, and
+`server.last_call_seconds` before it leaves the horn sounds. They are per departure,
+not per listener (a starter calls every group): the board's groups and my booking
+(offline the bus is open for as long as I have one). The pause menu on a course
+offers RETURN TO HUB at any time, leaving the round; online the completed holes' scores stay.
 
-In the hub, G drops one practice ball at the golfer's feet, on whatever surface
+In the hub, G drops a practice ball at the golfer's feet, on whatever surface
 is there, whatever they are doing (owner decision: the hub is for fooling
-about, so the drop is never refused). A golfer has one ball, so the drop
-replaces their last wherever it lies or flies. F in reach picks up their resting ball, including one in a practice cup;
-Space beside it addresses it with the club in hand. Neither drop nor pickup
+about, so the drop is never refused). A golfer has one ball in play
+(`game_state::ball`, the ball row: the one addressed and struck, so the whole shot
+path stays one-ball) and any number of spares (`game_state::spare_balls`, online
+`practice_ball` rows), balls at rest where they were put. Every ball out is one
+running array capped at `rules.balls_out`: a new ball (G, or teeing at a bay)
+that would exceed it removes the oldest first (by when it was first put on the
+ground, kept through swaps), never the new ball in play. G and a bay put the ball
+in play at rest among the spares; one in flight is thrown away, as before. Spares
+are resting balls in the shot snapshot (`spares_in_snapshot`, mine too: a chip
+can hit an earlier ball, except one lying where the struck ball starts), drawn
+like others' balls, not saved, and the bus clears them. The decisions are pure,
+in `game/my_balls_rules.cpp`, shared with the server; the same mechanism will
+serve a provisional ball (Rule 18.3) and two balls (Rule 20.1c(3)), not built yet.
+F at a ball in a course cup picks it up immediately. Otherwise, on a course
+and in the hub, F tapped at my ball steps up to address it, at a spare plays it (it
+swaps with my ball in play when that lies at rest). A ball already in a cup,
+including a holed spare, lifts on a tap in every place. F held
+(`player.ball_pickup_hold_seconds`) lifts the nearest practice ball or spare
+in reach and, held on, the next one after another hold time, so a cluster
+clears one by one. Space swings at address and jumps
+otherwise, never addressing. Neither drop, swap nor pickup
 moves the golfer, bag, items, effects or meshes, or changes progress. Online
-both actions wait for the complete authoritative ball row; refusals restore it.
+drop, swap and pickup wait for the complete authoritative rows; refusals restore them.

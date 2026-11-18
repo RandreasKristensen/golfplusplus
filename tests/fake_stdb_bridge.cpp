@@ -163,9 +163,8 @@ void stdb_claim_name(stdb_client*, const char* name, const size_t len) {
     record("stdb_claim_name", text_of(name, len));
 }
 
-void stdb_join_course(stdb_client*, const char* course_id, const size_t len, const bool takes_cart) {
+void stdb_join_course(stdb_client*, const char* course_id, const size_t len) {
     record("stdb_join_course", text_of(course_id, len));
-    fake_bridge().calls.back().flag = takes_cart;
 }
 
 void stdb_leave_room(stdb_client*, uint64_t) {
@@ -173,9 +172,13 @@ void stdb_leave_room(stdb_client*, uint64_t) {
 }
 
 void stdb_open_tee_book(stdb_client*, uint64_t room, const char* course, size_t len) { record("stdb_open_tee_book", text_of(course, len), static_cast<int64_t>(room)); }
-void stdb_book_tee(stdb_client*, uint64_t, uint64_t booking, const char* course, size_t len, int64_t) { record("stdb_book_tee", text_of(course, len), static_cast<int64_t>(booking)); }
+void stdb_book_tee(stdb_client*, uint64_t, uint64_t booking, const char* course, size_t len, int64_t at, bool takes_cart) {
+    record("stdb_book_tee", text_of(course, len), static_cast<int64_t>(booking));
+    fake_bridge().calls.back().flag = takes_cart;
+    fake_bridge().calls.back().extra = static_cast<std::uint64_t>(at);
+}
 void stdb_cancel_tee(stdb_client*, uint64_t, uint64_t booking) { record("stdb_cancel_tee", {}, static_cast<int64_t>(booking)); }
-void stdb_take_bus(stdb_client*, uint64_t, uint64_t booking, bool) { record("stdb_take_bus", {}, static_cast<int64_t>(booking)); }
+void stdb_take_bus(stdb_client*, uint64_t, uint64_t booking) { record("stdb_take_bus", {}, static_cast<int64_t>(booking)); }
 void stdb_return_to_hub(stdb_client*, uint64_t room) { record("stdb_return_to_hub", {}, static_cast<int64_t>(room)); }
 void stdb_start_booked_round(stdb_client*, uint64_t, uint64_t booking) { record("stdb_start_booked_round", {}, static_cast<int64_t>(booking)); }
 void stdb_leave_group(stdb_client*, uint64_t, uint64_t booking) { record("stdb_leave_group", {}, static_cast<int64_t>(booking)); }
@@ -202,8 +205,12 @@ void stdb_give_up_hole(stdb_client*, uint64_t) {
     record("stdb_give_up_hole");
 }
 
-void stdb_pick_up_ball(stdb_client*, uint64_t) {
-    record("stdb_pick_up_ball");
+void stdb_pick_up_ball(stdb_client*, uint64_t, const uint64_t ball_id) {
+    record("stdb_pick_up_ball", {}, static_cast<std::int64_t>(ball_id));
+}
+
+void stdb_play_ball(stdb_client*, uint64_t, const uint64_t spare_id) {
+    record("stdb_play_ball", {}, static_cast<std::int64_t>(spare_id));
 }
 
 void stdb_take_wheel(stdb_client*, uint64_t) { record("stdb_take_wheel"); }

@@ -1,4 +1,5 @@
 #include "core/startup_options.h"
+#include <cmath>
 
 #include "game/sky_clock.h"
 
@@ -174,6 +175,16 @@ startup_options with_online_options(startup_options options,
             options.online_server = trimmed(arguments[++i].c_str());
         } else if (argument == "--db" && has_value) {
             options.online_database = trimmed(arguments[++i].c_str());
+        } else if (argument == "--screenshot-view" && has_value) {
+            const auto parts = comma_parts(arguments[++i]);
+            std::array<float, 4> view{};
+            bool valid = parts.size() == view.size();
+            for (std::size_t j = 0; valid && j < view.size(); ++j) {
+                const auto value = number_of(parts[j]);
+                valid = value && std::isfinite(*value);
+                if (valid) { view[j] = *value; }
+            }
+            if (valid) { options.screenshot_view = view; }
         } else if (argument == "--anonymous") {
             options.online_anonymous = true;
         } else if (argument == "--god") {

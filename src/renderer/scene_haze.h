@@ -11,6 +11,7 @@
 #include "game/weather_lighting.h"
 
 #include <algorithm>
+#include <optional>
 
 #include <glm/vec3.hpp>
 
@@ -23,6 +24,7 @@ struct scene_haze {
     glm::vec3 eye{0.0f};
     // World height the low mist lies on: the area's lowest ground.
     float mist_floor = 0.0f;
+    std::optional<float> reflection_level;
 };
 
 // The haze over `backdrop` seen from `eye`: its colour times the time of

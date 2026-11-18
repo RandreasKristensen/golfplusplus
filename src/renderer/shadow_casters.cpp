@@ -28,20 +28,18 @@ void append_near_triangles(world_marker_batch& figures, const std::vector<Vertex
     }
 }
 
-void append_flagsticks(world_marker_batch& figures, const render_data& data, const scene_colors& colors,
-                       const float texel_meters) {
+void append_flagsticks(world_marker_batch& figures, const render_data& data, const scene_colors& colors) {
     const flag_pose flag{data.weather.flag_wind, data.weather.flag_lift, data.weather.flag_phase, data.weather.flag_flap};
-    const pole_view pole{data.flagstick_radius_meters, data.lighting.sun_direction, texel_meters};
-    const auto standing = [&](const glm::vec3& pin) {
+    const auto standing = [&](const glm::vec3& pin, const float height) {
         if (std::find(data.flags_out.begin(), data.flags_out.end(), pin) == data.flags_out.end()) {
-            append_pin_flagstick(figures, pin, data.pin_visual_height_meters, colors.markers, colors.glow, flag, pole);
+            append_pin_flagstick(figures, pin, height, colors.markers, colors.glow, flag, data.flagstick_radius_meters);
         }
     };
     if (data.show_hole) {
-        standing(data.pin_position);
+        standing(data.pin_position, data.pin_visual_height_meters);
     }
-    for (const glm::vec3& pin : data.pin_markers) {
-        standing(pin);
+    for (std::size_t i = 0; i < data.pin_markers.size(); ++i) {
+        standing(data.pin_markers[i], i < data.pin_marker_heights.size() ? data.pin_marker_heights[i] : data.pin_visual_height_meters);
     }
     for (const auto& [foot, tip] : data.lying_flags) {
         append_lying_flagstick(figures, foot, tip, colors.markers, colors.glow);
@@ -53,8 +51,7 @@ void build_shadow_casters(world_marker_batch& figures, prop_batch& models, const
                           const prop_catalog& props, const shadow_style& map, const prop_batch* static_models) {
     figures.clear();
     models.clear();
-    const float texel_meters = map.map_resolution > 0 ? map.map_extent / static_cast<float>(map.map_resolution) : 0.0f;
-    append_flagsticks(figures, data, colors, texel_meters);
+    append_flagsticks(figures, data, colors);
     if (data.hole_signs != nullptr) {
         append_near_triangles(figures, data.hole_signs->vertices, data.camera_position, map.map_extent);
     }

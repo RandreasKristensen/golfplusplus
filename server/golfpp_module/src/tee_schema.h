@@ -8,12 +8,14 @@ struct tee_slot_row {
     std::uint64_t room_id;
     std::int64_t scheduled_at; // UTC microseconds
     std::int32_t booked_count;
+    bool departed; // its bus has left (the tee time came): off the departure board
 };
-SPACETIMEDB_STRUCT(tee_slot_row, slot_id, key, course_id, world_id, room_id, scheduled_at, booked_count)
+SPACETIMEDB_STRUCT(tee_slot_row, slot_id, key, course_id, world_id, room_id, scheduled_at, booked_count, departed)
 SPACETIMEDB_TABLE(tee_slot_row, tee_slot, Public)
 FIELD_PrimaryKeyAutoInc(tee_slot, slot_id)
 FIELD_Unique(tee_slot, key)
 FIELD_Index(tee_slot, course_id)
+FIELD_Index(tee_slot, departed)
 
 struct tee_reservation_row {
     std::uint64_t reservation_id;
@@ -24,9 +26,10 @@ struct tee_reservation_row {
     std::uint32_t lane;
     bool grouped;
     bool completed;
+    bool takes_cart; // chosen with the booking: my own cart for the round (where the course has them)
     std::vector<std::int32_t> round_strokes;
 };
-SPACETIMEDB_STRUCT(tee_reservation_row, reservation_id, account_id, slot_id, started_at, revision, lane, grouped, completed, round_strokes)
+SPACETIMEDB_STRUCT(tee_reservation_row, reservation_id, account_id, slot_id, started_at, revision, lane, grouped, completed, takes_cart, round_strokes)
 SPACETIMEDB_TABLE(tee_reservation_row, tee_reservation, Private)
 FIELD_PrimaryKeyAutoInc(tee_reservation, reservation_id)
 FIELD_Unique(tee_reservation, account_id)
@@ -81,5 +84,15 @@ struct tee_reservation_view {
     std::uint32_t world_id;
     std::uint64_t room_id;
     std::int64_t scheduled_at;
+    bool takes_cart;
 };
-SPACETIMEDB_STRUCT(tee_reservation_view, reservation_id, slot_id, started_at, grouped, completed, revision, course_id, world_id, room_id, scheduled_at)
+SPACETIMEDB_STRUCT(tee_reservation_view, reservation_id, slot_id, started_at, grouped, completed, revision, course_id, world_id, room_id, scheduled_at, takes_cart)
+
+// One booked group on the hub's departure board: its time, course and names.
+struct departure_view {
+    std::uint64_t slot_id;
+    std::string course_id;
+    std::int64_t scheduled_at;
+    std::vector<std::string> names;
+};
+SPACETIMEDB_STRUCT(departure_view, slot_id, course_id, scheduled_at, names)

@@ -467,7 +467,7 @@ TEST_CASE("the holed ball waits in its cup until it is picked up, and no hole te
 
     walk_to(state, cup + glm::vec3(reach * 0.5f, 0.0f, 0.0f));
     CHECK(cup_ball_in_reach(state));
-    update_game(state, interact_input(), 0.016f);
+    tap_interact(state);
     CHECK(!state.ball.has_value());
     CHECK(tee_up(state, 1, false));
 }

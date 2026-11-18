@@ -215,7 +215,7 @@ TEST_CASE("the bus from a course to the hub saves offline progress, and online n
             game.online.room_ready = true;
         }
         game.save.skills["golf_swing"].xp = 40;
-        request_bus_travel(game, false);
+        request_bus_travel(game);
         CHECK(game.hub_flow.travel_course == online_hub_course);
         return game;
     };

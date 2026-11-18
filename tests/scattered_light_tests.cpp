@@ -237,19 +237,19 @@ TEST_CASE("a trunk against a low sun casts a dark shaft in the misty air in fron
     const int steps = 16;
     // Looking at the trunk, the air in front of it is in its shadow.
     const glm::vec3 at_trunk = glm::normalize(glm::vec3(0.0f, 0.5f, 20.0f));
-    const glm::vec3 shaded = shaft_shade(dawn, lit, at_trunk, 20.0f, steps, 0.5f);
+    const glm::vec3 shaded = shaft_shade(dawn, lit, at_trunk, 20.0f, 20.0f, steps);
     CHECK(brightness(shaded) > 0.0f);
     // Sun-coloured: what is taken out is the sun's glow.
     CHECK(shaded.r > shaded.b);
     // Through the gap 3 m beside it the air is in sun but for the few metres
     // nearest the eye, where the shadow reaches back to it.
     const glm::vec3 beside = glm::normalize(glm::vec3(3.0f, 0.5f, 20.0f));
-    CHECK(brightness(shaft_shade(dawn, lit, beside, 20.0f, steps, 0.5f)) < 0.2f * brightness(shaded));
+    CHECK(brightness(shaft_shade(dawn, lit, beside, 20.0f, 20.0f, steps)) < 0.2f * brightness(shaded));
     // With the trunk 3 m to the other side, that ray never meets its shadow.
     const auto trunk_aside = [&towards_sun](const glm::vec3& point) {
         return past_trunk(point + glm::vec3(3.0f, 0.0f, 0.0f), towards_sun);
     };
-    CHECK(brightness(shaft_shade(dawn, trunk_aside, beside, 20.0f, steps, 0.5f)) == 0.0f);
+    CHECK(brightness(shaft_shade(dawn, trunk_aside, beside, 20.0f, 20.0f, steps)) == 0.0f);
 }
 
 TEST_CASE("air all in shadow takes out exactly the sun's glow the haze was drawn with, most looking at the sun") {
@@ -257,17 +257,17 @@ TEST_CASE("air all in shadow takes out exactly the sun's glow the haze was drawn
     const auto dark = [](const glm::vec3&) { return 0.0f; };
     const glm::vec3 towards(0.0f, 0.0f, 1.0f);
     const glm::vec3 away(0.0f, 0.0f, -1.0f);
-    for (const float offset : {0.03f, 0.5f, 0.97f}) {
-        const glm::vec3 shaded = shaft_shade(dawn, dark, towards, 80.0f, 16, offset);
+    {
+        const glm::vec3 shaded = shaft_shade(dawn, dark, towards, 80.0f, 80.0f, 16);
         CHECK(near(shaded, haze_sun_glow(dawn, towards) * haze_over(dawn, towards, 80.0f), 1.0e-5f));
     }
     // That glow is what haze_toward adds to the haze's colour.
     CHECK(near(haze_toward(dawn, towards) - glm::vec3(dawn.haze_color), haze_sun_glow(dawn, towards), 1.0e-6f));
     // Looking away from the sun the air sends the eye little of it.
-    CHECK(brightness(shaft_shade(dawn, dark, away, 80.0f, 16, 0.5f)) <
-          0.1f * brightness(shaft_shade(dawn, dark, towards, 80.0f, 16, 0.5f)));
+    CHECK(brightness(shaft_shade(dawn, dark, away, 80.0f, 80.0f, 16)) <
+          0.1f * brightness(shaft_shade(dawn, dark, towards, 80.0f, 80.0f, 16)));
     // Nothing takes out more than the peak the pass is skipped under.
-    const glm::vec3 most = shaft_shade(dawn, dark, glm::vec3(dawn.sun_direction), 160.0f, 16, 0.5f);
+    const glm::vec3 most = shaft_shade(dawn, dark, glm::vec3(dawn.sun_direction), 160.0f, 160.0f, 16);
     CHECK(std::max(most.r, std::max(most.g, most.b)) <= shaft_peak(dawn, 160.0f) * 1.0001f);
     CHECK(std::max(most.r, std::max(most.g, most.b)) > 0.99f * shaft_peak(dawn, 160.0f));
     // With the sun down there is nothing to take out.
@@ -386,10 +386,10 @@ TEST_CASE("in mist the shafts take out exactly the glow drawn, and the lamps' be
     const frame_lighting_block dawn = low_mist(eye);
     const auto dark = [](const glm::vec3&) { return 0.0f; };
     const glm::vec3 low_sun = glm::normalize(glm::vec3(0.0f, -0.01f, 1.0f));
-    const glm::vec3 shaded = shaft_shade(dawn, dark, low_sun, 120.0f, 16, 0.5f);
+    const glm::vec3 shaded = shaft_shade(dawn, dark, low_sun, 120.0f, 120.0f, 16);
     CHECK(near(shaded, haze_sun_glow(dawn, low_sun) * haze_over(dawn, low_sun, 120.0f), 1.0e-5f));
     for (const glm::vec3& way : {low_sun, glm::vec3(dawn.sun_direction), glm::vec3(0.0f, -0.3f, 0.95f)}) {
-        const glm::vec3 most = shaft_shade(dawn, dark, glm::normalize(way), 160.0f, 16, 0.5f);
+        const glm::vec3 most = shaft_shade(dawn, dark, glm::normalize(way), 160.0f, 160.0f, 16);
         CHECK(std::max(most.r, std::max(most.g, most.b)) <= shaft_peak(dawn, 160.0f) * 1.0001f);
     }
     // A floodlight's beam in clear air, with and without the mist on the ground.
@@ -406,4 +406,31 @@ TEST_CASE("in mist the shafts take out exactly the glow drawn, and the lamps' be
     const float sampled = brightness(scattered_light(misty_night, at_ground));
     const float summed = brightness(summed_in_steps(misty_night, at_ground));
     CHECK(near(sampled, summed, summed * 0.15f));
+}
+
+TEST_CASE("sun shaft shade stays fixed when the background behind shadowed air changes depth") {
+    const frame_lighting_block dawn = misty_dawn();
+    const glm::vec3 way = glm::normalize(glm::vec3(0.0f, 0.1f, 1.0f));
+    const auto lit = [](const glm::vec3& point) { return point.z > 12.0f && point.z < 21.0f ? 0.0f : 1.0f; };
+    const glm::vec3 first = shaft_shade(dawn, lit, way, 40.0f, 220.0f, 64);
+    CHECK(brightness(first) > 0.0f);
+    for (const float depth : {41.0f, 65.0f, 123.0f, 220.0f}) {
+        CHECK(near(first, shaft_shade(dawn, lit, way, depth, 220.0f, 64), 1.0e-6f));
+    }
+}
+
+TEST_CASE("a mirrored mist ray takes the physical path above its water plane") {
+    frame_lighting_block reflected;
+    reflected.haze_eye = glm::vec4(0,-2,0,0.001f);
+    reflected.mist = glm::vec4(0,0.2f,0.1f,0);
+    reflected.air.w=1;
+    const glm::vec3 way=glm::normalize(glm::vec3(0,1,5));
+    const float first=2.0f/way.y;
+    frame_lighting_block physical=reflected;
+    physical.air.w=0;
+    physical.haze_eye.y=2;
+    const float near_depth=mist_depth(physical,glm::vec3(way.x,-way.y,way.z),first);
+    physical.haze_eye.y=0;
+    const float far=mist_depth(physical,way,20);
+    CHECK(near(near_depth + far, mist_depth(reflected,way,first+20), 0.0001f));
 }

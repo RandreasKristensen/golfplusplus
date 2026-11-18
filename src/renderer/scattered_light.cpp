@@ -106,11 +106,16 @@ float mist_at(const frame_lighting_block& block, const glm::vec3& world) {
 
 float mist_depth(const frame_lighting_block& block, const glm::vec3& way, const float meters) {
     const float run = std::min(meters, 1.0f / block.haze_eye.w);
-    const float rise = way.y * run * block.mist.y;
-    const float from_eye = (block.mist.x - block.haze_eye.y) * block.mist.y;
-    const float along = std::abs(rise) < 0.01f ? std::exp(from_eye) * (1.0f - rise * (0.5f - rise / 6.0f))
-                                               : (std::exp(from_eye) - std::exp(std::min(from_eye - rise, 60.0f))) / rise;
-    return block.mist.z * run * along;
+    const auto segment = [&](const float height, const float vertical, const float length) {
+        const float rise = vertical * length * block.mist.y;
+        const float from_eye = (block.mist.x - height) * block.mist.y;
+        const float along = std::abs(rise) < 0.01f ? std::exp(from_eye) * (1.0f - rise * (0.5f - rise / 6.0f))
+            : (std::exp(from_eye) - std::exp(std::min(from_eye - rise, 60.0f))) / rise;
+        return block.mist.z * length * along;
+    };
+    if (block.air.w < 0.5f) { return segment(block.haze_eye.y, way.y, run); }
+    const float first = way.y > 1.0e-6f ? std::clamp((block.mist.w - block.haze_eye.y) / way.y, 0.0f, run) : run;
+    return segment(2.0f * block.mist.w - block.haze_eye.y, -way.y, first) + segment(block.mist.w, way.y, run - first);
 }
 
 float haze_over(const frame_lighting_block& block, const glm::vec3& way, const float meters) {
@@ -136,14 +141,20 @@ glm::vec3 haze_toward(const frame_lighting_block& block, const glm::vec3& way) {
 }
 
 glm::vec3 shaft_shade(const frame_lighting_block& block, const std::function<float(const glm::vec3&)>& lit_at,
-                      const glm::vec3& way, const float meters, const int steps, const float offset) {
+                      const glm::vec3& way, const float meters, const float reach_meters, const int steps) {
     const glm::vec3 eye(block.haze_eye);
-    const float step = meters / static_cast<float>(std::max(steps, 1));
+    const float step = reach_meters / static_cast<float>(std::max(steps, 1));
+    const float origin = glm::dot(eye, way) / step;
+    const float phase = origin - std::floor(origin);
     float shaded = 0.0f;
     float before = 0.0f;
-    for (int k = 0; k < steps; ++k) {
-        const float after = haze_over(block, way, step * static_cast<float>(k + 1));
-        shaded += (after - before) * (1.0f - lit_at(eye + way * (step * (static_cast<float>(k) + offset))));
+    for (int k = 0; k <= steps; ++k) {
+        const float start = std::max(0.0f, (static_cast<float>(k) - phase) * step);
+        const float end = std::min(meters, (static_cast<float>(k + 1) - phase) * step);
+        if (end <= start) { break; }
+        const float after = haze_over(block, way, end);
+        const float at = std::clamp((static_cast<float>(k) + 0.5f - phase) * step, start, end);
+        shaded += (after - before) * (1.0f - lit_at(eye + way * at));
         before = after;
     }
     return haze_sun_glow(block, way) * shaded;

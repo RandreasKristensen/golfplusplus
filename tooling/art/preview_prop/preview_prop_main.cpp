@@ -14,7 +14,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <glm/geometric.hpp>
 
@@ -54,24 +56,40 @@ int main(const int argc, char** argv) {
         light->colors, props.props->at(hole_sign_model), 1);
     const float front = model->kind == "hub_book" ? -1.0f : 1.0f;
     const glm::vec3 board = model->points.count("board_center") ? model->point("board_center") : glm::vec3(0, 1.5f, 0);
-    const std::array<glm::vec3, 6> eyes{{{-12,1.7f,0}, {0,1.7f,12*front},
-        {-8.485281f,1.7f,8.485281f*front}, {-17.67767f,1.7f,17.67767f*front}, {0,1.7f,-12*front},
+    // Built hub things are photographed from a distance that fits their size (4 m across: the usual 12 m).
+    const bool fixture = model->kind == "hub_fixture" || model->kind == "hub_sign";
+    const glm::vec3 extent = fixture ? model->point("body_max") - model->point("body_min") : glm::vec3(4);
+    const float fit = fixture ? std::clamp(std::max({extent.x, extent.y, extent.z}) / 4.0f, 0.25f, 3.0f) : 1.0f;
+    const float centre_height = fixture ? std::max(0.3f, model->point("body_max").y * 0.45f) : model->kind == "hub_book" ? 1.0f : 1.5f;
+    const std::array<glm::vec3, 6> eyes{{{-12*fit,1.7f,0}, {0,1.7f,12*front*fit},
+        {-8.485281f*fit,1.7f,8.485281f*front*fit}, {-17.67767f*fit,1.7f,17.67767f*front*fit}, {0,1.7f,-12*front*fit},
         {0, std::max(1.7f, board.y), board.z + 3*front}}};
     const std::array<const char*,6> names{{"side", "front", "three_quarter", "tape_25m", "rear", "board"}};
+    // GOLFPP_PREVIEW_DOORS=0..1 photographs a bus with its doors that far through their swing.
+    const char* swing_env = std::getenv("GOLFPP_PREVIEW_DOORS");
+    const float swing = swing_env != nullptr && model->kind == "hub_bus" ? std::clamp(static_cast<float>(std::atof(swing_env)), 0.0f, 1.0f) : 0.0f;
     bool ok = true;
     for (std::size_t view = 0; view < eyes.size(); ++view) {
         render_data frame;
-        frame.world_props = &area.props; frame.trees_revision = 1; frame.hole_signs = &boards;
+        frame.world_props = &area.props; frame.trees_revision = 1 + view;  // each view starts with its doors shut frame.hole_signs = &boards;
         frame.camera_position = eyes[view];
-        frame.camera_target = view == 5 ? board : glm::vec3(0, model->kind == "hub_book" ? 1.0f : 1.5f, 0);
+        frame.camera_target = view == 5 ? board : glm::vec3(0, centre_height, 0);
         frame.camera_fov_degrees = 50; frame.viewmodel_fov_degrees = 50;
         frame.area_extent = 80; frame.area_center = {0,2,0}; // backdrop ground at y=0
         frame.lighting = make_render_lighting(game, *light, sky, 0);
         frame.glow = light->colors.glow; frame.show_hud = false;
         // Allow the actual iris and white balance to settle for each viewpoint.
         for (int tick = 0; tick < 90; ++tick) {
-            frame.clock_seconds = static_cast<float>(view * 90 + static_cast<std::size_t>(tick)) / 60;
+            frame.clock_seconds = static_cast<float>(view * 400 + static_cast<std::size_t>(tick)) / 60;
             draw.render(frame, *text);
+        }
+        if (swing > 0.0f) {
+            frame.bus_doors_open = true;
+            const int swing_ticks = static_cast<int>(std::ceil(swing * model->number("door_swing_seconds") * 60.0f)) + (swing >= 1.0f ? 1 : 0);
+            for (int tick = 1; tick <= swing_ticks; ++tick) {
+                frame.clock_seconds = static_cast<float>(view * 400 + 90 + tick) / 60;
+                draw.render(frame, *text);
+            }
         }
         const auto path = std::filesystem::path(argv[2]) / (std::string(names[view]) + ".bmp");
         ok = save_screenshot(display.sdl_window(), path) && ok;

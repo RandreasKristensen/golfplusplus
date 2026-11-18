@@ -77,7 +77,7 @@ public:
     // What the menus ask of the server; gameplay goes through net_commands.
     // A refusal arrives as a reducer failure.
     void claim_name(const std::string& name);
-    void join_course(const std::string& course_id, bool takes_cart);
+    void join_course(const std::string& course_id);
     void leave_room();
     void create_link_code();
     void redeem_link_code(const std::string& code);
@@ -166,6 +166,7 @@ private:
     std::uint32_t room_subscription_ = 0;
     std::optional<tee_reservation_info> reservation_;
     std::map<std::uint64_t, tee_slot_info> tee_slots_;
+    std::map<std::uint64_t, departure_info> departures_;
     std::string book_course_;
     bool book_acknowledged_ = false;
     std::int64_t book_after_ = 0;

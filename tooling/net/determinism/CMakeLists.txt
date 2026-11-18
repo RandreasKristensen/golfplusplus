@@ -78,6 +78,7 @@ set(sources
   src/game/tee_box.cpp
   src/game/sky_clock.cpp
   src/game/weather.cpp
+  src/game/tree_season.cpp
   src/game/tuning_loader.cpp
   src/game/utf8.cpp
 )

@@ -32,6 +32,7 @@
 #include "game/shot_number.h"
 #include "game/shot_setup.h"
 #include "game/shot_simulation.h"
+#include "game/spare_ball.h"
 #include "game/swing.h"
 #include "game/weather.h"
 #include "physics/body_collision.h"
@@ -119,6 +120,8 @@ struct my_ball {
     ball_place place = ball_place::teed;
     ball_kind kind = ball_kind::scored;
     std::optional<std::size_t> tee_mat = std::nullopt;
+    // When it was first put on the ground, as spare_ball::placed_at counts it.
+    std::int64_t placed_at = 0;
 };
 
 // The club picker open at my bag: the club it has highlighted (in bag order).
@@ -271,7 +274,9 @@ enum class audio_event_type {
     cart_sink,
     cart_righted,
     player_bump,
-    item_use
+    item_use,
+    boarding_call,  // the starter's PA: a chime and the call for a departure
+    bus_horn        // the hub bus's last call
 };
 
 // Game code pushes these (game/world_sounds.h); app plays them
@@ -299,11 +304,26 @@ struct static_anchor_cache {
 
 enum class hub_screen { none, book, bus };
 
+// How far a departure has got towards leaving (game/boarding.h).
+enum class boarding_phase { waiting, boarding, last_call, gone };
+
 struct hub_flow_state {
     hub_screen screen = hub_screen::none;
     std::string travel_course;
     std::optional<net_command_type> ball_request;
     std::uint64_t ball_updates = 0;
+    // The spare a pending pick_up_ball or play_ball names; 0 for the ball in play.
+    std::uint64_t ball_target = 0;
+    // The departures whose boarding the PA has called, by time, and how far
+    // each has got (game/boarding.h); a call is made once, at the change.
+    std::map<std::int64_t, boarding_phase> boarding_seen;
+};
+
+// F held at my ball: for how long since the hold began or the last lift, and
+// whether it has lifted a ball already (game/ball_lift.h).
+struct ball_hold {
+    float seconds = 0.0f;
+    bool lifted = false;
 };
 
 struct game_state {
@@ -312,6 +332,7 @@ struct game_state {
     std::optional<std::uint64_t> dap_pending;
     std::int64_t dap_requested_at = 0;
     hub_flow_state hub_flow;
+    std::optional<ball_hold> ball_holding;
     bool results_dismissed = false;
     // Content, copied in when the state is made. Never changed by play.
     std::string asset_root;
@@ -362,6 +383,11 @@ struct game_state {
 
     // nullopt: in my pocket. Not saved: leaving the course puts it away.
     std::optional<my_ball> ball;
+    // My other balls, at rest where I put them (game/my_balls.h): offline only,
+    // and not saved; the hub's bus clears them. Online they are the server's rows
+    // (online_view::spare_balls). `balls_placed` numbers them and their ages.
+    std::vector<spare_ball> spare_balls;
+    std::int64_t balls_placed = 0;
     std::optional<shot_playback> shot;  // while my ball moves
     // F at an unplayed tee with my ball in play on another hole: that tee,
     // until F gives the hole up there or Esc keeps playing it.
@@ -503,3 +529,5 @@ void continue_terrain_render_revision(game_state& state, std::uint64_t previous_
 // Hole `hole`'s tee and pin on the ground.
 glm::vec3 tee_anchor_position(const game_state& state, std::size_t hole);
 glm::vec3 pin_anchor_position(const game_state& state, std::size_t hole);
+// How tall the flagstick of `static_anchors.pins[pin]` stands: its cup's own, else the scale's.
+float pin_height_meters(const game_state& state, std::size_t pin);

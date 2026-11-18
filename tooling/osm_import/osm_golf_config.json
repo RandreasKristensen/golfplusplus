@@ -113,10 +113,12 @@
       "air": {"mean_temperature_c": 7.3, "daily_temperature_range_c": 4.9}
     },
     "himmerland_new_course": {
+      "ground": {"reviewed_dropouts": [{"position": [235, -445], "reach_m": 5, "reason": "Inland pond DEM plateau lies abruptly below its entire shoreline (Hedensted about 47 m; Himmerland about 15 m). Interpolate the surrounding bare-earth surface."}]},
       "sky": {"date": "08-10", "utc_offset_hours": 2, "clock_shift_hours": 5.25},
       "air": {"mean_temperature_c": 16.9, "daily_temperature_range_c": 8.1}
     },
     "hedensted_golf_klub": {
+      "ground": {"reviewed_dropouts": [{"position": [-205, -369], "reach_m": 5, "reason": "Inland pond DEM plateau lies abruptly below its entire shoreline (Hedensted about 47 m; Himmerland about 15 m). Interpolate the surrounding bare-earth surface."}]},
       "sky": {"date": "06-21", "utc_offset_hours": 2, "clock_shift_hours": 2.75},
       "air": {"mean_temperature_c": 14.8, "daily_temperature_range_c": 8.5}
     },
@@ -125,6 +127,7 @@
       "air": {"mean_temperature_c": 10.6, "daily_temperature_range_c": 8.9}
     },
     "himmerland_par_3": {
+      "ground": {"reviewed_dropouts": [{"position": [235, -446], "reach_m": 5, "reason": "Inland pond DEM plateau lies abruptly below its entire shoreline (Hedensted about 47 m; Himmerland about 15 m). Interpolate the surrounding bare-earth surface."}]},
       "sky": {"date": "09-05", "utc_offset_hours": 2, "clock_shift_hours": 6.75},
       "air": {"mean_temperature_c": 14.7, "daily_temperature_range_c": 7.3},
       "holes": [
@@ -292,6 +295,7 @@
       "ref_prefix": "P"
     },
     "hedensted_pay_play": {
+      "ground": {"reviewed_dropouts": [{"position": [-206, -368], "reach_m": 5, "reason": "Inland pond DEM plateau lies abruptly below its entire shoreline (Hedensted about 47 m; Himmerland about 15 m). Interpolate the surrounding bare-earth surface."}]},
       "sky": {"date": "07-15", "utc_offset_hours": 2, "clock_shift_hours": 4.0},
       "air": {"mean_temperature_c": 17.0, "daily_temperature_range_c": 8.5},
       "ref_prefix": "P",

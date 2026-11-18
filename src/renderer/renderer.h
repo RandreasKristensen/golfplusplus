@@ -32,6 +32,7 @@
 #include "renderer/hole_sign_renderer.h"
 #include "renderer/lighting_uniforms.h"
 #include "renderer/water_renderer.h"
+#include "renderer/reflection_pass.h"
 #include "renderer/weather_renderer.h"
 #include "renderer/overlay_pass.h"
 #include "renderer/picture_size.h"
@@ -95,10 +96,12 @@ private:
     bool ensure_framebuffer_size(int screen_width, int screen_height);
     // The low-res target's perspective at `fov_degrees`, far enough for the area.
     glm::mat4 scene_projection(float fov_degrees, float area_extent) const;
-    void render_scene(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile);
+    void render_scene(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile,
+                      bool reflected = false, const glm::mat4* sky_projection = nullptr, float reflection_level = 0.0f);
     void render_viewmodel(const glm::mat4& view, const render_data& data);
     // This frame's models in the world: carts, clubs at balls, what others hold.
     void build_prop_batch(const render_data& data);
+    void advance_bus_doors(const render_data& data, bool snap);
     void draw_props(const prop_batch& batch, const glm::mat4& view_proj, frame_profile* profile);
     void render_flight_path(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile);
     void render_overlay(const glm::mat4& view_proj, const render_data& data, const text_assets& text, frame_profile* profile);
@@ -126,6 +129,7 @@ private:
     fence_renderer fence_renderer_;
     floodlight_renderer floodlight_renderer_;
     water_renderer water_renderer_;
+    reflection_pass reflection_pass_;
     weather_renderer weather_renderer_;
     world_marker_renderer world_marker_renderer_;
     world_marker_renderer tee_box_renderer_;
@@ -141,6 +145,11 @@ private:
     prop_batch prop_batch_;
     prop_batch world_props_;
     std::uint64_t world_props_revision_ = 0;
+    // How far the bus's doors have swung: presentation only, from the state
+    // render_data names.
+    float bus_door_progress_ = 0.0f;
+    bool bus_door_seeded_ = false;
+    float bus_door_clock_ = 0.0f;
     prop_batch shadow_models_;
     prop_batch viewmodel_batch_;
     std::vector<render_terrain_vertex> flight_path_vertices_;

@@ -18,6 +18,13 @@
     "clock_shift_hours": 20.0
   },
   "green_stimp_feet": 9.5,
+  "rules": {
+    "scored": true,
+    "drops": false,
+    "shot_xp": true,
+    "stations": false,
+    "balls_out": 1
+  },
   "air": {
     "elevation_meters": 18,
     "mean_temperature_c": 1.5,

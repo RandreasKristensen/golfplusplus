@@ -1,7 +1,7 @@
 #pragma once
 
 // The `frame_lighting` uniform block (assets/picture/shaders/lighting.glsl): the
-// scene's light and haze, uploaded once per frame into one buffer that every
+// scene's light and haze, uploaded once per scene view into one buffer that every
 // scene shader reads. shader_program binds the block of every program that
 // has it to frame_lighting_binding when it links.
 
@@ -37,8 +37,8 @@ struct frame_lighting_block {
     glm::vec4 weather{0.0f};  // render_sky_weather: mottle, rainbow, cover, haze_gain
     glm::vec4 wet{1.0f, 0.0f, 1.0f, 0.0f};  // wet_albedo, wet_gloss, wet_gloss_power, unused
     glm::vec4 scatter{0.0f};  // render_sky_weather: scatter_per_meter, scatter_forwardness; beam_near_share, beam_core_meters
-    glm::vec4 air{0.0f};      // render_sky_weather: sun_glow, sun_forwardness, mist, unused
-    glm::vec4 mist{0.0f};     // scene_haze's mist_floor; 1 / mist_height_meters; mist_density; unused
+    glm::vec4 air{0.0f};      // render_sky_weather: sun_glow, sun_forwardness, mist, reflection active
+    glm::vec4 mist{0.0f};     // scene_haze's mist_floor; 1 / mist_height_meters; mist_density; reflection level
     std::array<glm::vec4, max_scene_lights> light_position{};  // w: radius, 0 for none
     std::array<glm::vec4, max_scene_lights> light_color{};     // w: cone_full_cos
     std::array<glm::vec4, max_scene_lights> light_cone{};      // xyz: direction; w: cone_edge_cos
@@ -71,9 +71,9 @@ inline frame_lighting_block make_frame_lighting_block(const render_lighting& lig
     block.wet = glm::vec4(weather.wet_albedo, weather.wet_gloss, weather.wet_gloss_power, 0.0f);
     block.scatter =
         glm::vec4(weather.scatter_per_meter, weather.scatter_forwardness, lighting.beam_near_share, lighting.beam_core_meters);
-    block.air = glm::vec4(weather.sun_glow, weather.sun_forwardness, weather.mist, 0.0f);
+    block.air = glm::vec4(weather.sun_glow, weather.sun_forwardness, weather.mist, haze.reflection_level ? 1.0f : 0.0f);
     const float thinning = lighting.mist_height_meters > 0.0f ? 1.0f / lighting.mist_height_meters : 0.0f;
-    block.mist = glm::vec4(haze.mist_floor, thinning, lighting.mist_density, 0.0f);
+    block.mist = glm::vec4(haze.mist_floor, thinning, lighting.mist_density, haze.reflection_level.value_or(0.0f));
     for (std::size_t i = 0; i < max_scene_lights; ++i) {
         const render_light light = i < lights.size() ? lights[i] : render_light{};
         block.light_position[i] = glm::vec4(light.position, light.radius);

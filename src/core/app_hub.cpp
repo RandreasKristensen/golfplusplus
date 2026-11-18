@@ -72,7 +72,11 @@ void app::watch_online_round() {
     }
     for (const reducer_failure& failure : online_->refusals()) {
         SDL_Log("The server refused %s: %s", failure.reducer.c_str(), failure.error.c_str());
-        if (failure.reducer == "take_bus" || failure.reducer == "return_to_hub") {
+        if (failure.reducer == "take_bus") {
+            game_.hub_flow.travel_course.clear();
+            game_.notice = game_notice{online_error_text_key(failure.error), 0.0f};
+            adopt_online_arrival(game_);
+        } else if (failure.reducer == "return_to_hub") {
             game_.hub_flow.travel_course.clear();
             game_.hub_flow.screen = hub_screen::bus;
             tee_book_.message = online_error_text_key(failure.error);

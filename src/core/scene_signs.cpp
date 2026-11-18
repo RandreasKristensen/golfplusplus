@@ -9,8 +9,9 @@ bool refresh_scene_hole_signs(render_hole_signs& signs,
                               const startup_catalog& catalog,
                               const text_assets& text,
                               const scene_colors& colors,
-                              const prop_catalog& props) {
+                              const prop_catalog& props,
+                              const std::string& clock) {
     return refresh_render_hole_signs(signs, game.area, game.terrain_render_revision, hole_sign_texts(game),
-                                     prop_boards(game.area, props, prop_board_labels(game, catalog, text)), text, colors,
+                                     prop_boards(game.area, props, prop_board_labels(game, catalog, text, clock)), text, colors,
                                      props.at(hole_sign_model), signs.revision + 1);
 }

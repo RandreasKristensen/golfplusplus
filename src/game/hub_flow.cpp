@@ -10,10 +10,10 @@
 
 bool course_warmup(const game_state& state) {
     const auto me = my_room_player(state);
-    return state.kind == place_kind::course && (is_online(state) ? me && !me->round_started : state.offline_preparing);
+    return state.place.rules.scored && (is_online(state) ? me && !me->round_started : state.offline_preparing);
 }
 bool first_tee_required(const game_state& state) {
-    return is_online(state) && state.kind == place_kind::course && state.online.reservation &&
+    return is_online(state) && state.place.rules.scored && state.online.reservation &&
         !state.online.reservation->completed && state.online.reservation->started_at == 0;
 }
 bool reservation_expired(const game_state& state) {
@@ -77,16 +77,15 @@ void select_putter(game_state& state) {
         if (state.clubs[i].club_class == "putter") { state.selected_club = i; return; }
     }
 }
-void request_bus_travel(game_state& state, const bool takes_cart) {
+void request_bus_travel(game_state& state) {
     if (!state.hub_flow.travel_course.empty() || (is_online(state) && !state.online.room_ready)) { return; }
     const auto& booking = active_booking(state);
     net_command command;
     command.type = state.kind == place_kind::hub ? net_command_type::take_bus : net_command_type::return_to_hub;
-    command.takes_cart = takes_cart;
     if (command.type == net_command_type::take_bus && !booking) {
         state.notice = game_notice{text_online_error_booking_required, 0}; return;
     }
-    state.takes_cart = takes_cart;
+    state.takes_cart = command.type == net_command_type::take_bus && booking->takes_cart;
     state.hub_flow.travel_course = command.type == net_command_type::take_bus ? booking->course_id : online_hub_course;
     request_tee_action(state, command);
     state.hub_flow.screen = hub_screen::none;

@@ -94,6 +94,11 @@ void draw_way_sign_face(overlay_batch& batch, const text_assets& text, const std
 // Sets `batch`'s grid to `width` x prop_board_face_height texels and appends
 // `label` in dark ink, painted straight onto the board's own colour.
 void draw_prop_board_face(overlay_batch& batch, const text_assets& text, const std::string& label, int width);
+// The face's width in texels for a board of this half size (its aspect).
+int prop_board_face_width(const glm::vec2& board_half_size);
+// Whether `label` fits a board face `width` texels wide whole, at the smallest
+// text scale: what draw_prop_board_face would not cut off with an ellipsis.
+bool prop_board_label_fits(const text_assets& text, const std::string& label, int width);
 
 // Sets `batch`'s grid to the face and appends the face over the board's
 // wood: the painted panel, the labels and the map of `sign`'s hole (the

@@ -23,7 +23,7 @@
 
 struct play_area;
 
-enum class floodlight_target { fairway, tee, green };
+enum class floodlight_target { fairway, tee, green, range };  // range: a hub pole along the hitting line
 
 struct floodlight {
     std::size_t area_hole = 0;  // index into play_area::holes of the hole it lights
@@ -33,6 +33,10 @@ struct floodlight {
     glm::vec3 lamp{0.0f};  // the lamp head's middle, at the top of the pole
     glm::vec3 aim{0.0f, -1.0f, 0.0f};  // unit, from the lamp towards what it lights
 };
+
+// A pole by its foot (snapped to the ground) with its lamp aimed at the ground
+// at `target`: what the hub's authored poles are made of.
+floodlight aimed_floodlight(const play_area& area, const glm::vec3& spot, const glm::vec3& target, const game_tuning& tuning);
 
 // Every hole's poles (`holes` already placed in `area`'s coordinates, its tee
 // boxes, signs and fences already standing), hole by hole: the tee's, the

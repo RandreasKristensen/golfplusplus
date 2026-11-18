@@ -29,3 +29,11 @@ render_terrain_vertex lit_ground_vertex(const glm::vec3& position, const glm::ve
 render_static_mesh make_terrain_render_mesh(const std::vector<const terrain_mesh*>& meshes, std::uint64_t revision,
                                             const ground_colors& colors, const ground_light_bake& light,
                                             const play_area* ponds, bool mow_stripes = false);
+
+// `area`'s ground as make_terrain_render_mesh draws it, under its zones'
+// overlay, which alone draws their shapes: each vertex in what sample_area
+// finds there with no zone (its holes' material, the fairway a ribbon
+// paints, else rough), so no zone's colour or bareness bleeds past its
+// outline across the ground's cells. A pond's bed stays the pond's.
+render_static_mesh make_ground_render_mesh(const play_area& area, std::uint64_t revision, const ground_colors& colors,
+                                           const ground_light_bake& light);

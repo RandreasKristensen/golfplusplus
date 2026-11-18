@@ -1,6 +1,12 @@
 // Booking/travel adapters, included by the SDK's single reducer translation unit.
 // Pure decisions live in tee_rules; all changes below share the reducer transaction.
 namespace {
+// The hub's in-game clock, which a tee time's day is counted on (game/tee_times.h);
+// the hub is loaded whenever anyone is at its book.
+hub_clock cached_hub_clock() {
+    const auto& content = *cached_content();
+    return hub_clock{content.tuning.sky_clock, content.hub ? static_cast<double>(content.hub->sky.utc_offset_hours) : 0.0};
+}
 room_row course_room(ReducerContext& ctx, const std::string& course_id) {
     std::vector<room_candidate> rooms;
     for (const auto& room : ctx.db[room_course_id].filter(course_id)) {
@@ -58,7 +64,7 @@ tee_slot_row ensure_tee_slot(ReducerContext& ctx, const std::string& course_id, 
     const std::string key = course_id + ":" + std::to_string(course_world_id) + ":" + std::to_string(scheduled);
     if (const auto slot = ctx.db[tee_slot_key].find(key)) { return *slot; }
     const room_row room = course_room(ctx, course_id);
-    return ctx.db[tee_slot].insert(tee_slot_row{0, key, course_id, course_world_id, room.room_id, scheduled, 0});
+    return ctx.db[tee_slot].insert(tee_slot_row{0, key, course_id, course_world_id, room.room_id, scheduled, 0, false});
 }
 void enter_course(ReducerContext& ctx, const std::uint64_t account, const server_course& course, const bool takes_cart) {
     leave_room_state(ctx, account);
@@ -66,7 +72,8 @@ void enter_course(ReducerContext& ctx, const std::uint64_t account, const server
     room_row joined = course_room(ctx, course.course.id);
     joined.player_count += 1;
     ctx.db[room_room_id].update(joined);
-    const glm::vec3 spawn = anchor_on_terrain(course.area, course.world.hub ? course.world.hub->book.position : (course.hub ? course.hub->arrival : course.world.hole_starts.front().position));
+    const glm::vec3 spawn = anchor_on_terrain(course.area, course.hub ? course.hub->arrival : course.world.hole_starts.front().position);
+    const float spawn_yaw = course.hub ? course.hub->arrival_heading : 0.0f;
     auto booking = ctx.db[tee_reservation_account_id].find(account);
     auto slot = booking ? ctx.db[tee_slot_slot_id].find(booking->slot_id) : std::optional<tee_slot_row>{};
     const bool booked = slot && slot->room_id == joined.room_id;
@@ -81,7 +88,7 @@ void enter_course(ReducerContext& ctx, const std::uint64_t account, const server
     ctx.db[room_member].insert(room_member_row{account, joined.room_id, group_id, scores, booked && booking->started_at != 0});
     ctx.db[motion_state].insert(joined_motion_state(account, spawn, ctx.timestamp));
     avatar_motion_row avatar{account, joined.room_id, static_cast<std::uint8_t>(motion_mode::idle),
-        spawn.x, spawn.y, spawn.z, 0.0f, 0.0f, 0.0f, 0.0, 0, 0, 0, 0, false, ctx.timestamp, 0, 0, {}};
+        spawn.x, spawn.y, spawn.z, spawn_yaw, 0.0f, 0.0f, 0.0, 0, 0, 0, 0, false, ctx.timestamp, 0, 0, {}};
     index_motion(avatar);
     ctx.db[avatar_motion].insert(avatar);
     bag_where bag = bag_where::on_back;

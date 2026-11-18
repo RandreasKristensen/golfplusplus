@@ -2,7 +2,7 @@
 
 // The shafts at half the scene's size (renderer/sun_shaft_pass.h), what is
 // in shadow taken out of the haze. SUN_SHAFTS: along each pixel's ray,
-// SHAFT_STEPS steps through the haze, each reading the shadow map once; the
+// SHAFT_STEPS steps through the haze, each softly filtering the shadow map; the
 // haze a step adds that lies in shadow sends the eye none of the sun's glow
 // the scene was drawn with. LAMP_SHADOWS: for each of that many floodlights,
 // SHAFT_STEPS steps through the run of the ray in its beam, evenly in the
@@ -10,9 +10,8 @@
 // the lamp's map once; the share of the beam's light from air in shadow is
 // taken out of what scattered_from gave (renderer/scattered_light.h's
 // lamp_shaft_shade). rgb: the light to take out of the scene; a: how far the
-// ray went, for the upsample. Each pixel's steps start a 4x4 Bayer share of
-// a step in, so 16 steps look like many more; the tape's grain hides the
-// pattern.
+// ray went, for the upsample. Sun samples use fixed world intervals; only
+// the lamp integrals dither their samples with the 4x4 Bayer pattern.
 
 #include "lighting.glsl"
 #include "shadow_map_light.glsl"
@@ -81,14 +80,23 @@ void main() {
     float offset = (bayer[cell.y * 4 + cell.x] + 0.5) / 16.0;
     vec3 taken = vec3(0.0);
 #ifdef SUN_SHAFTS
-    float step_meters = ray.w / float(SHAFT_STEPS);
+    // Fixed world intervals: changing the surface behind the air must not
+    // redistribute every sample and create moving light/dark streaks.
+    float step_meters = u_reach / float(SHAFT_STEPS);
+    float phase = fract(dot(haze_eye.xyz, ray.xyz) / step_meters);
     float shaded = 0.0;
     float before = 0.0;
-    for (int k = 0; k < SHAFT_STEPS; ++k) {
-        float after = haze_over(ray.xyz, step_meters * float(k + 1));
-        vec3 point = haze_eye.xyz + ray.xyz * (step_meters * (float(k) + offset));
+    for (int k = 0; k <= SHAFT_STEPS; ++k) {
+        float start = max(0.0, (float(k) - phase) * step_meters);
+        float end = min(ray.w, (float(k + 1) - phase) * step_meters);
+        if (end <= start) {
+            break;
+        }
+        float after = haze_over(ray.xyz, end);
+        float sample_meters = clamp((float(k) + 0.5 - phase) * step_meters, start, end);
+        vec3 point = haze_eye.xyz + ray.xyz * sample_meters;
         vec3 coords = (u_shadow_view_proj * vec4(point, 1.0)).xyz * 0.5 + 0.5;
-        shaded += (after - before) * (1.0 - shadow_map_light_once(coords));
+        shaded += (after - before) * (1.0 - shadow_map_light(coords));
         before = after;
     }
     taken += haze_sun_glow(ray.xyz) * shaded;

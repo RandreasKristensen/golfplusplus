@@ -5,7 +5,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
+#include <map>
+#include <queue>
+#include <utility>
 
 #include <glm/geometric.hpp>
 
@@ -66,4 +70,71 @@ float distance_past_cart_paths(const std::vector<cart_path>& paths, const glm::v
         }
     }
     return nearest;
+}
+
+path_graph graph_of(const std::vector<cart_path>& paths) {
+    path_graph graph;
+    std::map<std::pair<long, long>, std::size_t> at;
+    const auto node = [&](const glm::vec3& joint) {
+        const std::pair<long, long> key{std::lround(joint.x * 10.0f), std::lround(joint.z * 10.0f)};
+        const auto [found, added] = at.emplace(key, graph.nodes.size());
+        if (added) {
+            graph.nodes.push_back(joint);
+            graph.links.emplace_back();
+        }
+        return found->second;
+    };
+    for (const cart_path& path : paths) {
+        for (std::size_t i = 0; i + 1 < path.joints.size(); ++i) {
+            const std::size_t a = node(path.joints[i]);
+            const std::size_t b = node(path.joints[i + 1]);
+            if (a != b) {
+                graph.links[a].insert(b);
+                graph.links[b].insert(a);
+            }
+        }
+    }
+    return graph;
+}
+
+std::size_t nearest_node(const path_graph& graph, const glm::vec3& point) {
+    std::size_t best = 0;
+    for (std::size_t i = 1; i < graph.nodes.size(); ++i) {
+        if (horizontal_distance(graph.nodes[i], point) < horizontal_distance(graph.nodes[best], point)) {
+            best = i;
+        }
+    }
+    return best;
+}
+
+std::optional<std::vector<std::size_t>> route_along(const path_graph& graph, const std::size_t from, const std::size_t to) {
+    std::vector<float> spent(graph.nodes.size(), std::numeric_limits<float>::max());
+    std::vector<std::size_t> came(graph.nodes.size(), from);
+    std::priority_queue<std::pair<float, std::size_t>, std::vector<std::pair<float, std::size_t>>, std::greater<>> queue;
+    spent[from] = 0.0f;
+    queue.emplace(0.0f, from);
+    while (!queue.empty()) {
+        const auto [cost, node] = queue.top();
+        queue.pop();
+        if (node == to) {
+            std::vector<std::size_t> route{to};
+            while (route.back() != from) {
+                route.push_back(came[route.back()]);
+            }
+            std::reverse(route.begin(), route.end());
+            return route;
+        }
+        if (cost > spent[node]) {
+            continue;
+        }
+        for (const std::size_t next : graph.links[node]) {
+            const float total = cost + horizontal_distance(graph.nodes[node], graph.nodes[next]);
+            if (total < spent[next]) {
+                spent[next] = total;
+                came[next] = node;
+                queue.emplace(total, next);
+            }
+        }
+    }
+    return std::nullopt;
 }

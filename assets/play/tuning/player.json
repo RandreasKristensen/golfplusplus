@@ -7,6 +7,7 @@
     "max_look_pitch": 1.2,
     "mouse_look_radians": 0.0025,
     "ball_interact_radius": 3.0,
+    "ball_pickup_hold_seconds": 0.4,
     "flag_reach": 2.5,
     "bag_reach": 1.6,
     "bag_set_down_distance": 0.7,

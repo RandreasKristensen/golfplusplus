@@ -42,6 +42,14 @@ input_state held(button_state input_state::*key) {
     return keys;
 }
 
+// F pressed and let go through the key bindings: a tap.
+void tap_f(game_state& state) {
+    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f, bound), 0.016f);
+    input_state up;
+    up.key_f.released = true;
+    update_game(state, game_input_from_keys(up, 0.0f, bound), 0.016f);
+}
+
 // Where one frame of `input` moved me, on the ground plane.
 glm::vec3 step_of(game_state& state, const game_input& input, const float dt) {
     const glm::vec3 before = state.player.position;
@@ -99,6 +107,8 @@ TEST_CASE("the picker steps up the bag by W, up and the wheel away from me, down
 TEST_CASE("F steps up to the ball and then looks down at it, never up; Esc steps away; Space swings over it and jumps walking") {
     const game_input f = game_input_from_keys(held(&input_state::key_f), 0.0f, bound);
     CHECK(f.interact);
+    CHECK(f.interact_held);
+    CHECK(!f.interact_released);
     CHECK(!f.swing);
     const game_input space = game_input_from_keys(held(&input_state::space), 0.0f, bound);
     CHECK(space.swing);
@@ -117,7 +127,7 @@ TEST_CASE("F steps up to the ball and then looks down at it, never up; Esc steps
     CHECK(state.mode == game_mode::walking);
     update_game(state, game_input_from_keys(held(&input_state::mouse_left), 0.0f, bound), 0.016f);
     CHECK(state.mode == game_mode::walking);
-    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f, bound), 0.016f);
+    tap_f(state);
     REQUIRE(state.mode == game_mode::addressing);
     REQUIRE(!looking_down(state.address.look, camera));
     for (int press = 0; press < 3; ++press) {
@@ -131,7 +141,7 @@ TEST_CASE("F steps up to the ball and then looks down at it, never up; Esc steps
     }
     update_game(state, game_input_from_keys(held(&input_state::escape), 0.0f, bound), 0.016f);
     CHECK(state.mode == game_mode::walking);
-    update_game(state, game_input_from_keys(held(&input_state::key_f), 0.0f, bound), 0.016f);
+    tap_f(state);
     REQUIRE(state.mode == game_mode::addressing);
 
     // Looking down at it, Space takes the club back, Space again brings it
@@ -575,7 +585,7 @@ TEST_CASE("no jump over the ball, and stepping up to it mid-air lands me") {
     jump.jump = true;
     update_game(state, jump, 0.05f);
     REQUIRE(!state.player.vertical.grounded);
-    update_game(state, interact_input(), 0.016f);
+    tap_interact(state);
     REQUIRE(state.mode == game_mode::addressing);
     CHECK(state.player.vertical.grounded);
     CHECK(near(state.player.position.y, terrain_height(state.area, state.player.position)));

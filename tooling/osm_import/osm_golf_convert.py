@@ -3291,7 +3291,7 @@ def _course_ground(world: dict, sampler, origin_lat: float, origin_lon: float, c
                    box: tuple[float, float, float, float]) -> dict:
     cell_size = sampler.ground_cell_size if sampler is not None else float(config["ground"]["flat_cell_size"])
     return osm_ground.ground_grid(world, sampler, lambda x, z: _xz_to_latlon(x, z, origin_lat, origin_lon),
-                                  cell_size, box)
+                                  cell_size, box, config["ground"].get("reviewed_dropouts", []))
 
 
 def _write_ground_only(args) -> None:
@@ -3311,7 +3311,13 @@ def _write_ground_only(args) -> None:
     projection = world["projection"]
     origin_lat, origin_lon = float(projection["origin_lat"]), float(projection["origin_lon"])
     elevation = _make_elevation_sampler(args, config, origin_lat, origin_lon)
-    box = osm_ground.world_box(osm_ground.placed_hole_points(world, hole_jsons), float(config["ground"]["margin"]))
+    ground = world.get("ground")
+    if ground:
+        x, z = ground["origin"]
+        box = (x, z, x + (ground["columns"] - 1) * ground["cell_size"],
+               z + (ground["rows"] - 1) * ground["cell_size"])
+    else:
+        box = osm_ground.world_box(osm_ground.placed_hole_points(world, hole_jsons), float(config["ground"]["margin"]))
     world["ground"] = _course_ground(world, elevation, origin_lat, origin_lon, config, box)
     try:
         osm_publish.publish(course_folder, {course["world"]: osm_ground.course_world_text(world)})
@@ -3571,6 +3577,7 @@ Examples:
             },
             "sky": dict(config["sky"]),
             "green_stimp_feet": config["green_stimp_feet"],
+            "rules": {"scored": True, "drops": False, "shot_xp": True, "stations": False, "balls_out": 1},
             "air": _course_air(elevation, origin_lat, origin_lon, config),
             "holes": hole_paths
         }

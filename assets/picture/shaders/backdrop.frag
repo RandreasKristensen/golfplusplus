@@ -327,8 +327,10 @@ vec3 add_stars(vec3 sky, vec3 direction, float elevation, float pixel, float cle
 }
 
 void main() {
+
     vec4 far_point = u_inverse_view_proj * vec4(v_ndc, 1.0, 1.0);
     vec3 direction = normalize(far_point.xyz / far_point.w);
+
     float pixel = max(length(fwidth(direction)), 0.00001);
     float elevation = asin(clamp(direction.y, -1.0, 1.0));
     float u = atan(direction.x, -direction.z) / full_turn + 0.5;
@@ -351,7 +353,13 @@ void main() {
     // A cloud of the deck in front of the sun or moon hides it.
     float behind = clear * (1.0 - deck.a);
     sky = add_moon(sky, direction, elevation, pixel, behind);
+#ifndef REFLECTION_SKY
     sky = add_sun(min(sky, vec3(1.0)), direction, elevation, pixel, behind);
+#else
+    // The water's filtered glint integrates this disc over unresolved waves.
+    sky = min(sky, vec3(1.0));
+#endif
+
     // Thick weather (rain's curtains, fog) hides the sky, the sun too, in its haze.
     vec3 haze_here = haze_toward(direction);
     sky = mix(sky, haze_here, weather.w * weather.w);

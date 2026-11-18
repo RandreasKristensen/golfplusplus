@@ -1,79 +1,20 @@
 #include "renderer/grass_field.h"
-
 #include <algorithm>
 #include <cmath>
-
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
-
-namespace {
-// The window's side over the blades' reach each way.
-constexpr float window_margin_share = 0.5f;
-// How far past a tee box's edge no grass grows, so no blade leans over it.
-constexpr float tee_clear_meters = 0.1f;
-}
-
-std::vector<render_terrain_vertex> grass_bare_tee_tops(const std::vector<tee_box>& boxes) {
-    std::vector<render_terrain_vertex> vertices;
-    for (const tee_box& box : boxes) {
-        const glm::vec3 along = box.down_hole * (box.half_length + tee_clear_meters);
-        const glm::vec3 across = glm::vec3(-box.down_hole.z, 0.0f, box.down_hole.x) * (box.half_width + tee_clear_meters);
-        const glm::vec3 corners[4] = {box.center - along - across, box.center + along - across, box.center + along + across,
-                                      box.center - along + across};
-        for (const int i : {0, 1, 2, 0, 2, 3}) {
-            render_terrain_vertex vertex;
-            vertex.position = corners[i];
-            vertices.push_back(vertex);
-        }
-    }
-    return vertices;
-}
-
-grass_window grass_window_around(const glm::vec3& eye, const float reach) {
-    grass_window window;
-    window.size = 2.0f * reach * (1.0f + window_margin_share);
-    const float texel = window.size / static_cast<float>(grass_map_texels);
-    const glm::vec2 corner(eye.x - 0.5f * window.size, eye.z - 0.5f * window.size);
-    window.min = glm::vec2(std::floor(corner.x / texel), std::floor(corner.y / texel)) * texel;
-    window.base = std::round(eye.y);
-    return window;
-}
-
-bool grass_window_serves(const grass_window& window, const glm::vec3& eye, const float reach) {
-    if (window.size <= 0.0f) {
-        return false;
-    }
-    const glm::vec2 centre = window.min + glm::vec2(0.5f * window.size);
-    const float moved = std::max(std::abs(eye.x - centre.x), std::abs(eye.z - centre.y));
-    return moved <= 0.5f * reach * window_margin_share && std::abs(eye.y - window.base) < 0.25f * grass_map_depth_meters;
-}
-
-glm::mat4 grass_window_view_proj(const grass_window& window) {
-    const float half = 0.5f * window.size;
-    const glm::vec2 centre = window.min + glm::vec2(half);
-    glm::mat4 m(0.0f);
-    m[0][0] = 1.0f / half;                     // x to the map's x
-    m[2][1] = 1.0f / half;                     // z to the map's y
-    m[1][2] = -1.0f / grass_map_depth_meters;  // higher is nearer
-    m[3][0] = -centre.x / half;
-    m[3][1] = -centre.y / half;
-    m[3][2] = window.base / grass_map_depth_meters;
-    m[3][3] = 1.0f;
-    return m;
-}
 
 grass_grid grass_grid_around(const glm::vec3& eye, const float reach, const float spacing) {
     grass_grid grid;
     grid.spacing = spacing;
-    const int blocks = static_cast<int>(std::ceil((2.0f * reach / spacing + 1.0f) / static_cast<float>(grass_block_tufts)));
+    const int blocks = static_cast<int>(std::ceil((2.0f * reach / spacing + grass_block_tufts) / static_cast<float>(grass_block_tufts)));
     grid.per_row = blocks * grass_block_tufts;
-    grid.origin = glm::vec2(std::floor((eye.x - reach) / spacing), std::floor((eye.z - reach) / spacing)) * spacing;
+    grid.origin = glm::vec2(std::floor((eye.x - reach) / (spacing * grass_block_tufts)) * grass_block_tufts, std::floor((eye.z - reach) / (spacing * grass_block_tufts)) * grass_block_tufts) * spacing;
     return grid;
 }
 
 std::vector<glm::vec2> grass_visible_blocks(const grass_grid& grid, const view_frustum& frustum,
-                                            const std::vector<const render_static_mesh*>& ground, const float top,
-                                            const glm::vec3& eye, const float hollow) {
+                                            const std::vector<const render_static_mesh*>& ground, const float top) {
     std::vector<render_mesh_bounds> pieces;
     for (const render_static_mesh* mesh : ground) {
         if (mesh == nullptr) {
@@ -92,11 +33,6 @@ std::vector<glm::vec2> grass_visible_blocks(const grass_grid& grid, const view_f
     for (int row = 0; row < blocks; ++row) {
         for (int column = 0; column < blocks; ++column) {
             const glm::vec2 corner = grid.origin + glm::vec2(static_cast<float>(column), static_cast<float>(row)) * side;
-            const glm::vec2 farthest = glm::max(glm::abs(corner - glm::vec2(eye.x, eye.z)),
-                                                glm::abs(corner + glm::vec2(side + grid.spacing) - glm::vec2(eye.x, eye.z)));
-            if (glm::length(farthest) < hollow) {
-                continue;
-            }
             float low = 0.0f;
             float high = 0.0f;
             bool grounded = false;
@@ -135,4 +71,33 @@ std::vector<glm::vec3> grass_tuft_vertices(const int blades) {
         }
     }
     return vertices;
+}
+
+float grass_blade_reach(const grass_style& style, const float width_scale) {
+    const float tallest = style.blade_height_meters * std::max(1.0f, style.heavy_blade_share) * grass_blade_tallest_share;
+    return grass_blade_lean_share * tallest + 0.5f * style.blade_width_meters * width_scale;
+}
+
+namespace {
+std::uint32_t coarse_hash(const int x, const int z) {
+    std::uint32_t h = static_cast<std::uint32_t>(x) * 0x8da6b343u ^ static_cast<std::uint32_t>(z) * 0xd8163841u;
+    h = (h ^ (h >> 13)) * 0x5bd1e995u;
+    return h ^ (h >> 15);
+}
+}
+
+std::uint32_t grass_cell_rank(const int x, const int z) {
+    const auto h = coarse_hash(static_cast<int>(std::floor(x / 8.0)), static_cast<int>(std::floor(z / 8.0)));
+    // A permutation of each eight-cell block, with a unique minimum in
+    // every aligned power-of-two sub-block. Its minimum is found directly.
+    return (h & ~63u) | ((static_cast<std::uint32_t>(x) ^ h) & 7u) |
+        (((static_cast<std::uint32_t>(z) ^ (h >> 3)) & 7u) << 3);
+}
+
+glm::ivec2 grass_representative(const glm::ivec2& block, const int level) {
+    const int side = 1 << std::clamp(level, 0, grass_max_rings - 1);
+    const glm::ivec2 origin = block * side;
+    const auto h = coarse_hash(static_cast<int>(std::floor(origin.x / 8.0)), static_cast<int>(std::floor(origin.y / 8.0)));
+    const auto mask = static_cast<std::uint32_t>(side - 1);
+    return origin + glm::ivec2(h & mask, (h >> 3) & mask);
 }

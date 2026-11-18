@@ -26,8 +26,10 @@ bool start_course(game_state& state, const course_definition& course);
 // or, online, while another player's ball waits on that tee (tee_in_use).
 bool tee_up(game_state& state, std::size_t hole_index, bool give_up);
 
-// Records my ball's hole's strokes; the ball stays in the cup, where it
-// dropped (lying_in_cup), until it is picked up. The last hole finishes the round.
+// Holes my ball out: it stays in the cup, where it dropped (lying_in_cup),
+// until it is picked up. Where play is scored the hole's strokes are recorded
+// and the last hole finishes the round; elsewhere (place_rules::scored off)
+// the ball is just done.
 void complete_current_hole(game_state& state);
 
 // Where a ball holed on `hole` lies: at `near` when that is down in the

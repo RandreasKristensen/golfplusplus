@@ -24,6 +24,7 @@ import json
 import math
 
 import osm_elevation
+import osm_terrain_quality
 
 
 def _rotate_y(x: float, z: float, degrees: float) -> tuple[float, float]:
@@ -103,7 +104,7 @@ def ground_grid(world: dict,
                 sampler,
                 to_latlon,
                 cell_size: float,
-                box: tuple[float, float, float, float]) -> dict:
+                box: tuple[float, float, float, float], reviewed_dropouts=()) -> dict:
     """
     The course world's "ground" entry: a grid (rows along z, columns along x)
     covering `box` (world_box). `to_latlon(x, z)` projects course space to
@@ -123,6 +124,8 @@ def ground_grid(world: dict,
         # Hole 1's tee is at start.y in the course, so that DEM height maps there.
         base = filled[-1] - start[1]
         heights = [round(h - base, 2) for h in filled[:-1]]
+        heights = osm_terrain_quality.repair_dropouts(heights, columns, cell_size,
+                                                     (min_x, min_z), reviewed_dropouts)
 
     return {
         "origin": [round(min_x, 2), round(min_z, 2)],

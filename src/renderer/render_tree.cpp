@@ -37,27 +37,24 @@ glm::vec3 tree_world_point(const render_tree_instance& instance, const glm::vec3
     return instance.offset + glm::vec3(c * scaled.x - s * scaled.z, scaled.y, s * scaled.x + c * scaled.z);
 }
 
-render_tree_batch build_tree_batch(const std::vector<tree_body>& trees, const view_frustum* frustum, const glm::vec3& eye,
-                                   const bool all_far) {
-    std::map<std::tuple<std::size_t, int, int>, std::vector<render_tree_instance>> sorted;
+render_tree_batch build_tree_batch(const std::vector<tree_body>& trees, const view_frustum* frustum) {
+    std::map<std::tuple<std::size_t, int>, std::vector<render_tree_instance>> sorted;
     for (const tree_body& tree : trees) {
         const render_tree_instance instance = tree_instance_for(tree);
-        const glm::vec3 reach(instance.scale.x, 0.0f, instance.scale.z);
+        // Cards extend past the unit crown and its top; allow wind lean too.
+        const float sway = instance.scale.y * 0.2f;
+        const glm::vec3 reach(instance.scale.x * 1.5f + sway, 0.0f, instance.scale.z * 1.5f + sway);
         if (frustum != nullptr &&
-            !frustum_intersects_aabb(*frustum, tree.base - reach, tree.base + reach + glm::vec3(0.0f, instance.scale.y, 0.0f))) {
+            !frustum_intersects_aabb(*frustum, tree.base - reach, tree.base + reach + glm::vec3(0.0f, instance.scale.y * 1.3f, 0.0f))) {
             continue;
         }
-        const glm::vec3 to = tree.base - eye;
-        const bool close = !all_far && glm::dot(to, to) <= tree_near_meters * tree_near_meters;
-        const tree_detail detail = close ? tree_detail::full : tree_detail::sparse;
-        sorted[{tree.shape.species, tree_variant_for(tree), static_cast<int>(detail)}].push_back(instance);
+        sorted[{tree.shape.species, tree_variant_for(tree)}].push_back(instance);
     }
     render_tree_batch batch;
     for (auto& [key, instances] : sorted) {
         render_tree_bucket bucket;
         bucket.species = std::get<0>(key);
         bucket.variant = std::get<1>(key);
-        bucket.detail = static_cast<tree_detail>(std::get<2>(key));
         bucket.first = batch.instances.size();
         bucket.count = instances.size();
         batch.instances.insert(batch.instances.end(), instances.begin(), instances.end());

@@ -238,6 +238,7 @@ impl StdbClient {
         }
         watch_keyed!(player, Player);
         watch!(my_tee_slots, TeeSlot);
+        watch!(departure_board, DepartureBoard);
         watch!(my_tee_reservation, MyTeeReservation);
         watch!(my_tee_book_status, MyTeeBookStatus);
         watch_keyed!(room, Room);
@@ -245,6 +246,7 @@ impl StdbClient {
         watch_keyed!(golf_group, GolfGroup);
         watch!(my_avatar_motion, AvatarMotion);
         watch_keyed!(ball, Ball);
+        watch_keyed!(practice_ball, PracticeBall);
         watch_keyed!(dap_pair, Dap);
         watch!(my_golf_carts, GolfCart);
         watch_keyed!(player_loadout, PlayerLoadout);

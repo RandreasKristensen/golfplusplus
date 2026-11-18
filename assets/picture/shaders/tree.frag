@@ -3,6 +3,7 @@
 #include "lighting.glsl"
 #include "shadow_map_light.glsl"
 #include "noise.glsl"
+#include "tree_leaf.glsl"
 
 // A tree's bark, or the leaves on one of its clumps' cards: a grid of leaves,
 // each an ellipse at its own angle, as many of them as the crown is in leaf
@@ -25,9 +26,6 @@ uniform vec3 u_leaf_color;
 uniform float u_foliage;
 uniform float u_shine_through;  // the share of the sun behind a leaf that comes through it
 
-// Leaves across a card, each way.
-const float leaves_across = 5.0;
-
 void main() {
     vec3 n = normalize(v_normal);
     float sun = shadow_map_light(v_shadow);
@@ -35,17 +33,10 @@ void main() {
     float ao = 1.0;
     vec3 shine = vec3(0.0);
     if (v_leaf > 0.5) {
-        vec2 grid = v_uv * leaves_across;
-        vec2 cell = floor(grid) + v_tint * 37.0;
-        if (hash12(cell) >= u_foliage) {
+        if (!tree_leaf_present(v_uv, v_tint, u_foliage)) {
             discard;
         }
-        float angle = 6.2831853 * hash12(cell + 3.1);
-        vec2 f = fract(grid) - 0.5;
-        vec2 r = vec2(cos(angle) * f.x + sin(angle) * f.y, -sin(angle) * f.x + cos(angle) * f.y) / vec2(0.5, 0.36);
-        if (dot(r, r) > 1.0) {
-            discard;
-        }
+        vec2 cell = floor(v_uv * 5.0) + v_tint * 37.0;
         color = u_leaf_color * (0.8 + 0.4 * hash12(cell + 7.7)) * (0.9 + 0.2 * v_tint);
         ao = mix(1.0, 0.45, v_depth);
         vec3 to_eye = normalize(haze_eye.xyz - v_world);

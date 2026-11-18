@@ -23,7 +23,17 @@ struct tree_species {
     float bare_day = 0.0f;
 };
 
+// A named stretch of the year, from its first day to the next season's: the
+// words the tee book gives a course's date, set against the trees' own days
+// (spring begins before the first leaf, autumn when the default species begins
+// to colour, winter when it is bare).
+struct year_season {
+    std::string name;  // text key "hub.season.<name>"
+    int start_day = 0;  // 1..365, ascending through the list; the last wraps to the first
+};
+
 struct tree_tuning {
+    std::vector<year_season> seasons;
     std::vector<tree_species> species;
     float bare_crown_density = 0.0f;
 };
@@ -33,6 +43,10 @@ inline constexpr int midsummer_day_of_year = 172;
 
 // The day of the year (1..365) of `month` (1..12) and `day`, in a common year.
 int day_of_year(int month, int day);
+
+// The season `day` (1..365) is in: the last to start by it, or the year's last
+// before the first starts. `trees.seasons` must not be empty.
+const year_season& season_on(const tree_tuning& trees, int day);
 
 // The share of a crown in leaf on `day` (1..365): 0 bare .. 1 full.
 float foliage_share(const tree_species& species, float day);

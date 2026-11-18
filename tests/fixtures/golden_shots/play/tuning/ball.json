@@ -4,6 +4,7 @@
     "ball_physics_radius_meters": 0.021335,
     "ball_visual_radius_meters": 0.10,
     "pin_visual_height_meters": 2.10,
+    "practice_pin_visual_height_meters": 1.20,
     "flagstick_radius_meters": 0.05
   },
   "physics": {

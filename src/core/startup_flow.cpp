@@ -5,8 +5,10 @@
 #include "core/settings_menu.h"
 #include "game/content_files.h"
 #include "game/pixel_font_data.h"
+#include "game/hole_sign.h"
 #include "game/text_ids.h"
 
+#include <cmath>
 #include <utility>
 
 namespace {
@@ -26,19 +28,25 @@ render_hole_preview make_hole_preview(const hole_data& hole) {
     return preview;
 }
 
-startup_course_option make_course_option(const std::string& asset_root, const course_definition& course) {
+std::optional<startup_course_option> make_course_option(const std::string& asset_root, const course_definition& course,
+                                                        const float meters_per_world_unit, std::string& error) {
     startup_course_option option;
     option.course = course;
+    std::vector<hole_data> holes;
     for (std::size_t i = 0; i < course.holes.size(); ++i) {
-        const std::optional<hole_data> hole = load_hole_from_file(course_hole_path(asset_root, course, i));
+        const std::string path = course_hole_path(asset_root, course, i);
+        const std::optional<hole_data> hole = load_hole_from_file(path);
         if (!hole) {
-            continue;
+            error = "course " + course.id + ": hole file " + path + " cannot be read";
+            return std::nullopt;
         }
         option.total_par += hole->par;
         if (i == 0) {
             option.preview = make_hole_preview(*hole);
         }
+        holes.push_back(*hole);
     }
+    option.length_meters = play_length_meters(holes, meters_per_world_unit);
     return option;
 }
 
@@ -156,10 +164,24 @@ bool signed_in(const online_menu_status& online) {
     return online.status == net_status::connected && online.account_id != 0;
 }
 
-startup_catalog load_startup_catalog(const game_content& content, const text_assets& text) {
+int play_length_meters(const std::vector<hole_data>& holes, const float meters_per_world_unit) {
+    float length = 0.0f;
+    for (const hole_data& hole : holes) {
+        length += polyline_length(line_of_play(hole)) * meters_per_world_unit;
+    }
+    return static_cast<int>(std::lround(length));
+}
+
+startup_catalog_result load_startup_catalog(const game_content& content, const text_assets& text) {
     startup_catalog catalog;
+    std::string error;
     for (const course_definition& course : content.courses) {
-        catalog.courses.push_back(make_course_option(content.asset_root, course));
+        std::optional<startup_course_option> option =
+            make_course_option(content.asset_root, course, content.tuning.scale.meters_per_world_unit, error);
+        if (!option) {
+            return {std::nullopt, error};
+        }
+        catalog.courses.push_back(std::move(*option));
     }
     catalog.name_chars = font_charset(text.font);
     catalog.name_max_length = static_cast<std::size_t>(content.tuning.server.name_max_length);
@@ -167,7 +189,7 @@ startup_catalog load_startup_catalog(const game_content& content, const text_ass
     for (const setting_definition& definition : content.settings) {
         catalog.setting_labels.push_back(lookup_text(text, definition.label_key.c_str()));
     }
-    return catalog;
+    return {std::move(catalog), {}};
 }
 
 startup_menu_result update_startup_menu(startup_flow_state& state,

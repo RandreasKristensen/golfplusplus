@@ -1,5 +1,6 @@
 #include "game/hub_scene.h"
 #include "physics/vector_math.h"
+#include <algorithm>
 
 // Same yaw-only frame as the renderer: +X is left, +Z forward.
 glm::vec3 prop_point(const static_prop& placed, const glm::vec3& local) {
@@ -21,6 +22,7 @@ void place_hub_scene(play_area& area, const course_world_definition& world, cons
     const auto place = [&](const static_prop& placed) {
         const auto& model = props.at(placed.model);
         area.props.push_back(placed);
+        if (model.points.count("body_min") == 0) { return; }
         const auto low = model.point("body_min"), high = model.point("body_max");
         solid body;
         body.shape = solid_shape::box; body.kind = solid_kind::board;
@@ -33,12 +35,21 @@ void place_hub_scene(play_area& area, const course_world_definition& world, cons
     };
     if (world.hub) {
         place({"tee_book", anchor_on_terrain(area, world.hub->book.position) - props.at("tee_book").point("approach"), 0});
+        for (const auto& built : world.hub->props) {
+            place({built.model, anchor_on_terrain(area, built.position) + world_up * built.height, built.heading});
+        }
     }
     if (world.bus_stop) {
         const static_prop parked{"hub_bus", anchor_on_terrain(area, world.bus_stop->position), world.bus_stop->heading};
         place(parked);
-        area.bus = hub_anchor{prop_point(parked, props.at("hub_bus").point("approach")),
+        const auto& bus = props.at("hub_bus");
+        area.bus = hub_anchor{prop_point(parked, bus.point("approach")),
             tuning.server.bus_reach_meters / tuning.scale.meters_per_world_unit};
+        const auto speaker = std::find_if(area.props.begin(), area.props.end(), [](const static_prop& prop) { return prop.model == "hub_pa_pole"; });
+        if (speaker != area.props.end()) {
+            area.hub_sounds = hub_sound_sources{prop_point(*speaker, props.at(speaker->model).point("speaker")),
+                prop_point(parked, bus.point("engine")), prop_point(parked, bus.point("horn"))};
+        }
     }
     area.solids_grid = build_solid_grid(area.solids, solid_grid_cell_size);
 }

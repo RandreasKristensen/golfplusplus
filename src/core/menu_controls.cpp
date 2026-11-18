@@ -57,49 +57,62 @@ int select_course(int& selection,
                   const int count,
                   const input_state& input,
                   const menu_pointer& pointer,
-                  std::vector<ui_sound>& sounds, const startup_menu_screen screen) {
+                  std::vector<ui_sound>& sounds, const startup_menu_screen screen, const std::vector<bool>& inert) {
     if (count <= 0) {
         selection = 0;
         top_row = 0;
         return -1;
     }
-    const int rows = (count + picker_columns - 1) / picker_columns;
-    const int last_top = std::max(0, rows - picker_rows);
+    const int columns = startup_picker_columns(screen);
+    const int shown_rows = startup_picker_rows(screen);
+    const auto is_inert = [&](const int index) { return static_cast<std::size_t>(index) < inert.size() && inert[static_cast<std::size_t>(index)]; };
+    // Past tiles that are only headings, on in the direction of the move; none selectable leaves it.
+    const auto settle = [&](const int step) {
+        for (int tries = 0; tries < count && is_inert(selection); ++tries) { selection = wrap(selection + step, count); }
+    };
+    const int rows = (count + columns - 1) / columns;
+    const int last_top = std::max(0, rows - shown_rows);
     selection = std::clamp(selection, 0, count - 1);
+    settle(1);
     const int previous = selection;
     if (input.wheel_steps != 0) {
         top_row = std::clamp(top_row - input.wheel_steps, 0, last_top);
-        const int row = std::clamp(selection / picker_columns, top_row, top_row + picker_rows - 1);
-        selection = std::min(row * picker_columns + selection % picker_columns, count - 1);
+        const int row = std::clamp(selection / columns, top_row, top_row + shown_rows - 1);
+        selection = std::min(row * columns + selection % columns, count - 1);
+        settle(1);
     }
     if (input.left.pressed) {
         selection = wrap(selection - 1, count);
+        settle(-1);
     }
     if (input.right.pressed) {
         selection = wrap(selection + 1, count);
+        settle(1);
     }
     if (input.up.pressed) {
-        selection = wrap(selection - picker_columns, count);
+        selection = wrap(selection - columns, count);
+        settle(-1);
     }
     if (input.down.pressed) {
-        selection = wrap(selection + picker_columns, count);
+        selection = wrap(selection + columns, count);
+        settle(1);
     }
-    const int row = selection / picker_columns;
-    top_row = std::clamp(std::clamp(top_row, row - picker_rows + 1, row), 0, last_top);
-    const int first = top_row * picker_columns;
-    const int shown = std::min(count - first, picker_columns * picker_rows);
+    const int row = selection / columns;
+    top_row = std::clamp(std::clamp(top_row, row - shown_rows + 1, row), 0, last_top);
+    const int first = top_row * columns;
+    const int shown = std::min(count - first, columns * shown_rows);
     const int hovered = pointer.hover ? startup_tile_at(screen, shown, *pointer.hover) : -1;
-    if (hovered >= 0) {
+    if (hovered >= 0 && !is_inert(first + hovered)) {
         selection = first + hovered;
     }
     const int hit = pointer.click ? startup_tile_at(screen, shown, *pointer.click) : -1;
-    if (hit >= 0) {
+    if (hit >= 0 && !is_inert(first + hit)) {
         selection = first + hit;
     }
     if (selection != previous) {
         sounds.push_back(ui_sound::move);
     }
-    return hit >= 0 ? first + hit : -1;
+    return hit >= 0 && !is_inert(first + hit) ? first + hit : -1;
 }
 
 void add_tile(render_startup_menu& menu, std::string title, std::string subtitle, const bool selected) {
@@ -110,10 +123,17 @@ void add_tile(render_startup_menu& menu, std::string title, std::string subtitle
     menu.tiles.push_back(std::move(tile));
 }
 
+void add_heading(render_startup_menu& menu, std::string title) {
+    render_startup_tile tile;
+    tile.title = std::move(title);
+    tile.heading = true;
+    menu.tiles.push_back(std::move(tile));
+}
+
 void add_course_tiles(render_startup_menu& menu, const startup_catalog& catalog, const text_assets& text, const int selection,
                       const int top_row) {
-    const std::size_t first = static_cast<std::size_t>(std::max(0, top_row) * picker_columns);
-    const std::size_t end = std::min(catalog.courses.size(), first + static_cast<std::size_t>(picker_columns * picker_rows));
+    const std::size_t first = static_cast<std::size_t>(std::max(0, top_row) * startup_picker_columns(startup_menu_screen::course_picker));
+    const std::size_t end = std::min(catalog.courses.size(), first + static_cast<std::size_t>(startup_picker_columns(startup_menu_screen::course_picker) * startup_picker_rows(startup_menu_screen::course_picker)));
     menu.more_above = first > 0;
     menu.more_below = end < catalog.courses.size();
     for (std::size_t i = first; i < end; ++i) {

@@ -75,7 +75,7 @@ void online_session::carry_out(const std::vector<online_request>& requests, game
             net_.create_link_code();
             break;
         case online_request_type::join_course:
-            net_.join_course(request.text, request.takes_cart);
+            net_.join_course(request.text);
             break;
         case online_request_type::leave_room:
             net_.leave_room();
@@ -123,7 +123,7 @@ online_round_status online_session::watch_round(const game_state& state) {
         return {online_round_event::restart, {}};
     }
     if (!rejoin_sent_ && state.online.account_id != 0) {
-        net_.join_course(online_hub_course, false);
+        net_.join_course(online_hub_course);
         rejoin_sent_ = true;
     }
     return {};

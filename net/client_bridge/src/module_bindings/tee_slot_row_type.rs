@@ -14,6 +14,7 @@ pub struct TeeSlotRow {
     pub room_id: u64,
     pub scheduled_at: i64,
     pub booked_count: i32,
+    pub departed: bool,
 }
 
 impl __sdk::InModule for TeeSlotRow {
@@ -31,6 +32,7 @@ pub struct TeeSlotRowCols {
     pub room_id: __sdk::__query_builder::Col<TeeSlotRow, u64>,
     pub scheduled_at: __sdk::__query_builder::Col<TeeSlotRow, i64>,
     pub booked_count: __sdk::__query_builder::Col<TeeSlotRow, i32>,
+    pub departed: __sdk::__query_builder::Col<TeeSlotRow, bool>,
 }
 
 impl __sdk::__query_builder::HasCols for TeeSlotRow {
@@ -44,6 +46,7 @@ impl __sdk::__query_builder::HasCols for TeeSlotRow {
             room_id: __sdk::__query_builder::Col::new(table_name, "room_id"),
             scheduled_at: __sdk::__query_builder::Col::new(table_name, "scheduled_at"),
             booked_count: __sdk::__query_builder::Col::new(table_name, "booked_count"),
+            departed: __sdk::__query_builder::Col::new(table_name, "departed"),
         }
     }
 }
@@ -53,6 +56,7 @@ impl __sdk::__query_builder::HasCols for TeeSlotRow {
 /// Provides typed access to indexed columns for query building.
 pub struct TeeSlotRowIxCols {
     pub course_id: __sdk::__query_builder::IxCol<TeeSlotRow, String>,
+    pub departed: __sdk::__query_builder::IxCol<TeeSlotRow, bool>,
     pub key: __sdk::__query_builder::IxCol<TeeSlotRow, String>,
     pub slot_id: __sdk::__query_builder::IxCol<TeeSlotRow, u64>,
 }
@@ -62,6 +66,7 @@ impl __sdk::__query_builder::HasIxCols for TeeSlotRow {
     fn ix_cols(table_name: &'static str) -> Self::IxCols {
         TeeSlotRowIxCols {
             course_id: __sdk::__query_builder::IxCol::new(table_name, "course_id"),
+            departed: __sdk::__query_builder::IxCol::new(table_name, "departed"),
             key: __sdk::__query_builder::IxCol::new(table_name, "key"),
             slot_id: __sdk::__query_builder::IxCol::new(table_name, "slot_id"),
         }

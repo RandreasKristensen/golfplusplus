@@ -174,7 +174,7 @@ shot_result room_shot_result(const game_state& state, const room_shot& shot) {
     shot_course course = make_shot_course(state.area, static_cast<std::size_t>(std::max(0, shot.hole)),
                                                 course_weather_at(state, shot.record.setup.shot_at), state.place, flags_in,
                                                 state.tuning);
-    course.practice = state.kind == place_kind::hub;
+    course.practice = !state.place.rules.scored;
     return simulate_struck_shot(shot.record, shot.golfer, course, state.tuning, state.clubs);
 }
 
@@ -186,7 +186,7 @@ void start_remote_shot(game_state& state, const room_shot& shot) {
     if (avatar != state.remote_avatars.end() && player != state.online.players.end()) {
         avatar->second.hit_motion_at = player->second.motion_at;
     }
-    const bool valid_hole = state.kind == place_kind::hub ? shot.hole == -1
+    const bool valid_hole = !state.place.rules.scored ? shot.hole == -1
         : shot.hole >= 0 && static_cast<std::size_t>(shot.hole) < state.holes.size();
     if (!valid_hole) {
         return;
@@ -279,6 +279,10 @@ std::vector<shown_ball> remote_balls(const game_state& state) {
             balls.push_back(
                 shown_ball{account, holed ? lying_in_cup(state, static_cast<std::size_t>(ball.hole), ball.position) : ball.position});
         }
+    }
+    // Everyone's spares at rest, mine too: the rows are the only truth online.
+    for (const auto& [id, spare] : state.online.spare_balls) {
+        balls.push_back(shown_ball{spare.account, spare.position});
     }
     return balls;
 }

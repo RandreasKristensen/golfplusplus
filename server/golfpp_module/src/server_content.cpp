@@ -2,6 +2,7 @@
 
 #include "game/course_loader.h"
 #include "game/hub_scene.h"
+#include "game/model_kinds.h"
 #include "game/course_world_loader.h"
 #include "game/hole_loader.h"
 #include "game/text_assets.h"
@@ -37,11 +38,11 @@ server_content_load_result parse_server_content(const content_files& files) {
     server_content_load_result result;
     server_content content;
     content.content_hash = simulation_content_hash(files);
-    for (const char* id : {"tee_book", "hub_bus"}) {
-        const auto source = file_text(files, std::string("world/props/") + id + ".json");
+    for (const hub_model& wanted : hub_models()) {
+        const auto source = file_text(files, std::string("world/props/") + wanted.id + ".json");
         const auto model = source ? parse_prop_from_text(*source) : std::nullopt;
-        if (!model || model->kind != (std::string(id) == "hub_bus" ? "hub_bus" : "hub_book")) { result.error = std::string("cannot load hub prop ") + id; return result; }
-        content.hub_props.emplace(id, *model);
+        if (!model || model->kind != wanted.kind) { result.error = std::string("cannot load hub prop ") + wanted.id; return result; }
+        content.hub_props.emplace(wanted.id, *model);
     }
 
     const std::vector<std::string> tuning_texts = files_in(files, tuning_path);
@@ -144,7 +145,7 @@ shot_course server_shot_course(const server_course& course, const std::size_t ho
     }
     auto made = make_shot_course(course.area, hole, weather_at(tuning.weather, tuning.wind, tuning.sky_clock, course.course, shot_at),
                             course.course, flags_in, tuning);
-    made.practice = course.kind == place_kind::hub;
+    made.practice = !course.course.rules.scored;
     return made;
 }
 

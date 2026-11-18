@@ -5,6 +5,7 @@
 #include "game/hub_flow.h"
 #include "game/hub_scene.h"
 #include "game/mode_dispatch.h"
+#include "game/my_balls.h"
 #include "game/progress_rules.h"
 #include "physics/vector_math.h"
 
@@ -52,8 +53,16 @@ std::vector<interactable> interactables_in_reach(const game_state& state) {
         const float distance = horizontal_distance(me, state.ball->position);
         if (distance <= state.tuning.player.ball_interact_radius) {
             const bool in_cup = state.ball->place == ball_place::in_cup;
-            found.push_back(interactable{state.ball->kind == ball_kind::practice ? interactable_kind::practice_ball :
-                in_cup ? interactable_kind::cup_ball : interactable_kind::ball, 0, distance, {}});
+            found.push_back(interactable{in_cup ? interactable_kind::cup_ball : interactable_kind::ball, 0, distance, {}});
+        }
+    }
+    if (!shot_playing(state)) {
+        for (const spare_ball& spare : my_spare_balls(state)) {
+            const float distance = horizontal_distance(me, spare.position);
+            if (distance <= state.tuning.player.ball_interact_radius) {
+                found.push_back(interactable{spare.in_cup ? interactable_kind::cup_ball : interactable_kind::spare_ball,
+                    static_cast<std::size_t>(spare.id), distance, {}});
+            }
         }
     }
     const std::vector<course_world_collectible>& collectibles = state.world.collectibles;
@@ -76,7 +85,7 @@ std::vector<interactable> interactables_in_reach(const game_state& state) {
             found.push_back(interactable{interactable_kind::tee, i, distance, {}});
         }
     }
-    if (state.hub && !shot_playing(state)) {
+    if (state.place.rules.stations && state.hub && !shot_playing(state)) {
         for (std::size_t i = 0; i < state.hub->tee_mats.size(); ++i) {
             const auto& mat = state.hub->tee_mats[i];
             const float distance = horizontal_distance(me, mat.position);

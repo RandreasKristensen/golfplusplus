@@ -9,9 +9,9 @@
 #include "game/group_round.h"
 #include "game/interactables.h"
 #include "game/social_dap.h"
+#include "game/boarding.h"
 #include "game/hub_flow.h"
-#include "game/hub_session.h"
-#include "game/hub_ball.h"
+#include "game/my_balls.h"
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
 #include "game/online_play.h"
@@ -145,10 +145,7 @@ void update_shot_playback(game_state& state, const float dt) {
         push_audio_event(state, audio_event_type::ball_cup, ball.position);
     }
     // Online the hole is over when the server says so (game/online_play.h).
-    if (holed && !is_online(state)) {
-        if (state.hub) { finish_practice_shot(state); }
-        else { complete_current_hole(state); }
-    }
+    if (holed && !is_online(state)) { complete_current_hole(state); }
 }
 
 // What this frame's input may begin; the world plays on whatever it is.
@@ -267,8 +264,10 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
     update_bag_handling(state, dt);
     update_overlays(state, scope == input_scope::none ? game_input{} : input, dt);
     update_online_play(state, dt);
+    update_boarding(state);
     update_remote_players(state, dt);
-    if (!state.hub_flow.ball_request) { sync_motion(state, dt); }
+    // Boarding the bus this frame: the next motion would name the room I have left.
+    if (!state.hub_flow.ball_request && state.hub_flow.travel_course.empty()) { sync_motion(state, dt); }
 }
 
 void update_xp_drops(game_state& state, const float dt) {
@@ -327,7 +326,7 @@ void toggle_flag_in_reach(game_state& state) {
 
 shot_course current_shot_course(const game_state& state) {
     auto course = make_shot_course(state.area, state.ball->hole.value_or(state.area.cups.size()), state.weather, state.place, state.flags_in, state.tuning);
-    course.practice = state.kind == place_kind::hub;
+    course.practice = !state.place.rules.scored;
     const float speed = sample_area(state.area, state.ball->position).green_stimp_feet;
     if (speed > 0) { course.green_stimp_feet = speed; }
     return course;
@@ -409,6 +408,11 @@ glm::vec3 tee_anchor_position(const game_state& state, const std::size_t hole) {
         return state.static_anchors.tees[hole];
     }
     return hole < state.holes.size() ? anchor_on_terrain(state.area, state.holes[hole].tee_position) : glm::vec3(0.0f);
+}
+
+float pin_height_meters(const game_state& state, const std::size_t pin) {
+    const float own = pin < state.area.cups.size() ? state.area.cups[pin].flag_height_meters : 0.0f;
+    return own > 0.0f ? own : state.tuning.scale.pin_visual_height_meters;
 }
 
 glm::vec3 pin_anchor_position(const game_state& state, const std::size_t hole) {

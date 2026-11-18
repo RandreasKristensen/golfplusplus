@@ -44,9 +44,9 @@ TEST_CASE("every species the trees are of has a look to be drawn in") {
 
 TEST_CASE("a grown tree is the same for its seed, its bark first, and stands in its unit frame") {
     for (const tree_look& look : shipped_palette().trees) {
-        const grown_tree tree = grow_tree(look, 7U, tree_detail::full);
-        const grown_tree again = grow_tree(look, 7U, tree_detail::full);
-        const grown_tree other = grow_tree(look, 8U, tree_detail::full);
+        const grown_tree tree = grow_tree(look, 7U);
+        const grown_tree again = grow_tree(look, 7U);
+        const grown_tree other = grow_tree(look, 8U);
         REQUIRE(!tree.vertices.empty());
         REQUIRE(tree.vertices.size() % 3U == 0U);
         CHECK(tree.vertices.size() == again.vertices.size());
@@ -63,8 +63,6 @@ TEST_CASE("a grown tree is the same for its seed, its bark first, and stands in 
             CHECK(std::abs(v.position.z) <= 1.4f);
             CHECK(near(glm::length(v.normal), 1.0f, 0.01f));
         }
-        // Far away: fewer clumps, no twigs.
-        CHECK(grow_tree(look, 7U, tree_detail::sparse).vertices.size() < tree.vertices.size());
     }
 }
 
@@ -95,35 +93,23 @@ TEST_CASE("a tree stands at its foot, as tall as it is and as wide as its crown,
     CHECK(tree_variant_for(tree) < tree_variants);
 }
 
-TEST_CASE("the trees in view are bucketed by species, variant and detail; those behind are left out") {
+TEST_CASE("the trees in view are bucketed by species and variant; those behind are left out") {
     const glm::vec3 eye(0.0f, 2.0f, 0.0f);
     const glm::mat4 view_proj = glm::perspective(glm::radians(60.0f), 16.0f / 9.0f, 0.1f, 2000.0f) *
         glm::lookAt(eye, glm::vec3(0.0f, 2.0f, 100.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     const view_frustum frustum = make_view_frustum(view_proj);
     const std::vector<tree_body> trees{standing(glm::vec3(0.0f, 0.0f, 20.0f), 0), standing(glm::vec3(3.0f, 0.0f, 300.0f), 0),
                                        standing(glm::vec3(-2.0f, 0.0f, 25.0f), 1), standing(glm::vec3(0.0f, 0.0f, -50.0f), 0)};
-    const render_tree_batch batch = build_tree_batch(trees, &frustum, eye, false);
+    const render_tree_batch batch = build_tree_batch(trees, &frustum);
     CHECK(batch.instances.size() == 3U);
     std::size_t counted = 0;
-    bool full_seen = false;
-    bool sparse_seen = false;
     for (const render_tree_bucket& bucket : batch.buckets) {
         CHECK(bucket.count > 0U);
         CHECK(bucket.first == counted);
         counted += bucket.count;
-        full_seen = full_seen || bucket.detail == tree_detail::full;
-        sparse_seen = sparse_seen || bucket.detail == tree_detail::sparse;
-        for (std::size_t i = bucket.first; i < bucket.first + bucket.count; ++i) {
-            const bool is_close = glm::length(batch.instances[i].offset - eye) <= tree_near_meters;
-            CHECK(is_close == (bucket.detail == tree_detail::full));
-        }
     }
     CHECK(counted == batch.instances.size());
-    CHECK(full_seen);
-    CHECK(sparse_seen);
-    // The shadow maps take every tree, all far.
-    const render_tree_batch casters = build_tree_batch(trees, nullptr, eye, true);
+    // The shadow maps take the same models, without eye-dependent selection.
+    const render_tree_batch casters = build_tree_batch(trees, nullptr);
     CHECK(casters.instances.size() == trees.size());
-    CHECK(std::all_of(casters.buckets.begin(), casters.buckets.end(),
-                      [](const render_tree_bucket& bucket) { return bucket.detail == tree_detail::sparse; }));
 }

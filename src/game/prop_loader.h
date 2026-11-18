@@ -67,11 +67,14 @@ struct prop_model {
     std::vector<prop_part> parts;
     std::map<std::string, glm::vec3> points;
     std::map<std::string, prop_mount> mounts;
+    // Plain numbers the code animates by (the bus's door swing).
+    std::map<std::string, float> numbers;
 
     // What the code asks for is checked by kind when the model loads.
     glm::vec3 color(const std::string& name) const { return colors.at(name); }
     glm::vec3 point(const std::string& name) const { return points.at(name); }
     const prop_mount& mount(const std::string& name) const { return mounts.at(name); }
+    float number(const std::string& name) const { return numbers.at(name); }
 };
 
 // Every model by its file name (no extension).

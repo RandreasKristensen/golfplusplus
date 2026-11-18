@@ -4,7 +4,7 @@
 // the haze. Every scene shader hazes what it draws with the sun's glow in the
 // haze (lighting.glsl's haze_toward), as if the air in front were all in sun;
 // after the opaque scene, this pass steps each ray through the shadow map at
-// half the scene's size (sun_shafts.frag) and takes out of the scene's colour
+// half the scene's size on fixed world intervals (sun_shafts.frag) and takes out of the scene's colour
 // the glow of the air that lies in shadow (sun_shafts_composite.frag, the
 // scene's depth deciding which half-size pixels a pixel takes from). The
 // gaps between trees keep their glow and read as shafts. Real, never

@@ -42,6 +42,11 @@ render_datestamp make_datestamp(const text_assets& text, const double game_day, 
     return stamp;
 }
 
+std::string place_clock_text(const text_assets& text, const game_state& game, const sky_controls& controls,
+                             const std::int64_t local_unix_ms) {
+    return make_datestamp(text, course_game_day(game, controls, local_unix_ms), static_cast<double>(game.place.sky.utc_offset_hours)).time;
+}
+
 render_vcr make_render_vcr(const text_assets& text, const game_state& game, const sky_controls& controls,
                            const std::int64_t local_unix_ms, const vcr_signals& signals) {
     render_vcr vcr;

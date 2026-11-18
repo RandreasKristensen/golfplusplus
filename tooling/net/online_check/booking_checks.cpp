@@ -19,9 +19,9 @@ bool has_row(live_check& run, const std::int64_t at) {
 }
 }
 bool check_booking(live_check& run) {
-    run[0].client.join_course(run.course, false);
+    run[0].client.join_course(run.course);
     if (!run.refusal(0, "join_course", error_hub_only)) { return false; }
-    for (std::size_t i = 0; i < 6; ++i) { run[i].client.join_course(online_hub_course, false); }
+    for (std::size_t i = 0; i < 6; ++i) { run[i].client.join_course(online_hub_course); }
     if (!run.require("six complete scoped hub snapshots, same uncapped world", run.until([&] {
         for (std::size_t i = 0; i < 6; ++i) {
             const auto& s = run.state(i);
@@ -47,8 +47,10 @@ bool check_booking(live_check& run) {
     // leave it enough real time for the practice and social checks first,
     // without changing the clock.
     const auto interval = s.tuning.server.tee_interval_minutes * minute_micros;
-    for (const auto at : tee_times(s.online.server_now, s.tuning.server)) {
-        if (at - interval > s.online.server_now + 8 * minute_micros) { run.due = at; break; }
+    // The time after it is booked too, so both must be inside the book's horizon.
+    const hub_clock clock{s.tuning.sky_clock, static_cast<double>(s.hub_sky.utc_offset_hours)};
+    for (const auto at : tee_times(s.online.server_now, s.tuning.server, clock)) {
+        if (at - interval > s.online.server_now + 8 * minute_micros && within_tee_book(at + interval, s.online.server_now, s.tuning.server, clock)) { run.due = at; break; }
     }
     if (!run.require("natural quarter-hour available on empty database, no slot rows",
                      run.due != 0 && s.online.tee_slots.empty())) { return false; }
@@ -72,7 +74,30 @@ bool check_booking(live_check& run) {
         }
         return true;
     }))) { return false; }
+    // Each booking carries its own choice (peers 3 and 4 a cart, the rest carry), where the course has carts.
+    for (std::size_t i = 0; i < 5; ++i) {
+        if (!run.require("booking stores cart or carry as chosen", run.state(i).online.reservation->takes_cart == ((i == 3 || i == 4) && run.course_has_carts()))) { return false; }
+    }
+    // Changing the choice books the same time again: the same slot, the count unchanged.
+    const auto slot_before = run.state(0).online.reservation->slot_id;
+    if (!run.book(0, run.due, run.course_has_carts()) ||
+        !run.require("changing cart or carry re-books the same time in the same slot, still five", run.state(0).online.reservation->slot_id == slot_before && count_at(run, run.due) == 5)) { return false; }
+    if (!run.book(0, run.due, false)) { return false; }
+    // The departure board lists the group by time, course and the names in it, from the server's rows.
+    std::vector<std::string> names;
+    for (std::size_t i = 0; i < 5; ++i) { names.push_back(run.state(i).online.display_name); }
+    std::sort(names.begin(), names.end());
+    if (!run.require("departure board lists the booked time with its five names", run.until([&] {
+        const auto& board = run.state(3).online.departures;
+        return std::any_of(board.begin(), board.end(), [&](const departure_info& d) { return d.scheduled_at == run.due && d.course_id == run.course && d.names == names; });
+    }))) { return false; }
     if (!run.book(5, run.due + 2 * interval)) { return false; }
+    if (!run.require("departure board lists later groups after, in time order, within its rows", run.until([&] {
+        const auto& board = run.state(3).online.departures;
+        const bool later = std::any_of(board.begin(), board.end(), [&](const departure_info& d) { return d.scheduled_at == run.due + 2 * interval && d.names.size() == 1; });
+        return later && static_cast<int>(board.size()) <= run.state(3).tuning.server.departure_board_rows &&
+            std::is_sorted(board.begin(), board.end(), [](const departure_info& a, const departure_info& b) { return a.scheduled_at < b.scheduled_at; });
+    }))) { return false; }
     const auto previous = run.state(5).online.reservation->reservation_id;
     net_command full; full.type = net_command_type::book_tee; full.course_id = run.course;
     full.scheduled_at = run.due; full.reservation_id = previous; run.send(5, full);

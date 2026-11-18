@@ -28,6 +28,7 @@
 
 struct render_fences;  // renderer/fence_batch.h
 struct render_floodlights;  // renderer/floodlight_batch.h
+struct grass_field;   // renderer/grass_field.h
 struct render_water;   // renderer/water_batch.h
 struct render_hole_signs;  // renderer/hole_sign_batch.h
 
@@ -325,6 +326,11 @@ struct render_eyepiece {
 
 struct render_data {
     const std::vector<static_prop>* world_props = nullptr;
+    // The hub bus boards: its door swings open (renderer/prop_batch.h bus_door_pose).
+    bool bus_doors_open = false;
+    // False while the game cannot yet tell (online before its clock is known):
+    // the doors then stand at `bus_doors_open` rather than swing to it.
+    bool bus_doors_settled = true;
     glm::vec3 camera_position{0.0f};
     glm::vec3 camera_target{0.0f, 0.0f, 1.0f};
     float camera_fov_degrees = 0.0f;
@@ -348,6 +354,7 @@ struct render_data {
 
     // Scene. Pointers borrow caches owned by app or game_state that outlive
     // the render call; null means "none this frame".
+    const grass_field* grass = nullptr;
     const render_static_mesh* terrain_mesh = nullptr;
     const render_static_mesh* material_overlay_mesh = nullptr;
     // What is drawn behind the course, and the haze the scene fades into.
@@ -386,6 +393,7 @@ struct render_data {
     // The pins of every hole on the course but the one being played (whose
     // pin is `pin_position`): a course is one world, so they stay up in a round.
     std::vector<glm::vec3> pin_markers;
+    std::vector<float> pin_marker_heights;  // the flagstick's height of each, in metres
     // The cups whose flag is out, and each flagstick lying beside its cup,
     // from its foot to its tip.
     std::vector<glm::vec3> flags_out;
@@ -420,8 +428,8 @@ struct render_data {
     std::optional<render_item_use> smoking;
     std::optional<render_item_use> drinking;
 
-    // My figure on foot as others see it: never drawn (I look out of its
-    // eyes), only into the shadow map (renderer/shadow_casters.h).
+    // My figure on foot as others see it, drawn into mirrors and the shadow
+    // map (renderer/shadow_casters.h); the main camera looks out of its eyes.
     std::optional<render_remote_avatar> my_figure;
     std::optional<dap_hand_pose> dap_hand;
     // Other players in my room (online).

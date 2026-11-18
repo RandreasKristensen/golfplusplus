@@ -20,3 +20,5 @@ parsed<hole_data> parse_hole_from_text(const std::string& text);
 // a green, bunker, water or fairway outline ([[x, z], ...], three or more).
 parsed<std::vector<material_zone>> material_zones_from_json(const json& root);
 parsed<std::vector<tree_instance>> trees_from_json(const json& root);
+// `bushes`: each a position, radius and height, all leaves.
+parsed<std::vector<tree_instance>> bushes_from_json(const json& root);

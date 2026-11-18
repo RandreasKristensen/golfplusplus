@@ -33,18 +33,22 @@ int select_with_input(startup_menu_screen screen,
                       std::vector<ui_sound>& sounds);
 
 // A course picker's selection over `count` courses, picker_rows rows of
-// them shown from `top_row`: the wheel scrolls the rows (the selection kept
+// them shown from `top_row` (as many rows as `screen` shows, renderer/menu_overlay.h): the wheel scrolls the rows (the selection kept
 // among them), the arrows move the selection (the rows following it), and
-// the mouse picks among the tiles shown. Returns the clicked course, or -1.
+// the mouse picks among the tiles shown. Tiles flagged `inert` (headings) are
+// never selected. Returns the clicked course, or -1.
 int select_course(int& selection,
                   int& top_row,
                   int count,
                   const input_state& input,
                   const menu_pointer& pointer,
                   std::vector<ui_sound>& sounds,
-                  startup_menu_screen screen = startup_menu_screen::course_picker);
+                  startup_menu_screen screen = startup_menu_screen::course_picker,
+                  const std::vector<bool>& inert = {});
 
 void add_tile(render_startup_menu& menu, std::string title, std::string subtitle, bool selected);
+// A heading in the list of tiles: text in its cell, no tile, never selected.
+void add_heading(render_startup_menu& menu, std::string title);
 // One tile per catalog course shown from `top_row`, with hole 1's preview.
 void add_course_tiles(render_startup_menu& menu, const startup_catalog& catalog, const text_assets& text, int selection,
                       int top_row);

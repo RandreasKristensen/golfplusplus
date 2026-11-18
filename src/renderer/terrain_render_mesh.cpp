@@ -145,7 +145,9 @@ render_static_mesh make_terrain_render_mesh(const std::vector<const terrain_mesh
                 const float mud = level ? pond_bed_share(vertex.position, std::max(0.0f, *level - vertex.position.y)) : 0.0f;
                 render.vertices.push_back(
                     lit_ground_vertex(vertex.position, vertex.normal, glm::mix(colors.rough, colors.pond_bed, mud), 1.0f - mud, light));
-                render.vertices.back().blades = 1.0f - mud;
+                // The bed keeps its grass colour at the bank, but no rough
+                // blades grow within the pond's exact outline.
+                render.vertices.back().blades = 0.0f;
                 render.vertices.back().map_color = colors.water;
                 continue;
             }
@@ -169,4 +171,19 @@ render_static_mesh make_terrain_render_mesh(const std::vector<const terrain_mesh
     render.bounds = compute_render_mesh_bounds(render.vertices);
     render.chunks = build_render_mesh_chunks(render.vertices, render.indices);
     return render;
+}
+
+render_static_mesh make_ground_render_mesh(const play_area& area, const std::uint64_t revision, const ground_colors& colors,
+                                           const ground_light_bake& light) {
+    terrain_mesh ground;
+    ground.vertices = area.ground.vertices;
+    ground.indices = area.ground.indices;
+    ground.width = area.ground.width;
+    for (terrain_vertex& vertex : ground.vertices) {
+        if (vertex.material != terrain_material::water) {
+            const std::optional<terrain_sample> on_hole = sample_holes(area.holes, vertex.position);
+            vertex.material = on_hole ? on_hole->material : terrain_material::rough;
+        }
+    }
+    return make_terrain_render_mesh({&ground}, revision, colors, light, &area, true);
 }

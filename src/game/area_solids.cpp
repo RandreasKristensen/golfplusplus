@@ -143,10 +143,10 @@ std::vector<solid> flagstick_solids(const std::vector<cup>& cups, const std::vec
     const world_scale_tuning& scale = tuning.scale;
     const float unit = scale.meters_per_world_unit;
     const float thickness = tuning.cup.flagstick_radius_meters / unit;
-    const float length = scale.pin_visual_height_meters / unit;
     std::vector<solid> solids;
     for (std::size_t i = 0; i < cups.size(); ++i) {
         const cup& hole = cups[i];
+        const float length = (hole.flag_height_meters > 0.0f ? hole.flag_height_meters : scale.pin_visual_height_meters) / unit;
         const bool in = i >= flags_in.size() || flags_in[i];
         if (in) {
             const glm::vec3 foot = hole.centre - glm::vec3(0.0f, hole.depth, 0.0f);

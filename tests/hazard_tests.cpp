@@ -196,6 +196,7 @@ TEST_CASE("a pond's floor is the bank's grass at its edge, fading to mud deeper 
         }
         // A printed map shows it as water, whatever its floor.
         CHECK(drawn.vertices[i].map_color == colors.water);
+        CHECK(drawn.vertices[i].blades == 0.0f);
         const float depth = area.water_levels[0] - vertex.position.y;
         if (depth < 0.7f) {
             shallowest = std::min(shallowest, mud(drawn.vertices[i].color));

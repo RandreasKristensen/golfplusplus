@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "core/startup_flow.h"
+#include "game/content_files.h"
 #include "game/text_ids.h"
 #include "game/text_assets.h"
 #include "renderer/menu_overlay.h"
@@ -305,7 +306,7 @@ TEST_CASE("menu render data takes its text from the string table") {
 }
 
 TEST_CASE("the catalog totals each course's par and previews hole 1") {
-    const startup_catalog catalog = load_startup_catalog(*load_game_content(GOLFPP_ASSETS_DIR).content, shipped_text_assets());
+    const startup_catalog catalog = *load_startup_catalog(*load_game_content(GOLFPP_ASSETS_DIR).content, shipped_text_assets()).catalog;
     REQUIRE(!catalog.courses.empty());
     CHECK(catalog.name_max_length > 0U);
     CHECK(catalog.name_chars.find('A') != std::string::npos);
@@ -315,3 +316,35 @@ TEST_CASE("the catalog totals each course's par and previews hole 1") {
     }
 }
 
+TEST_CASE("a course's length is its holes' play lengths, tee to green along each line of play, not the walk between them") {
+    hole_data bent;
+    bent.tee_position = glm::vec3(0.0f, 0.0f, 0.0f);
+    bent.pin_position = glm::vec3(30.0f, 5.0f, 100.0f);
+    // The ends repeat the tee and the green; only the corner between them bends the line.
+    bent.spline.control_points = {bent.tee_position, glm::vec3(30.0f, 0.0f, 40.0f), bent.pin_position};
+    hole_data straight;
+    straight.tee_position = glm::vec3(300.0f, 0.0f, 0.0f);
+    straight.pin_position = glm::vec3(300.0f, 0.0f, 200.0f);
+    straight.spline.control_points = {straight.tee_position, straight.pin_position};
+    // 50 m to the corner and 60 m on, plus 200 m, wherever the holes lie: 310 m.
+    CHECK(play_length_meters({bent, straight}, 1.0f) == 310);
+    CHECK(play_length_meters({bent, straight}, 0.5f) == 155);
+    CHECK(play_length_meters({}, 1.0f) == 0);
+}
+
+TEST_CASE("every shipped course has a length: at least its holes' straight lines, and a golf course's size") {
+    const game_content content = *load_game_content(GOLFPP_ASSETS_DIR).content;
+    const startup_catalog catalog = *load_startup_catalog(content, shipped_text_assets()).catalog;
+    REQUIRE(catalog.courses.size() == content.courses.size());
+    for (const startup_course_option& option : catalog.courses) {
+        float straight = 0.0f;
+        for (std::size_t i = 0; i < option.course.holes.size(); ++i) {
+            const std::optional<hole_data> hole = load_hole_from_file(course_hole_path(content.asset_root, option.course, i));
+            REQUIRE(hole.has_value());
+            straight += horizontal_distance(hole->tee_position, hole->pin_position) * content.tuning.scale.meters_per_world_unit;
+        }
+        CHECK(static_cast<float>(option.length_meters) >= straight - 1.0f);
+        CHECK(option.length_meters > static_cast<int>(option.course.holes.size()) * 50);
+        CHECK(option.length_meters < static_cast<int>(option.course.holes.size()) * 700);
+    }
+}

@@ -16,8 +16,7 @@
 
 // Clears both and fills them with this frame's casters: the figures,
 // flagsticks, signs and fence posts, and the carts' models (their models
-// from `props`). A flagstick's pole is square to the sun and at least one of
-// the map's texels (`map`) wide, so the map catches it; signs and posts
+// from `props`). Flagsticks use the same cylinders as the picture; signs and posts
 // further from the camera than the map reaches are left out.
 void build_shadow_casters(world_marker_batch& figures, prop_batch& models, const render_data& data, const scene_colors& colors,
                           const prop_catalog& props, const shadow_style& map, const prop_batch* static_models = nullptr);

@@ -25,6 +25,21 @@ const model_kind* find_model_kind(const std::string& name);
 inline constexpr const char* fence_model = "fence";
 inline constexpr const char* floodlight_model = "floodlight";
 inline constexpr const char* hole_sign_model = "hole_sign";
+// The hub models whose board the code writes by name (core/tee_book.h
+// prop_board_labels): the clocks, a target's distance board, the departure
+// board's rows.
+inline constexpr const char* clock_model = "hub_clock";
+inline constexpr const char* distance_board_model = "hub_distance_board";
+inline constexpr const char* departure_board_model = "hub_departure_board";
+inline constexpr const char* departure_row_model = "hub_departure_row";
+// Every model a hub places or its scene needs, loaded with the hub by game and
+// server alike (their bounds are simulation content): the tee book, the bus
+// and the built things of the plaza and the range.
+struct hub_model {
+    const char* id;
+    const char* kind;
+};
+const std::vector<hub_model>& hub_models();
 struct required_model {
     const char* id;
     const char* kind;

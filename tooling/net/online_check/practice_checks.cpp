@@ -1,6 +1,6 @@
 #include "check_runtime.h"
 #include "game/address_view.h"
-#include "game/hub_ball.h"
+#include "game/my_balls.h"
 #include "game/mode_dispatch.h"
 #include "game/movement_step.h"
 #include "game/sent_setup.h"
@@ -100,6 +100,47 @@ bool check_practice(live_check& run) {
     };
     drop.placed += glm::vec3(1, 0, 0); run.send(0, drop);
     if (!run.require("second drop replaces the ball at the requested point in reach", run.until([&] { return ball_near(drop.placed); }))) { return false; }
+    // The ball it replaced lies on as my spare; every ball out is one array of the hub's balls_out.
+    const auto spares = [&] {
+        std::vector<spare_ball> mine;
+        for (const auto& [id, spare] : state.online.spare_balls) { if (spare.account == state.online.account_id) { mine.push_back(spare); } }
+        return mine;
+    };
+    if (!run.require("the replaced ball lies on as one spare", run.until([&] { return spares().size() == 1; }))) { return false; }
+    const int cap = state.place.rules.balls_out;
+    const auto here = my_room_player(state)->motion->position;
+    for (int i = 0; i < cap + 2; ++i) {
+        drop.placed = here + glm::vec3(0.2f * static_cast<float>(i % 5), 0, 0.2f * static_cast<float>(i / 5));
+        run.send(0, drop); run.tick();
+    }
+    if (!run.require("drops fill the array: spares plus the ball in play are the cap", run.until([&] {
+        return static_cast<int>(spares().size()) == cap - 1;
+    }))) { return false; }
+    run.wait(0.5f);
+    if (!run.require("the cap holds, the oldest having gone", static_cast<int>(spares().size()) == cap - 1)) { return false; }
+    // A swap is one transaction: the spare becomes the ball in play, the ball played a spare.
+    const spare_ball chosen = spares().front();
+    const glm::vec3 played = state.online.balls.at(state.online.account_id).position;
+    net_command swap; swap.type = net_command_type::play_ball; swap.ball_id = chosen.id;
+    run.send(0, swap);
+    if (!run.require("play_ball swaps the spare into play and the ball in play out", run.until([&] {
+        const auto ball = state.online.balls.find(state.online.account_id);
+        const bool played_out = std::any_of(state.online.spare_balls.begin(), state.online.spare_balls.end(), [&](const auto& entry) {
+            return entry.second.account == state.online.account_id && horizontal_distance(entry.second.position, played) < 0.05f; });
+        return ball != state.online.balls.end() && horizontal_distance(ball->second.position, chosen.position) < 0.05f &&
+            state.online.spare_balls.count(chosen.id) == 0 && played_out && static_cast<int>(spares().size()) == cap - 1;
+    }))) { return false; }
+    // Lifting one by one: each spare in reach goes, the ball in play stays.
+    std::size_t lifted = 0;
+    for (const spare_ball& spare : spares()) {
+        if (horizontal_distance(spare.position, here) > state.tuning.player.ball_interact_radius) { continue; }
+        net_command lift; lift.type = net_command_type::pick_up_ball; lift.ball_id = spare.id;
+        run.send(0, lift);
+        if (!run.require("pick_up_ball removes just that spare", run.until([&] { return state.online.spare_balls.count(spare.id) == 0; }))) { return false; }
+        ++lifted;
+    }
+    if (!run.require("spares in reach were lifted and the ball in play stayed",
+            lifted > 0 && state.online.balls.count(state.online.account_id) == 1)) { return false; }
     run.action(0, net_command_type::pick_up_ball);
     if (!run.require("practice pickup removes the whole ball row without progress", run.until([&] {
         return !state.online.balls.count(state.online.account_id);

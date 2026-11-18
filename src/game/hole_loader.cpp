@@ -107,6 +107,7 @@ parsed<std::vector<tree_instance>> trees_from_json(const json& root) {
     return json_elements<tree_instance>(root, "trees", tree_from_json);
 }
 
+namespace {
 // A bush: its `position` on the ground, its `radius` and `height`; all leaves.
 parsed<tree_instance> bush_from_json(const json& object) {
     const std::optional<glm::vec3> position = json_vec3(object, "position");
@@ -123,6 +124,11 @@ parsed<tree_instance> bush_from_json(const json& object) {
     bush.shape = tree_shape{0.0f, 0.0f, *radius, *height, tree_kind::bush};
     bush.species = "scrub";
     return {bush, ""};
+}
+}
+
+parsed<std::vector<tree_instance>> bushes_from_json(const json& root) {
+    return json_elements<tree_instance>(root, "bushes", bush_from_json);
 }
 
 parsed<hole_data> parse_hole_from_text(const std::string& text) {
@@ -183,7 +189,7 @@ parsed<hole_data> parse_hole_from_text(const std::string& text) {
     if (!trees.value) {
         return {std::nullopt, trees.error};
     }
-    parsed<std::vector<tree_instance>> bushes = json_elements<tree_instance>(*root, "bushes", bush_from_json);
+    parsed<std::vector<tree_instance>> bushes = bushes_from_json(*root);
     if (!bushes.value) {
         return {std::nullopt, bushes.error};
     }

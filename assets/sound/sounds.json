@@ -2,7 +2,7 @@
   "master_volume": 0.8,
   "voices": {
     "channels": 32,
-    "loops": 8
+    "loops": 12
   },
   "underwater": {
     "cutoff_hz": 350,
@@ -12,7 +12,8 @@
   "categories": {
     "ui": 0.55,
     "gameplay": 0.85,
-    "ambience": 0.45
+    "ambience": 0.45,
+    "world": 0.5
   },
   "sounds": [
     {
@@ -385,6 +386,61 @@
       "volume_multiplier": 1.0,
       "reference_distance": 1.0,
       "max_distance": 20.0
+    },
+    {
+      "id": "pa_boarding_call",
+      "file": "effects/pa_boarding_call.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): the starter's PA, a two-note chime then a call to the first tee's bus, tinny and a little distorted through the horns.",
+      "target_length_seconds": 4.0,
+      "volume_multiplier": 1.0,
+      "reference_distance": 20.0,
+      "max_distance": 200.0
+    },
+    {
+      "id": "bus_horn",
+      "file": "effects/bus_horn.wav",
+      "type": "sfx",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a short double honk of a bus horn, the last call.",
+      "target_length_seconds": 1.0,
+      "volume_multiplier": 1.0,
+      "reference_distance": 10.0,
+      "max_distance": 250.0
+    },
+    {
+      "id": "bus_engine_loop",
+      "file": "effects/bus_engine_loop.wav",
+      "type": "loop",
+      "category": "gameplay",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a diesel bus idling at the stop, seamless.",
+      "target_length_seconds": 4.0,
+      "volume_multiplier": 1.0,
+      "reference_distance": 5.0,
+      "max_distance": 80.0
+    },
+    {
+      "id": "birds_loop",
+      "file": "effects/birds_loop.wav",
+      "type": "loop",
+      "category": "world",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): songbirds in a shelterbelt, a few distant calls, seamless.",
+      "target_length_seconds": 20.0,
+      "volume_multiplier": 1.0,
+      "reference_distance": 8.0,
+      "max_distance": 70.0
+    },
+    {
+      "id": "terrace_chatter_loop",
+      "file": "effects/terrace_chatter_loop.wav",
+      "type": "loop",
+      "category": "world",
+      "description": "Placeholder (silence, tooling/audio/make_placeholders.py): a few people talking and glasses clinking on the clubhouse terrace, seamless.",
+      "target_length_seconds": 20.0,
+      "volume_multiplier": 1.0,
+      "reference_distance": 4.0,
+      "max_distance": 45.0
     },
     {
       "id": "thunder_close",

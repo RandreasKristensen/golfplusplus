@@ -308,11 +308,16 @@ bool single_column(const startup_menu_screen screen) {
 }
 
 bool picker(const startup_menu_screen screen) {
-    return screen == startup_menu_screen::course_picker || screen == startup_menu_screen::tee_book;
+    return screen == startup_menu_screen::course_picker || screen == startup_menu_screen::tee_book ||
+        screen == startup_menu_screen::course_book;
 }
 
-// A picker's grid: three by three tiles.
-constexpr int picker_tiles_shown = 9;
+// The course book's cards: a column, the least width that fits a card's two
+// lines (name and figures, then time, season and carts) beside its hole.
+constexpr int card_rows = 4;
+constexpr float card_pitch = 0.27f;
+constexpr float card_top = 0.32f;
+constexpr glm::vec2 card_half_size{0.80f, 0.125f};
 
 // A single column runs down from its top edge to above the footer. Main
 // and confirm columns start under the subtitle; form columns under the form.
@@ -340,7 +345,18 @@ const ui_rect field_box{glm::vec2(0.0f, 0.20f), glm::vec2(0.42f, 0.09f)};
 const ui_rect code_box{glm::vec2(0.0f, 0.20f), glm::vec2(0.50f, 0.14f)};
 }
 
+int startup_picker_columns(const startup_menu_screen screen) {
+    return screen == startup_menu_screen::course_book ? 1 : 3;
+}
+
+int startup_picker_rows(const startup_menu_screen screen) {
+    return screen == startup_menu_screen::course_book ? card_rows : 3;
+}
+
 glm::vec2 startup_tile_center(const startup_menu_screen screen, const int index, const int count) {
+    if (screen == startup_menu_screen::course_book) {
+        return glm::vec2(0.0f, card_top - static_cast<float>(index) * card_pitch);
+    }
     if (single_column(screen)) {
         const float top = screen == startup_menu_screen::form ? form_column_top : column_top;
         const float pitch = column_pitch_for(screen, count);
@@ -355,6 +371,9 @@ glm::vec2 startup_tile_center(const startup_menu_screen screen, const int index,
 }
 
 glm::vec2 startup_tile_half_size(const startup_menu_screen screen, const int count) {
+    if (screen == startup_menu_screen::course_book) {
+        return card_half_size;
+    }
     if (!single_column(screen)) {
         return glm::vec2(0.25f, 0.165f);
     }
@@ -382,7 +401,7 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
     draw_overlay_quad(batch, glm::vec2(0.0f), glm::vec2(1.0f), glm::vec3(0.0f, 0.0f, 0.0f), 0.72f);
     draw_overlay_quad(batch, glm::vec2(0.0f, 0.0f), glm::vec2(0.86f, 0.88f), glm::vec3(0.012f, 0.014f, 0.014f), 0.30f);
     draw_label(batch, text.font, find_text_style(text, style_title), menu.title, ui_rect{glm::vec2(0.0f, 0.80f), glm::vec2(0.78f, 0.10f)});
-    const bool book = menu.screen == startup_menu_screen::tee_book;
+    const bool book = menu.screen == startup_menu_screen::tee_book || menu.screen == startup_menu_screen::course_book;
     const ui_rect subtitle_box{glm::vec2(0.0f, book ? 0.62f : 0.66f), glm::vec2(0.76f, book ? 0.07f : 0.045f)};
     const text_style& message_style = find_text_style(text, menu.message_is_error ? style_error : style_subtitle);
     if (picker(menu.screen) && !book && !menu.message.empty()) {
@@ -409,13 +428,25 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
     for (std::size_t i = 0; i < menu.tiles.size(); ++i) {
         const render_startup_tile& tile = menu.tiles[i];
         const ui_rect tile_box{startup_tile_center(menu.screen, static_cast<int>(i), tile_count), tile_half};
+        if (tile.heading) {
+            draw_label(batch, text.font, find_text_style(text, style_heading), tile.title, inset_rect(tile_box, tile_half * glm::vec2(0.08f, 0.10f)));
+            continue;
+        }
         const glm::vec3 panel_color = tile.selected ? glm::vec3(0.20f, 0.16f, 0.065f) : glm::vec3(0.070f, 0.075f, 0.075f);
         const glm::vec3 outline = tile.selected ? glm::vec3(0.94f, 0.72f, 0.22f) : glm::vec3(0.50f, 0.52f, 0.48f);
         draw_overlay_quad(batch, tile_box.center, tile_box.half_size, panel_color, tile.selected ? 0.94f : 0.76f);
         draw_button_outline(batch, tile_box.center, tile_box.half_size, outline, tile.selected ? 0.94f : 0.44f);
 
         const ui_rect inner = inset_rect(tile_box, tile_half * glm::vec2(0.08f, 0.10f));
-        if (tile.preview) {
+        if (tile.preview && menu.screen == startup_menu_screen::course_book) {
+            const ui_rect thumbnail = slice_x(inner, 0.0f, 0.17f);
+            draw_hole_thumbnail(batch, *tile.preview, thumbnail.center, thumbnail.half_size, ground);
+            const ui_rect lines = slice_x(inner, 0.20f, 1.0f);
+            const ui_rect first = slice_y(lines, 0.0f, 0.5f);
+            draw_label(batch, text.font, find_text_style(text, style_card_name), tile.title, slice_x(first, 0.0f, 0.46f));
+            draw_label(batch, text.font, find_text_style(text, style_card_figures), tile.figures, slice_x(first, 0.46f, 1.0f));
+            draw_label(batch, text.font, find_text_style(text, style_card_detail), tile.subtitle, slice_y(lines, 0.5f, 1.0f));
+        } else if (tile.preview) {
             const ui_rect thumbnail = slice_y(inner, 0.0f, 0.48f);
             draw_hole_thumbnail(batch, *tile.preview, thumbnail.center, thumbnail.half_size, ground);
             draw_label(batch, text.font, find_text_style(text, style_tile_label_small), tile.title, slice_y(inner, 0.50f, 0.82f));
@@ -430,11 +461,12 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
 
     const glm::vec2 arrow_half(0.04f, 0.04f);
     if (picker(menu.screen)) {
-        // The box the grid's nine tiles fit, its arrows outside its right edge
+        // The box the grid's tiles fit, its arrows outside its right edge
         // by the top and bottom rows.
         const glm::vec2 top_left = startup_tile_center(menu.screen, 0, tile_count) + glm::vec2(-tile_half.x, tile_half.y);
+        const int tiles_shown = startup_picker_columns(menu.screen) * startup_picker_rows(menu.screen);
         const glm::vec2 bottom_right =
-            startup_tile_center(menu.screen, picker_tiles_shown - 1, tile_count) + glm::vec2(tile_half.x, -tile_half.y);
+            startup_tile_center(menu.screen, tiles_shown - 1, tile_count) + glm::vec2(tile_half.x, -tile_half.y);
         const glm::vec2 margin(0.02f, 0.025f);
         const glm::vec2 box_center = 0.5f * (top_left + bottom_right);
         const glm::vec2 box_half = 0.5f * glm::abs(bottom_right - top_left) + margin;

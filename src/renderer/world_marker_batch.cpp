@@ -297,18 +297,19 @@ void append_cup_holes(world_marker_batch& batch, const std::vector<glm::vec3>& c
     batch.append_world_triangles(insides, colors.cup, glow.cup, marker_stencil::hole_insides);
 }
 
+namespace {
+float marker_height(const std::vector<float>* heights, const std::size_t index, const float fallback) {
+    return heights != nullptr && index < heights->size() ? (*heights)[index] : fallback;
+}
+}
+
 void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, const float pin_visual_height_meters,
                           const marker_colors& colors, const glow_floors& glow, const flag_pose& flag,
-                          const pole_view& pole) {
+                          const float radius_meters) {
     const float pin_height = std::max(0.1f, pin_visual_height_meters);
-    const glm::vec3 pin_base = position + glm::vec3(0.0f, pin_height * 0.5f, 0.0f);
-    // Square to the eye, so its width on screen is its width: real, or one
-    // scene pixel where real would be thinner.
-    const float half_width = std::max(pole.radius_meters, pole.pixel_meters * 0.5f);
-    const glm::vec3 to_eye = safe_normalize(horizontal(pole.toward_eye), glm::vec3(0.0f, 0.0f, 1.0f));
-    const float yaw = glm::degrees(std::atan2(to_eye.x, to_eye.z));
-    batch.append_quad(panel_model(pin_base, yaw, glm::vec3(half_width, pin_height * 0.5f, 1.0f)), colors.pin_pole,
-                      glow.pin_pole, true);
+    batch.append_cylinder(glm::scale(glm::translate(glm::mat4(1), position),
+                                    glm::vec3(radius_meters, pin_height, radius_meters)),
+                          colors.pin_pole, glow.pin_pole, true);
 
     // Hung from just under the pole's top, flying out from it at `angle`
     // from straight down, its fly end waving across the wind.
@@ -318,7 +319,7 @@ void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, 
     const glm::vec3 out = downwind * std::sin(angle) - world_up * std::cos(angle);
     // Each flag at its own point of the wave, so a course's flags never flap together.
     const float phase = flag.phase + position.x * flag_phase_per_metre + position.z * flag_phase_per_metre * 1.7f;
-    const glm::vec3 hoist_top = position + glm::vec3(0.0f, pin_height * 0.86f + flag_half_height, 0.0f);
+    const glm::vec3 hoist_top = position + glm::vec3(0.0f, std::min(pin_height * 0.86f + flag_half_height, pin_height), 0.0f);
     const glm::vec3 hoist_bottom = hoist_top - world_up * (2.0f * flag_half_height);
     const auto along = [&](const float share) {
         const float wave = flag.flap * flag_length * share * std::sin(phase - glm::two_pi<float>() * flag_waves * share);
@@ -383,12 +384,6 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
         const std::vector<glm::vec3>& out = markers(scene.flags_out);
         return std::find(out.begin(), out.end(), cup) != out.end();
     };
-    // A flagstick's pole as seen from the camera, a scene pixel as wide as at its middle.
-    const auto pole_at = [&scene](const glm::vec3& pin) {
-        const glm::vec3 middle = pin + world_up * (scene.pin_visual_height_meters * 0.5f);
-        return pole_view{scene.flagstick_radius_meters, scene.camera_position - pin,
-                         glm::length(middle - scene.camera_position) * scene.pixel_per_meter};
-    };
     std::vector<glm::vec3> cups = markers(scene.pin_markers);
     if (scene.show_hole) {
         cups.push_back(scene.pin_position);
@@ -397,7 +392,7 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
     if (scene.show_hole) {
         if (!flag_out(scene.pin_position)) {
             append_pin_flagstick(batch, scene.pin_position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag,
-                                 pole_at(scene.pin_position));
+                                 scene.flagstick_radius_meters);
         }
     }
     if (scene.lying_flags != nullptr) {
@@ -411,10 +406,11 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
             append_collectible(batch, collectible, scene.ball_visual_radius_meters, marks, colors.glow.ball);
         }
     }
-    for (const glm::vec3& position : markers(scene.pin_markers)) {
-        if (!flag_out(position)) {
-            append_pin_flagstick(batch, position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag,
-                                 pole_at(position));
+    const std::vector<glm::vec3>& standing = markers(scene.pin_markers);
+    for (std::size_t i = 0; i < standing.size(); ++i) {
+        if (!flag_out(standing[i])) {
+            const float height = marker_height(scene.pin_marker_heights, i, scene.pin_visual_height_meters);
+            append_pin_flagstick(batch, standing[i], height, marks, colors.glow, scene.flag, scene.flagstick_radius_meters);
         }
     }
 

@@ -56,6 +56,16 @@ std::size_t push_shot_events(game_state& state, const shot_result& result, const
     return next_event;
 }
 
+std::vector<placed_loop> hub_ambience_loops(const game_state& state) {
+    std::vector<placed_loop> loops;
+    if (state.kind != place_kind::hub || !state.hub) { return loops; }
+    for (std::size_t i = 0; i < state.hub->ambience.size(); ++i) {
+        const hub_ambience& each = state.hub->ambience[i];
+        loops.push_back(placed_loop{"hub_ambience:" + std::to_string(i), each.sound, each.position});
+    }
+    return loops;
+}
+
 std::vector<running_motor> running_motors(const game_state& state) {
     std::vector<running_motor> motors;
     const cart_tuning& tuning = state.tuning.cart;

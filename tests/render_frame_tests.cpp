@@ -14,10 +14,12 @@
 #include "renderer/cart_batch.h"
 #include "renderer/held_props.h"
 #include "renderer/prop_batch.h"
+#include "renderer/primitive_mesh.h"
 #include "renderer/remote_avatar_batch.h"
 #include "renderer/fence_batch.h"
 #include "renderer/hole_sign_batch.h"
 #include "renderer/shadow_casters.h"
+#include "renderer/water_reflection.h"
 
 #include "test_support.h"
 
@@ -295,7 +297,7 @@ TEST_CASE("my figure casts the sun's shadow where I stand, at my ball while I ad
     CHECK(!frame_for(state).my_figure.has_value());
 }
 
-TEST_CASE("the flagstick casts the sun's shadow, its pole square to the sun and at least a shadow texel wide") {
+TEST_CASE("the flagstick casts its own fixed geometry into the sun shadow map") {
     game_state state = started_hole();
     render_data data = frame_for(state);
     REQUIRE(data.show_hole);
@@ -309,16 +311,21 @@ TEST_CASE("the flagstick casts the sun's shadow, its pole square to the sun and 
     prop_batch models;
     build_shadow_casters(casters, models, data, test_scene_colors(), test_props(), test_shadow_map(texel));
     REQUIRE(!casters.vertices().empty());
-    // The pole's quad, the first one: across the sun (along z), a texel wide.
-    float low = 1.0e9f;
-    float high = -1.0e9f;
-    for (std::size_t i = 0; i < 6 && i < casters.vertices().size(); ++i) {
-        const glm::vec3 offset = casters.vertices()[i].position - data.pin_position;
-        CHECK(std::abs(offset.x) < 0.001f);
-        low = std::min(low, offset.z);
-        high = std::max(high, offset.z);
+    world_marker_batch visible;
+    const flag_pose flag{data.weather.flag_wind,data.weather.flag_lift,data.weather.flag_phase,data.weather.flag_flap};
+    append_pin_flagstick(visible,data.pin_position,data.pin_visual_height_meters,test_scene_colors().markers,
+                         test_scene_colors().glow,flag,data.flagstick_radius_meters);
+    REQUIRE(casters.vertices().size()==visible.vertices().size());
+    for(std::size_t i=0;i<visible.vertices().size();++i) {
+        CHECK(near(casters.vertices()[i].position,visible.vertices()[i].position));
     }
-    CHECK(high - low >= texel - 0.001f);
+    const std::size_t pole_vertices=primitive_cylinder_segments*12;
+    for(std::size_t i=0;i<pole_vertices;++i) {
+        const auto offset=casters.vertices()[i].position-data.pin_position;
+        CHECK(glm::length(horizontal(offset))<=data.flagstick_radius_meters+0.0001f);
+        CHECK(offset.y>=-0.0001f);
+        CHECK(offset.y<=data.pin_visual_height_meters+0.0001f);
+    }
 
     // Taken out, it lies there and still casts; standing, nothing does.
     data.flags_out.push_back(data.pin_position);
@@ -1272,4 +1279,30 @@ TEST_CASE("my bag is drawn where it is: behind my cart's driver's seat, stood on
     CHECK(near(foot.y, terrain_height(state.area, foot), 0.05f));
     CHECK(head.y > foot.y + 0.7f);
     CHECK(glm::dot(head - foot, yaw_direction(down.yaw)) < 0.0f);
+}
+
+TEST_CASE("a water reflection contains my physical figure through the shared world path") {
+    auto state=started_hole();
+    step_up_to_ball(state);
+    auto scene=frame_for(state);
+    scene.smoking=render_item_use{"cigarette",1};
+    scene.drinking=render_item_use{"beer",2};
+    REQUIRE(scene.my_figure.has_value());
+    REQUIRE(scene.my_club.has_value());
+    const glm::vec3 eye(scene.camera_position.x,-scene.camera_position.y,scene.camera_position.z);
+    const auto reflected=make_reflected_scene(scene,eye);
+    CHECK(reflected.camera_position==eye);
+    REQUIRE(reflected.remote_avatars.size()==scene.remote_avatars.size()+1);
+    CHECK(reflected.remote_avatars.back().position==scene.my_figure->position);
+    CHECK(reflected.remote_avatars.back().yaw==scene.my_figure->yaw);
+    CHECK(reflected.remote_avatars.back().swing.has_value());
+    REQUIRE(reflected.remote_avatars.back().smoking.has_value());
+    REQUIRE(reflected.remote_avatars.back().drinking.has_value());
+    CHECK(reflected.remote_avatars.back().smoking->model==scene.smoking->model);
+    CHECK(reflected.remote_avatars.back().drinking->elapsed==scene.drinking->elapsed);
+    CHECK(!reflected.my_club.has_value());
+    CHECK(!reflected.address_feet.has_value());
+    CHECK(reflected.trees==scene.trees);
+    CHECK(reflected.terrain_mesh==scene.terrain_mesh);
+    CHECK(scene.my_club.has_value());
 }

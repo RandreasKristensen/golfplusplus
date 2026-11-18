@@ -3,7 +3,6 @@
 
 #include "game/course_session.h"
 #include "game/hub_flow.h"
-#include "game/hub_session.h"
 #include "game/golf_bag.h"
 #include "game/address_play.h"
 #include "game/bag_sync.h"
@@ -45,8 +44,7 @@ void adopt_ball_row(game_state& state) {
     const bool same_hole = server != nullptr && state.ball && server->hole == (state.ball->hole ? static_cast<int>(*state.ball->hole) : -1);
     if (same_hole && server->in_cup && ball_in_play(state)) {
         state.ball->strokes = server->stroke_count;
-        if (state.hub) { finish_practice_shot(state); }
-        else { complete_current_hole(state); }
+        complete_current_hole(state);
         return;
     }
     state.shot.reset();
@@ -55,7 +53,7 @@ void adopt_ball_row(game_state& state) {
     state.give_up_prompt.reset();
     state.mode = game_mode::walking;
     state.address = address_state{};
-    if (server && server->kind == ball_kind::practice && state.hub) {
+    if (server && server->kind == ball_kind::practice && !state.place.rules.scored) {
         state.ball = my_ball{std::nullopt, server->position, server->stroke_count,
             server->in_cup ? ball_place::in_cup : ball_place::at_rest, ball_kind::practice,
             server->tee_mat >= 0 ? std::optional<std::size_t>(static_cast<std::size_t>(server->tee_mat)) : std::nullopt};
@@ -135,7 +133,8 @@ void take_refusals(game_state& state) {
             adopt_server_cart(state);
         }
         const bool ball_refused = refusal.reducer == reducer_take_shot || refusal.reducer == reducer_tee_up ||
-            refusal.reducer == reducer_place_practice_ball || refusal.reducer == reducer_pick_up_ball || refusal.reducer == reducer_give_up_hole ||
+            refusal.reducer == reducer_place_practice_ball || refusal.reducer == reducer_pick_up_ball || refusal.reducer == reducer_play_ball ||
+            refusal.reducer == reducer_give_up_hole ||
             refusal.reducer == "start_booked_round";
         if (ball_refused) {
             state.hub_flow.ball_request.reset();
@@ -244,7 +243,13 @@ bool preparation_ready(const game_state& state) {
     if (!state.hub_flow.ball_request || !state.online.room_ready || state.online.ball_updates <= state.hub_flow.ball_updates) { return false; }
     const auto ball = my_server_ball(state);
     const auto me = my_room_player(state);
-    if (*state.hub_flow.ball_request == net_command_type::pick_up_ball) { return ball == nullptr; }
+    const std::uint64_t target = state.hub_flow.ball_target;
+    if (*state.hub_flow.ball_request == net_command_type::pick_up_ball) {
+        return target == 0 ? ball == nullptr : state.online.spare_balls.count(target) == 0;
+    }
+    if (*state.hub_flow.ball_request == net_command_type::play_ball) {
+        return ball && ball->kind == ball_kind::practice && state.online.spare_balls.count(target) == 0;
+    }
     if (ball && *state.hub_flow.ball_request == net_command_type::place_practice_ball) {
         return ball->kind == ball_kind::practice && ball->tee_mat < 0 && ball->stroke_count == 0 && !ball->in_cup;
     }
@@ -301,14 +306,16 @@ void update_online_play(game_state& state, const float dt) {
         state.notice = game_notice{text_online_error_booking_expired, 0};
     }
     if (preparation_ready(state)) {
-        const bool practice_action = state.hub_flow.ball_request == net_command_type::place_practice_ball ||
-            state.hub_flow.ball_request == net_command_type::pick_up_ball;
+        const net_command_type request = *state.hub_flow.ball_request;
+        // Dropping, lifting and playing a spare leave me where I stand.
+        const bool practice_action = request == net_command_type::place_practice_ball ||
+            request == net_command_type::pick_up_ball || request == net_command_type::play_ball;
         state.hub_flow.ball_request.reset();
         adopt_ball_row(state);
         if (!practice_action) { return_to_server(state); reset_motion_sync(state); }
         // The warmup station supplies its putter in the same server transaction.
         if (course_warmup(state)) { select_putter(state); }
-        if (!practice_action && ball_in_play(state)) { step_up_to_ball(state); }
+        if ((!practice_action || request == net_command_type::play_ball) && ball_in_play(state)) { step_up_to_ball(state); }
     }
     reconcile_bag_row(state, dt);
     // The room plays on while the server prepares my ball.

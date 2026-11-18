@@ -167,16 +167,26 @@ transient choice that is never saved; online lists UTC tee times. Book, outbound
 bus and return bus go through mode_dispatch in both modes.
 
 - Tee times are a function of the clock and tuning (`game/tee_times.h`): every
-  `server.tee_interval_minutes` for `server.tee_book_days`. A `tee_slot` row exists
-  only for a booked time: made on its first booking, deleted when nobody holds it.
-  The book lists every time itself, with counts from `my_tee_slots`.
+  `server.tee_interval_minutes` up to the end of the hub's in-game day
+  `server.tee_book_days_ahead` days after today (1: tomorrow; `within_tee_book`,
+  one function for the client's list and the server's `check_booking`), so the
+  book is 1 to 2 game days (4 to 8 real hours) long and never passes tomorrow.
+  A `tee_slot` row exists only for a booked time: made on its first booking,
+  deleted when nobody holds it. The book lists every time itself, under TODAY
+  and TOMORROW headings, with counts from `my_tee_slots`.
 - Owner decision: every time a player sees (book, booking, start hint, expiry)
   is the hub's in-game clock (`tee_time_text`, the camcorder datestamp's format),
-  never a real time or date, even on a course with its own clock.
+  never a real time or date, even on a course with its own clock. A time on the
+  next in-game day reads `TOMORROW <time>` (never "+1D"); today's is the time alone.
 - A booked time's group id is its slot id (`group_of_slot`).
   `server.group_capacity = 5` is the owner's departure from real golf's four.
-- `tee_reservation` is Private, one per account, independent of presence.
-  Booking validates a replacement before changing anything. Commands carry the
+- `tee_reservation` is Private, one per account, independent of presence, and
+  carries `takes_cart`: cart or carry is chosen in the tee book with the time and
+  stored with the booking (a cart only where the course has them), and `take_bus`
+  starts the round with it. Booking the same time again with the other choice
+  updates the row in place (same slot and group, a new revision). The bus and
+  `join_course` take no cart flag. Booking validates a replacement before changing
+  anything. Commands carry the
   originating room and the expected reservation id (zero for none).
 - Book/list/change/cancel need the server's accepted on-foot position at
   `world.hub.book`; `take_bus` needs reach of the parked bus (`play_area::bus`,
@@ -187,7 +197,12 @@ bus and return bus go through mode_dispatch in both modes.
   completed holes' scores are already progress.
   No fees or late penalties.
 - Clients subscribe only to the scoped views (`my_tee_book_status`,
-  `my_tee_slots`, `my_tee_reservation`), never whole booking tables.
+  `my_tee_slots`, `my_tee_reservation`), never whole booking tables, and to the
+  hub's `departure_board`: the next `server.departure_board_rows` booked times whose
+  bus has not left (`tee_slot.departed`, set at the tee time), each with its course
+  and the names in it, from the server's rows (`tee_rules.h` `next_departures`). The
+  departure board's rows and the PA's cues read it and my reservation, never the
+  real clock: times are `tee_time_text`.
 - Bus travel freezes input, clears predictions and presentation, and adopts a
   complete destination snapshot. Reconnect crosses the same boundary to the hub.
 - The bus arrives without a scored ball. Course warmup balls are putted,
@@ -203,6 +218,17 @@ bus and return bus go through mode_dispatch in both modes.
   booking. Completion releases the seat once and keeps the card until
   the bus back to the hub. Leaving a started group detaches only group identity; leaving
   before starting cancels the reservation and leaves any ball as warmup.
+
+**My balls.** `ball` is the ball in play; `practice_ball` (id, account, room,
+x, y, z, in_cup, placed_at; indexed by account and room) holds a golfer's spares,
+`rules.balls_out` in all. Drop (`place_practice_ball`), tee at a bay (`tee_up`),
+swap (`play_ball(spare_id)`) and lift (`pick_up_ball(ball_id)`, 0 the ball in
+play) each change the rows in one transaction, so no reader sees two balls in
+play; the oldest spares past the cap go inside it (`game/my_balls_rules.cpp`,
+also the offline rules). The client predicts none of it: each waits for the
+complete rows (changes to my ball row or my spares count as `ball_updates`) and a
+refusal re-adopts the ball row. Spares are in the room subscription, joined to
+the shot snapshot, and deleted when a golfer leaves the room (the bus).
 
 **Uncapped-world limits.** Indexed 3x3-cell hot-motion interest still retains
 self, group and occupied seats. Native spread/crowded tests extend to 200;

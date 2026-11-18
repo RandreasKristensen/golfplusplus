@@ -8,10 +8,11 @@
 // and treelines) goes over it, fading into the course's haze colour with
 // distance as drawn into its alpha (see tooling/art/make_art.py). Sky, land and haze are separate so
 // each follows the time of day from the frame_lighting block (lighting.glsl)
-// without redrawing the pictures.
+// without redrawing the pictures. Water reflects this same scene path.
 
 #include "game/course_definition.h"
 #include "game/lighting_loader.h"
+#include "renderer/framebuffer.h"
 #include "renderer/render_data.h"
 #include "renderer/scene_haze.h"
 #include "renderer/shader.h"
@@ -37,14 +38,19 @@ public:
     // Draws the prepared backdrop in this frame's light (the frame_lighting
     // block must hold the prepared haze) wherever the depth buffer is still
     // clear; `seconds` runs the stars' twinkle. Leaves depth testing on.
-    void draw(const glm::mat4& view, const glm::mat4& proj, float seconds, const render_lightning& lightning);
-    void set_profile(frame_profile* profile) { shader_.set_profile(profile); }
+    void draw(const glm::mat4& view, const glm::mat4& proj, float seconds, const render_lightning& lightning, bool reflection = false);
+    void set_profile(frame_profile* profile) {
+        shader_.set_profile(profile);
+        reflection_shader_.set_profile(profile);
+    }
 
 private:
     void load(const course_backdrop& backdrop);
+    void set_frame_uniforms(const shader_program& shader, float seconds, const render_lightning& lightning) const;
 
     std::string asset_root_;
     shader_program shader_;
+    shader_program reflection_shader_;
     texture sky_;
     texture land_;
     // What sky_ and land_ were loaded from (or failed to).

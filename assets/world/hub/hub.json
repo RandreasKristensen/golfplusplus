@@ -2,6 +2,13 @@
   "id": "practice_ground",
   "name": "Practice Ground",
   "carts": false,
+  "rules": {
+    "scored": false,
+    "drops": true,
+    "shot_xp": false,
+    "stations": true,
+    "balls_out": 10
+  },
   "backdrop": {
     "sky": "sky.bmp",
     "land": "land.bmp",
@@ -24,322 +31,2167 @@
     "daily_temperature_range_c": 8.5
   },
   "world": "world.json",
-  "arrival": [
-    45.0,
-    0.0,
-    39.0
-  ],
+  "arrival": {
+    "position": [
+      35.0,
+      0.0,
+      63.0
+    ],
+    "heading": 3.1416
+  },
   "hub": {
     "book": {
       "position": [
-        45.0,
+        40.0,
         0.0,
-        35.0
+        57.0
       ],
       "reach": 2.0
-    }
+    },
+    "pads": [
+      {
+        "name": "plaza",
+        "position": [
+          20.0,
+          0.0,
+          53.0
+        ],
+        "reach": 9.0
+      },
+      {
+        "name": "clubhouse",
+        "position": [
+          -3.0,
+          0.0,
+          53.0
+        ],
+        "reach": 8.0
+      },
+      {
+        "name": "clubhouse_pro_shop",
+        "position": [
+          -6.0,
+          0.0,
+          56.5
+        ],
+        "reach": 3.0
+      },
+      {
+        "name": "clubhouse_bar",
+        "position": [
+          0.0,
+          0.0,
+          49.5
+        ],
+        "reach": 3.0
+      },
+      {
+        "name": "clubhouse_simulator",
+        "position": [
+          -8.0,
+          0.0,
+          49.5
+        ],
+        "reach": 3.0
+      },
+      {
+        "name": "clubhouse_notice_board",
+        "position": [
+          12.0,
+          0.0,
+          58.0
+        ],
+        "reach": 2.0
+      },
+      {
+        "name": "clock_clubhouse",
+        "position": [
+          3.0,
+          0.0,
+          53.0
+        ],
+        "reach": 1.0
+      },
+      {
+        "name": "starter_hut",
+        "position": [
+          40.0,
+          0.0,
+          60.55
+        ],
+        "reach": 3.0
+      },
+      {
+        "name": "clock_starter_hut",
+        "position": [
+          40.0,
+          0.0,
+          59.05
+        ],
+        "reach": 1.0
+      },
+      {
+        "name": "departure_board",
+        "position": [
+          37.2,
+          0.0,
+          66.5
+        ],
+        "reach": 2.2
+      },
+      {
+        "name": "car_park",
+        "position": [
+          84.0,
+          0.0,
+          66.0
+        ],
+        "reach": 11.0
+      },
+      {
+        "name": "caddie_shack",
+        "position": [
+          56.0,
+          0.0,
+          28.0
+        ],
+        "reach": 4.0
+      },
+      {
+        "name": "cart_barn",
+        "position": [
+          69.0,
+          0.0,
+          27.0
+        ],
+        "reach": 5.0
+      }
+    ],
+    "props": [
+      {
+        "model": "hub_starter_hut",
+        "position": [
+          40.0,
+          0.0,
+          60.55
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_clock",
+        "position": [
+          40.0,
+          0.0,
+          59.05
+        ],
+        "heading": 3.1416,
+        "height": 2.35
+      },
+      {
+        "model": "hub_pa_pole",
+        "position": [
+          42.9,
+          0.0,
+          59.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bin",
+        "position": [
+          37.2,
+          0.0,
+          59.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bench",
+        "position": [
+          44.4,
+          0.02,
+          59.6
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_departure_board",
+        "position": [
+          37.2,
+          0.0,
+          66.5
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_departure_row",
+        "position": [
+          37.2,
+          0.0,
+          66.44
+        ],
+        "heading": 3.1416,
+        "height": 1.95
+      },
+      {
+        "model": "hub_departure_row",
+        "position": [
+          37.2,
+          0.0,
+          66.44
+        ],
+        "heading": 3.1416,
+        "height": 1.5
+      },
+      {
+        "model": "hub_departure_row",
+        "position": [
+          37.2,
+          0.0,
+          66.44
+        ],
+        "heading": 3.1416,
+        "height": 1.05
+      },
+      {
+        "model": "hub_departure_row",
+        "position": [
+          37.2,
+          0.0,
+          66.44
+        ],
+        "heading": 3.1416,
+        "height": 0.6
+      },
+      {
+        "model": "hub_clubhouse",
+        "position": [
+          -3.0,
+          0.0,
+          53.0
+        ],
+        "heading": 1.5708,
+        "height": 0.0
+      },
+      {
+        "model": "hub_clock",
+        "position": [
+          3.0,
+          0.0,
+          53.0
+        ],
+        "heading": 1.5708,
+        "height": 4.55
+      },
+      {
+        "model": "hub_terrace_table",
+        "position": [
+          5.2,
+          0.0,
+          50.8
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_terrace_table",
+        "position": [
+          5.2,
+          0.0,
+          55.2
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_terrace_table",
+        "position": [
+          7.6,
+          0.0,
+          53.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_flagpole",
+        "position": [
+          9.4,
+          0.0,
+          58.6
+        ],
+        "heading": 1.5708,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          -35.0,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          -31.5,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          -28.0,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          -24.5,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          -21.0,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          -17.5,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          -14.0,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          -10.5,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          -7.0,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          -3.5,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          0.0,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          3.5,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          7.0,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          10.5,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          14.0,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          17.5,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          21.0,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          24.5,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          28.0,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          31.5,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          35.0,
+          0.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          83.75,
+          20.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          87.25,
+          20.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          90.75,
+          20.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_range_divider",
+        "position": [
+          94.25,
+          20.0,
+          0.6
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          -34.25,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          -30.75,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          -27.25,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          -23.75,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          -20.25,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          -16.75,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          -13.25,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          -9.75,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          -6.25,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          -2.75,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          0.75,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          4.25,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          7.75,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          11.25,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          14.75,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          18.25,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          21.75,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          25.25,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          28.75,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          32.25,
+          0.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          84.5,
+          20.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          88.0,
+          20.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_bucket",
+        "position": [
+          91.5,
+          20.0,
+          1.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bag_stand",
+        "position": [
+          -35,
+          0.0,
+          3.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bag_stand",
+        "position": [
+          -28,
+          0.0,
+          3.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bag_stand",
+        "position": [
+          -21,
+          0.0,
+          3.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bag_stand",
+        "position": [
+          -14,
+          0.0,
+          3.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bag_stand",
+        "position": [
+          -7,
+          0.03,
+          3.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bag_stand",
+        "position": [
+          0,
+          0.03,
+          3.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bag_stand",
+        "position": [
+          7,
+          0.03,
+          3.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bag_stand",
+        "position": [
+          14,
+          0.03,
+          3.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bag_stand",
+        "position": [
+          21,
+          0.03,
+          3.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bag_stand",
+        "position": [
+          28,
+          0.03,
+          3.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bag_stand",
+        "position": [
+          35,
+          0.04,
+          3.4
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bench",
+        "position": [
+          -24.5,
+          0.0,
+          4.9
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bench",
+        "position": [
+          -8.75,
+          0.08,
+          4.9
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bench",
+        "position": [
+          8.75,
+          0.12,
+          4.9
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bench",
+        "position": [
+          24.5,
+          0.12,
+          4.9
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_bench",
+        "position": [
+          89.0,
+          20.0,
+          4.9
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_dispenser",
+        "position": [
+          -37.2,
+          0.0,
+          0.8
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_dispenser",
+        "position": [
+          37.2,
+          0.15,
+          0.8
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_ball_dispenser",
+        "position": [
+          96.2,
+          20.0,
+          0.8
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          -40.0,
+          -0.4,
+          -50.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          -5.0,
+          -0.2,
+          -75.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          -58.0,
+          -0.42,
+          -100.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          39.0,
+          -0.06,
+          -125.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          -30.0,
+          -0.19,
+          -150.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          -63.0,
+          0.1,
+          -185.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          -2.0,
+          -0.09,
+          -215.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          -43.0,
+          0.31,
+          -250.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          74.0,
+          0.2,
+          -95.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          100.0,
+          -0.05,
+          -145.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          76.0,
+          -0.39,
+          -200.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_distance_board",
+        "position": [
+          107.0,
+          -0.43,
+          -248.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_car_red",
+        "position": [
+          79.0,
+          0.0,
+          61.7
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_car_blue",
+        "position": [
+          82.2,
+          0.0,
+          61.7
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_car_cream",
+        "position": [
+          88.6,
+          0.0,
+          61.7
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_car_silver",
+        "position": [
+          91.6,
+          0.0,
+          61.7
+        ],
+        "heading": 3.1416,
+        "height": 0.0
+      },
+      {
+        "model": "hub_car_cream",
+        "position": [
+          80.4,
+          0.0,
+          68.4
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_car_red",
+        "position": [
+          89.6,
+          0.0,
+          68.4
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          29.0,
+          0.0,
+          60.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          37.5,
+          0.02,
+          53.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          37.5,
+          0.17,
+          31.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          37.5,
+          0.37,
+          14.5
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          29.5,
+          0.02,
+          42.5
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          27.5,
+          0.58,
+          9.5
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          10.0,
+          0.09,
+          4.5
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          -10.0,
+          0.27,
+          9.5
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          -27.5,
+          0.0,
+          9.5
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          53.75,
+          7.92,
+          9.5
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          66.38,
+          14.93,
+          9.5
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          79.12,
+          19.98,
+          9.5
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          41.0,
+          0.0,
+          66.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          17.5,
+          0.0,
+          53.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          52.5,
+          0.0,
+          64.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          67.5,
+          0.0,
+          64.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          88.0,
+          0.0,
+          74.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          84.5,
+          0.0,
+          41.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      },
+      {
+        "model": "hub_path_lamp",
+        "position": [
+          68.0,
+          0.01,
+          34.0
+        ],
+        "heading": 0.0,
+        "height": 0.0
+      }
+    ]
   },
   "tee_mats": [
     {
       "position": [
+        -33.25,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -33.25,
+        -0.18,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        -29.75,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -29.75,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        -26.25,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -26.25,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        -22.75,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -22.75,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        -19.25,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -19.25,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        -15.75,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -15.75,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        -12.25,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -12.25,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        -8.75,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -8.75,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        -5.25,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -5.25,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        -1.75,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        -1.75,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        1.75,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        1.75,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        5.25,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        5.25,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        8.75,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        8.75,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        12.25,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        12.25,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        15.75,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        15.75,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        19.25,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        19.25,
+        -0.19,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        22.75,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        22.75,
+        -0.18,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        26.25,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        26.25,
+        -0.18,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        29.75,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        29.75,
+        -0.18,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        33.25,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        33.25,
+        -0.18,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        85.5,
+        20.0,
+        0.0
+      ],
+      "aim": [
+        74.0,
+        -0.12,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        89.0,
+        20.0,
+        0.0
+      ],
+      "aim": [
+        74.0,
+        -0.12,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        92.5,
+        20.0,
+        0.0
+      ],
+      "aim": [
+        74.0,
+        -0.12,
+        -150.0
+      ],
+      "reach": 3.0,
+      "tee_box": true
+    },
+    {
+      "position": [
+        10.0,
+        0.49,
+        33.8
+      ],
+      "aim": [
+        9.0,
+        0.8,
+        21.5
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    },
+    {
+      "position": [
+        10.0,
+        0.2,
+        37.5
+      ],
+      "aim": [
+        9.0,
+        0.8,
+        21.5
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    },
+    {
+      "position": [
+        -10.0,
+        0.4,
+        22.0
+      ],
+      "aim": [
+        9.0,
+        0.8,
+        21.5
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    },
+    {
+      "position": [
+        31.0,
+        1.08,
+        22.0
+      ],
+      "aim": [
+        9.0,
+        0.8,
+        21.5
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    },
+    {
+      "position": [
+        -2.0,
+        -0.23,
+        34.5
+      ],
+      "aim": [
+        9.0,
+        0.8,
+        21.5
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    },
+    {
+      "position": [
+        22.0,
+        0.88,
+        33.5
+      ],
+      "aim": [
+        9.0,
+        0.8,
+        21.5
+      ],
+      "reach": 1.5,
+      "tee_box": false
+    }
+  ],
+  "tee_strips": [
+    {
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "aim": [
+        0.0,
+        -0.19,
+        -150.0
+      ],
+      "half_width": 39.0,
+      "half_length": 3.2
+    },
+    {
+      "position": [
+        89.0,
+        20.0,
+        0.0
+      ],
+      "aim": [
+        89.0,
+        -0.07,
+        -150.0
+      ],
+      "half_width": 6.0,
+      "half_length": 3.2
+    }
+  ],
+  "floodlights": [
+    {
+      "foot": [
         -30.0,
         0.0,
-        0.0
+        10.0
       ],
       "aim": [
-        -14.0,
-        0.0,
-        -50.0
-      ],
-      "reach": 3.0,
-      "tee_box": true
+        -30.0,
+        -0.07,
+        -20.0
+      ]
     },
     {
-      "position": [
-        -18.0,
-        0.0,
-        0.0
+      "foot": [
+        -15.0,
+        0.01,
+        10.0
       ],
       "aim": [
-        12.0,
-        0.0,
-        -80.0
-      ],
-      "reach": 3.0,
-      "tee_box": true
+        -15.0,
+        -0.04,
+        -20.0
+      ]
     },
     {
-      "position": [
-        -6.0,
+      "foot": [
         0.0,
-        0.0
+        0.59,
+        10.0
       ],
       "aim": [
-        -6.0,
         0.0,
-        -110.0
-      ],
-      "reach": 3.0,
-      "tee_box": true
+        -0.01,
+        -20.0
+      ]
     },
     {
-      "position": [
-        6.0,
-        0.0,
-        0.0
+      "foot": [
+        15.0,
+        0.59,
+        10.0
       ],
       "aim": [
-        16.0,
-        0.0,
-        -140.0
-      ],
-      "reach": 3.0,
-      "tee_box": true
+        15.0,
+        0.02,
+        -20.0
+      ]
     },
     {
-      "position": [
-        18.0,
-        0.0,
-        0.0
-      ],
-      "aim": [
-        -12.0,
-        0.0,
-        -175.0
-      ],
-      "reach": 3.0,
-      "tee_box": true
-    },
-    {
-      "position": [
+      "foot": [
         30.0,
-        0.0,
-        0.0
+        0.76,
+        10.0
       ],
       "aim": [
-        4.0,
-        0.0,
-        -210.0
-      ],
-      "reach": 3.0,
-      "tee_box": true
+        30.0,
+        0.05,
+        -20.0
+      ]
     },
     {
-      "position": [
-        198.0,
+      "foot": [
+        89.0,
         20.0,
-        -50.0
+        10.0
       ],
       "aim": [
-        210.0,
-        3.12,
-        -130.0
-      ],
-      "reach": 3.0,
-      "tee_box": true
-    },
-    {
-      "position": [
-        210.0,
-        20.0,
-        -50.0
-      ],
-      "aim": [
-        195.0,
-        1.2,
-        -210.0
-      ],
-      "reach": 3.0,
-      "tee_box": true
-    },
-    {
-      "position": [
-        222.0,
-        20.0,
-        -50.0
-      ],
-      "aim": [
-        230.0,
-        3.0,
-        -285.0
-      ],
-      "reach": 3.0,
-      "tee_box": true
-    },
-    {
-      "position": [
-        81.0,
-        0.0,
-        39.0
-      ],
-      "aim": [
-        86.0,
-        0.0,
-        43.0
-      ],
-      "reach": 1.5,
-      "tee_box": false
-    },
-    {
-      "position": [
-        60.0,
-        0.0,
-        42.0
-      ],
-      "aim": [
-        86.0,
-        0.0,
-        43.0
-      ],
-      "reach": 1.5,
-      "tee_box": false
-    },
-    {
-      "position": [
-        146.0,
-        0.0,
-        49.0
-      ],
-      "aim": [
-        151.0,
-        0.1,
-        53.0
-      ],
-      "reach": 1.5,
-      "tee_box": false
-    },
-    {
-      "position": [
-        125.0,
-        7.92,
-        52.0
-      ],
-      "aim": [
-        151.0,
-        0.1,
-        53.0
-      ],
-      "reach": 1.5,
-      "tee_box": false
-    },
-    {
-      "position": [
-        131.0,
-        -0.41,
-        109.0
-      ],
-      "aim": [
-        136.0,
-        -0.17,
-        113.0
-      ],
-      "reach": 1.5,
-      "tee_box": false
-    },
-    {
-      "position": [
-        110.0,
-        0.38,
-        112.0
-      ],
-      "aim": [
-        136.0,
-        -0.17,
-        113.0
-      ],
-      "reach": 1.5,
-      "tee_box": false
+        89.0,
+        17.1,
+        -20.0
+      ]
     }
   ],
   "targets": [
     {
       "position": [
-        -14.0,
-        0.0,
+        -30.0,
+        -0.34,
         -50.0
       ],
-      "radius": 7.0
+      "radius": 7.0,
+      "board": [
+        -40.0,
+        -0.4,
+        -50.0
+      ],
+      "distance_meters": 50
     },
     {
       "position": [
-        12.0,
-        0.0,
-        -80.0
+        6.0,
+        -0.11,
+        -75.0
       ],
-      "radius": 8.0
+      "radius": 8.0,
+      "board": [
+        -5.0,
+        -0.2,
+        -75.0
+      ],
+      "distance_meters": 75
     },
     {
       "position": [
-        -6.0,
-        0.0,
-        -110.0
+        -46.0,
+        -0.4,
+        -100.0
       ],
-      "radius": 9.0
+      "radius": 9.0,
+      "board": [
+        -58.0,
+        -0.42,
+        -100.0
+      ],
+      "distance_meters": 101
     },
     {
       "position": [
-        16.0,
-        0.0,
-        -140.0
+        26.0,
+        -0.11,
+        -125.0
       ],
-      "radius": 10.0
+      "radius": 10.0,
+      "board": [
+        39.0,
+        -0.06,
+        -125.0
+      ],
+      "distance_meters": 125
     },
     {
       "position": [
-        -12.0,
-        0.0,
-        -175.0
+        -16.0,
+        -0.19,
+        -150.0
       ],
-      "radius": 11.0
+      "radius": 11.0,
+      "board": [
+        -30.0,
+        -0.19,
+        -150.0
+      ],
+      "distance_meters": 150
     },
     {
       "position": [
-        4.0,
-        0.0,
-        -210.0
+        -48.0,
+        0.05,
+        -185.0
       ],
-      "radius": 12.0
+      "radius": 12.0,
+      "board": [
+        -63.0,
+        0.1,
+        -185.0
+      ],
+      "distance_meters": 186
     },
     {
       "position": [
-        210.0,
-        3.12,
-        -130.0
+        14.0,
+        -0.2,
+        -215.0
       ],
-      "radius": 9.0
+      "radius": 13.0,
+      "board": [
+        -2.0,
+        -0.09,
+        -215.0
+      ],
+      "distance_meters": 215
     },
     {
       "position": [
-        195.0,
-        1.2,
-        -210.0
+        -26.0,
+        0.19,
+        -250.0
       ],
-      "radius": 12.0
+      "radius": 14.0,
+      "board": [
+        -43.0,
+        0.31,
+        -250.0
+      ],
+      "distance_meters": 250
     },
     {
       "position": [
-        230.0,
-        3.0,
-        -285.0
+        62.0,
+        0.17,
+        -95.0
       ],
-      "radius": 14.0
+      "radius": 9.0,
+      "board": [
+        74.0,
+        0.2,
+        -95.0
+      ],
+      "distance_meters": 98
+    },
+    {
+      "position": [
+        86.0,
+        -0.07,
+        -145.0
+      ],
+      "radius": 11.0,
+      "board": [
+        100.0,
+        -0.05,
+        -145.0
+      ],
+      "distance_meters": 145
+    },
+    {
+      "position": [
+        60.0,
+        -0.39,
+        -200.0
+      ],
+      "radius": 13.0,
+      "board": [
+        76.0,
+        -0.39,
+        -200.0
+      ],
+      "distance_meters": 202
+    },
+    {
+      "position": [
+        90.0,
+        -0.47,
+        -248.0
+      ],
+      "radius": 14.0,
+      "board": [
+        107.0,
+        -0.43,
+        -248.0
+      ],
+      "distance_meters": 248
     }
   ],
   "practice_cups": [
     [
-      86.0,
+      45.0,
+      -0.19,
+      42.5
+    ],
+    [
+      60.0,
+      -0.12,
+      42.5
+    ],
+    [
+      75.0,
+      0.4,
+      42.5
+    ],
+    [
+      45.0,
       0.0,
-      43.0
+      48.0
     ],
     [
-      151.0,
-      0.1,
-      53.0
+      60.0,
+      0.0,
+      48.0
     ],
     [
-      136.0,
-      -0.17,
-      113.0
+      75.0,
+      0.4,
+      48.0
+    ],
+    [
+      45.0,
+      0.19,
+      53.5
+    ],
+    [
+      60.0,
+      0.12,
+      53.5
+    ],
+    [
+      75.0,
+      0.4,
+      53.5
+    ],
+    [
+      9.0,
+      0.8,
+      21.5
     ]
+  ],
+  "ambience": [
+    {
+      "sound": "birds_loop",
+      "position": [
+        -98.0,
+        5.84,
+        31.0
+      ]
+    },
+    {
+      "sound": "birds_loop",
+      "position": [
+        -98.0,
+        5.56,
+        -39.0
+      ]
+    },
+    {
+      "sound": "birds_loop",
+      "position": [
+        -98.0,
+        5.69,
+        -109.0
+      ]
+    },
+    {
+      "sound": "birds_loop",
+      "position": [
+        -98.0,
+        6.13,
+        -179.0
+      ]
+    },
+    {
+      "sound": "birds_loop",
+      "position": [
+        -98.0,
+        6.43,
+        -249.0
+      ]
+    },
+    {
+      "sound": "birds_loop",
+      "position": [
+        -98.0,
+        6.31,
+        -319.0
+      ]
+    },
+    {
+      "sound": "birds_loop",
+      "position": [
+        -69.0,
+        6.25,
+        -338.0
+      ]
+    },
+    {
+      "sound": "birds_loop",
+      "position": [
+        1.0,
+        6.16,
+        -338.0
+      ]
+    },
+    {
+      "sound": "birds_loop",
+      "position": [
+        71.0,
+        5.96,
+        -338.0
+      ]
+    },
+    {
+      "sound": "birds_loop",
+      "position": [
+        141.0,
+        5.93,
+        -338.0
+      ]
+    },
+    {
+      "sound": "terrace_chatter_loop",
+      "position": [
+        6.0,
+        1.3,
+        53.0
+      ]
+    }
   ]
 }

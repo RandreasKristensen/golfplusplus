@@ -46,9 +46,39 @@ A test of something placed, posed or animated in the picture says what a
 player would see: project through the camera and check what is in view, which
 way it faces and where it sits on screen. A wrong sign must fail a test.
 
+What only a GPU can show is checked by drawing it with the game's own
+renderer: after changing the grass, the ground's materials, the trees, the water or the
+backdrop, run `cmake --build build/test --target golfpp-picture-check` and
+`./build/test/golfpp-picture-check` (all courses, a few minutes; name course ids
+to narrow it, `--grass` or `--water` for one check). It must end `all passed`;
+its pictures are in `build/test/picture_check/<course>` (`tooling/picture_check/README.md`).
+
 An import must verify with 0 errors before holes are touched up: fix the
 importer, not its output. Where OSM lacks information, `osm_audit.py` says what
 the owner should map; overrides in `osm_golf_config.json` are a stop-gap.
+
+`WATER_SHORE_RELIEF` warns when a pond's sampled shoreline elevation varies
+by more than `checks.water_shore_relief_warn_m` (default 2 m): lowering land to
+the lowest shore can carve a crater. Review its outline and elevation before
+changing content. A confirmed real feature can be recorded in that course's
+`checks.reviewed_water_shores` as `{ "review id": "reason and evidence" }`;
+the printed review id binds to the shoreline samples and heights, so changed
+geometry or elevation requires review again. Accepted findings remain notes.
+These are heuristic warnings, not a simulation of the final ground mesh;
+connected ponds and smoothing can cause additional cuts. Run regression checks
+with `py -3 -m unittest test_osm_water_checks` in `tooling/osm_import/`.
+
+The ground importer detects enclosed, repeated-height DEM pits: at least twelve
+equal samples, with a rim whose tenth percentile is over 4 m higher and median
+over 6 m higher. It interpolates these only at course-specific
+`ground.reviewed_dropouts` locations (`position` in course XZ, `reach_m` from the
+detected centre, and a required `reason`). Other detected pits fail verification
+as `TERRAIN_DROPOUT`; real quarries and steep basins must not be repaired merely
+for looking unusual. The reviewed inland pond errors affect both Hedensted and
+both Himmerland layouts. `--ground-only` retains the existing grid footprint.
+Outline generation uncrosses folded edges while retaining their vertices;
+verification rejects remaining crossings as `ZONE_CROSSING`. Terrain and outline
+regressions: `py -3 -m unittest test_osm_terrain_quality` in `tooling/osm_import/`.
 
 The server module (from PowerShell, after `. <emsdk>\emsdk_env.ps1`):
 
@@ -105,12 +135,12 @@ Hub flow regression coverage lives in `tests/hub_flow_tests.cpp` (physical
 approach/model projection, book controls and pending acknowledgements, warmup and
 first-ball adoption, leave-menu preservation and aspect-ratio layout). Travel and
 reconnect snapshot boundaries also run through `online_session_tests` and the fake
-bridge. Regenerate the code-drawn hub models with
+bridge (`tests/hub_built_tests.cpp`: the built plaza and range, the departure board's text, the boarding cues and the bus's open door). Regenerate the code-drawn hub models with
 `py -3 tooling/practice_ground/make_hub_props.py` (`--check` verifies the shipped
 JSON; `MODEL --stage NAME` writes one build stage), then photograph them:
 `cmake --build build/test --target golfpp-preview-prop` and
 `py -3 tooling/art/preview_prop/preview_prop.py hub_bus --out build/prop_preview/bus`
-(`views.png` holds the four inspection views; `rear.png`, `board.png` extra). Open
+(`views.png` holds the four inspection views; `rear.png`, `board.png` extra; the bus's doors: set `GOLFPP_PREVIEW_DOORS=0..1` for how far through their swing). Open
 every view after each change. These models' bounds are compiled into server
 content, so rebuild the module after changing them, and copy them to the frozen
 golden props in `tests/fixtures/golden_shots/world/props/`.

@@ -2,6 +2,7 @@
 
 #include "game/weather.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -57,6 +58,7 @@ struct startup_options {
     bool online_anonymous = false;
     int window_width = 0;  // 0: the default size
     int window_height = 0;
+    std::optional<std::array<float, 4>> screenshot_view; // x, z, yaw, pitch; screenshot runs only
     std::string screenshot_path;  // empty: no screenshot
     std::optional<float> game_hour;  // none: the sky's clock runs
     // With game_hour: days since 1970-01-01 of the game date; none: the

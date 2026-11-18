@@ -9,9 +9,11 @@
 #include "game/net_types.h"
 #include "net/bridge_rows.h"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <initializer_list>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -23,7 +25,7 @@ stdb_string view(const std::string& text) {
 // The reducers net_commands call: the game answers their refusals.
 bool gameplay_reducer(const std::string& reducer) {
     for (const char* name : {reducer_update_motion, reducer_take_shot, reducer_tee_up, reducer_claim_collectible,
-                             reducer_dap, reducer_use_item, reducer_place_practice_ball, reducer_pick_up_ball, reducer_give_up_hole, "start_booked_round",
+                             reducer_dap, reducer_use_item, reducer_place_practice_ball, reducer_pick_up_ball, reducer_play_ball, reducer_give_up_hole, "start_booked_round",
                              reducer_leave_group, reducer_take_wheel, reducer_leave_wheel, reducer_board_cart,
                              reducer_leave_cart, reducer_right_cart, reducer_set_flag,
                              reducer_place_bag, reducer_take_club, reducer_set_golfer}) {
@@ -103,6 +105,10 @@ std::vector<std::size_t> stdb_header_layout() {
                                  offsetof(stdb_ball, x), offsetof(stdb_ball, y), offsetof(stdb_ball, z),
                                  offsetof(stdb_ball, stroke_count), offsetof(stdb_ball, last_shot_at),
                                  offsetof(stdb_ball, in_cup), offsetof(stdb_ball, kind), offsetof(stdb_ball, tee_mat)});
+    describe(sizeof(stdb_practice_ball), {offsetof(stdb_practice_ball, id), offsetof(stdb_practice_ball, account_id),
+                                          offsetof(stdb_practice_ball, room_id), offsetof(stdb_practice_ball, x),
+                                          offsetof(stdb_practice_ball, y), offsetof(stdb_practice_ball, z),
+                                          offsetof(stdb_practice_ball, in_cup), offsetof(stdb_practice_ball, placed_at)});
     describe(sizeof(stdb_golf_cart),
              {offsetof(stdb_golf_cart, owner), offsetof(stdb_golf_cart, room_id), offsetof(stdb_golf_cart, x),
               offsetof(stdb_golf_cart, y), offsetof(stdb_golf_cart, z), offsetof(stdb_golf_cart, yaw),
@@ -161,7 +167,8 @@ std::vector<std::size_t> stdb_header_layout() {
         offsetof(stdb_tee_slot, world_id), offsetof(stdb_tee_slot, room_id), offsetof(stdb_tee_slot, scheduled_at), offsetof(stdb_tee_slot, booked_count)});
     describe(sizeof(stdb_tee_reservation), {offsetof(stdb_tee_reservation, reservation_id), offsetof(stdb_tee_reservation, slot_id),
         offsetof(stdb_tee_reservation, started_at), offsetof(stdb_tee_reservation, grouped), offsetof(stdb_tee_reservation, completed), offsetof(stdb_tee_reservation, revision), offsetof(stdb_tee_reservation, course_id),
-        offsetof(stdb_tee_reservation, world_id), offsetof(stdb_tee_reservation, room_id), offsetof(stdb_tee_reservation, scheduled_at)});
+        offsetof(stdb_tee_reservation, world_id), offsetof(stdb_tee_reservation, room_id), offsetof(stdb_tee_reservation, scheduled_at), offsetof(stdb_tee_reservation, takes_cart)});
+    describe(sizeof(stdb_departure), {offsetof(stdb_departure, slot_id), offsetof(stdb_departure, course_id), offsetof(stdb_departure, scheduled_at), offsetof(stdb_departure, names)});
     describe(sizeof(stdb_tee_book_status), {offsetof(stdb_tee_book_status, course_id), offsetof(stdb_tee_book_status, server_now)});
     out.push_back(sizeof(stdb_row));
     describe(sizeof(stdb_event),
@@ -248,9 +255,9 @@ void net_client::claim_name(const std::string& name) {
     }
 }
 
-void net_client::join_course(const std::string& course_id, const bool takes_cart) {
+void net_client::join_course(const std::string& course_id) {
     if (status_ == net_status::connected) {
-        stdb_join_course(client_.get(), course_id.data(), course_id.size(), takes_cart);
+        stdb_join_course(client_.get(), course_id.data(), course_id.size());
     }
 }
 
@@ -303,6 +310,11 @@ void net_client::update(game_state& state) {
         state.online.reservation = reservation_;
         state.online.book_course_id = book_course_;
         state.online.book_ready = book_acknowledged_;
+        state.online.departures.clear();
+        for (const auto& [id, departure] : departures_) { state.online.departures.push_back(departure); }
+        std::sort(state.online.departures.begin(), state.online.departures.end(), [](const departure_info& a, const departure_info& b) {
+            return a.scheduled_at != b.scheduled_at ? a.scheduled_at < b.scheduled_at : a.slot_id < b.slot_id;
+        });
         state.online.tee_slots.clear();
         if (book_acknowledged_) {
             for (const auto& [id, slot] : tee_slots_) {
@@ -409,7 +421,10 @@ void net_client::send_commands(game_state& state) {
             stdb_use_item(client, room_id_, command.item_id.data(), command.item_id.size());
             break;
         case net_command_type::pick_up_ball:
-            stdb_pick_up_ball(client, room_id_);
+            stdb_pick_up_ball(client, room_id_, command.ball_id);
+            break;
+        case net_command_type::play_ball:
+            stdb_play_ball(client, room_id_, command.ball_id);
             break;
         case net_command_type::open_tee_book:
             book_course_ = command.course_id;
@@ -420,13 +435,13 @@ void net_client::send_commands(game_state& state) {
             stdb_open_tee_book(client, command.room_id, command.course_id.data(), command.course_id.size());
             break;
         case net_command_type::book_tee:
-            stdb_book_tee(client, command.room_id, command.reservation_id, command.course_id.data(), command.course_id.size(), command.scheduled_at);
+            stdb_book_tee(client, command.room_id, command.reservation_id, command.course_id.data(), command.course_id.size(), command.scheduled_at, command.takes_cart);
             break;
         case net_command_type::cancel_tee:
             stdb_cancel_tee(client, command.room_id, command.reservation_id);
             break;
         case net_command_type::take_bus:
-            stdb_take_bus(client, command.room_id, command.reservation_id, command.takes_cart);
+            stdb_take_bus(client, command.room_id, command.reservation_id);
             break;
         case net_command_type::return_to_hub:
             stdb_return_to_hub(client, command.room_id);
@@ -609,6 +624,16 @@ void net_client::handle_row(const stdb_event& event, game_state& state) {
         } else { tee_slots_.insert_or_assign(v.slot_id, slot); }
         break;
     }
+    case STDB_TABLE_DEPARTURE_BOARD: {
+        const auto& v = row.departure;
+        departure_info departure{v.slot_id, text_of(v.course_id), v.scheduled_at, {}};
+        std::istringstream lines(text_of(v.names));
+        for (std::string name; std::getline(lines, name);) { departure.names.push_back(name); }
+        const auto found = departures_.find(v.slot_id);
+        if (change != STDB_ROW_DELETE) { departures_.insert_or_assign(v.slot_id, departure); }
+        else if (found != departures_.end() && found->second.names == departure.names) { departures_.erase(found); }
+        break;
+    }
     case STDB_TABLE_MY_TEE_RESERVATION: {
         const auto& v = row.tee_reservation;
         if (change == STDB_ROW_DELETE) {
@@ -616,7 +641,7 @@ void net_client::handle_row(const stdb_event& event, game_state& state) {
         } else if (!reservation_ || v.reservation_id > reservation_->reservation_id ||
                    (v.reservation_id == reservation_->reservation_id && v.revision >= reservation_->revision)) {
             reservation_ = tee_reservation_info{v.reservation_id, v.slot_id, v.started_at, v.grouped, v.completed,
-                v.revision, text_of(v.course_id), v.world_id, v.room_id, v.scheduled_at};
+                v.revision, text_of(v.course_id), v.world_id, v.room_id, v.scheduled_at, v.takes_cart};
         }
         break;
     }
@@ -727,6 +752,7 @@ void net_client::subscribe_self() {
                                                       "SELECT * FROM my_tee_reservation",
                                                       "SELECT * FROM my_tee_book_status",
                                                       "SELECT * FROM my_tee_slots",
+                                                      "SELECT * FROM departure_board",
                                                       "SELECT * FROM my_skills",
                                                       "SELECT * FROM my_completed_courses",
                                                       "SELECT * FROM my_collected",
@@ -754,6 +780,7 @@ void net_client::subscribe_room(const std::uint64_t room_id) {
             "SELECT * FROM golf_group WHERE room_id = " + id,
             "SELECT * FROM my_avatar_motion",
             "SELECT * FROM ball WHERE room_id = " + id,
+            "SELECT * FROM practice_ball WHERE room_id = " + id,
             "SELECT * FROM my_golf_carts",
             "SELECT * FROM player_bag WHERE room_id = " + id,
             "SELECT * FROM green_flag WHERE room_id = " + id,
@@ -808,6 +835,7 @@ void net_client::forget_progress(game_state& state) {
     effects_.clear();
     reservation_.reset();
     tee_slots_.clear();
+    departures_.clear();
     book_course_.clear();
     book_after_ = 0;
     last_book_status_at_ = 0;

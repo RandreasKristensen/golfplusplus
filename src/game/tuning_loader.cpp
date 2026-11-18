@@ -128,6 +128,7 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.scale.ball_physics_radius_meters = scale.number("ball_physics_radius_meters");
     tuning.scale.ball_visual_radius_meters = scale.number("ball_visual_radius_meters");
     tuning.scale.pin_visual_height_meters = scale.number("pin_visual_height_meters");
+    tuning.scale.practice_pin_visual_height_meters = scale.number("practice_pin_visual_height_meters");
     tuning.scale.flagstick_radius_meters = scale.number("flagstick_radius_meters");
 
     const section_reader terrain = section("terrain");
@@ -342,6 +343,7 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.player.max_look_pitch = player.number("max_look_pitch");
     tuning.player.mouse_look_radians = player.number("mouse_look_radians");
     tuning.player.ball_interact_radius = player.number("ball_interact_radius");
+    tuning.player.ball_pickup_hold_seconds = player.number("ball_pickup_hold_seconds");
     tuning.player.flag_reach = player.number("flag_reach");
     tuning.player.bag_reach = player.number("bag_reach");
     tuning.player.bag_set_down_distance = player.number("bag_set_down_distance");
@@ -504,18 +506,21 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     }
     tuning.server.group_capacity = server.integer("group_capacity");
     tuning.server.group_tee_spacing_meters = server.number("group_tee_spacing_meters");
-    tuning.server.tee_book_days = server.integer("tee_book_days");
+    tuning.server.tee_book_days_ahead = server.integer("tee_book_days_ahead");
     tuning.server.warmup_distance_meters = server.number("warmup_distance_meters");
     tuning.server.warmup_reach_meters = server.number("warmup_reach_meters");
     tuning.server.bus_reach_meters = server.number("bus_reach_meters");
     tuning.server.bus_early_minutes = server.integer("bus_early_minutes");
+    tuning.server.last_call_seconds = server.number("last_call_seconds");
+    tuning.server.departure_board_rows = server.integer("departure_board_rows");
     tuning.server.tee_expiry_minutes = server.integer("tee_expiry_minutes");
     tuning.server.tee_interval_minutes = server.integer("tee_interval_minutes");
     if (tuning.server.group_capacity <= 0 || tuning.server.tee_interval_minutes <= 0 ||
-        tuning.server.tee_expiry_minutes <= 0 || tuning.server.tee_book_days <= 0 ||
-        tuning.server.bus_early_minutes < 0 || !(tuning.server.bus_reach_meters > 0) || !(tuning.server.warmup_distance_meters > 0.0f) ||
+        tuning.server.tee_expiry_minutes <= 0 || tuning.server.tee_book_days_ahead < 0 ||
+        tuning.server.bus_early_minutes < 0 || !(tuning.server.last_call_seconds > 0.0f) ||
+        tuning.server.last_call_seconds > static_cast<float>(tuning.server.bus_early_minutes) * 60.0f || tuning.server.departure_board_rows <= 0 || !(tuning.server.bus_reach_meters > 0) || !(tuning.server.warmup_distance_meters > 0.0f) ||
         !(tuning.server.warmup_reach_meters > 0.0f) || !(tuning.server.group_tee_spacing_meters > 0.0f)) {
-        missing.push_back("server tee times (positive interval, expiry, horizon, capacity and spacing; nonnegative bus lead)");
+        missing.push_back("server tee times (positive interval, expiry, capacity and spacing; nonnegative bus lead; a last call within it; board rows)");
     }
     tuning.server.name_min_length = server.integer("name_min_length");
     tuning.server.name_max_length = server.integer("name_max_length");
@@ -619,6 +624,20 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
         }
         tuning.trees.species.push_back(kind);
     }
+    const json* year_seasons = trees.section != nullptr ? json_array(*trees.section, "seasons") : nullptr;
+    for (std::size_t i = 0; year_seasons != nullptr && i < year_seasons->size(); ++i) {
+        const json& entry = (*year_seasons)[i];
+        const section_reader of{&entry, "trees.seasons[" + std::to_string(i) + "]", &missing};
+        year_season season;
+        season.name = json_string(entry, "name").value_or("");
+        season.start_day = of.integer("start_day");
+        const bool ordered = tuning.trees.seasons.empty() || season.start_day > tuning.trees.seasons.back().start_day;
+        if (season.name.empty() || season.start_day < 1 || season.start_day > 365 || !ordered) {
+            missing.push_back("trees.seasons[" + std::to_string(i) + "] (a name and a start day 1..365, later than the one before)");
+        }
+        tuning.trees.seasons.push_back(season);
+    }
+    if (year_seasons == nullptr || year_seasons->empty()) { missing.push_back("trees.seasons"); }
     const std::optional<std::string> default_species =
         trees.section != nullptr ? json_string(*trees.section, "default_species") : std::nullopt;
     if (species == nullptr || species->empty() || !default_species || !species_index(tuning.trees, *default_species)) {
@@ -653,6 +672,9 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.sky_clock.anchor_game_day = sky_clock.number("anchor_game_hour") / 24.0;
     tuning.sky_clock.game_days_per_real_day = sky_clock.number("game_days_per_real_day");
     tuning.sky_clock.year = sky_clock.integer("year");
+    if (!(tuning.sky_clock.game_days_per_real_day > 0.0)) {
+        missing.push_back("sky_clock.game_days_per_real_day (positive: the tee book counts hub days)");
+    }
 
     const section_reader golfer = section("golfer");
     tuning.golfer.speed_share_spread = golfer.number("speed_share_spread");

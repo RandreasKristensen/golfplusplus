@@ -33,13 +33,7 @@ struct grown_tree {
     std::size_t bark_count = 0;               // the first bark_count vertices
 };
 
-// Near trees are full: every clump and twig; far ones sparse: a few bigger clumps.
-enum class tree_detail : std::uint8_t {
-    full,
-    sparse
-};
-
-grown_tree grow_tree(const tree_look& look, std::uint32_t seed, tree_detail detail);
+grown_tree grow_tree(const tree_look& look, std::uint32_t seed);
 
 // Where a point of the unit frame lies within `look`'s crown shape: 0 at its
 // middle, 1 on its surface, more outside. Unit tested.

@@ -94,7 +94,7 @@ set(GOLFPP_SHARED_SOURCES
   src/physics/wind.cpp
   src/game/bag_place.cpp
   src/game/dap_rules.cpp
-  src/game/hub_ball_rules.cpp
+  src/game/my_balls_rules.cpp
   src/game/hub_loader.cpp
   src/game/hub_scene.cpp
   src/game/prop_loader.cpp

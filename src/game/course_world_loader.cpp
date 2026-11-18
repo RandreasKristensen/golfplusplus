@@ -212,7 +212,7 @@ parsed<course_world_definition> parse_world_from_text(const std::string& text, c
         if (!book || course) {
             return {std::nullopt, course ? "hub: in a course's world" : "hub.book: not a position and a reach above 0"};
         }
-        world.hub = hub_anchors{*book};
+        world.hub = hub_anchors{*book, {}, {}};
     }
     if (root->contains("bus_stop")) {
         const auto stop = json_object(*root, "bus_stop");
@@ -258,6 +258,11 @@ parsed<course_world_definition> parse_world_from_text(const std::string& text, c
         return {std::nullopt, trees.error};
     }
     world.trees = std::move(*trees.value);
+    parsed<std::vector<tree_instance>> bushes = bushes_from_json(*root);
+    if (!bushes.value) {
+        return {std::nullopt, bushes.error};
+    }
+    world.trees.insert(world.trees.end(), bushes.value->begin(), bushes.value->end());
 
     const json* projection = json_object(*root, "projection");
     const std::optional<float> latitude = projection != nullptr ? json_float(*projection, "origin_lat") : std::nullopt;

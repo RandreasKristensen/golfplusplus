@@ -45,7 +45,6 @@ std::optional<tree_look> look_from_json(const json& object) {
     const std::optional<float> trunk_radius = ranged(object, "trunk_radius", 0.01f, 0.5f);
     const std::optional<int> limbs = counted(object, "limbs", 1, 32);
     const std::optional<int> clumps = counted(object, "clumps", 1, 400);
-    const std::optional<int> far_clumps = counted(object, "far_clumps", 1, 400);
     const std::optional<float> clump_size = ranged(object, "clump_size", 0.02f, 1.0f);
     const std::optional<float> droop = ranged(object, "droop", 0.0f, 4.0f);
     const std::optional<float> aspect = ranged(object, "aspect", 0.2f, 10.0f);
@@ -54,7 +53,7 @@ std::optional<tree_look> look_from_json(const json& object) {
     const std::optional<glm::vec3> spring = colour(object, "spring");
     const std::optional<glm::vec3> summer = colour(object, "summer");
     const std::optional<glm::vec3> autumn = colour(object, "autumn");
-    if (look.name.empty() || !shape || !trunk_share || !trunk_radius || !limbs || !clumps || !far_clumps || !clump_size ||
+    if (look.name.empty() || !shape || !trunk_share || !trunk_radius || !limbs || !clumps || !clump_size ||
         !droop || !aspect || !shine_through || !bark || !spring || !summer || !autumn) {
         return std::nullopt;
     }
@@ -63,7 +62,6 @@ std::optional<tree_look> look_from_json(const json& object) {
     look.trunk_radius = *trunk_radius;
     look.limbs = *limbs;
     look.clumps = *clumps;
-    look.far_clumps = *far_clumps;
     look.clump_size = *clump_size;
     look.droop = *droop;
     look.aspect = *aspect;

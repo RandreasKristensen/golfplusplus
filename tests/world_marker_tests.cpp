@@ -31,7 +31,8 @@ namespace {
 constexpr std::size_t disc_vertex_count = 54;
 constexpr std::size_t quad_vertex_count = 6;
 constexpr std::size_t sphere_vertex_count = 576;
-constexpr std::size_t flagstick_vertex_count = 3 * quad_vertex_count;
+constexpr std::size_t pole_vertex_count = primitive_cylinder_segments * 12;
+constexpr std::size_t flagstick_vertex_count = pole_vertex_count + 2 * quad_vertex_count;
 // A cup's hole in 24 sides: its marking cylinder (a side's two triangles and
 // a slice of each end) and its inside (a side's two and a slice of bottom).
 constexpr std::size_t cup_mark_vertex_count = 24 * 12;
@@ -174,21 +175,17 @@ std::size_t check_flagstick(const world_marker_batch& batch,
                             std::size_t index,
                             const glm::vec3& position,
                             const float pin_visual_height_meters,
-                            const glm::vec3& toward_eye = glm::vec3(0.0f, 0.0f, 1.0f),
                             const float pole_half_width = 0.0f) {
-    const std::vector<glm::vec3> quad = expected_quad_positions();
     const float pin_height = std::max(0.1f, pin_visual_height_meters);
-    const glm::vec3 pin_base = position + glm::vec3(0.0f, pin_height * 0.5f, 0.0f);
     const glm::vec3 pole_color = test_scene_colors().markers.pin_pole;
     const glm::vec3 flag_color = test_scene_colors().markers.flag;
     const glow_floors& glow = test_scene_colors().glow;
-    // The pole: one panel square to the eye.
-    const float yaw = glm::degrees(std::atan2(toward_eye.x, toward_eye.z));
-    index = check_piece(batch, index, quad, expected_panel_model(pin_base, yaw, glm::vec3(pole_half_width, pin_height * 0.5f, 1.0f)),
-                        pole_color, glow.pin_pole);
+    index = check_piece(batch, index, make_cylinder_positions(primitive_cylinder_segments),
+                        glm::scale(glm::translate(glm::mat4(1), position),
+                                   glm::vec3(pole_half_width,pin_height,pole_half_width)), pole_color, glow.pin_pole);
     // In calm the flag hangs from just under the pole's top, its fly end
     // 0.72 m out along +x and 0.35 rad from straight down.
-    const glm::vec3 hoist_top = position + glm::vec3(0.0f, pin_height * 0.86f + 0.24f, 0.0f);
+    const glm::vec3 hoist_top = position + glm::vec3(0.0f, std::min(pin_height * 0.86f + 0.24f, pin_height), 0.0f);
     const glm::vec3 hoist_bottom = hoist_top - glm::vec3(0.0f, 0.48f, 0.0f);
     const glm::vec3 fly = glm::vec3(std::sin(0.35f), -std::cos(0.35f), 0.0f) * 0.72f;
     const std::vector<glm::vec3> flag = {hoist_top,         hoist_bottom,           hoist_bottom + fly * 0.5f,
@@ -364,13 +361,12 @@ TEST_CASE("world marker batch cuts the hole's cup, then stands its flagstick") {
     scene.cup_depth_meters = 0.1f;
     scene.pin_visual_height_meters = 2.1f;
     scene.flagstick_radius_meters = 0.00635f;
-    scene.camera_position = glm::vec3(-2.0f, 6.0f, 130.0f);
 
     world_marker_batch batch;
     build_world_marker_batch(batch, scene, test_scene_colors());
 
     const std::size_t flagstick_first = cup_mark_vertex_count + cup_inside_vertex_count;
-    CHECK(check_flagstick(batch, flagstick_first, scene.pin_position, 2.1f, glm::vec3(10.0f, 0.0f, -10.0f), 0.00635f) ==
+    CHECK(check_flagstick(batch, flagstick_first, scene.pin_position, 2.1f, 0.00635f) ==
           batch.vertices().size());
 
     // Its opening marked (no depth) | its inside | the flagstick.
@@ -488,62 +484,26 @@ TEST_CASE("a tee box is a flat top of grey tiles under a green mat, flush with t
     }
 }
 
-TEST_CASE("world marker pin pole turns square to the eye, the flag hung from its top") {
+TEST_CASE("the flagstick is one fixed cylinder at its real width, under every projection") {
+    const glm::vec3 pin(10,2,-5);
     world_marker_batch batch;
-    const glm::vec3 pin(10.0f, 2.0f, -5.0f);
-    const pole_view seen{0.00635f, glm::vec3(1.0f, 0.5f, 0.0f), 0.0f};
-    append_pin_flagstick(batch, pin, 2.0f, test_scene_colors().markers, test_scene_colors().glow, flag_pose{}, seen);
-    REQUIRE(batch.vertices().size() == flagstick_vertex_count);
-
-    // Quad corner (1, 1, 0): seen from +x the pole spreads along -z, its real
-    // radius out, reaching the pin top.
-    check_near(batch.vertices()[2].position, glm::vec3(10.0f, 4.0f, -5.00635f));
-    check_flagstick(batch, 0, pin, 2.0f, seen.toward_eye, 0.00635f);
-
-    // A too-short pin is clamped to 0.1 m.
-    world_marker_batch short_batch;
-    append_pin_flagstick(short_batch, pin, 0.0f, test_scene_colors().markers, test_scene_colors().glow);
-    check_flagstick(short_batch, 0, pin, 0.0f);
-}
-
-TEST_CASE("a far flagstick is one scene pixel wide from any side; nearer, or zoomed in, its real width") {
-    constexpr float lines = 240.0f;
-    constexpr float radius = 0.00635f;
-    const glm::vec3 pin(0.0f, 0.0f, 0.0f);
-    const glm::vec3 middle = pin + world_up;
-    // Screen width in scene pixels of the pole, seen from `eye` through `fov` degrees.
-    const auto pole_pixels = [&](const glm::vec3& eye, const float fov) {
-        const float pixel_per_meter = 2.0f * std::tan(glm::radians(fov) * 0.5f) / lines;
-        world_marker_batch batch;
-        append_pin_flagstick(batch, pin, 2.0f, test_scene_colors().markers, test_scene_colors().glow, flag_pose{},
-                             pole_view{radius, eye - pin, glm::length(middle - eye) * pixel_per_meter});
-        const glm::mat4 view_proj =
-            glm::perspective(glm::radians(fov), 4.0f / 3.0f, 0.05f, 500.0f) * glm::lookAt(eye, middle, world_up);
-        float left = 1e9f;
-        float right = -1e9f;
-        for (std::size_t i = 0; i < quad_vertex_count; ++i) {
-            const glm::vec3 corner = batch.vertices()[i].position;
-            // Measured across the pole's middle, where its pixel was taken.
-            const glm::vec4 clip = view_proj * glm::vec4(corner.x, middle.y, corner.z, 1.0f);
-            const float x = clip.x / clip.w * 0.5f * lines * 4.0f / 3.0f;
-            left = std::min(left, x);
-            right = std::max(right, x);
+    append_pin_flagstick(batch,pin,2,test_scene_colors().markers,test_scene_colors().glow,{},0.00635f);
+    REQUIRE(batch.vertices().size()==flagstick_vertex_count);
+    check_flagstick(batch,0,pin,2,0.00635f);
+    for (const float distance : {1.0f,40.0f,120.0f,300.0f}) {
+        const glm::vec3 eye = pin + glm::vec3(0,1,-distance);
+        const glm::mat4 vp=glm::perspective(glm::radians(60.0f),4.0f/3.0f,0.05f,1000.0f)*
+            glm::lookAt(eye,pin+world_up,world_up);
+        float left=1e9f,right=-1e9f;
+        for(std::size_t i=0;i<pole_vertex_count;++i) {
+            const auto& p=batch.vertices()[i].position;
+            CHECK(horizontal_distance(p,pin)<=0.00636f);
+            const auto clip=vp*glm::vec4(p.x,pin.y+1,p.z,1);
+            left=std::min(left,clip.x/clip.w); right=std::max(right,clip.x/clip.w);
         }
-        return right - left;
-    };
-    for (const float distance : {40.0f, 120.0f, 300.0f}) {
-        const float corner = distance / std::sqrt(2.0f);
-        for (const glm::vec3& eye : {glm::vec3(0.0f, 1.0f, -distance), glm::vec3(corner, 1.0f, -corner)}) {
-            CHECK(near(pole_pixels(eye, 60.0f), 1.0f, 0.01f));
-        }
+        const float projected=0.0127f/(distance*std::tan(glm::radians(30.0f))*4.0f/3.0f);
+        CHECK(near(right-left,projected,projected*0.03f));
     }
-    // Through a rangefinder's narrow view the far pole is wider than a pixel,
-    // and as wide as its real width shows, not widened.
-    const glm::vec3 far_eye(0.0f, 1.0f, -150.0f);
-    const float zoomed_fov = 0.5f;
-    const float real_pixels = 2.0f * radius / (150.0f * 2.0f * std::tan(glm::radians(zoomed_fov) * 0.5f) / lines);
-    CHECK(real_pixels > 1.5f);
-    CHECK(near(pole_pixels(far_eye, zoomed_fov), real_pixels, 0.01f));
 }
 
 TEST_CASE("a flag streams downwind, straight out in a strong wind and waving across it") {
@@ -553,7 +513,7 @@ TEST_CASE("a flag streams downwind, straight out in a strong wind and waving acr
         append_pin_flagstick(batch, pin, 2.0f, test_scene_colors().markers, test_scene_colors().glow, pose);
         CHECK(batch.vertices().size() == flagstick_vertex_count);
         // The fly end's top corner, less the hoist's.
-        return batch.vertices().back().position - batch.vertices()[quad_vertex_count].position;
+        return batch.vertices().back().position - batch.vertices()[pole_vertex_count].position;
     };
     const glm::vec3 south(0.0f, 0.0f, 1.0f);
     const glm::vec3 limp = fly_end(flag_pose{south * 0.5f, 0.0f, 0.0f, 0.0f});
@@ -627,7 +587,7 @@ TEST_CASE("world marker batch groups a hub into three runs in submission order")
     const std::size_t flagsticks_first = 3 * (cup_mark_vertex_count + cup_inside_vertex_count);
     std::size_t index = flagsticks_first;
     for (const glm::vec3& pin : pins) {
-        index = check_flagstick(batch, index, pin, 2.4f, -pin);
+        index = check_flagstick(batch, index, pin, 2.4f);
     }
     CHECK(index == batch.vertices().size());
 

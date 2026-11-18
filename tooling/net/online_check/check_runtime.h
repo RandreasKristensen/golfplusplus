@@ -33,7 +33,11 @@ public:
     bool refusal(std::size_t peer, const std::string& reducer, const std::string& error);
     void send(std::size_t peer, net_command command);
     void action(std::size_t peer, net_command_type type);
+    // Books `at` for `peer`; cart or carry is chosen by peer parity unless given (peers 3 and 4 take a cart, the rest carry: the practice and shot
+    // checks handle the bags of the first ones).
     bool book(std::size_t peer, std::int64_t at);
+    bool book(std::size_t peer, std::int64_t at, bool takes_cart);
+    bool course_has_carts() const;
     bool open(std::size_t peer);
     bool travel(std::size_t peer, const std::string& course);
     check_peer& operator[](std::size_t peer) { return *peers_.at(peer); }

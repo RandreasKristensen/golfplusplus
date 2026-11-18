@@ -11,6 +11,7 @@ pub(super) struct BookTeeArgs {
     pub expected_booking: u64,
     pub course_id: String,
     pub scheduled_at: i64,
+    pub takes_cart: bool,
 }
 
 impl From<BookTeeArgs> for super::Reducer {
@@ -20,6 +21,7 @@ impl From<BookTeeArgs> for super::Reducer {
             expected_booking: args.expected_booking,
             course_id: args.course_id,
             scheduled_at: args.scheduled_at,
+            takes_cart: args.takes_cart,
         }
     }
 }
@@ -45,12 +47,14 @@ pub trait book_tee {
         expected_booking: u64,
         course_id: String,
         scheduled_at: i64,
+        takes_cart: bool,
     ) -> __sdk::Result<()> {
         self.book_tee_then(
             room_id,
             expected_booking,
             course_id,
             scheduled_at,
+            takes_cart,
             |_, _| {},
         )
     }
@@ -67,6 +71,7 @@ pub trait book_tee {
         expected_booking: u64,
         course_id: String,
         scheduled_at: i64,
+        takes_cart: bool,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -81,6 +86,7 @@ impl book_tee for super::RemoteReducers {
         expected_booking: u64,
         course_id: String,
         scheduled_at: i64,
+        takes_cart: bool,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -92,6 +98,7 @@ impl book_tee for super::RemoteReducers {
                 expected_booking,
                 course_id,
                 scheduled_at,
+                takes_cart,
             },
             callback,
         )

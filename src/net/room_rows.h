@@ -1,7 +1,7 @@
 #pragma once
 
 // My room's rows as the game reads them (game_state::online): its members
-// with their names, golfers, motion, balls, carts, loadouts and bags, my
+// with their names, golfers, motion, balls, spare balls, carts, loadouts and bags, my
 // ride_motion row (written straight through, as it comes often), its
 // groups and greens' flags, and the shots played and items used in it. net_client hands every row of the room subscription here.
 // Also the estimate of the server's clock, taken from my own avatar_motion
@@ -63,6 +63,7 @@ private:
     std::map<std::uint64_t, motion> motions_;
     std::map<std::uint64_t, room_dap> daps_;
     std::map<std::uint64_t, room_ball> balls_;
+    std::map<std::uint64_t, spare_ball> spares_;  // practice_ball rows by id
     std::map<std::uint64_t, room_cart> carts_;
     std::map<std::uint64_t, loadout> loadouts_;
     std::map<std::uint64_t, room_bag> bags_;

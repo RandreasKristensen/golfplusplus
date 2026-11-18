@@ -17,6 +17,7 @@ local multiplayer server.
 | `net/dev.ps1` | The local SpacetimeDB server on demand: start, publish, anonymous logins, stop |
 | `net/check_determinism.ps1` | Golden shots, drives and walks natively and in the server's WASM |
 | `shot_lab/` | Hits the bag through the game's simulation and prints carry, apex, landing and curve (its README) |
+| `picture_check/` | Rendered checks through the game's renderer: no rough on bare ground, ponds no brighter than the sky they mirror (its README) |
 | `net/online_check/` | A headless client that checks a running server's answers (its README) |
 
 ## art/make_art.py
@@ -53,10 +54,10 @@ python tooling/art/make_art.py
 ## practice_ground/make_practice_ground.py
 
 Writes the hole-free hub in `assets/world/hub/` from code, the same every run:
-three short-game greens, six flat range bays, three hill bays, tee mats,
-targets, arrival, book and bus anchors. This is an authored place, not an OSM
-import or scored course. Change its layout in the generator, then regenerate;
-never edit the output. `--check` checks layout invariants and generated files
+the road and bus stop, putting green, chipping green, one range with a hill tee,
+paths, named pads, tee mats, targets, arrival, book and bus anchors. This is an
+authored place, not an OSM import or scored course. Change its layout in the
+generator, then regenerate; never edit the output. `--check` checks layout invariants and generated files
 without rewriting them. The book and bus models have their own generator,
 `practice_ground/make_hub_props.py` (`--check` verifies their shipped JSON).
 

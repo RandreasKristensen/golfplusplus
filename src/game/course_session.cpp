@@ -85,7 +85,7 @@ bool start_course(game_state& state, const course_definition& course) {
     state.xp_drops.clear();
     state.shot_number.reset();
     state.pending_xp_drop_amounts.clear();
-    state.ball.reset();
+    state.ball.reset(); state.spare_balls.clear();
     end_ball_play(state);
     leave_cart_at_once(state);
     state.smoking.reset();
@@ -141,20 +141,25 @@ bool tee_up(game_state& state, const std::size_t hole_index, const bool give_up)
 }
 
 void complete_current_hole(game_state& state) {
-    if (!state.round || !ball_in_play(state) || !state.ball->hole) {
+    if (!ball_in_play(state)) {
         return;
     }
     my_ball& ball = *state.ball;
-    const auto online_ball = state.online.balls.find(state.online.account_id);
-    const bool warmup = ball.kind == ball_kind::warmup || course_warmup(state) || (is_online(state) && online_ball != state.online.balls.end() && online_ball->second.kind == ball_kind::warmup);
-    if (!warmup) {
-        state.round = complete_hole(*state.round, *ball.hole, ball.strokes);
-        record_hole_completed(state);
+    if (state.place.rules.scored) {
+        if (!state.round || !ball.hole) {
+            return;
+        }
+        const auto online_ball = state.online.balls.find(state.online.account_id);
+        const bool warmup = ball.kind == ball_kind::warmup || course_warmup(state) || (is_online(state) && online_ball != state.online.balls.end() && online_ball->second.kind == ball_kind::warmup);
+        if (!warmup) {
+            state.round = complete_hole(*state.round, *ball.hole, ball.strokes);
+            record_hole_completed(state);
+        }
     }
     end_ball_play(state);
     // The ball stays in the cup until it is picked up, into the next round too.
     ball.place = ball_place::in_cup;
-    ball.position = lying_in_cup(state, *ball.hole, ball.position);
+    if (ball.hole) { ball.position = lying_in_cup(state, *ball.hole, ball.position); }
 }
 
 glm::vec3 lying_in_cup(const game_state& state, const std::size_t hole, const glm::vec3& near) {

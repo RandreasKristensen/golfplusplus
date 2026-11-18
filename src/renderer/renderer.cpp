@@ -31,8 +31,6 @@
 namespace {
 constexpr std::size_t initial_flight_path_vertices = 128;
 
-// The backdrop ground sits this far under the lowest terrain.
-constexpr float backdrop_ground_drop = 2.0f;
 constexpr float flight_path_lift = 0.02f;
 constexpr int grass_texture_unit = 1;
 constexpr const char* grass_texture_path = "world/ground/rough_grass.bmp";
@@ -41,12 +39,6 @@ constexpr const char* path_texture_path = "world/ground/cart_path.bmp";
 constexpr const char* fence_net_texture_path = "world/props/fence_net.bmp";
 constexpr float min_far_plane = 160.0f;
 constexpr float far_plane_extent_scale = 2.5f;
-
-// Draw submissions go through these so draw calls are counted in the profile.
-void draw_arrays(const shader_program& shader, const GLenum mode, const GLint first, const GLsizei count) {
-    glDrawArrays(mode, first, count);
-    record_draw_call(shader.profile());
-}
 
 void delete_buffer(unsigned int& buffer) {
     if (buffer != 0) {
@@ -103,7 +95,7 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
                              (std::filesystem::path(asset_root) / fence_net_texture_path).string()) &&
         floodlight_renderer_.init(path("floodlight.vert"), path("floodlight.frag")) &&
         water_renderer_.init(path("water.vert"), path("water.frag"), path("underwater.vert"), path("underwater.frag"), screen_vao_) &&
-        grass_renderer_.init(path("grass_map.vert"), path("grass_map.frag"), path("grass_blade.vert"), path("grass_blade.frag")) &&
+        grass_renderer_.init(path("grass_blade.vert"), path("grass_blade.frag")) &&
         weather_renderer_.init(path("weather_streak.vert"), path("weather_streak.frag"),
                                std::max(palette.rain.max_drops, palette.wind.max_specks)) &&
         overlay_pass_.init(path("overlay.vert"), path("overlay.frag")) &&
@@ -154,6 +146,7 @@ void renderer::shutdown() {
     fence_renderer_.shutdown();
     floodlight_renderer_.shutdown();
     water_renderer_.shutdown();
+    reflection_pass_.shutdown();
     grass_renderer_.shutdown();
     weather_renderer_.shutdown();
     overlay_pass_.shutdown();
@@ -207,22 +200,26 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
         return;
     }
 
-    if (world_props_revision_ != data.trees_revision) {
+    // Rebuilt with the course; the bus's doors are drawn each frame.
+    const bool new_course = !bus_door_seeded_ || world_props_revision_ != data.trees_revision;
+    if (new_course) {
         world_props_.clear();
         if (data.world_props) { append_world_props(world_props_, *data.world_props, props_, colors_.glow); }
         world_props_revision_ = data.trees_revision;
     }
+    advance_bus_doors(data, new_course);
     const glm::mat4 proj = scene_projection(data.camera_fov_degrees, data.area_extent);
     const glm::mat4 view = glm::lookAt(data.camera_position, data.camera_target, glm::vec3(0.0f, 1.0f, 0.0f));
     if (!data.vcr.still_frame || !camcorder_pass_.has_frame()) {
         const profile_scope scene_timer(profile, profile_stage::render_scene);
         const std::vector<tree_body> no_trees;
         tree_renderer_.set_seasons(data.tree_species);
+        tree_renderer_.set_motion(data.clock_seconds, glm::vec2(data.weather.surface_wind.x, data.weather.surface_wind.z));
         build_shadow_casters(shadow_casters_, shadow_models_, data, colors_, props_, shadow_map_pass_.style(), &world_props_);
         shadow_map_pass_.draw(tree_renderer_, data.trees != nullptr ? *data.trees : no_trees, data.trees_revision,
                               floodlight_renderer_, data.floodlights, shadow_casters_, shadow_models_,
                               data.lighting.sun_direction, data.lighting.shadows.sun_share, data.camera_position,
-                              data.camera_target - data.camera_position, gpu_timers_, profile);
+                              gpu_timers_, profile);
         glEnable(GL_DEPTH_TEST);
         const glm::vec3 sky = data.lighting.sky_zenith;
         if (data.show_rangefinder) {
@@ -367,123 +364,6 @@ bool renderer::ensure_framebuffer_size(const int screen_width, const int screen_
         tape_pass_.ensure_size(picture_.width, picture_.height);
 }
 
-void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile) {
-    const glm::mat4 view_proj = proj * view;
-
-    gpu_timers_.begin(gpu_profile_stage::terrain);
-    const float lowest_terrain = data.terrain_mesh != nullptr && data.terrain_mesh->bounds.valid
-        ? data.terrain_mesh->bounds.min.y
-        : data.area_center.y;
-    const render_sky_weather& weather = data.lighting.weather;
-    scene_haze haze = backdrop_pass_.prepare(data.backdrop, data.camera_position, data.area_extent, data.lighting.haze_tint);
-    haze.mist_floor = lowest_terrain;
-    lighting_uniforms_.upload(data.lighting,
-                              weathered_haze(haze, weather_haze{weather.haze_gain, weather.haze_distance_share, weather.haze_grey}),
-                              data.lights, profile);
-    colors_.glow = data.glow;
-    terrain_shader_.use();
-    terrain_shader_.set_vec3("u_grass_look", glm::vec3(grass_style_.stripe_shade, grass_style_.patch_share, grass_style_.patch_meters));
-    terrain_shader_.set_vec2("u_mow_widths", glm::vec2(grass_style_.stripe_fairway_meters, grass_style_.stripe_green_meters));
-    grass_texture_.bind(grass_texture_unit);
-    path_texture_.bind(path_texture_unit);
-    shadow_map_pass_.bind(terrain_shader_, shadow_map_unit);
-
-    // Backdrop ground under the whole area so the horizon is never empty.
-    const float ground_extent = std::max(1.0f, data.area_extent * 2.0f);
-    const glm::mat4 ground_model = glm::scale(
-        glm::translate(glm::mat4(1.0f), glm::vec3(data.area_center.x, lowest_terrain - backdrop_ground_drop, data.area_center.z)),
-        glm::vec3(ground_extent, 1.0f, ground_extent));
-    set_terrain_draw_state(terrain_shader_, ground_model, view_proj, colors_.ground.backdrop, 1.0f, 0.0f, false);
-    glBindVertexArray(ground_.vao);
-    draw_arrays(terrain_shader_, GL_TRIANGLES, 0, ground_.vertex_count);
-
-    const view_frustum frustum = make_view_frustum(view_proj);
-    const terrain_cull_stats terrain_stats =
-        terrain_renderer_.draw(terrain_shader_, data.terrain_mesh, data.material_overlay_mesh, view_proj, frustum,
-                               overlay_depth::pulled_forward, profile);
-    cull_stats_ = renderer_cull_stats{terrain_stats.terrain, terrain_stats.material_overlay, false};
-    // Under the blobs, which lie on them as on the ground.
-    build_tee_box_batch(tee_box_batch_, data.tee_boxes, colors_.markers);
-    tee_box_renderer_.shader().use();
-    shadow_map_pass_.bind(tee_box_renderer_.shader(), shadow_map_unit);
-    tee_box_renderer_.draw(tee_box_batch_, view_proj, profile);
-    gpu_timers_.end();
-    grass_renderer_.draw(grass_frame{data.terrain_mesh, data.material_overlay_mesh, data.tee_boxes, view_proj,
-                                     data.camera_position,
-                                     colors_.ground.rough, glm::vec2(data.weather.surface_wind.x, data.weather.surface_wind.z),
-                                     data.clock_seconds},
-                         grass_style_, terrain_renderer_, shadow_map_pass_, shadow_map_unit, gpu_timers_, profile);
-
-    gpu_timers_.begin(gpu_profile_stage::shadows);
-    blob_shadow_renderer_.draw(data.tree_shadows, data.tree_shadows_revision, data.blob_shadows, view_proj, profile);
-    gpu_timers_.end();
-
-    gpu_timers_.begin(gpu_profile_stage::trees);
-    const std::vector<tree_body> no_trees;
-    tree_renderer_.shader().use();
-    shadow_map_pass_.bind(tree_renderer_.shader(), shadow_map_unit);
-    cull_stats_.trees_visible =
-        tree_renderer_.draw(data.trees != nullptr ? *data.trees : no_trees, view_proj, frustum, data.camera_position,
-                            data.clock_seconds, glm::vec2(data.weather.surface_wind.x, data.weather.surface_wind.z), profile);
-    hole_sign_renderer_.draw(data.hole_signs, view_proj, profile);
-    fence_renderer_.draw_posts(data.fences, view_proj, profile);
-    floodlight_renderer_.draw(data.floodlights, view_proj, profile);
-    gpu_timers_.end();
-
-    world_marker_scene markers;
-    markers.show_hole = data.show_hole;
-    markers.pin_position = data.pin_position;
-    markers.pin_markers = &data.pin_markers;
-    markers.flags_out = &data.flags_out;
-    markers.lying_flags = &data.lying_flags;
-    markers.collectibles = &data.collectibles;
-    markers.cup_radius_meters = data.cup_radius_meters;
-    markers.cup_depth_meters = data.cup_depth_meters;
-    markers.pin_visual_height_meters = data.pin_visual_height_meters;
-    markers.flagstick_radius_meters = data.flagstick_radius_meters;
-    markers.flag = flag_pose{data.weather.flag_wind, data.weather.flag_lift, data.weather.flag_phase, data.weather.flag_flap};
-    markers.camera_position = data.camera_position;
-    markers.pixel_per_meter = 2.0f * std::tan(glm::radians(std::max(1.0f, data.camera_fov_degrees)) * 0.5f) /
-        static_cast<float>(picture_.height);
-    markers.address_feet = data.address_feet ? &*data.address_feet : nullptr;
-    markers.ball_visual_radius_meters = data.ball_visual_radius_meters;
-    markers.remote_avatars = &data.remote_avatars;
-    markers.remote_balls = &data.remote_balls;
-    markers.avatar_eye_height = data.avatar_eye_height;
-    build_world_marker_batch(world_marker_batch_, markers, colors_);
-    world_marker_renderer_.draw(world_marker_batch_, view_proj, profile);
-
-    // Behind everything solid, before anything blends over it.
-    gpu_timers_.begin(gpu_profile_stage::sky);
-    backdrop_pass_.draw(view, proj, data.clock_seconds, data.weather.lightning);
-    gpu_timers_.end();
-
-    // After the sky: smoke and beer blend over it.
-    build_prop_batch(data);
-    draw_props(prop_batch_, view_proj, profile);
-    draw_props(world_props_, view_proj, profile);
-    render_flight_path(view, proj, data, profile);
-
-    if (data.show_ball) {
-        const glm::mat4 ball_model = glm::scale(glm::translate(glm::mat4(1.0f), data.ball_position),
-                                                glm::vec3(data.ball_visual_radius_meters));
-        ball_shader_.use();
-        ball_shader_.set_mat4("u_mvp", view_proj * ball_model);
-        ball_shader_.set_mat4("u_model", ball_model);
-        ball_shader_.set_vec3("u_color", colors_.markers.ball);
-        ball_shader_.set_float("u_glow", colors_.glow.ball);
-        glBindVertexArray(ball_.vao);
-        draw_arrays(ball_shader_, GL_TRIANGLES, 0, ball_.vertex_count);
-        glBindVertexArray(0);
-    }
-    // Water and nets blend over everything solid, the ball included.
-    water_renderer_.draw_surfaces(data.water, view_proj, water_style_, data.weather, data.clock_seconds, gpu_timers_, profile);
-    fence_renderer_.draw_nets(data.fences, view_proj, profile);
-    gpu_timers_.begin(gpu_profile_stage::weather);
-    weather_renderer_.draw(data.weather, view_proj, profile);
-    gpu_timers_.end();
-}
-
 // What is pinned to the camera, what I hold, drawn over the scene at the
 // field of view it was posed for (render_data.h).
 void renderer::render_viewmodel(const glm::mat4& view, const render_data& data) {
@@ -504,8 +384,21 @@ void renderer::render_viewmodel(const glm::mat4& view, const render_data& data) 
     draw_props(viewmodel_batch_, scene_projection(data.viewmodel_fov_degrees, data.area_extent) * view, nullptr);
 }
 
+// The doors swing towards what the game says (render_data.h), taking the
+// model's swing time; they stand at it, not swing, on a new course or while
+// the game does not yet know it (a join mid-boarding).
+void renderer::advance_bus_doors(const render_data& data, const bool snap) {
+    const prop_model* bus = data.world_props ? placed_bus(*data.world_props, props_) : nullptr;
+    const float elapsed = std::clamp(data.clock_seconds - bus_door_clock_, 0.0f, 0.25f);
+    bus_door_clock_ = data.clock_seconds;
+    bus_door_seeded_ = true;
+    const std::optional<float> before = snap || !data.bus_doors_settled ? std::nullopt : std::optional<float>(bus_door_progress_);
+    bus_door_progress_ = door_swing_step(before, data.bus_doors_open, elapsed, bus != nullptr ? bus->number("door_swing_seconds") : 0.0f);
+}
+
 void renderer::build_prop_batch(const render_data& data) {
     prop_batch_.clear();
+    if (data.world_props) { append_bus_doors(prop_batch_, *data.world_props, props_, colors_.glow, bus_door_progress_); }
     const auto model = [this](const std::string& id) -> const prop_model* {
         const auto found = props_.find(id);
         return found != props_.end() ? &found->second : nullptr;
@@ -556,7 +449,8 @@ void renderer::render_flight_path(const glm::mat4& view, const glm::mat4& proj, 
         flight_path_buffer_.upload(flight_path_vertices_.data(), flight_path_vertices_.size() * sizeof(render_terrain_vertex), profile);
         set_terrain_draw_state(terrain_shader_, glm::mat4(1.0f), proj * view, data.flight_path_color, alpha,
                                colors_.glow.flight_path, false);
-        draw_arrays(terrain_shader_, GL_LINE_STRIP, 0, static_cast<GLsizei>(flight_path_vertices_.size()));
+        glDrawArrays(GL_LINE_STRIP, 0, static_cast<GLsizei>(flight_path_vertices_.size()));
+        record_draw_call(terrain_shader_.profile());
     };
     const bool own_path = data.show_flight_path && data.flight_path_points != nullptr;
     if (!own_path && data.remote_trails.empty()) {

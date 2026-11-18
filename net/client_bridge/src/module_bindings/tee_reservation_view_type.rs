@@ -17,6 +17,7 @@ pub struct TeeReservationView {
     pub world_id: u32,
     pub room_id: u64,
     pub scheduled_at: i64,
+    pub takes_cart: bool,
 }
 
 impl __sdk::InModule for TeeReservationView {
@@ -37,6 +38,7 @@ pub struct TeeReservationViewCols {
     pub world_id: __sdk::__query_builder::Col<TeeReservationView, u32>,
     pub room_id: __sdk::__query_builder::Col<TeeReservationView, u64>,
     pub scheduled_at: __sdk::__query_builder::Col<TeeReservationView, i64>,
+    pub takes_cart: __sdk::__query_builder::Col<TeeReservationView, bool>,
 }
 
 impl __sdk::__query_builder::HasCols for TeeReservationView {
@@ -53,6 +55,7 @@ impl __sdk::__query_builder::HasCols for TeeReservationView {
             world_id: __sdk::__query_builder::Col::new(table_name, "world_id"),
             room_id: __sdk::__query_builder::Col::new(table_name, "room_id"),
             scheduled_at: __sdk::__query_builder::Col::new(table_name, "scheduled_at"),
+            takes_cart: __sdk::__query_builder::Col::new(table_name, "takes_cart"),
         }
     }
 }

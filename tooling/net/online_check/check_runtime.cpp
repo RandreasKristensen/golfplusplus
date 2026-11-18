@@ -1,4 +1,5 @@
 #include "check_runtime.h"
+#include "game/cart_path.h"
 #include "game/course_session.h"
 #include "game/hub_flow.h"
 #include "game/mode_dispatch.h"
@@ -8,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <glm/geometric.hpp>
 #include <thread>
 
 bool live_check::require(const char* label, const bool passed) {
@@ -35,7 +37,7 @@ void live_check::tick() {
     for (auto& peer : peers_) {
         auto& p = *peer; auto& s = p.state;
         p.client.update(s);
-        while (auto f = p.client.take_reducer_failure()) { p.failures.push_back(*f); }
+        while (auto f = p.client.take_reducer_failure()) { p.failures.push_back(*f);}
         // Recorded here; update_game then reacts to them as the game would.
         p.failures.insert(p.failures.end(), s.online.refusals.begin(), s.online.refusals.end());
         p.shots.insert(p.shots.end(), s.online.shots.begin(), s.online.shots.end());
@@ -72,15 +74,46 @@ bool live_check::connect(const online_config& config) {
         return std::all_of(peers_.begin(), peers_.end(), [](const auto& p) { return !p->state.online.display_name.empty(); });
     }));
 }
+namespace {
+// In the hub a golfer follows the paths (past the book and round the bus), then
+// walks straight on to the target; elsewhere the walk is a straight line.
+std::vector<glm::vec3> walking_way(const game_state& s, const glm::vec3& target) {
+    if (!s.hub) { return {target}; }
+    const path_graph graph = graph_of(s.area.cart_paths);
+    std::vector<std::size_t> order(graph.nodes.size());
+    for (std::size_t i = 0; i < order.size(); ++i) { order[i] = i; }
+    std::sort(order.begin(), order.end(), [&](const std::size_t a, const std::size_t b) {
+        return horizontal_distance(graph.nodes[a], target) < horizontal_distance(graph.nodes[b], target); });
+    const std::size_t from = nearest_node(graph, s.player.position);
+    for (const std::size_t to : order) {
+        const auto route = route_along(graph, from, to);
+        if (!route) { continue; }
+        std::vector<glm::vec3> way;
+        for (std::size_t i = 1; i < route->size(); ++i) {
+            const glm::vec3& now = graph.nodes[(*route)[i]];
+            const bool last = i + 1 == route->size();
+            const bool turns = !last && glm::length(glm::cross(horizontal(now - graph.nodes[(*route)[i - 1]]),
+                horizontal(graph.nodes[(*route)[i + 1]] - now))) > 0.01f;
+            if (last || turns) { way.push_back(now); }
+        }
+        way.push_back(target);
+        return way;
+    }
+    return {target};
+}
+}
 bool live_check::walk(const std::size_t peer, const glm::vec3 target, const float seconds) {
     auto& p = (*this)[peer];
-    const bool reached = until([&] {
-        const auto delta = target - p.state.player.position;
-        const bool close = glm::length(glm::vec2(delta.x, delta.z)) < 0.3f;
-        p.input.forward_held = !close;
-        p.input.look_yaw = close ? 0.0f : wrap_angle(yaw_towards(p.state.player.position, target) - p.state.player.yaw);
-        return close;
-    }, seconds);
+    bool reached = true;
+    for (const glm::vec3& waypoint : walking_way(p.state, target)) {
+        reached = reached && until([&] {
+            const auto delta = waypoint - p.state.player.position;
+            const bool close = glm::length(glm::vec2(delta.x, delta.z)) < 0.3f;
+            p.input.forward_held = !close;
+            p.input.look_yaw = close ? 0.0f : wrap_angle(yaw_towards(p.state.player.position, waypoint) - p.state.player.yaw);
+            return close;
+        }, seconds);
+    }
     p.input = {}; send_motion_now(p.state);
     // The server's row for those steps, however long it takes to arrive.
     const bool agreed = until([&] {
@@ -115,15 +148,23 @@ bool live_check::open(const std::size_t peer) {
     net_command c; c.type = net_command_type::open_tee_book; c.course_id = course; send(peer, c); tick();
     return require("scoped book acknowledgement and server clock", until([&] { const auto& o = state(peer).online; return o.book_ready && o.book_course_id == course && o.server_now > 0; }));
 }
-bool live_check::book(const std::size_t peer, const std::int64_t at) {
-    net_command c; c.type = net_command_type::book_tee; c.course_id = course; c.scheduled_at = at;
+bool live_check::course_has_carts() const {
+    const auto found = std::find_if(content_.courses.begin(), content_.courses.end(), [&](const auto& c) { return c.id == course; });
+    return found != content_.courses.end() && found->carts;
+}
+bool live_check::book(const std::size_t peer, const std::int64_t at) { return book(peer, at, peer == 3 || peer == 4); }
+bool live_check::book(const std::size_t peer, const std::int64_t at, const bool takes_cart) {
+    net_command c; c.type = net_command_type::book_tee; c.course_id = course; c.scheduled_at = at; c.takes_cart = takes_cart;
     c.reservation_id = state(peer).online.reservation ? state(peer).online.reservation->reservation_id : 0; send(peer, c);
-    return require("booking row acknowledges requested UTC time", until([&] { const auto& r = state(peer).online.reservation; return r && r->scheduled_at == at; }));
+    // The row says what the server stored: the choice, a cart only where the course has them.
+    const bool stored = takes_cart && course_has_carts();
+    return require("booking row acknowledges requested UTC time and cart or carry", until([&] {
+        const auto& r = state(peer).online.reservation; return r && r->scheduled_at == at && r->takes_cart == stored;
+    }));
 }
 bool live_check::travel(const std::size_t peer, const std::string& destination) {
     (*this)[peer].input.interact = true; tick(); (*this)[peer].input = {};
-    if (!require("F at physical bus opens transport choices", state(peer).hub_flow.screen == hub_screen::bus)) { return false; }
-    request_bus_travel(state(peer), false);
+    if (!require("F at physical bus boards with no menu", state(peer).hub_flow.screen == hub_screen::none && !state(peer).hub_flow.travel_course.empty())) { return false; }
     return require("bus adopts complete destination snapshot", until([&] {
         const auto& s = state(peer); return s.online.room_ready && s.online.room && s.online.room->course_id == destination && s.place.id == destination && s.hub_flow.travel_course.empty() && my_room_player(s) && my_room_player(s)->motion && s.online.bags.count(s.online.account_id) && s.online.loadouts.count(s.online.account_id);
     }));

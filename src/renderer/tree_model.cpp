@@ -171,13 +171,12 @@ float crown_reach(const tree_look& look, const glm::vec3& point) {
     return glm::length(d);
 }
 
-grown_tree grow_tree(const tree_look& look, const std::uint32_t seed, const tree_detail detail) {
+grown_tree grow_tree(const tree_look& look, const std::uint32_t seed) {
     grown_tree model;
     tree_dice dice(seed);
     const crown_box box = crown_of(look);
-    const bool full = detail == tree_detail::full;
     const bool bush = look.shape == crown_shape::dome;
-    const int sides = full ? 6 : 4;
+    const int sides = 6;
     const float crown_base = box.middle.y - box.half.y;
 
     // The trunk: into the crown's middle, or a spruce's to its top.
@@ -188,7 +187,7 @@ grown_tree grow_tree(const tree_look& look, const std::uint32_t seed, const tree
         add_prism(model, segment{glm::vec3(0.0f), glm::vec3(0.0f, top, 0.0f), trunk_radius, trunk_radius * 0.25f}, sides);
     }
     // The limbs: from the trunk (a bush's from the ground) out into the crown.
-    const int limb_count = std::max(1, full ? look.limbs : std::max(2, look.limbs / 2));
+    const int limb_count = std::max(1, look.limbs);
     for (int i = 0; i < limb_count; ++i) {
         const float azimuth = tau * (static_cast<float>(i) + dice.between(-0.3f, 0.3f)) / static_cast<float>(limb_count);
         const glm::vec3 out(std::cos(azimuth), 0.0f, std::sin(azimuth));
@@ -218,32 +217,29 @@ grown_tree grow_tree(const tree_look& look, const std::uint32_t seed, const tree
     }
 
     // The clumps and the twigs to them.
-    const int clump_count = std::max(1, full ? look.clumps : look.far_clumps);
-    const float size = look.clump_size * (full ? 1.0f : std::sqrt(static_cast<float>(look.clumps) /
-                                                                  static_cast<float>(std::max(1, look.far_clumps))));
+    const int clump_count = std::max(1, look.clumps);
+    const float size = look.clump_size;
     std::vector<glm::vec3> centres;
     for (int i = 0; i < clump_count; ++i) {
         const bool inner = dice.next() < 0.12f;
         centres.push_back(point_in_crown(look, box, dice, inner ? 0.3f : 0.55f, inner ? 0.55f : 0.95f));
     }
-    if (full) {
-        for (const glm::vec3& centre : centres) {
-            float best_distance = 1.0e9f;
-            glm::vec3 best(0.0f);
-            float best_radius = 0.0f;
-            for (const segment& limb : limbs) {
-                float along = 0.0f;
-                const glm::vec3 on = nearest_on(limb, centre, along);
-                const float distance = glm::length(on - centre);
-                if (distance < best_distance) {
-                    best_distance = distance;
-                    best = on;
-                    best_radius = limb.from_radius + (limb.to_radius - limb.from_radius) * along;
-                }
+    for (const glm::vec3& centre : centres) {
+        float best_distance = 1.0e9f;
+        glm::vec3 best(0.0f);
+        float best_radius = 0.0f;
+        for (const segment& limb : limbs) {
+            float along = 0.0f;
+            const glm::vec3 on = nearest_on(limb, centre, along);
+            const float distance = glm::length(on - centre);
+            if (distance < best_distance) {
+                best_distance = distance;
+                best = on;
+                best_radius = limb.from_radius + (limb.to_radius - limb.from_radius) * along;
             }
-            if (best_distance > 0.02f) {
-                add_prism(model, segment{best, centre, best_radius * 0.5f, best_radius * 0.15f}, 3);
-            }
+        }
+        if (best_distance > 0.02f) {
+            add_prism(model, segment{best, centre, best_radius * 0.5f, best_radius * 0.15f}, 3);
         }
     }
     model.bark_count = model.vertices.size();

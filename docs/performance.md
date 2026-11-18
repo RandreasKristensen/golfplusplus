@@ -10,7 +10,7 @@ code reads them.
 
 | Variable | Effect |
 |---|---|
-| `GOLFPP_COURSE=<course id>` | Skip the menu and boot straight into that course (the `id` in `assets/world/courses/*/course.json`). Unknown ids fall back to the menu. |
+| `GOLFPP_COURSE=<course id>` | Skip the menu and boot straight into that course (the `id` in `assets/world/courses/*/course.json`). Unknown ids fall back to the menu. `practice_ground` (the hub's id) boots the offline hub at its bus-door arrival; with `GOLFPP_SCREENSHOT` and `GOLFPP_GAME_TIME` it photographs the plaza by day or night. |
 | `GOLFPP_VSYNC=0` | Present without vsync so FPS shows real headroom. Also accepts `off`, `no`, `false`, `disable(d)`; anything else keeps vsync on. |
 | `GOLFPP_WINDOW=<W>x<H>` | Open the window at this size in pixels (e.g. `3440x1440`) instead of 1280x720. Anything else keeps the default. The fullscreen setting still wins. |
 | `GOLFPP_SCREENSHOT=<path.bmp>` | 120 frames after loading (into `GOLFPP_COURSE`, or the menu), save the window's picture after the TV pass as a 24-bit BMP and quit. Runs with default settings, silent (no sound device is opened), and never writes the save. For reviewing the picture. |
@@ -51,7 +51,7 @@ whole microseconds to keep the lines short.
 | `TSAMP` / `TTRI` | Terrain sample calls / triangles tested across them |
 | `CHUNK v/c R IDX` | Terrain chunks visible / culled, merged draw ranges, indices drawn |
 | `TREE` | `ON` when the instanced tree batch passed frustum culling |
-| `GPU SMAP` / `LMAP` / `TER` / `SHD` / `TRE` / `PRP` / `SKY` / `WAT` / `WTR` / `SHF` / `BLM` / `SMR` / `CAM` / `EYE` / `TAPE` / `OVL` / `CRT` / `ZOOM` | GPU timings from timer queries, reported 2 frames late: the shadow map of trees, floodlights, players and carts (`shadow_map_pass`, 0 with the sun down) / the floodlights' shadow maps (`lamp_shadow_pass`, 0 but on the frame a new floodlight comes near or the trees change) / terrain / blob shadows (`blob_shadow_renderer`) / trees, signs, fence posts and floodlights / every model: carts, clubs and what is held, mine pinned to the camera too (`prop_renderer`) / the sky and land panorama behind them, its rainbow too (`backdrop_pass`) / the ponds: the copy of the scene under them and their surfaces, or the picture seen from under one (`water_renderer`, 0 with no pond in view) / rain streaks and the wind's specks (`weather_renderer`, two line draws, 0 with neither) / the sun shafts taken out of the haze and the trees' shadows out of the nearest floodlights' beams (`sun_shaft_pass`, 0 with neither) / the camcorder's quarter-size copy, metering and bloom / its column smear / its recording of the picture (`camcorder_pass`) / the rangefinder's eyepiece (`eyepiece_pass`, 0 when not held up) / tape pass / overlay / TV pass / the eyepiece's zoomed view, the scene drawn again within the eyepiece at its zoom (0 when not held up). While paused only the tape, overlay and TV run |
+| `GPU SMAP` / `LMAP` / `TER` / `GRS` / `SHD` / `TRE` / `PRP` / `SKY` / `REF` / `WAT` / `WTR` / `SHF` / `BLM` / `SMR` / `CAM` / `EYE` / `TAPE` / `OVL` / `CRT` / `ZOOM` | GPU timings from timer queries, reported 2 frames late: the shadow map of trees, floodlights, players and carts (`shadow_map_pass`, 0 with the sun down) / the floodlights' shadow maps (`lamp_shadow_pass`, redrawn when a lamp, the casters or the crowns' wind pose changes) / terrain / the fixed world grass tufts / blob shadows (`blob_shadow_renderer`) / trees, signs, fence posts and floodlights / every model: carts, clubs and what is held, mine pinned to the camera too (`prop_renderer`) / the sky and land panorama behind them, its rainbow too (`backdrop_pass`) / the real scene mirrored at each visible water level (`reflection_pass`) / the ponds: the copy of the scene under them and their surfaces, or the picture seen from under one (`water_renderer`, 0 with no pond in view) / rain streaks and the wind's specks (`weather_renderer`, two line draws, 0 with neither) / the sun shafts taken out of the haze and the trees' shadows out of the nearest floodlights' beams (`sun_shaft_pass`, 0 with neither) / the camcorder's quarter-size copy, metering and bloom / its column smear / its recording of the picture (`camcorder_pass`) / the rangefinder's eyepiece (`eyepiece_pass`, 0 when not held up) / tape pass / overlay / TV pass / the eyepiece's zoomed view, the scene drawn again within the eyepiece at its zoom (0 when not held up). While paused only the tape, overlay and TV run |
 
 The overlay text comes from `format_profile_overlay_lines` in
 `src/profiling/profiling.cpp`.
@@ -74,6 +74,126 @@ course takes about 1.1 s (`golfpp-shot-lab --course himmerland_new_course
 shots of the whole bag at three backswings in 0.3 s more); walking costs
 about 0.03 ms of `update_game` a frame (the test preset, 3000 frames walking
 and turning across the course).
+
+## Current renderer benchmark
+
+Measured 2026-11-18: 18 courses, 51 views, release, Ryzen 7 5800HS,
+16 GB RAM, RTX 3050 Ti Laptop GPU (driver 610.47), AC power, 1920 x 1080
+window and shipped 640 x 360 scene. The competing game was closed before
+this run; a second golf++ instance started after it finished. GPU telemetry
+recorded 79-90 C and thermal limiting in 241 of 436 one-second samples.
+These are sustained, thermally variable laptop observations, not a certified
+unthrottled hardware comparison.
+
+Each case warms 60 frames and measures 240. A measured frame rebuilds render
+data/lights/weather, renders, swaps with vsync off and calls `glFinish`.
+It measures **serialized rendering cost**, including driver/query waits;
+it excludes simulation, networking, audio and loading. It is not measured
+whole-game FPS. The sweep is a full first rotation after the short warmup,
+so it can include newly visited-view resource growth. The full-app,
+pipelined and repeatability work is in the
+[performance implementation plan](todo/rendering_performance.md).
+
+32 of 51 p95 results exceeded 16.67 ms. This gaming machine needs substantial
+headroom beyond a 60 Hz interval to support older integrated devices.
+No earlier executable plus matching assets was benchmarked, so there is no
+honest old/new percentage to quote.
+
+All values below are p95 milliseconds; grass is CPU sample payload only.
+A similar logical GPU texture payload is requested; driver storage may differ.
+
+| Course | Play p95 | Pond p95 | Sweep p95 | Grass MiB |
+|---|---:|---:|---:|---:|
+| `blommenslyst_9_holes` | 9.88 | 14.31 | 10.08 | 39.7 |
+| `blommenslyst_golfklub` | 17.80 | 26.30 | 18.69 | 138.3 |
+| `hedensted_golf_klub` | 18.57 | 22.97 | 53.82 | 470.7 |
+| `hedensted_pay_play` | 16.13 | 15.32 | 21.31 | 104.3 |
+| `himmerland_new_course` | 17.44 | 29.80 | 17.46 | 296.8 |
+| `himmerland_par_3` | 18.87 | 17.43 | 17.54 | 77.2 |
+| `horsens_golfklub` | 17.77 | 31.58 | 37.59 | 139.6 |
+| `horsens_par_3` | 10.49 | 13.20 | 10.80 | 42.0 |
+| `jelling_golfklub` | 19.24 | 26.51 | 33.42 | 337.5 |
+| `jelling_par_3` | 11.60 | 9.76 | 9.71 | 19.1 |
+| `kalo_golf_club` | 17.54 | 27.92 | 28.18 | 303.2 |
+| `kalo_par_3` | 10.31 | - | 9.78 | 43.9 |
+| `marienlyst_golfklub` | 11.81 | - | 11.55 | 20.1 |
+| `mollerup_golf_club` | 46.82 | 47.51 | 28.59 | 202.7 |
+| `mollerup_par_3` | 10.27 | 12.87 | 9.29 | 19.0 |
+| `odense_golfklub` | 24.37 | 31.63 | 24.29 | 190.8 |
+| `odense_pilebanen` | 14.04 | - | 22.19 | 175.3 |
+| `ry_golf_klub` | 20.71 | 17.73 | 21.00 | 223.8 |
+
+Hedensted's sweep averaged 26.70 ms but reached p95 53.82 / p99 57.49 ms.
+Mollerup's pond averaged 42.78 ms, p95 47.51 / p99 49.38 ms. Those cases
+show why one small course's stage averages are insufficient. Warm solo
+views stream roughly 1.7-4.8 MiB/frame in these cases; Hedensted's field is
+470.7 MiB before its GPU texture. Peak observed process working set reached
+about 1.55 GiB. These are measured costs, not proof that one particular
+component accounts for every slow frame.
+
+The [summary CSV](benchmarks/2026-11-18_renderer.csv) retains mean, median,
+p95, p99, maximum, preparation/submission time and draw/upload counters.
+Raw frames, GPU stages and telemetry from the completed run are in
+`build/release/benchmarks/rtx3050ti/`. The later component-isolation batch
+was interrupted when a separate golf++ instance began; its partial results
+are exploratory and are not used as controlled subtraction estimates.
+A temporary per-executable power-saving preference still selected NVIDIA
+and was restored; actual integrated-GPU performance remains unmeasured.
+
+Reproduce the probe (close competing GPU apps and avoid simultaneous builds):
+
+```powershell
+cmake --preset release
+cmake --build build/release --target golfpp-picture-check --parallel 4
+./build/release/golfpp-picture-check --profile
+./build/release/golfpp-picture-check horsens_golfklub --profile --isolate
+./build/release/golfpp-picture-check horsens_golfklub --profile --night
+```
+
+`--isolate` removes water, trees or grass only in diagnostic render data;
+no production setting changes. Do not add those deltas: removed trees affect
+both main and reflected views, and driver/clock effects are not additive.
+The scene and memory changes proposed next are tracked in
+`docs/todo/rendering_performance.md`.
+
+## Earlier GPU stage measurements
+
+Measured 2026-11-18 in release on the owner's NVIDIA GeForce RTX 3050 Ti
+Laptop GPU (driver 610.47), 1920 x 1080 window, shipped 640 x 360 scene,
+no vsync. `golfpp-picture-check COURSE --profile` uses the ordinary renderer,
+including signs, props and the local figure, at noon: 60 warmup frames and
+120 measured frames per view. It writes `profile.csv` and `profile_info.txt`
+in `build/release/picture_check/COURSE`.
+
+| GPU stage (ms) | Marienlyst play | Horsens play | Horsens pond |
+|---|---:|---:|---:|
+| Full trees and signs (`TRE`) | 0.831 | 1.185 | 1.967 |
+| Full-model sun shadows (`SMAP`) | 0.755 | 1.149 | 0.139 |
+| Fixed grass (`GRS`) | 0.481 | 0.636 | 0.583 |
+| Real mirrored scenes (`REF`) | 0 | 2.116 | 7.992 |
+| Water composition (`WAT`) | 0 | 0.048 | 0.167 |
+
+These stage-only fixed-view averages do not establish low-end headroom.
+The broader frame-time results above supersede that conclusion. The sky,
+sun shadows, shafts and camcorder stages (`SKY + SMAP + SHF
++ LMAP + BLM + SMR + CAM`) total 0.975 ms. The sun map is 256 square;
+`map_softness` is 0.375 texels, preserving the world-space PCF tap offsets
+of the previous 1024-square, 1.5-texel filter. Tree geometry, leaf cutouts
+and wind pose are identical in picture, sun map and lamp maps.
+
+Mirrors retain the full scene at quarter width and height (160 x 90 in this
+run). Current-frame depth queries skip entirely hidden water planes. Before
+those queries, the full-resolution Horsens pond view spent 118.96 ms in
+mirrors; with queries at half resolution it spent 10.60 ms, and the final
+quarter-resolution pass costs 7.99 ms. These compare the same view; the
+first measurement also used the larger sun map. Marienlyst has no ponds,
+so Horsens supplies the water measurement. More visible water levels mean
+more real scene passes; `REF` includes their geometry, shading and visibility
+queries rather than charging their work to the main scene's counters.
+
+The one-time grass field bake takes 0.20 s for Marienlyst's 1418 x 1238
+nodes and 2.35 s for Horsens's 4102 x 2974 nodes. It is not part of frame
+cost; no field is redrawn or uploaded while walking.
 
 ## Online: server energy and traffic
 
@@ -148,3 +268,5 @@ snapshot and movement XP are now the server's own. Measure 2- and 8-player
 play on the test database before release; if it costs too much, walking
 standing still is already skipped, and walking could step at half the rate.
 
+
+Screenshot runs accept `--screenshot-view x,z,yaw,pitch` (radians), placing the eye on the sampled ground at that location. It applies only with `GOLFPP_SCREENSHOT`. Hub path lamps share the nearest 16 scene lights and four 128-square lamp shadow maps (cached while the casters' pose holds); adding posts does not increase those GPU budgets.

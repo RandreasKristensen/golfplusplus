@@ -70,8 +70,26 @@ void append_prop_model(prop_batch& batch, const prop_model& model, const glm::ma
 // What a painted part of `part` shows in `paint`.
 glm::vec3 painted_color(const prop_part& part, const std::optional<glm::vec3>& paint);
 
+// How far the bus's doors have swung (0 shut, 1 open) after `elapsed` more
+// seconds heading for `open`, a full swing taking `swing_seconds`. With no
+// `progress` yet (a course just loaded, a join mid-boarding) they stand at it.
+float door_swing_step(const std::optional<float>& progress, bool open, float elapsed, float swing_seconds);
+
+// The hub bus's door parts (tagged "door") swung `progress` (0 shut, 1 open,
+// eased) about its door_hinge point, as seen from the model's frame.
+prop_part_pose bus_door_pose(const prop_model& bus, float progress);
+
+// The model of the first placed hub bus, nullptr when there is none.
+const prop_model* placed_bus(const std::vector<static_prop>& placed, const prop_catalog& props);
+
+// Every placed prop, the bus without its doors: they move, so
+// append_bus_doors draws them each frame.
 void append_world_props(prop_batch& batch, const std::vector<static_prop>& placed,
     const prop_catalog& props, const glow_floors& glow);
+
+// The placed buses' door parts swung `progress`.
+void append_bus_doors(prop_batch& batch, const std::vector<static_prop>& placed, const prop_catalog& props,
+                      const glow_floors& glow, float progress);
 
 // Where `hung` goes hung at `mount` of a model whose frame is `frame`: its
 // hang point at the mount, its sides along the mount's.

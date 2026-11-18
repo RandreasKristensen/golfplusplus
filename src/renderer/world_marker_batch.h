@@ -157,6 +157,9 @@ struct world_marker_scene {
     glm::vec3 pin_position{0.0f};
     // Every other hole's cup and flag, then the course's collectibles.
     const std::vector<glm::vec3>* pin_markers = nullptr;
+    // Each marker's flagstick height in metres; a marker past its end stands
+    // pin_visual_height_meters tall.
+    const std::vector<float>* pin_marker_heights = nullptr;
     const std::vector<render_collectible>* collectibles = nullptr;
     // Cups without their flag, and the flagsticks lying beside them.
     const std::vector<glm::vec3>* flags_out = nullptr;
@@ -166,11 +169,7 @@ struct world_marker_scene {
     float cup_depth_meters = 0.0f;
     float pin_visual_height_meters = 0.0f;
     flag_pose flag;
-    // A flagstick's real radius; where the camera is, and how wide one scene
-    // pixel is a metre from it: flagsticks are drawn at least a pixel wide.
     float flagstick_radius_meters = 0.0f;
-    glm::vec3 camera_position{0.0f};
-    float pixel_per_meter = 0.0f;
 
     const render_address_feet* address_feet = nullptr;
 
@@ -199,19 +198,10 @@ void append_tee_box(world_marker_batch& batch, const tee_box& box, const marker_
 // cylinder marking its opening, then every one's inside in the cup's colour.
 void append_cup_holes(world_marker_batch& batch, const std::vector<glm::vec3>& centres, float radius, float depth,
                       const marker_colors& colors, const glow_floors& glow);
-// How a standing flagstick's pole is seen: its real radius, the way from it
-// towards the eye, and how wide a scene pixel is where it stands.
-struct pole_view {
-    float radius_meters = 0.0f;
-    glm::vec3 toward_eye{0.0f, 0.0f, 1.0f};
-    float pixel_meters = 0.0f;
-};
-// The pole, one panel turned to the eye at its real width, or a scene pixel
-// wide where that is thinner, so far off it still shows; then its flag flying
-// as `flag` says from the top of it in two panels, hoist to fly.
+// A cylindrical pole at its real radius; its flag flies in the world's wind.
 void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, float pin_visual_height_meters,
                           const marker_colors& colors, const glow_floors& glow, const flag_pose& flag = flag_pose{},
-                          const pole_view& pole = pole_view{});
+                          float radius_meters = 0.0f);
 // A flagstick taken out, lying on the green from `foot` to `tip`, its flag
 // flat on the ground at the tip end.
 void append_lying_flagstick(world_marker_batch& batch, const glm::vec3& foot, const glm::vec3& tip,

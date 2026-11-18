@@ -48,6 +48,8 @@ game_input game_input_from_keys(const input_state& keys, const float mouse_look_
     input.snap_view = keys.key_r.pressed;
 
     input.interact = keys.key_f.pressed;
+    input.interact_held = keys.key_f.is_down;
+    input.interact_released = keys.key_f.released;
     input.drop_practice_ball = keys.key_g.pressed;
     input.swing = keys.space.pressed;
     input.jump = keys.space.pressed;

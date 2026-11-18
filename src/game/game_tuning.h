@@ -28,6 +28,8 @@ struct world_scale_tuning {
     // (cup_tuning: the cup is drawn as big as it plays).
     float ball_visual_radius_meters = 0.0f;
     float pin_visual_height_meters = 0.0f;
+    // The short flags of a practice green (the hub's cups).
+    float practice_pin_visual_height_meters = 0.0f;
     // What a player or cart bumps into at a standing flagstick.
     float flagstick_radius_meters = 0.0f;
 };
@@ -205,6 +207,8 @@ struct player_tuning {
     float max_look_pitch = 0.0f;
     float mouse_look_radians = 0.0f;
     float ball_interact_radius = 0.0f;
+    // F held this long picks up my nearest resting ball; a shorter press is a tap.
+    float ball_pickup_hold_seconds = 0.0f;
     // From a cup, standing on its green, P takes its flag out or puts it back.
     float flag_reach = 0.0f;
     // How far behind a ball the player stands teeing it up.
@@ -474,8 +478,14 @@ struct server_tuning {
     int tee_interval_minutes = 0;
     int tee_expiry_minutes = 0;
     int bus_early_minutes = 0;
+    // The bus's horn sounds this long before it leaves.
+    float last_call_seconds = 0.0f;
+    // How many departures the server lists for the hub's board.
+    int departure_board_rows = 0;
     float bus_reach_meters = 0.0f;
-    int tee_book_days = 0;
+    // The book lists times up to the end of the hub's in-game day this many days
+    // after today (1: tomorrow), so a time reads as today's or tomorrow's (game/tee_times.h).
+    int tee_book_days_ahead = 0;
     float warmup_distance_meters = 0.0f;
     float warmup_reach_meters = 0.0f;
     int name_min_length = 0;  // code points

@@ -33,10 +33,12 @@ struct game_input {
     // B: my bag off my cart onto my back, down at my feet, back up from the
     // ground, or onto my cart.
     bool move_bag = false;
-    // With what is in reach: tee up, step up to my ball, pick up the one in
-    // the cup, claim a collectible, step into or out of a cart; at address,
-    // step away from the ball.
+    // With what is in reach: tee up, step up to my ball, claim a collectible,
+    // step into or out of a cart; at address, step away from the ball.
+    // Held at my ball it picks the ball up instead (game/ball_lift.h).
     bool interact = false;
+    bool interact_held = false;
+    bool interact_released = false;
     bool drop_practice_ball = false;
     // At address, steps of the backswing's cap this frame by the wheel:
     // positive longer.

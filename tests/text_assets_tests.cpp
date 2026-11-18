@@ -155,7 +155,7 @@ TEST_CASE("font covers the name and menu charset") {
         CHECK(false);
         return;
     }
-    const std::string required = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_.,!?:/+()'#@";
+    const std::string required = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_.,!?:/+()'#@&";
     for (const char c : required) {
         CHECK(font_has_glyph(text->font, c));
     }
@@ -180,6 +180,35 @@ TEST_CASE("font draws Danish letters, lowercase with the uppercase glyph") {
     const std::string charset = font_charset(text->font);
     CHECK(charset.find(u8"Æ") != std::string::npos);
     CHECK(charset.find(u8"æ") == std::string::npos);
+}
+
+TEST_CASE("the comma has a tail below its dot, so it reads as a comma and not a full stop") {
+    const std::optional<text_assets> text = shipped_text();
+    REQUIRE(text);
+    const pixel_glyph& comma = find_glyph(text->font, ',');
+    const pixel_glyph& stop = find_glyph(text->font, '.');
+    CHECK(stop.lit_pixel_count == 1);
+    CHECK(comma.lit_pixel_count >= 3);
+    // Rises above the full stop's single row and ends on the bottom row, off to the left of its stem.
+    const int rows = static_cast<int>(comma.pixels.size()) / comma.width;
+    int top = rows;
+    for (int row = 0; row < rows; ++row) {
+        for (int column = 0; column < comma.width; ++column) {
+            if (comma.pixels[static_cast<std::size_t>(row * comma.width + column)] != 0 && top == rows) { top = row; }
+        }
+    }
+    CHECK(top <= rows - 3);
+    CHECK(comma.pixels[static_cast<std::size_t>((rows - 1) * comma.width)] != 0);
+}
+
+TEST_CASE("every shipped course's name has a glyph for each of its characters") {
+    const std::optional<text_assets> text = shipped_text();
+    REQUIRE(text);
+    const auto content = load_game_content(GOLFPP_ASSETS_DIR);
+    REQUIRE(content.content);
+    for (const auto& course : content.content->courses) {
+        for (const char32_t c : decode_utf8(course.name)) { CHECK(font_has_glyph(text->font, c)); }
+    }
 }
 
 TEST_CASE("missing glyphs draw the fallback box, not a letter") {

@@ -12,6 +12,7 @@
 #include "core/tape_tracking.h"
 #include "core/vcr_frame.h"
 #include "game/asset_resolver.h"
+#include "game/boarding.h"
 #include "game/content_files.h"
 #include "game/course_session.h"
 #include "game/golf_cart.h"
@@ -146,6 +147,10 @@ std::string sound_for_event(const audio_event& event) {
         return sound_cart_righted;
     case audio_event_type::player_bump:
         return sound_player_bump;
+    case audio_event_type::boarding_call:
+        return sound_pa_boarding_call;
+    case audio_event_type::bus_horn:
+        return sound_bus_horn;
     }
     return {};
 }
@@ -222,7 +227,12 @@ bool app::init(const startup_options& options) {
         return false;
     }
     content_ = std::move(*content.content);
-    catalog_ = load_startup_catalog(content_, text_);
+    startup_catalog_result catalog = load_startup_catalog(content_, text_);
+    if (!catalog.catalog) {
+        SDL_Log("Failed to load the course catalog: %s", catalog.error.c_str());
+        return false;
+    }
+    catalog_ = std::move(*catalog.catalog);
 
 #if GOLFPP_NET
     const std::optional<std::string> online_text = read_text_file(std::filesystem::path(asset_root) / online_config_path);
@@ -269,9 +279,11 @@ bool app::init(const startup_options& options) {
     game_ = make_game_state(content_, save.save);
 
     // GOLFPP_COURSE skips the menu (profiling); an unknown id shows the menu.
+    // The hub's own id boots the offline practice ground.
+    const bool boot_hub = options.boot_course_id == online_hub_course;
     const course_definition* boot_course =
-        options.boot_course_id.empty() ? nullptr : find_course(content_, options.boot_course_id);
-    if (!options.boot_course_id.empty() && boot_course == nullptr) {
+        options.boot_course_id.empty() || boot_hub ? nullptr : find_course(content_, options.boot_course_id);
+    if (!options.boot_course_id.empty() && !boot_hub && boot_course == nullptr) {
         SDL_Log("GOLFPP_COURSE=%s: no such course, starting at the menu", options.boot_course_id.c_str());
     }
     if (options.tour_stop) {
@@ -279,11 +291,20 @@ bool app::init(const startup_options& options) {
             SDL_Log("GOLFPP_TOUR: the course failed to load");
             return false;
         }
+    } else if (boot_hub && arrive_at_place(online_hub_course)) {
+        enter_playing(menu_);
     } else if (boot_course != nullptr && start_course(game_, *boot_course)) {
         enter_playing(menu_);
     } else if (!reset_to_menu_backdrop()) {
         SDL_Log("The first course (%s) failed to load", content_.courses.front().id.c_str());
         return false;
+    }
+
+    if (review_run && options.screenshot_view) {
+        const auto& view = *options.screenshot_view;
+        game_.player.position = anchor_on_terrain(game_.area, glm::vec3(view[0], 0, view[1]));
+        game_.player.yaw = view[2];
+        game_.look.pitch = view[3];
     }
 
     // Typing only reaches input_state::text_typed while a text field is focused.
@@ -511,7 +532,7 @@ void app::update_confirm_menu(frame_profile* profile) {
             return_to_menu();
         }
         if (result.leave_group) { request_leave_group(game_); }
-        if (result.return_hub) { request_bus_travel(game_, false); }
+        if (result.return_hub) { request_bus_travel(game_); }
         if (result.give_up_hole) {
             give_up_hole(game_);
         }
@@ -614,6 +635,12 @@ void app::play_game_audio() {
     for (const running_motor& motor : running_motors(game_)) {
         motors.push_back(loop_request{"cart_motor:" + std::to_string(motor.owner), sound_cart_drive_loop, motor.position, motor.pitch});
     }
+    for (const placed_loop& loop : hub_ambience_loops(game_)) {
+        motors.push_back(loop_request{loop.key, loop.sound, loop.position, 1.0f});
+    }
+    if (bus_doors_open(game_) && game_.area.hub_sounds) {
+        motors.push_back(loop_request{"bus_engine", sound_bus_engine_loop, game_.area.hub_sounds->bus_engine, 1.0f});
+    }
     audio_.set_loops(motors);
 }
 
@@ -632,7 +659,7 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
         static_cast<float>(setting_value(menu_.settings, *find_setting(content_.settings, setting_field_of_view)));
     const bool interact_prompt = setting_value(menu_.settings, *find_setting(content_.settings, setting_interact_prompt)) != 0;
     render_data data = make_render_data(game_, text_, content_.skills,
-                                        render_meshes{&terrain_render_mesh_, &material_overlay_render_mesh_, &hole_signs_, &fences_, &water_, &floodlights_},
+                                        render_meshes{&terrain_render_mesh_, &material_overlay_render_mesh_, &hole_signs_, &fences_, &water_, &floodlights_, &grass_field_},
                                         props_, fov_degrees, interact_prompt);
 
     const camera_view desired = fixed_camera

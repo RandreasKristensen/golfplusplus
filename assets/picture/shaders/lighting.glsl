@@ -1,6 +1,6 @@
 // The scene's light and haze this frame: the one home of both. Every scene
 // shader pulls this in with `#include "lighting.glsl"`; the renderer fills
-// the block once per frame (renderer/lighting_uniforms.h) from the palette
+// the block once per scene view (renderer/lighting_uniforms.h) from the palette
 // (assets/visuals/lighting.json).
 //
 //   lit:   albedo * (hemisphere(N) * ao + sun_color * wrap(N.L) * sun_shadow + local_light)
@@ -44,11 +44,12 @@ layout(std140) uniform frame_lighting {
     // x: how much of the sun's light the haze sends towards the eye, at
     // Henyey-Greenstein's average; y: how much keeps on forwards (its g);
     // z: the mist, the haze's growth with distance from its square (0)
-    // towards straight (1).
+    // towards straight (1); w: a mirrored water view.
     vec4 air;
     // The mist lying low: x the world height it lies on, the area's lowest
     // ground; y how fast it thins upwards, 1 / the metres it takes to thin
-    // by e; z the share of the light it takes out per metre on that ground.
+    // by e; z the share of the light it takes out per metre on that ground;
+    // w: the mirror plane while air.w is set.
     vec4 mist;
     vec4 light_position[max_lights];  // xyz: world space; w: how far it reaches, 0 for no light
     vec4 light_color[max_lights];     // rgb: its light, past 1 near it; w: cos of where its cone is full
@@ -106,6 +107,7 @@ vec3 local_light(vec3 world, vec3 normal) {
     vec3 n = normalize(normal);
     vec3 sum = vec3(0.0);
     for (int i = 0; i < max_lights; ++i) {
+        if (light_position[i].w <= 0.0) { continue; }
         vec3 towards;
         vec3 light = light_reaching(i, world, towards);
         sum += light * max((dot(n, towards) + sun_wrap) / (1.0 + sun_wrap), 0.0);
@@ -117,6 +119,7 @@ vec3 local_light(vec3 world, vec3 normal) {
 vec3 local_light(vec3 world) {
     vec3 sum = vec3(0.0);
     for (int i = 0; i < max_lights; ++i) {
+        if (light_position[i].w <= 0.0) { continue; }
         vec3 towards;
         sum += light_reaching(i, world, towards);
     }
@@ -138,6 +141,7 @@ vec3 air_reaching(int i, vec3 world, out vec3 towards) {
 vec3 air_light(vec3 world) {
     vec3 sum = vec3(0.0);
     for (int i = 0; i < max_lights; ++i) {
+        if (light_position[i].w <= 0.0) { continue; }
         vec3 towards;
         sum += air_reaching(i, world, towards);
     }
@@ -164,6 +168,7 @@ vec3 wet_gloss(vec3 world, vec3 normal, float sun) {
     float fresnel = 0.04 + 0.96 * pow(1.0 - facing, 5.0);
     vec3 glints = sun_color.rgb * sun * pow(max(dot(reflect(-sun_direction.xyz, n), view), 0.0), wet.z);
     for (int i = 0; i < max_lights; ++i) {
+        if (light_position[i].w <= 0.0) { continue; }
         vec3 towards;
         vec3 light = light_reaching(i, world, towards);
         glints += light * pow(max(dot(reflect(-towards, n), view), 0.0), wet.z);
@@ -184,13 +189,21 @@ float mist_at(vec3 world) {
 // cancels, so there it takes the series: level, the even mist at the eye.
 // A long look down far below the lowest ground (the backdrop's land) caps
 // its far end's e-folds, so the mist there is thick but never infinite.
-float mist_depth(vec3 way, float meters) {
-    float run = min(meters, 1.0 / haze_eye.w);
-    float rise = way.y * run * mist.y;
-    float from_eye = (mist.x - haze_eye.y) * mist.y;
+float mist_run(float height, float vertical, float run) {
+    float rise = vertical * run * mist.y;
+    float from_eye = (mist.x - height) * mist.y;
     float level = exp(from_eye) * (1.0 - rise * (0.5 - rise / 6.0));
     float climbing = (exp(from_eye) - exp(min(from_eye - rise, 60.0))) / (abs(rise) < 0.01 ? 1.0 : rise);
     return mist.z * run * (abs(rise) < 0.01 ? level : climbing);
+}
+
+float mist_depth(vec3 way, float meters) {
+    float run = min(meters, 1.0 / haze_eye.w);
+    if (air.w < 0.5) { return mist_run(haze_eye.y, way.y, run); }
+    // The virtual eye lies below the mirror; its ray's first leg is the
+    // reflected physical leg above it, never fog under the pond.
+    float first = way.y > 0.000001 ? clamp((mist.w - haze_eye.y) / way.y, 0.0, run) : run;
+    return mist_run(2.0 * mist.w - haze_eye.y, -way.y, first) + mist_run(mist.w, way.y, run - first);
 }
 
 // How much of what is `meters` from the eye along `way` (unit length) the
@@ -342,6 +355,7 @@ vec3 scattered_light(vec3 world) {
     vec3 way = to / max(far, 0.001);
     vec3 sum = vec3(0.0);
     for (int i = 0; i < max_lights; ++i) {
+        if (light_position[i].w <= 0.0) { continue; }
         sum += scattered_from(i, way, far);
     }
     return sum;

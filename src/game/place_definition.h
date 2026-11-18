@@ -57,6 +57,16 @@ struct course_air {
 
 enum class place_kind : unsigned char { hub, course };
 
+// What the play there counts for, read from the manifest's "rules" (every
+// field required). A plain place is a course.
+struct place_rules {
+    bool scored = true;     // balls count: strokes, holes and a round; off, holing out just ends the ball
+    bool drops = false;     // G drops a ball at my feet
+    bool shot_xp = true;    // a scored shot pays skill XP
+    bool stations = false;  // its mats tee a fresh ball any time (the hub's tee_mats)
+    int balls_out = 1;      // how many balls a player may have out, the ball in play included (game/my_balls.h)
+};
+
 struct place_definition {
     std::string id;
     std::string name;
@@ -66,4 +76,5 @@ struct place_definition {
     course_air air;
     float green_stimp_feet = 0.0f;
     bool carts = true;
+    place_rules rules;
 };

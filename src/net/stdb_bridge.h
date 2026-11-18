@@ -82,6 +82,8 @@ typedef enum stdb_table {
     STDB_TABLE_TEE_SLOT = 24,
     STDB_TABLE_MY_TEE_RESERVATION = 25,
     STDB_TABLE_DAP = 27,
+    STDB_TABLE_PRACTICE_BALL = 28,
+    STDB_TABLE_DEPARTURE_BOARD = 29,
     STDB_TABLE_MY_TEE_BOOK_STATUS = 26
 } stdb_table;
 
@@ -232,6 +234,18 @@ typedef struct stdb_ball {
     uint8_t kind;
     int32_t tee_mat;
 } stdb_ball;
+
+// One of a golfer's spare balls (the practice_ball table, game/spare_ball.h).
+typedef struct stdb_practice_ball {
+    uint64_t id;
+    uint64_t account_id;
+    uint64_t room_id;
+    float x;
+    float y;
+    float z;
+    bool in_cup;
+    int64_t placed_at;  // server microseconds
+} stdb_practice_ball;
 
 typedef struct stdb_golf_cart {
     uint64_t owner;
@@ -403,7 +417,14 @@ typedef struct stdb_tee_reservation {
     uint32_t world_id;
     uint64_t room_id;
     int64_t scheduled_at;
+    bool takes_cart;
 } stdb_tee_reservation;
+typedef struct stdb_departure {
+    uint64_t slot_id;
+    stdb_string course_id;
+    int64_t scheduled_at;
+    stdb_string names;  // the group's names, one per line
+} stdb_departure;
 typedef struct stdb_tee_book_status {
     stdb_string course_id;
     int64_t server_now;
@@ -412,6 +433,7 @@ typedef struct stdb_tee_book_status {
 typedef union stdb_row {
     stdb_tee_slot tee_slot;
     stdb_tee_reservation tee_reservation;
+    stdb_departure departure;
     stdb_tee_book_status tee_book_status;
     stdb_player player;
     stdb_golfer_skill golfer_skill;
@@ -424,6 +446,7 @@ typedef union stdb_row {
     stdb_golf_group golf_group;
     stdb_avatar_motion avatar_motion;
     stdb_ball ball;
+    stdb_practice_ball practice_ball;
     stdb_shot_event shot_event;
     stdb_item_use_event item_use_event;
     stdb_dap dap;
@@ -496,12 +519,12 @@ void stdb_unsubscribe(stdb_client* client, uint32_t subscription);
 
 // Reducers. A failure arrives as REDUCER_FAILED.
 void stdb_claim_name(stdb_client* client, const char* name, size_t len);
-void stdb_join_course(stdb_client* client, const char* course_id, size_t len, bool takes_cart);
+void stdb_join_course(stdb_client* client, const char* course_id, size_t len);
 void stdb_leave_room(stdb_client* client, uint64_t expected_room);
 void stdb_open_tee_book(stdb_client*, uint64_t room_id, const char* course_id, size_t len);
-void stdb_book_tee(stdb_client*, uint64_t room_id, uint64_t expected_booking, const char* course_id, size_t len, int64_t scheduled_at);
+void stdb_book_tee(stdb_client*, uint64_t room_id, uint64_t expected_booking, const char* course_id, size_t len, int64_t scheduled_at, bool takes_cart);
 void stdb_cancel_tee(stdb_client*, uint64_t room_id, uint64_t reservation_id);
-void stdb_take_bus(stdb_client*, uint64_t room_id, uint64_t reservation_id, bool takes_cart);
+void stdb_take_bus(stdb_client*, uint64_t room_id, uint64_t reservation_id);
 void stdb_return_to_hub(stdb_client*, uint64_t room_id);
 void stdb_start_booked_round(stdb_client*, uint64_t room_id, uint64_t reservation_id);
 void stdb_leave_group(stdb_client*, uint64_t room_id, uint64_t reservation_id);
@@ -510,7 +533,9 @@ bool stdb_update_motion(stdb_client* client, uint64_t expected_room, const stdb_
 void stdb_update_ride(stdb_client* client, uint64_t expected_room, const stdb_motion* motion);
 void stdb_tee_up(stdb_client* client, uint64_t expected_room, int32_t hole_index, bool give_up);
 void stdb_give_up_hole(stdb_client* client, uint64_t expected_room);
-void stdb_pick_up_ball(stdb_client* client, uint64_t expected_room);
+// `ball_id` 0: the ball in play; else the spare to lift.
+void stdb_pick_up_ball(stdb_client* client, uint64_t expected_room, uint64_t ball_id);
+void stdb_play_ball(stdb_client* client, uint64_t expected_room, uint64_t spare_id);
 void stdb_place_practice_ball(stdb_client* client, uint64_t expected_room, float x, float y, float z);
 void stdb_take_wheel(stdb_client* client, uint64_t expected_room);
 void stdb_leave_wheel(stdb_client* client, uint64_t expected_room);

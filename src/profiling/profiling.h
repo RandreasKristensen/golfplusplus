@@ -69,15 +69,16 @@ inline constexpr std::size_t profile_stage_count = static_cast<std::size_t>(prof
 enum class gpu_profile_stage : std::size_t {
     shadow_map = 0,
     terrain,
-    grass,  // the rough's blades near the eye and the ground map they stand on (grass_renderer)
+    grass,  // the rough's fixed world tufts (grass_renderer)
     shadows,
     trees,
     props,  // every model: carts, clubs, what is held (prop_renderer)
     sky,
+    reflection, // the real mirrored scene, once per visible water level
     water,  // the ponds: a copy of the scene under them and their surfaces, or the picture seen from under one (water_renderer)
     weather,
     shafts,  // the sun's shafts: shadows taken out of the haze (sun_shaft_pass)
-    lamp_shadows,  // the floodlights' shadow maps, drawn only when a new lamp comes near (lamp_shadow_pass)
+    lamp_shadows,  // the floodlights' shadow maps, including the casters' wind pose (lamp_shadow_pass)
     eyepiece,
     zoom,  // the eyepiece's view, the scene drawn again at its zoom
     bloom,

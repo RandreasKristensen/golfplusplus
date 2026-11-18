@@ -1,6 +1,7 @@
 #version 330 core
 
 #include "lighting.glsl"
+#include "tree_pose.glsl"
 
 // A tree of its species' grown model (renderer/tree_model.h), one instance
 // per tree: the unit frame scaled to its crown and height, turned about its
@@ -27,17 +28,10 @@ out float v_leaf;
 out float v_depth;
 flat out float v_tint;
 
-// How far a crown leans per m/s of wind, as a share of its height, at its top.
-const float lean_per_wind = 0.004;
-
 void main() {
     float c = cos(a_instance_turn.x);
     float s = sin(a_instance_turn.x);
-    vec3 scaled = a_pos * a_instance_scale;
-    vec3 world = a_instance_offset + vec3(c * scaled.x - s * scaled.z, scaled.y, s * scaled.x + c * scaled.z);
-    float up = a_pos.y * a_pos.y;
-    float gust = 0.6 + 0.4 * sin(u_time * 1.3 + a_instance_offset.x * 0.21 + a_instance_offset.z * 0.17);
-    world.xz += u_wind * (lean_per_wind * a_instance_scale.y * up * gust);
+    vec3 world=tree_world_position(a_pos,a_instance_scale,a_instance_offset,a_instance_turn.x,u_time,u_wind);
     vec3 n = a_normal / a_instance_scale;
     v_normal = normalize(vec3(c * n.x - s * n.z, n.y, s * n.x + c * n.z));
     gl_Position = u_view_proj * vec4(world, 1.0);

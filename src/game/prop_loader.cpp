@@ -16,7 +16,7 @@
 namespace {
 // The objects a variant merges into its base's by name; anything else it
 // names replaces the base's.
-const std::vector<std::string> merged_keys{"colors", "paint", "points", "mounts"};
+const std::vector<std::string> merged_keys{"colors", "paint", "points", "mounts", "numbers"};
 
 bool is_color(const glm::vec3& color) {
     return !glm::any(glm::lessThan(color, glm::vec3(0.0f))) && !glm::any(glm::greaterThan(color, glm::vec3(1.0f)));
@@ -157,6 +157,17 @@ std::optional<prop_model> parse_prop(const json& root) {
     } else if (root.contains("paint")) {
         return std::nullopt;
     }
+    if (const json* numbers = json_object(root, "numbers")) {
+        for (const auto& item : numbers->items()) {
+            const std::optional<float> number = json_float(*numbers, item.key().c_str());
+            if (!number) {
+                return std::nullopt;
+            }
+            model.numbers[item.key()] = *number;
+        }
+    } else if (root.contains("numbers")) {
+        return std::nullopt;
+    }
     const json* parts = json_array(root, "parts");
     const json* points = json_object(root, "points");
     const json* mounts = json_object(root, "mounts");
@@ -201,6 +212,11 @@ std::optional<prop_model> parse_prop(const json& root) {
     if ((model.kind == "hub_book" || model.kind == "hub_bus") &&
         (glm::any(glm::greaterThanEqual(model.point("body_min"), model.point("body_max"))) ||
          glm::length(model.point("board_normal")) < .5f)) {
+        return std::nullopt;
+    }
+    // The bus's doors swing a positive time through a positive angle.
+    if (model.kind == "hub_bus" && (model.numbers.count("door_swing_seconds") == 0 || model.numbers.count("door_open_degrees") == 0 ||
+                                    !(model.number("door_swing_seconds") > 0.0f) || !(model.number("door_open_degrees") > 0.0f))) {
         return std::nullopt;
     }
     return model;

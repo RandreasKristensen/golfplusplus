@@ -70,8 +70,28 @@ struct hub_anchor {
     float reach = 0.0f;
 };
 
+// A named piece of ground set aside for something not built yet (the clubhouse
+// and its rooms, the plaza, the caddie shack), `reach` its footprint's radius.
+struct hub_pad {
+    std::string name;
+    glm::vec3 position{0.0f};
+    float reach = 0.0f;
+};
+
+// A built thing standing in the hub: its model (game/prop_loader.h), where
+// its origin stands on the ground, which way its front (+z) faces and how far
+// it is raised (a clock on a wall).
+struct hub_prop {
+    std::string model;
+    glm::vec3 position{0.0f};
+    float heading = 0.0f;
+    float height = 0.0f;
+};
+
 struct hub_anchors {
     hub_anchor book;
+    std::vector<hub_pad> pads;
+    std::vector<hub_prop> props;
 };
 
 struct bus_stop {

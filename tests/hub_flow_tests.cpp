@@ -1,7 +1,11 @@
 #include "doctest.h"
 #include "test_support.h"
 #include "core/scene_signs.h"
+#include "core/departure_board.h"
 #include "core/tee_book.h"
+#include "game/picture_loader.h"
+#include "renderer/menu_overlay.h"
+#include "renderer/picture_size.h"
 #include "core/vcr_frame.h"
 #include "game/text_ids.h"
 #include "renderer/hud_overlay.h"
@@ -28,11 +32,11 @@ constexpr std::int64_t minute = 60000000;
 game_state hub_game() {
     auto game = started_game(fixture_hub_course());
     game.play = play_mode::online; game.place.id = online_hub_course;
-    game.kind = place_kind::hub; game.hub = hub_definition{};
+    game.kind = place_kind::hub; game.hub = hub_definition{}; game.place.rules = place_rules{false, true, false, true, 10};
     game.world.collectibles.clear();
     for (auto& start : game.world.hole_starts) { start.position.x += 100; }
     game.bag.where = bag_where::on_ground; game.bag.position = glm::vec3(100,0,100);
-    game.world.hub = hub_anchors{{glm::vec3(0,0,16),2}};
+    game.world.hub = hub_anchors{{glm::vec3(0,0,16),2}, {}, {}};
     game.world.bus_stop = bus_stop{glm::vec3(6,0,16), 0.0f};
     place_hub_scene(game.area, game.world, test_props(), game.tuning);
     game.online.account_id = 1; game.online.room_ready = true;
@@ -164,18 +168,26 @@ TEST_CASE("offline tee book chooses PLAY NOW and both buses preserve solo progre
     const auto progress = save_data_to_json(game.save);
     update_tee_book(menu, game, catalog, {}, {}, {});
     const auto page = render_tee_book(menu, game, catalog, shipped_text_assets());
+    // The cart or carry choice, then the course.
     REQUIRE(page.tiles.size() == 2);
-    // What it does, then the time of day there.
-    CHECK(page.tiles.front().subtitle.rfind("PLAY NOW - ", 0) == 0);
+    // Esc and R do the rest: no back or refresh rows, no key footer.
+    CHECK(page.footer.empty());
+    CHECK(page.tiles.front().title == "TRANSPORT: TAKE A CART");
+    // The course's card: its time of day there, then its season.
+    CHECK(page.screen == startup_menu_screen::course_book);
+    CHECK(page.tiles.back().subtitle.find(" - ") != std::string::npos);
+    menu.selection = 1;
     update_tee_book(menu, game, catalog, accept(), {}, {});
     REQUIRE(active_booking(game));
     CHECK(active_booking(game)->course_id == fixture_hub_course().id);
+    CHECK(active_booking(game)->takes_cart);
     CHECK(game.net_commands.empty()); CHECK(!game.online.reservation);
     update_tee_book(menu, game, catalog, {}, {}, {});
     CHECK(!menu.pending);
-    game.hub_flow.screen = hub_screen::bus;
-    update_tee_book(menu, game, catalog, {}, {}, {});
-    update_tee_book(menu, game, catalog, accept(), {}, {});
+    // F at the bus boards: no menu, and the booking's choice goes with me.
+    request_bus_travel(game);
+    CHECK(game.hub_flow.screen == hub_screen::none);
+    CHECK(game.takes_cart);
     CHECK(game.hub_flow.travel_course == fixture_hub_course().id);
     REQUIRE(enter_place(game, game.hub_flow.travel_course));
     CHECK(course_warmup(game)); CHECK(!game.ball);
@@ -193,7 +205,11 @@ TEST_CASE("offline tee book chooses PLAY NOW and both buses preserve solo progre
     request_ball_preparation(game, net_command_type::start_booked_round);
     REQUIRE(game.ball); CHECK(game.ball->kind == ball_kind::scored);
     CHECK(!course_warmup(game));
-    request_bus_travel(game, false);
+    // On a course the bus offers the way back.
+    game.hub_flow.screen = hub_screen::bus;
+    update_tee_book(menu, game, catalog, {}, {}, {});
+    update_tee_book(menu, game, catalog, accept(), {}, {});
+    CHECK(game.hub_flow.travel_course == online_hub_course);
     REQUIRE(enter_place(game, game.hub_flow.travel_course));
     CHECK(game.kind == place_kind::hub); CHECK(!game.round); CHECK(!game.ball);
     CHECK(save_data_to_json(game.save) == progress);
@@ -227,12 +243,12 @@ TEST_CASE("bus and tee book boards: labelled by booking and place, read left to 
         return static_cast<std::size_t>(found - game.area.props.begin());
     };
     const std::size_t book = index("tee_book"), bus = index("hub_bus");
-    auto labels = prop_board_labels(game, courses(), text);
+    auto labels = prop_board_labels(game, courses(), text, "");
     REQUIRE(labels.size() == game.area.props.size());
     CHECK(labels[book] == lookup_text(text, text_hub_book_title));
     CHECK(labels[bus] == lookup_text(text, text_hub_bus_title));
     game.online.reservation = tee_reservation_info{}; game.online.reservation->course_id = "course";
-    labels = prop_board_labels(game, courses(), text);
+    labels = prop_board_labels(game, courses(), text, "");
     CHECK(labels[bus] == "Meadow Course");
 
     render_hole_signs signs;
@@ -242,7 +258,7 @@ TEST_CASE("bus and tee book boards: labelled by booking and place, read left to 
     CHECK(refresh_render_hole_signs(signs, game.area, 1, {}, boards, text, test_scene_colors(), sign_model, 1));
     CHECK(!refresh_render_hole_signs(signs, game.area, 1, {}, boards, text, test_scene_colors(), sign_model, 2));
     game.kind = place_kind::course;
-    labels = prop_board_labels(game, courses(), text);
+    labels = prop_board_labels(game, courses(), text, "");
     CHECK(labels[bus] == lookup_text(text, text_hub_bus_board_hub));
     boards = prop_boards(game.area, test_props(), labels);
     CHECK(refresh_render_hole_signs(signs, game.area, 1, {}, boards, text, test_scene_colors(), sign_model, 3));
@@ -252,12 +268,12 @@ TEST_CASE("bus and tee book boards: labelled by booking and place, read left to 
     render_hole_signs scene_signs;
     game.kind = place_kind::hub;
     game.online.reservation.reset();
-    CHECK(refresh_scene_hole_signs(scene_signs, game, courses(), text, test_scene_colors(), test_props()));
-    CHECK(!refresh_scene_hole_signs(scene_signs, game, courses(), text, test_scene_colors(), test_props()));
+    CHECK(refresh_scene_hole_signs(scene_signs, game, courses(), text, test_scene_colors(), test_props(), ""));
+    CHECK(!refresh_scene_hole_signs(scene_signs, game, courses(), text, test_scene_colors(), test_props(), ""));
     const rgba_image unbooked_face = scene_signs.signs.back().face;
     game.online.reservation = tee_reservation_info{};
     game.online.reservation->course_id = "course";
-    CHECK(refresh_scene_hole_signs(scene_signs, game, courses(), text, test_scene_colors(), test_props()));
+    CHECK(refresh_scene_hole_signs(scene_signs, game, courses(), text, test_scene_colors(), test_props(), ""));
     CHECK(scene_signs.revision == 2U);
     CHECK(scene_signs.signs.back().face.pixels != unbooked_face.pixels);
     game.kind = place_kind::course;
@@ -300,9 +316,139 @@ TEST_CASE("tee times read the hub's in-game clock: 15 real minutes apart, never 
     const auto next = tee_time_text(game.online.server_now + 15 * minute, game, text);
     CHECK(next == make_datestamp(text, 3.0 + 1.5 / 24.0, 2.0).time);
     CHECK(next.find("UTC") == std::string::npos);
-    // Four real hours on is a later in-game day.
+    // Four real hours on is the next in-game day: TOMORROW, never a "+1D".
     const auto later = tee_time_text(game.online.server_now + 240 * minute, game, text);
-    CHECK(later == format_text(text, text_hub_time_later_day, {{"time", make_datestamp(text, 4.0, 2.0).time}, {"days", "1"}}));
+    CHECK(later == "TOMORROW " + make_datestamp(text, 4.0, 2.0).time);
+}
+
+namespace {
+// A catalog course with a hole count, par and length, dated `month`/`day`.
+startup_course_option card_course(const char* id, const char* name, const bool carts, const int month, const int day) {
+    startup_course_option option;
+    option.course.id = id; option.course.name = name; option.course.carts = carts;
+    option.course.holes = {"1.json", "2.json", "3.json"};
+    option.course.sky.month = month; option.course.sky.day = day;
+    option.total_par = 11; option.length_meters = 5912;
+    return option;
+}
+void set_hub_clock(game_state& game, const std::int64_t now) {
+    game.tuning.sky_clock = sky_timeline{0, 0.0, 6.0, 1989};
+    game.hub_sky.utc_offset_hours = 2.0f;
+    game.online.server_now = now;
+}
+}
+
+TEST_CASE("the tee book's courses are cards: name, holes, par and length, then the time there, season and carts") {
+    auto game = hub_game();
+    const auto& text = shipped_text_assets();
+    startup_catalog catalog;
+    catalog.courses = {card_course("links", "Links Course", false, 6, 21), card_course("park", "Park Course", true, 3, 19)};
+    tee_book_state menu;
+    game.hub_flow.screen = hub_screen::book;
+    update_tee_book(menu, game, catalog, {}, {}, {});
+    const auto page = render_tee_book(menu, game, catalog, text);
+    CHECK(page.screen == startup_menu_screen::course_book);
+    REQUIRE(page.tiles.size() == 2);
+    CHECK(page.tiles[0].title == "Links Course");
+    CHECK(page.tiles[0].figures == "3 HOLES  PAR 11  5,912 M");
+    // Midsummer begins on the 21st of June; a course without carts says so.
+    CHECK(page.tiles[0].subtitle.find(" - MIDSUMMER - CARRY ONLY") != std::string::npos);
+    // The 19th of March is still winter, and a cart is no remark.
+    CHECK(page.tiles[1].subtitle.find(" - WINTER") != std::string::npos);
+    CHECK(page.tiles[1].subtitle.find("CARRY") == std::string::npos);
+    CHECK(with_thousands(0) == "0");
+    CHECK(with_thousands(999) == "999");
+    CHECK(with_thousands(1000) == "1,000");
+    CHECK(with_thousands(1234567) == "1,234,567");
+}
+
+TEST_CASE("every shipped course's card fits its text at every aspect, and an overlong name is cut off, not overflowed") {
+    auto game = hub_game();
+    const auto& text = shipped_text_assets();
+    startup_catalog catalog = *load_startup_catalog(shipped_content(), text).catalog;
+    REQUIRE(catalog.courses.size() >= 4);
+    const int lines = load_picture_style(asset_root())->target_lines;
+    game.hub_flow.screen = hub_screen::book;
+    for (const bool long_name : {false, true}) {
+        if (long_name) { catalog.courses[0].course.name = std::string(80, 'W'); }
+        tee_book_state menu;
+        for (int selection = 0; selection < static_cast<int>(catalog.courses.size()); ++selection) {
+            menu.selection = selection;
+            update_tee_book(menu, game, catalog, {}, {}, {});
+            const auto page = render_tee_book(menu, game, catalog, text);
+            bool shows_long_name = false;
+            for (const auto& tile : page.tiles) { shows_long_name = shows_long_name || tile.title == std::string(80, 'W'); }
+            for (const auto& [width, height] : std::vector<std::pair<int, int>>{{1440, 1080}, {1920, 1080}, {2560, 1080}}) {
+                const picture_size size = picture_size_for_window(width, height, lines);
+                overlay_batch batch;
+                batch.grid = overlay_grid{size.width, size.height};
+                draw_startup_menu(batch, text, page, test_scene_colors().ground);
+                // Only an overlong name is ever cut, and it is.
+                CHECK((batch.truncated_text_count > 0U) == shows_long_name);
+            }
+        }
+    }
+}
+
+TEST_CASE("the book lists today's times, then tomorrow's under their headings, across the hub's midnight") {
+    auto game = hub_game();
+    const auto& text = shipped_text_assets();
+    // The hub's days begin at 03:40, 07:40, 11:40, 15:40, 19:40 and 23:40 UTC. 15:50 is early in a day.
+    set_hub_clock(game, (15 * 60 + 50) * minute);
+    tee_book_state menu; list_ready(menu, game);
+    const auto rows = tee_times(game.online.server_now, game.tuning.server, hub_clock{game.tuning.sky_clock, 2.0});
+    REQUIRE(rows.size() == 31);  // 16:00 to 23:30
+    const auto at = [](const int hours, const int minutes) { return (hours * 60 + minutes) * minute; };
+    // Courses, transport, TODAY, 16:00..19:30 (15 times), TOMORROW, 19:45 on.
+    auto page = render_tee_book(menu, game, courses(), text);
+    REQUIRE(page.tiles.size() == 9);
+    CHECK(page.screen == startup_menu_screen::tee_book);
+    CHECK(page.tiles[2].heading); CHECK(page.tiles[2].title == "TODAY");
+    CHECK(page.tiles[3].title == tee_clock_text(at(16, 0), game, text));
+    menu.top = 5;  // rows 15 to 23
+    page = render_tee_book(menu, game, courses(), text);
+    REQUIRE(page.tiles.size() == 9);
+    CHECK(page.tiles[2].title == tee_clock_text(at(19, 30), game, text));
+    CHECK(page.tiles[3].heading); CHECK(page.tiles[3].title == "TOMORROW");
+    CHECK(page.tiles[4].title == tee_clock_text(at(19, 45), game, text));
+    // Rows show the time alone, never a day suffix.
+    for (const auto& tile : page.tiles) {
+        CHECK(tile.title.find('+') == std::string::npos);
+        if (!tile.heading) { CHECK(tile.title.find("TOMORROW") == std::string::npos); }
+    }
+    // Arrows and Enter pass over a heading: up from the time after it lands on the one before.
+    menu.selection = 19;
+    input_state up; up.up.pressed = true;
+    tick(menu, game, up);
+    CHECK(menu.selection == 16);
+    input_state left; left.left.pressed = true;
+    menu.selection = 19; tick(menu, game, left);
+    CHECK(menu.selection == 17);
+}
+
+TEST_CASE("places that show a tee time say TOMORROW only for the next in-game day, never a plus or a date") {
+    auto game = hub_game();
+    const auto& text = shipped_text_assets();
+    set_hub_clock(game, (15 * 60 + 50) * minute);
+    const std::int64_t today = (19 * 60 + 30) * minute;
+    const std::int64_t tomorrow = (19 * 60 + 45) * minute;
+    CHECK(tee_time_text(today, game, text).find("TOMORROW") == std::string::npos);
+    CHECK(tee_time_text(tomorrow, game, text) == "TOMORROW " + tee_clock_text(tomorrow, game, text));
+    startup_catalog catalog = courses();
+    const std::int64_t expiry = game.tuning.server.tee_expiry_minutes * minute;
+    for (const std::int64_t at : {(17 * 60) * minute, today, tomorrow}) {
+        tee_reservation_info row; row.reservation_id = 1; row.course_id = "course"; row.scheduled_at = at;
+        game.online.reservation = row;
+        const std::string booking = booking_text(game, catalog, text);
+        CHECK(booking.find('+') == std::string::npos);
+        // The time and the first-strike expiry each say TOMORROW only when they are.
+        CHECK((booking.find("TOMORROW " + tee_clock_text(at, game, text)) != std::string::npos) == (at >= tomorrow));
+        CHECK((booking.find("TOMORROW " + tee_clock_text(at + expiry, game, text)) != std::string::npos) == (at + expiry >= tomorrow));
+    }
+    departure_info departure; departure.scheduled_at = tomorrow; departure.course_id = "course";
+    CHECK(departure_text(departure, game, catalog, text, 1000).find("TOMORROW") == 0);
+    departure.scheduled_at = today;
+    CHECK(departure_text(departure, game, catalog, text, 1000).find("TOMORROW") == std::string::npos);
 }
 
 TEST_CASE("each course's clock runs its own hours ahead, so the tee book shows which is at sunrise") {
@@ -330,4 +476,183 @@ TEST_CASE("each course's clock runs its own hours ahead, so the tee book shows w
     CHECK(std::string(part_of_day_key(3.0f, false, 7.0f)) == text_hub_part_sunset);
     CHECK(std::string(part_of_day_key(-3.0f, true, 9.0f)) == text_hub_part_dawn);
     CHECK(std::string(part_of_day_key(50.0f, false, 0.5f)) == text_hub_part_midday);
+}
+
+namespace {
+const net_command* last_command(const game_state& game, const net_command_type type) {
+    for (auto it = game.net_commands.rbegin(); it != game.net_commands.rend(); ++it) { if (it->type == type) { return &*it; } }
+    return nullptr;
+}
+startup_catalog carts_and_carry() {
+    startup_catalog catalog = courses();
+    course_definition walkers; walkers.id = "walkers"; walkers.name = "Walkers Links"; walkers.carts = false;
+    catalog.courses.push_back({walkers, 0, std::nullopt});
+    return catalog;
+}
+}
+
+TEST_CASE("the tee book offers cart or carry with the time, and changing it books the same time again") {
+    auto game = hub_game(); tee_book_state menu; list_ready(menu, game);
+    const auto& text = shipped_text_assets();
+    auto page = render_tee_book(menu, game, courses(), text);
+    // The way back, the choice, then the times.
+    REQUIRE(page.tiles.size() > 3);
+    CHECK(page.tiles[1].title == "TRANSPORT: TAKE A CART");
+    CHECK(page.tiles[1].subtitle == "ENTER TO CHANGE");
+    // A time books with the choice: the cart, as nothing was changed.
+    menu.selection = 2; game.net_commands.clear();
+    tick(menu, game, accept());
+    REQUIRE(menu.pending == net_command_type::book_tee);
+    const auto* booked = last_command(game, net_command_type::book_tee);
+    REQUIRE(booked);
+    CHECK(booked->takes_cart); CHECK(booked->scheduled_at == 105 * minute); CHECK(booked->course_id == "course");
+    // The server's row arrives with the choice: the request is answered.
+    tee_reservation_info row; row.reservation_id = 4; row.revision = 1; row.course_id = "course"; row.scheduled_at = 105 * minute; row.takes_cart = true;
+    game.online.reservation = row;
+    tick(menu, game);
+    CHECK(!menu.pending);
+    // With a booking the row's choice is shown; changing it sends the same time again, the other way.
+    page = render_tee_book(menu, game, courses(), text);
+    CHECK(page.tiles[2].title == "TRANSPORT: TAKE A CART");
+    menu.selection = 2; game.net_commands.clear();
+    tick(menu, game, accept());
+    REQUIRE(menu.pending == net_command_type::book_tee);
+    booked = last_command(game, net_command_type::book_tee);
+    REQUIRE(booked);
+    CHECK(!booked->takes_cart); CHECK(booked->scheduled_at == 105 * minute); CHECK(booked->reservation_id == 4);
+    // Until the row says so, the book still shows the booking as it is.
+    CHECK(render_tee_book(menu, game, courses(), text).tiles[2].title == "TRANSPORT: TAKE A CART");
+    // A refusal keeps the whole row, and the book shows it.
+    game.online.reservation->revision = 1;
+    std::vector<reducer_failure> refusals{{"book_tee", "group_full"}};
+    update_tee_book(menu, game, courses(), {}, {}, refusals);
+    CHECK(!menu.pending); CHECK(game.online.reservation->takes_cart);
+    CHECK(render_tee_book(menu, game, courses(), text).tiles[2].title == "TRANSPORT: TAKE A CART");
+    // Sent again and answered: the row's new choice shows.
+    tick(menu, game, accept());
+    REQUIRE(menu.pending == net_command_type::book_tee);
+    game.online.reservation->takes_cart = false; game.online.reservation->revision = 2;
+    tick(menu, game);
+    CHECK(!menu.pending);
+    CHECK(render_tee_book(menu, game, courses(), text).tiles[2].title == "TRANSPORT: CARRY YOUR BAG");
+}
+
+TEST_CASE("before a booking the choice is only picked, and the next time booked takes it; a course without carts offers only carry") {
+    auto game = hub_game(); tee_book_state menu; list_ready(menu, game);
+    menu.selection = 1; game.net_commands.clear();
+    tick(menu, game, accept());
+    CHECK(!menu.pending); CHECK(game.net_commands.empty()); CHECK(!menu.takes_cart);
+    CHECK(render_tee_book(menu, game, courses(), shipped_text_assets()).tiles[1].title == "TRANSPORT: CARRY YOUR BAG");
+    menu.selection = 4; tick(menu, game, accept());  // past TODAY, to the second time
+    const auto* booked = last_command(game, net_command_type::book_tee);
+    REQUIRE(booked); CHECK(!booked->takes_cart); CHECK(booked->scheduled_at == 120 * minute);
+
+    // A course without carts has no choice to offer, and books carry whatever was picked.
+    auto walking = hub_game(); tee_book_state walkers_menu;
+    const auto walkers = carts_and_carry();
+    walking.hub_flow.screen = hub_screen::book;
+    update_tee_book(walkers_menu, walking, walkers, {}, {}, {});
+    walkers_menu.selection = 1;
+    update_tee_book(walkers_menu, walking, walkers, accept(), {}, {});
+    REQUIRE(walkers_menu.pending == net_command_type::open_tee_book);
+    walking.online.book_ready = true; walking.online.book_course_id = "walkers";
+    update_tee_book(walkers_menu, walking, walkers, {}, {}, {});
+    const auto page = render_tee_book(walkers_menu, walking, walkers, shipped_text_assets());
+    REQUIRE(page.tiles.size() > 2);
+    for (const auto& tile : page.tiles) { CHECK(tile.title.rfind("TRANSPORT", 0) != 0); }
+    walkers_menu.selection = 1; walking.net_commands.clear();
+    update_tee_book(walkers_menu, walking, walkers, accept(), {}, {});
+    booked = last_command(walking, net_command_type::book_tee);
+    REQUIRE(booked); CHECK(!booked->takes_cart); CHECK(booked->course_id == "walkers");
+}
+
+TEST_CASE("offline PLAY NOW takes the same choice: cart or carry, carry on a course without carts") {
+    auto game = make_game_state(fixture_content(), save_data{});
+    REQUIRE(enter_place(game, online_hub_course));
+    startup_catalog catalog;
+    catalog.courses.push_back({fixture_hub_course(), 0, std::nullopt});
+    const std::string id = fixture_hub_course().id;
+    const auto& text = shipped_text_assets();
+    tee_book_state menu;
+    game.hub_flow.screen = hub_screen::book;
+    update_tee_book(menu, game, catalog, {}, {}, {});
+    auto page = render_tee_book(menu, game, catalog, text);
+    REQUIRE(page.tiles.size() == 2);
+    CHECK(page.tiles[0].title == "TRANSPORT: TAKE A CART");
+    CHECK(page.tiles[1].subtitle.find("CARRY ONLY") == std::string::npos);
+    // PLAY NOW with the cart.
+    menu.selection = 1;
+    update_tee_book(menu, game, catalog, accept(), {}, {});
+    REQUIRE(active_booking(game)); CHECK(active_booking(game)->takes_cart);
+    update_tee_book(menu, game, catalog, {}, {}, {});
+    CHECK(!menu.pending);
+    // With a booking the choice changes it: the same course booked again, as carry.
+    menu.selection = 0;
+    update_tee_book(menu, game, catalog, accept(), {}, {});
+    REQUIRE(active_booking(game)); CHECK(active_booking(game)->course_id == id); CHECK(!active_booking(game)->takes_cart);
+    update_tee_book(menu, game, catalog, {}, {}, {});
+    CHECK(!menu.pending);
+    page = render_tee_book(menu, game, catalog, text);
+    CHECK(page.tiles[0].title == "TRANSPORT: CARRY YOUR BAG");
+    // And the bus takes the booking's choice along.
+    request_bus_travel(game);
+    CHECK(!game.takes_cart); CHECK(game.hub_flow.travel_course == id);
+
+    // Picking carry first books carry; a course without carts books carry whatever was picked.
+    auto again = make_game_state(fixture_content(), save_data{});
+    REQUIRE(enter_place(again, online_hub_course));
+    tee_book_state picking;
+    again.hub_flow.screen = hub_screen::book;
+    update_tee_book(picking, again, catalog, {}, {}, {});
+    picking.selection = 0;
+    update_tee_book(picking, again, catalog, accept(), {}, {});
+    CHECK(!picking.takes_cart); CHECK(!active_booking(again));
+    picking.selection = 1;
+    update_tee_book(picking, again, catalog, accept(), {}, {});
+    REQUIRE(active_booking(again)); CHECK(!active_booking(again)->takes_cart);
+
+    auto walking = make_game_state(fixture_content(), save_data{});
+    REQUIRE(enter_place(walking, online_hub_course));
+    startup_catalog walkers;
+    auto no_carts = fixture_hub_course(); no_carts.carts = false;
+    walkers.courses.push_back({no_carts, 0, std::nullopt});
+    tee_book_state walkers_menu;
+    walking.hub_flow.screen = hub_screen::book;
+    update_tee_book(walkers_menu, walking, walkers, {}, {}, {});
+    CHECK(render_tee_book(walkers_menu, walking, walkers, text).tiles[1].subtitle.find("CARRY ONLY") != std::string::npos);
+    walkers_menu.selection = 1;
+    update_tee_book(walkers_menu, walking, walkers, accept(), {}, {});
+    REQUIRE(active_booking(walking)); CHECK(!active_booking(walking)->takes_cart);
+}
+
+TEST_CASE("F at the hub's bus boards it with no menu; without a booking it says so") {
+    auto game = hub_game();
+    REQUIRE(game.area.bus);
+    game.player.position = game.area.bus->position;
+    game_input press; press.interact = true;
+    game.net_commands.clear();
+    update_game(game, press, 0.016f);
+    CHECK(game.hub_flow.screen == hub_screen::none);
+    CHECK(game.hub_flow.travel_course.empty());
+    REQUIRE(game.notice); CHECK(game.notice->text_key == text_online_error_booking_required);
+    CHECK(last_command(game, net_command_type::take_bus) == nullptr);
+    // Booked: F boards at once, taking the booking's carry or cart.
+    tee_reservation_info row; row.reservation_id = 4; row.course_id = "course"; row.scheduled_at = 105 * minute; row.takes_cart = true;
+    game.online.reservation = row;
+    game.player.position = game.area.bus->position;
+    update_game(game, press, 0.016f);
+    CHECK(game.hub_flow.screen == hub_screen::none);
+    CHECK(game.hub_flow.travel_course == "course");
+    CHECK(game.takes_cart);
+    const auto* bus = last_command(game, net_command_type::take_bus);
+    REQUIRE(bus); CHECK(bus->reservation_id == 4);
+    // No motion follows it: it would name the room I have left.
+    CHECK(game.net_commands.back().type == net_command_type::take_bus);
+    // On a course the bus offers the way back instead.
+    auto course = hub_game();
+    course.kind = place_kind::course; course.place.id = "course";
+    course.player.position = course.area.bus->position;
+    update_game(course, press, 0.016f);
+    CHECK(course.hub_flow.screen == hub_screen::bus);
+    CHECK(course.hub_flow.travel_course.empty());
 }

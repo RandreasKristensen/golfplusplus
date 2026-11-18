@@ -349,7 +349,37 @@ def generated_fairway(line, par: int, design: dict, roughs=()):
     return _strip_without(pts, widths, cut, cell, float(design["least_piece_square_meters"]))
 
 
+def crossing_edges(ring):
+    """First pair of nonadjacent edges crossing strictly inside both segments."""
+    def side(a, b, p):
+        return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+    for i, a in enumerate(ring):
+        b = ring[(i + 1) % len(ring)]
+        for j in range(i + 2, len(ring)):
+            if i == 0 and j == len(ring) - 1:
+                continue
+            c, d = ring[j], ring[(j + 1) % len(ring)]
+            if side(a, b, c) * side(a, b, d) < 0 and side(c, d, a) * side(c, d, b) < 0:
+                return i, j
+    return None
+
+
+def untangle_ring(ring):
+    """Uncross edges by reversing their intervening arc, retaining every point.
+
+    Each reversal strictly shortens the perimeter. This also handles strips
+    whose inside edge folds across itself at a tight bend.
+    """
+    out = list(ring)
+    pair = crossing_edges(out)
+    while pair is not None:
+        i, j = pair
+        out[i + 1:j + 1] = reversed(out[i + 1:j + 1])
+        pair = crossing_edges(out)
+    return out
+
+
 def zone_json(zone_type: str, ring, offset=(0.0, 0.0), digits: int = 2) -> dict:
     """A hole file's zone: its outline relative to `offset` (the tee)."""
     return {"type": zone_type,
-            "outline": [[round(x - offset[0], digits), round(z - offset[1], digits)] for x, z in ring]}
+            "outline": untangle_ring([[round(x - offset[0], digits), round(z - offset[1], digits)] for x, z in ring])}

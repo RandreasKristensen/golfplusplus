@@ -98,6 +98,7 @@ bool room_rows::apply(const stdb_event& event,
     case STDB_TABLE_AVATAR_MOTION: room = row.avatar_motion.room_id; break;
     case STDB_TABLE_DAP: room = row.dap.room_id; break;
     case STDB_TABLE_BALL: room = row.ball.room_id; break;
+    case STDB_TABLE_PRACTICE_BALL: room = row.practice_ball.room_id; break;
     case STDB_TABLE_GOLF_CART: room = row.golf_cart.room_id; break;
     case STDB_TABLE_PLAYER_BAG: room = row.player_bag.room_id; break;
     case STDB_TABLE_GREEN_FLAG: room = row.green_flag.room_id; break;
@@ -156,6 +157,12 @@ bool room_rows::apply(const stdb_event& event,
         const stdb_ball& b = row.ball;
         if (b.account_id == my_account) { ++state.online.ball_updates; }
         apply_change(balls_, b.account_id, change, room_ball{b.hole, glm::vec3(b.x, b.y, b.z), b.stroke_count, b.in_cup, static_cast<ball_kind>(b.kind), b.tee_mat});
+        break;
+    }
+    case STDB_TABLE_PRACTICE_BALL: {
+        const stdb_practice_ball& b = row.practice_ball;
+        if (b.account_id == my_account) { ++state.online.ball_updates; }
+        apply_change(spares_, b.id, change, spare_ball{b.id, b.account_id, glm::vec3(b.x, b.y, b.z), b.in_cup, b.placed_at});
         break;
     }
     case STDB_TABLE_GOLF_CART: {
@@ -242,6 +249,7 @@ void room_rows::publish(game_state& state) {
     item_uses_.clear();
     state.online.daps = daps_;
     state.online.balls = balls_;
+    state.online.spare_balls = spares_;
     state.online.carts = carts_;
     state.online.loadouts = loadouts_;
     state.online.bags = bags_;
@@ -270,6 +278,7 @@ void room_rows::clear(game_state& state) {
     motions_.clear();
     daps_.clear(); state.online.daps.clear(); state.dap_pending.reset();
     balls_.clear();
+    spares_.clear();
     carts_.clear();
     loadouts_.clear();
     bags_.clear();
@@ -278,6 +287,7 @@ void room_rows::clear(game_state& state) {
     changed_ = false;
     state.online.players.clear();
     state.online.balls.clear();
+    state.online.spare_balls.clear();
     state.online.carts.clear();
     state.online.loadouts.clear();
     state.online.bags.clear();

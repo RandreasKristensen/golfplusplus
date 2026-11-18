@@ -1,6 +1,7 @@
 #include "tee_rules.h"
 #include "game/server_errors.h"
 #include "physics/vector_math.h"
+#include <algorithm>
 
 bool tee_expired(const std::int64_t scheduled, const std::int64_t now, const bool started,
                   const server_tuning& tuning) {
@@ -10,13 +11,20 @@ bool tee_missed(const std::int64_t scheduled, const std::int64_t now, const bool
                 const server_tuning& tuning) {
     return tee_expired(scheduled, now, started, tuning) || (!started && !boarded && now >= scheduled);
 }
+std::vector<board_slot> next_departures(std::vector<board_slot> waiting, const std::size_t rows) {
+    std::sort(waiting.begin(), waiting.end(), [](const board_slot& a, const board_slot& b) {
+        return a.scheduled_at != b.scheduled_at ? a.scheduled_at < b.scheduled_at : a.slot_id < b.slot_id;
+    });
+    if (waiting.size() > rows) { waiting.resize(rows); }
+    return waiting;
+}
 std::string check_booking(const std::uint64_t expected, const std::uint64_t current,
                           const std::int64_t scheduled, const std::int64_t now, const int occupied,
-                          const bool same_slot, const server_tuning& tuning) {
+                          const bool same_slot, const server_tuning& tuning, const hub_clock& clock) {
     if (expected != current) { return error_stale_booking; }
     const auto interval = tuning.tee_interval_minutes * minute_micros;
     if (scheduled < now || scheduled % interval != 0 ||
-        scheduled > now + tuning.tee_book_days * 24 * 60 * minute_micros) { return error_invalid_slot; }
+        !within_tee_book(scheduled, now, tuning, clock)) { return error_invalid_slot; }
     if (!same_slot && occupied >= tuning.group_capacity) { return error_group_full; }
     return {};
 }

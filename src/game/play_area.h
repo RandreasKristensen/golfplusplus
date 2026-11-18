@@ -33,9 +33,18 @@ struct static_prop {
     float heading = 0.0f;
 };
 
+// Where the hub's sounds come from, taken from its models' points: the
+// starter's PA speaker, the parked bus's engine and its horn.
+struct hub_sound_sources {
+    glm::vec3 announcer{0.0f};
+    glm::vec3 bus_engine{0.0f};
+    glm::vec3 bus_horn{0.0f};
+};
+
 struct play_area {
     std::vector<static_prop> props;
     std::optional<hub_anchor> bus;
+    std::optional<hub_sound_sources> hub_sounds;
     float ground_y = 0.0f;  // height used where there is no terrain
     // XZ centre and half-size of the terrain and ground, for the camera's far
     // plane, the backdrop ground and the course map.

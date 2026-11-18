@@ -25,16 +25,22 @@ is placed in the course by its world hole start, which is its tee.
 """
 
 import json
+import hashlib
 import math
 from pathlib import Path
 
 import osm_bus_stop
 import osm_cart_paths
 import osm_outline
+import osm_ground
+import osm_terrain_quality
 
 SCORECARDS = Path(__file__).resolve().parent / "testdata" / "scorecards.json"
 
 DEFAULT_TOLERANCES = {
+    # Review thresholds, not claims about what terrain is physically possible.
+    "water_shore_relief_warn_m": 2.0,
+    "reviewed_water_shores": {},
     # Hole length against the scorecard, as a fraction of the scorecard.
     "length_warn": 0.12,
     "length_error": 0.25,
@@ -304,6 +310,8 @@ def _check_loader_contract(findings: Findings, p: dict):
         if not _is_outline(zone.get("outline")):
             findings.add("error", "ZONE_FORMAT", f"hole {n} has a {zone.get('type')} zone without an `outline` "
                          f"of at least three [x, z] points round a positive area", n)
+        elif osm_outline.crossing_edges(zone["outline"]) is not None:
+            findings.add("error", "ZONE_CROSSING", f"hole {n} has a self-crossing {zone.get('type')} outline", n)
 
 
 def _check_projection(findings: Findings, p: dict, tol: dict, world: dict | None):
@@ -547,6 +555,51 @@ def _check_bus_stop(findings: Findings, placed: list[dict], world: dict, tol: di
         findings.add("error", "BUS_STOP_PATH", "no path from the bus stop to the first tee", 1)
 
 
+def _check_water_shores(findings: Findings, placed: list[dict], world: dict, tol: dict):
+    """Flag land a level pond would cut away; approvals bind to sampled geometry."""
+    ground = world.get("ground", {})
+    if not ground.get("heights_cm"):
+        return
+    columns, rows = ground["columns"], ground["rows"]
+    cell = ground["cell_size"]
+    heights = osm_ground.heights_from_rows_cm(ground["heights_cm"])
+
+    def height(point):
+        x = (point[0] - ground["origin"][0]) / cell
+        z = (point[1] - ground["origin"][1]) / cell
+        if not (0 <= x <= columns - 1 and 0 <= z <= rows - 1):
+            return None
+        ix, iz = min(int(x), columns - 2), min(int(z), rows - 2)
+        tx, tz = x - ix, z - iz
+        a = heights[iz * columns + ix] * (1 - tx) + heights[iz * columns + ix + 1] * tx
+        b = heights[(iz + 1) * columns + ix] * (1 - tx) + heights[(iz + 1) * columns + ix + 1] * tx
+        return a * (1 - tz) + b * tz
+
+    for p in placed:
+        for zone in p["zones"]:
+            if zone["type"] != "water":
+                continue
+            outline = zone["outline"]
+            samples = resample(outline + [outline[0]], cell)
+            levels = [height(q) for q in samples]
+            if any(h is None for h in levels):
+                findings.add("warn", "WATER_SHORE_COVERAGE",
+                             f"hole {p['number']} water shoreline extends outside the elevation grid", p["number"])
+                continue
+            relief = max(levels) - min(levels)
+            if relief <= tol["water_shore_relief_warn_m"]:
+                continue
+            fingerprint = hashlib.sha256(json.dumps([samples, levels]).encode()).hexdigest()[:16]
+            reason = tol["reviewed_water_shores"].get(fingerprint)
+            reviewed = isinstance(reason, str) and bool(reason.strip())
+            x, z = zone["center"]
+            findings.add("info" if reviewed else "warn", "WATER_SHORE_RELIEF",
+                         f"hole {p['number']} water near ({x:.1f}, {z:.1f}) has {relief:.1f} m shoreline "
+                         f"relief; flattening to its lowest shore may carve a crater. "
+                         f"Review outline/elevation; review id {fingerprint}"
+                         + (f"; accepted: {reason}" if reviewed else ""), p["number"])
+
+
 def check_course(course_id: str, hole_jsons: list[dict], world: dict | None,
                  scorecard: dict | None, tolerances: dict | None = None) -> Findings:
     """Every check on one course; holes in play order."""
@@ -567,6 +620,18 @@ def check_course(course_id: str, hole_jsons: list[dict], world: dict | None,
         _check_tree_sides(findings, p, tol)
     _check_pairs(findings, placed, tol)
     _check_routing(findings, placed, tol)
+    if world is not None:
+        _check_water_shores(findings, placed, world, tol)
+        ground = world.get("ground", {})
+        if ground.get("heights_cm"):
+            import numpy as np
+            heights = np.asarray(osm_ground.heights_from_rows_cm(ground["heights_cm"])).reshape(
+                ground["rows"], ground["columns"])
+            for r, c, mask in osm_terrain_quality.dropout_masks(heights, ground["cell_size"]):
+                x = ground["origin"][0] + c.start * ground["cell_size"]
+                z = ground["origin"][1] + r.start * ground["cell_size"]
+                findings.add("error", "TERRAIN_DROPOUT", f"flat-bottom elevation dropout near "
+                             f"({x:.1f}, {z:.1f}), {int(mask.sum())} samples; regenerate ground")
     if world is not None and world.get("source", {}).get("type") == "osm":
         _check_cart_paths(findings, placed, world, tol)
         _check_bus_stop(findings, placed, world, tol)

@@ -61,6 +61,26 @@ parsed<course_air> parse_air(const json& root) {
     return {course_air{*elevation, *mean, *range}, ""};
 }
 
+parsed<place_rules> parse_rules(const json& root) {
+    const json* object = json_object(root, "rules");
+    if (object == nullptr) {
+        return {std::nullopt, "rules: missing"};
+    }
+    const std::optional<bool> scored = json_bool(*object, "scored");
+    const std::optional<bool> drops = json_bool(*object, "drops");
+    const std::optional<bool> shot_xp = json_bool(*object, "shot_xp");
+    const std::optional<bool> stations = json_bool(*object, "stations");
+    const std::optional<int> balls_out = json_int(*object, "balls_out");
+    if (!scored || !drops || !shot_xp || !stations || !balls_out || *balls_out < 1) {
+        return {std::nullopt, !scored ? "rules.scored: not true or false"
+                              : !drops  ? "rules.drops: not true or false"
+                              : !shot_xp ? "rules.shot_xp: not true or false"
+                              : !stations ? "rules.stations: not true or false"
+                                          : "rules.balls_out: not a count of one or more"};
+    }
+    return {place_rules{*scored, *drops, *shot_xp, *stations, *balls_out}, ""};
+}
+
 parsed<course_backdrop> parse_backdrop(const json& root) {
     const json* object = json_object(root, "backdrop");
     if (object == nullptr) {
@@ -95,8 +115,9 @@ parsed<place_definition> parse_place_from_text(const std::string& text) {
     const parsed<course_backdrop> backdrop = parse_backdrop(*root);
     const parsed<course_sky> sky = parse_sky(*root);
     const parsed<course_air> air = parse_air(*root);
-    if (!backdrop.value || !sky.value || !air.value) {
-        return {std::nullopt, !backdrop.value ? backdrop.error : !sky.value ? sky.error : air.error};
+    const parsed<place_rules> rules = parse_rules(*root);
+    if (!backdrop.value || !sky.value || !air.value || !rules.value) {
+        return {std::nullopt, !backdrop.value ? backdrop.error : !sky.value ? sky.error : !air.value ? air.error : rules.error};
     }
 
     const std::optional<std::string> id = json_string(*root, "id");
@@ -120,6 +141,7 @@ parsed<place_definition> parse_place_from_text(const std::string& text) {
     course.air = *air.value;
     course.green_stimp_feet = *stimp;
     course.carts = *carts;
+    course.rules = *rules.value;
     return {course, ""};
 }
 

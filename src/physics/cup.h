@@ -19,6 +19,7 @@ struct cup {
     float depth = 0.0f;
     float rim_radius = 0.0f;
     glm::vec3 up{0.0f, 1.0f, 0.0f};  // the green's normal there
+    float flag_height_meters = 0.0f;  // its flagstick's height; 0 is the scale tuning's pin height
 };
 
 // How the lip, the wall and the bottom give the ball back. The grips are

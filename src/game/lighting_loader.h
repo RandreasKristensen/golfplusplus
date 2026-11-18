@@ -289,6 +289,7 @@ struct glow_floors {
     float flag = 0.0f;
     float ember = 0.0f;
     float flight_path = 0.0f;
+    float window = 0.0f;  // a lit window's glass
 };
 
 struct scene_colors {
@@ -326,13 +327,11 @@ struct shadow_style {
     float foot_share = 0.0f;
     float pole_radius = 0.0f;  // a floodlight pole's blob at its foot
     // The shadow map: map_resolution texels square over map_extent
-    // metres of ground, its middle map_ahead of the extent in front of the
-    // camera; map_strength of the sun the shadow takes away (faded in like
+    // metres of ground, centred on the camera position; map_strength of the sun the shadow takes away (faded in like
     // the blobs), its edge blurred over map_softness texels, and faded out
     // over the outer map_edge_fade of the map.
     int map_resolution = 0;
     float map_extent = 0.0f;
-    float map_ahead = 0.0f;
     float map_strength = 0.0f;
     float map_softness = 0.0f;
     float map_edge_fade = 0.0f;
@@ -376,8 +375,6 @@ struct shaft_style {
 // rain_ring_slope at the heaviest. The view through wobbles by
 // refraction_pixels at most. The sun glints off the waves with
 // glint_strength times the sun, in a lobe glint_sharpness sharp. The
-// reflection looks reflection_reach_meters out along its ray, from
-// reflection_first_step_meters, each step longer than the last, before it
 // falls back on the sky. From under the surface the same absorption and
 // scatter fog the view along its path, the sun's light shimmers on what lies
 // under the surface in caustics (caustic_strength times the sun, patterns
@@ -405,8 +402,6 @@ struct water_style {
     float refraction_pixels = 0.0f;
     float glint_strength = 0.0f;
     float glint_sharpness = 0.0f;
-    float reflection_reach_meters = 0.0f;
-    float reflection_first_step_meters = 0.0f;
     float caustic_strength = 0.0f;
     float caustic_cell_meters = 0.0f;
     float wobble_height_share = 0.0f;
@@ -470,7 +465,6 @@ struct tree_look {
     float trunk_radius = 0.0f;
     int limbs = 0;
     int clumps = 0;
-    int far_clumps = 0;
     float clump_size = 0.0f;
     float droop = 0.0f;
     float aspect = 0.0f;
