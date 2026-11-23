@@ -62,7 +62,8 @@ look_changes look_changes_between(const look_texts& from, const look_texts& to) 
     changes.shadows = section_differs(before, after, "shadows");
     changes.shafts = section_differs(before, after, "shafts");
     changes.streaks = section_differs(before, after, "rain") || section_differs(before, after, "wind");
-    changes.ground = section_differs(before, after, "ground");
+    changes.ground = section_differs(before, after, "ground") || section_differs(before, after, "map") ||
+        section_differs(before, after, "terrain_lod");
     changes.picture = from.picture != to.picture;
     return changes;
 }

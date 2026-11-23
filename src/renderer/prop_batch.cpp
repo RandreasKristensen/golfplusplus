@@ -16,8 +16,6 @@
 #include <glm/vec4.hpp>
 
 namespace {
-constexpr std::size_t floats_per_vertex = 6;
-
 float glow_floor(const glow_floors& glow, const std::string& name) {
     for (const share_field<glow_floors>& field : glow_fields) {
         if (name == field.key) {
@@ -28,48 +26,58 @@ float glow_floor(const glow_floors& glow, const std::string& name) {
 }
 }
 
-prop_batch::prop_batch()
-    : cylinder_(make_cylinder_vertices(primitive_cylinder_segments)),
-      sphere_(make_sphere_vertices(primitive_sphere_latitude_segments, primitive_sphere_longitude_segments)),
-      quad_(make_xy_quad_vertices()) {}
+prop_batch::prop_batch() = default;
 
 void prop_batch::clear() {
-    opaque_.clear();
-    blended_.clear();
-}
-
-void prop_batch::append(const prop_batch& batch) {
-    opaque_.insert(opaque_.end(), batch.opaque_.begin(), batch.opaque_.end());
-    blended_.insert(blended_.end(), batch.blended_.begin(), batch.blended_.end());
+    for (auto& list : lists_) {
+        for (std::vector<mesh_instance>& instances : list) { instances.clear(); }
+    }
 }
 
 void prop_batch::append(const prop_mesh mesh, const glm::mat4& model, const glm::vec3& color, const float glow,
                         const float alpha) {
-    const std::vector<float>& unit = mesh == prop_mesh::cylinder ? cylinder_ : mesh == prop_mesh::sphere ? sphere_ : quad_;
-    std::vector<prop_vertex>& out = alpha < 1.0f ? blended_ : opaque_;
-    const glm::mat3 normals = glm::transpose(glm::inverse(glm::mat3(model)));
-    for (std::size_t i = 0; i + floats_per_vertex <= unit.size(); i += floats_per_vertex) {
-        prop_vertex vertex;
-        vertex.position = glm::vec3(model * glm::vec4(unit[i], unit[i + 1], unit[i + 2], 1.0f));
-        vertex.normal = safe_normalize(normals * glm::vec3(unit[i + 3], unit[i + 4], unit[i + 5]), world_up);
-        vertex.color = color;
-        vertex.alpha = alpha;
-        vertex.glow = glow;
-        out.push_back(vertex);
+    lists_[alpha < 1.0f ? 1 : 0][mesh_index(mesh)].push_back(make_mesh_instance(model, color, glow, alpha));
+}
+
+std::size_t prop_batch::instance_count(const bool blended) const {
+    std::size_t count = 0;
+    for (const std::vector<mesh_instance>& instances : lists_[blended ? 1 : 0]) { count += instances.size(); }
+    return count;
+}
+
+std::size_t prop_batch::joined_first(const bool blended, const prop_mesh mesh) const {
+    std::size_t first = blended ? instance_count(false) : 0;
+    for (std::size_t m = 0; m < mesh_index(mesh); ++m) { first += lists_[blended ? 1 : 0][m].size(); }
+    return first;
+}
+
+void prop_batch::join(std::vector<mesh_instance>& out) const {
+    out.clear();
+    for (const auto& list : lists_) {
+        for (const std::vector<mesh_instance>& instances : list) { out.insert(out.end(), instances.begin(), instances.end()); }
     }
 }
 
-std::size_t prop_mesh_vertex_count(const prop_mesh mesh) {
-    switch (mesh) {
-    case prop_mesh::cylinder:
-        return make_cylinder_vertices(primitive_cylinder_segments).size() / floats_per_vertex;
-    case prop_mesh::sphere:
-        return make_sphere_vertices(primitive_sphere_latitude_segments, primitive_sphere_longitude_segments).size() /
-               floats_per_vertex;
-    case prop_mesh::quad:
-        return make_xy_quad_vertices().size() / floats_per_vertex;
+std::vector<prop_vertex> prop_batch::placed_vertices(const bool blended) const {
+    std::vector<prop_vertex> vertices;
+    for (const prop_mesh mesh : {prop_mesh::cylinder, prop_mesh::sphere, prop_mesh::quad}) {
+        for (const mesh_instance& instance : instances(blended, mesh)) {
+            for (std::size_t i = 0; i < meshes_.vertex_count(mesh); ++i) {
+                prop_vertex vertex;
+                vertex.position = placed_position(instance, meshes_, mesh, i);
+                vertex.normal = placed_normal(instance, meshes_, mesh, i);
+                vertex.color = instance.color;
+                vertex.alpha = instance.alpha;
+                vertex.glow = instance.glow;
+                vertices.push_back(vertex);
+            }
+        }
     }
-    return 0;
+    return vertices;
+}
+
+std::size_t prop_mesh_vertex_count(const prop_mesh mesh) {
+    return canonical_meshes().vertex_count(mesh);
 }
 
 std::size_t prop_model_vertex_count(const prop_model& model) {

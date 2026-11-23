@@ -70,7 +70,24 @@ startup_options parse_startup_options(const char* vsync_value, const char* cours
     return options;
 }
 
-startup_options with_review_options(startup_options options, const char* window_value, const char* screenshot_value) {
+startup_options with_benchmark_options(startup_options options, const char* directory, const char* duration,
+                                       const char* reverse) {
+    options.benchmark_directory = trimmed(directory);
+    if (!options.benchmark_directory.empty()) {
+        options.vsync = false;
+        options.tour_stop.reset();
+        options.screenshot_path.clear();
+        options.screenshot_view.reset();
+        if (options.window_width == 0) { options.window_width = 1920; options.window_height = 1080; }
+        const int ms = positive_number(trimmed(duration));
+        if (ms > 0) { options.benchmark_ms = ms; }
+        options.benchmark_reverse = trimmed(reverse) == "1";
+    }
+    return options;
+}
+
+startup_options with_review_options(startup_options options, const char* window_value, const char* screenshot_value,
+                                    const char* scene_resolution_value) {
     const std::string window = lowercase(trimmed(window_value));
     const std::size_t separator = window.find('x');
     if (separator != std::string::npos) {
@@ -82,6 +99,11 @@ startup_options with_review_options(startup_options options, const char* window_
         }
     }
     options.screenshot_path = trimmed(screenshot_value);
+    const std::string resolution = trimmed(scene_resolution_value);
+    if (!resolution.empty() && std::all_of(resolution.begin(), resolution.end(), [](const char c) { return c >= '0' && c <= '9'; }) &&
+        resolution.size() <= 2) {
+        options.scene_resolution = std::stoi(resolution);
+    }
     return options;
 }
 
@@ -118,6 +140,15 @@ startup_options with_game_time(startup_options options, const char* game_time_va
         options.game_date = date;
     }
     return options;
+}
+
+course_definition on_pinned_date(course_definition course, const std::optional<std::int64_t>& pinned_date) {
+    if (pinned_date) {
+        const civil_date date = civil_from_days(*pinned_date);
+        course.sky.month = date.month;
+        course.sky.day = date.day;
+    }
+    return course;
 }
 
 namespace {

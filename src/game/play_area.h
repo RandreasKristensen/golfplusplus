@@ -15,6 +15,7 @@
 #include "physics/cart_dynamics.h"
 #include "physics/cup.h"
 #include "physics/solid.h"
+#include "physics/surface_index.h"
 #include "physics/terrain.h"
 #include "physics/tree_body.h"
 #include "profiling/profiling.h"
@@ -61,6 +62,11 @@ struct play_area {
     // Every hole's greens, bunkers and water, placed like the holes. Their
     // exact shapes decide the material, on a ribbon or off it.
     std::vector<material_zone> zones;
+    // The hole (an index into `holes`) each zone is of, by index into `zones`;
+    // none past its end: a zone no hole owns.
+    std::vector<std::size_t> zone_holes;
+    // Finds the holes and zones that can hold a point (physics/surface_index.h).
+    surface_index surface;
     // Each water zone's surface height (its lowest rim), by index into `zones`;
     // 0 for the others. The ground under it is the pond's bowl.
     std::vector<float> water_levels;
@@ -71,8 +77,8 @@ struct play_area {
     std::vector<tee_box> tee_boxes;
     // The course world's cart paths, laid on the ground.
     std::vector<cart_path> cart_paths;
-    // A sign at every tee box, and one by every green pointing along the
-    // paths to the next tee.
+    // A sign at every tee box, and the way signs to the tees: one by every
+    // green but the last and one at every path junction a walk between them takes.
     std::vector<hole_sign> signs;
     std::vector<way_sign> way_signs;
     // The course world's fences, their poles on the ground.
@@ -116,8 +122,7 @@ play_area build_course_area(const std::vector<hole_data>& holes,
 
 // The one surface: the height and normal at `position` of the ground or of
 // a walkable solid's top over it, whichever is higher, with
-// the ground's material there (surface_material: zones, else the holes'
-// fairway or rough, else rough). The ball, standing, walking and driving all
+// the ground's material there (surface_at in game/area_surface.h). The ball, standing, walking and driving all
 // stand on it.
 terrain_sample sample_area(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);
 float terrain_height(const play_area& area, const glm::vec3& position, frame_profile* profile = nullptr);

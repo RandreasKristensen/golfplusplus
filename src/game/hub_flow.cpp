@@ -49,7 +49,7 @@ void request_ball_preparation(game_state& state, const net_command_type type, co
     if (type == net_command_type::start_booked_round &&
         (!state.online.reservation || state.online.reservation->completed || reservation_expired(state))) {
         state.notice = game_notice{!state.online.reservation ? text_online_error_booking_required :
-            text_online_error_booking_expired, 0}; return;
+            text_online_error_booking_expired, 0.0f, message_severity::error}; return;
     }
     state.hub_flow.ball_request = type;
     state.hub_flow.ball_updates = state.online.ball_updates;
@@ -83,7 +83,7 @@ void request_bus_travel(game_state& state) {
     net_command command;
     command.type = state.kind == place_kind::hub ? net_command_type::take_bus : net_command_type::return_to_hub;
     if (command.type == net_command_type::take_bus && !booking) {
-        state.notice = game_notice{text_online_error_booking_required, 0}; return;
+        state.notice = game_notice{text_online_error_booking_required, 0.0f, message_severity::error}; return;
     }
     state.takes_cart = command.type == net_command_type::take_bus && booking->takes_cart;
     state.hub_flow.travel_course = command.type == net_command_type::take_bus ? booking->course_id : online_hub_course;

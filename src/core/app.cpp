@@ -1,11 +1,11 @@
 #include "core/app.h"
 
+#include "core/benchmark_driver.h"
 #include "audio/audio_manifest.h"
 #include "audio/sound_ids.h"
 #include "core/event_loop.h"
 #include "core/god_menu.h"
 #include "core/key_bindings.h"
-#include "core/play_screen.h"
 #include "core/render_frame.h"
 #include "core/screenshot.h"
 #include "core/sky_frame.h"
@@ -49,10 +49,6 @@ constexpr int window_height = 720;
 constexpr int screenshot_frame = 120;
 // render_data::clock_seconds wraps at this, so a float keeps sub-millisecond steps.
 constexpr double clock_wrap_seconds = 3600.0;
-
-std::int64_t unix_now_ms() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-}
 
 std::string sdl_path(char* path) {
     const std::string result = path != nullptr ? path : "";
@@ -205,6 +201,7 @@ bool app::init(const startup_options& options) {
     god_.wetness = options.wetness;
     screenshot_path_ = options.screenshot_path;
     tape_style_ = picture.tape;
+    ui_lines_ = picture.ui_lines;
     if (!renderer_.init(window_.sdl_window(), asset_root, picture, lighting_, props_)) {
         SDL_Log("Renderer init failed (shaders in %s/shaders)", asset_root.c_str());
         return false;
@@ -240,7 +237,7 @@ bool app::init(const startup_options& options) {
     // Offline always works: without online play's config or a matching
     // bridge the game starts offline only.
     std::optional<net_client> net;
-    if (online) {
+    if (online && options.benchmark_directory.empty()) {
         net = net_client::create(
             with_overrides(*online, options.online_server, options.online_database, options.online_anonymous),
             lookup_text(text_, text_online_browser_signed_in), lookup_text(text_, text_online_browser_failed), content_.content_hash);
@@ -249,7 +246,7 @@ bool app::init(const startup_options& options) {
         online_.emplace(std::move(*net));
     } else if (!online) {
         SDL_Log("Online play is off: cannot load %s from %s", online_config_path, asset_root.c_str());
-    } else {
+    } else if (options.benchmark_directory.empty()) {
         SDL_Log("Online play is off: the client bridge does not match src/net/stdb_bridge.h; rebuild it");
     }
 #endif
@@ -259,11 +256,13 @@ bool app::init(const startup_options& options) {
         pref_path.empty() ? std::filesystem::path(asset_root) / "saves" : std::filesystem::path(pref_path);
     progress_saver_.path = save_file_path(save_root);
     settings_path_ = settings_file_path(save_root);
-    // A GOLFPP_SCREENSHOT run is reproducible, silent and leaves the player's
-    // files alone: default settings, and the save is read but never written.
-    const bool review_run = !screenshot_path_.empty();
+    if (!pref_path.empty()) { grass_cache_dir_ = std::filesystem::path(pref_path) / "cache" / "grass"; }
+    const bool review_run = !screenshot_path_.empty() || !options.benchmark_directory.empty();
     menu_.settings = review_run ? settings_values{} : load_settings(settings_path_, content_.settings);
-    const save_load_result save = load_save(progress_saver_.path);
+    if (review_run && options.scene_resolution) {
+        menu_.settings[setting_scene_resolution] = *options.scene_resolution;
+    }
+    const save_load_result save = options.benchmark_directory.empty() ? load_save(progress_saver_.path) : save_load_result{};
     progress_saver_.enabled = !review_run;
     if (save.existing_was_unreadable) {
         if (save.unreadable_backup.empty()) {
@@ -293,7 +292,7 @@ bool app::init(const startup_options& options) {
         }
     } else if (boot_hub && arrive_at_place(online_hub_course)) {
         enter_playing(menu_);
-    } else if (boot_course != nullptr && start_course(game_, *boot_course)) {
+    } else if (boot_course != nullptr && load_course(on_pinned_date(*boot_course, options.game_date))) {
         enter_playing(menu_);
     } else if (!reset_to_menu_backdrop()) {
         SDL_Log("The first course (%s) failed to load", content_.courses.front().id.c_str());
@@ -309,7 +308,7 @@ bool app::init(const startup_options& options) {
 
     // Typing only reaches input_state::text_typed while a text field is focused.
     set_text_input_enabled(false);
-    // A screenshot run is for the picture: it opens no sound device, so it is silent.
+    // Screenshot and benchmark runs open no sound device, so they are silent.
     if (!review_run) {
         audio_.init();
     }
@@ -319,73 +318,6 @@ bool app::init(const startup_options& options) {
     audio_.start_ambience(on_course ? sound_ambience_course_day : sound_ambience_menu_vcr);
     running_ = true;
     return true;
-}
-
-void app::run() {
-    Uint64 previous_counter = SDL_GetPerformanceCounter();
-    const double counter_frequency = static_cast<double>(SDL_GetPerformanceFrequency());
-
-    while (running_) {
-        const Uint64 counter = SDL_GetPerformanceCounter();
-        const float dt = static_cast<float>(static_cast<double>(counter - previous_counter) / counter_frequency);
-        previous_counter = counter;
-
-        input_ = poll_events(input_);
-        if (input_.quit_requested) {
-            running_ = false;
-        }
-        game_.local_unix_ms = unix_now_ms();
-        update_look(dt);
-        run_god_menu(god_, sky_, game_, god_menu_keys_of(look_tuning_.open ? without_god_menu_keys(input_) : input_));
-        profiler_.enabled = god_.show_profiler;
-        sky_ = scrub_sky(sky_, profiler_.enabled && input_.key_t.is_down, dt);
-        profiler_end_frame(profiler_, dt);
-        profiler_begin_frame(profiler_);
-        frame_profile* profile = profiler_frame(profiler_);
-
-        if (menu_.flow == startup_flow::touring) {
-            update_tour(dt, profile);
-        } else if (menu_.flow != startup_flow::playing) {
-            update_menu(dt, profile);
-        } else if (const play_frame frame = play_frame_for(game_, menu_.confirm_active, input_.escape.pressed);
-                   frame.screen == play_screen::hub_menu) {
-            update_hub_menu(dt, profile);
-        } else if (frame.screen == play_screen::results) {
-            set_mouse_captured(false);
-            if (input_.enter.pressed || input_.space.pressed || input_.escape.pressed) {
-                audio_.play(sound_ui_select);
-                game_.results_dismissed = true;
-            }
-            if (frame.world_updates) {
-                update_game(game_, game_input{}, dt, profile);
-                play_game_audio();
-            }
-            render_data data = make_frame(dt, menu_.flow != startup_flow::playing, profile);
-            present_frame(data, profile);
-        } else if (frame.screen == play_screen::pause) {
-            if (frame.world_updates) {
-                update_game(game_, game_input{}, dt, profile);
-            }
-            update_confirm_menu(profile);
-        } else {
-            update_round(dt, profile);
-        }
-#if GOLFPP_NET
-        if (online_) {
-            online_->update(game_);
-            watch_online_round();
-        }
-#endif
-        for (const sync_breach& breach : game_.motion_sync.reports) {
-            SDL_Log("Sync breach %s: predicted (%.4f, %.4f, %.4f), row (%.4f, %.4f, %.4f), ack %.9f, refusal %s",
-                    breach.thing.c_str(), breach.predicted.x, breach.predicted.y, breach.predicted.z,
-                    breach.authoritative.x, breach.authoritative.y, breach.authoritative.z,
-                    breach.ack, breach.refusal.c_str());
-        }
-        game_.motion_sync.reports.clear();
-    }
-
-    save_progress();
 }
 
 void app::shutdown() {
@@ -400,7 +332,7 @@ bool app::reset_to_menu_backdrop() {
     online_view online = std::move(game_.online);
     game_ = make_game_state(content_, game_.save);
     game_.online = std::move(online);
-    if (!start_course(game_, content_.courses.front())) {
+    if (!load_course(content_.courses.front())) {
         return false;
     }
     continue_terrain_render_revision(game_, previous_revision);
@@ -445,6 +377,8 @@ void app::apply_settings(const bool write) {
     audio_.set_levels(audio_levels_from_settings(menu_.settings, content_.settings));
     // load_game_content refuses settings without fullscreen.
     window_.set_fullscreen(setting_value(menu_.settings, *find_setting(content_.settings, setting_fullscreen)) != 0);
+    renderer_.set_scene_resolution(
+        setting_step_index(menu_.settings, *find_setting(content_.settings, setting_scene_resolution)));
     renderer_.set_tape_wear(setting_fraction(menu_.settings, *find_setting(content_.settings, setting_tape_wear)));
     if (write && !write_settings(settings_path_, menu_.settings, content_.settings)) {
         SDL_Log("Failed to write settings %s", settings_path_.string().c_str());
@@ -562,33 +496,9 @@ float app::mouse_look_radians() const {
     return game_.tuning.player.mouse_look_radians * percent / 100.0f;
 }
 
-void app::update_round(const float dt, frame_profile* profile) {
-    {
-        const profile_scope timer(profile, profile_stage::update_game);
-        game_.hand = setting_value(menu_.settings, *find_setting(content_.settings, setting_handedness)) != 0
-            ? handedness::left
-            : handedness::right;
-        game_.favourite_colour = static_cast<std::uint8_t>(
-            setting_value(menu_.settings, *find_setting(content_.settings, setting_favourite_colour)));
-        update_game(game_,
-                    game_input_from_keys(god_.open ? without_god_menu_keys(input_) : input_, mouse_look_radians(),
-                                         game_.tuning.setup),
-                    dt, profile);
-    }
-    set_mouse_captured(true);
-    set_text_input_enabled(false);
-    if (game_.save_requested) {
-        save_progress();
-    }
-
-    render_data data = make_frame(dt, false, profile);
-    play_game_audio();
-    present_frame(data, profile);
-}
-
 bool app::begin_tour(const course_definition& course, const std::size_t first) {
     game_.play = play_mode::offline;
-    if (!start_course(game_, course)) {
+    if (!load_course(course)) {
         return false;
     }
     touring_ = start_tour(game_, tour_, first);
@@ -658,9 +568,11 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
     const float fov_degrees =
         static_cast<float>(setting_value(menu_.settings, *find_setting(content_.settings, setting_field_of_view)));
     const bool interact_prompt = setting_value(menu_.settings, *find_setting(content_.settings, setting_interact_prompt)) != 0;
+    const std::vector<cart_in_world> no_crowd;
+    const std::vector<cart_in_world>& crowd = benchmark_ ? benchmark_->crowd_carts() : no_crowd;
     render_data data = make_render_data(game_, text_, content_.skills,
-                                        render_meshes{&terrain_render_mesh_, &material_overlay_render_mesh_, &hole_signs_, &fences_, &water_, &floodlights_, &grass_field_},
-                                        props_, fov_degrees, interact_prompt);
+                                        render_meshes{&terrain_render_mesh_, &material_overlay_render_mesh_, &hole_signs_, &fences_, &water_, &floodlights_, &grass_field_, &course_map_},
+                                        props_, fov_degrees, interact_prompt, &cart_fits_, crowd);
 
     const camera_view desired = fixed_camera
         ? camera_view{fixed_camera->position, fixed_camera->target, data.camera_fov_degrees}
@@ -682,7 +594,8 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
     }
     data.lighting = make_render_lighting(game_, lighting_, shown_sky(), unix_now_ms(), weather_shown_.shown);
     data.weather = make_frame_weather(weather_shown_, game_, lighting_, data);
-    add_frame_lights(data, game_, lighting_, tree_shadows_);
+    if (benchmark_) { benchmark_->populate(data); }
+    add_frame_lights(data, game_, lighting_, tree_shadows_, blob_ground_);
     if (god_.open && menu_.flow == startup_flow::playing) {
         data.god_menu = god_menu_frame_view(god_, sky_, game_, text_);
     }
@@ -691,46 +604,40 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
 }
 
 void app::present_frame(render_data& data, frame_profile* profile) {
-    data.show_fps = profiler_.enabled;
-    if (data.show_fps) {
-        const float frame_ms = profiler_.published.frame_ms;
-        const int fps = frame_ms > 0.0f ? static_cast<int>(std::lround(1000.0f / frame_ms)) : 0;
-        data.fps_label = format_text(text_, text_hud_fps,
-                                     {{"fps", std::to_string(fps)}, {"ms", std::to_string(static_cast<int>(std::lround(frame_ms)))}});
-        data.profile_summary = profiler_.published;
-        data.sync_breaches = game_.motion_sync.breaches;
+    {
+        const profile_scope timer(profile, profile_stage::make_render_data);
+        data.show_fps = god_.show_profiler;
+        if (data.show_fps) {
+            const float frame_ms = profiler_.published.frame_ms;
+            const int fps = frame_ms > 0.0f ? static_cast<int>(std::lround(1000.0f / frame_ms)) : 0;
+            data.fps_label = format_text(text_, text_hud_fps,
+                                         {{"fps", std::to_string(fps)}, {"ms", std::to_string(static_cast<int>(std::lround(frame_ms)))}});
+            data.profile_summary = &profiler_.published;
+            data.sync_breaches = game_.motion_sync.breaches;
+        }
+
+        const std::uint64_t ticks = SDL_GetTicks64();
+        const float dt = last_present_ticks_ != 0 ? static_cast<float>(ticks - last_present_ticks_) / 1000.0f : 0.0f;
+        last_present_ticks_ = ticks;
+        const bool paused = menu_.flow == startup_flow::playing && (menu_.confirm_active || round_results_shown(game_));
+        tape_tracking_ = update_tape_tracking(tape_tracking_, tape_tracking_signals_for(game_, paused), dt, tape_style_);
+        const bool touring = menu_.flow == startup_flow::touring;
+        const vcr_signals vcr{menu_.flow != startup_flow::playing && !touring, paused,
+                              setting_value(menu_.settings, *find_setting(content_.settings, setting_datestamp)) != 0, touring};
+        data.vcr = make_render_vcr(text_, game_, shown_sky(), unix_now_ms(), vcr);
+        if (touring) {
+            data.vcr.title = tour_title(*touring_, tour_, text_);
+            data.vcr.keys = lookup_text(text_, text_menu_tour_picker_playing);
+        }
+        data.clock_seconds = static_cast<float>(std::fmod(static_cast<double>(ticks) / 1000.0, clock_wrap_seconds));
+        data.tape_tracking = tape_tracking_.level;
+        data.lighting.fade = tape_tracking_.fade;
+        show_look_tuning(data, look_tuning_, lighting_, text_);
     }
 
-    const std::uint64_t ticks = SDL_GetTicks64();
-    const float dt = last_present_ticks_ != 0 ? static_cast<float>(ticks - last_present_ticks_) / 1000.0f : 0.0f;
-    last_present_ticks_ = ticks;
-    const bool paused = menu_.flow == startup_flow::playing && (menu_.confirm_active || round_results_shown(game_));
-    tape_tracking_ = update_tape_tracking(tape_tracking_, tape_tracking_signals_for(game_, paused), dt, tape_style_);
-    const bool touring = menu_.flow == startup_flow::touring;
-    const vcr_signals vcr{menu_.flow != startup_flow::playing && !touring, paused,
-                          setting_value(menu_.settings, *find_setting(content_.settings, setting_datestamp)) != 0, touring};
-    data.vcr = make_render_vcr(text_, game_, shown_sky(), unix_now_ms(), vcr);
-    if (touring) {
-        data.vcr.title = tour_title(*touring_, tour_, text_);
-        data.vcr.keys = lookup_text(text_, text_menu_tour_picker_playing);
-    }
-    data.clock_seconds = static_cast<float>(std::fmod(static_cast<double>(ticks) / 1000.0, clock_wrap_seconds));
-    data.tape_tracking = tape_tracking_.level;
-    data.lighting.fade = tape_tracking_.fade;
-    show_look_tuning(data, look_tuning_, lighting_, text_);
-
-    renderer_.render(data, text_, profile);
-    if (profile != nullptr) {
-        const renderer_cull_stats& cull = renderer_.cull_stats();
-        profile->visible_chunks = cull.terrain.chunks_visible + cull.material_overlay.chunks_visible;
-        profile->culled_chunks = cull.terrain.chunks_culled + cull.material_overlay.chunks_culled;
-        profile->chunk_draw_ranges = cull.terrain.draw_ranges + cull.material_overlay.draw_ranges;
-        profile->chunk_indices_drawn = cull.terrain.indices_drawn + cull.material_overlay.indices_drawn;
-        profile->chunk_indices_total = cull.terrain.indices_total + cull.material_overlay.indices_total;
-        profile->trees_visible = cull.trees_visible;
-    }
+    renderer_.render(data, text_);
     if (!screenshot_path_.empty() && ++frames_presented_ == screenshot_frame) {
-        if (!save_screenshot(window_.sdl_window(), screenshot_path_)) {
+        if (!save_screenshot(window_.sdl_window(), screenshot_path_, profile)) {
             SDL_Log("GOLFPP_SCREENSHOT: cannot write %s", screenshot_path_.string().c_str());
         }
         running_ = false;

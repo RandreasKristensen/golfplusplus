@@ -98,7 +98,7 @@ void take_refusals(game_state& state) {
     for (const reducer_failure& refusal : state.online.refusals) {
         if (refusal.reducer == reducer_dap) {
             state.dap_pending.reset();
-            state.notice = game_notice{online_error_text_key(refusal.error), 0.0f};
+            state.notice = game_notice{online_error_text_key(refusal.error), 0.0f, message_severity::error};
             continue;
         }
         // A ride motion is only for my passenger to watch: a late or lost one
@@ -107,7 +107,7 @@ void take_refusals(game_state& state) {
             continue;
         }
         if (swing_refused(state, refusal)) {
-            state.notice = game_notice{online_error_text_key(refusal.error), 0.0f};
+            state.notice = game_notice{online_error_text_key(refusal.error), 0.0f, message_severity::error};
             continue;
         }
         if (refusal.reducer == reducer_place_bag || refusal.reducer == reducer_take_club) {
@@ -144,7 +144,7 @@ void take_refusals(game_state& state) {
             (refusal.reducer == reducer_update_motion && !driving_cart(state))) {
             return_to_server(state);
         }
-        state.notice = game_notice{online_error_text_key(refusal.error), 0.0f};
+        state.notice = game_notice{online_error_text_key(refusal.error), 0.0f, message_severity::error};
     }
     state.online.refusals.clear();
 }
@@ -303,7 +303,7 @@ void update_online_play(game_state& state, const float dt) {
         adopt_ball_row(state);
         return_to_server(state);
         reset_motion_sync(state);
-        state.notice = game_notice{text_online_error_booking_expired, 0};
+        state.notice = game_notice{text_online_error_booking_expired, 0.0f, message_severity::error};
     }
     if (preparation_ready(state)) {
         const net_command_type request = *state.hub_flow.ball_request;

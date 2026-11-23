@@ -1,5 +1,6 @@
 #pragma once
 
+#include "renderer/gl_storage.h"
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -24,8 +25,10 @@
 // Kept free of GL so it can be unit tested; the actual query is passed in.
 class uniform_location_cache {
 public:
-    static constexpr std::size_t capacity = 32;
-    static constexpr std::size_t max_name_length = 31;
+    // Above the most names any one program sets (backdrop.frag sets 35, lit
+    // scene programs a few dozen with their lamp arrays).
+    static constexpr std::size_t capacity = 128;
+    static constexpr std::size_t max_name_length = 47;
 
     // Returns the cached location for `name`, calling `query(name)` (which
     // must return an int location) on a miss. Names too long to store, or
@@ -79,6 +82,9 @@ private:
 
 class shader_program {
 public:
+    explicit shader_program(gl_storage storage = {})
+        : storage_(storage) {}
+
     // `defines` (whole #define lines) go into both stages after #version.
     bool load_from_files(const std::string& vertex_path, const std::string& fragment_path,
                          const std::string& defines = std::string());
@@ -95,14 +101,12 @@ public:
 
     unsigned int id() const { return program_; }
 
-    // Optional, non-owning profiling sink. The renderer points this at the
-    // frame profile it is recording into (null when profiling is off) so
-    // uniform sets are counted without any global state. Drawing helpers read
-    // it back through profile() to count draw calls from the same sink.
+    // Standalone passes can supply a frame directly. The game's passes share the renderer's ledger.
     void set_profile(frame_profile* profile) { profile_ = profile; }
-    frame_profile* profile() const { return profile_; }
+    frame_profile* profile() const { return storage_.profile(profile_); }
 
 private:
+    gl_storage storage_;
     int uniform_location(const char* name) const;
 
     unsigned int program_ = 0;

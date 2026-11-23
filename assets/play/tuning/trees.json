@@ -1,6 +1,8 @@
 {
   "trees": {
     "bare_crown_density": 0.3,
+    "withered_left_at_leaf_out": 0.5,
+    "summer_leaf_fall_per_day": 0.0002,
     "seasons": [
       { "name": "spring", "start_day": 79 },
       { "name": "early_summer", "start_day": 152 },
@@ -17,7 +19,8 @@
         "leaf_out_day": 122,
         "full_leaf_day": 138,
         "turned_day": 295,
-        "bare_day": 318
+        "bare_day": 318,
+        "withered_share": 0.15
       },
       {
         "name": "oak",
@@ -25,7 +28,8 @@
         "leaf_out_day": 130,
         "full_leaf_day": 152,
         "turned_day": 300,
-        "bare_day": 330
+        "bare_day": 330,
+        "withered_share": 0.1
       },
       {
         "name": "birch",
@@ -33,7 +37,8 @@
         "leaf_out_day": 112,
         "full_leaf_day": 130,
         "turned_day": 280,
-        "bare_day": 305
+        "bare_day": 305,
+        "withered_share": 0.0
       },
       {
         "name": "willow",
@@ -41,7 +46,8 @@
         "leaf_out_day": 105,
         "full_leaf_day": 125,
         "turned_day": 292,
-        "bare_day": 320
+        "bare_day": 320,
+        "withered_share": 0.0
       },
       {
         "name": "spruce",
@@ -49,7 +55,8 @@
         "leaf_out_day": 0,
         "full_leaf_day": 0,
         "turned_day": 0,
-        "bare_day": 0
+        "bare_day": 0,
+        "withered_share": 0.0
       },
       {
         "name": "pine",
@@ -57,7 +64,17 @@
         "leaf_out_day": 0,
         "full_leaf_day": 0,
         "turned_day": 0,
-        "bare_day": 0
+        "bare_day": 0,
+        "withered_share": 0.0
+      },
+      {
+        "name": "hedge",
+        "evergreen": false,
+        "leaf_out_day": 122,
+        "full_leaf_day": 138,
+        "turned_day": 295,
+        "bare_day": 318,
+        "withered_share": 0.8
       },
       {
         "name": "scrub",
@@ -65,7 +82,8 @@
         "leaf_out_day": 110,
         "full_leaf_day": 135,
         "turned_day": 290,
-        "bare_day": 315
+        "bare_day": 315,
+        "withered_share": 0.0
       }
     ]
   }

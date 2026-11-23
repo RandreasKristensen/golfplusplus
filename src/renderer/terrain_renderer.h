@@ -1,11 +1,13 @@
 #pragma once
 
 // The ground's two static meshes, the terrain and the material overlay drawn
-// over it, uploaded only when their revision changes and drawn frustum-culled
-// in a few merged index ranges with the terrain shader. Also the shader's
+// over it, uploaded only when their revision changes (the terrain's coarse
+// index lists with it, in a second buffer) and drawn frustum-culled
+// in index-ordered ranges, joined across gaps a draw call costs more than, with the terrain shader. Also the shader's
 // per-draw state and the vertex layout every render_terrain_vertex buffer
 // shares (the flight path's too).
 
+#include "renderer/gl_storage.h"
 #include "profiling/profiling.h"
 #include "renderer/frustum.h"
 #include "renderer/render_mesh.h"
@@ -39,19 +41,28 @@ enum class overlay_depth { pulled_forward, over_all };
 
 class terrain_renderer {
 public:
+    explicit terrain_renderer(gl_storage storage = {})
+        : storage_(storage) {}
+
     bool init();
     void shutdown();
     // Uploads whichever mesh changed, then draws what `frustum` sees with
-    // `shader`, already in use. Null meshes draw nothing.
+    // `shader`, already in use. Null meshes draw nothing. The terrain's chunks
+    // are drawn as the coarser levels `lod` accepts; the overlay never is.
     terrain_cull_stats draw(const shader_program& shader, const render_static_mesh* terrain,
                             const render_static_mesh* material_overlay, const glm::mat4& view_proj,
-                            const view_frustum& frustum, overlay_depth overlay, frame_profile* profile);
+                            const view_frustum& frustum, overlay_depth overlay, const render_lod_view& lod,
+                            frame_profile* profile);
 
 private:
+    gl_storage storage_;
     struct static_mesh_buffers {
         unsigned int vao = 0;
         unsigned int vbo = 0;
         unsigned int ebo = 0;
+        // The coarse index lists, with their own vertex array on the same vertices.
+        unsigned int lod_vao = 0;
+        unsigned int lod_ebo = 0;
         int index_count = 0;
         std::uint64_t uploaded_revision = 0;
         bool uploaded = false;

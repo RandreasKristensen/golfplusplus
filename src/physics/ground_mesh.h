@@ -74,7 +74,10 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
 // The holes' sample at `position`, nothing when it is off every hole. Where
 // holes overlap, fairway wins over rough and the hole the point is deeper
 // inside wins a tie.
-std::optional<terrain_sample> sample_holes(const std::vector<terrain_mesh>& holes, const glm::vec3& position);
+// `among` (ascending indices, as physics/surface_index.h gives) limits the
+// holes looked at to those that can hold the point; the result is the same.
+std::optional<terrain_sample> sample_holes(const std::vector<terrain_mesh>& holes, const glm::vec3& position,
+                                           const index_range* among = nullptr);
 
 // The material at `position`: the winning zone's (zone_material_at, which
 // reaches past the ribbons), else the holes' fairway or rough, else rough.
@@ -82,3 +85,6 @@ std::optional<terrain_sample> sample_holes(const std::vector<terrain_mesh>& hole
 terrain_material surface_material(const std::vector<material_zone>& zones,
                                   const terrain_sample* on_hole,
                                   const glm::vec3& position);
+// The same rule from what the queries found: the winning zone's material (if
+// any) and the holes' sample (null off every hole).
+terrain_material surface_material(std::optional<terrain_material> zone, const terrain_sample* on_hole);

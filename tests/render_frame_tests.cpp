@@ -1,4 +1,5 @@
 #include "doctest.h"
+#include "renderer/online_overlay.h"
 
 #include "core/render_frame.h"
 #include "core/tape_tracking.h"
@@ -14,22 +15,55 @@
 #include "renderer/cart_batch.h"
 #include "renderer/held_props.h"
 #include "renderer/prop_batch.h"
+#include "renderer/prop_frame.h"
 #include "renderer/primitive_mesh.h"
 #include "renderer/remote_avatar_batch.h"
 #include "renderer/fence_batch.h"
 #include "renderer/hole_sign_batch.h"
+#include "renderer/marker_scene.h"
 #include "renderer/shadow_casters.h"
 #include "renderer/water_reflection.h"
 
 #include "test_support.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace {
 constexpr float test_fov_degrees = 60.0f;
+constexpr int shadow_picture_height = 240;
+
+// What the sun's shadow map draws of the frame's markers: figures and flagsticks.
+struct sun_casters {
+    std::vector<world_marker_vertex> list;
+    const std::vector<world_marker_vertex>& vertices() const { return list; }
+};
+
+void build_shadow_casters(sun_casters& casters, const render_data& data, const scene_colors& colors) {
+    world_marker_batch batch;
+    build_world_marker_batch(batch, marker_scene_for(data, shadow_picture_height), colors);
+    casters.list.clear();
+    for (const world_marker_run& run : batch.runs()) {
+        if (batch.shown_in(run, marker_view::sun_shadow)) {
+            casters.list.insert(casters.list.end(), batch.vertices().begin() + static_cast<std::ptrdiff_t>(run.first),
+                                batch.vertices().begin() + static_cast<std::ptrdiff_t>(run.first + run.count));
+        }
+    }
+    // The figures, each canonical mesh placed by its instance.
+    const canonical_meshes meshes;
+    for (const world_marker_instance_run& run : batch.instance_runs()) {
+        if (!batch.shown_in(run.part, marker_view::sun_shadow)) { continue; }
+        for (std::size_t n = run.first; n < run.first + run.count; ++n) {
+            const mesh_instance& instance = batch.instances(run.mesh)[n];
+            for (std::size_t v = 0; v < meshes.vertex_count(run.mesh); ++v) {
+                casters.list.push_back(world_marker_vertex{placed_position(instance, meshes, run.mesh, v), instance.color, instance.glow});
+            }
+        }
+    }
+}
 
 render_data frame_for(const game_state& state, const float fov_degrees = test_fov_degrees) {
     static const text_assets text = *load_text_assets(asset_root());
@@ -265,15 +299,13 @@ TEST_CASE("my figure casts the sun's shadow where I stand, at my ball while I ad
     CHECK(data.my_figure->yaw == state.player.yaw);
     CHECK(!data.my_figure->swing.has_value());
     CHECK(data.avatar_eye_height == state.tuning.camera.walking_eye_height);
-    world_marker_batch casters;
-    prop_batch models;
-    build_shadow_casters(casters, models, data, test_scene_colors(), test_props(), test_shadow_map(0.2f));
+    sun_casters casters;
+    build_shadow_casters(casters, data, test_scene_colors());
     // Mine, and the flagsticks.
     render_data flags_only = data;
     flags_only.my_figure.reset();
-    world_marker_batch flag_casters;
-    prop_batch flag_models;
-    build_shadow_casters(flag_casters, flag_models, flags_only, test_scene_colors(), test_props(), test_shadow_map(0.2f));
+    sun_casters flag_casters;
+    build_shadow_casters(flag_casters, flags_only, test_scene_colors());
     CHECK(!flag_casters.vertices().empty());
     CHECK(casters.vertices().size() == remote_figure_vertex_count() + flag_casters.vertices().size());
     REQUIRE(!data.carts.empty());
@@ -281,9 +313,19 @@ TEST_CASE("my figure casts the sun's shadow where I stand, at my ball while I ad
     // My cart with my bag strapped on it, and the club in my hand.
     REQUIRE(data.carts[0].bags.size() == 1U);
     CHECK(data.carts[0].bags.begin()->second.model == "golf_bag");
-    CHECK(models.opaque().size() == data.carts.size() * cart_vertex_count(test_props().at("golf_cart")) +
-                                        prop_model_vertex_count(test_props().at("golf_bag")) +
-                                        prop_model_vertex_count(test_props().at(data.my_figure->carried_club_model)));
+    prop_frame frame;
+    frame.build(data, test_props(), test_scene_colors(), 0.0f);
+    const prop_ranges casting = frame.ranges(prop_view::sun_shadow, false);
+    std::size_t casting_vertices = 0;
+    for (const prop_mesh mesh : {prop_mesh::cylinder, prop_mesh::sphere, prop_mesh::quad}) {
+        const prop_runs& runs = casting[static_cast<std::size_t>(mesh)];
+        for (int i = 0; i < runs.count; ++i) {
+            casting_vertices += runs.run[static_cast<std::size_t>(i)].count * prop_mesh_vertex_count(mesh);
+        }
+    }
+    CHECK(casting_vertices == data.carts.size() * cart_vertex_count(test_props().at("golf_cart")) +
+                                  prop_model_vertex_count(test_props().at("golf_bag")) +
+                                  prop_model_vertex_count(test_props().at(data.my_figure->carried_club_model)));
 
     step_up_to_ball(state);
     data = frame_for(state);
@@ -306,15 +348,16 @@ TEST_CASE("the flagstick casts its own fixed geometry into the sun shadow map") 
     data.lying_flags.clear();
     data.flags_out.clear();
     data.lighting.sun_direction = glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f));
-    const float texel = 0.3f;
-    world_marker_batch casters;
-    prop_batch models;
-    build_shadow_casters(casters, models, data, test_scene_colors(), test_props(), test_shadow_map(texel));
+    sun_casters casters;
+    build_shadow_casters(casters, data, test_scene_colors());
     REQUIRE(!casters.vertices().empty());
     world_marker_batch visible;
     const flag_pose flag{data.weather.flag_wind,data.weather.flag_lift,data.weather.flag_phase,data.weather.flag_flap};
+    // The shadow map draws the pole as wide as the main view does.
+    const world_marker_scene scene=marker_scene_for(data,shadow_picture_height);
+    const float pole_radius=flagstick_draw_radius(scene,data.pin_position,data.pin_visual_height_meters,scene.pixel_per_meter);
     append_pin_flagstick(visible,data.pin_position,data.pin_visual_height_meters,test_scene_colors().markers,
-                         test_scene_colors().glow,flag,data.flagstick_radius_meters);
+                         test_scene_colors().glow,flag,pole_radius);
     REQUIRE(casters.vertices().size()==visible.vertices().size());
     for(std::size_t i=0;i<visible.vertices().size();++i) {
         CHECK(near(casters.vertices()[i].position,visible.vertices()[i].position));
@@ -322,48 +365,18 @@ TEST_CASE("the flagstick casts its own fixed geometry into the sun shadow map") 
     const std::size_t pole_vertices=primitive_cylinder_segments*12;
     for(std::size_t i=0;i<pole_vertices;++i) {
         const auto offset=casters.vertices()[i].position-data.pin_position;
-        CHECK(glm::length(horizontal(offset))<=data.flagstick_radius_meters+0.0001f);
+        CHECK(glm::length(horizontal(offset))<=pole_radius+0.0001f);
         CHECK(offset.y>=-0.0001f);
         CHECK(offset.y<=data.pin_visual_height_meters+0.0001f);
     }
 
     // Taken out, it lies there and still casts; standing, nothing does.
     data.flags_out.push_back(data.pin_position);
-    build_shadow_casters(casters, models, data, test_scene_colors(), test_props(), test_shadow_map(texel));
+    build_shadow_casters(casters, data, test_scene_colors());
     CHECK(casters.vertices().empty());
     data.lying_flags.emplace_back(data.pin_position + glm::vec3(0.5f, 0.0f, 0.0f), data.pin_position + glm::vec3(2.5f, 0.0f, 0.0f));
-    build_shadow_casters(casters, models, data, test_scene_colors(), test_props(), test_shadow_map(texel));
+    build_shadow_casters(casters, data, test_scene_colors());
     CHECK(!casters.vertices().empty());
-}
-
-TEST_CASE("hole signs, way signs and fence posts cast the sun's shadow where the map reaches") {
-    render_data data;
-    data.camera_position = glm::vec3(0.0f, 2.0f, 0.0f);
-    const auto triangle_at = [](const float x) {
-        return std::vector<glm::vec3>{glm::vec3(x, 0.0f, 0.0f), glm::vec3(x + 1.0f, 0.0f, 0.0f), glm::vec3(x, 2.0f, 0.0f)};
-    };
-    render_hole_signs signs;
-    render_fences fences;
-    for (const float x : {10.0f, 1000.0f}) {
-        for (const glm::vec3& corner : triangle_at(x)) {
-            hole_sign_vertex sign;
-            sign.position = corner;
-            signs.vertices.push_back(sign);
-            fence_vertex post;
-            post.position = corner + glm::vec3(0.0f, 0.0f, 5.0f);
-            fences.posts.push_back(post);
-        }
-    }
-    data.hole_signs = &signs;
-    data.fences = &fences;
-    world_marker_batch casters;
-    prop_batch models;
-    build_shadow_casters(casters, models, data, test_scene_colors(), test_props(), test_shadow_map(0.3f));
-    // The near sign's and post's triangles; not the far ones.
-    REQUIRE(casters.vertices().size() == 6U);
-    for (const world_marker_vertex& vertex : casters.vertices()) {
-        CHECK(vertex.position.x < 20.0f);
-    }
 }
 
 TEST_CASE("online frames show other players, their tags, balls and trails; offline ones none") {
@@ -601,7 +614,7 @@ TEST_CASE("another player at their ball is drawn from their row as their own gam
 
 TEST_CASE("a refusal from the server shows as a notice") {
     game_state state = started_hole();
-    state.notice = game_notice{"online.error.too_far", 0.0f};
+    state.notice = game_notice{"online.error.too_far", 0.0f, message_severity::error};
     CHECK(frame_for(state).notice_label == "TOO FAR AWAY");
 }
 
@@ -687,25 +700,27 @@ TEST_CASE("what I hold follows the camera: the same on screen wherever I look, t
     };
 
     const seen level = props_seen();
-    REQUIRE(!level.batch.opaque().empty());
+    REQUIRE(!level.batch.opaque_vertices().empty());
     // Five puffs of smoke, then the beer's drops.
-    const std::vector<glm::vec3> level_blobs = sphere_centres(level.batch.blended());
+    const std::vector<glm::vec3> level_blobs = sphere_centres(level.batch.blended_vertices());
     REQUIRE(level_blobs.size() > 5U);
     float lowest_held = 1e9f;
-    for (const prop_vertex& vertex : level.batch.opaque()) {
+    for (const prop_vertex& vertex : level.batch.opaque_vertices()) {
         lowest_held = std::min(lowest_held, vertex.position.y);
     }
     // Poured: the stream runs below the props held in view.
     CHECK(level_blobs.back().y < lowest_held);
 
     const auto check_same_on_screen = [&](const seen& now) {
-        REQUIRE(now.batch.opaque().size() == level.batch.opaque().size());
-        for (std::size_t i = 0; i < now.batch.opaque().size(); ++i) {
-            const glm::vec3 seen_now(now.view * glm::vec4(now.batch.opaque()[i].position, 1.0f));
-            const glm::vec3 seen_level(level.view * glm::vec4(level.batch.opaque()[i].position, 1.0f));
+        const std::vector<prop_vertex> placed_now = now.batch.opaque_vertices();
+        const std::vector<prop_vertex> placed_level = level.batch.opaque_vertices();
+        REQUIRE(placed_now.size() == placed_level.size());
+        for (std::size_t i = 0; i < placed_now.size(); ++i) {
+            const glm::vec3 seen_now(now.view * glm::vec4(placed_now[i].position, 1.0f));
+            const glm::vec3 seen_level(level.view * glm::vec4(placed_level[i].position, 1.0f));
             CHECK(near(seen_now, seen_level, 0.0001f));
         }
-        const std::vector<glm::vec3> blobs = sphere_centres(now.batch.blended());
+        const std::vector<glm::vec3> blobs = sphere_centres(now.batch.blended_vertices());
         REQUIRE(blobs.size() == level_blobs.size());
         for (std::size_t i = 0; i < blobs.size(); ++i) {
             if (i < 5) {
@@ -763,7 +778,8 @@ TEST_CASE("my beer can tips towards me to pour, its opening facing me and the be
     prop_batch batch;
     append_held_props(batch, pouring, test_scene_colors().glow);
     const glm::vec3 beer = test_props().at("beer_can").color("beer");
-    CHECK(std::any_of(batch.blended().begin(), batch.blended().end(),
+    const std::vector<prop_vertex> drops = batch.blended_vertices();
+    CHECK(std::any_of(drops.begin(), drops.end(),
                       [&](const prop_vertex& vertex) { return vertex.color == beer && in_view(vertex.position); }));
 }
 
@@ -843,7 +859,7 @@ TEST_CASE("a tipped cart is seen lying on the side it rolled onto, a sunk one re
         prop_batch batch;
         append_cart_model(batch, drawn, model, test_scene_colors());
         float lowest = 1000.0f;
-        for (const prop_vertex& vertex : batch.opaque()) {
+        for (const prop_vertex& vertex : batch.opaque_vertices()) {
             lowest = std::min(lowest, vertex.position.y - terrain_height(state.area, vertex.position));
         }
         CHECK(lowest > -0.15f);
@@ -863,7 +879,7 @@ TEST_CASE("a tipped cart is seen lying on the side it rolled onto, a sunk one re
     append_cart_model(batch, data.carts[0], model, test_scene_colors());
     float lowest = 1000.0f;
     float highest = -1000.0f;
-    for (const prop_vertex& vertex : batch.opaque()) {
+    for (const prop_vertex& vertex : batch.opaque_vertices()) {
         lowest = std::min(lowest, vertex.position.y - terrain_height(state.area, vertex.position));
         highest = std::max(highest, vertex.position.y);
     }
@@ -873,7 +889,7 @@ TEST_CASE("a tipped cart is seen lying on the side it rolled onto, a sunk one re
 }
 
 namespace {
-// The picture's lines (assets/picture/picture.json target_lines).
+// The picture's lines (assets/picture/picture.json ui_lines and the first scene_lines).
 constexpr float scene_lines = 360.0f;
 
 // Where `world` lands in the scene picture at `aspect`, in scene pixels from
@@ -1034,8 +1050,8 @@ TEST_CASE("iron and wedge heads show their own loft while carried, handled and s
                    glm::vec3(frame * glm::vec4(model.point("grip"), 1.0f)), 0.0001f));
         prop_batch batch;
         append_swing_club(batch, pose, address.ball_visual_radius_meters, model, test_scene_colors().glow);
-        float lowest = batch.opaque().front().position.y;
-        for (const prop_vertex& vertex : batch.opaque()) {
+        float lowest = batch.opaque_vertices().front().position.y;
+        for (const prop_vertex& vertex : batch.opaque_vertices()) {
             lowest = std::min(lowest, vertex.position.y);
         }
         CHECK(std::abs(lowest - (address.ball_position.y - address.ball_visual_radius_meters)) < 0.005f);
@@ -1305,4 +1321,267 @@ TEST_CASE("a water reflection contains my physical figure through the shared wor
     CHECK(reflected.trees==scene.trees);
     CHECK(reflected.terrain_mesh==scene.terrain_mesh);
     CHECK(scene.my_club.has_value());
+}
+
+namespace {
+using vertex_key = std::array<float, 7>;
+
+std::vector<vertex_key> sorted_keys(const prop_batch& batch, const bool blended) {
+    std::vector<vertex_key> keys;
+    for (const prop_vertex& v : blended ? batch.blended_vertices() : batch.opaque_vertices()) {
+        keys.push_back({v.position.x, v.position.y, v.position.z, v.normal.x, v.color.x, v.alpha, v.glow});
+    }
+    std::sort(keys.begin(), keys.end());
+    return keys;
+}
+
+std::vector<vertex_key> sorted_keys(const prop_frame& frame, const prop_view view, const bool blended) {
+    const prop_ranges ranges = frame.ranges(view, blended);
+    const canonical_meshes meshes;
+    std::vector<vertex_key> keys;
+    // Each run's instances, every vertex of the canonical mesh as the instance places it.
+    for (const prop_mesh mesh : {prop_mesh::cylinder, prop_mesh::sphere, prop_mesh::quad}) {
+        const prop_runs& runs = ranges[static_cast<std::size_t>(mesh)];
+        for (int i = 0; i < runs.count; ++i) {
+            const prop_range run = runs.run[static_cast<std::size_t>(i)];
+            for (std::size_t n = run.first; n < run.first + run.count; ++n) {
+                const mesh_instance& instance = frame.batch().instances(blended, mesh)[n];
+                for (std::size_t v = 0; v < meshes.vertex_count(mesh); ++v) {
+                    const glm::vec3 position = placed_position(instance, meshes, mesh, v);
+                    keys.push_back({position.x, position.y, position.z, placed_normal(instance, meshes, mesh, v).x, instance.color.x,
+                                    instance.alpha, instance.glow});
+                }
+            }
+        }
+    }
+    std::sort(keys.begin(), keys.end());
+    return keys;
+}
+}
+
+TEST_CASE("one prop upload serves the main view, the mirrored view and the sun's shadow with what each used to build") {
+    game_state state = started_hole();
+    step_up_to_ball(state);
+    render_data data = frame_for(state);
+    REQUIRE(data.my_figure.has_value());
+    REQUIRE(data.my_club.has_value());
+    render_remote_avatar other = *data.my_figure;
+    other.player_id = 7;
+    other.position += glm::vec3(3.0f, 0.0f, 0.0f);
+    data.remote_avatars.push_back(other);
+    const scene_colors& colors = test_scene_colors();
+    prop_frame frame;
+    frame.build(data, test_props(), colors, 0.0f);
+
+    // What the main view built before: carts, bags, handled gear, my club, others' club and gear.
+    const auto assemble = [&](const render_data& scene, const bool include_gear_only) {
+        prop_batch expected;
+        if (!include_gear_only) {
+            append_carts_and_bags(expected, scene, test_props(), colors);
+            if (scene.my_club) {
+                append_swing_club(expected, *scene.my_club, scene.ball_visual_radius_meters,
+                                  test_props().at(scene.my_club->club_model), colors.glow);
+            }
+            for (const render_remote_avatar& avatar : scene.remote_avatars) {
+                if (avatar.swing) {
+                    append_swing_club(expected, *avatar.swing, scene.ball_visual_radius_meters,
+                                      test_props().at(avatar.swing->club_model), colors.glow);
+                }
+                if (const auto holder = remote_prop_holder(avatar, scene.avatar_eye_height, test_props())) {
+                    append_held_props(expected, *holder, colors.glow);
+                }
+                append_figure_gear(expected, avatar, scene.avatar_eye_height, test_props(), colors);
+            }
+        } else {
+            append_carts_and_bags(expected, scene, test_props(), colors);
+            if (scene.my_figure) { append_figure_gear(expected, *scene.my_figure, scene.avatar_eye_height, test_props(), colors); }
+            for (const render_remote_avatar& avatar : scene.remote_avatars) {
+                append_figure_gear(expected, avatar, scene.avatar_eye_height, test_props(), colors);
+            }
+        }
+        return expected;
+    };
+    for (const bool blended : {false, true}) {
+        CHECK(sorted_keys(frame, prop_view::scene, blended) == sorted_keys(assemble(data, false), blended));
+        // The mirror's scene is the world with my figure added as a player and my club and hand left out.
+        render_data mirrored = make_reflected_scene(data, data.camera_position);
+        CHECK(sorted_keys(frame, prop_view::mirror, blended) == sorted_keys(assemble(mirrored, false), blended));
+        // The sun's shadow: carts, bags and the gear every figure carries, mine included.
+        CHECK(sorted_keys(frame, prop_view::sun_shadow, blended) == sorted_keys(assemble(data, true), blended));
+    }
+    CHECK(!frame.batch().empty());
+    // The scene view's groups are one run of each mesh's list.
+    for (const prop_runs& runs : frame.ranges(prop_view::scene, false)) { CHECK(runs.count <= 1); }
+}
+
+namespace {
+constexpr int pole_picture_width = 320;
+constexpr int pole_picture_height = 240;
+constexpr float pole_zoom = 8.0f;
+constexpr float pole_height_meters = 2.13f;
+constexpr float real_pole_radius = 0.00635f;
+
+// A standing flagstick at the origin seen from `distance` metres down +Z and `sideways` off to one side.
+struct pole_shot {
+    std::vector<glm::vec2> pole;  // the pole's vertices on the picture, in pixels
+    float radius = 0.0f;          // the radius the pole was drawn at
+};
+
+// The pole the view draws: the main one, or at `magnification` above 1 the zoomed view's own.
+pole_shot shoot_pole(const float distance, const float sideways, const float magnification) {
+    render_data data;
+    data.show_hole = true;
+    data.show_rangefinder = magnification > 1.0f;
+    data.rangefinder_eyepiece.magnification = magnification;
+    data.pin_visual_height_meters = pole_height_meters;
+    data.flagstick_radius_meters = real_pole_radius;
+    data.camera_position = glm::vec3(sideways, 1.7f, distance);
+    data.camera_fov_degrees = test_fov_degrees;
+    world_marker_batch batch;
+    build_world_marker_batch(batch, marker_scene_for(data, pole_picture_height), test_scene_colors());
+    const std::size_t first = magnification > 1.0f ? batch.part_end(static_cast<std::size_t>(marker_part::poles)) : 0;
+    CHECK(batch.part_end(static_cast<std::size_t>(marker_part::zoom_poles)) - batch.part_end(static_cast<std::size_t>(marker_part::poles)) ==
+            (magnification > 1.0f ? primitive_cylinder_segments * 12 : 0));
+    const glm::vec3 target(0.0f, pole_height_meters * 0.5f, 0.0f);
+    glm::mat4 proj = glm::perspective(glm::radians(test_fov_degrees),
+                                      static_cast<float>(pole_picture_width) / pole_picture_height, 0.1f, 1000.0f);
+    proj[0][0] *= magnification;  // the eyepiece's zoom (renderer/eyepiece_pass.cpp zoomed_projection)
+    proj[1][1] *= magnification;
+    const glm::mat4 view_proj = proj * glm::lookAt(data.camera_position, target, glm::vec3(0.0f, 1.0f, 0.0f));
+    pole_shot shot;
+    for (std::size_t i = first; i < first + primitive_cylinder_segments * 12; ++i) {
+        const glm::vec3 position = batch.vertices()[i].position;
+        shot.radius = std::max(shot.radius, glm::length(horizontal(position)));
+        const glm::vec4 clip = view_proj * glm::vec4(position, 1.0f);
+        shot.pole.emplace_back((clip.x / clip.w * 0.5f + 0.5f) * pole_picture_width,
+                               (clip.y / clip.w * 0.5f + 0.5f) * pole_picture_height);
+    }
+    return shot;
+}
+
+float pole_width(const pole_shot& shot) {
+    const auto [low, high] = std::minmax_element(shot.pole.begin(), shot.pole.end(),
+                                                 [](const glm::vec2& a, const glm::vec2& b) { return a.x < b.x; });
+    return high->x - low->x;
+}
+
+// Rows of the pole's height whose centre line holds no pixel centre inside the pole's triangles.
+int uncovered_pole_rows(const pole_shot& shot) {
+    float low = shot.pole.front().y;
+    float high = low;
+    for (const glm::vec2& p : shot.pole) {
+        low = std::min(low, p.y);
+        high = std::max(high, p.y);
+    }
+    int missed = 0;
+    for (int row = static_cast<int>(std::ceil(low - 0.5f)); row + 0.5f <= high; ++row) {
+        const float y = static_cast<float>(row) + 0.5f;
+        bool covered = false;
+        for (std::size_t t = 0; t + 2 < shot.pole.size() && !covered; t += 3) {
+            float from = 1e9f;
+            float to = -1e9f;
+            for (std::size_t e = 0; e < 3; ++e) {
+                const glm::vec2 a = shot.pole[t + e];
+                const glm::vec2 b = shot.pole[t + (e + 1) % 3];
+                if ((a.y - y) * (b.y - y) <= 0.0f && a.y != b.y) {
+                    const float x = a.x + (b.x - a.x) * (y - a.y) / (b.y - a.y);
+                    from = std::min(from, x);
+                    to = std::max(to, x);
+                }
+            }
+            covered = from <= to && std::ceil(from - 0.5f) <= std::floor(to - 0.5f);
+        }
+        missed += covered ? 0 : 1;
+    }
+    return missed;
+}
+}
+
+TEST_CASE("a far flagstick is a whole pixel wide in each view, the eyepiece's own pixel in the zoomed one") {
+    for (const float distance : {50.0f, 150.0f, 400.0f}) {
+        for (int step = 0; step < 16; ++step) {
+            const float sideways = static_cast<float>(step) / 16.0f * distance * 0.0048f;
+            const pole_shot main = shoot_pole(distance, sideways, 1.0f);
+            CHECK(pole_width(main) >= 1.0f - 0.001f);
+            CHECK(main.radius > real_pole_radius);
+            CHECK(uncovered_pole_rows(main) == 0);
+            const pole_shot zoomed = shoot_pole(distance, sideways, pole_zoom);
+            CHECK(pole_width(zoomed) >= 1.0f - 0.001f);
+            CHECK(uncovered_pole_rows(zoomed) == 0);
+            if (distance == 400.0f) {
+                // Not the main view's width magnified, which would be about eight pixels.
+                CHECK(pole_width(zoomed) <= 1.5f);
+                CHECK(zoomed.radius < main.radius * 0.5f);
+            }
+        }
+    }
+}
+
+TEST_CASE("a flagstick wider than a pixel of its view keeps its real radius") {
+    for (const float distance : {1.0f, 1.5f}) {
+        const pole_shot main = shoot_pole(distance, 0.0f, 1.0f);
+        CHECK(pole_width(main) > 1.0f);
+        CHECK(near(main.radius, real_pole_radius, 0.0001f));
+    }
+    // Far enough to be a pixel in the main view, but wider than one zoomed pixel.
+    for (const float distance : {5.0f, 10.0f}) {
+        const pole_shot zoomed = shoot_pole(distance, 0.0f, pole_zoom);
+        CHECK(pole_width(zoomed) > 1.0f);
+        CHECK(near(zoomed.radius, real_pole_radius, 0.0001f));
+    }
+}
+
+namespace {
+bool has_colour(const overlay_batch& batch, const glm::vec3 colour) {
+    return std::any_of(batch.vertices.begin(), batch.vertices.end(), [&](const overlay_vertex& v) { return glm::vec3(v.color) == colour; });
+}
+// What a notice's batch looks like for `severity`: the three parts that make it red.
+struct notice_look { bool error_fill, error_border, error_text, neutral_border; };
+notice_look drawn_notice(const std::string& label, const message_severity severity, const overlay_grid grid, std::size_t& cut) {
+    overlay_batch batch;
+    batch.grid = grid;
+    draw_notice(batch, shipped_text_assets(), label, severity);
+    cut = batch.truncated_text_count;
+    for (const overlay_vertex& v : batch.vertices) { CHECK(std::abs(v.position.x) <= 1.0f); CHECK(std::abs(v.position.y) <= 1.0f); }
+    return {has_colour(batch, glm::vec3(0.03f, 0.02f, 0.02f)), has_colour(batch, glm::vec3(0.62f, 0.30f, 0.22f)),
+            has_colour(batch, glm::vec3(0.94f, 0.38f, 0.26f)), has_colour(batch, glm::vec3(0.50f, 0.52f, 0.48f))};
+}
+}
+
+TEST_CASE("only a refusal is drawn red: text, border and background; a status is neutral at every aspect") {
+    for (const overlay_grid grid : {overlay_grid{640, 480}, overlay_grid{854, 480}, overlay_grid{1120, 480}}) {
+        for (const char* key : {"online.error.too_far", "hub.pending", "scorecard.waiting_for_group", "hud.water_penalty", "hud.ball_hit_penalty"}) {
+            const std::string label = lookup_text(shipped_text_assets(), key);
+            std::size_t cut = 0;
+            const notice_look error = drawn_notice(label, message_severity::error, grid, cut);
+            CHECK(cut == 0U);
+            CHECK(error.error_fill); CHECK(error.error_border); CHECK(error.error_text); CHECK(!error.neutral_border);
+            const notice_look status = drawn_notice(label, message_severity::status, grid, cut);
+            CHECK(cut == 0U);
+            CHECK(!status.error_fill); CHECK(!status.error_border); CHECK(!status.error_text); CHECK(status.neutral_border);
+        }
+    }
+}
+
+TEST_CASE("the HUD notice carries the producer's severity; progress is neutral and never hides a refusal; travel has no HUD notice") {
+    game_state state = started_hole();
+    state.notice = game_notice{"online.error.too_far", 0.0f, message_severity::error};
+    state.hub_flow.ball_request = net_command_type::tee_up;
+    render_data data = frame_for(state);
+    CHECK(data.notice_label == "TOO FAR AWAY");
+    CHECK(data.notice_severity == message_severity::error);
+    // Progress alone: neutral.
+    state.notice.reset();
+    data = frame_for(state);
+    CHECK(data.notice_label == "Waiting for the server...");
+    CHECK(data.notice_severity == message_severity::status);
+    // A rules consequence keeps its notice, as a status.
+    state.notice = game_notice{text_hud_water_penalty, 0.0f, message_severity::status};
+    data = frame_for(state);
+    CHECK(data.notice_label == "IN THE WATER: +1 STROKE");
+    CHECK(data.notice_severity == message_severity::status);
+    // Travel shows on its own screen only: no duplicate in the HUD.
+    state.notice.reset(); state.hub_flow.ball_request.reset();
+    state.hub_flow.travel_course = "somewhere";
+    CHECK(frame_for(state).notice_label.empty());
 }

@@ -1,7 +1,7 @@
 #pragma once
 
 // Owns everything (window, renderer, audio, content, game state) and runs the
-// main loop: poll input -> update menus or the game -> render.
+// main loop. An optional callback receives each profiled iteration after GPU readback.
 
 #include "audio/audio_engine.h"
 #include "core/god_menu.h"
@@ -9,6 +9,7 @@
 #include "core/light_frame.h"
 #include "core/look_tuning.h"
 #include "core/progress_saver.h"
+#include "core/render_gear.h"
 #include "core/sky_frame.h"
 #include "core/startup_flow.h"
 #include "core/tee_book.h"
@@ -25,6 +26,7 @@
 #include "game/text_assets.h"
 #include "profiling/profiling.h"
 #include "renderer/camera_transition.h"
+#include "renderer/course_map_sheet.h"
 #include "renderer/fence_batch.h"
 #include "renderer/hole_sign_batch.h"
 #include "renderer/floodlight_batch.h"
@@ -43,11 +45,15 @@
 #include "core/online_session.h"
 #endif
 
+class benchmark_driver;
+
 class app {
 public:
     // False (after logging why) when the window, renderer or content fail.
     bool init(const startup_options& options);
-    void run();
+    // A sink enables raw frame records independently of the profiler overlay.
+    void run(const frame_profile_sink& sink = {});
+    bool run_benchmark(const startup_options& options);
     void shutdown();
 
 private:
@@ -62,6 +68,7 @@ private:
     void apply_settings(bool write);
     void update_menu(float dt, frame_profile* profile);
     void update_confirm_menu(frame_profile* profile);
+    void advance_game(const game_input& input, float dt, frame_profile* profile);
     void update_round(float dt, frame_profile* profile);
     void update_hub_menu(float dt, frame_profile* profile);
     bool arrive_at_place(const std::string& place_id);
@@ -85,7 +92,11 @@ private:
     void watch_online_round();
     // The round's sounds, heard from the camera as drawn this frame.
     void play_game_audio();
+    static std::int64_t unix_now_ms();
+    bool load_course(const course_definition& course);
     void refresh_render_meshes();
+    double course_load_ms_ = 0;
+    double course_bake_ms_ = 0;
     // lighting.json and picture.json reloaded when saved, and the F2 panel
     // (app_look.cpp).
     void update_look(float dt);
@@ -96,6 +107,7 @@ private:
                            const std::optional<camera_view>& fixed_camera = std::nullopt);
     void present_frame(render_data& data, frame_profile* profile);
 
+    benchmark_driver* benchmark_ = nullptr;  // owned by run_benchmark for the duration of run
     window window_;
     renderer renderer_;
     audio_engine audio_;
@@ -108,6 +120,7 @@ private:
     game_state game_;
     progress_saver progress_saver_;
     std::filesystem::path settings_path_;
+    std::filesystem::path grass_cache_dir_;  // empty: the grass field stays in memory
 
     // Presentation state, never read by game logic.
     camera_transition_state camera_transition_;
@@ -116,11 +129,15 @@ private:
     render_static_mesh terrain_render_mesh_;
     render_static_mesh material_overlay_render_mesh_;
     render_hole_signs hole_signs_;
+    course_map_sheet course_map_;
     render_fences fences_;
     render_floodlights floodlights_;
     render_water water_;
     tree_shadow_cache tree_shadows_;
+    blob_ground_memo blob_ground_;
+    cart_fit_memo cart_fits_;
     tape_style tape_style_;
+    int ui_lines_ = 0;  // the picture's UI size, which the course map's sheet is as fine as
     lighting_palette lighting_;
     std::string asset_root_;
     look_tuning_state look_tuning_;

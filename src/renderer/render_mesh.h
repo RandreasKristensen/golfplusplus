@@ -5,35 +5,14 @@
 #include <cstdint>
 #include <vector>
 
+#include "game/lighting_loader.h"
+#include "renderer/terrain_vertex.h"
+
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 // GL-free render mesh data. Kept separate from renderer.h so the pure helpers
 // here can be unit tested without SDL or an OpenGL context.
-
-struct render_terrain_vertex {
-    glm::vec3 position = glm::vec3(0.0f);
-    glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::vec3 color = glm::vec3(1.0f);
-    float rough = 0.0f;  // 1 where the rough's grass texture shows, 0 where not
-    float paved = 0.0f;  // 1 where the cart path's asphalt texture shows, 0 where not
-    float ao = 1.0f;     // how much of the sky it sees (renderer/sky_visibility.h)
-    // Mown grass: the way the mower went, 2 long on a fairway and 1 on a
-    // green (their stripes' widths are the grass style's); zero unmown.
-    glm::vec2 mow{0.0f};
-    // How far across the line it was mown along it lies, signed, in metres:
-    // which pass of the mower it is in.
-    float mow_across = 0.0f;
-    // The grass's blades here: 1 rough, 2 heavy rough (as tall as the grass
-    // style says), 0 none, between where they meet.
-    float blades = 0.0f;
-    // The sine of the horizon's elevation each of the 8 horizon ways
-    // (sky_visibility.h), 0..255 for 0..1: where the sun is hidden behind the land.
-    std::array<std::uint8_t, 8> horizon{};
-    // Its colour on a printed map (course_map_fill.h): the colour, but water
-    // over a pond's floor. Not drawn.
-    glm::vec3 map_color = glm::vec3(1.0f);
-};
 
 // Axis-aligned bounds over every vertex position. `valid` is false for an
 // empty vertex list, in which case min/max stay at zero.
@@ -47,9 +26,20 @@ struct render_mesh_bounds {
 // bounds of the vertices those triangles reference. Built once per mesh
 // revision (see renderer/render_mesh_chunks.h) and frustum culled per frame.
 struct render_mesh_chunk {
+    // A stretch of the coarse index lists: `count` indices from `first`, in
+    // the list built for `list` (1 up; a level that thinned nothing more than
+    // the one before shares its span).
+    struct span {
+        std::uint32_t first = 0;
+        std::uint32_t count = 0;
+        std::uint8_t list = 0;
+    };
     render_mesh_bounds bounds;
     std::uint32_t first_index = 0;
     std::uint32_t index_count = 0;
+    // Its coarser stand-ins, level 1 first, in render_static_mesh::lod_indices
+    // (renderer/render_mesh_lod.h); a count of 0 is a level not built.
+    std::array<span, max_terrain_lod_levels> coarse{};
 };
 
 struct render_static_mesh {
@@ -60,6 +50,10 @@ struct render_static_mesh {
     // Rebuild with build_render_mesh_chunks whenever `vertices`/`indices`
     // change. Empty means "not chunked": the renderer draws the whole mesh.
     std::vector<render_mesh_chunk> chunks;
+    // The chunks' coarser index lists, and how far under the full mesh each
+    // level lies at most, in metres (level 1 first). Empty: no levels.
+    std::vector<std::uint32_t> lod_indices;
+    std::vector<float> lod_error_meters;
     std::uint64_t revision = 0;
 };
 

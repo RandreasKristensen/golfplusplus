@@ -103,7 +103,7 @@ bool start_course(game_state& state, const course_definition& course) {
 bool tee_up(game_state& state, const std::size_t hole_index, const bool give_up) {
     if (!state.round) { return false; }
     if (first_tee_required(state) && !course_warmup(state)) {
-        state.notice = game_notice{text_online_error_first_tee_required, 0}; return false;
+        state.notice = game_notice{text_online_error_first_tee_required, 0.0f, message_severity::error}; return false;
     }
     if (course_warmup(state)) {
         request_ball_preparation(state, net_command_type::tee_up, hole_index, give_up);
@@ -113,19 +113,19 @@ bool tee_up(game_state& state, const std::size_t hole_index, const bool give_up)
         return false;
     }
     if (state.ball && state.ball->place == ball_place::in_cup) {
-        state.notice = game_notice{text_ball_in_cup, 0.0f};
+        state.notice = game_notice{text_ball_in_cup, 0.0f, message_severity::error};
         return false;
     }
     if (state.ball && state.ball->hole == hole_index) {
         return false;  // that hole's ball is mine: it is played where it lies
     }
     if (state.ball && !give_up) {
-        state.notice = game_notice{text_ball_in_play, 0.0f};
+        state.notice = game_notice{text_ball_in_play, 0.0f, message_severity::error};
         return false;
     }
     if (is_online(state) &&
         tee_in_use(state.online.balls, state.online.account_id, static_cast<int>(hole_index))) {
-        state.notice = game_notice{text_online_tee_in_use, 0.0f};
+        state.notice = game_notice{text_online_tee_in_use, 0.0f, message_severity::error};
         return false;
     }
     end_ball_play(state);
@@ -176,7 +176,7 @@ glm::vec3 lying_in_cup(const game_state& state, const std::size_t hole, const gl
 void give_up_hole(game_state& state) {
     if (!state.round) { return; }
     if (first_tee_required(state) && !course_warmup(state)) {
-        state.notice = game_notice{text_online_error_first_tee_required, 0}; return;
+        state.notice = game_notice{text_online_error_first_tee_required, 0.0f, message_severity::error}; return;
     }
     if (!ball_in_play(state)) {
         return;

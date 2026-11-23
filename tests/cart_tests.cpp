@@ -308,7 +308,11 @@ TEST_CASE("trees, poles, signs, nets and flagsticks stand in the way of players 
           2 * area.signs.size() + area.way_signs.size() + fence_poles + area.floodlights.size());
     CHECK(solids_of(area, solid_kind::flagstick).empty());  // by the flags (flagstick_solids)
     CHECK(solids_of(area, solid_kind::lamp).size() == area.floodlights.size());
-    CHECK(solids_of(area, solid_kind::board).size() == area.signs.size() + area.way_signs.size() + area.props.size());
+    std::size_t way_boards = 0;
+    for (const way_sign& sign : area.way_signs) {
+        way_boards += sign.boards.size();
+    }
+    CHECK(solids_of(area, solid_kind::board).size() == area.signs.size() + way_boards + area.props.size());
     CHECK(solids_of(area, solid_kind::net).size() == nets);
     CHECK(!solids_of(area, solid_kind::path).empty());
     for (const solid& thing : area.solids) {

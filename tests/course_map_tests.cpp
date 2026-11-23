@@ -1,9 +1,11 @@
 #include "doctest.h"
 
-#include "renderer/course_map_fill.h"
+#include "game/text_ids.h"
+#include "renderer/course_map_card.h"
+#include "renderer/course_map_layout.h"
 #include "renderer/course_map_overlay.h"
+#include "renderer/map_ink.h"
 #include "renderer/overlay_batch.h"
-#include "renderer/render_mesh.h"
 
 #include "test_support.h"
 
@@ -19,154 +21,14 @@
 #include <glm/vector_relational.hpp>
 
 namespace {
-render_static_mesh make_test_terrain_mesh(const float span, const std::uint64_t revision) {
-    render_static_mesh mesh;
-    const int steps = 8;
-    for (int z = 0; z <= steps; ++z) {
-        for (int x = 0; x <= steps; ++x) {
-            render_terrain_vertex vertex;
-            const float fx = static_cast<float>(x) / static_cast<float>(steps);
-            const float fz = static_cast<float>(z) / static_cast<float>(steps);
-            vertex.position = glm::vec3((fx - 0.5f) * span, 0.0f, (fz - 0.5f) * span);
-            vertex.color = glm::vec3(0.18f + fx * 0.1f, 0.42f, 0.18f + fz * 0.1f);
-            vertex.map_color = vertex.color;
-            mesh.vertices.push_back(vertex);
-        }
-    }
-
-    const std::uint32_t stride = static_cast<std::uint32_t>(steps + 1);
-    for (int z = 0; z < steps; ++z) {
-        for (int x = 0; x < steps; ++x) {
-            const std::uint32_t base = static_cast<std::uint32_t>(z) * stride + static_cast<std::uint32_t>(x);
-            mesh.indices.push_back(base);
-            mesh.indices.push_back(base + stride);
-            mesh.indices.push_back(base + 1U);
-            mesh.indices.push_back(base + 1U);
-            mesh.indices.push_back(base + stride);
-            mesh.indices.push_back(base + stride + 1U);
-        }
-    }
-
-    mesh.bounds = compute_render_mesh_bounds(mesh.vertices);
-    mesh.revision = revision;
-    return mesh;
-}
-
-course_map_layout make_test_layout(const float scale) {
-    course_map_layout layout;
-    layout.world_center = glm::vec3(3.0f, 0.0f, -2.0f);
-    layout.scale = glm::vec2(scale);
-    return layout;
+const map_inks& inks() {
+    return test_scene_colors().map;
 }
 
 // The four corners of an XZ box, as a course's outline.
 std::vector<glm::vec3> box_outline(const glm::vec3& low, const glm::vec3& high) {
     return {low, glm::vec3(high.x, 0.0f, low.z), high, glm::vec3(low.x, 0.0f, high.z)};
 }
-
-bool same_vertices(const std::vector<overlay_vertex>& a, const std::vector<overlay_vertex>& b) {
-    if (a.size() != b.size()) {
-        return false;
-    }
-    for (std::size_t i = 0; i < a.size(); ++i) {
-        if (a[i].position != b[i].position || a[i].color != b[i].color) {
-            return false;
-        }
-    }
-    return true;
-}
-}
-
-TEST_CASE("map fill produces geometry for a terrain mesh") {
-    const render_static_mesh mesh = make_test_terrain_mesh(60.0f, 1U);
-    overlay_batch batch;
-    append_course_map_fill(batch, make_test_layout(0.02f), &mesh);
-
-    CHECK(!(batch.vertices.empty()));
-    CHECK(batch.vertices.size() % overlay_vertices_per_quad == 0U);
-}
-
-TEST_CASE("cached map fill vertices are identical to the uncached build") {
-    const render_static_mesh mesh = make_test_terrain_mesh(60.0f, 7U);
-    const course_map_layout layout = make_test_layout(0.02f);
-
-    overlay_batch direct;
-    append_course_map_fill(direct, layout, &mesh);
-
-    course_map_fill_cache cache;
-    CHECK(update_course_map_fill_cache(cache, layout, &mesh));
-    CHECK(same_vertices(cache.fill.vertices, direct.vertices));
-
-    // A second frame with the same inputs reuses the cached vertices.
-    const std::uint64_t revision = cache.revision;
-    CHECK(!(update_course_map_fill_cache(cache, layout, &mesh)));
-    CHECK(cache.revision == revision);
-    CHECK(same_vertices(cache.fill.vertices, direct.vertices));
-}
-
-TEST_CASE("map fill cache rebuilds when the layout changes") {
-    const render_static_mesh mesh = make_test_terrain_mesh(60.0f, 2U);
-    course_map_fill_cache cache;
-    update_course_map_fill_cache(cache, make_test_layout(0.02f), &mesh);
-    const std::uint64_t revision = cache.revision;
-
-    const course_map_layout moved = make_test_layout(0.03f);
-    CHECK(update_course_map_fill_cache(cache, moved, &mesh));
-    CHECK(cache.revision == revision + 1U);
-
-    overlay_batch direct;
-    append_course_map_fill(direct, moved, &mesh);
-    CHECK(same_vertices(cache.fill.vertices, direct.vertices));
-}
-
-TEST_CASE("map fill cache rebuilds when the terrain mesh changes") {
-    const render_static_mesh first = make_test_terrain_mesh(60.0f, 3U);
-    const render_static_mesh second = make_test_terrain_mesh(90.0f, 4U);
-    const course_map_layout layout = make_test_layout(0.02f);
-
-    course_map_fill_cache cache;
-    update_course_map_fill_cache(cache, layout, &first);
-    const std::size_t first_size = cache.fill.vertices.size();
-
-    CHECK(update_course_map_fill_cache(cache, layout, &second));
-    overlay_batch direct;
-    append_course_map_fill(direct, layout, &second);
-    CHECK(same_vertices(cache.fill.vertices, direct.vertices));
-    CHECK(cache.fill.vertices.size() != first_size);
-
-    // Losing the mesh empties the fill instead of leaving stale geometry.
-    CHECK(update_course_map_fill_cache(cache, layout, nullptr));
-    CHECK(cache.fill.vertices.empty());
-}
-
-TEST_CASE("layout comparison only matches exactly equal layouts") {
-    const course_map_layout base = make_test_layout(0.02f);
-    course_map_layout same = base;
-    CHECK(course_map_layouts_match(base, same));
-
-    same.world_center.x += 0.0001f;
-    CHECK(!(course_map_layouts_match(base, same)));
-
-    course_map_layout shifted = base;
-    shifted.center.y += 0.001f;
-    CHECK(!(course_map_layouts_match(base, shifted)));
-}
-
-TEST_CASE("map fill prints triangles smaller than a strip") {
-    overlay_batch batch;
-    const course_map_layout layout = make_test_layout(0.02f);
-    const glm::vec2 corner = layout.center;
-    append_map_fill_triangle(batch, layout, corner, corner + glm::vec2(0.0008f, 0.0f), corner + glm::vec2(0.0f, 0.0008f),
-                             glm::vec3(1.0f));
-    CHECK(overlay_batch_quad_count(batch) == 1U);
-}
-
-TEST_CASE("the map prints water in its own ink, never the bunkers'") {
-    const glm::vec3 water = course_map_material_ink(test_scene_colors().ground, terrain_material::water);
-    const glm::vec3 bunker = course_map_material_ink(test_scene_colors().ground, terrain_material::bunker);
-    CHECK(glm::length(water - bunker) > 0.3f);
-    CHECK(water.b > water.r);
-    CHECK(water.b > water.g);
 }
 
 TEST_CASE("the course map fits the course's holes to its paper, square on screen, at every aspect") {
@@ -199,7 +61,30 @@ TEST_CASE("the course map fits the course's holes to its paper, square on screen
     }
 }
 
-TEST_CASE("the course map turns a course lying corner to corner so its length lies across the paper") {
+// The same points and angle as MapTurnTests in tooling/osm_import/test_osm_golf_convert.py, with
+// the paper's drawable part in paper heights (osm_ground.MAP_DRAWABLE).
+TEST_CASE("the course map's turn is the angle of the largest scale, the one the importer chooses") {
+    const std::vector<glm::vec3> points = [] {
+        std::vector<glm::vec3> made;
+        for (const glm::vec2 xz : {glm::vec2(0, 0), glm::vec2(900, 500), glm::vec2(1400, 1200), glm::vec2(400, 200),
+                                   glm::vec2(1000, 0), glm::vec2(100, 600), glm::vec2(1250, 900), glm::vec2(-200, 350),
+                                   glm::vec2(700, 820), glm::vec2(1500, 1000)}) {
+            made.emplace_back(xz.x, 0.0f, xz.y);
+        }
+        return made;
+    }();
+    const glm::vec2 drawable(1.42f, 0.92f);
+    const double chosen = course_map_turn_degrees(points, drawable);
+    CHECK(std::abs(chosen - 6.9) < 1.0e-9);
+    const double scale = course_map_fit_scale(points, chosen, drawable);
+    for (int degrees = -89; degrees <= 90; ++degrees) {
+        CHECK(scale >= course_map_fit_scale(points, degrees, drawable));
+    }
+    // Equal scales go to the smaller turn: a square fits as well turned a quarter way round.
+    CHECK(course_map_turn_degrees(box_outline(glm::vec3(0.0f), glm::vec3(100.0f, 0.0f, 100.0f)), drawable) == 0.0);
+}
+
+TEST_CASE("the course map turns a course lying corner to corner to the angle that fits it largest") {
     render_data data;
     // 1000 m long and 150 m wide, running north-east.
     const glm::vec3 along = glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f));
@@ -208,41 +93,17 @@ TEST_CASE("the course map turns a course lying corner to corner so its length li
                                along * 500.0f + across * 75.0f, -along * 500.0f + across * 75.0f};
     for (const overlay_grid grid : {overlay_grid{554, 416}, overlay_grid{640, 360}, overlay_grid{733, 314}}) {
         const course_map_layout layout = make_course_map_layout(data, grid);
-        const glm::vec2 pixels(static_cast<float>(grid.width), static_cast<float>(grid.height));
-        const glm::vec2 length = (map_point(layout, along * 500.0f) - map_point(layout, -along * 500.0f)) * pixels;
-        // Within a degree of level on screen.
-        CHECK(std::abs(length.y) < std::abs(length.x) * 0.02f);
-        // Unturned, it would run corner to corner.
-        CHECK(std::abs(layout.turn.y) > 0.6f);
-    }
-}
-
-TEST_CASE("the course map draws no tree off its paper") {
-    render_data data;
-    data.course_map_outline = box_outline(glm::vec3(0.0f), glm::vec3(400.0f, 0.0f, 400.0f));
-    data.player_position = glm::vec3(200.0f, 0.0f, 200.0f);
-    std::vector<tree_body> trees(2);
-    trees[0].base = glm::vec3(200.0f, 0.0f, 200.0f);
-    trees[1].base = glm::vec3(200.0f, 0.0f, 2000.0f);
-    data.trees = &trees;
-    overlay_batch batch;
-    batch.grid = overlay_grid{640, 360};
-    const course_map_layout layout = make_course_map_layout(data, batch.grid);
-    draw_course_map_marks(batch, shipped_text_assets(), layout, data);
-    std::size_t tree_quads = 0;
-    for (std::size_t i = 0; i + overlay_vertices_per_quad <= batch.vertices.size(); i += overlay_vertices_per_quad) {
-        if (glm::length(glm::vec3(batch.vertices[i].color) - course_map_tree_ink) > 0.001f) {
-            continue;
+        const glm::vec2 drawable = course_map_drawable(grid);
+        const double degrees = std::atan2(static_cast<double>(layout.turn.y), static_cast<double>(layout.turn.x)) * 180.0 / 3.14159265358979;
+        CHECK(std::abs(degrees - course_map_turn_degrees(data.course_map_outline, drawable)) < 0.001);
+        // At least as large as at any whole degree, and larger than unturned or with its length level.
+        const double scale = layout.scale.y * pixels_per_clip(grid).y;
+        for (int turn = -89; turn <= 90; ++turn) {
+            CHECK(scale >= course_map_fit_scale(data.course_map_outline, turn, drawable) * 0.9999);
         }
-        ++tree_quads;
-        for (std::size_t k = 0; k < overlay_vertices_per_quad; ++k) {
-            const glm::vec2 corner = batch.vertices[i + k].position;
-            CHECK(glm::all(glm::greaterThanEqual(corner, layout.center - layout.half_size)));
-            CHECK(glm::all(glm::lessThanEqual(corner, layout.center + layout.half_size)));
-        }
+        CHECK(scale > course_map_fit_scale(data.course_map_outline, 0.0, drawable));
+        CHECK(scale > course_map_fit_scale(data.course_map_outline, -45.0, drawable));
     }
-    // The one on the course.
-    CHECK(tree_quads == 1U);
 }
 
 TEST_CASE("walking off the course map never moves it; an arrow at its edge points out to me") {
@@ -256,19 +117,21 @@ TEST_CASE("walking off the course map never moves it; an arrow at its edge point
             render_data walked = data;
             walked.player_position = away;
             const course_map_layout layout = make_course_map_layout(walked, grid);
-            CHECK(course_map_layouts_match(layout, on_course));
+            CHECK((layout.center == on_course.center && layout.half_size == on_course.half_size &&
+                   layout.world_center == on_course.world_center && layout.turn == on_course.turn && layout.scale == on_course.scale));
             overlay_batch batch;
             batch.grid = grid;
-            draw_course_map_marks(batch, shipped_text_assets(), layout, walked);
-            // The arrow: the one triangle drawn (a quad with two corners at its tip), its fill last.
+            draw_course_map_marks(batch, shipped_text_assets(), layout, walked, inks());
+            // The arrow: the first triangles drawn (a quad with two corners at its tip), outline then
+            // fill; the card's north arrow comes after.
             std::vector<std::size_t> triangles;
             for (std::size_t i = 0; i + overlay_vertices_per_quad <= batch.vertices.size(); i += overlay_vertices_per_quad) {
                 if (batch.vertices[i + 1].position == batch.vertices[i + 2].position) {
                     triangles.push_back(i);
                 }
             }
-            REQUIRE(triangles.size() == 2U);
-            const std::size_t fill = triangles.back();
+            REQUIRE(triangles.size() == 4U);
+            const std::size_t fill = triangles[1];
             const glm::vec2 tip = batch.vertices[fill + 1].position;
             const glm::vec2 back = (batch.vertices[fill].position + batch.vertices[fill + 5].position) * 0.5f;
             CHECK(glm::all(glm::greaterThan(tip, layout.center - layout.half_size)));
@@ -344,7 +207,7 @@ TEST_CASE("every hole's number sits in the middle of its hole on the course map,
         }
         overlay_batch batch;
         batch.grid = grid;
-        draw_course_map_marks(batch, text, layout, data);
+        draw_course_map_marks(batch, text, layout, data, inks());
         CHECK(batch.truncated_text_count == 0U);
     }
 }
@@ -371,12 +234,12 @@ TEST_CASE("every hole's tee box is drawn on the course map at its tee, lying acr
     overlay_batch batch;
     batch.grid = overlay_grid{640, 480};
     const course_map_layout layout = make_course_map_layout(data, batch.grid);
-    draw_course_map_marks(batch, shipped_text_assets(), layout, data);
+    draw_course_map_marks(batch, shipped_text_assets(), layout, data, inks());
     // The tee boxes' fills: whole quads in the tee's ink, fully opaque.
     std::vector<std::pair<glm::vec2, glm::vec2>> boxes;  // centre, half extent
     for (std::size_t i = 0; i + overlay_vertices_per_quad <= batch.vertices.size(); i += overlay_vertices_per_quad) {
         const overlay_vertex& vertex = batch.vertices[i];
-        if (glm::length(glm::vec3(vertex.color) - course_map_tee_ink) > 0.001f || vertex.color.a < 0.99f) {
+        if (glm::length(glm::vec3(vertex.color) - inks().tee) > 0.001f || vertex.color.a < 0.99f) {
             continue;
         }
         glm::vec2 low(1.0e9f), high(-1.0e9f);

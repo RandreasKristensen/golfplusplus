@@ -90,7 +90,9 @@
     "map_extent": 160,
     "map_strength": 1.0,
     "map_softness": 0.375,
-    "map_edge_fade": 0.2
+    "map_edge_fade": 0.2,
+    "map_pose_texels": 0.25,
+    "map_sun_degrees": 0.02
   },
   "shafts": {
     "steps": 64,
@@ -101,10 +103,10 @@
     "lamp_near_meters": 0.3
   },
   "water": {
-    "absorption_red": 1.0,
-    "absorption_green": 0.3,
-    "absorption_blue": 0.6,
-    "scatter_color": [0.1, 0.145, 0.085],
+    "absorption_red": 0.7,
+    "absorption_green": 0.55,
+    "absorption_blue": 0.4,
+    "scatter_color": [0.065, 0.09, 0.12],
     "max_path_meters": 6,
     "ripple_slope": 0.12,
     "ripple_wavelength_meters": 1.4,
@@ -126,15 +128,27 @@
     "caustic_cell_meters": 0.7,
     "wobble_height_share": 0.003
   },
+  "terrain_lod": {
+    "levels": 3,
+    "finest_error_meters": 0.2,
+    "error_ratio": 2.5,
+    "attribute_error": 0.1,
+    "mirror_max_error_pixels": 0.5
+  },
   "grass": {
-    "stripe_fairway_meters": 3.0,
-    "stripe_green_meters": 0.6,
-    "stripe_shade": 0.12,
+    "fibre_fairway_meters": 0.06,
+    "fibre_fairway_shade": 0.08,
+    "fibre_fairway_slope": 0.25,
+    "fibre_green_meters": 0.03,
+    "fibre_green_shade": 0.04,
+    "fibre_green_slope": 0.12,
+    "lamp_light_cap": 0.9,
     "patch_meters": 6,
     "patch_share": 0.12,
     "tuft_spacing_meters": 0.16,
     "blade_height_meters": 0.09,
     "blade_width_meters": 0.025,
+    "blade_min_pixels": 1.5,
     "reach_meters": 22,
     "blade_sway": 0.35,
     "base_shade": 0.7,
@@ -144,14 +158,28 @@
   },
   "trees": {
     "species": [
-      {"name": "beech", "shape": "round", "trunk_share": 0.3, "trunk_radius": 0.12, "limbs": 6, "clumps": 98, "clump_size": 0.32, "droop": 0.0, "aspect": 3.0, "shine_through": 0.15, "bark": [0.36, 0.35, 0.32], "spring": [0.45, 0.62, 0.22], "summer": [0.16, 0.32, 0.11], "autumn": [0.62, 0.36, 0.12]},
-      {"name": "oak", "shape": "round", "trunk_share": 0.3, "trunk_radius": 0.14, "limbs": 5, "clumps": 84, "clump_size": 0.34, "droop": 0.0, "aspect": 3.0, "shine_through": 0.12, "bark": [0.25, 0.21, 0.17], "spring": [0.42, 0.55, 0.2], "summer": [0.15, 0.3, 0.1], "autumn": [0.48, 0.34, 0.14]},
-      {"name": "birch", "shape": "oval", "trunk_share": 0.35, "trunk_radius": 0.07, "limbs": 5, "clumps": 70, "clump_size": 0.28, "droop": 0.4, "aspect": 3.5, "shine_through": 0.18, "bark": [0.8, 0.78, 0.72], "spring": [0.5, 0.66, 0.25], "summer": [0.22, 0.4, 0.14], "autumn": [0.78, 0.64, 0.16]},
-      {"name": "willow", "shape": "weeping", "trunk_share": 0.25, "trunk_radius": 0.16, "limbs": 6, "clumps": 98, "clump_size": 0.3, "droop": 1.5, "aspect": 2.5, "shine_through": 0.16, "bark": [0.3, 0.27, 0.2], "spring": [0.55, 0.66, 0.3], "summer": [0.3, 0.42, 0.18], "autumn": [0.62, 0.6, 0.22]},
-      {"name": "spruce", "shape": "cone", "trunk_share": 0.12, "trunk_radius": 0.08, "limbs": 14, "clumps": 70, "clump_size": 0.28, "droop": 0.0, "aspect": 3.5, "shine_through": 0.05, "bark": [0.24, 0.18, 0.13], "spring": [0.08, 0.2, 0.1], "summer": [0.08, 0.2, 0.1], "autumn": [0.08, 0.2, 0.1]},
-      {"name": "pine", "shape": "umbrella", "trunk_share": 0.55, "trunk_radius": 0.08, "limbs": 5, "clumps": 40, "clump_size": 0.34, "droop": 0.0, "aspect": 3.0, "shine_through": 0.05, "bark": [0.42, 0.26, 0.15], "spring": [0.14, 0.26, 0.12], "summer": [0.14, 0.26, 0.12], "autumn": [0.14, 0.26, 0.12]},
-      {"name": "scrub", "shape": "dome", "trunk_share": 0.0, "trunk_radius": 0.1, "limbs": 5, "clumps": 36, "clump_size": 0.45, "droop": 0.0, "aspect": 0.8, "shine_through": 0.12, "bark": [0.25, 0.2, 0.15], "spring": [0.4, 0.55, 0.2], "summer": [0.14, 0.3, 0.11], "autumn": [0.55, 0.32, 0.12]}
-    ]
+      {"name": "beech", "shape": "round", "trunk_share": 0.3, "trunk_radius": 0.12, "stems": 1, "apical_dominance": 0.35, "light_bend": 0.8, "branch_droop": 0.3, "twig_spacing": 0.13, "pipe_exponent": 2.1, "clumps": 98, "clump_size": 0.32, "droop": 0.0, "aspect": 3.0, "twig_kink": 0.6, "twig_hang": 0.1, "twig_haze": 0.1, "shine_through": 0.15, "bark": [0.36, 0.35, 0.32], "twig": [0.4, 0.3, 0.22], "spring": [0.45, 0.62, 0.22], "summer": [0.16, 0.32, 0.11], "autumn": [0.62, 0.36, 0.12], "withered": [0.55, 0.4, 0.25]},
+      {"name": "oak", "shape": "round", "trunk_share": 0.3, "trunk_radius": 0.14, "stems": 1, "apical_dominance": 0.2, "light_bend": 0.5, "branch_droop": 0.15, "twig_spacing": 0.14, "pipe_exponent": 2.0, "clumps": 84, "clump_size": 0.34, "droop": 0.0, "aspect": 3.0, "twig_kink": 0.9, "twig_hang": 0.0, "twig_haze": 0.1, "shine_through": 0.12, "bark": [0.25, 0.21, 0.17], "twig": [0.36, 0.3, 0.24], "spring": [0.42, 0.55, 0.2], "summer": [0.15, 0.3, 0.1], "autumn": [0.48, 0.34, 0.14], "withered": [0.4, 0.29, 0.18]},
+      {"name": "birch", "shape": "oval", "trunk_share": 0.35, "trunk_radius": 0.07, "stems": 1, "apical_dominance": 0.5, "light_bend": 1.0, "branch_droop": 0.6, "twig_spacing": 0.13, "pipe_exponent": 2.2, "clumps": 70, "clump_size": 0.28, "droop": 0.4, "aspect": 3.5, "twig_kink": 0.2, "twig_hang": 0.7, "twig_haze": 0.12, "shine_through": 0.18, "bark": [0.8, 0.78, 0.72], "twig": [0.42, 0.26, 0.25], "spring": [0.5, 0.66, 0.25], "summer": [0.22, 0.4, 0.14], "autumn": [0.78, 0.64, 0.16], "withered": [0.55, 0.42, 0.2]},
+      {"name": "willow", "shape": "weeping", "trunk_share": 0.25, "trunk_radius": 0.16, "stems": 1, "apical_dominance": 0.15, "light_bend": 0.9, "branch_droop": 1.2, "twig_spacing": 0.14, "pipe_exponent": 2.0, "clumps": 98, "clump_size": 0.3, "droop": 1.5, "aspect": 2.5, "twig_kink": 0.1, "twig_hang": 1.0, "twig_haze": 0.04, "shine_through": 0.16, "bark": [0.3, 0.27, 0.2], "twig": [0.62, 0.52, 0.18], "spring": [0.55, 0.66, 0.3], "summer": [0.3, 0.42, 0.18], "autumn": [0.62, 0.6, 0.22], "withered": [0.5, 0.45, 0.25]},
+      {"name": "spruce", "shape": "cone", "trunk_share": 0.12, "trunk_radius": 0.08, "stems": 1, "apical_dominance": 1.0, "light_bend": 0.1, "branch_droop": 0.5, "twig_spacing": 0.14, "pipe_exponent": 2.3, "clumps": 70, "clump_size": 0.28, "droop": 0.0, "aspect": 3.5, "twig_kink": 0.3, "twig_hang": 0.2, "twig_haze": 0.05, "shine_through": 0.05, "bark": [0.24, 0.18, 0.13], "twig": [0.28, 0.22, 0.16], "spring": [0.08, 0.2, 0.1], "summer": [0.08, 0.2, 0.1], "autumn": [0.08, 0.2, 0.1], "withered": [0.4, 0.3, 0.18]},
+      {"name": "pine", "shape": "umbrella", "trunk_share": 0.55, "trunk_radius": 0.08, "stems": 1, "apical_dominance": 0.5, "light_bend": 0.6, "branch_droop": 0.1, "twig_spacing": 0.16, "pipe_exponent": 2.3, "clumps": 40, "clump_size": 0.34, "droop": 0.0, "aspect": 3.0, "twig_kink": 0.4, "twig_hang": 0.0, "twig_haze": 0.05, "shine_through": 0.05, "bark": [0.42, 0.26, 0.15], "twig": [0.35, 0.25, 0.16], "spring": [0.14, 0.26, 0.12], "summer": [0.14, 0.26, 0.12], "autumn": [0.14, 0.26, 0.12], "withered": [0.4, 0.3, 0.18]},
+      {"name": "hedge", "shape": "dome", "trunk_share": 0.0, "trunk_radius": 0.03, "stems": 4, "apical_dominance": 0.2, "light_bend": 0.4, "branch_droop": 0.1, "twig_spacing": 0.14, "pipe_exponent": 2.1, "clumps": 40, "clump_size": 0.42, "droop": 0.0, "aspect": 1.4, "twig_kink": 0.6, "twig_hang": 0.0, "twig_haze": 0.15, "shine_through": 0.15, "bark": [0.36, 0.35, 0.32], "twig": [0.4, 0.3, 0.22], "spring": [0.45, 0.62, 0.22], "summer": [0.16, 0.32, 0.11], "autumn": [0.62, 0.36, 0.12], "withered": [0.55, 0.4, 0.25]},
+      {"name": "scrub", "shape": "dome", "trunk_share": 0.0, "trunk_radius": 0.035, "stems": 5, "apical_dominance": 0.25, "light_bend": 0.5, "branch_droop": 0.2, "twig_spacing": 0.15, "pipe_exponent": 2.0, "clumps": 36, "clump_size": 0.45, "droop": 0.0, "aspect": 0.8, "twig_kink": 0.7, "twig_hang": 0.1, "twig_haze": 0.12, "shine_through": 0.12, "bark": [0.25, 0.2, 0.15], "twig": [0.33, 0.26, 0.2], "spring": [0.4, 0.55, 0.2], "summer": [0.14, 0.3, 0.11], "autumn": [0.55, 0.32, 0.12], "withered": [0.55, 0.38, 0.2]}
+    ],
+    "falling_leaves": {
+      "leaves_per_square_meter": 2400,
+      "leaf_size_meters": 0.07,
+      "fall_speed": 1.0,
+      "flutter_seconds": 1.0,
+      "flutter_meters": 0.25,
+      "lie_seconds": 6.0,
+      "wind_factor": 0.35,
+      "most_per_tree": 24,
+      "most_per_pass": 6000,
+      "min_pixels": 1.0
+    },
+    "impostor": {"azimuths": 12, "elevations_degrees": [-15, -5, 5, 15, 25, 40], "tile_pixels": 32, "radius_error": 0.11, "wind_error": 0.0005, "max_error_pixels": 0.5, "depth_first_coverage": 1.5, "depth_first_coverage_lamps": 0.05}
   },
   "night_lights": {
     "on_deg": 2,
@@ -277,6 +305,30 @@
     "backdrop": [0.10, 0.26, 0.13],
     "pond_bed": [0.24, 0.18, 0.09],
     "cart_path": [0.40, 0.37, 0.31]
+  },
+  "map": {
+    "paper": [0.76, 0.72, 0.55],
+    "paper_shadow": [0.14, 0.12, 0.09],
+    "fold": [0.05, 0.04, 0.03],
+    "fairway": [0.22, 0.40, 0.16],
+    "rough": [0.19, 0.27, 0.13],
+    "heavy_rough": [0.22, 0.27, 0.12],
+    "green": [0.24, 0.57, 0.24],
+    "bunker": [0.58, 0.48, 0.20],
+    "water": [0.17, 0.24, 0.47],
+    "tree": [0.07, 0.34, 0.14],
+    "tree_shadow": [0.11, 0.17, 0.08],
+    "tree_outline": [0.02, 0.10, 0.05],
+    "tee": [0.34, 0.21, 0.12],
+    "cart_path": [0.88, 0.84, 0.70],
+    "fence": [0.16, 0.10, 0.06],
+    "flagstick": [0.06, 0.04, 0.025],
+    "flag": [0.76, 0.17, 0.12],
+    "marker_outline": [0.04, 0.035, 0.025],
+    "ball": [0.94, 0.93, 0.82],
+    "player": [0.22, 0.46, 0.72],
+    "bag": [0.62, 0.20, 0.14],
+    "other_hole_fade": 0.55
   },
   "markers": {
     "ball": [0.9, 0.9, 0.9],

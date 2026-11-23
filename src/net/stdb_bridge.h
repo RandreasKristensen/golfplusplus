@@ -428,6 +428,7 @@ typedef struct stdb_departure {
 typedef struct stdb_tee_book_status {
     stdb_string course_id;
     int64_t server_now;
+    uint64_t request_id;  // the open_tee_book request this answers
 } stdb_tee_book_status;
 
 typedef union stdb_row {
@@ -478,6 +479,7 @@ typedef struct stdb_event {
     stdb_string text;
     stdb_string reducer;            // REDUCER_FAILED: which
     uint32_t subscription;          // SUBSCRIPTION_*: the stdb_subscribe handle
+    uint64_t request;               // REDUCER_FAILED: the request number the call was given, 0 for none
     stdb_login_method login_method; // SIGNED_IN
     bool retrying;                  // DISCONNECTED: the bridge signs in again by itself
     stdb_table table;               // ROW
@@ -521,7 +523,9 @@ void stdb_unsubscribe(stdb_client* client, uint32_t subscription);
 void stdb_claim_name(stdb_client* client, const char* name, size_t len);
 void stdb_join_course(stdb_client* client, const char* course_id, size_t len);
 void stdb_leave_room(stdb_client* client, uint64_t expected_room);
-void stdb_open_tee_book(stdb_client*, uint64_t room_id, const char* course_id, size_t len);
+// `request` is the caller's number for this request; the module returns it with its
+// answer (stdb_tee_book_status) and a refusal carries it (stdb_event::request).
+void stdb_open_tee_book(stdb_client*, uint64_t room_id, const char* course_id, size_t len, uint64_t request);
 void stdb_book_tee(stdb_client*, uint64_t room_id, uint64_t expected_booking, const char* course_id, size_t len, int64_t scheduled_at, bool takes_cart);
 void stdb_cancel_tee(stdb_client*, uint64_t room_id, uint64_t reservation_id);
 void stdb_take_bus(stdb_client*, uint64_t room_id, uint64_t reservation_id);

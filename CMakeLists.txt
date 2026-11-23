@@ -86,6 +86,7 @@ golfpp_library(golfpp-physics
     src/physics/ground_contact.cpp
     src/physics/turf_contact.cpp
     src/physics/ground_mesh.cpp
+    src/physics/surface_index.cpp
     src/physics/ground_pad.cpp
     src/physics/impact.cpp
     src/physics/land_relief.cpp
@@ -100,6 +101,7 @@ golfpp_library(golfpp-physics
 )
 
 golfpp_library(golfpp-profiling
+    src/profiling/process_memory.cpp
     src/profiling/profiling.cpp
 )
 
@@ -165,6 +167,7 @@ golfpp_library(golfpp-game
     src/game/visual_tour_loader.cpp
     src/game/pixel_font_data.cpp
     src/game/area_solids.cpp
+    src/game/area_surface.cpp
     src/game/play_area.cpp
     src/game/tree_season.cpp
     src/game/tree_looks.cpp
@@ -215,9 +218,13 @@ golfpp_library(golfpp-render-data
     src/renderer/bag_batch.cpp
     src/renderer/cart_batch.cpp
     src/renderer/control_icons.cpp
-    src/renderer/course_map_fill.cpp
+    src/renderer/course_map_card.cpp
+    src/renderer/course_map_layout.cpp
     src/renderer/course_map_overlay.cpp
+    src/renderer/course_map_paint.cpp
+    src/renderer/course_map_sheet.cpp
     src/renderer/held_props.cpp
+    src/renderer/mesh_instance.cpp
     src/renderer/prop_batch.cpp
     src/renderer/prop_light.cpp
     src/renderer/scattered_light.cpp
@@ -227,11 +234,22 @@ golfpp_library(golfpp-render-data
     src/renderer/floodlight_batch.cpp
     src/renderer/hole_sign_batch.cpp
     src/renderer/water_reflection.cpp
+    src/renderer/water_crop.cpp
     src/renderer/water_batch.cpp
     src/renderer/grass_bake.cpp
+    src/renderer/grass_baker.cpp
+    src/renderer/grass_cache.cpp
+    src/renderer/grass_distance.cpp
+    src/renderer/grass_pack.cpp
+    src/renderer/grass_tile_backing.cpp
     src/renderer/grass_field.cpp
+    src/renderer/grass_tile_cache.cpp
+    src/renderer/grass_tiles.cpp
+    src/renderer/tree_skeleton.cpp
     src/renderer/tree_model.cpp
+    src/renderer/falling_leaf.cpp
     src/renderer/hole_sign_face.cpp
+    src/renderer/map_ink.cpp
     src/renderer/god_menu_overlay.cpp
     src/renderer/hud_overlay.cpp
     src/renderer/shot_number_overlay.cpp
@@ -247,6 +265,8 @@ golfpp_library(golfpp-render-data
     src/renderer/primitive_mesh.cpp
     src/renderer/rangefinder_overlay.cpp
     src/renderer/render_mesh_chunks.cpp
+    src/renderer/chunk_thinner.cpp
+    src/renderer/render_mesh_lod.cpp
     src/renderer/dap_pose.cpp
     src/renderer/remote_avatar_batch.cpp
     src/renderer/render_tree.cpp
@@ -254,6 +274,9 @@ golfpp_library(golfpp-render-data
     src/renderer/lamp_shadows.cpp
     src/renderer/scorecard_overlay.cpp
     src/renderer/shadow_casters.cpp
+    src/renderer/prop_frame.cpp
+    src/renderer/marker_scene.cpp
+    src/renderer/caster_index.cpp
     src/renderer/shadow_map_fit.cpp
     src/renderer/swing_club.cpp
     src/renderer/shader_source.cpp
@@ -362,6 +385,8 @@ golfpp_library(golfpp-app-logic
     src/core/online_menus.cpp
     src/core/play_screen.cpp
     src/core/tee_book.cpp
+    src/core/tee_book_list.cpp
+    src/core/tee_book_text.cpp
     src/core/departure_board.cpp
     src/core/render_frame.cpp
     src/core/render_gear.cpp
@@ -395,6 +420,10 @@ target_link_libraries(golfpp-online-session PUBLIC golfpp-app-logic golfpp-net)
 add_executable(golfpp
     src/audio/audio_engine.cpp
     src/core/app.cpp
+    src/core/app_loop.cpp
+    src/core/app_benchmark.cpp
+    src/core/benchmark_driver.cpp
+    src/core/benchmark_csv.cpp
     src/core/app_hub.cpp
     src/core/app_scene.cpp
     src/core/app_look.cpp
@@ -406,20 +435,26 @@ add_executable(golfpp
     src/renderer/blob_shadow_renderer.cpp
     src/renderer/camcorder_pass.cpp
     src/renderer/dynamic_buffer.cpp
+    src/renderer/instance_meshes.cpp
     src/renderer/framebuffer.cpp
     src/renderer/gl_loader.cpp
     src/renderer/gl_timer.cpp
+    src/renderer/gl_storage.cpp
     src/renderer/fence_renderer.cpp
     src/renderer/floodlight_renderer.cpp
     src/renderer/hole_sign_renderer.cpp
+    src/renderer/course_map_renderer.cpp
     src/renderer/lighting_uniforms.cpp
     src/renderer/reflection_pass.cpp
     src/renderer/water_renderer.cpp
     src/renderer/grass_renderer.cpp
+    src/renderer/grass_tile_store.cpp
     src/renderer/eyepiece_pass.cpp
     src/renderer/overlay_pass.cpp
     src/renderer/prop_renderer.cpp
     src/renderer/renderer_scene.cpp
+    src/renderer/renderer_static.cpp
+    src/renderer/renderer_frame.cpp
     src/renderer/renderer.cpp
     src/renderer/renderer_look.cpp
     src/renderer/shader.cpp
@@ -429,7 +464,9 @@ add_executable(golfpp
     src/renderer/tape_pass.cpp
     src/renderer/terrain_renderer.cpp
     src/renderer/texture.cpp
+    src/renderer/tree_impostor_renderer.cpp
     src/renderer/tree_renderer.cpp
+    src/renderer/falling_leaf_renderer.cpp
     src/renderer/tv_pass.cpp
     src/renderer/weather_renderer.cpp
     src/renderer/world_marker_renderer.cpp
@@ -504,9 +541,21 @@ add_executable(golfpp-picture-check EXCLUDE_FROM_ALL
     tooling/picture_check/check_support.cpp
     tooling/picture_check/grass_check.cpp
     tooling/picture_check/grass_ground_check.cpp
+    tooling/picture_check/grass_motion_check.cpp
+    tooling/picture_check/grass_tile_check.cpp
+    tooling/picture_check/picture_rig.cpp
     tooling/picture_check/water_check.cpp
     tooling/picture_check/water_scene_check.cpp
+    tooling/picture_check/water_crop_check.cpp
     tooling/picture_check/tree_check.cpp
+    tooling/picture_check/tree_season_check.cpp
+    tooling/picture_check/shadow_receiver_check.cpp
+    tooling/picture_check/tree_image_check.cpp
+    tooling/picture_check/turf_review_check.cpp
+    tooling/picture_check/crowd_review_check.cpp
+    tooling/picture_check/eyepiece_check.cpp
+    tooling/picture_check/preset_check.cpp
+    tooling/picture_check/terrain_lod_check.cpp
     tooling/picture_check/profile_check.cpp
     src/core/window.cpp ${GOLFPP_GL_SOURCES})
 target_compile_definitions(golfpp-picture-check PRIVATE SDL_MAIN_HANDLED GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}"
@@ -521,7 +570,8 @@ if (GOLFPP_NET)
         tooling/net/online_check/booking_checks.cpp
         tooling/net/online_check/practice_checks.cpp
         tooling/net/online_check/social_checks.cpp
-        tooling/net/online_check/round_checks.cpp)
+        tooling/net/online_check/round_checks.cpp
+        tooling/net/online_check/tee_book_timing.cpp)
     target_link_libraries(golfpp-online-check PRIVATE golfpp-net golfpp-client-bridge golfpp-warnings)
     target_compile_definitions(golfpp-online-check PRIVATE GOLFPP_ASSETS_DIR="${GOLFPP_ASSETS_DIR}")
 endif()
@@ -591,10 +641,14 @@ if (GOLFPP_BUILD_TESTS)
         tests/content_tests.cpp
         tests/prop_tests.cpp
         tests/controls_tests.cpp
-        tests/course_map_fill_tests.cpp
+        tests/area_surface_tests.cpp
+        tests/course_map_card_tests.cpp
+        tests/course_map_sheet_tests.cpp
+        tests/course_map_tests.cpp
         tests/course_tests.cpp
         tests/det_math_tests.cpp
         tests/dynamic_buffer_tests.cpp
+        tests/static_cache_tests.cpp
         tests/fence_tests.cpp
         tests/flight_tests.cpp
         tests/impact_tests.cpp
@@ -604,8 +658,13 @@ if (GOLFPP_BUILD_TESTS)
         tests/god_menu_tests.cpp
         tests/hazard_tests.cpp
         tests/grass_field_tests.cpp
+        tests/grass_oracle.cpp
+        tests/grass_pack_tests.cpp
+        tests/grass_cache_tests.cpp
+        tests/grass_tile_tests.cpp
         tests/tree_season_tests.cpp
         tests/tree_model_tests.cpp
+        tests/falling_leaf_tests.cpp
         tests/hole_sign_tests.cpp
         tests/item_tests.cpp
         tests/tee_box_tests.cpp
@@ -639,6 +698,8 @@ if (GOLFPP_BUILD_TESTS)
         tests/rangefinder_tests.cpp
         tests/putting_read_tests.cpp
         tests/render_culling_tests.cpp
+        tests/render_lod_tests.cpp
+        tests/terrain_vertex_tests.cpp
         tests/render_frame_tests.cpp
         tests/server_content_tests.cpp
         tests/shader_tests.cpp
@@ -649,6 +710,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/shot_simulation_tests.cpp
         tests/sky_clock_tests.cpp
         tests/water_light_tests.cpp
+        tests/water_crop_tests.cpp
         tests/weather_tests.cpp
         tests/weather_frame_tests.cpp
         tests/sky_visibility_tests.cpp

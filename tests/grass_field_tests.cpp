@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "renderer/grass_field.h"
+#include "renderer/grass_tiles.h"
 #include "test_support.h"
 
 #include <algorithm>
@@ -25,30 +26,6 @@ TEST_CASE("the tufts stand on a world-fixed grid round the eye") {
     CHECK(here.origin.x <= 10.03f - 20.0f);
 }
 
-TEST_CASE("only the blocks of tufts the eye may see over ground are drawn") {
-    // Flat ground from x -100 to 100 and z -100 to 40; the eye looks along +z.
-    render_static_mesh ground;
-    ground.bounds = render_mesh_bounds{glm::vec3(-100.0f, 0.0f, -100.0f), glm::vec3(100.0f, 0.0f, 40.0f), true};
-    const glm::vec3 eye(0.0f, 1.7f, 0.0f);
-    const view_frustum frustum = make_view_frustum(glm::perspective(glm::radians(60.0f), 16.0f / 9.0f, 0.1f, 500.0f) *
-                                                   glm::lookAt(eye, eye + glm::vec3(0.0f, -0.1f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
-    const grass_grid grid = grass_grid_around(eye, 60.0f, 0.5f);
-    const float side = grid.spacing * static_cast<float>(grass_block_tufts);
-    const int blocks = grid.per_row / grass_block_tufts;
-    const std::vector<glm::vec2> seen = grass_visible_blocks(grid, frustum, {&ground}, 0.3f);
-    CHECK(!seen.empty());
-    CHECK(static_cast<int>(seen.size()) < blocks * blocks / 2);
-    bool ahead = false;
-    for (const glm::vec2& corner : seen) {
-        // Not behind the eye, and not past the ground's end.
-        CHECK(corner.y + side + grid.spacing > eye.z);
-        CHECK(corner.y <= 40.0f);
-        ahead = ahead || (corner.x <= 0.0f && corner.x + side > 0.0f && corner.y > 10.0f);
-    }
-    CHECK(ahead);
-    CHECK(grass_visible_blocks(grid, frustum, {}, 0.3f).empty());
-}
-
 TEST_CASE("a tuft is three tapering blades, each standing from its root to its tip") {
     const std::vector<glm::vec3> tuft = grass_tuft_vertices(3);
     CHECK(tuft.size() == 27U);
@@ -66,7 +43,7 @@ namespace {
 render_static_mesh flat_ground() {
     render_static_mesh mesh;
     for (const glm::vec2 p : {glm::vec2(-12,-12), glm::vec2(12,-12), glm::vec2(12,12), glm::vec2(-12,12)}) {
-        render_terrain_vertex v; v.position = glm::vec3(p.x, 3 + 0.1f*p.x, p.y); v.blades = 1;
+        render_terrain_vertex v; v.position = glm::vec3(p.x, 3 + 0.1f*p.x, p.y); v.set_blades(1.0f);
         mesh.vertices.push_back(v);
     }
     mesh.indices = {0,1,2,0,2,3};
@@ -74,6 +51,50 @@ render_static_mesh flat_ground() {
     mesh.revision = 17;
     return mesh;
 }
+}
+
+TEST_CASE("only the blocks of tufts the eye may see over ground are drawn") {
+    // Flat ground from x -100 to 100 and z -100 to 40; the eye looks along +z.
+    render_static_mesh ground;
+    for (const glm::vec2 p : {glm::vec2(-100.0f, -100.0f), glm::vec2(100.0f, -100.0f), glm::vec2(100.0f, 40.0f), glm::vec2(-100.0f, 40.0f)}) {
+        render_terrain_vertex v;
+        v.position = glm::vec3(p.x, 0.0f, p.y);
+        v.set_blades(1.0f);
+        ground.vertices.push_back(v);
+    }
+    ground.indices = {0, 1, 2, 0, 2, 3};
+    ground.bounds = compute_render_mesh_bounds(ground.vertices);
+    const grass_field field = bake_grass_field(ground, render_static_mesh{}, {});
+    const glm::vec3 eye(0.0f, 1.7f, 0.0f);
+    const view_frustum frustum = make_view_frustum(glm::perspective(glm::radians(60.0f), 16.0f / 9.0f, 0.1f, 500.0f) *
+                                                   glm::lookAt(eye, eye + glm::vec3(0.0f, -0.1f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+    const grass_grid grid = grass_grid_around(eye, 60.0f, 0.5f);
+    const float side = grid.spacing * static_cast<float>(grass_block_tufts);
+    const int blocks = grid.per_row / grass_block_tufts;
+    std::size_t scratch = 0;
+    const auto seen = grass_visible_blocks(grid, frustum, field, 0.3f, 1.0f, &scratch);
+    CHECK(scratch >= seen.corners.size() * sizeof(glm::vec2));
+    CHECK(scratch < 16 * 1024);
+    CHECK(seen.tiles.size() == seen.corners.size());
+    CHECK(!seen.corners.empty());
+    CHECK(static_cast<int>(seen.corners.size()) < blocks * blocks / 2);
+    bool ahead = false;
+    for (std::size_t i = 0; i < seen.corners.size(); ++i) {
+        const glm::vec2 corner = seen.corners[i];
+        // Not behind the eye, and not past the ground's end.
+        CHECK(corner.y + side + grid.spacing > eye.z);
+        // Whole tiles select: a block may reach the ground-less rest of the last tile over it.
+        CHECK(seen.tiles[i].y <= grass_tile_of(glm::vec2(0.0f, 40.0f)).y);
+        ahead = ahead || (corner.x <= 0.0f && corner.x + side > 0.0f && corner.y > 10.0f);
+        // Its tiles hold the block's whole reach.
+        CHECK(seen.tiles[i].x == grass_tile_of(corner).x);
+        CHECK(seen.tiles[i].z == grass_tile_of(corner + glm::vec2(side + grid.spacing)).x);
+    }
+    CHECK(ahead);
+    grass_field none;
+    CHECK(grass_visible_blocks(grid, frustum, none, 0.3f, 1.0f).corners.empty());
+    // Tiles that cannot grow the widest blade leave nothing to draw.
+    CHECK(grass_visible_blocks(grid, frustum, field, 0.3f, 1000.0f).corners.empty());
 }
 
 TEST_CASE("grass field edges are conservative at every interpolation alignment, including thin slivers and tee tops") {
@@ -87,7 +108,7 @@ TEST_CASE("grass field edges are conservative at every interpolation alignment, 
     tee_box tee; tee.center = glm::vec3(-5,3,5); tee.half_width = 1; tee.half_length = 2;
     tee.down_hole = glm::normalize(glm::vec3(1,0,1));
     const auto field = bake_grass_field(ground, bare, {tee});
-    REQUIRE(!field.samples.empty());
+    REQUIRE(!field.tiles.empty());
     CHECK(field.revision == ground.revision);
     for (float t = 0; t < 1; t += 0.007f) {
         const glm::vec2 p = glm::mix(glm::vec2(-8,-7), glm::vec2(8,7.01f), t);
@@ -151,7 +172,10 @@ TEST_CASE("grass distance nodes match overlapping bare outlines, including dupli
             const glm::vec3 p(x,0,z);
             const float exact=std::min({zone_distance_outside(zones[0],p),zone_distance_outside(zones[1],p),
                                         12-std::abs(x),12-std::abs(z)});
-            CHECK(near(sample_grass_field(field,{x,z}).y,exact,0.0001f));
+            // Rounded down to the clearance's step, never up.
+            const float stored = sample_grass_field(field,{x,z}).y;
+            CHECK(stored <= exact + 0.0001f);
+            CHECK(exact - stored <= grass_field_distance_cap / 65535.0f + 0.0001f);
         }
     }
 }

@@ -1,17 +1,19 @@
 #pragma once
 
-// The one way a model is drawn: its parts (game/prop_loader.h) as unit
-// meshes with their normals, in the world, for the lit prop pass
-// (prop_renderer.h, assets/picture/shaders/prop.frag): the cigarette and its
-// smoke, the can and its beer, the cart, the club. Opaque pieces are drawn
-// first, those with an alpha below 1 blended over them. A new model file is
-// drawn and lit with no code. GL-free.
+// The one way a model is drawn: its parts (game/prop_loader.h) as instances
+// of the canonical unit meshes (mesh_instance.h), for the lit prop pass
+// (prop_renderer.h, assets/picture/shaders/prop.vert and prop.frag): the
+// cigarette and its smoke, the can and its beer, the cart, the club. Opaque
+// pieces are drawn first, those with an alpha below 1 blended over them. A
+// new model file is drawn and lit with no code. GL-free.
 
 #include "game/lighting_loader.h"
 #include "game/play_area.h"
 #include "game/prop_loader.h"
+#include "renderer/mesh_instance.h"
 #include "renderer/prop_pieces.h"
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <vector>
@@ -19,8 +21,9 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
-// Uploaded straight into a GL buffer: world position, world normal, colour,
-// alpha, and the glow floor (the least light it shows).
+// A placed vertex as the CPU sees it (prop_batch::opaque_vertices): world
+// position, world normal, colour, alpha, and the glow floor (the least light
+// it shows). Never uploaded: the GPU places the canonical mesh itself.
 struct prop_vertex {
     glm::vec3 position{0.0f};
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
@@ -33,24 +36,31 @@ class prop_batch {
 public:
     prop_batch();
 
-    // Empties both lists but keeps their capacity for the next frame.
+    // Empties every list but keeps their capacity for the next frame.
     void clear();
-    // Copies already-built world geometry (for the shared shadow batch).
-    void append(const prop_batch& batch);
     // Unit `mesh` placed by `model`; blended when `alpha` is below 1.
     void append(prop_mesh mesh, const glm::mat4& model, const glm::vec3& color, float glow, float alpha = 1.0f);
 
-    const std::vector<prop_vertex>& opaque() const { return opaque_; }
-    const std::vector<prop_vertex>& blended() const { return blended_; }
-    bool empty() const { return opaque_.empty() && blended_.empty(); }
+    // The opaque or blended instances of one mesh, in the order they were appended.
+    const std::vector<mesh_instance>& instances(bool blended, prop_mesh mesh) const { return lists_[blended ? 1 : 0][mesh_index(mesh)]; }
+    // The lists joined, as uploaded: opaque cylinders, spheres, quads, then the blended ones. `joined_first`
+    // is where one list starts in it.
+    void join(std::vector<mesh_instance>& out) const;
+    std::size_t joined_first(bool blended, prop_mesh mesh) const;
+    std::size_t instance_count(bool blended) const;
+    bool empty() const { return instance_count(false) + instance_count(true) == 0; }
+
+    // Every placed vertex of the opaque or blended instances, list by list: what the draw puts on screen,
+    // for tests and the lowest-point query of a rolled cart.
+    std::vector<prop_vertex> opaque_vertices() const { return placed_vertices(false); }
+    std::vector<prop_vertex> blended_vertices() const { return placed_vertices(true); }
 
 private:
-    // Interleaved position.xyz + normal.xyz (primitive_mesh.h).
-    std::vector<float> cylinder_;
-    std::vector<float> sphere_;
-    std::vector<float> quad_;
-    std::vector<prop_vertex> opaque_;
-    std::vector<prop_vertex> blended_;
+    static std::size_t mesh_index(prop_mesh mesh) { return static_cast<std::size_t>(mesh); }
+    std::vector<prop_vertex> placed_vertices(bool blended) const;
+
+    canonical_meshes meshes_;
+    std::array<std::array<std::vector<mesh_instance>, prop_mesh_count>, 2> lists_;
 };
 
 // Vertices `append` adds for one `mesh`.

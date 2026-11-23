@@ -95,7 +95,7 @@ render_static_mesh with_cart_paths(render_static_mesh mesh, const play_area& are
             const bool on_path = top.top_solid >= 0;
             const glm::vec3 at(on_ground.position.x, on_path ? top.point.y : on_ground.position.y, on_ground.position.z);
             mesh.vertices.push_back(lit_ground_vertex(at, on_path ? top.normal : on_ground.normal, color, 0.0f, light));
-            mesh.vertices.back().paved = 1.0f;
+            mesh.vertices.back().set_paved(1.0f);
         }
         return found->second;
     };

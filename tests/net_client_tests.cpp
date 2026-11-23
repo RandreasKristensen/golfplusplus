@@ -1345,7 +1345,31 @@ TEST_CASE("scorecard: room snapshots preserve my account name and replace previo
     CHECK((card.players[1].strokes == std::vector<int>{0, 0, 0}));
 }
 
-TEST_CASE("tee book rows: scoped views, full snapshot and refresh acknowledgement") {
+namespace {
+void send_open(net_client& client, game_state& state, const char* course) {
+    net_command open;
+    open.type = net_command_type::open_tee_book;
+    open.course_id = course;
+    state.net_commands.push_back(open);
+    client.update(state);
+}
+std::uint64_t last_request() {
+    const auto& calls = fake_bridge().calls;
+    for (auto it = calls.rbegin(); it != calls.rend(); ++it) { if (it->name == "stdb_open_tee_book") { return it->extra; } }
+    return 0;
+}
+void status_row(const char* course, const std::int64_t now, const std::uint64_t request) {
+    stdb_row status{};
+    status.tee_book_status = stdb_tee_book_status{fake_text(course), now, request};
+    queue_event(row_event(STDB_TABLE_MY_TEE_BOOK_STATUS, STDB_ROW_INSERT, status));
+}
+void slot_row(const std::uint64_t id, const char* course, const std::int64_t at, const int count, const stdb_row_change change = STDB_ROW_INSERT) {
+    stdb_row slot{};
+    slot.tee_slot = stdb_tee_slot{id, fake_text(course), 1, 7, at, count};
+    queue_event(row_event(STDB_TABLE_TEE_SLOT, change, slot));
+}
+}
+TEST_CASE("tee book rows: scoped views, full snapshot and request-numbered answers") {
     game_state state = started_hole();
     auto client = connected_client(state, 42);
     const auto& queries = fake_bridge().subscriptions.at(3);
@@ -1354,36 +1378,104 @@ TEST_CASE("tee book rows: scoped views, full snapshot and refresh acknowledgemen
     CHECK(any_query_contains(queries, "FROM my_tee_book_status"));
     CHECK(!(any_query_contains(queries, "FROM tee_slot")));
     CHECK(!(any_query_contains(queries, "FROM tee_reservation")));
-    net_command open;
-    open.type = net_command_type::open_tee_book;
-    open.course_id = "first";
-    state.net_commands.push_back(open);
+    send_open(client, state, "first");
+    const std::uint64_t first = last_request();
+    REQUIRE(first != 0);
+    slot_row(2, "first", 1800000000, 3);
+    status_row("first", 1000000000, first);
     client.update(state);
-    stdb_row slot{};
-    slot.tee_slot = stdb_tee_slot{2, fake_text("first"), 1, 7, 1800000000, 3};
-    queue_event(row_event(STDB_TABLE_TEE_SLOT, STDB_ROW_INSERT, slot));
-    stdb_row status{};
-    status.tee_book_status = stdb_tee_book_status{fake_text("first"), 1000000000};
-    queue_event(row_event(STDB_TABLE_MY_TEE_BOOK_STATUS, STDB_ROW_INSERT, status));
-    client.update(state);
-    CHECK(!(state.online.book_ready));
-    CHECK(state.online.tee_slots.empty()); // self subscription not yet complete
+    CHECK(!state.online.book_ready);
+    CHECK(state.online.tee_slots.empty());  // self subscription not yet complete
     queue_event(applied(4));
     client.update(state);
     REQUIRE(state.online.book_ready);
+    CHECK(state.online.book_live);
+    CHECK(state.online.book_answers == 1);
     REQUIRE(state.online.tee_slots.size() == 1);
     CHECK(state.online.tee_slots.at(2).booked_count == 3);
     CHECK(state.online.server_now >= 1000000000);
-    state.net_commands.push_back(open);
+    // A refresh keeps the last confirmed counts, shows live changes, and is answered by its own number alone.
+    send_open(client, state, "first");
+    const std::uint64_t second = last_request();
+    CHECK(second > first);
+    CHECK(state.online.book_ready);
+    CHECK(state.online.tee_slots.size() == 1);
+    slot_row(2, "first", 1800000000, 4);
+    slot_row(2, "first", 1800000000, 3, STDB_ROW_DELETE);
     client.update(state);
-    CHECK(!(state.online.book_ready));
-    queue_event(row_event(STDB_TABLE_MY_TEE_BOOK_STATUS, STDB_ROW_INSERT, status)); // stale acknowledgement
+    CHECK(state.online.tee_slots.at(2).booked_count == 4);  // a live count change, mid-refresh
+    status_row("first", 1000000100, first);  // an obsolete answer
     client.update(state);
-    CHECK(!(state.online.book_ready));
-    status.tee_book_status.server_now += 100;
-    queue_event(row_event(STDB_TABLE_MY_TEE_BOOK_STATUS, STDB_ROW_INSERT, status));
+    CHECK(state.online.book_answers == 1);
+    status_row("first", 1000000200, second);
+    client.update(state);
+    CHECK(state.online.book_answers == 2);
+    CHECK(state.online.tee_slots.at(2).booked_count == 4);
+}
+TEST_CASE("tee book rows: a late answer for another course or an obsolete request is ignored (A, B, A)") {
+    game_state state = started_hole();
+    auto client = connected_client(state, 42);
+    queue_event(applied(4));
+    client.update(state);
+    send_open(client, state, "a"); const std::uint64_t one = last_request();
+    send_open(client, state, "b"); const std::uint64_t two = last_request();
+    send_open(client, state, "a"); const std::uint64_t three = last_request();
+    CHECK(one < two); CHECK(two < three);
+    slot_row(1, "a", 1800000000, 2);
+    status_row("a", 1000000000, one);
+    status_row("b", 1000000001, two);
+    client.update(state);
+    CHECK(!state.online.book_ready);
+    CHECK(state.online.book_answers == 0);
+    CHECK(state.online.tee_slots.empty());
+    status_row("a", 1000000002, three);
+    client.update(state);
+    REQUIRE(state.online.book_ready);
+    CHECK(state.online.book_course_id == "a");
+    CHECK(state.online.book_answers == 1);
+    CHECK(state.online.book_live);
+    CHECK(state.online.tee_slots.size() == 1);
+    // The slot view moving to another course leaves the confirmed counts, not live.
+    send_open(client, state, "b");
+    const std::uint64_t four = last_request();
+    status_row("b", 1000000003, four - 1);  // the view follows b before b's own answer
     client.update(state);
     CHECK(state.online.book_ready);
+    CHECK(state.online.book_course_id == "a");
+    CHECK(!state.online.book_live);
+    CHECK(state.online.tee_slots.size() == 1);
+}
+TEST_CASE("tee book rows: refusals end only the latest request's wait; teardown drops the counts") {
+    game_state state = started_hole();
+    auto client = connected_client(state, 42);
+    queue_event(applied(4));
+    client.update(state);
+    send_open(client, state, "a"); const std::uint64_t one = last_request();
+    send_open(client, state, "b"); const std::uint64_t two = last_request();
+    stdb_event old_refusal = fake_event(STDB_EVENT_REDUCER_FAILED);
+    old_refusal.reducer = fake_text("open_tee_book"); old_refusal.text = fake_text("unknown_course"); old_refusal.request = one;
+    queue_event(old_refusal);
+    client.update(state);
+    CHECK(state.online.book_refusals == 0);
+    CHECK(!client.take_reducer_failure());
+    stdb_event refusal = old_refusal;
+    refusal.request = two;
+    queue_event(refusal);
+    client.update(state);
+    CHECK(state.online.book_refusals == 1);
+    CHECK(state.online.book_error == "unknown_course");
+    // An answer, then the room changing: nothing is kept, and an answer still on its way is no answer.
+    send_open(client, state, "a"); const std::uint64_t three = last_request();
+    status_row("a", 1000000000, three);
+    client.update(state);
+    REQUIRE(state.online.book_ready);
+    queue_event(member_row(42, 8, STDB_ROW_INSERT));
+    client.update(state);
+    CHECK(!state.online.book_ready);
+    CHECK(state.online.tee_slots.empty());
+    status_row("a", 1000000100, three);
+    client.update(state);
+    CHECK(!state.online.book_ready);
 }
 TEST_CASE("tee reservation rows: replacement eviction, completion, teardown and reconnect") {
     game_state state = started_hole();

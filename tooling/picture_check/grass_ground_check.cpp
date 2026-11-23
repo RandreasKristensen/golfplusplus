@@ -41,8 +41,8 @@ grass_check_result check_grass_ground_views(const check_course& course,const lig
             const auto vp=glm::perspective(glm::radians(60.0f),1.5f,0.1f,300.0f)*glm::lookAt(eye,target,glm::vec3(0,1,0));
             scene_haze haze;haze.eye=eye;haze.full_distance=100000;
             lighting.upload(light,haze,{},nullptr);
-            const grass_frame frame{&course.terrain,&course.overlay,&course.grass,vp,eye,palette.colors.ground.rough,{},7};
-            timers.begin_frame(false);picture.bind();glViewport(0,0,900,600);glEnable(GL_DEPTH_TEST);glDisable(GL_CULL_FACE);
+            const grass_frame frame{&course.grass,vp,eye,palette.colors.ground.rough,{},7,600,{}};
+            timers.begin_frame(nullptr);picture.bind();glViewport(0,0,900,600);glEnable(GL_DEPTH_TEST);glDisable(GL_CULL_FACE);
             glClearColor(0,0,0,0);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
             roots.draw(frame,palette.grass,shadows,4,timers,nullptr);
             const auto selected=read_colors(picture,900,600);
@@ -70,11 +70,11 @@ grass_check_result check_grass_ground_views(const check_course& course,const lig
     }
     // A fixed rough patch through both sides of each density boundary:
     // roots and heights stay put, and projected coverage changes smoothly.
-    for(std::size_t i=0;i<course.grass.samples.size();i+=137) {
-        if(course.grass.samples[i].y<5) {continue;}
-        const int x=static_cast<int>(i%course.grass.columns),z=static_cast<int>(i/course.grass.columns);
-        const glm::vec2 at=course.grass.origin+glm::vec2(x,z)*grass_field_spacing;
-        const float ground=course.grass.samples[i].x;
+    glm::vec2 at(0.0f);float ground=0.0f;
+    const bool found=for_each_grass_node(course.grass,137,[&](const glm::vec2& place,const glm::vec3& node) {
+        if(node.y<5) {return false;}
+        at=place;ground=node.x;return true;});
+    if(found) {
         const auto vp=glm::ortho(-2.0f,2.0f,-2.0f,2.0f,0.1f,200.0f)*
             glm::lookAt(glm::vec3(at.x,ground+100,at.y),glm::vec3(at.x,ground,at.y),glm::vec3(0,0,1));
         for(int level=0;level<static_cast<int>(std::round(palette.grass.rings));++level) {
@@ -85,7 +85,7 @@ grass_check_result check_grass_ground_views(const check_course& course,const lig
                 scene_haze haze;haze.eye=eye;haze.full_distance=100000;
                 lighting.upload(light,haze,{},nullptr);
                 picture.bind();glViewport(0,0,512,512);glClearColor(0,0,0,0);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-                blades.draw({&course.terrain,&course.overlay,&course.grass,vp,eye,palette.colors.ground.rough,{12,0},7},
+                blades.draw({&course.grass,vp,eye,palette.colors.ground.rough,{12,0},7,512,{}},
                              palette.grass,shadows,4,timers,nullptr);
                 auto image=read_colors(picture,512,512);
                 if(before.empty()) {before=std::move(image);continue;}
@@ -100,7 +100,6 @@ grass_check_result check_grass_ground_views(const check_course& course,const lig
                 result.pictures+=2;
             }
         }
-        break;
     }
     std::printf("  ground views: %lld root pixels on bare ground\n",result.wrong_pixels);
     diagnostic.shutdown();roots.shutdown();blades.shutdown();lighting.shutdown();shadows.shutdown();picture.shutdown();timers.shutdown();

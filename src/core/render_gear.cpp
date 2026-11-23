@@ -11,6 +11,7 @@
 #include "renderer/bag_batch.h"
 #include "renderer/cart_batch.h"
 
+#include <algorithm>
 #include <cmath>
 #include <optional>
 
@@ -42,12 +43,31 @@ float eased(const float t) {
 }
 
 // `cart` as drawn with its model: on its wheels, going over or lying on a side.
-render_cart drawn_cart(const game_state& game, const cart_in_world& cart, const prop_model& model) {
-    const auto ground = [&game](const glm::vec3& point) { return terrain_height(game.area, point); };
-    render_cart drawn = cart_tipped(cart.condition)
-        ? cart_rolled(cart.pose.position, cart.pose.yaw, cart.condition == cart_condition::on_left_side, cart.fall_angle, model,
-                      ground)
-        : cart_on_ground(cart.pose.position, cart.pose.yaw, model, ground);
+render_cart drawn_cart(const game_state& game, const cart_in_world& cart, const std::string& model_name,
+                       const prop_model& model, cart_fit_memo& fits) {
+    const std::uint64_t revision = game.static_anchors.revision * 1000003ULL + game.terrain_render_revision;
+    if (fits.revision != revision) {
+        fits.entries.clear();
+        fits.revision = revision;
+    }
+    const auto found = std::find_if(fits.entries.begin(), fits.entries.end(),
+                                    [&cart](const cart_fit_memo::entry& held) { return held.owner == cart.owner; });
+    cart_fit_memo::entry& held = found != fits.entries.end() ? *found : fits.entries.emplace_back();
+    if (found == fits.entries.end() || held.position != cart.pose.position || held.yaw != cart.pose.yaw ||
+        held.condition != cart.condition || held.fall_angle != cart.fall_angle || held.model != model_name) {
+        const auto ground = [&game](const glm::vec3& point) { return terrain_height(game.area, point); };
+        held.owner = cart.owner;
+        held.position = cart.pose.position;
+        held.yaw = cart.pose.yaw;
+        held.condition = cart.condition;
+        held.fall_angle = cart.fall_angle;
+        held.model = model_name;
+        held.fit = cart_tipped(cart.condition)
+            ? cart_rolled(cart.pose.position, cart.pose.yaw, cart.condition == cart_condition::on_left_side, cart.fall_angle,
+                          model, ground)
+            : cart_on_ground(cart.pose.position, cart.pose.yaw, model, ground);
+    }
+    render_cart drawn = held.fit;
     drawn.driven = cart.driven;
     drawn.steer = cart.steer;
     drawn.paint = gear_paint_of(game, cart.owner);
@@ -56,11 +76,11 @@ render_cart drawn_cart(const game_state& game, const cart_in_world& cart, const 
 
 // `owner`'s cart (0: mine) as drawn, with its model.
 std::optional<std::pair<render_cart, const prop_model*>> find_drawn_cart(const game_state& game, const std::uint64_t owner,
-                                                                          const prop_catalog& props) {
+                                                                          const prop_catalog& props, cart_fit_memo& fits) {
     for (const cart_in_world& cart : carts_in_world(game)) {
         const auto model = props.find(item_model(game, cart.item));
         if (cart.owner == owner && model != props.end()) {
-            return std::make_pair(drawn_cart(game, cart, model->second), &model->second);
+            return std::make_pair(drawn_cart(game, cart, model->first, model->second, fits), &model->second);
         }
     }
     return std::nullopt;
@@ -69,14 +89,15 @@ std::optional<std::pair<render_cart, const prop_model*>> find_drawn_cart(const g
 // The frame of `owner`'s bag (`model`) at `place`: set down, on `figure`'s
 // back, or strapped on a cart.
 std::optional<glm::mat4> bag_frame_at(const game_state& game, const bag_place& place, const std::uint64_t owner,
-                                      const render_remote_avatar& figure, const prop_model& model, const prop_catalog& props) {
+                                      const render_remote_avatar& figure, const prop_model& model, const prop_catalog& props,
+                                      cart_fit_memo& fits) {
     switch (place.where) {
     case bag_where::on_ground:
         return ground_bag_frame(render_ground_bag{std::string(), place.position, place.yaw, {}}, model);
     case bag_where::on_back:
         return back_bag_frame(figure, game.tuning.camera.walking_eye_height, model);
     case bag_where::on_cart: {
-        const auto cart = find_drawn_cart(game, strapped_on(game, place, owner), props);
+        const auto cart = find_drawn_cart(game, strapped_on(game, place, owner), props, fits);
         if (!cart || cart->second->mounts.count(mount_of(place.seat)) == 0) {
             return std::nullopt;
         }
@@ -107,7 +128,7 @@ std::string bag_model_of(const game_state& game, const std::uint64_t account) {
 }
 
 void add_handling(render_data& data, render_remote_avatar& figure, const game_state& game, const bag_handling& handling,
-                  const std::uint64_t owner, const std::string& bag_model, const prop_catalog& props) {
+                  const std::uint64_t owner, const std::string& bag_model, const prop_catalog& props, cart_fit_memo& fits) {
     const auto bag = props.find(bag_model);
     if (bag == props.end()) {
         return;
@@ -116,8 +137,8 @@ void add_handling(render_data& data, render_remote_avatar& figure, const game_st
     const float t = handling_progress(handling, game.tuning.player);
     const float eye_height = game.tuning.camera.walking_eye_height;
     if (handling.kind == handling_kind::bag) {
-        const std::optional<glm::mat4> from = bag_frame_at(game, handling.from, owner, figure, model, props);
-        const std::optional<glm::mat4> to = bag_frame_at(game, handling.to, owner, figure, model, props);
+        const std::optional<glm::mat4> from = bag_frame_at(game, handling.from, owner, figure, model, props, fits);
+        const std::optional<glm::mat4> to = bag_frame_at(game, handling.to, owner, figure, model, props, fits);
         if (!from || !to) {
             return;
         }
@@ -130,7 +151,7 @@ void add_handling(render_data& data, render_remote_avatar& figure, const game_st
         figure.crouch = (low ? 1.0f : 0.4f) * std::sin(glm::pi<float>() * t);
         return;
     }
-    const std::optional<glm::mat4> at = bag_frame_at(game, handling.to, owner, figure, model, props);
+    const std::optional<glm::mat4> at = bag_frame_at(game, handling.to, owner, figure, model, props, fits);
     if (!at) {
         return;
     }
@@ -149,13 +170,23 @@ void add_handling(render_data& data, render_remote_avatar& figure, const game_st
     figure.reach = pose.hand;
 }
 
-void add_carts_and_bags(render_data& data, const game_state& game, const prop_catalog& props, render_remote_avatar* me) {
-    for (const cart_in_world& cart : carts_in_world(game)) {
+void add_carts_and_bags(render_data& data, const game_state& game, const prop_catalog& props, render_remote_avatar* me,
+                        cart_fit_memo& fits, const std::vector<cart_in_world>& scripted_carts) {
+    std::vector<cart_in_world> carts = carts_in_world(game);
+    carts.insert(carts.end(), scripted_carts.begin(), scripted_carts.end());
+    fits.entries.erase(std::remove_if(fits.entries.begin(), fits.entries.end(),
+                                      [&carts](const cart_fit_memo::entry& held) {
+                                          return std::none_of(carts.begin(), carts.end(), [&held](const cart_in_world& cart) {
+                                              return cart.owner == held.owner;
+                                          });
+                                      }),
+                       fits.entries.end());
+    for (const cart_in_world& cart : carts) {
         const auto model = props.find(item_model(game, cart.item));
         if (model == props.end()) {
             continue;
         }
-        render_cart drawn = drawn_cart(game, cart, model->second);
+        render_cart drawn = drawn_cart(game, cart, model->first, model->second, fits);
         drawn.model = model->first;
         if (game.bag.where == bag_where::on_cart && strapped_on(game, game.bag, 0) == cart.owner && !bag_moving(game, 0)) {
             drawn.bags[mount_of(game.bag.seat)] = render_strapped_bag{bag_model_of(game, 0), gear_paint_of(game, 0)};
@@ -180,6 +211,6 @@ void add_carts_and_bags(render_data& data, const game_state& game, const prop_ca
         standing.position = game.player.position;
         standing.yaw = game.player.yaw;
         standing.left_handed = game.hand == handedness::left;
-        add_handling(data, me != nullptr ? *me : standing, game, *game.handling, 0, bag_model_of(game, 0), props);
+        add_handling(data, me != nullptr ? *me : standing, game, *game.handling, 0, bag_model_of(game, 0), props, fits);
     }
 }

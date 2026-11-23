@@ -5,6 +5,7 @@
 // blended over it without writing depth, so what stands behind a net shows
 // through its holes. Uploads only when the fences are rebuilt.
 
+#include "renderer/gl_storage.h"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -20,6 +21,9 @@
 
 class fence_renderer {
 public:
+    explicit fence_renderer(gl_storage storage = {})
+        : shader_(storage), buffer_(storage), net_(storage) {}
+
     // `net_image` is the net texture's file (assets/world/props/fence_net.bmp).
     bool init(const std::string& vertex_path, const std::string& fragment_path, const std::string& net_image);
     void shutdown();

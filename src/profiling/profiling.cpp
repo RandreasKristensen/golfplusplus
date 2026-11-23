@@ -19,8 +19,9 @@ void add_frame(frame_profile& total, const frame_profile& frame) {
         total.stage_ms[i] += frame.stage_ms[i];
     }
     for (std::size_t i = 0; i < gpu_profile_stage_count; ++i) {
-        total.gpu_stage_ms[i] += frame.gpu_stage_ms[i];
+        total.gpu_ms[0][i] += frame.gpu_ms[0][i];
     }
+    total.gpu_frame_ms += frame.gpu_frame_ms;
     total.gpu_timers_available = total.gpu_timers_available || frame.gpu_timers_available;
     total.terrain_sample_calls += frame.terrain_sample_calls;
     total.terrain_triangles_tested += frame.terrain_triangles_tested;
@@ -58,7 +59,7 @@ std::uint64_t average_u64(const std::uint64_t total, const int frames) {
     return (total + static_cast<std::uint64_t>(frames) / 2U) / static_cast<std::uint64_t>(frames);
 }
 
-frame_profile averaged(const frame_profile& total, const int frames) {
+frame_profile averaged(const frame_profile& total, const int frames, const int gpu_frames) {
     frame_profile result;
     if (frames <= 0) {
         return result;
@@ -69,8 +70,9 @@ frame_profile averaged(const frame_profile& total, const int frames) {
         result.stage_ms[i] = total.stage_ms[i] / divisor;
     }
     for (std::size_t i = 0; i < gpu_profile_stage_count; ++i) {
-        result.gpu_stage_ms[i] = total.gpu_stage_ms[i] / divisor;
+        if (gpu_frames) { result.gpu_ms[0][i] = total.gpu_ms[0][i] / gpu_frames; }
     }
+    if (gpu_frames) { result.gpu_frame_ms = total.gpu_frame_ms / gpu_frames; }
     result.gpu_timers_available = total.gpu_timers_available;
     result.terrain_sample_calls = average_u32(total.terrain_sample_calls, frames);
     result.terrain_triangles_tested = average_u64(total.terrain_triangles_tested, frames);
@@ -99,39 +101,32 @@ double stage_value(const frame_profile& profile, const profile_stage stage) {
 }
 
 double gpu_stage_value(const frame_profile& profile, const gpu_profile_stage stage) {
-    return profile.gpu_stage_ms[static_cast<std::size_t>(stage)];
+    return profile.gpu_ms[0][static_cast<std::size_t>(stage)];
 }
 }
 
-void profiler_begin_frame(profiler& profile) {
-    if (!profile.enabled) {
-        profile.frame_open = false;
-        return;
-    }
-
+frame_profile* profiler_begin_frame(profiler& profile) {
+    if (!profile.enabled) { return nullptr; }
     profile.frame = frame_profile{};
-    profile.frame_open = true;
+    profile.frame.frame_number = profile.next_frame++;
+    return &profile.frame;
 }
 
-void profiler_end_frame(profiler& profile, const float frame_seconds) {
-    if (!profile.frame_open) {
-        return;
-    }
-
-    profile.frame_open = false;
-    profile.frame.frame_ms = std::max(0.0f, frame_seconds) * 1000.0f;
-    add_frame(profile.accumulator, profile.frame);
+void publish_profile(profiler& profile, const frame_profile& frame) {
+    add_frame(profile.accumulator, frame);
     ++profile.accumulated_frames;
-    profile.accumulated_seconds += std::max(0.0f, frame_seconds);
+    if (frame.gpu_timers_available) { ++profile.accumulated_gpu_frames; }
+    profile.accumulated_seconds += frame.frame_ms / 1000.0f;
 
     if (profile.accumulated_seconds < std::max(0.01f, profile.publish_interval_seconds)) {
         return;
     }
 
-    profile.published = averaged(profile.accumulator, profile.accumulated_frames);
+    profile.published = averaged(profile.accumulator, profile.accumulated_frames, profile.accumulated_gpu_frames);
     profile.has_published = true;
     profile.accumulator = frame_profile{};
     profile.accumulated_frames = 0;
+    profile.accumulated_gpu_frames = 0;
     profile.accumulated_seconds = 0.0f;
 }
 
@@ -153,6 +148,9 @@ const char* profile_stage_label(const profile_stage stage) {
         return "CRT";
     case profile_stage::window_swap:
         return "SWP";
+    case profile_stage::query_read: return "QRY";
+    case profile_stage::upload: return "UPL";
+    case profile_stage::readback: return "READ";
     case profile_stage::count:
         break;
     }
@@ -231,7 +229,7 @@ std::vector<std::string> format_profile_overlay_lines(const frame_profile& profi
     lines.reserve(12);
     lines.push_back(cpu(profile_stage::update_game) + " " + cpu(profile_stage::refresh_render_mesh_cache));
     lines.push_back(cpu(profile_stage::make_render_data) + " " + cpu(profile_stage::window_swap));
-    lines.push_back(cpu(profile_stage::render) + " " + cpu(profile_stage::render_crt));
+    lines.push_back(cpu(profile_stage::render) + " " + cpu(profile_stage::query_read) + " " + cpu(profile_stage::upload));
     lines.push_back(cpu(profile_stage::render_scene) + " " + cpu(profile_stage::render_overlay));
     lines.push_back("DRAW " + std::to_string(profile.draw_calls) + " UNI " + std::to_string(profile.uniform_sets) +
                     " ULOC " + std::to_string(profile.uniform_location_queries));
@@ -260,7 +258,7 @@ std::vector<std::string> format_profile_overlay_lines(const frame_profile& profi
         lines.push_back("GPU " + gpu(gpu_profile_stage::bloom) + " " + gpu(gpu_profile_stage::smear) + " " +
                         gpu(gpu_profile_stage::camcorder) + " " +
                         gpu(gpu_profile_stage::eyepiece));
-        lines.push_back("GPU " + gpu(gpu_profile_stage::tape) + " " + gpu(gpu_profile_stage::overlay) + " " +
+        lines.push_back("GPU " + microseconds_text(profile.gpu_frame_ms) + " " + gpu(gpu_profile_stage::tape) + " " + gpu(gpu_profile_stage::overlay) + " " +
                         gpu(gpu_profile_stage::crt) + " " + gpu(gpu_profile_stage::zoom));
     }
 

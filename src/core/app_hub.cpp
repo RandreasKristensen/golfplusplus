@@ -1,4 +1,5 @@
 #include "core/app.h"
+#include <chrono>
 #include "core/event_loop.h"
 #include "core/progress_saver.h"
 #include "game/hub_flow.h"
@@ -12,7 +13,9 @@
 
 bool app::arrive_at_place(const std::string& place_id) {
     const std::string destination = place_id;
+    const auto start = std::chrono::steady_clock::now();
     if (!enter_place_saving(game_, destination, progress_saver_)) { return false; }
+    course_load_ms_ = elapsed_milliseconds(start);
     tee_book_ = tee_book_state{};
     menu_.confirm_active = false;
     if (is_online(game_)) { adopt_online_arrival(game_); }
@@ -54,13 +57,13 @@ void app::update_hub_menu(const float dt, frame_profile* profile) {
     for (const auto sound : sounds) {
         audio_.play(sound == ui_sound::move ? sound_ui_move : sound == ui_sound::back ? sound_ui_back : sound_ui_select);
     }
-    update_game(game_, game_input{}, dt, profile);
+    advance_game(game_input{}, dt, profile);
     render_data data = make_frame(0, false, profile);
     if (game_.hub_flow.screen != hub_screen::none) { data.startup_menu = render_tee_book(tee_book_, game_, catalog_, text_); }
     if (!game_.hub_flow.travel_course.empty()) {
         data.startup_menu.screen = startup_menu_screen::form;
         data.startup_menu.title = lookup_text(text_, text_hub_bus_title);
-        data.startup_menu.message = lookup_text(text_, text_hub_travel);
+        set_message(data.startup_menu, lookup_text(text_, text_hub_travel), message_severity::status);
     }
     present_frame(data, profile);
 }
@@ -74,12 +77,12 @@ void app::watch_online_round() {
         SDL_Log("The server refused %s: %s", failure.reducer.c_str(), failure.error.c_str());
         if (failure.reducer == "take_bus") {
             game_.hub_flow.travel_course.clear();
-            game_.notice = game_notice{online_error_text_key(failure.error), 0.0f};
+            game_.notice = game_notice{online_error_text_key(failure.error), 0.0f, message_severity::error};
             adopt_online_arrival(game_);
         } else if (failure.reducer == "return_to_hub") {
             game_.hub_flow.travel_course.clear();
             game_.hub_flow.screen = hub_screen::bus;
-            tee_book_.message = online_error_text_key(failure.error);
+            set_book_error(tee_book_, online_error_text_key(failure.error));
             adopt_online_arrival(game_);
         }
     }

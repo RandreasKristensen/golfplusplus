@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <utility>
 
 #include <glm/common.hpp>
 #include <glm/vector_relational.hpp>
@@ -143,7 +144,8 @@ std::optional<picture_style> parse_picture_from_text(const std::string& text) {
     if (!root) {
         return std::nullopt;
     }
-    const std::optional<int> target_lines = json_int(*root, "target_lines");
+    const std::optional<int> ui_lines = json_int(*root, "ui_lines");
+    const json* scene_lines_array = json_array(*root, "scene_lines");
     const json* camcorder_object = json_object(*root, "camcorder");
     const json* tape_object = json_object(*root, "tape");
     const json* tv_object = json_object(*root, "tv");
@@ -151,10 +153,19 @@ std::optional<picture_style> parse_picture_from_text(const std::string& text) {
         camcorder_object != nullptr ? parse_camcorder(*camcorder_object) : std::nullopt;
     const std::optional<tape_style> tape = tape_object != nullptr ? parse_tape(*tape_object) : std::nullopt;
     const std::optional<tv_style> tv = tv_object != nullptr ? parse_tv(*tv_object) : std::nullopt;
-    if (!target_lines || *target_lines <= 0 || !camcorder || !tape || !tv) {
+    if (!ui_lines || *ui_lines <= 0 || scene_lines_array == nullptr || scene_lines_array->empty() || !camcorder ||
+        !tape || !tv) {
         return std::nullopt;
     }
-    return picture_style{*target_lines, *camcorder, *tape, *tv};
+    std::vector<int> scene_lines;
+    for (const json& element : *scene_lines_array) {
+        const std::optional<int> lines = json_int(element);
+        if (!lines || *lines <= 0 || (!scene_lines.empty() && *lines <= scene_lines.back())) {
+            return std::nullopt;
+        }
+        scene_lines.push_back(*lines);
+    }
+    return picture_style{*ui_lines, std::move(scene_lines), *camcorder, *tape, *tv};
 }
 
 std::optional<picture_style> load_picture_style(const std::string& asset_root) {

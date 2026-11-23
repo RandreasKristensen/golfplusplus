@@ -1,92 +1,124 @@
 #include "renderer/gl_timer.h"
-
 #include "renderer/gl_loader.h"
+
+namespace {
+GLuint64 timestamp(const GLuint query) {
+    GLuint64 value = 0;
+    glGetQueryObjectui64v(query, GL_QUERY_RESULT, &value);
+    return value;
+}
+}
 
 void gl_timer_pool::init() {
     shutdown();
-    for (int slot = 0; slot < slot_count; ++slot) {
-        glGenQueries(static_cast<GLsizei>(gpu_profile_stage_count), queries_[slot]);
+    GLint bits = 0;
+    glGetQueryiv(GL_TIMESTAMP, GL_QUERY_COUNTER_BITS, &bits);
+    supported_ = bits > 0;
+    if (supported_) {
+        for (auto& pending : slots_) { glGenQueries(2, pending.bounds); }
     }
-    initialized_ = true;
 }
 
 void gl_timer_pool::shutdown() {
-    if (initialized_) {
-        for (int slot = 0; slot < slot_count; ++slot) {
-            glDeleteQueries(static_cast<GLsizei>(gpu_profile_stage_count), queries_[slot]);
+    if (supported_) {
+        for (auto& pending : slots_) {
+            glDeleteQueries(2, pending.bounds);
+            for (const auto& part : pending.segments) { glDeleteQueries(2, part.query); }
         }
     }
     *this = gl_timer_pool{};
 }
 
-void gl_timer_pool::begin_frame(const bool record) {
-    if (!initialized_) {
-        return;
-    }
-
-    end();
-    recording_ = record;
-    if (!record) {
-        frames_written_ = 0;
-        for (auto& slot : issued_) {
-            for (bool& issued : slot) {
-                issued = false;
-            }
+bool gl_timer_pool::resolve(slot& pending, frame_profile* cost) {
+    const profile_scope timer(cost, profile_stage::query_read);
+    GLuint available = 0;
+    // Every timestamp has the same query target. Availability of the last covers all earlier pairs.
+    glGetQueryObjectuiv(pending.bounds[1], GL_QUERY_RESULT_AVAILABLE, &available);
+    if (!available) { return false; }
+    const auto start = timestamp(pending.bounds[0]);
+    const auto end = timestamp(pending.bounds[1]);
+    if (end >= start) {
+        pending.frame.gpu_timers_available = true;
+        pending.frame.gpu_frame_ms = static_cast<double>(end - start) / 1000000.0;
+        for (std::size_t i = 0; i < pending.used; ++i) {
+            const auto& part = pending.segments[i];
+            record_timestamp_segment(pending.frame, part.stage, part.group, timestamp(part.query[0]), timestamp(part.query[1]));
         }
+    }
+    return true;
+}
+
+void gl_timer_pool::begin_frame(frame_profile* profile) {
+    ++sequence_;
+    stack_.clear();
+    if (!supported_) { return; }
+    if (!profile) {
+        // Frames issued before the overlay closed must not reach the next average.
+        while (ring_.oldest(sequence_, true)) { ring_.release(); }
+        completed_.reset();
         return;
     }
-    write_slot_ = (write_slot_ + 1) % slot_count;
-    for (bool& issued : issued_[write_slot_]) {
-        issued = false;
+    if (const auto oldest = ring_.oldest(sequence_)) {
+        auto& pending = slots_[*oldest];
+        if (resolve(pending, profile)) {
+            completed_ = pending.frame;
+            ring_.release();
+        }
     }
-    if (frames_written_ < slot_count) {
-        ++frames_written_;
+    writing_ = ring_.reserve(sequence_);
+    if (writing_) {
+        auto& current = slots_[*writing_];
+        current.used = 0;
+        glQueryCounter(current.bounds[0], GL_TIMESTAMP);
     }
 }
 
 void gl_timer_pool::begin(const gpu_profile_stage stage) {
-    if (active_stage_ != gpu_profile_stage::count) {
-        ++nested_;
-        return;
+    if (!writing_) { return; }
+    auto& current = slots_[*writing_];
+    if (current.used == current.segments.size()) {
+        current.segments.emplace_back();
+        glGenQueries(2, current.segments.back().query);
     }
-    if (!initialized_ || !recording_ || stage == gpu_profile_stage::count) {
-        return;
+    auto& part = current.segments[current.used];
+    part.stage = stage;
+    part.group = gpu_stage_group::scene;
+    if (!stack_.empty()) {
+        const auto& parent = current.segments[stack_.back()];
+        part.group = child_stage_group(parent.stage, parent.group);
     }
-    glBeginQuery(GL_TIME_ELAPSED, queries_[write_slot_][static_cast<std::size_t>(stage)]);
-    active_stage_ = stage;
+    stack_.push_back(current.used++);
+    glQueryCounter(part.query[0], GL_TIMESTAMP);
 }
 
 void gl_timer_pool::end() {
-    if (nested_ > 0) {
-        --nested_;
-        return;
-    }
-    if (!initialized_ || active_stage_ == gpu_profile_stage::count) {
-        return;
-    }
-    glEndQuery(GL_TIME_ELAPSED);
-    issued_[write_slot_][static_cast<std::size_t>(active_stage_)] = true;
-    active_stage_ = gpu_profile_stage::count;
+    if (!writing_ || stack_.empty()) { return; }
+    glQueryCounter(slots_[*writing_].segments[stack_.back()].query[1], GL_TIMESTAMP);
+    stack_.pop_back();
 }
 
-void gl_timer_pool::collect(frame_profile* profile) {
-    if (!initialized_ || !recording_ || profile == nullptr || frames_written_ < slot_count) {
-        return;
-    }
+void gl_timer_pool::end_frame() {
+    if (writing_) { glQueryCounter(slots_[*writing_].bounds[1], GL_TIMESTAMP); }
+}
 
-    const int read_slot = (write_slot_ + 1) % slot_count;
-    for (std::size_t stage = 0; stage < gpu_profile_stage_count; ++stage) {
-        if (!issued_[read_slot][stage]) {
-            continue;
-        }
-        GLuint done = 0U;
-        glGetQueryObjectuiv(queries_[read_slot][stage], GL_QUERY_RESULT_AVAILABLE, &done);
-        if (done == 0U) {
-            continue;
-        }
-        GLuint64 nanoseconds = 0U;
-        glGetQueryObjectui64v(queries_[read_slot][stage], GL_QUERY_RESULT, &nanoseconds);
-        issued_[read_slot][stage] = false;
-        record_gpu_stage(profile, static_cast<gpu_profile_stage>(stage), static_cast<double>(nanoseconds) / 1000000.0);
+void gl_timer_pool::finish(const frame_profile& frame, const frame_profile_sink& sink) {
+    if (completed_) {
+        sink(*completed_);
+        completed_.reset();
+    }
+    if (writing_) {
+        slots_[*writing_].frame = frame;
+        writing_.reset();
+    } else {
+        sink(frame);
+    }
+}
+
+void gl_timer_pool::flush(const frame_profile_sink& sink) {
+    while (const auto oldest = ring_.oldest(sequence_, true)) {
+        auto& pending = slots_[*oldest];
+        resolve(pending, nullptr);
+        sink(pending.frame);
+        ring_.release();
     }
 }

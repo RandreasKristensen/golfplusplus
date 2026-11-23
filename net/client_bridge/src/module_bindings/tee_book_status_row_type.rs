@@ -10,6 +10,7 @@ pub struct TeeBookStatusRow {
     pub account_id: u64,
     pub course_id: String,
     pub server_now: i64,
+    pub request_id: u64,
 }
 
 impl __sdk::InModule for TeeBookStatusRow {
@@ -23,6 +24,7 @@ pub struct TeeBookStatusRowCols {
     pub account_id: __sdk::__query_builder::Col<TeeBookStatusRow, u64>,
     pub course_id: __sdk::__query_builder::Col<TeeBookStatusRow, String>,
     pub server_now: __sdk::__query_builder::Col<TeeBookStatusRow, i64>,
+    pub request_id: __sdk::__query_builder::Col<TeeBookStatusRow, u64>,
 }
 
 impl __sdk::__query_builder::HasCols for TeeBookStatusRow {
@@ -32,6 +34,7 @@ impl __sdk::__query_builder::HasCols for TeeBookStatusRow {
             account_id: __sdk::__query_builder::Col::new(table_name, "account_id"),
             course_id: __sdk::__query_builder::Col::new(table_name, "course_id"),
             server_now: __sdk::__query_builder::Col::new(table_name, "server_now"),
+            request_id: __sdk::__query_builder::Col::new(table_name, "request_id"),
         }
     }
 }

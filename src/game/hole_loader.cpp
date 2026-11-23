@@ -109,6 +109,7 @@ parsed<std::vector<tree_instance>> trees_from_json(const json& root) {
 
 namespace {
 // A bush: its `position` on the ground, its `radius` and `height`; all leaves.
+// Scrub unless a `species` is named (a beech hedge's "hedge").
 parsed<tree_instance> bush_from_json(const json& object) {
     const std::optional<glm::vec3> position = json_vec3(object, "position");
     const std::optional<float> radius = json_float(object, "radius");
@@ -122,7 +123,7 @@ parsed<tree_instance> bush_from_json(const json& object) {
     tree_instance bush;
     bush.position = *position;
     bush.shape = tree_shape{0.0f, 0.0f, *radius, *height, tree_kind::bush};
-    bush.species = "scrub";
+    bush.species = json_string(object, "species").value_or("scrub");
     return {bush, ""};
 }
 }

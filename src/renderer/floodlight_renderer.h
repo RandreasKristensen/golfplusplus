@@ -5,6 +5,7 @@
 // lighting.glsl's lamp_glow; and the same mesh into the shadow map.
 // Uploads only when the floodlights are rebuilt.
 
+#include "renderer/gl_storage.h"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -18,6 +19,9 @@
 
 class floodlight_renderer {
 public:
+    explicit floodlight_renderer(gl_storage storage = {})
+        : shader_(storage), buffer_(storage) {}
+
     bool init(const std::string& vertex_path, const std::string& fragment_path);
     void shutdown();
 

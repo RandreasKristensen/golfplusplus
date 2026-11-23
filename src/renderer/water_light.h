@@ -46,6 +46,16 @@ inline float water_fresnel(const float cos_view) {
     return water_f0 + (1.0f - water_f0) * away * away * away * away * away;
 }
 
+// The share of the surface whose reflected ray, `up` its height before the
+// undrawn waves of `slope` tilt it (up to twice their slope either way),
+// points down into the next wave and shows the water's own light. Mirrors
+// water.frag.
+inline float water_masked_share(const float up, const float slope) {
+    const float reach = 2.0f * slope + 0.02f;
+    const float t = std::clamp((up + reach) / (2.0f * reach), 0.0f, 1.0f);
+    return 1.0f - t * t * (3.0f - 2.0f * t);
+}
+
 // Projected-area quadrature of the undrawn wave faces, matching water.frag.
 // Their slope must survive the distance fade of the resolved ripple normal.
 inline float water_filtered_fresnel(const float cos_view, const float slope) {

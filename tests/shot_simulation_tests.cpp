@@ -555,9 +555,11 @@ TEST_CASE("the backswing dial steps finer the shorter the swing, so a chip is as
     const auto step_share = [&](const float backswing) {
         return speed(stepped_backswing(backswing, 1, limits)) / speed(backswing) - 1.0f;
     };
+    // A 7:30 chip; below it speed rises steeply from zero, so a step is a large share of it but moves the ball
+    // only about a metre (content_tests).
+    CHECK(step_share(0.25f) > 0.0f);
+    CHECK(step_share(0.25f) < 2.0f * step_share(0.9f));
     const float chip = 0.1f;
-    CHECK(step_share(chip) > 0.0f);
-    CHECK(step_share(chip) < 2.0f * step_share(0.9f));
     CHECK(stepped_backswing(chip, 1, limits) - chip < (stepped_backswing(1.0f, 1, limits) - 1.0f) / 3.0f);
     // A step down undoes a step up, below full, across it and past it.
     for (const float backswing : {limits.backswing_min, chip, 0.99f, 1.0f, 1.05f}) {

@@ -1,9 +1,12 @@
 #include "doctest.h"
+#include <algorithm>
 
 #include "profiling/profiling.h"
 #include "renderer/dynamic_buffer.h"
 
 #include <cstddef>
+#include <cstdint>
+#include <vector>
 
 TEST_CASE("dynamic buffer capacity only grows") {
     CHECK(grow_buffer_capacity(0, 0) == 0U);
@@ -88,4 +91,24 @@ TEST_CASE("buffer counters separate streaming writes from reallocations") {
 
     record_buffer_write(nullptr, 64U);
     record_buffer_upload(nullptr, 64U);
+}
+
+TEST_CASE("stream hashes tell a changed stream from an unchanged one, in every byte and every length") {
+    std::vector<unsigned char> bytes(1000);
+    for (std::size_t i = 0; i < bytes.size(); ++i) { bytes[i] = static_cast<unsigned char>(i * 31U + 7U); }
+    const std::uint64_t whole = hash_stream(bytes.data(), bytes.size());
+    CHECK(hash_stream(bytes.data(), bytes.size()) == whole);
+    for (std::size_t at = 0; at < bytes.size(); ++at) {
+        std::vector<unsigned char> changed = bytes;
+        changed[at] ^= 1U;
+        CHECK(hash_stream(changed.data(), changed.size()) != whole);
+    }
+    // Swapping two equal-sized blocks (the lanes' order) is a change too.
+    std::vector<unsigned char> swapped = bytes;
+    std::swap_ranges(swapped.begin(), swapped.begin() + 8, swapped.begin() + 8);
+    CHECK(hash_stream(swapped.data(), swapped.size()) != whole);
+    // A shorter stream, including one that only drops trailing zeros, hashes differently.
+    CHECK(hash_stream(bytes.data(), 999) != whole);
+    const unsigned char zeros[16] = {};
+    CHECK(hash_stream(zeros, 15) != hash_stream(zeros, 16));
 }

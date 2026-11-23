@@ -171,7 +171,10 @@ void stdb_leave_room(stdb_client*, uint64_t) {
     record("stdb_leave_room");
 }
 
-void stdb_open_tee_book(stdb_client*, uint64_t room, const char* course, size_t len) { record("stdb_open_tee_book", text_of(course, len), static_cast<int64_t>(room)); }
+void stdb_open_tee_book(stdb_client*, uint64_t room, const char* course, size_t len, uint64_t request) {
+    record("stdb_open_tee_book", text_of(course, len), static_cast<int64_t>(room));
+    fake_bridge().calls.back().extra = request;
+}
 void stdb_book_tee(stdb_client*, uint64_t, uint64_t booking, const char* course, size_t len, int64_t at, bool takes_cart) {
     record("stdb_book_tee", text_of(course, len), static_cast<int64_t>(booking));
     fake_bridge().calls.back().flag = takes_cart;

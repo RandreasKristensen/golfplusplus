@@ -2,6 +2,8 @@
 
 #include "physics/terrain.h"
 #include "profiling/profiling.h"
+#include "profiling/timestamp_ring.h"
+#include "renderer/gl_storage.h"
 
 #include <chrono>
 #include <cmath>
@@ -42,7 +44,6 @@ TEST_CASE("record helpers are no-ops on a null profile") {
     record_buffer_upload(nullptr, 128);
     record_buffer_write(nullptr, 128);
     record_terrain_sample(nullptr, 42);
-    record_gpu_stage(nullptr, gpu_profile_stage::terrain, 1.0);
 
     const profile_scope timer(nullptr, profile_stage::render);
     CHECK(true);
@@ -73,17 +74,6 @@ TEST_CASE("counters accumulate onto an explicit frame profile") {
     CHECK(profile.terrain_triangles_tested == 200U);
 }
 
-TEST_CASE("gpu stage recording marks timers as available") {
-    frame_profile profile;
-    CHECK(!(profile.gpu_timers_available));
-
-    record_gpu_stage(&profile, gpu_profile_stage::crt, 0.5);
-    record_gpu_stage(&profile, gpu_profile_stage::crt, 0.25);
-
-    CHECK(profile.gpu_timers_available);
-    CHECK(std::abs(profile.gpu_stage_ms[static_cast<std::size_t>(gpu_profile_stage::crt)] - 0.75) < 0.000001);
-}
-
 TEST_CASE("profile_scope records elapsed time into its stage and accumulates") {
     frame_profile profile;
     CHECK(stage(profile, profile_stage::update_game) == 0.0);
@@ -112,11 +102,10 @@ TEST_CASE("disabled profiler hands out a null frame and records nothing") {
     profiler profile;
     profile.enabled = false;
 
-    profiler_begin_frame(profile);
-    CHECK(profiler_frame(profile) == nullptr);
+    auto* frame = profiler_begin_frame(profile);
+    CHECK(frame == nullptr);
 
-    record_draw_call(profiler_frame(profile), 10);
-    profiler_end_frame(profile, 0.016f);
+    record_draw_call(frame, 10);
 
     CHECK(profile.frame.draw_calls == 0U);
     CHECK(!(profile.has_published));
@@ -130,23 +119,26 @@ TEST_CASE("enabled profiler clears each frame and publishes an average") {
 
     // Two frames below the publish interval: nothing published yet.
     profiler_begin_frame(profile);
-    record_draw_call(profiler_frame(profile), 100);
-    record_terrain_sample(profiler_frame(profile), 1000);
-    profiler_end_frame(profile, 0.1f);
+    record_draw_call(&profile.frame, 100);
+    record_terrain_sample(&profile.frame, 1000);
+    profile.frame.frame_ms = 100;
+    publish_profile(profile, profile.frame);
     CHECK(!(profile.has_published));
 
     profiler_begin_frame(profile);
     CHECK(profile.frame.draw_calls == 0U);
-    record_draw_call(profiler_frame(profile), 200);
-    record_terrain_sample(profiler_frame(profile), 2000);
-    profiler_end_frame(profile, 0.1f);
+    record_draw_call(&profile.frame, 200);
+    record_terrain_sample(&profile.frame, 2000);
+    profile.frame.frame_ms = 100;
+    publish_profile(profile, profile.frame);
     CHECK(!(profile.has_published));
 
     // Third frame crosses the interval and publishes the window average.
     profiler_begin_frame(profile);
-    record_draw_call(profiler_frame(profile), 300);
-    record_terrain_sample(profiler_frame(profile), 3000);
-    profiler_end_frame(profile, 0.1f);
+    record_draw_call(&profile.frame, 300);
+    record_terrain_sample(&profile.frame, 3000);
+    profile.frame.frame_ms = 100;
+    publish_profile(profile, profile.frame);
 
     CHECK(profile.has_published);
     CHECK(profile.published.draw_calls == 200U);
@@ -156,8 +148,9 @@ TEST_CASE("enabled profiler clears each frame and publishes an average") {
 
     // The accumulator resets, so the next window starts clean.
     profiler_begin_frame(profile);
-    record_draw_call(profiler_frame(profile), 10);
-    profiler_end_frame(profile, 0.3f);
+    record_draw_call(&profile.frame, 10);
+    profile.frame.frame_ms = 300;
+    publish_profile(profile, profile.frame);
     CHECK(profile.published.draw_calls == 10U);
 }
 
@@ -231,7 +224,8 @@ TEST_CASE("chunk culling counters are averaged and shown on the overlay") {
     profile.frame.chunk_indices_drawn = 11000U;
     profile.frame.chunk_indices_total = 51876U;
     profile.frame.trees_visible = true;
-    profiler_end_frame(profile, 0.2f);
+    profile.frame.frame_ms = 200;
+    publish_profile(profile, profile.frame);
 
     profiler_begin_frame(profile);
     profile.frame.visible_chunks = 90U;
@@ -240,7 +234,8 @@ TEST_CASE("chunk culling counters are averaged and shown on the overlay") {
     profile.frame.chunk_indices_drawn = 12000U;
     profile.frame.chunk_indices_total = 51876U;
     profile.frame.trees_visible = false;
-    profiler_end_frame(profile, 0.2f);
+    profile.frame.frame_ms = 200;
+    publish_profile(profile, profile.frame);
 
     CHECK(profile.has_published);
     CHECK(profile.published.visible_chunks == 85U);
@@ -276,7 +271,7 @@ TEST_CASE("gpu lines only appear once timer queries have reported") {
     frame_profile profile;
     CHECK(!(any_line_contains(format_profile_overlay_lines(profile), "GPU")));
 
-    record_gpu_stage(&profile, gpu_profile_stage::terrain, 1.0);
+    profile.gpu_timers_available = true;
     CHECK(any_line_contains(format_profile_overlay_lines(profile), "GPU"));
 }
 
@@ -306,4 +301,108 @@ TEST_CASE("empty terrain meshes report no triangle work") {
     const terrain_mesh empty;
     const terrain_sample sample = sample_terrain_mesh(empty, glm::vec3(1.0f, 0.0f, 2.0f), 3.0f);
     CHECK(sample.triangles_tested == 0);
+}
+
+TEST_CASE("timestamp ring defers reads and preserves unfinished frames on wrap") {
+    timestamp_ring ring;
+    CHECK(!ring.oldest(0));
+    CHECK(ring.reserve(0) == 0);
+    CHECK(!ring.oldest(1));
+    CHECK(ring.reserve(1) == 1);
+    CHECK(ring.oldest(2) == 0);
+    CHECK(ring.reserve(2) == 2);
+    CHECK(ring.reserve(3) == 3);
+    CHECK(!ring.reserve(4));
+    CHECK(ring.oldest(5) == 0);
+    ring.release();
+    CHECK(ring.reserve(5) == 0);
+    for (unsigned slot = 1; slot <= 3; ++slot) {
+        CHECK(ring.oldest(5) == slot);
+        ring.release();
+    }
+    CHECK(!ring.oldest(5));
+    CHECK(ring.oldest(5, true) == 0);
+}
+
+TEST_CASE("repeated timestamp segments accumulate under their parent independently of frame time") {
+    frame_profile frame;
+    frame.gpu_frame_ms = 10;
+    const auto props = gpu_profile_stage::props;
+    record_timestamp_segment(frame, props, gpu_stage_group::scene, 0, 1000000);
+    record_timestamp_segment(frame, props, gpu_stage_group::scene, 1500000, 3500000);
+    record_timestamp_segment(frame, gpu_profile_stage::reflection, gpu_stage_group::scene, 4000000, 9000000);
+    record_timestamp_segment(frame, props, gpu_stage_group::reflection, 5000000, 5500000);
+    record_timestamp_segment(frame, props, gpu_stage_group::reflection, 6000000, 7500000);
+    CHECK(frame.gpu_ms[0][static_cast<std::size_t>(props)] == 3);
+    CHECK(frame.gpu_ms[static_cast<std::size_t>(gpu_stage_group::reflection)][static_cast<std::size_t>(props)] == 2);
+    CHECK(frame.gpu_ms[0][static_cast<std::size_t>(gpu_profile_stage::reflection)] == 5);
+    const auto zoom = child_stage_group(gpu_profile_stage::zoom, gpu_stage_group::scene);
+    const auto mirror = child_stage_group(gpu_profile_stage::reflection, zoom);
+    CHECK(mirror == gpu_stage_group::zoom_reflection);
+    record_timestamp_segment(frame, props, mirror, 7000000, 7500000);
+    CHECK(frame.gpu_ms[static_cast<std::size_t>(mirror)][static_cast<std::size_t>(props)] == 0.5);
+    CHECK(frame.gpu_frame_ms == 10);
+}
+
+TEST_CASE("per-pass submissions and frame counters reset between raw records") {
+    profiler recorder;
+    recorder.enabled = true;
+    profiler_begin_frame(recorder);
+    auto& frame = recorder.frame;
+    frame.work.current().tree_instances = 4;
+    {
+        const profile_pass_scope scope(&frame, profile_pass::reflection);
+        frame.work.current().tree_instances = 8;
+        frame.work.reflection_captures = 2;
+    }
+    CHECK(frame.work.current().tree_instances == 4);
+    frame.work.static_upload_bytes = 512;
+    frame.gpu_texture_bytes = 1024;
+    profiler_begin_frame(recorder);
+    CHECK(frame.frame_number == 1);
+    CHECK(frame.work.current().tree_instances == 0);
+    CHECK(frame.work.passes[static_cast<std::size_t>(profile_pass::reflection)].tree_instances == 0);
+    CHECK(frame.work.reflection_captures == 0);
+    CHECK(frame.work.static_upload_bytes == 0);
+    CHECK(frame.gpu_texture_bytes == 0);
+}
+
+TEST_CASE("logical texture storage includes odd non-square mip tails") {
+    CHECK(texture_storage_bytes(5, 3, 4, false) == 60);
+    CHECK(texture_storage_bytes(5, 3, 4, true) == 72);
+    CHECK(texture_storage_bytes(1, 8, 12, true) == 180);
+    CHECK(texture_storage_bytes(0, 8, 12, true) == 0);
+}
+
+TEST_CASE("logical allocations track live sizes across replacement, deletion and name reuse") {
+    allocation_table storage;
+    CHECK(storage.replace(1, 100));
+    CHECK(storage.replace(2, 30));
+    CHECK(!storage.replace(1, 100));
+    CHECK(!storage.replace(1, 80));
+    CHECK(storage.bytes() == 110);
+    CHECK(storage.bytes(1) == 80);
+    CHECK(storage.bytes(2) == 30);
+    CHECK(storage.bytes(3) == 0);
+    storage.erase(2);
+    storage.erase(2);
+    CHECK(storage.bytes() == 80);
+    CHECK(storage.replace(2, 20));
+    CHECK(storage.bytes() == 100);
+}
+
+TEST_CASE("overlay averages GPU intervals over frames with available timestamps") {
+    profiler recorder;
+    frame_profile available;
+    available.frame_ms = 100;
+    available.gpu_frame_ms = 4;
+    available.gpu_timers_available = true;
+    record_timestamp_segment(available, gpu_profile_stage::terrain, gpu_stage_group::scene, 0, 1500000);
+    publish_profile(recorder, available);
+    frame_profile busy;
+    busy.frame_ms = 200;
+    publish_profile(recorder, busy);
+    CHECK(recorder.published.frame_ms == 150);
+    CHECK(recorder.published.gpu_frame_ms == 4);
+    CHECK(recorder.published.gpu_ms[0][static_cast<std::size_t>(gpu_profile_stage::terrain)] == 1.5);
 }

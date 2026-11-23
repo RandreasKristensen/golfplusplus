@@ -1,4 +1,5 @@
 #include "water_check.h"
+#include "water_crop_check.h"
 #include "water_scene_check.h"
 
 #include "core/sky_frame.h"
@@ -103,6 +104,7 @@ water_check_result check_water(const check_course& course, const lighting_palett
         std::fill(std::begin(vertex.fetch), std::end(vertex.fetch), water_fetch_cap_meters);
         pond.triangles.push_back(vertex);
     }
+    index_render_water(pond);
     const glm::vec3 eye(0.0f, eye_height, 0.0f);
     float calm_distant = 0.0f;
     for (const water_case& shown : cases) {
@@ -122,22 +124,24 @@ water_check_result check_water(const check_course& course, const lighting_palett
         lighting.upload(light, haze, {}, nullptr);
         render_weather surface;
         surface.surface_wind = glm::vec3(shown.wind, 0.0f, 0.0f);
-        timers.begin_frame(false);
+        timers.begin_frame(nullptr);
         scene.bind();
         glViewport(0, 0, width, height);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
         backdrop.draw(view, proj, 3.0f, render_lightning{});
-        reflections.draw(&pond, view, proj, eye, timers, [&](const water_reflection_view& reflected) {
+        const auto candidates = water.candidates(&pond, proj * view, eye, palette.water, surface, nullptr);
+        const draw_target target{scene.id(), width, height, false};
+        reflections.draw(view, proj, eye, target, candidates, [&](const water_reflection_view& reflected) {
             scene_haze mirrored_haze = backdrop.prepare(&course.game.place.backdrop, reflected.eye,
                                                               course.game.area.extent, light.haze_tint);
             mirrored_haze.reflection_level = reflected.level;
             lighting.upload(light, mirrored_haze, {}, nullptr);
-            backdrop.draw(reflected.view, proj, 3.0f, render_lightning{}, true);
+            backdrop.draw(reflected.view, reflected.sky_projection, 3.0f, render_lightning{}, true);
         });
         lighting.upload(light, haze, {}, nullptr);
-        water.draw_surfaces(&pond, proj * view, palette.water, surface, reflections.surfaces(), 3.0f, timers, nullptr);
+        water.draw_surfaces(&pond, candidates, proj * view, target, palette.water, surface, reflections.surfaces(), 3.0f, timers, nullptr);
         const std::vector<glm::vec4> picture = read_colors(scene, width, height);
         ++result.pictures;
 
@@ -191,6 +195,7 @@ water_check_result check_water(const check_course& course, const lighting_palett
         write_check_bmp(out / (std::string("water_") + shown.name + ".bmp"), width, height, look);
     }
     result.failures += check_water_scene(course,palette,asset_root,out,backdrop,water,lighting,scene,timers) ? 0:1;
+    result.failures += check_water_crops(course,palette,asset_root,out,backdrop,water,lighting,scene,timers) ? 0:1;
     ++result.pictures;
     framebuffer::bind_default();
     scene.shutdown();

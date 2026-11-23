@@ -5,7 +5,8 @@
 // hands on the wheel when driving, and their balls. Each player
 // has a shirt tint; a group shares the colour of its members' caps. While they address their ball, their club is drawn at
 // it as mine is, their hands on its grip; what they smoke and drink is held
-// at their mouth (held_props.h). GL-free.
+// at their mouth (held_props.h). Each part of a figure and each ball is an
+// instance of a canonical mesh (world_marker_batch.h), never a placed vertex. GL-free.
 
 #include "game/gear_paint.h"
 #include "renderer/dap_pose.h"
@@ -68,6 +69,6 @@ void append_remote_ball(world_marker_batch& batch, const render_remote_ball& bal
 // `props`; none when they use nothing.
 std::optional<prop_holder> remote_prop_holder(const render_remote_avatar& avatar, float eye_height, const prop_catalog& props);
 
-// Vertices of a figure on foot, and of one sat in a cart.
+// Vertices the draw places for a figure on foot, and for one sat in a cart.
 std::size_t remote_figure_vertex_count();
 std::size_t remote_seated_vertex_count();

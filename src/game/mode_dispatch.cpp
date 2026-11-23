@@ -371,23 +371,24 @@ const std::optional<tee_reservation_info>& active_booking(const game_state& stat
     return is_online(state) ? state.online.reservation : state.offline_booking;
 }
 
-void request_tee_action(game_state& state, net_command command) {
+bool request_tee_action(game_state& state, net_command command) {
     if (!is_online(state)) {
         if (command.type == net_command_type::book_tee) {
             for (const auto& course : load_courses(state.asset_root).value.value_or(std::vector<course_definition>{})) {
                 if (course.id == command.course_id) {
                     tee_reservation_info choice; choice.course_id = course.id;
                     choice.takes_cart = command.takes_cart && course.carts;
-                    state.offline_booking = choice; return;
+                    state.offline_booking = choice; return false;
                 }
             }
         } else if (command.type == net_command_type::cancel_tee) {
             state.offline_booking.reset();
         }
-        return;
+        return false;
     }
-    if (!state.online.room_ready || !state.online.room) { return; }
+    if (!state.online.room_ready || !state.online.room) { return false; }
     command.room_id = state.online.room->room_id;
     command.reservation_id = state.online.reservation ? state.online.reservation->reservation_id : 0;
     push_command(state, std::move(command));
+    return true;
 }

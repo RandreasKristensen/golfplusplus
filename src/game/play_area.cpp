@@ -2,6 +2,7 @@
 
 #include "physics/det_math.h"
 #include "game/area_solids.h"
+#include "game/area_surface.h"
 #include "game/hub_definition.h"
 #include "game/tree_season.h"
 
@@ -130,6 +131,7 @@ play_area with_ground(play_area area, const std::vector<hole_data>& holes, const
     area.ground = std::move(built.mesh);
     area.water_levels = std::move(built.water_levels);
     area.material_overlay = build_material_overlay_mesh(area.ground, area.zones);
+    area.surface = build_surface_index(area.holes, area.zones);
     return area;
 }
 
@@ -287,6 +289,7 @@ play_area place_course_holes(const std::vector<hole_data>& holes,
         course.holes.push_back(on_land ? lift_over_land(std::move(mesh), placed.tee_position.y, holes[i].spline.width)
                                        : std::move(mesh));
         course.zones.insert(course.zones.end(), placed.material_zones.begin(), placed.material_zones.end());
+        course.zone_holes.insert(course.zone_holes.end(), placed.material_zones.size(), i);
         course.trees.insert(course.trees.end(), placed.trees.begin(), placed.trees.end());
         if (i == 0) {
             course.ground_y = placed.tee_position.y;
@@ -296,12 +299,13 @@ play_area place_course_holes(const std::vector<hole_data>& holes,
 }
 
 namespace {
-// Each tree's species, and how much of its crown is in leaf on `day`.
+// Each tree's species, and how many leaves its crown has on `day`, withered ones counted.
 void set_tree_seasons(std::vector<tree_instance>& trees, const tree_tuning& tuning, const int day) {
     for (tree_instance& tree : trees) {
         tree.shape.species = species_index(tuning, tree.species).value_or(0);
-        tree.shape.foliage = tuning.species.empty() ? 1.0f
-                                                    : foliage_share(tuning.species[tree.shape.species], static_cast<float>(day));
+        tree.shape.foliage = tuning.species.empty()
+                                 ? 1.0f
+                                 : crown_leaves(tuning, tuning.species[tree.shape.species], static_cast<float>(day));
     }
 }
 }
@@ -361,6 +365,7 @@ play_area build_hub_area(const hub_definition& hub, const course_world_definitio
     for (std::size_t i = 0; i < area.tee_boxes.size(); ++i) { area.tee_boxes[i].center.y = ground.pad_levels[i]; }
     area.ground = std::move(ground.mesh); area.water_levels = std::move(ground.water_levels);
     area.material_overlay = build_material_overlay_mesh(area.ground, area.zones);
+    area.surface = build_surface_index(area.holes, area.zones);
     area = with_bounds(std::move(area));
     area = with_fences(with_cart_paths(std::move(area), world.cart_roads, tuning), world.fences, tuning);
     set_tree_seasons(area.trees, tuning.trees, world.day_of_year);
@@ -387,7 +392,7 @@ bool under_water(const play_area& area, const glm::vec3& position) {
 }
 
 std::optional<float> water_level_at(const play_area& area, const glm::vec3& position) {
-    const std::optional<zone_hit> zone = winning_zone_at(area.zones, position);
+    const std::optional<zone_hit> zone = winning_zone_at(area.zones, area.surface, position);
     if (!zone || zone->material != terrain_material::water || zone->index >= area.water_levels.size()) {
         return std::nullopt;
     }
@@ -396,9 +401,10 @@ std::optional<float> water_level_at(const play_area& area, const glm::vec3& posi
 
 terrain_sample sample_area(const play_area& area, const glm::vec3& position, frame_profile* profile) {
     terrain_sample sample = sample_terrain_mesh(area.ground, position, area.ground_y);
-    const std::optional<terrain_sample> on_hole = sample_holes(area.holes, position);
-    const auto zone = winning_zone_at(area.zones, position);
-    sample.material = zone ? zone->material : on_hole ? on_hole->material : terrain_material::rough;
+    const area_surface surface = surface_at(area, position);
+    const std::optional<terrain_sample>& on_hole = surface.on_hole;
+    const std::optional<zone_hit>& zone = surface.zone;
+    sample.material = surface.material;
     if (zone) {
         sample.green_stimp_feet = area.zones[zone->index].green_stimp_feet;
         if (sample.material == terrain_material::water && zone->index < area.water_levels.size()) {

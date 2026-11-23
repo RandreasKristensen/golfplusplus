@@ -8,6 +8,7 @@
 // takes a new lamp, the casters are rebuilt or the wind moves the crown; players and carts
 // cast nothing into them. Carts' headlights are never shadowed.
 
+#include "renderer/gl_storage.h"
 #include "game/lighting_loader.h"
 #include "physics/tree_body.h"
 #include "profiling/profiling.h"
@@ -16,6 +17,7 @@
 #include "renderer/lamp_shadows.h"
 #include "renderer/render_data.h"
 #include "renderer/shader.h"
+#include "renderer/tree_pose_drift.h"
 #include "renderer/tree_renderer.h"
 
 #include <cstddef>
@@ -29,6 +31,9 @@
 
 class lamp_shadow_pass {
 public:
+    explicit lamp_shadow_pass(gl_storage storage = {})
+        : storage_(storage), shader_(storage), tree_shader_(storage) {}
+
     // shadow_map.vert and shadow_map.frag.
     bool init(const std::string& vertex_path, const std::string& fragment_path, const shaft_style& style);
     void shutdown();
@@ -36,9 +41,10 @@ public:
     // frame_lighting holds them) seen from `eye`, and draws the maps of those
     // new to their tiles. Leaves its framebuffer bound when it draws: the
     // caller binds its own.
+    // A drawn map stays until a crown has swayed `pose_tolerance_meters` (tree_pose_drift.h).
     void update(const std::vector<render_light>& lights, const glm::vec3& eye, tree_renderer& tree_batch,
-                const std::vector<tree_body>& trees, std::uint64_t trees_revision, floodlight_renderer& floodlight_batch,
-                const render_floodlights* floodlights, gl_timer_pool& timers, frame_profile* profile);
+                floodlight_renderer& floodlight_batch,
+                const render_floodlights* floodlights, float pose_tolerance_meters, gl_timer_pool& timers, frame_profile* profile);
     // How many lamps' beams take shadows this frame.
     std::size_t count() const { return slots_.size(); }
     // Binds the maps to `unit` and tells `receiver` (sun_shafts.frag with
@@ -46,8 +52,8 @@ public:
     void bind(const shader_program& receiver, int unit) const;
 
 private:
-    float tree_motion_time_ = 0.0f;
-    glm::vec2 tree_wind_{0.0f};
+    gl_storage storage_;
+    tree_pose_drift pose_;
     std::uint64_t tree_model_revision_ = 0;
     shader_program shader_;
     shader_program tree_shader_;

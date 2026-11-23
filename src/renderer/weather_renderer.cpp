@@ -64,7 +64,7 @@ bool weather_renderer::init(const std::string& vertex_path, const std::string& f
     const std::vector<streak_vertex> vertices = make_streak_vertices(max_streaks_);
     glBindVertexArray(vao_);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices.size() * sizeof(streak_vertex)), vertices.data(),
+    storage_.buffer(vbo_, GL_ARRAY_BUFFER, vertices.size() * sizeof(streak_vertex), vertices.data(),
                  GL_STATIC_DRAW);
     glEnableVertexAttribArray(seed_location);
     glVertexAttribPointer(seed_location, 4, GL_FLOAT, GL_FALSE, sizeof(streak_vertex), nullptr);
@@ -77,10 +77,7 @@ bool weather_renderer::init(const std::string& vertex_path, const std::string& f
 }
 
 void weather_renderer::shutdown() {
-    if (vbo_ != 0) {
-        glDeleteBuffers(1, &vbo_);
-        vbo_ = 0;
-    }
+    storage_.delete_buffer(vbo_);
     if (vao_ != 0) {
         glDeleteVertexArrays(1, &vao_);
         vao_ = 0;

@@ -1,5 +1,6 @@
 #include "doctest.h"
 
+#include "renderer/caster_motion.h"
 #include "renderer/shadow_map_fit.h"
 
 #include "test_support.h"
@@ -11,6 +12,7 @@
 
 #include <cmath>
 #include <initializer_list>
+#include <vector>
 
 namespace {
 constexpr float extent = 160.0f;
@@ -100,4 +102,46 @@ TEST_CASE("panning the camera changes screen position without moving a world's s
         const shadow_map_fit fit = fit_shadow_map(low_sun, eye, extent, resolution);
         CHECK(near(on_map(fit, glm::vec3(world) / world.w), reference, 0.1f));
     }
+}
+
+TEST_CASE("a held shadow map is the same map while the camera stays on its texel and within an extent of its depth") {
+    const glm::vec3 eye(10.0f, 3.0f, 20.0f);
+    const shadow_map_fit held = fit_shadow_map(low_sun, eye, extent, resolution);
+    const float texel = extent / resolution;
+    // A step of a hundredth of a texel across the sun keeps the corner; a texel or more moves it.
+    const glm::mat3 light = shadow_light_rotation(low_sun);
+    const glm::vec3 across = glm::transpose(light) * glm::vec3(1.0f, 0.0f, 0.0f);
+    const glm::vec3 along = glm::transpose(light) * glm::vec3(0.0f, 0.0f, 1.0f);
+    CHECK(fit_shadow_map(low_sun, eye + across * texel * 0.001f, extent, resolution).corner == held.corner);
+    CHECK(fit_shadow_map(low_sun, eye + across * texel * 2.0f, extent, resolution).corner != held.corner);
+    // Moving along the sun only slides the depth.
+    const shadow_map_fit slid = fit_shadow_map(low_sun, eye + along * 30.0f, extent, resolution);
+    CHECK(slid.corner == held.corner);
+    CHECK(near(slid.depth_middle - held.depth_middle, 30.0f, 0.01f));
+}
+
+TEST_CASE("held casters count as unmoved until one has strayed past the tolerance from where it was drawn") {
+    const std::vector<glm::vec3> drawn{{0.0f, 0.0f, 0.0f}, {5.0f, 1.0f, 2.0f}, {-3.0f, 2.0f, 8.0f}};
+    caster_motion held;
+    const auto list = [](const std::vector<glm::vec3>& positions) {
+        return [&positions](const auto& visit) {
+            for (const glm::vec3& position : positions) { visit(position); }
+        };
+    };
+    CHECK(!held.within(list(drawn), 0.1f));
+    held.hold(list(drawn));
+    CHECK(held.within(list(drawn), 0.0f));
+    std::vector<glm::vec3> flutter = drawn;
+    flutter[1].x += 0.09f;
+    CHECK(held.within(list(flutter), 0.1f));
+    // Slow drift is measured against the drawn place, not the last frame's.
+    flutter[1].x += 0.09f;
+    CHECK(!held.within(list(flutter), 0.1f));
+    // A figure gone or added is a different list.
+    CHECK(!held.within(list({drawn.begin(), drawn.begin() + 2}), 0.1f));
+    std::vector<glm::vec3> more = drawn;
+    more.push_back({1.0f, 1.0f, 1.0f});
+    CHECK(!held.within(list(more), 0.1f));
+    held.forget();
+    CHECK(!held.within(list(drawn), 0.1f));
 }

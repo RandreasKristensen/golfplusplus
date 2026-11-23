@@ -293,6 +293,8 @@ inline constexpr const char* text_hole_sign_target = "hole_sign.target";
 
 // The course map (held up with M)
 inline constexpr const char* text_course_map_hole_number = "course_map.hole_number";
+inline constexpr const char* text_course_map_scale = "course_map.scale";
+inline constexpr const char* text_course_map_north = "course_map.north";
 
 // Skills panel
 inline constexpr const char* text_skills_title = "skills.title";
@@ -356,9 +358,11 @@ inline constexpr const char* style_rangefinder_tag = "rangefinder_tag";
 inline constexpr const char* style_rangefinder_wind = "rangefinder_wind";
 inline constexpr const char* style_rangefinder_height = "rangefinder_height";
 inline constexpr const char* style_hole_sign_number = "hole_sign_number";
+inline constexpr const char* style_way_sign_number = "way_sign_number";
 inline constexpr const char* style_prop_board = "prop_board";
 inline constexpr const char* style_hole_sign_detail = "hole_sign_detail";
 inline constexpr const char* style_course_map_hole_number = "course_map_hole_number";
+inline constexpr const char* style_course_map_scale = "course_map_scale";
 inline constexpr const char* style_panel_title = "panel_title";
 inline constexpr const char* style_panel_header = "panel_header";
 inline constexpr const char* style_panel_value = "panel_value";
@@ -412,7 +416,13 @@ inline constexpr const char* text_hub_pending = "hub.pending";
 inline constexpr const char* text_hub_slot_elapsed = "hub.slot_elapsed";
 inline constexpr const char* text_hub_slot_full = "hub.slot_full";
 inline constexpr const char* text_hub_count = "hub.count";
+inline constexpr const char* text_hub_count_unknown = "hub.count_unknown";
+inline constexpr const char* text_hub_count_updating = "hub.count_updating";
+inline constexpr const char* text_hub_count_old = "hub.count_old";
 inline constexpr const char* text_hub_own_slot = "hub.own_slot";
+inline constexpr const char* text_hub_list_pending = "hub.list_pending";
+inline constexpr const char* text_hub_list_failed = "hub.list_failed";
+inline constexpr const char* text_hub_list_timeout = "hub.list_timeout";
 inline constexpr const char* text_hub_courses = "hub.courses";
 inline constexpr const char* text_hub_cancel = "hub.cancel";
 inline constexpr const char* text_hub_return = "hub.return";

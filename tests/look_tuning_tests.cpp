@@ -241,7 +241,7 @@ TEST_CASE("a reloaded look keeps the last good one through a bad file and says w
     CHECK(std::string(watch.error->file) == lighting_path);
     CHECK(watch.shown.lighting == longer);
 
-    CHECK(!take_look_texts(watch, look_texts{longer, with(shipped_picture(), "\"target_lines\": 360", "\"target_lines\": -1")}));
+    CHECK(!take_look_texts(watch, look_texts{longer, with(shipped_picture(), "\"ui_lines\": 360", "\"ui_lines\": -1")}));
     REQUIRE(watch.error.has_value());
     CHECK(watch.error->problem == look_problem::not_valid);
     CHECK(std::string(watch.error->file) == picture_style_path);
@@ -278,11 +278,11 @@ TEST_CASE("the look's files are polled, and a good save after a bad one recovers
     CHECK(near(reload->next.lighting.weather.mist, 0.7f));
     CHECK(!watch.error.has_value());
 
-    folder.save(folder.picture, with(shipped_picture(), "\"target_lines\": 360", "\"target_lines\": 240"));
+    folder.save(folder.picture, with(shipped_picture(), "\"scene_lines\": [360, 720]", "\"scene_lines\": [240]"));
     reload = poll_look(watch, look_poll_seconds);
     REQUIRE(reload.has_value());
     CHECK(reload->changes.picture);
-    CHECK(reload->next.picture.target_lines == 240);
+    CHECK((reload->next.picture.scene_lines == std::vector<int>{240}));
 }
 
 TEST_CASE("a panel step is written to lighting.json and shown once, without the poll applying it again") {

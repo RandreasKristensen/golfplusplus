@@ -24,6 +24,8 @@ inline constexpr const char* setting_music_volume = "music_volume";
 inline constexpr const char* setting_field_of_view = "field_of_view";  // the gameplay camera's, in degrees
 inline constexpr const char* setting_mouse_sensitivity = "mouse_sensitivity";  // percent of the tuning's mouse look
 inline constexpr const char* setting_fullscreen = "fullscreen";  // 0 windowed, 1 borderless fullscreen
+// Which of picture.json's scene_lines presets the picture is drawn at (0 the standard).
+inline constexpr const char* setting_scene_resolution = "scene_resolution";
 inline constexpr const char* setting_tape_wear = "tape_wear";    // from a fresh tape (min) to a worn one (max)
 inline constexpr const char* setting_datestamp = "datestamp";    // 0 off, 1 the camcorder's date and time in the corner
 inline constexpr const char* setting_interact_prompt = "interact_prompt";  // 0 off, 1 the F key shown when F would act

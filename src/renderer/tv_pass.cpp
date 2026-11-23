@@ -47,7 +47,7 @@ void tv_pass::draw(const unsigned int picture_texture, const picture_size& pictu
     shader_.set_vec2("u_resolution", glm::vec2(static_cast<float>(window_width), window_height_f));
     shader_.set_int("u_factor", picture.factor);
     shader_.set_vec2("u_crop", glm::vec2(static_cast<float>(picture.crop_x), static_cast<float>(picture.crop_y)));
-    shader_.set_vec4("u_beam", glm::vec4(style_.horizontal_blur, style_.scanline_depth * scanline_strength,
+    shader_.set_vec4("u_beam", glm::vec4(style_.horizontal_blur * static_cast<float>(picture.unit), style_.scanline_depth * scanline_strength,
                                          style_.scanline_gap, style_.mask));
     shader_.set_vec4("u_screen", glm::vec4(style_.curvature, style_.corner_radius * window_height_f, style_.vignette, 0.0f));
     shader_.set_vec4("u_halation", glm::vec4(style_.halation, style_.halation_threshold,

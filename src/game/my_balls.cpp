@@ -64,7 +64,7 @@ void put_new_ball_in_play(game_state& state, my_ball fresh) {
 void request_practice_drop(game_state& state) {
     if (busy_with_rows(state)) { return; }
     const auto position = practice_drop_position(state.area, state.place.rules, state.player.position, state.player.position, state.tuning);
-    if (!position) { state.notice = game_notice{online_error_text_key(error_not_available), 0}; return; }
+    if (!position) { state.notice = game_notice{online_error_text_key(error_not_available), 0.0f, message_severity::error}; return; }
     if (is_online(state)) {
         ask_server(state, net_command_type::place_practice_ball, 0);
         return;

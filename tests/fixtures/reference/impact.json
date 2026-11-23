@@ -22,6 +22,11 @@
   "partial_swing_speed_share": {
     "by_backswing_clock": { "7:30": 0.45, "9:00": 0.62, "10:30": 0.82, "12:00": 1.0 },
     "source": "golf instruction 'clock system' wedge data (e.g. Pelz, Short Game Bible, 1999): a 9:00 backswing at about 60-65% of full speed",
+    "below_7:30": {
+      "anchor": { "0:00 (6:00 hands, no backswing)": 0.0 },
+      "source": "no measured clubhead or ball speed against backswing length was found below 7:30 (searched 2026-11: Pelz clock-system material gives only 7:30, 9:00 and 10:30; chipping instruction says distance comes from backswing length at constant tempo, without figures). The shipped points 0.05 -> 0.06 and 0.1 -> 0.11 are interpolated from the physical anchor (no backswing, no club speed) toward the 7:30 point, tuned so the shortest sand wedge swing totals under about 1.5 m and a 4 m chip needs a backswing of about 0.08 or more (tooling/shot_lab). Not a citation.",
+      "checked": false
+    },
     "checked": false
   },
   "overswing": { "speed_gain": 0.03, "source": "golf++ design: past full, a little speed for much wider dice", "checked": false }

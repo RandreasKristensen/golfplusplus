@@ -250,7 +250,7 @@ void step_in_at(game_state& state, const seat_door& door) {
     const bool blocked = door.owner == 0 ? door.door == cart_seat::passenger && passenger_sat
                                          : passenger_sat || (door.door == cart_seat::driver && driver_seated(state, door.owner));
     if (blocked) {
-        state.notice = game_notice{text_hud_seat_taken, 0.0f};
+        state.notice = game_notice{text_hud_seat_taken, 0.0f, message_severity::error};
         return;
     }
     if (is_online(state)) {

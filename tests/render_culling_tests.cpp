@@ -135,6 +135,33 @@ TEST_CASE("frustum follows a rotated camera") {
     CHECK(!box_visible(frustum, glm::vec3(-40.0f, 2.0f, 10.0f), 2.0f));
 }
 
+TEST_CASE("a hidden disc hides only boxes wholly inside it on screen") {
+    // 640 x 360 picture, 60 degrees tall, looking down -Z: a point at depth d and height y lands y / (d * tan 30) of
+    // half the height above the middle.
+    const glm::mat4 proj = glm::perspective(glm::radians(60.0f), 16.0f / 9.0f, 0.1f, 100.0f);
+    const glm::mat4 view_proj = proj * glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    view_frustum frustum = make_view_frustum(view_proj);
+    const auto hidden = [&frustum](const glm::vec3& center, const float half_size) {
+        return frustum_hides_aabb(frustum, center - glm::vec3(half_size), center + glm::vec3(half_size));
+    };
+    CHECK(!hidden(glm::vec3(0.0f, 0.0f, -20.0f), 1.0f));
+    frustum.hidden = hidden_disc{view_proj, glm::vec2(640.0f, 360.0f), 100.0f};
+    // 1 m at 20 m is about 15.6 pixels: well inside 100 pixels of the middle.
+    CHECK(hidden(glm::vec3(0.0f, 0.0f, -20.0f), 1.0f));
+    CHECK(hidden(glm::vec3(2.0f, 0.0f, -20.0f), 1.0f));
+    // Straddling the edge, off to either side or above it, or too big to fit.
+    CHECK(!hidden(glm::vec3(6.5f, 0.0f, -20.0f), 1.0f));
+    CHECK(!hidden(glm::vec3(-6.5f, 0.0f, -20.0f), 1.0f));
+    CHECK(!hidden(glm::vec3(0.0f, 6.5f, -20.0f), 1.0f));
+    CHECK(!hidden(glm::vec3(0.0f, -6.5f, -20.0f), 1.0f));
+    CHECK(!hidden(glm::vec3(0.0f, 0.0f, -20.0f), 8.0f));
+    // Behind the eye or reaching it, nothing projects into the disc.
+    CHECK(!hidden(glm::vec3(0.0f, 0.0f, 20.0f), 1.0f));
+    CHECK(!hidden(glm::vec3(0.0f, 0.0f, -1.0f), 2.0f));
+    frustum.hidden.radius = 0.0f;
+    CHECK(!hidden(glm::vec3(0.0f, 0.0f, -20.0f), 1.0f));
+}
+
 TEST_CASE("chunk builder covers every triangle exactly once with contiguous ranges") {
     const test_grid_mesh mesh = make_grid_mesh(16, 16, 4.0f);
     render_chunk_settings settings;
@@ -276,6 +303,10 @@ TEST_CASE("adjacent visible chunks merge into one draw range") {
     CHECK(ranges[0].first_index == chunks[0].first_index);
     CHECK(ranges[0].index_count == chunks[0].index_count + chunks[1].index_count);
     CHECK(ranges[1].first_index == chunks.back().first_index);
+    const auto merged = collect_chunk_index_ranges(chunks, two_runs, mesh.indices.size(), 1U, ranges);
+    CHECK(merged.indices_visible == split.indices_drawn);
+    CHECK(merged.indices_drawn == mesh.indices.size());
+    CHECK(merged.indices_drawn > merged.indices_visible);
 
     std::vector<bool> none(chunks.size(), false);
     const render_chunk_cull_stats culled = collect_chunk_index_ranges(chunks, none, mesh.indices.size(), 8U, ranges);
@@ -302,6 +333,46 @@ TEST_CASE("range limiting merges the smallest gap and never drops indices") {
     CHECK(ranges.size() == 1U);
     CHECK(ranges[0].first_index == 0U);
     CHECK(ranges[0].index_count == 330U);
+}
+
+TEST_CASE("gaps up to a limit are drawn through, in order, and the rest are left") {
+    std::vector<render_index_range> ranges{
+        render_index_range{0U, 30U},
+        render_index_range{60U, 30U},
+        render_index_range{300U, 30U},
+        render_index_range{330U, 30U},
+        render_index_range{1000U, 3U}
+    };
+    merge_render_index_gaps(ranges, 30U);
+    REQUIRE(ranges.size() == 3U);
+    CHECK(ranges[0].first_index == 0U);
+    CHECK(ranges[0].index_count == 90U);
+    CHECK(ranges[1].first_index == 300U);
+    CHECK(ranges[1].index_count == 60U);
+    CHECK(ranges[2].first_index == 1000U);
+    merge_render_index_gaps(ranges, 0U);
+    CHECK(ranges.size() == 3U);
+    merge_render_index_gaps(ranges, 5000U);
+    REQUIRE(ranges.size() == 1U);
+    CHECK(ranges[0].first_index == 0U);
+    CHECK(ranges[0].index_count == 1003U);
+    std::vector<render_index_range> none;
+    merge_render_index_gaps(none, 100U);
+    CHECK(none.empty());
+
+    // Through the chunk collector the gap limit comes before the range cap, and the draws stay in index order.
+    const std::vector<render_mesh_chunk> chunks{{{}, 0U, 30U}, {{}, 30U, 30U}, {{}, 60U, 30U}, {{}, 90U, 30U}, {{}, 120U, 30U}};
+    const std::vector<bool> shown{true, false, true, false, true};
+    std::vector<render_index_range> collected;
+    const render_chunk_cull_stats joined = collect_chunk_index_ranges(chunks, shown, 150U, 8U, collected, 30U);
+    CHECK(collected.size() == 1U);
+    CHECK(joined.indices_visible == 90U);
+    CHECK(joined.indices_drawn == 150U);
+    const render_chunk_cull_stats apart = collect_chunk_index_ranges(chunks, shown, 150U, 8U, collected, 0U);
+    REQUIRE(collected.size() == 3U);
+    CHECK(collected[0].first_index < collected[1].first_index);
+    CHECK(collected[1].first_index < collected[2].first_index);
+    CHECK(apart.indices_drawn == 90U);
 }
 
 TEST_CASE("unchunked meshes fall back to a single full draw range") {

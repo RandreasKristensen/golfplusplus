@@ -5,6 +5,7 @@
 // scene shader reads. shader_program binds the block of every program that
 // has it to frame_lighting_binding when it links.
 
+#include "renderer/gl_storage.h"
 #include "renderer/render_data.h"
 #include "renderer/scene_haze.h"
 #include "renderer/scene_lights.h"
@@ -85,6 +86,9 @@ inline frame_lighting_block make_frame_lighting_block(const render_lighting& lig
 
 class lighting_uniforms {
 public:
+    explicit lighting_uniforms(gl_storage storage = {})
+        : storage_(storage) {}
+
     bool init();
     void shutdown();
     // Writes this frame's light, lit by the lights nearest the camera, and
@@ -97,6 +101,7 @@ public:
     const std::vector<render_light>& lights() const { return lights_; }
 
 private:
+    gl_storage storage_;
     unsigned int buffer_ = 0;
     frame_lighting_block block_;
     std::vector<render_light> lights_;

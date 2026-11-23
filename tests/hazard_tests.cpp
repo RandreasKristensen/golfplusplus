@@ -99,7 +99,7 @@ TEST_CASE("the ground has no step where a bowl's finer cells meet the rest") {
     CHECK(worst < 0.1f * 1.5f * tuning.bunker_depth / tuning.bunker_lip_meters + 0.02f);
 }
 
-TEST_CASE("a pond fills its outline to its lowest rim, and overlapping zones are one pond") {
+TEST_CASE("a pond fills its outline to just under its lowest rim, and overlapping zones are one pond") {
     const glm::vec3 a(-6.0f, 0.0f, 120.0f);
     const glm::vec3 b(6.0f, 0.0f, 120.0f);
     const play_area area = flat_area({circle_zone(material_zone_type::water, a, 9.0f),
@@ -107,7 +107,11 @@ TEST_CASE("a pond fills its outline to its lowest rim, and overlapping zones are
                                       circle_zone(material_zone_type::bunker, glm::vec3(0.0f, 0.0f, 40.0f), 3.0f)});
     REQUIRE(area.water_levels.size() == 3U);
     CHECK(area.water_levels[0] == area.water_levels[1]);
-    CHECK(near(area.water_levels[0], terrain_height(area, a + glm::vec3(-12.0f, 0.0f, 0.0f)), 0.02f));
+    // Under the rim by its straight bank's rise over a fine cell's diagonal.
+    const float rim = terrain_height(area, a + glm::vec3(-12.0f, 0.0f, 0.0f));
+    const float most_freeboard = zone_tuning().water_edge_slope * shipped_content().tuning.terrain.zone_cell_size * 1.41421356f;
+    CHECK(area.water_levels[0] < rim - 0.5f * most_freeboard + 0.02f);
+    CHECK(area.water_levels[0] > rim - most_freeboard - 0.02f);
     const terrain_sample middle = sample_area(area, glm::vec3(0.0f, 0.0f, 120.0f));
     REQUIRE(middle.material == terrain_material::water);
     CHECK(near(middle.water_level, area.water_levels[0]));
@@ -138,7 +142,7 @@ TEST_CASE("a pond's water meets its bank at its outline, with no dry ground belo
             CHECK(terrain_height(area, centre + way * (radius + out)) >= level - 0.01f);
         }
     }
-    // Its surface lies only over ground below it, out to where the bank meets it.
+    // Its surface lies only over ground below it and ends on the outline itself.
     const render_water water = build_render_water(area, 1);
     REQUIRE(!water.triangles.empty());
     float reach = 0.0f;
@@ -147,10 +151,8 @@ TEST_CASE("a pond's water meets its bank at its outline, with no dry ground belo
         CHECK(terrain_height(area, point) <= level + 0.01f);
         reach = std::max(reach, glm::length(glm::vec2(point.x - centre.x, point.z - centre.z)));
     }
-    // On flat ground the shore is flat at the level: the surface stops at
-    // the first fine cell's corner past the outline.
-    CHECK(reach > radius - 0.5f);
-    CHECK(reach < radius + zone_tuning().water_shore_meters);
+    CHECK(reach > radius - 0.05f);
+    CHECK(reach < radius + 0.05f);
 }
 
 TEST_CASE("a pond's fetch is nothing on its upwind shore and its width on the downwind one") {
@@ -177,7 +179,7 @@ TEST_CASE("a pond's fetch is nothing on its upwind shore and its width on the do
     CHECK(between >= std::min(east->fetch[0], east->fetch[1]) - 0.01f);
 }
 
-TEST_CASE("a pond's floor is the bank's grass at its edge, fading to mud deeper in, and water on a map") {
+TEST_CASE("a pond's floor is the bank's grass at its edge, mud just inside it, and water on a map") {
     const glm::vec3 centre(0.0f, 0.0f, 150.0f);
     const play_area area = flat_area({circle_zone(material_zone_type::water, centre, 20.0f)});
     const ground_colors& colors = test_scene_colors().ground;
@@ -186,29 +188,34 @@ TEST_CASE("a pond's floor is the bank's grass at its edge, fading to mud deeper 
     const auto mud = [&](const glm::vec3& color) {
         return glm::length(color - colors.rough) / glm::length(colors.pond_bed - colors.rough);
     };
-    float shallowest = 1.0f;
-    float deepest_mud = 1.0f;
+    bool any_floor = false;
     for (std::size_t i = 0; i < drawn.vertices.size(); ++i) {
         const terrain_vertex& vertex = area.ground.vertices[i];
         if (vertex.material != terrain_material::water) {
-            CHECK(drawn.vertices[i].color != colors.pond_bed);
+            CHECK(drawn.vertices[i].color() != colors.pond_bed);
             continue;
         }
-        // A printed map shows it as water, whatever its floor.
-        CHECK(drawn.vertices[i].map_color == colors.water);
-        CHECK(drawn.vertices[i].blades == 0.0f);
-        const float depth = area.water_levels[0] - vertex.position.y;
-        if (depth < 0.7f) {
-            shallowest = std::min(shallowest, mud(drawn.vertices[i].color));
+        CHECK(drawn.vertices[i].blades() == 0.0f);
+        // A hand's width down the bank, the floor is all mud.
+        if (area.water_levels[0] - vertex.position.y > 0.15f) {
+            CHECK(mud(drawn.vertices[i].color()) > 0.99f);
         }
-        if (depth > zone_tuning().water_max_depth - 0.1f) {
-            deepest_mud = std::min(deepest_mud, mud(drawn.vertices[i].color));
+        any_floor = true;
+    }
+    CHECK(any_floor);
+    // Its drawn shape keeps the bank's grass on the outline itself.
+    const render_static_mesh shape = make_terrain_render_mesh({&area.material_overlay}, 1U, colors, ground_light_bake{}, &area);
+    float edge_mud = 1.0f;
+    for (std::size_t i = 0; i < shape.vertices.size(); ++i) {
+        const glm::vec3& position = area.material_overlay.vertices[i].position;
+        if (zone_edge_distance(area.zones[0], position) < 0.001f) {
+            edge_mud = std::min(edge_mud, mud(shape.vertices[i].color()));
         }
     }
-    CHECK(shallowest < 0.5f);
-    CHECK(deepest_mud > 0.9f);
+    // Within the colour's byte steps.
+    CHECK(edge_mud < 0.05f);
     // No pond given: it is drawn in its material's colour.
     const render_static_mesh plain = make_terrain_render_mesh({&area.ground}, 1U, colors, ground_light_bake{}, nullptr);
     CHECK(std::none_of(plain.vertices.begin(), plain.vertices.end(),
-                       [&](const render_terrain_vertex& vertex) { return vertex.color == colors.pond_bed; }));
+                       [&](const render_terrain_vertex& vertex) { return vertex.color() == colors.pond_bed; }));
 }

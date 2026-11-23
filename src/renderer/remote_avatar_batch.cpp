@@ -14,7 +14,6 @@
 
 namespace {
 constexpr float no_glow = 0.0f;
-constexpr bool writes_depth = true;
 // The figure's height over the eye height, and its parts as fractions of it.
 constexpr float figure_height_scale = 1.08f;
 constexpr float figure_head_height = 0.90f;
@@ -70,19 +69,19 @@ public:
         : batch_(batch), feet_(feet), forward_(yaw_direction(yaw)), left_(yaw_left(forward_)), h_(height) {}
 
     void cylinder(const glm::vec3& centre, const glm::vec3& rotation, const glm::vec3& scale, const glm::vec3& color) const {
-        batch_.append_cylinder(local_cylinder_model(feet_, feet_ + forward_, centre * h_, rotation, scale * h_), color, no_glow,
-                               writes_depth);
+        batch_.append_instance(prop_mesh::cylinder, local_cylinder_model(feet_, feet_ + forward_, centre * h_, rotation, scale * h_),
+                               color, no_glow);
     }
     void sphere(const glm::vec3& centre, const float radius, const glm::vec3& color) const {
-        batch_.append_sphere(local_sphere_model(feet_, feet_ + forward_, centre * h_, radius * h_), color, no_glow, writes_depth);
+        batch_.append_instance(prop_mesh::sphere, local_sphere_model(feet_, feet_ + forward_, centre * h_, radius * h_), color, no_glow);
     }
     void limb(const glm::vec3& from, const glm::vec3& to, const float radius, const glm::vec3& color) const {
-        batch_.append_cylinder(local_segment_model(feet_, feet_ + forward_, from * h_, to * h_, radius * h_), color, no_glow,
-                               writes_depth);
+        batch_.append_instance(prop_mesh::cylinder, local_segment_model(feet_, feet_ + forward_, from * h_, to * h_, radius * h_),
+                               color, no_glow);
     }
     void panel(const glm::vec3& centre, const glm::vec3& rotation, const glm::vec2& half_size, const glm::vec3& color) const {
-        batch_.append_quad(local_panel_model(feet_, feet_ + forward_, centre * h_, rotation, half_size * h_), color, no_glow,
-                           writes_depth);
+        batch_.append_instance(prop_mesh::quad, local_panel_model(feet_, feet_ + forward_, centre * h_, rotation, half_size * h_),
+                               color, no_glow);
     }
     // A world point in the frame, as fractions of the height.
     glm::vec3 local(const glm::vec3& world) const {
@@ -217,6 +216,6 @@ void append_remote_ball(world_marker_batch& batch, const render_remote_ball& bal
                         const figure_colors& colors, const float glow) {
     // Tinted towards the player's colour, still mostly white so it reads as a ball.
     const glm::vec3 color = glm::mix(colors.ball, remote_tint(colors, ball.player_id), colors.ball_shirt_share);
-    batch.append_sphere(glm::scale(glm::translate(glm::mat4(1.0f), ball.position), glm::vec3(radius)), color, glow,
-                        writes_depth);
+    batch.append_instance(prop_mesh::sphere, glm::scale(glm::translate(glm::mat4(1.0f), ball.position), glm::vec3(radius)), color,
+                          glow);
 }

@@ -41,7 +41,7 @@ TEST_CASE("water takes red out fastest and nothing out of no depth") {
     CHECK(deeper.z < deep.z);
 }
 
-TEST_CASE("a pond shows the bank in the first half metre and has turned dark green by three") {
+TEST_CASE("a pond shows the bank in the first half metre and has turned a dark, faintly blue grey by three") {
     const water_style water = shipped_water();
     const glm::vec3 white(1.0f);
     const glm::vec3 light(0.8f);
@@ -50,8 +50,10 @@ TEST_CASE("a pond shows the bank in the first half metre and has turned dark gre
     CHECK(bank.x > 0.4f);
     CHECK(bank.y > bank.x);
     const glm::vec3 middle = water_seen_through(water, white, light, water_path_meters(water, 3.0f));
+    // Blue leads green only slightly: a hue, not a blue pond, and never green.
+    CHECK(middle.z > middle.y);
     CHECK(middle.y > middle.x);
-    CHECK(middle.y > middle.z);
+    CHECK(middle.z < 1.6f * middle.y);
     // Most of the bank's light is gone, and what is left is the water's colour.
     CHECK(glm::length(middle) < 0.5f * glm::length(bank));
     CHECK(glm::length(middle - water.scatter_color * light) < 0.5f * glm::length(white - water.scatter_color * light));
@@ -75,6 +77,44 @@ TEST_CASE("the surface reflects little looking down and nearly all at a glancing
     CHECK(near(water_fresnel(1.0f), water_f0));
     CHECK(near(water_fresnel(0.0f), 1.0f));
     CHECK(water_fresnel(0.2f) > water_fresnel(0.8f));
+}
+
+TEST_CASE("distant rough water hides a smooth share of its reflection in the next wave, never all or none") {
+    const water_style water = shipped_water();
+    const float slope = water.ripple_slope + water.fine_slope;
+    // A 1.7 m eye: the reflected ray rises as steeply as the view falls.
+    float previous = 0.0f;
+    for (const float meters : {5.0f, 20.0f, 60.0f, 150.0f, 400.0f}) {
+        const float up = 1.7f / std::sqrt(meters * meters + 1.7f * 1.7f);
+        const float share = water_masked_share(up, slope);
+        CHECK(share >= previous);
+        previous = share;
+    }
+    // Far off, rough water is partly masked: a blend, not dark specks or a mirror.
+    const float far = water_masked_share(1.7f / 400.0f, slope);
+    CHECK(far > 0.2f);
+    CHECK(far < 0.8f);
+    // A calm mirror hides nothing seen from above, and nothing is hidden looking down.
+    CHECK(near(water_masked_share(0.05f, 0.0f), 0.0f));
+    CHECK(near(water_masked_share(1.0f, slope), 0.0f));
+    // Every share is a blend between nothing and all of it, smooth in the height.
+    for (int i = -100; i <= 100; ++i) {
+        const float up = static_cast<float>(i) / 200.0f;
+        const float share = water_masked_share(up, slope);
+        CHECK(share >= 0.0f);
+        CHECK(share <= 1.0f);
+        CHECK(std::abs(water_masked_share(up + 0.005f, slope) - share) < 0.05f);
+    }
+}
+
+TEST_CASE("the shader masks the next wave as the CPU does") {
+    const std::optional<std::string> source =
+        read_text_file(std::filesystem::path(asset_root()) / "picture" / "shaders" / "water.frag");
+    REQUIRE(source.has_value());
+    for (const char* text : {"float reach = 2.0 * slope + 0.02;", "return 1.0 - smoothstep(-reach, reach, up);",
+                             "float masked = water_masked_share(bounce.y, smear);"}) {
+        CHECK(source->find(text) != std::string::npos);
+    }
 }
 
 TEST_CASE("distant water retains the Fresnel response of unresolved waves") {
@@ -139,7 +179,7 @@ TEST_CASE("the shaders carry the window's edge the CPU works out") {
     CHECK(source->find(expected) != std::string::npos);
 }
 
-TEST_CASE("deeper water is darker, and red goes first") {
+TEST_CASE("deeper water is darker, red goes first and blue last") {
     const water_style water = shipped_water();
     const glm::vec3 shallow = water_light_at_depth(water, 0.5f);
     const glm::vec3 deep = water_light_at_depth(water, 3.0f);
@@ -148,8 +188,9 @@ TEST_CASE("deeper water is darker, and red goes first") {
     for (int channel = 0; channel < 3; ++channel) {
         CHECK(deep[channel] < shallow[channel]);
     }
-    CHECK(deep.x < deep.z);
-    CHECK(deep.z < deep.y);
+    // Red goes first and blue last: the water is faintly blue, never green.
+    CHECK(deep.x < deep.y);
+    CHECK(deep.y < deep.z);
 }
 
 TEST_CASE("still water is a mirror, a light breeze breaks it and a fresh one leaves nothing whole") {
@@ -203,11 +244,55 @@ TEST_CASE("visible water planes are deduplicated, sorted, and culled independent
             render_water_vertex v; v.position=p; water.triangles.push_back(v);
         }
     }
+    index_render_water(water);
     const glm::vec3 eye(0,4,0);
     const glm::mat4 vp = glm::perspective(glm::radians(60.0f),1.5f,0.1f,100.0f) *
         glm::lookAt(eye,glm::vec3(0,2,20),glm::vec3(0,1,0));
-    const auto levels=visible_water_levels(water,vp);
-    REQUIRE(levels.size()==2); CHECK(levels[0]==1); CHECK(levels[1]==2);
+    const auto levels=water_candidates(water,vp,eye,water_lookup_reach{});
+    REQUIRE(levels.size()==2); CHECK(levels[0].level==1); CHECK(levels[1].level==2);
     for (auto& vertex:water.triangles) { vertex.position.z = -vertex.position.z; }
-    CHECK(visible_water_levels(water,vp).empty());
+    index_render_water(water);
+    CHECK(water_candidates(water,vp,eye,water_lookup_reach{}).empty());
+}
+
+TEST_CASE("water levels group only exactly equal heights and keep exact bounds per level and cell") {
+    render_water water;
+    const float near_level = std::nextafter(1.0f, 2.0f);
+    const auto add = [&](const float level, const glm::vec2 centre) {
+        for (const glm::vec2 corner : {glm::vec2(-2, -2), glm::vec2(2, -2), glm::vec2(0, 3)}) {
+            render_water_vertex v; v.position = {centre.x + corner.x, level, centre.y + corner.y}; water.triangles.push_back(v);
+        }
+    };
+    add(1.0f, {500, 10}); add(near_level, {0, 10}); add(1.0f, {-500, 10}); add(1.0f, {500, 12});
+    index_render_water(water);
+    REQUIRE(water.levels.size() == 2);
+    CHECK(water.levels[0].level == 1.0f);
+    CHECK(water.levels[1].level == near_level);
+    CHECK(water.levels[0].vertex_count == 9);
+    CHECK(water.levels[0].cluster_count == 2);
+    CHECK(water.levels[1].cluster_count == 1);
+    CHECK(water.levels[0].min.x == -502.0f); CHECK(water.levels[0].max.x == 502.0f);
+    CHECK(water.levels[1].first_vertex == 9);
+    for (const water_level_range& range : water.levels) {
+        int vertices = 0;
+        for (int c = 0; c < range.cluster_count; ++c) {
+            const water_cluster& cluster = water.clusters[static_cast<std::size_t>(range.first_cluster + c)];
+            CHECK(cluster.first_vertex == range.first_vertex + vertices);
+            vertices += cluster.vertex_count;
+            for (int v = 0; v < cluster.vertex_count; ++v) {
+                const glm::vec3 p = water.triangles[static_cast<std::size_t>(cluster.first_vertex + v)].position;
+                CHECK(p.y == range.level);
+                CHECK(glm::all(glm::greaterThanEqual(p, cluster.min)));
+                CHECK(glm::all(glm::lessThanEqual(p, cluster.max)));
+            }
+        }
+        CHECK(vertices == range.vertex_count);
+    }
+    // Looking at the middle: level 1's bounds span the view but none of its clusters do.
+    const glm::mat4 middle = glm::perspective(glm::radians(20.0f), 1.0f, 0.1f, 2000.0f) *
+        glm::lookAt(glm::vec3(0, 5, -100), glm::vec3(0, 1, 10), glm::vec3(0, 1, 0));
+    const auto candidates = water_candidates(water, middle, glm::vec3(0, 5, -100), water_lookup_reach{});
+    REQUIRE(candidates.size() == 1);
+    CHECK(candidates[0].level == near_level);
+    CHECK(candidates[0].query == 0);
 }

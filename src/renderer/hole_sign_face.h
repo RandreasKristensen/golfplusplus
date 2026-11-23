@@ -1,7 +1,7 @@
 #pragma once
 
 // What is painted on a hole sign's face (game/hole_sign.h): the hole number,
-// a top-down map of the hole in the course map's inks (course_map_fill.h),
+// a top-down map of the hole in the maps' inks (map_ink.h),
 // its par and its length. The map is framed on the hole alone and shows
 // everything of the course inside that frame (every hole's fairway, rough,
 // greens, bunkers, water and trees, other holes faded), turned so the hole runs across the
@@ -12,14 +12,17 @@
 // course (overlay_raster.h), so its texels stay chunky in the scene.
 // GL-free.
 
+#include <cstddef>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "game/hole_sign.h"
 #include "game/lighting_loader.h"
 #include "game/play_area.h"
 #include "game/text_assets.h"
 #include "renderer/overlay_batch.h"
+#include "renderer/pixel_font.h"
 #include "renderer/ui_rect.h"
 
 #include <glm/vec2.hpp>
@@ -35,8 +38,9 @@ inline constexpr int hole_sign_map_top = 16;
 inline constexpr int hole_sign_map_width = 86;
 inline constexpr int hole_sign_map_height = 34;
 
-// A way sign's face (game/hole_sign.h way_sign), in texels: its board's aspect.
-inline constexpr int way_sign_face_width = 64;
+// A way board's face (game/way_sign.h) is this many texels high and as wide as
+// its box's aspect, so every board has the same texel density and its
+// lettering (one fixed scale, the way_sign_number style) the same size.
 inline constexpr int way_sign_face_height = 24;
 
 // A prop board's face is this many texels high, and as wide as its aspect.
@@ -72,9 +76,9 @@ struct hole_sign_map_frame {
 
 hole_sign_map_frame make_hole_sign_map_frame(const play_area& area, const hole_sign& sign);
 
-// What the map shows at a point: the course's surface there (any hole's zone,
-// else any hole's fairway or rough), and whether it is `sign`'s own hole's
-// (inside its ribbon, or the green its pin is on).
+// What the map shows at a point: the course's surface there (surface_at: any
+// hole's zone, else any hole's fairway or rough), and whether it is `sign`'s
+// own hole's (hole_owns_surface).
 struct hole_sign_map_spot {
     terrain_material material = terrain_material::rough;
     bool own_hole = false;
@@ -84,12 +88,19 @@ struct hole_sign_map_spot {
 std::optional<hole_sign_map_spot> hole_sign_map_spot_at(const play_area& area, const hole_sign& sign, const glm::vec3& point);
 
 // The spot's ink: other holes' fairway, rough and green faded
-// (course_map_other_hole_ink), bunkers and water as they are.
-glm::vec3 hole_sign_map_ink(const ground_colors& ground, const hole_sign_map_spot& spot);
+// (map_hole_ink), bunkers and water as they are.
+glm::vec3 hole_sign_map_ink(const map_inks& inks, const hole_sign_map_spot& spot);
 
-// Sets `batch`'s grid to a way sign's face and appends its painted panel
-// and `label`, the hole it points to ("HOLE 4").
-void draw_way_sign_face(overlay_batch& batch, const text_assets& text, const std::string& label);
+// A way board's face width in texels, for its box's half width and half height.
+int way_sign_face_width(float half_width, float half_height);
+
+// How `label` lies on a way board's face of `width` texels: always at the
+// style's one scale; truncated only if the board is too short for it.
+text_layout layout_way_sign_label(const text_assets& text, const std::string& label, int width);
+
+// Sets `batch`'s grid to a way board's face of `width` texels and appends its
+// painted panel and `label` (way_sign_label).
+void draw_way_sign_face(overlay_batch& batch, const text_assets& text, const std::string& label, int width);
 
 // Sets `batch`'s grid to `width` x prop_board_face_height texels and appends
 // `label` in dark ink, painted straight onto the board's own colour.
@@ -102,10 +113,10 @@ bool prop_board_label_fits(const text_assets& text, const std::string& label, in
 
 // Sets `batch`'s grid to the face and appends the face over the board's
 // wood: the painted panel, the labels and the map of `sign`'s hole (the
-// course in `area` around it) in the inks of `ground`.
+// course in `area` around it) in `inks`.
 void draw_hole_sign_face(overlay_batch& batch,
                          const text_assets& text,
                          const hole_sign_labels& labels,
                          const play_area& area,
                          const hole_sign& sign,
-                         const ground_colors& ground);
+                         const map_inks& inks);

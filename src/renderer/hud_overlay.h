@@ -17,8 +17,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-// Everything except the course map (drawn by the renderer from its retained
-// buffer), the startup menus and the debug text.
+// Everything except the course map (drawn by the renderer, with its sheet as
+// a texture), the startup menus and the debug text.
 void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& data, const glm::mat4& view_proj);
 // Overlay clip-space position of a world point, or nullopt when it is
 // behind the camera or outside the depth range.

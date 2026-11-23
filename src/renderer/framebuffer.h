@@ -4,6 +4,7 @@
 // reads), the sun shafts', the camcorder's steps, and the tape pass the TV
 // pass upscales.
 
+#include "renderer/gl_storage.h"
 enum class framebuffer_color {
     rgb8,      // what the tape records and plays
     hdr,       // R11G11B10F: brighter than white, never negative
@@ -26,6 +27,9 @@ struct framebuffer_format {
 
 class framebuffer {
 public:
+    explicit framebuffer(gl_storage storage = {})
+        : storage_(storage) {}
+
     bool init(int width, int height, const framebuffer_format& format = framebuffer_format{});
     void shutdown();
     void bind() const;
@@ -40,6 +44,7 @@ public:
     int height() const { return height_; }
 
 private:
+    gl_storage storage_;
     unsigned int fbo_ = 0;
     unsigned int color_tex_ = 0;
     unsigned int depth_rbo_ = 0;

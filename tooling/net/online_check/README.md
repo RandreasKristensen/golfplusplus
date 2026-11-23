@@ -75,6 +75,14 @@ no XP effects), exact expiry boundary and a whole completed card have native
 coverage; this harness does not claim live evidence for those cases. SDL rendering
 requires a separate game run; headless results do not verify appearance.
 
+Measured, not asserted: `golfpp-online-check <server> <database> --tee-book-timing`
+(a fresh database, never run with the lifecycle checks) times the tee book through the
+real SDK: a list request for a never-opened large course, a second open, manual
+refreshes, other courses, a refresh after 61 s idle, then booking and a cold bus
+journey. Client time is dispatch to the answering row; the module's own reducer time
+and fuel are read from the server's `/v1/metrics` (`reducer_wasm_time_usec`, needs
+`curl`) so a cold destination build shows apart from a warm request.
+
 Afterwards delete only the database whose exact identity the publish command
 returned (`spacetime delete <that identity> --server $checkServer`). If you started
 a server, verify its listener PID, executable, parent chain and exact data-dir

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -139,6 +140,7 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.terrain.zones.bunker_lip_meters = terrain.number("bunker_lip_meters");
     tuning.terrain.zones.water_bank_meters = terrain.number("water_bank_meters");
     tuning.terrain.zones.water_shore_meters = terrain.number("water_shore_meters");
+    tuning.terrain.zones.water_edge_slope = terrain.number("water_edge_slope");
     tuning.terrain.zones.water_min_depth = terrain.number("water_min_depth");
     tuning.terrain.zones.water_max_depth = terrain.number("water_max_depth");
     tuning.terrain.fairway_cell_size = terrain.number("fairway_cell_size");
@@ -496,6 +498,12 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.net.shot_correction_seconds = net.number("shot_correction_seconds");
     tuning.net.remote_trail_fade_seconds = net.number("remote_trail_fade_seconds");
     tuning.net.notice_seconds = net.number("notice_seconds");
+    tuning.net.tee_book_refresh_seconds = net.number("tee_book_refresh_seconds");
+    tuning.net.tee_book_list_timeout_seconds = net.number("tee_book_list_timeout_seconds");
+    for (const auto& [name, value] : {std::pair<const char*, float>{"net.tee_book_refresh_seconds (positive)", tuning.net.tee_book_refresh_seconds},
+                                      {"net.tee_book_list_timeout_seconds (positive)", tuning.net.tee_book_list_timeout_seconds}}) {
+        if (!(value > 0.0f) || !std::isfinite(value)) { missing.push_back(name); }
+    }
     tuning.net.ride_motion_interval_seconds = net.number("ride_motion_interval_seconds");
     tuning.net.ride_correction_seconds = net.number("ride_correction_seconds");
 
@@ -559,10 +567,12 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.way_sign.behind_spread = way_sign.number("behind_spread");
     tuning.way_sign.tee_clearance = way_sign.number("tee_clearance");
     tuning.way_sign.path_offset = way_sign.number("path_offset");
-    tuning.way_sign.junction_lead = way_sign.number("junction_lead");
-    tuning.way_sign.board_width = way_sign.number("board_width");
+    tuning.way_sign.board_length = way_sign.number("board_length");
+    tuning.way_sign.digit_length = way_sign.number("digit_length");
+    tuning.way_sign.space_length = way_sign.number("space_length");
     tuning.way_sign.board_height = way_sign.number("board_height");
     tuning.way_sign.board_thickness = way_sign.number("board_thickness");
+    tuning.way_sign.board_gap = way_sign.number("board_gap");
     tuning.way_sign.board_lift = way_sign.number("board_lift");
     tuning.way_sign.post_radius = way_sign.number("post_radius");
 
@@ -608,6 +618,8 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
 
     const section_reader trees = section("trees");
     tuning.trees.bare_crown_density = trees.number("bare_crown_density");
+    tuning.trees.withered_left_at_leaf_out = trees.number("withered_left_at_leaf_out");
+    tuning.trees.summer_leaf_fall_per_day = trees.number("summer_leaf_fall_per_day");
     const json* species = trees.section != nullptr ? json_array(*trees.section, "species") : nullptr;
     for (std::size_t i = 0; species != nullptr && i < species->size(); ++i) {
         const json& entry = (*species)[i];
@@ -619,6 +631,7 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
         kind.full_leaf_day = of.number("full_leaf_day");
         kind.turned_day = of.number("turned_day");
         kind.bare_day = of.number("bare_day");
+        kind.withered_share = of.number("withered_share");
         if (kind.name.empty() || species_index(tuning.trees, kind.name)) {
             missing.push_back("trees.species[" + std::to_string(i) + "].name");
         }

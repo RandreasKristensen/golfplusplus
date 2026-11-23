@@ -3,9 +3,13 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
+#include <tuple>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+
+#include <glm/common.hpp>
 
 namespace {
 using cell_key = std::int64_t;
@@ -119,47 +123,87 @@ private:
 };
 }
 
+void index_render_water(render_water& water) {
+    const std::size_t count = water.triangles.size() / 3;
+    struct entry {
+        float level;
+        std::int64_t column;
+        std::int64_t row;
+        std::size_t triangle;
+    };
+    std::vector<entry> order;
+    order.reserve(count);
+    for (std::size_t t = 0; t < count; ++t) {
+        const glm::vec3& a = water.triangles[3 * t].position;
+        const glm::vec3& b = water.triangles[3 * t + 1].position;
+        const glm::vec3& c = water.triangles[3 * t + 2].position;
+        const glm::vec3 centre = (a + b + c) / 3.0f;
+        order.push_back({a.y, static_cast<std::int64_t>(std::floor(centre.x / water_cluster_cell_meters)),
+                         static_cast<std::int64_t>(std::floor(centre.z / water_cluster_cell_meters)), t});
+    }
+    std::sort(order.begin(), order.end(), [](const entry& l, const entry& r) {
+        return std::tie(l.level, l.column, l.row, l.triangle) < std::tie(r.level, r.column, r.row, r.triangle);
+    });
+    std::vector<render_water_vertex> sorted;
+    sorted.reserve(water.triangles.size());
+    water.levels.clear();
+    water.clusters.clear();
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        const entry& e = order[i];
+        const bool new_level = i == 0 || order[i - 1].level != e.level;
+        const bool new_cluster = new_level || order[i - 1].column != e.column || order[i - 1].row != e.row;
+        glm::vec3 low(std::numeric_limits<float>::max());
+        glm::vec3 high(std::numeric_limits<float>::lowest());
+        for (std::size_t k = 0; k < 3; ++k) {
+            const render_water_vertex& vertex = water.triangles[3 * e.triangle + k];
+            sorted.push_back(vertex);
+            low = glm::min(low, vertex.position);
+            high = glm::max(high, vertex.position);
+        }
+        const int first = static_cast<int>(sorted.size()) - 3;
+        if (new_level) {
+            water.levels.push_back({e.level, first, 0, static_cast<int>(water.clusters.size()), 0, low, high});
+        }
+        if (new_cluster) {
+            water.clusters.push_back({first, 0, low, high});
+            ++water.levels.back().cluster_count;
+        }
+        water_level_range& level = water.levels.back();
+        water_cluster& cluster = water.clusters.back();
+        level.vertex_count += 3;
+        level.min = glm::min(level.min, low);
+        level.max = glm::max(level.max, high);
+        cluster.vertex_count += 3;
+        cluster.min = glm::min(cluster.min, low);
+        cluster.max = glm::max(cluster.max, high);
+    }
+    water.triangles = std::move(sorted);
+}
+
 render_water build_render_water(const play_area& area, const std::uint64_t revision) {
     render_water water;
     water.revision = revision;
-    const std::vector<terrain_vertex>& vertices = area.ground.vertices;
-    const std::vector<std::uint32_t>& indices = area.ground.indices;
+    const std::vector<terrain_vertex>& vertices = area.material_overlay.vertices;
+    const std::vector<std::uint32_t>& indices = area.material_overlay.indices;
     for (std::size_t i = 0; i + 2 < indices.size(); i += 3) {
-        // The pond of the triangle's first corner on water.
-        std::optional<float> level;
-        for (std::size_t k = 0; k < 3 && !level; ++k) {
-            const terrain_vertex& corner = vertices[indices[i + k]];
-            if (corner.material == terrain_material::water) {
-                level = water_level_at(area, corner.position);
-            }
+        const std::array<glm::vec3, 3> corners = {vertices[indices[i]].position, vertices[indices[i + 1]].position,
+                                                  vertices[indices[i + 2]].position};
+        if (vertices[indices[i]].material != terrain_material::water) {
+            continue;
         }
+        // The piece lies inside its pond's outline, so its middle finds the pond.
+        const std::optional<float> level = water_level_at(area, (corners[0] + corners[1] + corners[2]) / 3.0f);
         if (!level) {
             continue;
         }
-        // The part of the triangle whose ground lies below the level, so the
-        // surface ends where the water meets the bank.
-        std::array<glm::vec3, 4> wet{};
-        std::size_t count = 0;
-        for (std::size_t k = 0; k < 3; ++k) {
-            const glm::vec3& a = vertices[indices[i + k]].position;
-            const glm::vec3& b = vertices[indices[i + (k + 1) % 3]].position;
-            const bool a_wet = a.y < *level;
-            if (a_wet) {
-                wet[count++] = a;
-            }
-            if (a_wet != (b.y < *level)) {
-                wet[count++] = a + (b - a) * ((*level - a.y) / (b.y - a.y));
-            }
-        }
-        for (std::size_t k = 1; k + 1 < count; ++k) {
-            for (glm::vec3 point : {wet[0], wet[k], wet[k + 1]}) {
-                point.y = *level;
-                render_water_vertex vertex;
-                vertex.position = point;
-                water.triangles.push_back(vertex);
-            }
+        for (glm::vec3 point : corners) {
+            point.y = *level;
+            render_water_vertex vertex;
+            vertex.position = point;
+            water.triangles.push_back(vertex);
         }
     }
+    index_render_water(water);
     fetch_grid grid(water_cells(water.triangles));
     for (render_water_vertex& vertex : water.triangles) {
         for (int direction = 0; direction < water_fetch_directions; ++direction) {

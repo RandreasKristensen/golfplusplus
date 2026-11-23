@@ -9,9 +9,12 @@
 bool renderer::set_look(const std::string& asset_root, const look& next, const look_changes& changes) {
     picture_style_ = next.picture;
     colors_ = next.lighting.colors;
+    ++looks_revision_;
     water_style_ = next.lighting.water;
     grass_style_ = next.lighting.grass;
-    bool ok = tree_renderer_.set_looks(next.lighting.trees);
+    terrain_lod_style_ = next.lighting.terrain_lod;
+    bool ok = tree_renderer_.set_looks(next.lighting.trees, next.lighting.tree_impostor);
+    tree_renderer_.set_falling_leaves(next.lighting.falling_leaves);
     const lighting_palette& palette = next.lighting;
     const auto path = [&asset_root](const char* name) { return shader_path(asset_root, name); };
     if (changes.picture) {

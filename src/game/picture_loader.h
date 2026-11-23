@@ -8,6 +8,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <glm/vec3.hpp>
 
@@ -52,7 +53,7 @@ struct tape_style {
 
 // The small TV it plays on (crt.frag, renderer/tv_pass.h).
 struct tv_style {
-    float horizontal_blur = 0.0f;   // in scene pixels: the beam is soft sideways
+    float horizontal_blur = 0.0f;   // in UI pixels: the beam is soft sideways
     float scanline_depth = 0.0f;    // the dark gap under each line, at full strength
     float scanline_gap = 0.0f;      // of each line's height
     int scanline_full_factor = 0;   // window rows per line where the depth is full; none at 1
@@ -102,9 +103,13 @@ struct camcorder_style {
 };
 
 struct picture_style {
-    // About how many lines the scene has: each line is a whole number of
-    // window rows, and the width follows the window.
-    int target_lines = 0;
+    // The HUD, text, grain and the TV's beam are sized for a picture this many
+    // lines high (renderer/picture_size.h's UI pixel).
+    int ui_lines = 0;
+    // The scene resolution presets, fewest lines first, the first the default:
+    // about how many lines each has, each a whole number of window rows, the
+    // width following the window.
+    std::vector<int> scene_lines;
     camcorder_style camcorder;
     tape_style tape;
     tv_style tv;

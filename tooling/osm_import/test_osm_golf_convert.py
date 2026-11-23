@@ -1290,17 +1290,43 @@ class WorldBoxTests(unittest.TestCase):
         self.assertAlmostEqual(width, box[2] - box[0], places=3)
         self.assertAlmostEqual(depth, box[3] - box[1], places=3)
 
+    # Holes as wide and tall as the paper's drawable part, so the map is not turned.
+    DRAWABLE_WIDTH = (ground.MAP_PAPER_ASPECT - ground.MAP_MARGIN_SHARE) * 1000.0
+    DRAWABLE_DEPTH = (1.0 - ground.MAP_MARGIN_SHARE) * 1000.0
+
     def test_the_box_is_the_maps_paper_round_the_holes_and_the_margin(self):
-        # 1000 m across, 100 m deep: the map is not turned, and its paper
-        # (3:2, its margin a tenth) is 1100 m across and 733 m deep.
-        box = ground.world_box([(0.0, 0.0), (1000.0, 0.0), (0.0, 100.0), (1000.0, 100.0)], 50.0)
-        depth = 1100.0 / ground.MAP_PAPER_ASPECT
-        self.assert_box(box, -100.0, 50.0 - depth * 0.5 - 50.0, 1200.0, depth + 100.0)
+        wide, deep = self.DRAWABLE_WIDTH, self.DRAWABLE_DEPTH
+        box = ground.world_box([(0.0, 0.0), (wide, 0.0), (0.0, deep), (wide, deep)], 50.0)
+        paper = max(wide, deep * ground.MAP_PAPER_ASPECT) * ground.MAP_PAPER_SLACK
+        self.assert_box(box, wide * 0.5 - paper * 0.5 - 50.0, deep * 0.5 - paper / ground.MAP_PAPER_ASPECT * 0.5 - 50.0,
+                        paper + 100.0, paper / ground.MAP_PAPER_ASPECT + 100.0)
 
     def test_a_course_longer_north_to_south_is_turned_across_the_paper(self):
-        box = ground.world_box([(0.0, 0.0), (0.0, 1000.0), (100.0, 0.0), (100.0, 1000.0)], 50.0)
-        width = 1100.0 / ground.MAP_PAPER_ASPECT
-        self.assert_box(box, 50.0 - width * 0.5 - 50.0, -100.0, width + 100.0, 1200.0)
+        wide, deep = self.DRAWABLE_WIDTH, self.DRAWABLE_DEPTH
+        box = ground.world_box([(0.0, 0.0), (0.0, wide), (deep, 0.0), (deep, wide)], 50.0)
+        paper = max(wide, deep * ground.MAP_PAPER_ASPECT) * ground.MAP_PAPER_SLACK
+        self.assert_box(box, deep * 0.5 - paper / ground.MAP_PAPER_ASPECT * 0.5 - 50.0, wide * 0.5 - paper * 0.5 - 50.0,
+                        paper / ground.MAP_PAPER_ASPECT + 100.0, paper + 100.0)
+
+
+class MapTurnTests(unittest.TestCase):
+    # The same points and angle as map_turn's test in tests/course_map_tests.cpp.
+    POINTS = [(0, 0), (900, 500), (1400, 1200), (400, 200), (1000, 0), (100, 600), (1250, 900), (-200, 350),
+              (700, 820), (1500, 1000)]
+
+    def test_the_turn_is_the_angle_of_the_largest_scale_as_the_game_chooses_it(self):
+        self.assertAlmostEqual(6.9, ground.map_turn_degrees(self.POINTS), places=6)
+        cosine, sine = ground.map_turn(self.POINTS)
+        self.assertAlmostEqual(6.9, math.degrees(math.atan2(sine, cosine)), places=6)
+
+    def test_the_chosen_scale_is_at_least_that_of_every_whole_degree(self):
+        chosen = ground.map_fit_scale(self.POINTS, ground.map_turn_degrees(self.POINTS))
+        for degrees in range(-89, 91):
+            self.assertGreaterEqual(chosen, ground.map_fit_scale(self.POINTS, degrees))
+
+    def test_equal_scales_go_to_the_smaller_turn(self):
+        square = [(0, 0), (100, 0), (0, 100), (100, 100)]
+        self.assertEqual(0.0, ground.map_turn_degrees(square))
 
 
 class SlugTests(unittest.TestCase):

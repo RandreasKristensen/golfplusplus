@@ -123,6 +123,8 @@ inline constexpr bounded_field<shadow_style> shadow_fields[] = {
     {"map_strength", &shadow_style::map_strength, 0.0f, 1.0f},
     {"map_softness", &shadow_style::map_softness, 0.0f, 8.0f},
     {"map_edge_fade", &shadow_style::map_edge_fade, 0.01f, 1.0f},
+    {"map_pose_texels", &shadow_style::map_pose_texels, 0.0f, 4.0f},
+    {"map_sun_degrees", &shadow_style::map_sun_degrees, 0.0f, 5.0f},
 };
 
 inline constexpr int min_shadow_map_resolution = 64;
@@ -167,15 +169,27 @@ inline constexpr bounded_field<water_style> water_fields[] = {
     {"wobble_height_share", &water_style::wobble_height_share, 0.0f, 0.05f},
 };
 
+inline constexpr bounded_field<terrain_lod_style> terrain_lod_fields[] = {
+    {"finest_error_meters", &terrain_lod_style::finest_error_meters, 0.001f, 10.0f},
+    {"error_ratio", &terrain_lod_style::error_ratio, 1.1f, 16.0f},
+    {"attribute_error", &terrain_lod_style::attribute_error, 0.0f, 1.0f},
+    {"mirror_max_error_pixels", &terrain_lod_style::mirror_max_error_pixels, 0.0f, 8.0f},
+};
+
 inline constexpr bounded_field<grass_style> grass_fields[] = {
-    {"stripe_fairway_meters", &grass_style::stripe_fairway_meters, 0.1f, 20.0f},
-    {"stripe_green_meters", &grass_style::stripe_green_meters, 0.1f, 20.0f},
-    {"stripe_shade", &grass_style::stripe_shade, 0.0f, 1.0f},
+    {"fibre_fairway_meters", &grass_style::fibre_fairway_meters, 0.005f, 1.0f},
+    {"fibre_fairway_shade", &grass_style::fibre_fairway_shade, 0.0f, 0.5f},
+    {"fibre_fairway_slope", &grass_style::fibre_fairway_slope, 0.0f, 1.0f},
+    {"fibre_green_meters", &grass_style::fibre_green_meters, 0.005f, 1.0f},
+    {"fibre_green_shade", &grass_style::fibre_green_shade, 0.0f, 0.5f},
+    {"fibre_green_slope", &grass_style::fibre_green_slope, 0.0f, 1.0f},
+    {"lamp_light_cap", &grass_style::lamp_light_cap, 0.1f, 4.0f},
     {"patch_meters", &grass_style::patch_meters, 0.1f, 100.0f},
     {"patch_share", &grass_style::patch_share, 0.0f, 1.0f},
     {"tuft_spacing_meters", &grass_style::tuft_spacing_meters, 0.05f, 2.0f},
     {"blade_height_meters", &grass_style::blade_height_meters, 0.0f, 2.0f},
     {"blade_width_meters", &grass_style::blade_width_meters, 0.001f, 0.2f},
+    {"blade_min_pixels", &grass_style::blade_min_pixels, 0.0f, 4.0f},
     {"reach_meters", &grass_style::reach_meters, 1.0f, 100.0f},
     {"blade_sway", &grass_style::blade_sway, 0.0f, 1.0f},
     {"base_shade", &grass_style::base_shade, 0.0f, 4.0f},
@@ -322,6 +336,34 @@ inline constexpr color_field<ground_colors> ground_fields[] = {
     {"backdrop", &ground_colors::backdrop},
     {"pond_bed", &ground_colors::pond_bed},
     {"cart_path", &ground_colors::cart_path},
+};
+
+inline constexpr color_field<map_inks> map_ink_fields[] = {
+    {"paper", &map_inks::paper},
+    {"paper_shadow", &map_inks::paper_shadow},
+    {"fold", &map_inks::fold},
+    {"fairway", &map_inks::fairway},
+    {"rough", &map_inks::rough},
+    {"heavy_rough", &map_inks::heavy_rough},
+    {"green", &map_inks::green},
+    {"bunker", &map_inks::bunker},
+    {"water", &map_inks::water},
+    {"tree", &map_inks::tree},
+    {"tree_shadow", &map_inks::tree_shadow},
+    {"tree_outline", &map_inks::tree_outline},
+    {"tee", &map_inks::tee},
+    {"cart_path", &map_inks::cart_path},
+    {"fence", &map_inks::fence},
+    {"flagstick", &map_inks::flagstick},
+    {"flag", &map_inks::flag},
+    {"marker_outline", &map_inks::marker_outline},
+    {"ball", &map_inks::ball},
+    {"player", &map_inks::player},
+    {"bag", &map_inks::bag},
+};
+
+inline constexpr share_field<map_inks> map_share_fields[] = {
+    {"other_hole_fade", &map_inks::other_hole_fade},
 };
 
 inline constexpr color_field<marker_colors> marker_fields[] = {

@@ -57,8 +57,8 @@ void tick(tee_book_state& menu, game_state& game, const input_state& input = {})
 }
 void list_ready(tee_book_state& menu, game_state& game) {
     game.hub_flow.screen = hub_screen::book; tick(menu, game); tick(menu, game, accept());
-    REQUIRE(menu.pending == net_command_type::open_tee_book);
-    game.online.book_ready = true; game.online.book_course_id = "course";
+    REQUIRE(menu.list.phase == list_phase::loading);
+    game.online.book_ready = true; game.online.book_live = true; game.online.book_course_id = "course"; ++game.online.book_answers;
     for (int i = 0; i < 96; ++i) {
         tee_slot_info slot; slot.course_id = "course"; slot.scheduled_at = (105 + i*15) * minute;
         slot.booked_count = 3; game.online.tee_slots[static_cast<std::uint64_t>(i+1)] = slot;
@@ -90,13 +90,6 @@ TEST_CASE("hub F anchors match reachable models and physical collision, offline 
     play_area area = game.area; area.props.clear();
     const auto count = area.solids.size(); place_hub_scene(area, game.world, test_props(), game.tuning);
     REQUIRE(area.props.size() == 2); CHECK(area.solids.size() == count+2);
-    prop_batch cached, shadows;
-    append_world_props(cached, area.props, test_props(), test_scene_colors().glow);
-    world_marker_batch figures; render_data frame;
-    build_shadow_casters(figures, shadows, frame, test_scene_colors(), test_props(), test_shadow_map(0.2f), &cached);
-    REQUIRE(shadows.opaque().size() == cached.opaque().size());
-    CHECK(shadows.opaque().front().position == cached.opaque().front().position);
-    CHECK(shadows.opaque().back().position == cached.opaque().back().position);
     const auto& book = test_props().at("tee_book");
     CHECK(near(area.props[0].position + book.point("approach"), anchor_on_terrain(game.area, game.world.hub->book.position)));
     const auto& bus = test_props().at("hub_bus");
@@ -176,7 +169,7 @@ TEST_CASE("offline tee book chooses PLAY NOW and both buses preserve solo progre
     // The course's card: its time of day there, then its season.
     CHECK(page.screen == startup_menu_screen::course_book);
     CHECK(page.tiles.back().subtitle.find(" - ") != std::string::npos);
-    menu.selection = 1;
+    menu.selection = 1; menu.selected_time = 0;
     update_tee_book(menu, game, catalog, accept(), {}, {});
     REQUIRE(active_booking(game));
     CHECK(active_booking(game)->course_id == fixture_hub_course().id);
@@ -277,8 +270,12 @@ TEST_CASE("bus and tee book boards: labelled by booking and place, read left to 
     CHECK(scene_signs.revision == 2U);
     CHECK(scene_signs.signs.back().face.pixels != unbooked_face.pixels);
     game.kind = place_kind::course;
-    // No hole sign texts were given: the way signs come first, then the boards.
-    REQUIRE(signs.signs.size() == game.area.way_signs.size() + 2);
+    // No hole sign texts were given: the way boards come first, then the boards.
+    std::size_t way_boards = 0;
+    for (const way_sign& sign : game.area.way_signs) {
+        way_boards += sign.boards.size();
+    }
+    REQUIRE(signs.signs.size() == way_boards + 2);
     const std::size_t first_board = signs.signs.size() - 2;
     // The book's title faces its reader at the approach.
     CHECK(glm::dot(boards[0].normal, horizontal(game.world.hub->book.position - boards[0].center)) > 0);
@@ -367,7 +364,7 @@ TEST_CASE("every shipped course's card fits its text at every aspect, and an ove
     const auto& text = shipped_text_assets();
     startup_catalog catalog = *load_startup_catalog(shipped_content(), text).catalog;
     REQUIRE(catalog.courses.size() >= 4);
-    const int lines = load_picture_style(asset_root())->target_lines;
+    const picture_style picture = *load_picture_style(asset_root());
     game.hub_flow.screen = hub_screen::book;
     for (const bool long_name : {false, true}) {
         if (long_name) { catalog.courses[0].course.name = std::string(80, 'W'); }
@@ -378,13 +375,15 @@ TEST_CASE("every shipped course's card fits its text at every aspect, and an ove
             const auto page = render_tee_book(menu, game, catalog, text);
             bool shows_long_name = false;
             for (const auto& tile : page.tiles) { shows_long_name = shows_long_name || tile.title == std::string(80, 'W'); }
-            for (const auto& [width, height] : std::vector<std::pair<int, int>>{{1440, 1080}, {1920, 1080}, {2560, 1080}}) {
-                const picture_size size = picture_size_for_window(width, height, lines);
-                overlay_batch batch;
-                batch.grid = overlay_grid{size.width, size.height};
-                draw_startup_menu(batch, text, page, test_scene_colors().ground);
-                // Only an overlong name is ever cut, and it is.
-                CHECK((batch.truncated_text_count > 0U) == shows_long_name);
+            for (const int lines : picture.scene_lines) {
+                for (const auto& [width, height] : std::vector<std::pair<int, int>>{{1440, 1080}, {1920, 1080}, {2560, 1080}}) {
+                    const picture_size size = picture_size_for_window(width, height, lines, picture.ui_lines);
+                    overlay_batch batch;
+                    batch.grid = overlay_grid{size.ui_width, size.ui_height};
+                    draw_startup_menu(batch, text, page, test_scene_colors().ground);
+                    // Only an overlong name is ever cut, and it is.
+                    CHECK((batch.truncated_text_count > 0U) == shows_long_name);
+                }
             }
         }
     }
@@ -417,12 +416,12 @@ TEST_CASE("the book lists today's times, then tomorrow's under their headings, a
         if (!tile.heading) { CHECK(tile.title.find("TOMORROW") == std::string::npos); }
     }
     // Arrows and Enter pass over a heading: up from the time after it lands on the one before.
-    menu.selection = 19;
+    menu.selection = 19; menu.selected_time = 0;
     input_state up; up.up.pressed = true;
     tick(menu, game, up);
     CHECK(menu.selection == 16);
     input_state left; left.left.pressed = true;
-    menu.selection = 19; tick(menu, game, left);
+    menu.selection = 19; menu.selected_time = 0; tick(menu, game, left);
     CHECK(menu.selection == 17);
 }
 
@@ -500,7 +499,7 @@ TEST_CASE("the tee book offers cart or carry with the time, and changing it book
     CHECK(page.tiles[1].title == "TRANSPORT: TAKE A CART");
     CHECK(page.tiles[1].subtitle == "ENTER TO CHANGE");
     // A time books with the choice: the cart, as nothing was changed.
-    menu.selection = 2; game.net_commands.clear();
+    menu.selection = 2; menu.selected_time = 0; game.net_commands.clear();
     tick(menu, game, accept());
     REQUIRE(menu.pending == net_command_type::book_tee);
     const auto* booked = last_command(game, net_command_type::book_tee);
@@ -514,7 +513,7 @@ TEST_CASE("the tee book offers cart or carry with the time, and changing it book
     // With a booking the row's choice is shown; changing it sends the same time again, the other way.
     page = render_tee_book(menu, game, courses(), text);
     CHECK(page.tiles[2].title == "TRANSPORT: TAKE A CART");
-    menu.selection = 2; game.net_commands.clear();
+    menu.selection = 2; menu.selected_time = 0; game.net_commands.clear();
     tick(menu, game, accept());
     REQUIRE(menu.pending == net_command_type::book_tee);
     booked = last_command(game, net_command_type::book_tee);
@@ -539,11 +538,11 @@ TEST_CASE("the tee book offers cart or carry with the time, and changing it book
 
 TEST_CASE("before a booking the choice is only picked, and the next time booked takes it; a course without carts offers only carry") {
     auto game = hub_game(); tee_book_state menu; list_ready(menu, game);
-    menu.selection = 1; game.net_commands.clear();
+    menu.selection = 1; menu.selected_time = 0; game.net_commands.clear();
     tick(menu, game, accept());
     CHECK(!menu.pending); CHECK(game.net_commands.empty()); CHECK(!menu.takes_cart);
     CHECK(render_tee_book(menu, game, courses(), shipped_text_assets()).tiles[1].title == "TRANSPORT: CARRY YOUR BAG");
-    menu.selection = 4; tick(menu, game, accept());  // past TODAY, to the second time
+    menu.selection = 4; menu.selected_time = 0; tick(menu, game, accept());  // past TODAY, to the second time
     const auto* booked = last_command(game, net_command_type::book_tee);
     REQUIRE(booked); CHECK(!booked->takes_cart); CHECK(booked->scheduled_at == 120 * minute);
 
@@ -552,15 +551,15 @@ TEST_CASE("before a booking the choice is only picked, and the next time booked 
     const auto walkers = carts_and_carry();
     walking.hub_flow.screen = hub_screen::book;
     update_tee_book(walkers_menu, walking, walkers, {}, {}, {});
-    walkers_menu.selection = 1;
+    walkers_menu.selection = 1; walkers_menu.selected_time = 0;
     update_tee_book(walkers_menu, walking, walkers, accept(), {}, {});
-    REQUIRE(walkers_menu.pending == net_command_type::open_tee_book);
-    walking.online.book_ready = true; walking.online.book_course_id = "walkers";
+    REQUIRE(walkers_menu.list.phase == list_phase::loading);
+    walking.online.book_ready = true; walking.online.book_live = true; walking.online.book_course_id = "walkers"; ++walking.online.book_answers;
     update_tee_book(walkers_menu, walking, walkers, {}, {}, {});
     const auto page = render_tee_book(walkers_menu, walking, walkers, shipped_text_assets());
     REQUIRE(page.tiles.size() > 2);
     for (const auto& tile : page.tiles) { CHECK(tile.title.rfind("TRANSPORT", 0) != 0); }
-    walkers_menu.selection = 1; walking.net_commands.clear();
+    walkers_menu.selection = 1; walkers_menu.selected_time = 0; walking.net_commands.clear();
     update_tee_book(walkers_menu, walking, walkers, accept(), {}, {});
     booked = last_command(walking, net_command_type::book_tee);
     REQUIRE(booked); CHECK(!booked->takes_cart); CHECK(booked->course_id == "walkers");
@@ -581,13 +580,13 @@ TEST_CASE("offline PLAY NOW takes the same choice: cart or carry, carry on a cou
     CHECK(page.tiles[0].title == "TRANSPORT: TAKE A CART");
     CHECK(page.tiles[1].subtitle.find("CARRY ONLY") == std::string::npos);
     // PLAY NOW with the cart.
-    menu.selection = 1;
+    menu.selection = 1; menu.selected_time = 0;
     update_tee_book(menu, game, catalog, accept(), {}, {});
     REQUIRE(active_booking(game)); CHECK(active_booking(game)->takes_cart);
     update_tee_book(menu, game, catalog, {}, {}, {});
     CHECK(!menu.pending);
     // With a booking the choice changes it: the same course booked again, as carry.
-    menu.selection = 0;
+    menu.selection = 0; menu.selected_time = 0;
     update_tee_book(menu, game, catalog, accept(), {}, {});
     REQUIRE(active_booking(game)); CHECK(active_booking(game)->course_id == id); CHECK(!active_booking(game)->takes_cart);
     update_tee_book(menu, game, catalog, {}, {}, {});
@@ -620,7 +619,7 @@ TEST_CASE("offline PLAY NOW takes the same choice: cart or carry, carry on a cou
     walking.hub_flow.screen = hub_screen::book;
     update_tee_book(walkers_menu, walking, walkers, {}, {}, {});
     CHECK(render_tee_book(walkers_menu, walking, walkers, text).tiles[1].subtitle.find("CARRY ONLY") != std::string::npos);
-    walkers_menu.selection = 1;
+    walkers_menu.selection = 1; walkers_menu.selected_time = 0;
     update_tee_book(walkers_menu, walking, walkers, accept(), {}, {});
     REQUIRE(active_booking(walking)); CHECK(!active_booking(walking)->takes_cart);
 }
@@ -655,4 +654,230 @@ TEST_CASE("F at the hub's bus boards it with no menu; without a booking it says 
     update_game(course, press, 0.016f);
     CHECK(course.hub_flow.screen == hub_screen::bus);
     CHECK(course.hub_flow.travel_course.empty());
+}
+
+namespace {
+// The book on its course page with the list request sent and not yet answered.
+void course_page(tee_book_state& menu, game_state& game) {
+    game.hub_flow.screen = hub_screen::book; game.net_commands.clear();
+    tick(menu, game); tick(menu, game, accept());
+    REQUIRE(menu.list.phase == list_phase::loading);
+    REQUIRE(last_command(game, net_command_type::open_tee_book));
+}
+// The server answers the request: counts for `course`, followed live.
+void answer(game_state& game, const char* course, const int count) {
+    game.online.book_ready = true; game.online.book_live = true; game.online.book_course_id = course; ++game.online.book_answers;
+    game.online.tee_slots.clear();
+    tee_slot_info slot; slot.course_id = course; slot.scheduled_at = 105 * minute; slot.booked_count = count;
+    game.online.tee_slots[1] = slot;
+}
+std::vector<render_startup_tile> slot_tiles(const render_startup_menu& page) {
+    std::vector<render_startup_tile> found;
+    for (const auto& tile : page.tiles) { if (!tile.heading && tile.title.find("TRANSPORT") == std::string::npos && tile.title != "CHOOSE COURSE") { found.push_back(tile); } }
+    return found;
+}
+}
+
+TEST_CASE("the book shows the course times on its first frame; unknown counts say so, never zero") {
+    auto game = hub_game(); tee_book_state menu; const auto& text = shipped_text_assets();
+    course_page(menu, game);
+    const auto page = render_tee_book(menu, game, courses(), text);
+    REQUIRE(page.screen == startup_menu_screen::tee_book);
+    const auto times = tee_times(game.online.server_now, game.tuning.server, tee_book_clock(game));
+    REQUIRE(!times.empty());
+    const auto tiles = slot_tiles(page);
+    REQUIRE(!tiles.empty());
+    CHECK(tiles.front().title == tee_clock_text(times.front(), game, text));
+    for (const auto& tile : tiles) {
+        CHECK(tile.subtitle.find("?/5") == 0);
+        CHECK(tile.subtitle.find("0/5") == std::string::npos);
+    }
+    // Checking is neutral progress, never an error, and does not stop browsing.
+    CHECK(page.message == "Checking bookings...");
+    CHECK(page.severity == message_severity::status);
+    input_state down; down.down.pressed = true;
+    const int before = menu.selection;
+    tick(menu, game, down);
+    CHECK(menu.selection != before);
+    CHECK(menu.list.phase == list_phase::loading);
+}
+
+TEST_CASE("an answer fills the counts; a refresh keeps them, marked as updating, and never blanks the rows") {
+    auto game = hub_game(); tee_book_state menu; const auto& text = shipped_text_assets();
+    course_page(menu, game);
+    answer(game, "course", 3);
+    tick(menu, game);
+    CHECK(menu.list.phase == list_phase::idle);
+    auto tiles = slot_tiles(render_tee_book(menu, game, courses(), text));
+    REQUIRE(!tiles.empty());
+    CHECK(tiles.front().subtitle.find("3/5 booked") == 0);
+    CHECK(tiles.front().subtitle.find("updating") == std::string::npos);
+    // R refreshes: rows stay, the selection stays on its time, the counts show as updating.
+    menu.selection = 5; menu.selected_time = 0; tick(menu, game);
+    const std::int64_t chosen = menu.selected_time;
+    CHECK(chosen != 0);
+    game.net_commands.clear();
+    input_state r; r.key_r.pressed = true;
+    tick(menu, game, r);
+    CHECK(menu.list.phase == list_phase::loading);
+    REQUIRE(last_command(game, net_command_type::open_tee_book));
+    tiles = slot_tiles(render_tee_book(menu, game, courses(), text));
+    REQUIRE(!tiles.empty());
+    CHECK(tiles.front().subtitle.find("3/5 booked, updating") == 0);
+    CHECK(menu.selected_time == chosen);
+    // Single flight: R again sends nothing.
+    game.net_commands.clear(); tick(menu, game, r);
+    CHECK(game.net_commands.empty());
+    // A live count change shows during the refresh.
+    answer(game, "course", 4); --game.online.book_answers;
+    CHECK(slot_tiles(render_tee_book(menu, game, courses(), text)).front().subtitle.find("4/5 booked") == 0);
+    // The answer ends the refresh and confirms the counts.
+    ++game.online.book_answers; tick(menu, game);
+    CHECK(menu.list.phase == list_phase::idle);
+    CHECK(slot_tiles(render_tee_book(menu, game, courses(), text)).front().subtitle.find("4/5 booked") == 0);
+    CHECK(slot_tiles(render_tee_book(menu, game, courses(), text)).front().subtitle.find("updating") == std::string::npos);
+    // Counts the server no longer follows are old, not confirmed.
+    game.online.book_live = false;
+    CHECK(slot_tiles(render_tee_book(menu, game, courses(), text)).front().subtitle.find("last seen") != std::string::npos);
+}
+
+TEST_CASE("the selection follows its time as the clock moves, across the day change") {
+    auto game = hub_game(); tee_book_state menu;
+    set_hub_clock(game, (15 * 60 + 50) * minute);
+    course_page(menu, game);
+    answer(game, "course", 1); tick(menu, game);
+    const auto at = [](const int h, const int m) { return (h * 60 + m) * minute; };
+    menu.selection = 6; menu.selected_time = 0; tick(menu, game);
+    const std::int64_t time = menu.selected_time;
+    REQUIRE(time != 0);
+    // Times pass: the list moves up, the same time stays selected.
+    game.online.server_now = at(16, 40);
+    tick(menu, game);
+    CHECK(menu.selected_time == time);
+    // The chosen time passes: the earliest still listed takes over.
+    game.online.server_now = time + minute;
+    tick(menu, game);
+    CHECK(menu.selected_time > time);
+    // Across the hub midnight the headings change, and the selection still lands on a time.
+    game.online.server_now = at(23, 50);
+    tick(menu, game);
+    CHECK(menu.selected_time > at(23, 50));
+}
+
+TEST_CASE("an empty course confirmed shows 0, where an unanswered one shows a question mark") {
+    auto game = hub_game(); tee_book_state menu;
+    course_page(menu, game);
+    game.online.book_ready = true; game.online.book_live = true; game.online.book_course_id = "course"; ++game.online.book_answers;
+    tick(menu, game);
+    const auto tiles = slot_tiles(render_tee_book(menu, game, courses(), shipped_text_assets()));
+    REQUIRE(!tiles.empty());
+    for (const auto& tile : tiles) { CHECK(tile.subtitle.find("0/5 booked") == 0); }
+}
+
+TEST_CASE("a full slot is refused locally only on confirmed counts; unconfirmed counts leave it to the server") {
+    auto game = hub_game(); tee_book_state menu;
+    course_page(menu, game);
+    answer(game, "course", game.tuning.server.group_capacity); tick(menu, game);
+    menu.selection = 2; menu.selected_time = 0; tick(menu, game); game.net_commands.clear();
+    REQUIRE(menu.selected_time == 105 * minute);
+    tick(menu, game, accept());
+    CHECK(menu.message == text_hub_slot_full); CHECK(menu.severity == message_severity::error);
+    CHECK(!menu.pending); CHECK(!last_command(game, net_command_type::book_tee));
+    // Refreshing: the count is not confirmed now, so the server decides.
+    input_state r; r.key_r.pressed = true; tick(menu, game, r);
+    REQUIRE(menu.list.phase == list_phase::loading);
+    tick(menu, game, accept());
+    CHECK(menu.pending == net_command_type::book_tee);
+    CHECK(last_command(game, net_command_type::book_tee));
+}
+
+TEST_CASE("rapid course changes: the latest request is the one waited for, and backing out works meanwhile") {
+    auto game = hub_game(); tee_book_state menu; auto catalog = carts_and_carry();
+    game.hub_flow.screen = hub_screen::book; game.net_commands.clear();
+    update_tee_book(menu, game, catalog, {}, {}, {});
+    menu.selection = 0; update_tee_book(menu, game, catalog, accept(), {}, {});
+    CHECK(menu.course == "course");
+    // Back out to the courses and pick the other, while the first is unanswered.
+    menu.selection = 0; menu.selected_time = 0; update_tee_book(menu, game, catalog, accept(), {}, {});
+    CHECK(menu.course.empty()); CHECK(menu.list.phase == list_phase::idle);
+    menu.selection = 1; update_tee_book(menu, game, catalog, accept(), {}, {});
+    CHECK(menu.course == "walkers"); CHECK(menu.list.course == "walkers");
+    // An answer for the first course is not this course.
+    answer(game, "course", 2);
+    update_tee_book(menu, game, catalog, {}, {}, {});
+    CHECK(menu.list.phase == list_phase::loading);
+    CHECK(slot_tiles(render_tee_book(menu, game, catalog, shipped_text_assets())).front().subtitle.find("?/5") == 0);
+    answer(game, "walkers", 1);
+    update_tee_book(menu, game, catalog, {}, {}, {});
+    CHECK(menu.list.phase == list_phase::idle);
+}
+
+TEST_CASE("a failed list request ends loading with its reason, is not retried by itself, and retries on R") {
+    auto game = hub_game(); tee_book_state menu; const auto& text = shipped_text_assets();
+    course_page(menu, game);
+    game.online.book_error = "request_failed"; ++game.online.book_refusals;
+    tick(menu, game);
+    CHECK(menu.list.phase == list_phase::failed);
+    auto page = render_tee_book(menu, game, courses(), text);
+    CHECK(page.severity == message_severity::error);
+    CHECK(page.message == "THE SERVER DID NOT ANSWER. PRESS R TO TRY AGAIN");
+    CHECK(!slot_tiles(page).empty());  // the times stay
+    // Far past the refresh interval, nothing is sent on its own.
+    game.net_commands.clear();
+    game.online.server_now += static_cast<std::int64_t>(game.tuning.net.tee_book_refresh_seconds * 3e6);
+    tick(menu, game);
+    CHECK(game.net_commands.empty());
+    input_state r; r.key_r.pressed = true; tick(menu, game, r);
+    CHECK(menu.list.phase == list_phase::loading);
+    CHECK(last_command(game, net_command_type::open_tee_book));
+    CHECK(render_tee_book(menu, game, courses(), text).severity == message_severity::status);
+    // No answer at all times out, with a message and a retry.
+    game.online.server_now += static_cast<std::int64_t>(game.tuning.net.tee_book_list_timeout_seconds * 1.1e6);
+    tick(menu, game);
+    CHECK(menu.list.phase == list_phase::failed);
+    CHECK(render_tee_book(menu, game, courses(), text).message == "NO ANSWER FROM THE SERVER. PRESS R TO TRY AGAIN");
+    // With no room to send from, the request fails at once instead of waiting.
+    game.online.room_ready = false; tick(menu, game, r);
+    CHECK(menu.list.phase == list_phase::failed);
+}
+
+TEST_CASE("bookings are single flight, confirmed by the row, and a refusal keeps the original reservation") {
+    auto game = hub_game(); tee_book_state menu; const auto& text = shipped_text_assets();
+    course_page(menu, game);
+    answer(game, "course", 1); tick(menu, game);
+    tee_reservation_info row; row.reservation_id = 4; row.revision = 1; row.course_id = "course"; row.scheduled_at = 105 * minute; row.takes_cart = true;
+    game.online.reservation = row;
+    menu.selection = 5; menu.selected_time = 0; tick(menu, game); game.net_commands.clear();
+    tick(menu, game, accept());
+    REQUIRE(menu.pending == net_command_type::book_tee);
+    CHECK(render_tee_book(menu, game, courses(), text).message == "Waiting for the server...");
+    // No predicted success: the reservation is still the old one, and a second press sends nothing.
+    CHECK(game.online.reservation->scheduled_at == 105 * minute);
+    game.net_commands.clear(); tick(menu, game, accept());
+    CHECK(game.net_commands.empty());
+    // Browsing still works while it waits.
+    input_state down; down.down.pressed = true; const int before = menu.selection; tick(menu, game, down);
+    CHECK(menu.selection != before);
+    // A refusal: the original row is untouched, the refusal is an error, the wait is over.
+    update_tee_book(menu, game, courses(), {}, {}, {{"book_tee", "group_full"}});
+    CHECK(!menu.pending);
+    REQUIRE(game.online.reservation); CHECK(game.online.reservation->reservation_id == 4); CHECK(game.online.reservation->scheduled_at == 105 * minute);
+    const auto page = render_tee_book(menu, game, courses(), text);
+    CHECK(page.severity == message_severity::error);
+    CHECK(page.message == "TEE TIME FULL. BOOKING UNCHANGED.");
+}
+
+TEST_CASE("leaving the book drops the list state; offline sends no list request") {
+    auto game = hub_game(); tee_book_state menu;
+    course_page(menu, game);
+    input_state escape; escape.escape.pressed = true; tick(menu, game, escape);
+    CHECK(menu.course.empty()); CHECK(menu.list.phase == list_phase::idle);
+    auto offline = make_game_state(fixture_content(), save_data{});
+    REQUIRE(enter_place(offline, online_hub_course));
+    startup_catalog catalog; catalog.courses.push_back({fixture_hub_course(), 0, std::nullopt});
+    tee_book_state solo; offline.hub_flow.screen = hub_screen::book;
+    update_tee_book(solo, offline, catalog, {}, {}, {});
+    solo.selection = 1; update_tee_book(solo, offline, catalog, accept(), {}, {});
+    CHECK(solo.list.phase == list_phase::idle);
+    CHECK(offline.net_commands.empty());
 }

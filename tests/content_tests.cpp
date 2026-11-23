@@ -20,6 +20,8 @@
 #include "core/vcr_frame.h"
 #include "game/cart_path.h"
 #include "game/content_files.h"
+#include "game/delivery.h"
+#include "game/place_definition.h"
 #include "game/course_loader.h"
 #include "game/course_session.h"
 #include "game/hub_scene.h"
@@ -152,7 +154,7 @@ TEST_CASE("game tuning needs every lie number") {
 
 TEST_CASE("tuning curves and profiles refuse numbers beyond a float") {
     const game_tuning_parse_result curve =
-        parse_game_tuning_from_texts(shipped_tuning_with("\"speed_share\": [[0.0, 0.15]", "\"speed_share\": [[0.0, 1e100]"));
+        parse_game_tuning_from_texts(shipped_tuning_with("\"speed_share\": [[0.0, 0.0]", "\"speed_share\": [[0.0, 1e100]"));
     CHECK(!curve.tuning.has_value());
     CHECK(curve.error.find("swing.speed_share") != std::string::npos);
     const game_tuning_parse_result profile =
@@ -317,6 +319,21 @@ TEST_CASE("the ball stands out on the grass and the flag against the sky at ever
             }
         }
     }
+}
+
+TEST_CASE("a green's short turf is finer and calmer than a fairway's, and the lamps' light on it is capped below white") {
+    const std::optional<lighting_palette> palette = load_lighting(asset_root());
+    REQUIRE(palette.has_value());
+    const grass_style& grass = palette->grass;
+    CHECK(grass.fibre_green_meters < grass.fibre_fairway_meters);
+    CHECK(grass.fibre_green_shade <= grass.fibre_fairway_shade);
+    CHECK(grass.fibre_green_slope <= grass.fibre_fairway_slope);
+    // The rough's blades are the loudest turf.
+    CHECK(grass.fibre_fairway_shade < grass.patch_share);
+    // Past this the green's brightest channel, under the sky's light, reaches white and the camcorder clips it.
+    const lighting_key night = lighting_at(*palette, -90.0f);
+    const glm::vec3 green = palette->colors.ground.green;
+    CHECK(std::max({green.r, green.g, green.b}) * (night.ambient_sky.g + grass.lamp_light_cap) <= 1.0f);
 }
 
 TEST_CASE("at night the ball glows past white and the green's floodlights lift the cup off its green") {
@@ -803,12 +820,20 @@ TEST_CASE("the picture style needs every field in range, and the shipped one loa
     const auto parses = [](const json& value) { return parse_picture_from_text(value.dump()).has_value(); };
 
     json lines = shipped;
-    lines["target_lines"] = 240;
+    lines["scene_lines"] = json::array({240, 480});
     const std::optional<picture_style> style = parse_picture_from_text(lines.dump());
     REQUIRE(style.has_value());
-    CHECK(style->target_lines == 240);
-    for (const json bad_lines : {json(0), json(360.5)}) {
-        lines["target_lines"] = bad_lines;
+    CHECK((style->scene_lines == std::vector<int>{240, 480}));
+    CHECK(style->ui_lines == 360);
+    // Presets are positive whole numbers, fewest lines first, and there is at least one.
+    for (const json bad_lines : {json::array(), json::array({0}), json::array({360.5}), json::array({720, 360}),
+                                 json::array({360, 360}), json(360)}) {
+        lines["scene_lines"] = bad_lines;
+        CHECK(!parses(lines));
+    }
+    lines = shipped;
+    for (const json bad_ui : {json(0), json(360.5), json(-1)}) {
+        lines["ui_lines"] = bad_ui;
         CHECK(!parses(lines));
     }
     CHECK(!parse_picture_from_text("not json"));
@@ -881,7 +906,7 @@ TEST_CASE("tape wear runs the look from next to no tape to worn") {
     CHECK(std::abs(tape_look_at(tape, 1.0f).luma_lines - tape.worn.luma_lines) < 0.01f);
     // Fresh is next to nothing: no colour shift or tone change, detail finer
     // than the picture's lines.
-    CHECK(tape.fresh.luma_lines > 4.0f * static_cast<float>(picture.target_lines));
+    CHECK(tape.fresh.luma_lines > 4.0f * static_cast<float>(picture.ui_lines));
     CHECK(tape.fresh.chroma_delay == 0.0f);
     CHECK(tape.fresh.black_lift == 0.0f);
     CHECK(tape.fresh.saturation == 1.0f);
@@ -907,7 +932,7 @@ TEST_CASE("the picture keeps whole window rows per line, and wider windows get m
                                                    {1003, 1003, 3, 335, 335, 1, 1},
                                                    {320, 200, 1, 320, 200, 0, 0},
                                                    {0, 0, 1, 1, 1, 0, 0}}) {
-        const picture_size size = picture_size_for_window(e.window_width, e.window_height, 360);
+        const picture_size size = picture_size_for_window(e.window_width, e.window_height, 360, 360);
         CHECK(size.factor == e.factor);
         CHECK(size.width == e.width);
         CHECK(size.height == e.height);
@@ -916,6 +941,52 @@ TEST_CASE("the picture keeps whole window rows per line, and wider windows get m
         // The scene covers the window and overhangs it by less than a scene pixel.
         CHECK(size.width * size.factor >= e.window_width);
         CHECK(size.width * size.factor - std::max(1, e.window_width) < size.factor);
+    }
+}
+
+TEST_CASE("every scene resolution preset keeps square whole-pixel lines and the UI on whole blocks") {
+    const picture_style picture = *load_picture_style(asset_root());
+    REQUIRE((picture.scene_lines == std::vector<int>{360, 720}));
+    struct expected {
+        int window_width, window_height, preset, factor, unit, width, height, ui_width, ui_height;
+    };
+    for (const expected& e : std::vector<expected>{{3440, 1440, 0, 4, 1, 860, 360, 860, 360},
+                                                   {3440, 1440, 1, 2, 2, 1720, 720, 860, 360},
+                                                   {1920, 1080, 0, 3, 1, 640, 360, 640, 360},
+                                                   {1920, 1080, 1, 2, 1, 960, 540, 960, 540},
+                                                   {1280, 720, 0, 2, 1, 640, 360, 640, 360},
+                                                   {1280, 720, 1, 1, 2, 1280, 720, 640, 360},
+                                                   {3840, 2160, 1, 3, 2, 1280, 720, 640, 360}}) {
+        const picture_size size = picture_size_for_window(e.window_width, e.window_height,
+                                                          picture.scene_lines[static_cast<std::size_t>(e.preset)], picture.ui_lines);
+        CHECK(size.factor == e.factor);
+        CHECK(size.unit == e.unit);
+        CHECK(size.width == e.width);
+        CHECK(size.height == e.height);
+        CHECK(size.ui_width == e.ui_width);
+        CHECK(size.ui_height == e.ui_height);
+        // The scene is whole UI blocks, covers the window and overhangs it by less than one block.
+        CHECK(size.width == size.ui_width * size.unit);
+        CHECK(size.height == size.ui_height * size.unit);
+        CHECK(size.width * size.factor >= e.window_width);
+        CHECK(size.width * size.factor - e.window_width < size.factor * size.unit);
+        CHECK(size.height * size.factor - e.window_height < size.factor * size.unit);
+        CHECK(size.crop_x * 2 <= size.width * size.factor - e.window_width + 1);
+    }
+    // The presets resolve differently at every window height, and never ask for more than one scene pixel per window pixel.
+    for (const int height : {720, 1080, 1200, 1440, 2160}) {
+        const auto factor = [&](const int preset) {
+            return picture_size_for_window(height * 16 / 9, height, picture.scene_lines[static_cast<std::size_t>(preset)],
+                                           picture.ui_lines).factor;
+        };
+        CHECK(factor(0) > factor(1));
+    }
+    CHECK(picture_size_for_window(1280, 720, 720, 360).factor == 1);
+    // On-screen UI block size stays the standard preset's where the window is a whole multiple of the scene lines.
+    for (const int height : {720, 1440, 2160}) {
+        const picture_size standard = picture_size_for_window(height * 16 / 9, height, 360, 360);
+        const picture_size fine = picture_size_for_window(height * 16 / 9, height, 720, 360);
+        CHECK(fine.factor * fine.unit == standard.factor * standard.unit);
     }
 }
 
@@ -1165,14 +1236,16 @@ TEST_CASE("json numeric helpers refuse overflow instead of wrapping or producing
 }
 
 namespace {
-// The scene target (renderer/picture_size.h) for 4:3, 16:9 and 21:9 windows
-// at the shipped line count; 4:3 is the narrowest the screens are laid out for.
+// The UI grid (renderer/picture_size.h) for 4:3, 16:9 and 21:9 windows at
+// every shipped scene resolution; 4:3 is the narrowest the screens are laid out for.
 std::vector<overlay_grid> shipped_grids() {
-    const int lines = load_picture_style(asset_root())->target_lines;
+    const picture_style picture = *load_picture_style(asset_root());
     std::vector<overlay_grid> grids;
-    for (const auto& [width, height] : std::vector<std::pair<int, int>>{{1440, 1080}, {1920, 1080}, {2560, 1080}}) {
-        const picture_size size = picture_size_for_window(width, height, lines);
-        grids.push_back(overlay_grid{size.width, size.height});
+    for (const int lines : picture.scene_lines) {
+        for (const auto& [width, height] : std::vector<std::pair<int, int>>{{1440, 1080}, {1920, 1080}, {2560, 1080}}) {
+            const picture_size size = picture_size_for_window(width, height, lines, picture.ui_lines);
+            grids.push_back(overlay_grid{size.ui_width, size.ui_height});
+        }
     }
     return grids;
 }
@@ -1421,7 +1494,7 @@ TEST_CASE("every shipped course's map numbers each hole in the middle of the hol
             }
             // Numbered as their signs are: a practice station by a green has none.
             if (hole->tee_box) {
-                data.map_holes.push_back(render_map_hole{std::to_string(i + 1), line});
+                data.map_holes.push_back(render_map_hole{std::to_string(i + 1), line, std::nullopt});
             }
         }
         data.course_map_outline = {low, glm::vec3(high.x, 0.0f, low.z), high, glm::vec3(low.x, 0.0f, high.z)};
@@ -1446,9 +1519,10 @@ TEST_CASE("every shipped course's map numbers each hole in the middle of the hol
                     CHECK((gap.x >= 0.0f || gap.y >= 0.0f));
                 }
             }
+            // The numbers, scale bar and north arrow fit.
             overlay_batch batch;
             batch.grid = grid;
-            draw_course_map_marks(batch, text, layout, data);
+            draw_course_map_marks(batch, text, layout, data, test_scene_colors().map);
             CHECK(batch.truncated_text_count == 0U);
         }
     }
@@ -1489,12 +1563,12 @@ TEST_CASE("every shipped course's map shows its holes as large as fits, on land 
             // Every corner of the ground printed on the paper is on the land.
             for (const glm::vec2 sign : {glm::vec2(-1.0f, -1.0f), glm::vec2(1.0f, -1.0f), glm::vec2(1.0f, 1.0f),
                                          glm::vec2(-1.0f, 1.0f)}) {
-                const glm::vec2 paper = sign * (layout.half_size - glm::vec2(course_map_fill_inset)) / layout.scale;
+                const glm::vec2 paper = sign * (layout.half_size - glm::vec2(course_map_inset)) / layout.scale;
                 const glm::vec2 delta(paper.x * layout.turn.x + paper.y * layout.turn.y,
                                       -paper.x * layout.turn.y + paper.y * layout.turn.x);
                 const glm::vec3 corner(layout.world_center.x - delta.x, 0.0f, layout.world_center.z + delta.y);
                 CHECK(glm::length(map_point(layout, corner) - layout.center -
-                                  sign * (layout.half_size - glm::vec2(course_map_fill_inset))) < 0.0001f);
+                                  sign * (layout.half_size - glm::vec2(course_map_inset))) < 0.0001f);
                 CHECK(corner.x >= land_low.x);
                 CHECK(corner.z >= land_low.y);
                 CHECK(corner.x <= land_high.x);
@@ -1515,7 +1589,7 @@ TEST_CASE("every shipped hole sign fits its number, par and a four-digit length"
             REQUIRE(hole.has_value());
             overlay_batch batch;
             draw_hole_sign_face(batch, text, make_hole_sign_labels(text, static_cast<int>(i) + 1, hole->par, 9999, false), area,
-                                area.signs.front(), test_scene_colors().ground);
+                                area.signs.front(), test_scene_colors().map);
             CHECK(batch.truncated_text_count == 0U);
         }
     }
@@ -1524,7 +1598,7 @@ TEST_CASE("every shipped hole sign fits its number, par and a four-digit length"
 TEST_CASE("every shipped hole sign's map frames its hole and shows what lies on it") {
     const game_content& content = shipped_content();
     const text_assets& text = shipped_text_assets();
-    const ground_colors& ground = test_scene_colors().ground;
+    const map_inks& inks = test_scene_colors().map;
     // How far past the hole's fairway and rough the frame may reach on either
     // side along its tighter axis (for the pin's green).
     constexpr float slack = 30.0f;
@@ -1589,7 +1663,7 @@ TEST_CASE("every shipped hole sign's map frames its hole and shows what lies on 
             // Every green, bunker and pond on the hole's corridor is on the map
             // in its own ink, whichever hole it was mapped with.
             overlay_batch batch;
-            draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 3, 100, false), area, sign, ground);
+            draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 3, 100, false), area, sign, inks);
             const rgba_image face = rasterize_overlay_batch(batch, test_props().at("hole_sign").color("board"));
             const auto drawn = [&](const glm::vec3& ink) {
                 for (std::size_t i = 0; i + 3 < face.pixels.size(); i += 4) {
@@ -1624,7 +1698,7 @@ TEST_CASE("every shipped hole sign's map frames its hole and shows what lies on 
                 REQUIRE(there.has_value());
                 REQUIRE(spot.has_value());
                 CHECK(spot->material == *there);
-                CHECK(drawn(hole_sign_map_ink(ground, *spot)));
+                CHECK(drawn(hole_sign_map_ink(inks, *spot)));
             }
         }
     }
@@ -1750,19 +1824,23 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
             }
         }
 
-        // Every refusal the server can send, and waiting for the group, as the notice.
-        std::vector<std::string> notices = online_messages(text);
-        notices.push_back(text_scorecard_waiting_for_group);
-        notices.push_back(text_hud_bag_on_back);
-        notices.push_back(text_hud_seat_taken);
-        notices.push_back(text_hud_bag_spot_taken);
-        for (const std::string& message : notices) {
-            render_data data = busy_hud(text, longest_named_club());
-            data.notice_label = lookup_text(text, message.c_str());
-            overlay_batch batch;
-            batch.grid = grid;
-            draw_hud(batch, text, data, glm::mat4(1.0f));
-            CHECK(batch.truncated_text_count == 0U);
+        // Every refusal the server can send as an error notice; waiting, progress and
+        // penalties as a status notice.
+        std::vector<std::string> refusals = online_messages(text);
+        refusals.push_back(text_hud_bag_on_back);
+        refusals.push_back(text_hud_seat_taken);
+        refusals.push_back(text_hud_bag_spot_taken);
+        const std::vector<std::string> statuses{text_scorecard_waiting_for_group, text_hub_pending, text_hud_water_penalty, text_hud_ball_hit_penalty};
+        for (const message_severity severity : {message_severity::error, message_severity::status}) {
+            for (const std::string& message : severity == message_severity::error ? refusals : statuses) {
+                render_data data = busy_hud(text, longest_named_club());
+                data.notice_label = lookup_text(text, message.c_str());
+                data.notice_severity = severity;
+                overlay_batch batch;
+                batch.grid = grid;
+                draw_hud(batch, text, data, glm::mat4(1.0f));
+                CHECK(batch.truncated_text_count == 0U);
+            }
         }
 
         for (const course_definition& course : shipped_content().courses) {
@@ -1842,7 +1920,7 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
                 tuning.watch.error = look_error{file, problem};
                 overlay_batch batch;
                 batch.grid = grid;
-                draw_notice(batch, text, look_notice(tuning, text));
+                draw_notice(batch, text, look_notice(tuning, text), message_severity::error);
                 CHECK(batch.truncated_text_count == 0U);
             }
         }
@@ -1850,7 +1928,7 @@ TEST_CASE("every shipped screen fits its text without cutting any off") {
         tuning.unwritten = true;
         overlay_batch unwritten;
         unwritten.grid = grid;
-        draw_notice(unwritten, text, look_notice(tuning, text));
+        draw_notice(unwritten, text, look_notice(tuning, text), message_severity::error);
         CHECK(unwritten.truncated_text_count == 0U);
 
         overlay_batch loading;
@@ -1935,7 +2013,9 @@ TEST_CASE("every shipped pond's water lies on ground under its level") {
                     const glm::vec3 at(x, 0.0f, z);
                     const terrain_sample sample = sample_area(state.area, at);
                     const float ground = sample_terrain_mesh(state.area.ground, at, state.area.ground_y).point.y;
-                    if (sample.material == terrain_material::water && !(ground < sample.water_level)) {
+                    // On the outline itself the bank crosses the level along the
+                    // ground's straight triangles, a few centimetres off the curve.
+                    if (sample.material == terrain_material::water && !(ground < sample.water_level + 0.05f)) {
                         ++above;
                     }
                 }
@@ -2388,4 +2468,37 @@ TEST_CASE("shipped hub: shelterbelts, a wooded crest and hedges edge it, and no 
         CHECK(distance_past_cart_paths(state.area.cart_paths, prop.position) < 0.0f);
     }
     CHECK(cars >= 5);
+}
+
+// How far the shipped sand wedge, swung back `backswing` on a flat fairway in
+// still air, has gone when it rests.
+static float shipped_sand_wedge_total(const float backswing) {
+    const game_content& content = shipped_content();
+    const hole_data hole = straight_hole(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 600.0f), 80.0f);
+    const play_area area = hole_area(hole, content.tuning);
+    const glm::vec3 start = anchor_on_terrain(area, glm::vec3(0.0f, 0.0f, 20.0f));
+    shot_course course = make_shot_course(area, 0, weather_state{}, place_definition{}, {}, content.tuning);
+    course.hole.pin = hole.pin_position;
+    const club_definition* wedge = find_club(content.clubs, "sand_wedge");
+    if (wedge == nullptr) {
+        CHECK(wedge != nullptr);
+        return 0.0f;
+    }
+    shot_setup input = stock_setup(*wedge, lie_at(area, start), start, 0.0f, handedness::right, 0.0f, content.tuning.setup);
+    input.backswing = backswing;
+    return simulate_shot(input, course, content.tuning, content.clubs).rest_position.z - start.z;
+}
+
+TEST_CASE("the shipped speed curve makes a short swing a short chip") {
+    const game_tuning& tuning = shipped_content().tuning;
+    CHECK(near(backswing_speed_share(*find_club(shipped_content().clubs, "sand_wedge"), 0.0f, tuning.swing), 0.0f));
+    // The dial's shortest swing barely moves the ball.
+    CHECK(shipped_sand_wedge_total(tuning.setup.backswing_step_short) < 1.5f);
+    // A 4 m chip takes a visible backswing.
+    CHECK(shipped_sand_wedge_total(0.07f) < 4.0f);
+    CHECK(shipped_sand_wedge_total(0.12f) > 4.0f);
+    // A dial step through the short chips moves the ball about a metre or so.
+    const setup_limits limits = setup_limits_for(*find_club(shipped_content().clubs, "sand_wedge"), tuning.setup);
+    const float next = stepped_backswing(0.1f, 1, limits);
+    CHECK(shipped_sand_wedge_total(next) - shipped_sand_wedge_total(0.1f) < 1.5f);
 }

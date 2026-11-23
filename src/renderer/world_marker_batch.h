@@ -2,7 +2,9 @@
 
 #include "game/lighting_loader.h"
 #include "game/tee_box.h"
+#include "renderer/mesh_instance.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -23,6 +25,13 @@
 // Only opaque geometry belongs here: runs never blend, so submission order
 // matters only for depth-write changes, exact depth ties and the cups'
 // holes, which come first so everything after is drawn into them.
+//
+// What moves with the crowd, the figures and their balls, is not transformed
+// at all: each of its pieces is an instance (mesh_instance.h) of a canonical
+// mesh, kept in a list per mesh, and the GL side draws every part's pieces of
+// one mesh as one instanced draw (world_marker_renderer.h). Their draw order is
+// by mesh, not by submission. Everything else (cups, flags, poles, collectibles,
+// feet, tee boxes) is world-space triangles in runs, kept as vertices.
 
 // Uploaded straight into a GL buffer: position.xyz, color.rgb, then glow:
 // the least light the piece shows (lighting.glsl's flat_light), 0 for none.
@@ -68,12 +77,48 @@ inline constexpr int world_marker_disc_segments = 18;
 struct render_remote_avatar;
 struct render_remote_ball;
 
+// The parts build_world_marker_batch lays out one after the other, each in
+// runs of its own, so a view draws the parts it shows from the one upload:
+// the picture's main view and its zoomed one (my shoes at address), the
+// mirrored views (my figure) and the sun's shadow map (flagsticks and figures).
+enum class marker_part : std::size_t {
+    cups,
+    poles,        // the standing flagsticks' poles, as wide as a pixel of the main view needs
+    zoom_poles,   // the same poles as wide as a pixel of the zoomed view needs (empty without one)
+    flagsticks,   // the hole's, the course's and the lying ones' flags and the lying poles
+    collectibles,
+    avatars,
+    balls,
+    address_feet,
+    my_figure,
+    count
+};
+enum class marker_view { scene, zoom, mirror, sun_shadow };
+
+// One part's instances of one mesh (all depth-writing, no stencil, layer 0),
+// from the start of that mesh's list.
+struct world_marker_instance_run {
+    marker_part part = marker_part::cups;
+    prop_mesh mesh = prop_mesh::cylinder;
+    std::size_t first = 0;
+    std::size_t count = 0;
+};
+
 class world_marker_batch {
 public:
     world_marker_batch();
 
     // Empties vertices and runs but keeps their capacity for the next frame.
     void clear();
+    // Ends `part`: what is appended next starts a run of its own. Parts end in order.
+    void end_part(marker_part part);
+    // Where each part ends, in vertices, for re-sending only the parts that changed;
+    // a batch not built in parts is one part.
+    std::size_t part_end_count() const { return parts_ended_ ? part_ends_.size() : 1; }
+    std::size_t part_end(std::size_t index) const { return parts_ended_ ? part_ends_[index] : vertices_.size(); }
+    // Whether `view` draws the part `run` belongs to (a batch with no parts ended draws every run).
+    bool shown_in(const world_marker_run& run, marker_view view) const;
+    bool shown_in(marker_part part, marker_view view) const;
 
     // Unit disc / quad / cylinder / sphere transformed by `model`, with its
     // glow floor (world_marker_vertex).
@@ -81,6 +126,8 @@ public:
     void append_quad(const glm::mat4& model, const glm::vec3& color, float glow, bool depth_write);
     void append_cylinder(const glm::mat4& model, const glm::vec3& color, float glow, bool depth_write);
     void append_sphere(const glm::mat4& model, const glm::vec3& color, float glow, bool depth_write);
+    // A figure's or ball's piece: `mesh` placed by `model`, drawn instanced, depth-writing.
+    void append_instance(prop_mesh mesh, const glm::mat4& model, const glm::vec3& color, float glow);
     // The quad a, b, c, d (in order round it), already in world space.
     void append_world_quad(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& d,
                            const glm::vec3& color, float glow, bool depth_write);
@@ -94,7 +141,16 @@ public:
 
     const std::vector<world_marker_vertex>& vertices() const { return vertices_; }
     const std::vector<world_marker_run>& runs() const { return runs_; }
-    bool empty() const { return vertices_.empty(); }
+    // The instances of `mesh`; the lists joined (cylinders, spheres, quads) are what is uploaded, and
+    // `instance_base` is where one starts in them.
+    const std::vector<mesh_instance>& instances(prop_mesh mesh) const { return instances_[static_cast<std::size_t>(mesh)]; }
+    const std::vector<world_marker_instance_run>& instance_runs() const { return instance_runs_; }
+    std::size_t instance_base(prop_mesh mesh) const;
+    std::size_t instance_count() const;
+    void join_instances(std::vector<mesh_instance>& out) const;
+    // Every vertex the instances place, list by list, as the draw puts them on screen: for tests.
+    std::vector<world_marker_vertex> instanced_vertices() const;
+    bool empty() const { return vertices_.empty() && instance_count() == 0; }
 
 private:
     // The run the next vertices join, a new one when the state changes.
@@ -109,8 +165,16 @@ private:
     std::vector<glm::vec3> unit_quad_;
     std::vector<glm::vec3> unit_cylinder_;
     std::vector<glm::vec3> unit_sphere_;
+    canonical_meshes meshes_;
+    std::array<std::vector<mesh_instance>, prop_mesh_count> instances_;
+    std::vector<world_marker_instance_run> instance_runs_;
+    std::array<std::size_t, prop_mesh_count> open_run_{};  // the run each mesh is adding to, plus one; 0 for none
+    marker_part part_ = marker_part::cups;                  // the part being built
     std::vector<world_marker_vertex> vertices_;
     std::vector<world_marker_run> runs_;
+    std::array<std::size_t, static_cast<std::size_t>(marker_part::count)> part_ends_{};
+    bool parts_ended_ = false;
+    bool break_run_ = false;
     int layer_ = 0;
 };
 
@@ -169,9 +233,19 @@ struct world_marker_scene {
     float cup_depth_meters = 0.0f;
     float pin_visual_height_meters = 0.0f;
     flag_pose flag;
+    // A flagstick's real radius; where the camera is, and how wide one pixel is a
+    // metre from it in the main view and in the zoomed one (0: no such view; the
+    // main view then draws every pole at its real radius, the zoomed one none).
     float flagstick_radius_meters = 0.0f;
+    glm::vec3 camera_position{0.0f};
+    float pixel_per_meter = 0.0f;
+    float zoom_pixel_per_meter = 0.0f;
 
     const render_address_feet* address_feet = nullptr;
+    // The cups are in a batch of their own (build_cup_batch), kept for the course.
+    bool cups_apart = false;
+    // My own figure, which only a mirror or the sun's shadow shows (marker_view).
+    const render_remote_avatar* my_figure = nullptr;
 
     float ball_visual_radius_meters = 0.0f;
 
@@ -198,10 +272,23 @@ void append_tee_box(world_marker_batch& batch, const tee_box& box, const marker_
 // cylinder marking its opening, then every one's inside in the cup's colour.
 void append_cup_holes(world_marker_batch& batch, const std::vector<glm::vec3>& centres, float radius, float depth,
                       const marker_colors& colors, const glow_floors& glow);
-// A cylindrical pole at its real radius; its flag flies in the world's wind.
+// A cylindrical pole of `radius_meters` and its flag, which flies in the world's wind.
 void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, float pin_visual_height_meters,
                           const marker_colors& colors, const glow_floors& glow, const flag_pose& flag = flag_pose{},
                           float radius_meters = 0.0f);
+// The pole alone, and the flag alone, of a flagstick.
+void append_pin_pole(world_marker_batch& batch, const glm::vec3& position, float pin_visual_height_meters,
+                     const marker_colors& colors, const glow_floors& glow, float radius_meters);
+void append_pin_flag(world_marker_batch& batch, const glm::vec3& position, float pin_visual_height_meters,
+                     const marker_colors& colors, const glow_floors& glow, const flag_pose& flag);
+// The radius a standing flagstick is drawn at in a view whose pixels are
+// `pixel_per_meter` wide a metre from the camera: its real one, or where that
+// is thinner than a pixel of that view, one just wide enough that its
+// silhouette is a whole pixel (the cylinder is an n-gon, narrowest across its
+// flats), so it never drops out far off. Each view has its own pole (marker_part
+// poles, zoom_poles), so a zoomed view never magnifies the main view's width.
+float flagstick_draw_radius(const world_marker_scene& scene, const glm::vec3& position, float height_meters,
+                            float pixel_per_meter);
 // A flagstick taken out, lying on the green from `foot` to `tip`, its flag
 // flat on the ground at the tip end.
 void append_lying_flagstick(world_marker_batch& batch, const glm::vec3& foot, const glm::vec3& tip,
@@ -219,3 +306,5 @@ void build_tee_box_batch(world_marker_batch& batch, const std::vector<tee_box>* 
 // flags is never visible, and the course collapses into a few runs instead of
 // two per hole.
 void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors);
+// Clears `batch` and fills it with the cups' holes of `scene` alone, for a scene whose cups_apart is set.
+void build_cup_batch(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors);

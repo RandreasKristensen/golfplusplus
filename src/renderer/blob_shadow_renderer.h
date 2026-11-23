@@ -6,6 +6,7 @@
 // never written, and pulled forward in depth past the drawn zone shapes so
 // it lies on whatever ground it falls on.
 
+#include "renderer/gl_storage.h"
 #include "profiling/profiling.h"
 #include "renderer/render_data.h"
 #include "renderer/shader.h"
@@ -19,6 +20,9 @@
 
 class blob_shadow_renderer {
 public:
+    explicit blob_shadow_renderer(gl_storage storage = {})
+        : storage_(storage), shader_(storage) {}
+
     bool init(const std::string& vertex_path, const std::string& fragment_path);
     void shutdown();
     // `trees` may be null (none).
@@ -26,6 +30,7 @@ public:
               const std::vector<render_blob_shadow>& frame, const glm::mat4& view_proj, frame_profile* profile);
 
 private:
+    gl_storage storage_;
     shader_program shader_;
     unsigned int vao_ = 0;
     unsigned int corner_vbo_ = 0;

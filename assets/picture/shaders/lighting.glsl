@@ -161,19 +161,24 @@ vec3 flat_light(float glow) {
 
 // The shine of wet ground at `world` facing `normal`: the sky's light at a
 // glancing angle, and the sun's and the night lights' glints off it.
-vec3 wet_gloss(vec3 world, vec3 normal, float sun) {
+// `fine` is the mean squared slope of the surface's fine detail: the glints
+// spread over it and dim to keep their light (Beckmann's lobe, as wet.z sets
+// it, widened), so fine turf never glints sharper than it is.
+vec3 wet_gloss(vec3 world, vec3 normal, float sun, float fine) {
     vec3 n = normalize(normal);
     vec3 view = normalize(haze_eye.xyz - world);
     float facing = max(dot(n, view), 0.0);
     float fresnel = 0.04 + 0.96 * pow(1.0 - facing, 5.0);
-    vec3 glints = sun_color.rgb * sun * pow(max(dot(reflect(-sun_direction.xyz, n), view), 0.0), wet.z);
+    float power = max(2.0 / (2.0 / (wet.z + 2.0) + fine) - 2.0, 1.0);
+    float keeps = (power + 2.0) / (wet.z + 2.0);
+    vec3 glints = sun_color.rgb * sun * pow(max(dot(reflect(-sun_direction.xyz, n), view), 0.0), power);
     for (int i = 0; i < max_lights; ++i) {
         if (light_position[i].w <= 0.0) { continue; }
         vec3 towards;
         vec3 light = light_reaching(i, world, towards);
-        glints += light * pow(max(dot(reflect(-towards, n), view), 0.0), wet.z);
+        glints += light * pow(max(dot(reflect(-towards, n), view), 0.0), power);
     }
-    return wet.y * (sky_light.rgb * fresnel + glints);
+    return wet.y * (sky_light.rgb * fresnel + glints * keeps);
 }
 
 // The share of the light the low mist takes out per metre at `world`.

@@ -18,10 +18,6 @@ namespace {
 constexpr int ribbon_cross_section_count = 9;
 // The ribbon's outer 45% drops away by ribbon_edge_drop (terrain.h).
 constexpr float ribbon_flat_fraction = 0.55f;
-// A pond's shore is flat this far under its level (under water is strictly
-// below it), so a sliver of the pond in a triangle with no corner inside is
-// still water over ground.
-constexpr float shore_under_level = 0.001f;
 // Fewest rim vertices of a round zone overlay, however small the zone.
 
 float distance_xz_squared(const glm::vec3& a, const glm::vec3& b) {
@@ -83,26 +79,50 @@ std::optional<terrain_material> material_from_zone(const material_zone_type type
 
 }
 
-std::optional<zone_hit> winning_zone_at(const std::vector<material_zone>& zones, const glm::vec3& position) {
-    std::optional<zone_hit> best;
-    for (std::size_t index = 0; index < zones.size(); ++index) {
+std::optional<zone_hit> winning_zone_at(const std::vector<material_zone>& zones, const glm::vec3& position,
+                                        const index_range* among) {
+    // The edge distance (depth) is only worked out to break a tie of priority.
+    std::optional<std::size_t> best;
+    std::optional<float> best_depth;
+    int best_priority = -2;
+    const auto consider = [&](const std::size_t index) {
         const material_zone& zone = zones[index];
         const std::optional<terrain_material> material = material_from_zone(zone.type);
         if (!material || !zone_contains(zone, position)) {
-            continue;
+            return;
         }
         const int priority = material_priority(*material);
-        const int best_priority = best ? material_priority(best->material) : -2;
         if (priority < best_priority) {
-            continue;
+            return;
         }
-        const float depth = zone_edge_distance(zone, position);
-        if (priority == best_priority && depth <= best->depth) {
-            continue;
+        if (priority == best_priority) {
+            if (!best_depth) {
+                best_depth = zone_edge_distance(zones[*best], position);
+            }
+            const float depth = zone_edge_distance(zone, position);
+            if (depth <= *best_depth) {
+                return;
+            }
+            best_depth = depth;
+        } else {
+            best_depth.reset();
+            best_priority = priority;
         }
-        best = zone_hit{index, *material, depth};
+        best = index;
+    };
+    if (among != nullptr) {
+        for (const std::uint32_t index : *among) {
+            consider(index);
+        }
+    } else {
+        for (std::size_t index = 0; index < zones.size(); ++index) {
+            consider(index);
+        }
     }
-    return best;
+    if (!best) {
+        return std::nullopt;
+    }
+    return zone_hit{*best, *material_from_zone(zones[*best].type)};
 }
 
 namespace {
@@ -394,7 +414,7 @@ bool is_better_edge_candidate(const terrain_candidate& candidate, const terrain_
 // Spatial index (uniform XZ grid, CSR storage)
 // ---------------------------------------------------------------------------
 
-constexpr int max_index_cells_per_axis = 256;
+constexpr int max_index_cells_per_axis = 1024;
 constexpr std::size_t max_index_entries = 8000000U;
 // Slack used when pruning the ring search. Must be >= the epsilon of
 // compare_near so ties are never pruned away.
@@ -639,43 +659,42 @@ enum class scan_pass {
     both
 };
 
-terrain_scan_state scan_triangle(const terrain_mesh& mesh,
-                                 const glm::vec3& position,
-                                 const glm::vec3& query_point,
-                                 const float fallback_y,
-                                 const int triangle_index,
-                                 const scan_pass pass,
-                                 const terrain_scan_state& state) {
-    terrain_scan_state next = state;
-    ++next.triangles_tested;
+void scan_triangle(const terrain_mesh& mesh,
+                   const glm::vec3& position,
+                   const glm::vec3& query_point,
+                   const float fallback_y,
+                   const int triangle_index,
+                   const scan_pass pass,
+                   terrain_scan_state& state) {
+    ++state.triangles_tested;
 
     const terrain_vertex& a = triangle_vertex(mesh, triangle_index, 0U);
     const terrain_vertex& b = triangle_vertex(mesh, triangle_index, 1U);
     const terrain_vertex& c = triangle_vertex(mesh, triangle_index, 2U);
-    const float section_distance = distance_xz_squared(query_point, triangle_section_center(mesh, triangle_index));
 
     const std::optional<glm::vec3> barycentric = barycentric_xz(position, a.position, b.position, c.position);
     if (barycentric) {
         if (pass == scan_pass::edge_only) {
-            return next;
+            return;
         }
         terrain_candidate candidate;
         candidate.sample = sample_from_barycentric(mesh, triangle_index, *barycentric, true);
         candidate.sample.point.x = position.x;
         candidate.sample.point.z = position.z;
-        candidate.section_distance = section_distance;
+        candidate.section_distance = distance_xz_squared(query_point, triangle_section_center(mesh, triangle_index));
         candidate.height_distance = std::abs(candidate.sample.point.y - fallback_y);
-        if (!next.has_inside || is_better_inside_candidate(candidate, next.best_inside)) {
-            next.best_inside = candidate;
-            next.has_inside = true;
+        if (!state.has_inside || is_better_inside_candidate(candidate, state.best_inside)) {
+            state.best_inside = candidate;
+            state.has_inside = true;
         }
-        return next;
+        return;
     }
 
     if (pass == scan_pass::inside_only) {
-        return next;
+        return;
     }
 
+    const float section_distance = distance_xz_squared(query_point, triangle_section_center(mesh, triangle_index));
     for (int edge = 0; edge < 3; ++edge) {
         const glm::vec3 edge_barycentric = closest_barycentric_on_edge(position, a.position, b.position, c.position, edge);
         terrain_candidate candidate;
@@ -683,12 +702,11 @@ terrain_scan_state scan_triangle(const terrain_mesh& mesh,
         candidate.edge_distance = distance_squared(query_point, candidate.sample.point);
         candidate.sample.distance_from_center += std::sqrt(candidate.edge_distance);
         candidate.section_distance = section_distance;
-        if (!next.has_edge || is_better_edge_candidate(candidate, next.best_edge)) {
-            next.best_edge = candidate;
-            next.has_edge = true;
+        if (!state.has_edge || is_better_edge_candidate(candidate, state.best_edge)) {
+            state.best_edge = candidate;
+            state.has_edge = true;
         }
     }
-    return next;
 }
 
 terrain_sample finish_terrain_scan(const terrain_scan_state& state, const glm::vec3& query_point) {
@@ -824,18 +842,22 @@ float carved_height(const std::vector<carving_zone>& zones, const glm::vec3& pos
         }
         const std::optional<float> inside = zone_depth_inside(zone, position);
         if (!inside) {
-            // The shore: outside the outline the ground comes down to the
-            // pond's level, flat just under it for the shore's first half so
-            // every triangle across the outline is under water inside it.
+            // The shore: outside the outline the ground comes up from the
+            // pond's level on the straight bank, then eases to the ground.
             const float out = zone_edge_distance(zone, position);
             if (out < tuning.water_shore_meters) {
-                const float rise = eased(2.0f * out / tuning.water_shore_meters - 1.0f);
-                carved = std::min(carved, glm::mix(carving.water_level - shore_under_level, height, rise));
+                const float edge = carving.water_edge_meters;
+                const float rise = eased((out - edge) / std::max(tuning.water_shore_meters - edge, 0.001f));
+                const float bank_top = carving.water_level + tuning.water_edge_slope * std::min(out, edge);
+                carved = std::min(carved, glm::mix(bank_top, height, rise));
             }
             continue;
         }
+        // Straight down from the outline, then eased onto the bank's depth.
+        const float edge = std::max(carving.water_edge_meters, 0.001f);
         const float bank = tuning.water_bank_meters > 0.0f ? *inside / tuning.water_bank_meters : 1.0f;
-        const float depth = tuning.water_min_depth + (tuning.water_max_depth - tuning.water_min_depth) * eased(bank);
+        const float bank_depth = tuning.water_min_depth + (tuning.water_max_depth - tuning.water_min_depth) * eased(bank);
+        const float depth = glm::mix(tuning.water_edge_slope * std::min(*inside, edge), bank_depth, eased((*inside - edge) / edge));
         carved = std::min(carved, carving.water_level - depth);
     }
     if (in_bunker) {
@@ -1282,15 +1304,15 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& po
 
     const int triangle_count = static_cast<int>(mesh.indices.size() / 3U);
     const glm::vec3 query_point(position.x, fallback_y, position.z);
-    const auto scan = [&](const int triangle, const scan_pass pass, const terrain_scan_state& state) {
-        return scan_triangle(mesh, position, query_point, fallback_y, triangle, pass, state);
+    const auto scan = [&](const int triangle, const scan_pass pass, terrain_scan_state& state) {
+        scan_triangle(mesh, position, query_point, fallback_y, triangle, pass, state);
     };
 
     const terrain_mesh_index& index = mesh.spatial_index;
     if (!terrain_index_matches(mesh, index)) {
         terrain_scan_state state;
         for (int triangle = 0; triangle < triangle_count; ++triangle) {
-            state = scan(triangle, scan_pass::both, state);
+            scan(triangle, scan_pass::both, state);
         }
         return finish_terrain_scan(state, query_point);
     }
@@ -1303,7 +1325,7 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& po
     const int cell_z = index_cell_coord(position.z, index.min_z, index.cell_size_z, index.cells_z);
     const std::size_t cell = cell_slot(index, cell_x, cell_z);
     for (std::uint32_t slot = index.cell_starts[cell]; slot < index.cell_starts[cell + 1U]; ++slot) {
-        state = scan(static_cast<int>(index.cell_triangles[slot]), scan_pass::inside_only, state);
+        scan(static_cast<int>(index.cell_triangles[slot]), scan_pass::inside_only, state);
     }
     if (state.has_inside) {
         return finish_terrain_scan(state, query_point);
@@ -1350,7 +1372,7 @@ terrain_sample sample_terrain_mesh(const terrain_mesh& mesh, const glm::vec3& po
     std::sort(candidates.begin(), candidates.end());
     candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
     for (const std::uint32_t triangle : candidates) {
-        state = scan(static_cast<int>(triangle), scan_pass::edge_only, state);
+        scan(static_cast<int>(triangle), scan_pass::edge_only, state);
     }
     return finish_terrain_scan(state, query_point);
 }
@@ -1359,13 +1381,23 @@ std::optional<terrain_sample> sample_terrain_inside(const terrain_mesh& mesh, co
     if (mesh.vertices.empty() || mesh.indices.size() < 3U) {
         return std::nullopt;
     }
+    const terrain_mesh_index& index = mesh.spatial_index;
+    const bool indexed = terrain_index_matches(mesh, index);
+    if (indexed) {
+        // No padded triangle box (padded_triangle_bounds) reaches past the
+        // index's extent by more than this, so nothing can contain the point.
+        const float reach = 0.001f + 0.001f * std::max(index.max_x - index.min_x, index.max_z - index.min_z);
+        if (position.x < index.min_x - reach || position.x > index.max_x + reach ||
+            position.z < index.min_z - reach || position.z > index.max_z + reach) {
+            return std::nullopt;
+        }
+    }
     const glm::vec3 query_point(position.x, 0.0f, position.z);
     terrain_scan_state state;
     const auto scan = [&](const int triangle) {
-        state = scan_triangle(mesh, position, query_point, 0.0f, triangle, scan_pass::inside_only, state);
+        scan_triangle(mesh, position, query_point, 0.0f, triangle, scan_pass::inside_only, state);
     };
-    const terrain_mesh_index& index = mesh.spatial_index;
-    if (terrain_index_matches(mesh, index)) {
+    if (indexed) {
         const std::size_t cell = cell_slot(index,
                                            index_cell_coord(position.x, index.min_x, index.cell_size_x, index.cells_x),
                                            index_cell_coord(position.z, index.min_z, index.cell_size_z, index.cells_z));

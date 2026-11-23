@@ -138,6 +138,8 @@ inline constexpr const char* reducer_place_bag = "place_bag";
 inline constexpr const char* reducer_take_club = "take_club";
 inline constexpr const char* reducer_set_golfer = "set_golfer";
 inline constexpr const char* reducer_update_ride = "update_ride";
+// Answered by the tee book alone: the client numbers each request (net_client).
+inline constexpr const char* reducer_open_tee_book = "open_tee_book";
 
 // A golfer as their player row has them (set_golfer): their hand, natural
 // shape (natural_shape_unset until picked) and favourite colour (the
@@ -177,7 +179,7 @@ struct net_command {
     bool give_up = false;        // tee_up: giving up the hole my ball is in play on
     std::string collectible_id;  // claim_collectible
     std::string item_id;         // use_item
-    std::string course_id;       // book/list
+    std::string course_id;       // book/list (open_tee_book: the client gives each its own request number)
     std::int64_t scheduled_at = 0; // UTC microseconds, book_tee
     std::uint64_t room_id = 0;     // booking/travel/leave: room where intent originated
     std::uint64_t reservation_id = 0; // expected current booking (0: none)
@@ -202,7 +204,7 @@ enum class net_status {
 // only on a server with the same, else asks for an update
 // (net_failure_outdated_game). Bump it with every change to the module's
 // tables, views or reducers; the server_protocol view itself never changes.
-inline constexpr std::uint32_t protocol_version = 30;
+inline constexpr std::uint32_t protocol_version = 31;
 inline constexpr const char* online_hub_course = "practice_ground";
 
 // The failure ids the bridge and the client give (src/net/stdb_bridge.h,
@@ -406,8 +408,22 @@ struct online_view {
     std::optional<tee_reservation_info> reservation;
     std::map<std::uint64_t, tee_slot_info> tee_slots;
     std::vector<departure_info> departures;  // by time; the board's
+    // The tee book's booked counts (`tee_slots`: a row only for a booked time) for
+    // `book_course_id`, as the server last confirmed them by answering the latest
+    // open_tee_book request. Counts of another course, or from an older request,
+    // never appear; a course never answered has no counts, which is not zero.
     std::string book_course_id;
-    bool book_ready = false; // complete scoped slot subscription + server book acknowledgement
+    bool book_ready = false;  // `tee_slots` are confirmed counts for `book_course_id`
+    // The server still follows that course for me, so `tee_slots` change as its
+    // rows do. False once it follows another: they are the last confirmed, kept
+    // for the book to show as old.
+    bool book_live = false;
+    // How many answers and refusals of the latest request have arrived this
+    // session; a menu compares them with their values when it asked. A refusal
+    // leaves the last counts as they were; `book_error` is its server_errors.h id.
+    std::uint64_t book_answers = 0;
+    std::uint64_t book_refusals = 0;
+    std::string book_error;
     std::optional<online_room> room;
     // Counts changes to my ball row and my spares, which a ball request waits on.
     std::uint64_t ball_updates = 0;

@@ -21,7 +21,7 @@ bool loopback_endpoint(const std::string& server) {
 }
 int main(const int argc, char** argv) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
-    if (argc < 3 || argc > 4) { std::fprintf(stderr, "usage: golfpp-online-check <loopback server URI> <disposable database> [course id]\n"); return 2; }
+    if (argc < 3 || argc > 4) { std::fprintf(stderr, "usage: golfpp-online-check <loopback server URI> <disposable database> [course id | --tee-book-timing]\n"); return 2; }
     const std::string server = argv[1], database = argv[2];
     if (!loopback_endpoint(server) || database.rfind("cleanup2-check-", 0) != 0) {
         std::fprintf(stderr, "requires loopback server and fresh database named cleanup2-check-<unique suffix>\n"); return 2;
@@ -31,7 +31,12 @@ int main(const int argc, char** argv) {
     auto config = text ? parse_online_config_from_text(*text) : std::nullopt;
     if (!content.content || !config) { std::fprintf(stderr, "cannot load game content or online configuration\n"); return 2; }
     config->auth_client_id = database; // isolated credential namespace, even for guest lifecycle checks
-    live_check run(std::move(*content.content)); run.course = argc == 4 ? argv[3] : "jelling_par_3";
+    const bool timing = argc == 4 && std::string(argv[3]) == "--tee-book-timing";
+    live_check run(std::move(*content.content)); run.course = argc == 4 && !timing ? argv[3] : "jelling_par_3"; run.server = server;
+    if (timing) {
+        const bool measured = run.connect(with_overrides(*config, server, database, true)) && measure_tee_book(run);
+        std::printf("%s\n", measured ? "tee book measurements done" : "tee book measurement failed"); return measured ? 0 : 1;
+    }
     const bool passed = run.connect(with_overrides(*config, server, database, true)) && check_booking(run) && check_practice(run) && check_social(run) && check_round(run);
     std::printf("%s\n", passed ? "all live lifecycle checks passed" : "live lifecycle check failed"); return passed ? 0 : 1;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "renderer/gl_storage.h"
 #include <string>
 
 // GL side of the batched overlay. Owns one dynamic VBO/VAO plus the tiny
@@ -24,6 +25,9 @@
 
 class overlay_pass {
 public:
+    explicit overlay_pass(gl_storage storage = {})
+        : shader_(storage), stream_(storage) {}
+
     bool init(const std::string& vertex_path, const std::string& fragment_path);
     void shutdown();
 
@@ -36,15 +40,10 @@ public:
     // the batch (capacity is kept). No-op when empty.
     void flush();
 
-    // Draws overlay geometry that is rebuilt rarely (the course map terrain
-    // fill) from its own retained buffer: the vertices are uploaded only when
-    // `revision` changes, not every frame. Flushes the streaming batch first
-    // so the retained geometry lands in submission order.
-    void draw_retained(const std::vector<overlay_vertex>& vertices, std::uint64_t revision);
-
 private:
     // One VAO over one dynamic buffer; the overlay vertex layout for both.
     struct vertex_stream {
+        explicit vertex_stream(gl_storage storage) : buffer(storage) {}
         unsigned int vao = 0;
         dynamic_vertex_buffer buffer;
     };
@@ -56,8 +55,4 @@ private:
     overlay_batch batch_;
     frame_profile* profile_ = nullptr;
     vertex_stream stream_;
-    vertex_stream retained_stream_;
-    std::size_t retained_vertex_count_ = 0;
-    std::uint64_t retained_revision_ = 0;
-    bool retained_uploaded_ = false;
 };

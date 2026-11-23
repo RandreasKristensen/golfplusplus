@@ -22,6 +22,8 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -207,7 +209,7 @@ TEST_CASE("lit scene shaders take their light from lighting.glsl, none from a un
     for (const char* name : {"terrain.frag", "ball.frag", "hole_sign.frag", "fence.frag", "water.frag", "underwater.frag", "lit_flat.frag",
                              "tree.vert", "tree.frag", "world_marker.vert", "tee_box.vert", "backdrop.frag", "blob_shadow.vert",
                              "floodlight.vert", "floodlight.frag", "weather_streak.vert", "sun_shafts.frag", "sun_shafts_composite.frag",
-                             "grass_blade.vert", "grass_blade.frag"}) {
+                             "grass_blade.vert", "grass_blade.frag", "falling_leaf.vert", "falling_leaf.frag"}) {
         const std::optional<std::string> source = read_text_file(shaders / name);
         REQUIRE(source.has_value());
         const std::optional<std::string> expanded = expand_shader_includes(*source, read);
@@ -232,14 +234,17 @@ TEST_CASE("everything drawn in the world fades into the haze, so nothing shows t
         {"floodlight.vert", "floodlight.frag"},    {"world_marker.vert", "lit_flat.frag"},
         {"tee_box.vert", "tee_box.frag"},          {"ball.vert", "ball.frag"},
         {"weather_streak.vert", "weather_streak.frag"}, {"blob_shadow.vert", "blob_shadow.frag"},
-        {"grass_blade.vert", "grass_blade.frag"},
+        {"grass_blade.vert", "grass_blade.frag"}, {"falling_leaf.vert", "falling_leaf.frag"},
     };
     for (const auto& [vertex, fragment] : programs) {
         const std::optional<std::string> vertex_source = read_text_file(shaders / vertex);
         const std::optional<std::string> fragment_source = read_text_file(shaders / fragment);
         REQUIRE(vertex_source.has_value());
         REQUIRE(fragment_source.has_value());
-        const std::string both = *vertex_source + *fragment_source;
+        const shader_include_reader read = [&shaders](const std::string& name) { return read_text_file(shaders / name); };
+        const std::optional<std::string> expanded = expand_shader_includes(*fragment_source, read);
+        REQUIRE(expanded.has_value());
+        const std::string both = *vertex_source + *expanded;
         CHECK((both.find("hazed(") != std::string::npos || both.find("faded(") != std::string::npos ||
                both.find("haze_at(") != std::string::npos));
     }
@@ -410,7 +415,7 @@ TEST_CASE("tree shadow variants expand the same leaf cutouts as the visible tree
         const auto expanded = expand_shader_includes(*source, read);
         REQUIRE(expanded.has_value());
         CHECK(expanded->find(*leaves) != std::string::npos);
-        CHECK(expanded->find("tree_leaf_present(v_uv, v_tint, u_foliage)") != std::string::npos);
+        CHECK(expanded->find("tree_card_texel(v_uv, v_tint, v_card.y, v_card.x, u_season, u_twigs, pixel, shade)") != std::string::npos);
     }
     for (const char* name : {"shadow_map.vert", "shadow_map.frag"}) {
         const auto source = read(name);
@@ -431,4 +436,24 @@ TEST_CASE("visible and casting trees expand the same clock and wind pose") {
         CHECK(expanded->find(*pose)!=std::string::npos);
         CHECK(expanded->find("tree_world_position(a_pos,a_instance_scale,a_instance_offset,a_instance_turn.x,u_time,u_wind)")!=std::string::npos);
     }
+}
+
+TEST_CASE("uniform location cache holds a backdrop's 35 names and lamp array elements, so a warmed view looks up nothing") {
+    uniform_location_cache cache;
+    int calls = 0;
+    const fake_uniform_query query{&calls};
+    std::vector<std::string> names;
+    for (int i = 0; i < 35; ++i) { names.push_back("u_backdrop_" + std::to_string(i)); }
+    for (int lamp = 0; lamp < 4; ++lamp) {
+        names.push_back("u_lamp_view_proj[" + std::to_string(lamp) + "]");
+        names.push_back("u_lamp[" + std::to_string(lamp) + "]");
+    }
+    names.push_back("u_dead_array[0]");  // optimised out: cached as -1 too
+    for (int frame = 0; frame < 3; ++frame) {
+        for (const std::string& name : names) { cache.find_or_query(name.c_str(), query); }
+        if (frame == 0) { CHECK(calls == static_cast<int>(names.size())); }
+    }
+    CHECK(calls == static_cast<int>(names.size()));
+    CHECK(cache.size() == names.size());
+    CHECK(uniform_location_cache::capacity >= 64U);
 }

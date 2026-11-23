@@ -7,12 +7,14 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "game/lighting_loader.h"
+#include "game/message_severity.h"
 #include "game/text_assets.h"
 #include "physics/material_zone.h"
 #include "renderer/overlay_batch.h"
@@ -59,8 +61,9 @@ struct render_startup_menu {
     std::string credits;
     std::string version;
     // A status line under the subtitle; on the pickers it replaces the subtitle.
+    // Set text and severity together (set_message).
     std::string message;
-    bool message_is_error = false;
+    message_severity severity = message_severity::status;
     // Form screens: a text field, or a code shown large.
     std::optional<text_input_state> field;
     std::string code;
@@ -72,6 +75,12 @@ struct render_startup_menu {
     bool more_above = false;
     bool more_below = false;
 };
+
+// Replaces the status line: its text and its severity, never one without the other.
+inline void set_message(render_startup_menu& menu, std::string text, const message_severity severity) {
+    menu.message = std::move(text);
+    menu.severity = severity;
+}
 
 // Tile layout in overlay clip space for `count` tiles: a single column on
 // the main, form and confirm screens (closer together when there are many),

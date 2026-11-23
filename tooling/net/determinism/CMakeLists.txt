@@ -38,6 +38,7 @@ set(sources
   src/physics/ground_contact.cpp
   src/physics/turf_contact.cpp
   src/physics/ground_mesh.cpp
+  src/physics/surface_index.cpp
   src/physics/ground_pad.cpp
   src/physics/material_zone.cpp
   src/physics/terrain.cpp
@@ -70,6 +71,7 @@ set(sources
   src/game/way_sign.cpp
   src/game/json_util.cpp
   src/game/pixel_font_data.cpp
+  src/game/area_surface.cpp
   src/game/play_area.cpp
   src/game/reward_rules.cpp
   src/game/skill_catalog.cpp

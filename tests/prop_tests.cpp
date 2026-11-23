@@ -3,6 +3,7 @@
 #include "game/model_kinds.h"
 #include "game/prop_loader.h"
 #include "renderer/camera_local.h"
+#include "renderer/mesh_instance.h"
 #include "renderer/prop_batch.h"
 #include "renderer/prop_pieces.h"
 
@@ -16,6 +17,8 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/mat3x3.hpp>
+#include <glm/matrix.hpp>
 #include <glm/vec4.hpp>
 
 namespace {
@@ -191,11 +194,12 @@ TEST_CASE("a model's parts become unit meshes in its frame, a box its six faces"
     // Drawn, every vertex carries a normal pointing out of its piece.
     prop_batch batch;
     append_prop_model(batch, *model, frame, glow_floors{});
-    CHECK(batch.opaque().size() == prop_model_vertex_count(*model));
-    CHECK(batch.blended().empty());
+    const std::vector<prop_vertex> drawn = batch.opaque_vertices();
+    CHECK(drawn.size() == prop_model_vertex_count(*model));
+    CHECK(batch.blended_vertices().empty());
     std::size_t side = 0;
     for (std::size_t i = 0; i < prop_mesh_vertex_count(prop_mesh::cylinder); ++i) {
-        const prop_vertex& vertex = batch.opaque()[i];
+        const prop_vertex& vertex = drawn[i];
         const glm::vec3 from_axis(vertex.position.x - 10.0f, 0.0f, vertex.position.z);
         if (std::abs(vertex.normal.y) > 0.99f) {
             // A cap: facing out of its end.
@@ -206,4 +210,77 @@ TEST_CASE("a model's parts become unit meshes in its frame, a box its six faces"
         }
     }
     CHECK(side > 0U);
+}
+
+namespace {
+// A turned, stretched, mirrored and moved placement: what a limb, a wheel or a mirrored figure part is.
+glm::mat4 awkward_model(const float turn, const glm::vec3& stretch, const glm::vec3& at) {
+    return glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), at), turn, glm::normalize(glm::vec3(1.0f, 2.0f, -0.5f))), stretch);
+}
+}
+
+TEST_CASE("an instance places its canonical mesh exactly as the matrix transformed each vertex, normals by the inverse transpose") {
+    const canonical_meshes meshes;
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    for (const glm::mat4& model : {awkward_model(0.7f, glm::vec3(0.2f, 1.5f, 0.4f), glm::vec3(10.0f, 2.0f, -4.0f)),
+                                   awkward_model(-2.1f, glm::vec3(-1.0f, 0.3f, 0.3f), glm::vec3(-3.0f, 0.0f, 8.0f)),
+                                   glm::mat4(1.0f)}) {
+        const mesh_instance instance = make_mesh_instance(model, glm::vec3(0.25f, 0.5f, 0.75f), -3.0f, 0.5f);
+        CHECK(instance_matrix(instance) == model);
+        CHECK(instance.color == glm::vec3(0.25f, 0.5f, 0.75f));
+        CHECK(instance.glow == -3.0f);
+        CHECK(instance.alpha == 0.5f);
+        const glm::mat3 normals = glm::transpose(glm::inverse(glm::mat3(model)));
+        for (const prop_mesh mesh : {prop_mesh::cylinder, prop_mesh::sphere, prop_mesh::quad}) {
+            REQUIRE(meshes.vertex_count(mesh) > 0U);
+            for (std::size_t i = 0; i < meshes.vertex_count(mesh); ++i) {
+                const float* at = &meshes.vertices(mesh)[i * canonical_meshes::floats_per_vertex];
+                CHECK(placed_position(instance, meshes, mesh, i) == glm::vec3(model * glm::vec4(at[0], at[1], at[2], 1.0f)));
+                const glm::vec3 normal = placed_normal(instance, meshes, mesh, i);
+                CHECK(near(glm::length(normal), 1.0f, 0.0001f));
+                CHECK(near(normal, glm::normalize(normals * glm::vec3(at[3], at[4], at[5])), 0.0001f));
+            }
+        }
+    }
+    // The batch lists each mesh apart, opaque and blended; joined they are one buffer the draws index into.
+    prop_batch batch;
+    batch.append(prop_mesh::sphere, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
+    batch.append(prop_mesh::quad, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
+    batch.append(prop_mesh::cylinder, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
+    batch.append(prop_mesh::sphere, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f);
+    batch.append(prop_mesh::sphere, glm::mat4(1.0f), glm::vec3(1.0f), 0.0f, 0.4f);
+    std::vector<mesh_instance> joined;
+    batch.join(joined);
+    CHECK(joined.size() == 5U);
+    CHECK(batch.joined_first(false, prop_mesh::cylinder) == 0U);
+    CHECK(batch.joined_first(false, prop_mesh::sphere) == 1U);
+    CHECK(batch.joined_first(false, prop_mesh::quad) == 3U);
+    CHECK(batch.joined_first(true, prop_mesh::sphere) == 4U);
+    CHECK(batch.instances(false, prop_mesh::sphere).size() == 2U);
+    CHECK(batch.instances(true, prop_mesh::sphere).size() == 1U);
+    CHECK(joined.back().alpha == 0.4f);
+    CHECK(batch.opaque_vertices().size() == prop_mesh_vertex_count(prop_mesh::cylinder) + 2 * prop_mesh_vertex_count(prop_mesh::sphere) +
+                                                prop_mesh_vertex_count(prop_mesh::quad));
+    batch.clear();
+    CHECK(batch.empty());
+}
+
+TEST_CASE("the corners an instance is tracked by move at least as far as any of its vertices between two placements") {
+    const canonical_meshes meshes;
+    const mesh_instance before = make_mesh_instance(awkward_model(0.3f, glm::vec3(0.6f, 1.2f, 0.5f), glm::vec3(1.0f, 2.0f, 3.0f)),
+                                                    glm::vec3(1.0f), 0.0f);
+    const mesh_instance after = make_mesh_instance(awkward_model(0.5f, glm::vec3(0.7f, 1.1f, 0.5f), glm::vec3(1.2f, 2.0f, 2.7f)),
+                                                   glm::vec3(1.0f), 0.0f);
+    for (const prop_mesh mesh : {prop_mesh::cylinder, prop_mesh::sphere, prop_mesh::quad}) {
+        float vertex_moved = 0.0f;
+        for (std::size_t i = 0; i < meshes.vertex_count(mesh); ++i) {
+            vertex_moved = std::max(vertex_moved, glm::length(placed_position(after, meshes, mesh, i) - placed_position(before, meshes, mesh, i)));
+        }
+        float corner_moved = 0.0f;
+        const auto was = placed_corners(before, mesh);
+        const auto now = placed_corners(after, mesh);
+        for (std::size_t c = 0; c < was.size(); ++c) { corner_moved = std::max(corner_moved, glm::length(now[c] - was[c])); }
+        CHECK(vertex_moved > 0.0f);
+        CHECK(corner_moved >= vertex_moved - 0.00001f);
+    }
 }

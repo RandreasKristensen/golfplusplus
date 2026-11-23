@@ -170,7 +170,7 @@ void move_bag(game_state& state) {
     }
     if (const std::optional<cart_spot> spot = cart_spot_in_reach(state)) {
         if (spot->taken) {
-            state.notice = game_notice{text_hud_bag_spot_taken, 0.0f};
+            state.notice = game_notice{text_hud_bag_spot_taken, 0.0f, message_severity::error};
             return;
         }
         place_bag(state, bag_place{bag_where::on_cart, spot->seat, spot->owner, glm::vec3(0.0f), 0.0f});

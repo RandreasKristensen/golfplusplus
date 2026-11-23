@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "core/startup_options.h"
+#include "core/benchmark_scenarios.h"
 #include "game/sky_clock.h"
 
 #include <cstdint>
@@ -131,21 +132,21 @@ TEST_CASE("GOLFPP_GAME_TIME can pin the hour on a game date of its own") {
 }
 
 TEST_CASE("GOLFPP_WINDOW sets the window size and GOLFPP_SCREENSHOT the picture's path") {
-    const startup_options none = with_review_options(startup_options{}, nullptr, nullptr);
+    const startup_options none = with_review_options(startup_options{}, nullptr, nullptr, nullptr);
     CHECK(none.window_width == 0);
     CHECK(none.window_height == 0);
     CHECK(none.screenshot_path.empty());
 
-    const startup_options sized = with_review_options(startup_options{}, " 3440x1440 ", " shots/wide.bmp\n");
+    const startup_options sized = with_review_options(startup_options{}, " 3440x1440 ", " shots/wide.bmp\n", " 2 ");
     CHECK(sized.window_width == 3440);
     CHECK(sized.window_height == 1440);
     CHECK(sized.screenshot_path == "shots/wide.bmp");
-    CHECK(with_review_options(startup_options{}, "1024X768", nullptr).window_width == 1024);
+    CHECK(with_review_options(startup_options{}, "1024X768", nullptr, nullptr).window_width == 1024);
 
     // Anything but two positive whole numbers keeps the default size.
     for (const char* bad : {"", "1920", "1920x", "x1080", "0x1080", "1920x0", "-5x10", "19.5x10", "1920 x 1080", "axb",
                             "999999x10"}) {
-        const startup_options options = with_review_options(startup_options{}, bad, nullptr);
+        const startup_options options = with_review_options(startup_options{}, bad, nullptr, nullptr);
         CHECK(options.window_width == 0);
         CHECK(options.window_height == 0);
     }
@@ -168,4 +169,51 @@ TEST_CASE("GOLFPP_WEATHER holds a weather kind, optionally with wind and wetness
         CHECK(!with_weather_options(startup_options{}, bad, nullptr).weather.has_value());
     }
     CHECK(with_online_options(startup_options{}, nullptr, nullptr, {"--god"}).god_menu);
+}
+
+TEST_CASE("full-app benchmark is opt-in, uncapped and accepts short diagnostics") {
+    CHECK(with_benchmark_options({}, nullptr, "30", "1").vsync);
+    const auto full = with_benchmark_options({}, " log ", nullptr, nullptr);
+    CHECK(!full.vsync);
+    CHECK(full.benchmark_directory == "log");
+    CHECK(full.benchmark_ms == 10000);
+    CHECK(with_benchmark_options({}, "log", "-1", nullptr).benchmark_ms == 10000);
+    const auto quick = with_benchmark_options({}, "log", "50", "1");
+    CHECK(quick.benchmark_ms == 50);
+    CHECK(quick.benchmark_reverse);
+}
+
+TEST_CASE("full-app matrix covers ponds, control, matched crowds and reversed hub") {
+    const auto wet = benchmark_scenarios(false, true, false, false);
+    CHECK(std::count_if(wet.begin(), wet.end(), [](const auto& s) { return s.view == benchmark_view::pond; }) == 1);
+    const auto dry = benchmark_scenarios(false, false, true, false);
+    CHECK(std::none_of(dry.begin(), dry.end(), [](const auto& s) { return s.view == benchmark_view::pond; }));
+    CHECK(std::count_if(dry.begin(), dry.end(), [](const auto& s) { return s.no_water; }) == 1);
+    for (const bool hub : {true, false}) {
+        const auto forward = benchmark_scenarios(hub, false, false, false);
+        const auto reverse = benchmark_scenarios(hub, false, false, true);
+        REQUIRE(forward.size() == reverse.size());
+        for (std::size_t i = 0; i < forward.size(); ++i) {
+            CHECK(std::string(forward[i].name) == reverse[reverse.size() - 1 - i].name);
+        }
+        for (const int count : {0, 5, 40}) {
+            CHECK(std::any_of(forward.begin(), forward.end(), [count](const auto& s) { return s.nearby == count; }));
+        }
+        CHECK(std::count_if(forward.begin(), forward.end(), [](const auto& s) { return s.moving && s.nearby == 40; }) == 1);
+        CHECK(std::none_of(forward.begin(), forward.end(), [](const auto& s) { return s.moving && s.nearby != 40; }));
+    }
+}
+
+TEST_CASE("a pinned date dates the booted course, so its trees stand in that season; no date keeps the course's") {
+    course_definition course;
+    course.sky.month = 8;
+    course.sky.day = 28;
+    const startup_options winter = with_game_time(startup_options{}, "1989-12-21T12");
+    REQUIRE(winter.game_date.has_value());
+    const course_definition dated = on_pinned_date(course, winter.game_date);
+    CHECK(dated.sky.month == 12);
+    CHECK(dated.sky.day == 21);
+    const course_definition kept = on_pinned_date(course, std::nullopt);
+    CHECK(kept.sky.month == 8);
+    CHECK(kept.sky.day == 28);
 }

@@ -31,6 +31,7 @@ struct render_floodlights;  // renderer/floodlight_batch.h
 struct grass_field;   // renderer/grass_field.h
 struct render_water;   // renderer/water_batch.h
 struct render_hole_signs;  // renderer/hole_sign_batch.h
+struct course_map_sheet;   // renderer/course_map_sheet.h
 
 struct render_skill_progress {
     std::string label;
@@ -123,9 +124,8 @@ struct render_trail {
     float alpha = 0.0f;
 };
 
-// A hole on the course map: its number, along its line of play (tee, the
-// hole's interior control points, pin), drawn faintly from tee to pin; and
-// its tee box, if it has one.
+// A hole on the course map: its number, placed along its line of play (tee,
+// the hole's interior control points, pin), and its tee box, if it has one.
 struct render_map_hole {
     std::string number;
     std::vector<glm::vec3> line_of_play;
@@ -264,13 +264,17 @@ struct render_lightning {
 };
 
 // A tree species as drawn this frame (game/tree_season.h): its look's name,
-// the share of its crowns in leaf, how far they have turned and how fresh
-// their spring green still is.
+// the share of its crowns in leaf, how far they have turned, how fresh
+// their spring green still is, the share they hold withered and how many of
+// their leaves are falling.
 struct render_tree_species {
     std::string name;
     float foliage = 1.0f;
     float turned = 0.0f;
     float fresh = 0.0f;
+    float withered = 0.0f;  // game/tree_season.h's withered_share
+    float falling = 0.0f;   // leaves_falling: the share of a full crown falling a day
+    float falling_withered = 0.0f;  // the share of those withered
 };
 
 // The weather's moving things this frame (core/weather_frame.h): rain, the
@@ -483,16 +487,23 @@ struct render_data {
     std::optional<float> rangefinder_wind_angle;
     bool show_course_map = false;
     // The course map: the XZ outline around every hole's ribbon and zones
-    // (play_area::holes_outline) that it turns and fits to its paper, and
-    // each hole's number along its line of play.
+    // (play_area::holes_outline) that it turns and fits to its paper, the
+    // ground printed on it (built once per course), and each hole's number
+    // along its line of play.
     std::vector<glm::vec3> course_map_outline;
+    const course_map_sheet* course_map = nullptr;
     std::vector<render_map_hole> map_holes;
+    // Metres per world unit, for the map's scale bar.
+    float map_meters_per_unit = 1.0f;
     // My bag, when it is not on my back.
     std::optional<glm::vec3> map_bag_position;
     bool show_scorecard = false;
     bool show_course_results = false;
     scorecard_data scorecard;
-    std::string notice_label;  // a refusal from the server, for a moment
+    // The one notice in the HUD box, for a moment: a refusal (error), or a
+    // status such as progress waiting on the server or a rules consequence.
+    std::string notice_label;
+    message_severity notice_severity = message_severity::status;
     // Why lighting.json or picture.json is not shown (core/look_tuning.h),
     // drawn as the notice with or without the HUD.
     std::string look_notice;
@@ -515,6 +526,6 @@ struct render_data {
     // Developer overlay (Ctrl).
     bool show_fps = false;
     std::string fps_label;
-    frame_profile profile_summary;
+    const frame_profile* profile_summary = nullptr;  // app-owned overlay average
     std::uint64_t sync_breaches = 0;
 };

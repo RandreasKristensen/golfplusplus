@@ -18,6 +18,7 @@
 // the trees and floodlights cut the beams they stand in. Each pair of sun
 // or not and how many lamps is its own program, picked here.
 
+#include "renderer/gl_storage.h"
 #include "game/lighting_loader.h"
 #include "renderer/framebuffer.h"
 #include "renderer/gl_timer.h"
@@ -34,6 +35,9 @@
 
 class sun_shaft_pass {
 public:
+    explicit sun_shaft_pass(gl_storage storage = {})
+        : storage_(storage), composite_(storage), shafts_(storage) {}
+
     // `shader_dir` holds the shaft shaders and crt.vert; `screen_vao` is a
     // full-screen quad owned by the caller; the shadow map is bound to
     // `shadow_map_unit` and the lamps' maps to `lamp_map_unit` while the
@@ -49,9 +53,9 @@ public:
     // Leaves its own framebuffer bound: the caller binds the scene's again.
     void draw(const frame_lighting_block& lighting, const shadow_map_pass& shadows, const lamp_shadow_pass& lamps,
               unsigned int scene_depth, const glm::mat4& view_proj, gl_timer_pool& timers);
-    void set_profile(frame_profile* profile);
 
 private:
+    gl_storage storage_;
     void destroy_targets();
     // The march for the sun or not and `lamps` lamps.
     shader_program& march(bool sun, std::size_t lamps);

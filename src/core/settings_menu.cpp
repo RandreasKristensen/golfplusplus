@@ -139,8 +139,9 @@ render_startup_menu make_settings_menu_render_data(const settings_view& view,
     menu.title = lookup_text(text, text_menu_settings_title);
     menu.subtitle = lookup_text(text, text_menu_settings_subtitle);
     menu.footer = lookup_text(text, text_menu_settings_footer);
-    menu.message = view.search.empty() ? lookup_text(text, text_menu_settings_search_hint)
-                                       : format_text(text, text_menu_settings_search, {{"search", view.search}});
+    set_message(menu, view.search.empty() ? lookup_text(text, text_menu_settings_search_hint)
+                                          : format_text(text, text_menu_settings_search, {{"search", view.search}}),
+                message_severity::status);
 
     std::vector<std::string> labels;
     for (const setting_definition& definition : definitions) {

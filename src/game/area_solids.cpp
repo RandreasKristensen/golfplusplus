@@ -98,11 +98,13 @@ std::vector<solid> standing_solids(const play_area& area, const game_tuning& tun
         solids.push_back(stopping_all(upright(solid_kind::pole, sign.post_foot, sign.post_radius,
                                               way_sign_top(sign) - sign.post_foot.y),
                                       contacts.pole));
-        const glm::vec3 half = sign.points * sign.board_half_width;
         const glm::vec3 low(0.0f, sign.board_half_height, 0.0f);
-        solids.push_back(stopping_all(wall(solid_kind::board, sign.board_center - half - low, sign.board_center + half - low,
-                                           0.5f * sign.board_thickness, 2.0f * sign.board_half_height),
-                                      contacts.board));
+        for (const way_board& board : sign.boards) {
+            const glm::vec3 half = board.points * board.half_width;
+            solids.push_back(stopping_all(wall(solid_kind::board, board.center - half - low, board.center + half - low,
+                                               0.5f * sign.board_thickness, 2.0f * sign.board_half_height),
+                                          contacts.board));
+        }
     }
     // Each cart path's slabs, joint to joint: walkable tops the ball meets
     // as the surface (sample_area), by the path's numbers.

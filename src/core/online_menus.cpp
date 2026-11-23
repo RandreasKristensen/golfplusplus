@@ -274,17 +274,15 @@ std::string message_text(const text_assets& text, const std::string& key) {
 
 void login_render_data(const text_assets& text, const online_menu_status& online, render_startup_menu& menu) {
     if (!online.available) {
-        menu.message = lookup_text(text, text_menu_login_unavailable);
-        menu.message_is_error = true;
+        set_message(menu, lookup_text(text, text_menu_login_unavailable), message_severity::error);
     } else if (idle(online) && needs_sign_in(online)) {
-        menu.message = lookup_text(text, text_menu_login_needed);
+        set_message(menu, lookup_text(text, text_menu_login_needed), message_severity::status);
     } else if (idle(online)) {
-        menu.message = message_text(text, online_error_text_key(online.failure_id));
-        menu.message_is_error = true;
+        set_message(menu, message_text(text, online_error_text_key(online.failure_id)), message_severity::error);
     } else if (online.status == net_status::waiting_for_browser) {
-        menu.message = lookup_text(text, text_menu_login_browser);
+        set_message(menu, lookup_text(text, text_menu_login_browser), message_severity::status);
     } else {
-        menu.message = lookup_text(text, text_menu_login_signing_in);
+        set_message(menu, lookup_text(text, text_menu_login_signing_in), message_severity::status);
     }
 }
 
@@ -396,8 +394,7 @@ void make_online_menu_render_data(const startup_flow_state& state,
     menu.footer = lookup_text(text, text_menu_online_footer);
     menu.cursor_time = static_cast<float>(std::fmod(state.clock_seconds, 60.0));
     if (!state.message_key.empty()) {
-        menu.message = message_text(text, state.message_key);
-        menu.message_is_error = true;
+        set_message(menu, message_text(text, state.message_key), message_severity::error);
     }
     const auto selected = [&state](const std::size_t i) { return static_cast<int>(i) == state.selection; };
 
@@ -417,7 +414,7 @@ void make_online_menu_render_data(const startup_flow_state& state,
         menu.footer = lookup_text(text, text_menu_name_footer);
         menu.field = state.field;
         if (state.waiting) {
-            menu.message = lookup_text(text, text_menu_name_waiting);
+            set_message(menu, lookup_text(text, text_menu_name_waiting), message_severity::status);
         }
         add_tile(menu, lookup_text(text, text_menu_name_ok), lookup_text(text, text_menu_name_ok_hint), selected(0));
         if (name_entry_tiles(online) > 1) {
@@ -431,7 +428,7 @@ void make_online_menu_render_data(const startup_flow_state& state,
         menu.footer = lookup_text(text, text_menu_link_entry_footer);
         menu.field = state.field;
         if (state.waiting) {
-            menu.message = lookup_text(text, text_menu_link_entry_waiting);
+            set_message(menu, lookup_text(text, text_menu_link_entry_waiting), message_severity::status);
         }
         add_tile(menu, lookup_text(text, text_menu_link_entry_ok), lookup_text(text, text_menu_link_entry_ok_hint), selected(0));
         add_tile(menu, lookup_text(text, text_menu_login_back), lookup_text(text, text_menu_link_entry_back_hint), selected(1));
@@ -442,16 +439,16 @@ void make_online_menu_render_data(const startup_flow_state& state,
         menu.footer = lookup_text(text, text_menu_link_code_footer);
         if (!online.link_code.empty()) {
             menu.code = online.link_code;
-            menu.message = format_text(text, text_menu_link_code_expires, {{"minutes", std::to_string(online.link_code_minutes_left)}});
-            menu.message_is_error = false;
+            set_message(menu, format_text(text, text_menu_link_code_expires, {{"minutes", std::to_string(online.link_code_minutes_left)}}),
+                        message_severity::status);
         } else if (state.message_key.empty()) {
-            menu.message = lookup_text(text, text_menu_link_code_waiting);
+            set_message(menu, lookup_text(text, text_menu_link_code_waiting), message_severity::status);
         }
         add_tile(menu, lookup_text(text, text_menu_link_code_done), lookup_text(text, text_menu_link_code_done_hint), selected(0));
         break;
     case startup_flow::joining:
         menu.subtitle = lookup_text(text, text_menu_joining_subtitle);
-        menu.message = format_text(text, text_menu_joining_message, {{"course", online_hub_course}});
+        set_message(menu, format_text(text, text_menu_joining_message, {{"course", online_hub_course}}), message_severity::status);
         add_tile(menu, lookup_text(text, text_menu_login_cancel), lookup_text(text, text_menu_joining_cancel_hint), selected(0));
         break;
     default:

@@ -179,17 +179,24 @@ float sample_height_grid(const height_grid& grid, const float x, const float z) 
     return near_row + (far_row - near_row) * tz;
 }
 
-std::optional<terrain_sample> sample_holes(const std::vector<terrain_mesh>& holes, const glm::vec3& position) {
+std::optional<terrain_sample> sample_holes(const std::vector<terrain_mesh>& holes, const glm::vec3& position,
+                                           const index_range* among) {
     std::optional<terrain_sample> best;
     std::size_t best_hole = 0;
-    for (std::size_t i = 0; i < holes.size(); ++i) {
+    const auto consider = [&](const std::size_t i) {
         const std::optional<terrain_sample> sample = sample_terrain_inside(holes[i], position);
-        if (!sample) {
-            continue;
-        }
-        if (!best || outranks(holes[i], *sample, holes[best_hole], *best)) {
+        if (sample && (!best || outranks(holes[i], *sample, holes[best_hole], *best))) {
             best = sample;
             best_hole = i;
+        }
+    };
+    if (among != nullptr) {
+        for (const std::uint32_t i : *among) {
+            consider(i);
+        }
+    } else {
+        for (std::size_t i = 0; i < holes.size(); ++i) {
+            consider(i);
         }
     }
     return best;
@@ -198,7 +205,11 @@ std::optional<terrain_sample> sample_holes(const std::vector<terrain_mesh>& hole
 terrain_material surface_material(const std::vector<material_zone>& zones,
                                   const terrain_sample* on_hole,
                                   const glm::vec3& position) {
-    return zone_material_at(zones, position).value_or(on_hole != nullptr ? on_hole->material : terrain_material::rough);
+    return surface_material(zone_material_at(zones, position), on_hole);
+}
+
+terrain_material surface_material(const std::optional<terrain_material> zone, const terrain_sample* on_hole) {
+    return zone.value_or(on_hole != nullptr ? on_hole->material : terrain_material::rough);
 }
 
 built_ground build_ground(const std::vector<terrain_mesh>& holes,
@@ -390,7 +401,12 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
 
     // Each pond's level: the lowest of the uncarved ground round its edge
     // (its corners and the middles of its sides), but where another pond's
-    // water is. Ponds whose outlines meet are one, at the lowest of their levels.
+    // water is, less the rise of its straight bank over a fine cell's
+    // diagonal, so the bank crosses the level on the outline even where the
+    // ground round it is flat. Ponds whose outlines meet are one, at the lowest
+    // of their levels.
+    const float water_edge_meters = cell_diagonal / static_cast<float>(lattice);
+    const float water_freeboard = settings.zones.water_edge_slope * water_edge_meters;
     std::vector<std::size_t> pond(zones.size());
     for (std::size_t i = 0; i < zones.size(); ++i) {
         pond[i] = i;
@@ -433,7 +449,7 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
     for (std::size_t i = 0; i < zones.size(); ++i) {
         if (is_water(i)) {
             const float level = pond_low[root(i)];
-            built.water_levels[i] = level < std::numeric_limits<float>::max() ? level : uncarved_at(zones[i].center);
+            built.water_levels[i] = (level < std::numeric_limits<float>::max() ? level : uncarved_at(zones[i].center)) - water_freeboard;
         }
     }
 
@@ -464,7 +480,7 @@ built_ground build_ground(const std::vector<terrain_mesh>& holes,
         for (int row = cell_row_at(zone.center.z - reach.y); row <= cell_row_at(zone.center.z + reach.y); ++row) {
             for (int column = cell_column_at(zone.center.x - reach.x); column <= cell_column_at(zone.center.x + reach.x); ++column) {
                 cell_carving[static_cast<std::size_t>(row * cell_columns + column)].push_back(
-                    carving_zone{&zone, built.water_levels[i], &bunker_edges[i]});
+                    carving_zone{&zone, built.water_levels[i], water_edge_meters, &bunker_edges[i]});
             }
         }
     }

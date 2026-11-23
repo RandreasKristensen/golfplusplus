@@ -5,6 +5,7 @@
 // filled once at init (assets/picture/shaders/weather_streak.vert wraps them round
 // the camera). Blended over the scene, depth-tested but never written.
 
+#include "renderer/gl_storage.h"
 #include "profiling/profiling.h"
 #include "renderer/render_data.h"
 #include "renderer/shader.h"
@@ -15,12 +16,16 @@
 
 class weather_renderer {
 public:
+    explicit weather_renderer(gl_storage storage = {})
+        : storage_(storage), shader_(storage) {}
+
     // `max_streaks` is the most either draw ever shows.
     bool init(const std::string& vertex_path, const std::string& fragment_path, int max_streaks);
     void shutdown();
     void draw(const render_weather& weather, const glm::mat4& view_proj, frame_profile* profile);
 
 private:
+    gl_storage storage_;
     void draw_streaks(const render_streaks& streaks);
 
     shader_program shader_;

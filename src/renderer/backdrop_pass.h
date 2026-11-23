@@ -10,6 +10,7 @@
 // each follows the time of day from the frame_lighting block (lighting.glsl)
 // without redrawing the pictures. Water reflects this same scene path.
 
+#include "renderer/gl_storage.h"
 #include "game/course_definition.h"
 #include "game/lighting_loader.h"
 #include "renderer/framebuffer.h"
@@ -25,6 +26,9 @@
 
 class backdrop_pass {
 public:
+    explicit backdrop_pass(gl_storage storage = {})
+        : shader_(storage), reflection_shader_(storage), sky_(storage), land_(storage) {}
+
     // `screen_vao` is a full-screen quad (position.xyz first) owned by the caller.
     bool init(const std::string& asset_root, const std::string& vertex_path, const std::string& fragment_path,
               unsigned int screen_vao, const sky_style& sky);
@@ -39,10 +43,6 @@ public:
     // block must hold the prepared haze) wherever the depth buffer is still
     // clear; `seconds` runs the stars' twinkle. Leaves depth testing on.
     void draw(const glm::mat4& view, const glm::mat4& proj, float seconds, const render_lightning& lightning, bool reflection = false);
-    void set_profile(frame_profile* profile) {
-        shader_.set_profile(profile);
-        reflection_shader_.set_profile(profile);
-    }
 
 private:
     void load(const course_backdrop& backdrop);

@@ -49,30 +49,69 @@ def placed_hole_points(world: dict, holes: list[dict]) -> list[tuple[float, floa
 
 # The course map's paper is this much wider than tall, and shows at most
 # this much more than the holes' span either way, its margin round them
-# (paper_aspect and map_margin_share in src/renderer/course_map_overlay.cpp).
+# (course_map_paper_aspect in src/renderer/course_map_layout.h and
+# map_margin_share in course_map_layout.cpp).
 MAP_PAPER_ASPECT = 1.5
 MAP_PAPER_SLACK = 1.1
+# Between the paper's edge and the course on it, as a share of the paper's
+# half height, on every side (map_margin_share in course_map_layout.cpp).
+MAP_MARGIN_SHARE = 0.08
+# What the course may fill of the paper, in paper heights: it fits inside the margin.
+MAP_DRAWABLE = (MAP_PAPER_ASPECT - MAP_MARGIN_SHARE, 1.0 - MAP_MARGIN_SHARE)
 
 
 def _map_turned(x: float, z: float, cos_t: float, sin_t: float) -> tuple[float, float]:
-    """A course point on the map's axes (turned_point in course_map_overlay.cpp):
+    """A course point on the map's axes (turned_point in course_map_layout.cpp):
     course +X to the left, +Z up, turned counter-clockwise."""
     px, pz = -x, z
     return px * cos_t - pz * sin_t, px * sin_t + pz * cos_t
 
 
+def map_fit_scale(points: list[tuple[float, float]], degrees: float,
+                  drawable: tuple[float, float] = MAP_DRAWABLE) -> float:
+    """The scale (drawable units per metre) at which `points`, turned `degrees`
+    counter-clockwise, just fit `drawable` (course_map_fit_scale)."""
+    radians = degrees * math.pi / 180.0
+    turned = [_map_turned(x, z, math.cos(radians), math.sin(radians)) for x, z in points]
+    width = max(max(p[0] for p in turned) - min(p[0] for p in turned), 1.0)
+    height = max(max(p[1] for p in turned) - min(p[1] for p in turned), 1.0)
+    return min(drawable[0] / width, drawable[1] / height)
+
+
+def map_turn_degrees(points: list[tuple[float, float]],
+                     drawable: tuple[float, float] = MAP_DRAWABLE) -> float:
+    """The turn, in degrees, at which the course round `points` fits the map's
+    paper at the largest scale (course_map_turn_degrees in
+    course_map_layout.cpp): the best whole degree from -89 to 90, refined to a
+    tenth; scales equal but for rounding go to the smaller turn, and to the
+    counter-clockwise one of two equal turns."""
+    best_tenths, best_scale = 0, map_fit_scale(points, 0.0, drawable)
+
+    def consider(tenths: int) -> None:
+        nonlocal best_tenths, best_scale
+        scale = map_fit_scale(points, tenths * 0.1, drawable)
+        tolerance = best_scale * 1.0e-9
+        if scale > best_scale + tolerance:
+            beats = True
+        elif scale >= best_scale - tolerance:
+            beats = abs(tenths) < abs(best_tenths) if abs(tenths) != abs(best_tenths) else tenths > best_tenths
+        else:
+            beats = False
+        if beats:
+            best_tenths, best_scale = tenths, scale
+
+    for degrees in range(-89, 91):
+        consider(degrees * 10)
+    coarse = best_tenths
+    for offset in range(-9, 10):
+        consider(coarse + offset)
+    return best_tenths * 0.1
+
+
 def map_turn(points: list[tuple[float, float]]) -> tuple[float, float]:
-    """The map's turn (cosine, sine) of the course round `points` (course_turn
-    in course_map_overlay.cpp): the one, nearest to none, leaving it least tall."""
-    best, best_height = (1.0, 0.0), float("inf")
-    for step in range(180):
-        degrees = -(step // 2) if step % 2 == 0 else step // 2 + 1
-        turn = (math.cos(math.radians(degrees)), math.sin(math.radians(degrees)))
-        heights = [_map_turned(x, z, *turn)[1] for x, z in points]
-        height = max(heights) - min(heights)
-        if height < best_height * 0.9999:
-            best, best_height = turn, height
-    return best
+    """The map's turn (cosine, sine) of the course round `points`."""
+    radians = map_turn_degrees(points) * math.pi / 180.0
+    return math.cos(radians), math.sin(radians)
 
 
 def world_box(points: list[tuple[float, float]], margin: float) -> tuple[float, float, float, float]:

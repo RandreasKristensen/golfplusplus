@@ -68,7 +68,7 @@ bool floodlight_renderer::prepare(const render_floodlights* floodlights, frame_p
         return false;
     }
     if (!uploaded_ || uploaded_revision_ != floodlights->revision) {
-        buffer_.upload(floodlights->vertices.data(), floodlights->vertices.size() * sizeof(floodlight_vertex), profile);
+        buffer_.upload(floodlights->vertices.data(), floodlights->vertices.size() * sizeof(floodlight_vertex), profile, upload_kind::cached);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         vertex_count_ = floodlights->vertices.size();
         uploaded_revision_ = floodlights->revision;

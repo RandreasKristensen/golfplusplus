@@ -2,7 +2,8 @@
 
 // The hole signs as the scene draws them: one face texture per sign
 // (hole_sign_face.h) and every sign's model in one vertex list, its board
-// with the texture on the face and wood elsewhere, on two posts. Painting
+// with the texture on the face and wood elsewhere, on two posts (a way sign's
+// boards carry it on both faces). Painting
 // the faces samples the ground for every texel, so it is rebuilt only when
 // the course is loaded again (its terrain revision moves: ground colours,
 // zones and the signs' places and poses may all differ) or what a sign says
@@ -67,13 +68,13 @@ std::vector<prop_board> prop_boards(const play_area& area, const prop_catalog& p
 struct hole_sign_source {
     hole_sign_text text;
     glm::vec3 board_center{0.0f};
-    std::string label;  // a prop board's
+    std::string label;  // a prop board's or a way board's (way_sign_label)
 };
 
 struct render_hole_signs {
     std::vector<hole_sign_vertex> vertices;  // triangles
     std::vector<render_hole_sign> signs;
-    std::vector<hole_sign_source> sources;  // one per sign of the play area, then per way sign and prop board
+    std::vector<hole_sign_source> sources;  // one per sign of the play area, then per way board and prop board
     // Bumped when rebuilt; the GL side re-uploads only when it changes.
     std::uint64_t revision = 0;
     // The game's terrain_render_revision these were built for.
@@ -84,12 +85,14 @@ struct render_hole_signs {
 
 // Appends `sign`'s board and posts as triangles.
 void append_hole_sign_model(std::vector<hole_sign_vertex>& vertices, const hole_sign& sign, const prop_model& model);
-// Appends a way sign: its board, its face towards the path, pointed at the
-// end it points to, on its post.
-void append_way_sign_model(std::vector<hole_sign_vertex>& vertices, const way_sign& sign, const prop_model& model);
+// Appends `sign`'s board `board_index`: its box with the face on both sides
+// (each read left to right by someone facing it) and its pointed end, and the
+// post with the top board, which is the first.
+void append_way_board_model(std::vector<hole_sign_vertex>& vertices, const way_sign& sign, std::size_t board_index,
+                            const prop_model& model);
 
 // Every sign of `area`, each saying `texts[i]` (one per area.signs[i]), then
-// its way signs, each saying the hole it points to, then `boards`.
+// each board of its way signs, each saying the tees it points to, then `boards`.
 render_hole_signs build_render_hole_signs(const play_area& area,
                                           const std::vector<hole_sign_text>& texts,
                                           const std::vector<prop_board>& boards,

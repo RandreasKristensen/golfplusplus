@@ -1,36 +1,43 @@
 #pragma once
 
+// Delayed GL_TIMESTAMP pairs for complete frames and every invocation of a stage.
 #include "profiling/profiling.h"
+#include "profiling/timestamp_ring.h"
+#include <array>
+#include <optional>
+#include <vector>
 
-// GPU timer queries (GL_TIME_ELAPSED) for the profiling overlay.
-//
-// Results are read back without stalling: a ring of frame slots is used and a
-// frame's timings are collected once the GPU has finished with them (usually
-// two frames later), which is fine for a debug overlay.
 class gl_timer_pool {
 public:
-    static constexpr int slot_count = 3;
-
     void init();
     void shutdown();
-
-    // Call once at the start of a frame. record=false (profiling off) issues
-    // no queries.
-    void begin_frame(bool record);
-    // A stage begun inside another counts towards the outer one: its begin
-    // and end do nothing.
+    void begin_frame(frame_profile* profile);
+    void end_frame();
     void begin(gpu_profile_stage stage);
     void end();
-    // Writes finished timings into `profile` (safe with null).
-    void collect(frame_profile* profile);
+    // Attach post-swap CPU data to the issuing slot and deliver resolved records.
+    void finish(const frame_profile& frame, const frame_profile_sink& sink);
+    // Deliver remaining records at shutdown. GPU fields stay unavailable if still busy.
+    void flush(const frame_profile_sink& sink);
 
 private:
-    unsigned int queries_[slot_count][gpu_profile_stage_count] = {};
-    bool issued_[slot_count][gpu_profile_stage_count] = {};
-    int write_slot_ = 0;
-    int frames_written_ = 0;
-    gpu_profile_stage active_stage_ = gpu_profile_stage::count;
-    int nested_ = 0;  // stages begun inside the active one and not yet ended
-    bool initialized_ = false;
-    bool recording_ = false;
+    struct segment {
+        unsigned int query[2]{};
+        gpu_profile_stage stage{};
+        gpu_stage_group group{};
+    };
+    struct slot {
+        unsigned int bounds[2]{};
+        std::vector<segment> segments;
+        std::size_t used = 0;
+        frame_profile frame;
+    };
+    bool resolve(slot& pending, frame_profile* cost);
+    timestamp_ring ring_;
+    std::array<slot, timestamp_ring::capacity> slots_;
+    std::optional<std::size_t> writing_;
+    std::optional<frame_profile> completed_;
+    std::vector<std::size_t> stack_;
+    std::uint64_t sequence_ = 0;
+    bool supported_ = false;
 };

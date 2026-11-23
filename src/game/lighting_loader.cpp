@@ -310,6 +310,22 @@ std::optional<marker_colors> parse_markers(const json& root) {
     return markers;
 }
 
+std::optional<map_inks> parse_map_inks(const json& root) {
+    map_inks inks;
+    const json* object = json_object(root, "map");
+    if (object == nullptr || !read_colors(root, "map", map_ink_fields, inks)) {
+        return std::nullopt;
+    }
+    for (const share_field<map_inks>& field : map_share_fields) {
+        const std::optional<float> share = read_share(*object, field.key);
+        if (!share) {
+            return std::nullopt;
+        }
+        inks.*field.member = *share;
+    }
+    return inks;
+}
+
 std::optional<figure_colors> parse_figures(const json& root) {
     figure_colors figures;
     const json* object = json_object(root, "figures");
@@ -349,7 +365,15 @@ std::optional<lighting_palette> parse_lighting_from_text(const std::string& text
     grass_style grass;
     const json* grass_object = json_object(*root, "grass");
     const bool grass_read = grass_object != nullptr && read_bounded(*grass_object, grass_fields, grass);
+    terrain_lod_style terrain_lod;
+    const json* terrain_lod_object = json_object(*root, "terrain_lod");
+    const std::optional<int> lod_levels = terrain_lod_object != nullptr ? json_int(*terrain_lod_object, "levels") : std::nullopt;
+    const bool terrain_lod_read = lod_levels && *lod_levels >= 0 && *lod_levels <= max_terrain_lod_levels &&
+        read_bounded(*terrain_lod_object, terrain_lod_fields, terrain_lod);
+    terrain_lod.levels = lod_levels.value_or(0);
     std::optional<std::vector<tree_look>> trees = parse_tree_looks(*root);
+    const std::optional<tree_impostor_style> impostor = parse_tree_impostor_style(*root);
+    const std::optional<falling_leaf_style> falling_leaves = parse_falling_leaf_style(*root);
     const std::optional<night_light_style> night_lights = parse_night_lights(*root);
     const std::optional<weather_style> weather = parse_weather(*root);
     const std::optional<rain_style> rain = parse_rain(*root);
@@ -358,7 +382,8 @@ std::optional<lighting_palette> parse_lighting_from_text(const std::string& text
     lighting_palette palette;
     scene_colors& colors = palette.colors;
     std::optional<marker_colors> markers = parse_markers(*root);
-    if (!keys || !markers || !figures || !glow || !sky || !shadows || !shafts || !water || !grass_read || !trees || !night_lights || !weather || !rain || !wind ||
+    const std::optional<map_inks> map = parse_map_inks(*root);
+    if (!keys || !markers || !map || !figures || !glow || !sky || !shadows || !shafts || !water || !grass_read || !terrain_lod_read || !trees || !impostor || !falling_leaves || !night_lights || !weather || !rain || !wind ||
         !lightning || !read_colors(*root, "ground", ground_fields, colors.ground)) {
         return std::nullopt;
     }
@@ -368,12 +393,16 @@ std::optional<lighting_palette> parse_lighting_from_text(const std::string& text
     palette.shafts = *shafts;
     palette.water = *water;
     palette.grass = grass;
+    palette.terrain_lod = terrain_lod;
     palette.trees = std::move(*trees);
+    palette.tree_impostor = *impostor;
+    palette.falling_leaves = *falling_leaves;
     palette.night_lights = *night_lights;
     palette.weather = *weather;
     palette.rain = *rain;
     palette.wind = *wind;
     palette.lightning = *lightning;
+    colors.map = *map;
     colors.markers = std::move(*markers);
     colors.figures = std::move(*figures);
     colors.glow = *glow;

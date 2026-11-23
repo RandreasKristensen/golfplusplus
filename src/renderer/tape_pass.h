@@ -17,6 +17,7 @@
 //   https://xdevs.com/doc/Sencore/Sencore_Tech_Tips/TT133%20-%20Testing%20VCR%20Color%20Circuits%20Using%20The%20VA62-VC63%20And%20SC61.pdf - 629 kHz colour-under
 //   https://www.digitalfaq.com/forum/video-capture/13372-color-horizontal-resolution-print.html - about 45 colour lines
 
+#include "renderer/gl_storage.h"
 #include "game/picture_loader.h"
 #include "profiling/profiling.h"
 #include "renderer/framebuffer.h"
@@ -26,6 +27,9 @@
 
 class tape_pass {
 public:
+    explicit tape_pass(gl_storage storage = {})
+        : shader_(storage), target_(storage) {}
+
     // `screen_vao` is a full-screen quad (position.xyz, uv) owned by the caller.
     bool init(const std::string& vertex_path, const std::string& fragment_path, unsigned int screen_vao,
               const tape_style& style);
@@ -38,7 +42,6 @@ public:
     // `seconds` runs the noise; `tracking` (0..1) is how much tracking noise.
     void draw(unsigned int picture_texture, float seconds, float tracking);
     unsigned int color_texture() const { return target_.color_texture(); }
-    void set_profile(frame_profile* profile) { shader_.set_profile(profile); }
 
 private:
     shader_program shader_;

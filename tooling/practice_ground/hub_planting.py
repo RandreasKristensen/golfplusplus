@@ -3,7 +3,7 @@
 Danish shelterbelts (laehegn): rows of mixed broadleaf a few metres deep, tall
 oak and beech down the middle with birch and willow outside them, a little
 spruce and a scrub of hawthorn-like bushes on the edges. A wooded crest on the
-east ridge, and clipped hedges along the south roads. Only species of
+east ridge, and clipped beech hedges along the south roads. Only species of
 assets/play/tuning/trees.json are used; trees keep the course world format and
 hedges and edge scrub use the `bushes` format.
 
@@ -29,8 +29,12 @@ def tree(rng, x, z, kind):
             "leaf_height": round(.55 * height, 2), "species": species}
 
 
-def bush(x, z, radius, height):
-    return {"position": [round(x, 2), 0., round(z, 2)], "radius": round(radius, 2), "height": round(height, 2)}
+def bush(x, z, radius, height, species=None):
+    """A bush: scrub unless `species` is named."""
+    planted = {"position": [round(x, 2), 0., round(z, 2)], "radius": round(radius, 2), "height": round(height, 2)}
+    if species:
+        planted["species"] = species
+    return planted
 
 
 def shelterbelt(rng, centre, start, end, blocked, trees, bushes, step=4.):
@@ -82,10 +86,11 @@ def crest_woods(rng, bounds, wanted, blocked, trees, spacing=9.):
 
 
 def hedge(rng, start, end, blocked, bushes):
-    """A clipped hedge along start-end: one bush every HEDGE_STEP, none where something must stay clear."""
+    """A clipped beech hedge along start-end: one bush every HEDGE_STEP, none where something must stay clear.
+    Clipped beech keeps most of its leaves withered through winter (the `hedge` species)."""
     length = math.dist(start, end)
     for k in range(int(length / HEDGE_STEP) + 1):
         t = k * HEDGE_STEP / length
         x, z = start[0] + (end[0] - start[0]) * t, start[1] + (end[1] - start[1]) * t
         if not blocked(x, z, HEDGE_RADIUS):
-            bushes.append(bush(x, z, HEDGE_RADIUS + rng.uniform(-.1, .15), HEDGE_HEIGHT + rng.uniform(-.1, .2)))
+            bushes.append(bush(x, z, HEDGE_RADIUS + rng.uniform(-.1, .15), HEDGE_HEIGHT + rng.uniform(-.1, .2), "hedge"))

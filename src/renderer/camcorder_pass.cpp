@@ -77,12 +77,6 @@ void camcorder_pass::shutdown() {
     has_frame_ = false;
 }
 
-void camcorder_pass::set_profile(frame_profile* profile) {
-    for (shader_program* shader : {&downsample_, &adapt_, &bloom_, &smear_, &record_}) {
-        shader->set_profile(profile);
-    }
-}
-
 bool camcorder_pass::ensure_size(const int width, const int height) {
     if (picture_.width() == width && picture_.height() == height) {
         return true;
@@ -175,6 +169,7 @@ void camcorder_pass::draw(const unsigned int scene_texture, const render_lightin
     record_.set_vec4("u_tone", glm::vec4(style_.shoulder, style_.toe, light.saturation, style_.bloom_strength));
     record_.set_vec4("u_gain", glm::vec4(light.gain_noise, style_.gain_grain, style_.gain_chroma, style_.smear_strength));
     record_.set_float("u_field", std::floor(seconds * fields_per_second_));
+    record_.set_int("u_grain_cell", std::max(1, grain_cell_));
     record_.set_float("u_fade", light.fade);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, bloom_target_.color_texture());

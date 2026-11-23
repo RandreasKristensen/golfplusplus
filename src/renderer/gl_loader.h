@@ -14,6 +14,7 @@
 #define GOLFPP_GL_FUNCTIONS(X)                                      \
     X(PFNGLACTIVETEXTUREPROC, glActiveTexture)                      \
     X(PFNGLATTACHSHADERPROC, glAttachShader)                        \
+    X(PFNGLBEGINCONDITIONALRENDERPROC, glBeginConditionalRender)    \
     X(PFNGLBEGINQUERYPROC, glBeginQuery)                            \
     X(PFNGLBINDBUFFERPROC, glBindBuffer)                            \
     X(PFNGLBINDBUFFERBASEPROC, glBindBufferBase)                    \
@@ -21,11 +22,12 @@
     X(PFNGLBINDRENDERBUFFERPROC, glBindRenderbuffer)                \
     X(PFNGLBINDVERTEXARRAYPROC, glBindVertexArray)                  \
     X(PFNGLBLENDEQUATIONPROC, glBlendEquation)                      \
+    X(PFNGLBLENDFUNCSEPARATEPROC, glBlendFuncSeparate)              \
     X(PFNGLBLITFRAMEBUFFERPROC, glBlitFramebuffer)                  \
     X(PFNGLBUFFERDATAPROC, glBufferData)                            \
     X(PFNGLBUFFERSUBDATAPROC, glBufferSubData)                      \
     X(PFNGLCHECKFRAMEBUFFERSTATUSPROC, glCheckFramebufferStatus)    \
-    X(PFNGLCOMPILESHADERPROC, glCompileShader)                      \
+    X(PFNGLCLEARBUFFERFVPROC, glClearBufferfv)                          X(PFNGLCOMPILESHADERPROC, glCompileShader)                      \
     X(PFNGLCREATEPROGRAMPROC, glCreateProgram)                      \
     X(PFNGLCREATESHADERPROC, glCreateShader)                        \
     X(PFNGLDELETEBUFFERSPROC, glDeleteBuffers)                      \
@@ -35,11 +37,15 @@
     X(PFNGLDELETERENDERBUFFERSPROC, glDeleteRenderbuffers)          \
     X(PFNGLDELETESHADERPROC, glDeleteShader)                        \
     X(PFNGLDELETEVERTEXARRAYSPROC, glDeleteVertexArrays)            \
-    X(PFNGLDRAWARRAYSINSTANCEDPROC, glDrawArraysInstanced)          \
+    X(PFNGLDRAWARRAYSINSTANCEDPROC, glDrawArraysInstanced)              X(PFNGLDRAWBUFFERSPROC, glDrawBuffers)                          \
+    X(PFNGLDRAWELEMENTSINSTANCEDPROC, glDrawElementsInstanced)      \
     X(PFNGLENABLEVERTEXATTRIBARRAYPROC, glEnableVertexAttribArray)  \
+    X(PFNGLGETQUERYIVPROC, glGetQueryiv)                            \
+    X(PFNGLQUERYCOUNTERPROC, glQueryCounter)                        \
+    X(PFNGLENDCONDITIONALRENDERPROC, glEndConditionalRender)        \
     X(PFNGLENDQUERYPROC, glEndQuery)                                \
     X(PFNGLFRAMEBUFFERRENDERBUFFERPROC, glFramebufferRenderbuffer)  \
-    X(PFNGLFRAMEBUFFERTEXTURE2DPROC, glFramebufferTexture2D)        \
+    X(PFNGLFRAMEBUFFERTEXTURE2DPROC, glFramebufferTexture2D)            X(PFNGLFRAMEBUFFERTEXTURELAYERPROC, glFramebufferTextureLayer)  \
     X(PFNGLGENBUFFERSPROC, glGenBuffers)                            \
     X(PFNGLGENERATEMIPMAPPROC, glGenerateMipmap)                    \
     X(PFNGLGENFRAMEBUFFERSPROC, glGenFramebuffers)                  \
@@ -53,11 +59,15 @@
     X(PFNGLGETSHADERINFOLOGPROC, glGetShaderInfoLog)                \
     X(PFNGLGETSHADERIVPROC, glGetShaderiv)                          \
     X(PFNGLGETUNIFORMBLOCKINDEXPROC, glGetUniformBlockIndex)        \
+    X(PFNGLGETUNIFORMIVPROC, glGetUniformiv)                        \
     X(PFNGLGETUNIFORMLOCATIONPROC, glGetUniformLocation)            \
+    X(PFNGLISPROGRAMPROC, glIsProgram)                              \
     X(PFNGLLINKPROGRAMPROC, glLinkProgram)                          \
     X(PFNGLRENDERBUFFERSTORAGEPROC, glRenderbufferStorage)          \
     X(PFNGLSHADERSOURCEPROC, glShaderSource)                        \
     X(PFNGLSTENCILOPSEPARATEPROC, glStencilOpSeparate)              \
+    X(PFNGLTEXIMAGE3DPROC, glTexImage3D)                            \
+    X(PFNGLTEXSUBIMAGE3DPROC, glTexSubImage3D)                      \
     X(PFNGLUNIFORM1FPROC, glUniform1f)                              \
     X(PFNGLUNIFORM1IPROC, glUniform1i)                              \
     X(PFNGLUNIFORM2FVPROC, glUniform2fv)                            \
@@ -79,6 +89,7 @@ bool load_gl_functions();
 
 #define glActiveTexture golfpp_glActiveTexture
 #define glAttachShader golfpp_glAttachShader
+#define glBeginConditionalRender golfpp_glBeginConditionalRender
 #define glBeginQuery golfpp_glBeginQuery
 #define glBindBuffer golfpp_glBindBuffer
 #define glBindBufferBase golfpp_glBindBufferBase
@@ -86,10 +97,12 @@ bool load_gl_functions();
 #define glBindRenderbuffer golfpp_glBindRenderbuffer
 #define glBindVertexArray golfpp_glBindVertexArray
 #define glBlendEquation golfpp_glBlendEquation
+#define glBlendFuncSeparate golfpp_glBlendFuncSeparate
 #define glBlitFramebuffer golfpp_glBlitFramebuffer
 #define glBufferData golfpp_glBufferData
 #define glBufferSubData golfpp_glBufferSubData
 #define glCheckFramebufferStatus golfpp_glCheckFramebufferStatus
+#define glClearBufferfv golfpp_glClearBufferfv
 #define glCompileShader golfpp_glCompileShader
 #define glCreateProgram golfpp_glCreateProgram
 #define glCreateShader golfpp_glCreateShader
@@ -101,10 +114,16 @@ bool load_gl_functions();
 #define glDeleteShader golfpp_glDeleteShader
 #define glDeleteVertexArrays golfpp_glDeleteVertexArrays
 #define glDrawArraysInstanced golfpp_glDrawArraysInstanced
+#define glDrawBuffers golfpp_glDrawBuffers
+#define glDrawElementsInstanced golfpp_glDrawElementsInstanced
 #define glEnableVertexAttribArray golfpp_glEnableVertexAttribArray
+#define glGetQueryiv golfpp_glGetQueryiv
+#define glQueryCounter golfpp_glQueryCounter
+#define glEndConditionalRender golfpp_glEndConditionalRender
 #define glEndQuery golfpp_glEndQuery
 #define glFramebufferRenderbuffer golfpp_glFramebufferRenderbuffer
 #define glFramebufferTexture2D golfpp_glFramebufferTexture2D
+#define glFramebufferTextureLayer golfpp_glFramebufferTextureLayer
 #define glGenBuffers golfpp_glGenBuffers
 #define glGenerateMipmap golfpp_glGenerateMipmap
 #define glGenFramebuffers golfpp_glGenFramebuffers
@@ -118,11 +137,15 @@ bool load_gl_functions();
 #define glGetShaderInfoLog golfpp_glGetShaderInfoLog
 #define glGetShaderiv golfpp_glGetShaderiv
 #define glGetUniformBlockIndex golfpp_glGetUniformBlockIndex
+#define glGetUniformiv golfpp_glGetUniformiv
 #define glGetUniformLocation golfpp_glGetUniformLocation
+#define glIsProgram golfpp_glIsProgram
 #define glLinkProgram golfpp_glLinkProgram
 #define glRenderbufferStorage golfpp_glRenderbufferStorage
 #define glShaderSource golfpp_glShaderSource
 #define glStencilOpSeparate golfpp_glStencilOpSeparate
+#define glTexImage3D golfpp_glTexImage3D
+#define glTexSubImage3D golfpp_glTexSubImage3D
 #define glUniform1f golfpp_glUniform1f
 #define glUniform1i golfpp_glUniform1i
 #define glUniform2fv golfpp_glUniform2fv

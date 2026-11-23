@@ -39,5 +39,7 @@ shadow_map_fit fit_shadow_map(const glm::vec3& towards_sun, const glm::vec3& eye
     shadow_map_fit fit;
     fit.view_proj = proj * glm::mat4(rotation);
     fit.depth_range = 2.0f * reach;
+    fit.corner = glm::vec2(left, bottom);
+    fit.depth_middle = middle.z;
     return fit;
 }

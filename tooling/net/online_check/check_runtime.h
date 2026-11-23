@@ -27,7 +27,8 @@ public:
     bool connect(const online_config& config);
     bool require(const char* label, bool passed);
     bool until(const std::function<bool()>& done, float seconds = 15.0f);
-    void tick();
+    // One frame for every client; `pause` is the sleep that paces it.
+    void tick(std::chrono::milliseconds pause = std::chrono::milliseconds(20));
     void wait(float seconds);
     bool walk(std::size_t peer, glm::vec3 target, float seconds = 45.0f);
     bool refusal(std::size_t peer, const std::string& reducer, const std::string& error);
@@ -43,6 +44,7 @@ public:
     check_peer& operator[](std::size_t peer) { return *peers_.at(peer); }
     game_state& state(std::size_t peer) { return peers_.at(peer)->state; }
     std::string course;
+    std::string server;  // its loopback URI, for the metrics a measurement reads
     std::int64_t due = 0;
 private:
     game_content content_;
@@ -54,3 +56,5 @@ bool check_social(live_check& run);
 bool check_round(live_check& run);
 
 bool check_practice(live_check& run);
+// Measured, not asserted: the tee book's list requests, booking and cold travel.
+bool measure_tee_book(live_check& run);

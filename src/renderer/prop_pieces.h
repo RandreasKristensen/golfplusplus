@@ -5,6 +5,7 @@
 // faces. GL-free.
 
 #include "game/prop_loader.h"
+#include "renderer/mesh_instance.h"
 
 #include <cstddef>
 #include <optional>
@@ -12,12 +13,6 @@
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
-
-enum class prop_mesh {
-    cylinder,  // unit cylinder, y in [0, 1]
-    sphere,    // unit sphere
-    quad       // unit quad, [-1, 1] in XY
-};
 
 struct prop_piece {
     prop_mesh mesh = prop_mesh::sphere;

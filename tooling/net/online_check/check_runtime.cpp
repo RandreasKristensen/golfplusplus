@@ -30,8 +30,8 @@ bool live_check::require(const char* label, const bool passed) {
     }
     return passed;
 }
-void live_check::tick() {
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+void live_check::tick(const std::chrono::milliseconds pause) {
+    std::this_thread::sleep_for(pause);
     const auto now = std::chrono::steady_clock::now();
     const float dt = std::chrono::duration<float>(now - previous_).count(); previous_ = now;
     for (auto& peer : peers_) {

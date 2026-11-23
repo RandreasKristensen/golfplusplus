@@ -137,7 +137,9 @@ void record_hole_completed(game_state& state);
 void receive_online_progress(game_state& state, const save_data& progress);
 
 // Captures the current room and booking and flushes steps before a physical hub action.
-void request_tee_action(game_state& state, net_command command);
+// True when a command was queued for the server; offline there is none (a booking
+// is kept locally) and online without a complete room nothing is sent.
+bool request_tee_action(game_state& state, net_command command);
 
 // Every arrival loads through this boundary. Online travel waits for its full
 // destination snapshot; offline entry loads immediately.

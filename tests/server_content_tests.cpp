@@ -262,3 +262,18 @@ TEST_CASE("the server builds each hole where the game plays it, and shots land i
     // The shots go through the trees, not only over open ground.
     CHECK(tree_hits > 0);
 }
+
+// Opening and booking the tee book check a destination by its manifest alone, so the manifest
+// must say what booking needs, exactly as the built course would.
+TEST_CASE("a destination's manifest gives booking its carts and hole count, as the built course does; the hub is no destination") {
+    const content_fixture fixture = fixture_content_files();
+    const server_content content = *parse_server_content(fixture.files).content;
+    const course_definition* manifest = find_server_course(content, fixture_hub_course().id);
+    REQUIRE(manifest != nullptr);
+    const std::optional<server_course> built = build_server_course(fixture.files, content, fixture_hub_course().id);
+    REQUIRE(built.has_value());
+    CHECK(manifest->carts == built->course.carts);
+    CHECK(manifest->holes.size() == built->holes.size());
+    REQUIRE(content.hub.has_value());
+    CHECK(find_server_course(content, content.hub->id) == nullptr);
+}

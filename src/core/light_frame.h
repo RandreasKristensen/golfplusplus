@@ -27,9 +27,30 @@ struct tree_shadow_cache {
 
 void refresh_tree_shadows(tree_shadow_cache& cache, const game_state& game, const shadow_style& shadows);
 
+// Where each blob caster of the last frame fell on the ground: a figure, cart
+// or ball that has not moved falls where it did, so it is not found again
+// (the ground queries dominate with a crowd). Casters are kept in frame order,
+// each remembering what its answer was for; a change in any of it asks again.
+struct blob_ground_memo {
+    struct entry {
+        glm::vec3 source{0.0f};
+        glm::vec3 bottom{0.0f};
+        glm::vec3 towards_sun{0.0f};
+        float sun_share = 0.0f;
+        float max_stretch = 0.0f;
+        terrain_sample ground;
+        float height = 0.0f;  // the caster's bottom over the ground under it
+    };
+    std::vector<entry> entries;
+    std::uint64_t revision = 0;  // game_state::static_anchors' and terrain_render_revision, combined, when built
+};
+
 // Fills data.glow, data.lighting.lamp_glow, data.lights and the blob shadows
 // from what `data` shows;
 // the trees' are borrowed from `trees`.
+void add_frame_lights(render_data& data, const game_state& game, const lighting_palette& palette,
+                      const tree_shadow_cache& trees, blob_ground_memo& memo);
+// A single frame, with nothing remembered from the last (a test's or a still's).
 void add_frame_lights(render_data& data, const game_state& game, const lighting_palette& palette,
                       const tree_shadow_cache& trees);
 

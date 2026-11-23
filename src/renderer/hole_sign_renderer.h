@@ -5,6 +5,7 @@
 // chunky texels up close. Uploads the models and textures only when the
 // signs are rebuilt; one draw per sign.
 
+#include "renderer/gl_storage.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -20,6 +21,9 @@
 
 class hole_sign_renderer {
 public:
+    explicit hole_sign_renderer(gl_storage storage = {})
+        : storage_(storage), shader_(storage), buffer_(storage) {}
+
     bool init(const std::string& vertex_path, const std::string& fragment_path);
     void shutdown();
 
@@ -29,6 +33,7 @@ public:
               frame_profile* profile);
 
 private:
+    gl_storage storage_;
     void upload(const render_hole_signs& signs, frame_profile* profile);
 
     shader_program shader_;

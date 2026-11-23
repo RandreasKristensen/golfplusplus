@@ -72,6 +72,7 @@ bool has_applied_settings(const std::vector<setting_definition>& definitions) {
         find_setting(definitions, setting_field_of_view) != nullptr &&
         find_setting(definitions, setting_mouse_sensitivity) != nullptr &&
         find_setting(definitions, setting_fullscreen) != nullptr &&
+        find_setting(definitions, setting_scene_resolution) != nullptr &&
         find_setting(definitions, setting_tape_wear) != nullptr &&
         find_setting(definitions, setting_datestamp) != nullptr &&
         find_setting(definitions, setting_interact_prompt) != nullptr &&

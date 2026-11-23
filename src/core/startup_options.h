@@ -1,5 +1,6 @@
 #pragma once
 
+#include "game/course_definition.h"
 #include "game/weather.h"
 
 #include <array>
@@ -27,10 +28,14 @@
 //   GOLFPP_SCREENSHOT=path.bmp
 //                     after loading, run a few frames, save the window's
 //                     picture (after the TV pass) as a BMP and quit.
+//   GOLFPP_SCENE_RESOLUTION=n
+//                     with GOLFPP_SCREENSHOT: draw at the n-th scene
+//                     resolution preset (0 the standard), as the setting does.
 //   GOLFPP_GAME_TIME=hour or YYYY-MM-DDThour
 //                     pin the sky at this hour on the course's clock (0 to
 //                     24, e.g. 19.5) on the course's date or the given one
-//                     (1989-12-21T23), for screenshots.
+//                     (1989-12-21T23), for screenshots; a given date also
+//                     dates the booted offline course (its trees' season).
 //   GOLFPP_WEATHER=kind[,wind[,wetness]]
 //                     hold the weather offline (core/god_menu.h): a
 //                     weather_kind name (clear, cloudy, light_fog, fog,
@@ -51,6 +56,9 @@
 // without signing in (servers with allow_anonymous only); --god for the god
 // menu.
 struct startup_options {
+    std::string benchmark_directory;
+    int benchmark_ms = 10000;
+    bool benchmark_reverse = false;
     bool vsync = true;
     std::string boot_course_id;
     std::string online_server;    // empty: assets/play/online.json's
@@ -60,6 +68,7 @@ struct startup_options {
     int window_height = 0;
     std::optional<std::array<float, 4>> screenshot_view; // x, z, yaw, pitch; screenshot runs only
     std::string screenshot_path;  // empty: no screenshot
+    std::optional<int> scene_resolution;  // screenshot runs only: the setting's value, else the default
     std::optional<float> game_hour;  // none: the sky's clock runs
     // With game_hour: days since 1970-01-01 of the game date; none: the
     // sky timeline's anchor date.
@@ -82,17 +91,26 @@ struct startup_options {
 // course: surrounding whitespace is trimmed; whitespace-only becomes empty.
 startup_options parse_startup_options(const char* vsync_value, const char* course_value);
 
+startup_options with_benchmark_options(startup_options options, const char* directory, const char* duration,
+                                       const char* reverse);
+
 // Adds the review switches. Pure, like parse_startup_options: the raw
 // environment strings or null. The window is "WxH" with positive whole
 // numbers ('x' or 'X', surrounding whitespace trimmed); anything else keeps
-// the default size. The screenshot path is trimmed.
-startup_options with_review_options(startup_options options, const char* window_value, const char* screenshot_value);
+// the default size. The screenshot path is trimmed. The scene resolution is
+// a whole number of digits; anything else leaves the default.
+startup_options with_review_options(startup_options options, const char* window_value, const char* screenshot_value,
+                                    const char* scene_resolution_value);
 
 // Adds the pinned time of day. Pure, like parse_startup_options: the raw
 // environment string or null. A number from 0 to 24, optionally after a
 // "YYYY-MM-DDT" date (surrounding whitespace trimmed); anything else leaves
 // the clock running.
 startup_options with_game_time(startup_options options, const char* game_time_value);
+
+// `course` on the pinned date's day of the year, when one is given: what the
+// booted offline course stands on (its trees' season), as its sky does.
+course_definition on_pinned_date(course_definition course, const std::optional<std::int64_t>& pinned_date);
 
 // Adds the held weather and the god menu. Pure, like parse_startup_options:
 // the raw environment strings or null. The weather is a kind's name, then

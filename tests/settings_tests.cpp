@@ -3,6 +3,7 @@
 #include "audio/audio_manifest.h"
 #include "core/settings_menu.h"
 #include "core/startup_flow.h"
+#include "game/picture_loader.h"
 #include "game/settings.h"
 #include "game/text_assets.h"
 
@@ -290,6 +291,31 @@ TEST_CASE("the shipped settings have their text and include the ones the game ap
             CHECK(shipped_text_assets().strings.entries.count(key) == 1U);
         }
     }
+}
+
+TEST_CASE("the scene resolution setting has a step per picture preset, starts on the standard and persists") {
+    const game_content& content = shipped_content();
+    const setting_definition* resolution = find_setting(content.settings, setting_scene_resolution);
+    REQUIRE(resolution != nullptr);
+    const picture_style picture = *load_picture_style(asset_root());
+    CHECK(resolution->value_keys.size() == picture.scene_lines.size());
+    CHECK(setting_step_index({}, *resolution) == 0);
+
+    const settings_values fine = adjust_setting({}, *resolution, 99);
+    CHECK(setting_step_index(fine, *resolution) == static_cast<int>(picture.scene_lines.size()) - 1);
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / "golfpp_test_scene_resolution";
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+    const std::filesystem::path path = settings_file_path(root);
+    REQUIRE(write_settings(path, fine, content.settings));
+    CHECK(setting_step_index(load_settings(path, content.settings), *resolution) ==
+          static_cast<int>(picture.scene_lines.size()) - 1);
+    // A value from a build with more presets is clamped, not refused.
+    const std::optional<settings_values> beyond =
+        parse_settings_from_text(R"({"version": 1, "values": {"scene_resolution": 9}})", content.settings);
+    REQUIRE(beyond.has_value());
+    CHECK(setting_step_index(*beyond, *resolution) == static_cast<int>(picture.scene_lines.size()) - 1);
+    std::filesystem::remove_all(root, error);
 }
 
 TEST_CASE("the master and music volume settings become the audio levels, and persist") {

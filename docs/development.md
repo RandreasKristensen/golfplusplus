@@ -49,8 +49,8 @@ way it faces and where it sits on screen. A wrong sign must fail a test.
 What only a GPU can show is checked by drawing it with the game's own
 renderer: after changing the grass, the ground's materials, the trees, the water or the
 backdrop, run `cmake --build build/test --target golfpp-picture-check` and
-`./build/test/golfpp-picture-check` (all courses, a few minutes; name course ids
-to narrow it, `--grass` or `--water` for one check). It must end `all passed`;
+`./build/test/golfpp-picture-check` (all courses, about 25 minutes; name course ids
+to narrow it, `--grass`, `--tiles`, `--eyepiece`, `--shadow-receivers`, `--presets` (both scene resolution presets at 720, 1080 and 1440 rows), `--trees` (the trees alone: casters, bare crowns walked past, falling leaves against `falling_leaf.h`, the image gate, and summer and winter pictures of each species in `build/test/picture_check/trees`) or `--water` (which also compares the ground's coarser mirror levels with the full ground) for one check; `--crowd=<label>` and `--against=<label>` compare how a crowd is drawn before and after a change). It must end `all passed`;
 its pictures are in `build/test/picture_check/<course>` (`tooling/picture_check/README.md`).
 
 An import must verify with 0 errors before holes are touched up: fix the
@@ -75,7 +75,8 @@ over 6 m higher. It interpolates these only at course-specific
 detected centre, and a required `reason`). Other detected pits fail verification
 as `TERRAIN_DROPOUT`; real quarries and steep basins must not be repaired merely
 for looking unusual. The reviewed inland pond errors affect both Hedensted and
-both Himmerland layouts. `--ground-only` retains the existing grid footprint.
+both Himmerland layouts. `--ground-only COURSE_ID` refits only the ground grid to the map's paper
+round the course's placed holes (offline from the cache, leaving the rest of the course as it is).
 Outline generation uncrosses folded edges while retaining their vertices;
 verification rejects remaining crossings as `ZONE_CROSSING`. Terrain and outline
 regressions: `py -3 -m unittest test_osm_terrain_quality` in `tooling/osm_import/`.

@@ -239,10 +239,26 @@ room-wide. Shot snapshots/collisions and movement collision inputs scan room
 state; more people also increase reducer work. Measure server time, bytes and
 Maincloud TeV for both spread and crowded populations before capacity claims.
 
-The tee-book client (`core/tee_book`) waits for `book_ready` for its course and
-for reservation-row changes; a pending request cannot repeat, and a refused
-replacement keeps the complete original reservation. LEAVE GROUP and RETURN TO
-HUB in the pause menu only send their intents.
+**The tee book never waits on the network to show its times.** The client
+(`core/tee_book`) lists a course's times from the clock on the first frame
+(`tee_times`, the validated server clock, the hub's day rules). The booked counts
+come from the course's list request (`core/tee_book_list`), asked of the server
+with `open_tee_book(room, course, request_id)`; the client numbers each request
+and the module returns the number in `my_tee_book_status.request_id`. Only the
+answer to the latest request counts: a late answer for another course or an
+older request (A, B, A) changes nothing, and so does an older request's refusal.
+Counts are unknown (shown as such, never zero) until a course is answered; they
+are kept while a refresh is under way (updating) and when the slot view follows
+another course (old), and dropped when the room or the session ends. One list
+request is in flight at a time, its wait ends with its answer, a refusal or
+`net.tee_book_list_timeout_seconds`, and a failed one is retried only by the
+player (R). List state is separate from bookings: browsing, switching courses and
+backing out never wait on it. A booking or cancellation is single flight, never
+predicted, and ends when its reservation row arrives or the server refuses it; a
+refused replacement keeps the complete original reservation. The module checks
+a destination by its manifest (`find_server_course`: carts, hole count); the course
+itself is built when someone enters it. LEAVE GROUP and RETURN TO HUB in the
+pause menu only send their intents.
 
 **Paired Social greetings.** Protocol 24 adds `dap(expected_room, target)` and
 room-scoped `dap_pair` rows. The reducer reads both accepted `motion_state`

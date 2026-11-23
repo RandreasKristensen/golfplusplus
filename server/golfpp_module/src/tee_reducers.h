@@ -27,15 +27,18 @@ SPACETIMEDB_REDUCER(leave_room, ReducerContext ctx, std::uint64_t expected_room)
     leave_room_state(ctx, me.player->account_id);
     return Ok();
 }
-SPACETIMEDB_REDUCER(open_tee_book, ReducerContext ctx, std::uint64_t room_id, std::string course_id) {
+// The destination is checked against its manifest: the course itself is built when
+// someone enters it (enter_course), never to list or book its times.
+SPACETIMEDB_REDUCER(open_tee_book, ReducerContext ctx, std::uint64_t room_id, std::string course_id, std::uint64_t request_id) {
     const member_result me = caller_member(ctx);
     if (!me.member) { return refused(me); }
     if (!at_hub_anchor(ctx, *me.member, room_id, true)) { return Err(error_hub_only); }
-    const server_course* course = cached_course(course_id);
-    if (!course || course->kind == place_kind::hub) { return Err(error_unknown_course); }
+    if (!find_server_course(*cached_content(), course_id)) { return Err(error_unknown_course); }
     // The times are the clock's (game/tee_times.h); only booked ones have rows.
+    // The request id comes back with the status so the client can tell its
+    // latest request's answer from an older one's.
     const auto now = ctx.timestamp.micros_since_epoch();
-    const tee_book_status_row status{me.member->account_id, course_id, now};
+    const tee_book_status_row status{me.member->account_id, course_id, now, request_id};
     if (ctx.db[tee_book_status_account_id].find(status.account_id)) { ctx.db[tee_book_status_account_id].update(status); }
     else { ctx.db[tee_book_status].insert(status); }
     return Ok();
@@ -45,15 +48,15 @@ SPACETIMEDB_REDUCER(book_tee, ReducerContext ctx, std::uint64_t room_id, std::ui
     const member_result me = caller_member(ctx);
     if (!me.member) { return refused(me); }
     if (!at_hub_anchor(ctx, *me.member, room_id, true)) { return Err(error_hub_only); }
-    const server_course* course = cached_course(course_id);
-    if (!course || course->kind == place_kind::hub) { return Err(error_unknown_course); }
+    const course_definition* course = find_server_course(*cached_content(), course_id);
+    if (!course) { return Err(error_unknown_course); }
     const auto current = ctx.db[tee_reservation_account_id].find(me.member->account_id);
     const auto current_slot = current ? ctx.db[tee_slot_slot_id].find(current->slot_id) : std::optional<tee_slot_row>{};
     const std::string key = course_id + ":" + std::to_string(course_world_id) + ":" + std::to_string(scheduled_at);
     const auto existing = ctx.db[tee_slot_key].find(key);
     const bool same = existing && current_slot && existing->slot_id == current_slot->slot_id;
     // A cart only where the course has them: a bag can always be carried.
-    takes_cart = booked_takes_cart(takes_cart, course->course.carts);
+    takes_cart = booked_takes_cart(takes_cart, course->carts);
     const std::string error = check_booking(expected_booking, current ? current->reservation_id : 0, scheduled_at,
         ctx.timestamp.micros_since_epoch(), existing ? existing->booked_count : 0, same, cached_content()->tuning.server,
         cached_hub_clock());

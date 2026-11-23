@@ -7,6 +7,8 @@
 
 #include <filesystem>
 
+struct frame_profile;
+
 // Reads the window's back buffer, so call it after the frame is drawn and
 // before the swap. False when the file cannot be written.
-bool save_screenshot(SDL_Window* window, const std::filesystem::path& path);
+bool save_screenshot(SDL_Window* window, const std::filesystem::path& path, frame_profile* profile = nullptr);

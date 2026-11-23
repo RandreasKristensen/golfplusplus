@@ -169,11 +169,11 @@ std::vector<std::size_t> stdb_header_layout() {
         offsetof(stdb_tee_reservation, started_at), offsetof(stdb_tee_reservation, grouped), offsetof(stdb_tee_reservation, completed), offsetof(stdb_tee_reservation, revision), offsetof(stdb_tee_reservation, course_id),
         offsetof(stdb_tee_reservation, world_id), offsetof(stdb_tee_reservation, room_id), offsetof(stdb_tee_reservation, scheduled_at), offsetof(stdb_tee_reservation, takes_cart)});
     describe(sizeof(stdb_departure), {offsetof(stdb_departure, slot_id), offsetof(stdb_departure, course_id), offsetof(stdb_departure, scheduled_at), offsetof(stdb_departure, names)});
-    describe(sizeof(stdb_tee_book_status), {offsetof(stdb_tee_book_status, course_id), offsetof(stdb_tee_book_status, server_now)});
+    describe(sizeof(stdb_tee_book_status), {offsetof(stdb_tee_book_status, course_id), offsetof(stdb_tee_book_status, server_now), offsetof(stdb_tee_book_status, request_id)});
     out.push_back(sizeof(stdb_row));
     describe(sizeof(stdb_event),
              {offsetof(stdb_event, kind), offsetof(stdb_event, text), offsetof(stdb_event, reducer),
-              offsetof(stdb_event, subscription), offsetof(stdb_event, login_method), offsetof(stdb_event, retrying),
+              offsetof(stdb_event, subscription), offsetof(stdb_event, request), offsetof(stdb_event, login_method), offsetof(stdb_event, retrying),
               offsetof(stdb_event, table), offsetof(stdb_event, change), offsetof(stdb_event, row)});
     out.push_back(sizeof(stdb_event_kind));
     out.push_back(sizeof(bool));
@@ -308,19 +308,12 @@ void net_client::update(game_state& state) {
 
     if (self_applied_) {
         state.online.reservation = reservation_;
-        state.online.book_course_id = book_course_;
-        state.online.book_ready = book_acknowledged_;
+        publish_book(state);
         state.online.departures.clear();
         for (const auto& [id, departure] : departures_) { state.online.departures.push_back(departure); }
         std::sort(state.online.departures.begin(), state.online.departures.end(), [](const departure_info& a, const departure_info& b) {
             return a.scheduled_at != b.scheduled_at ? a.scheduled_at < b.scheduled_at : a.slot_id < b.slot_id;
         });
-        state.online.tee_slots.clear();
-        if (book_acknowledged_) {
-            for (const auto& [id, slot] : tee_slots_) {
-                if (slot.course_id == book_course_) { state.online.tee_slots.emplace(id, slot); }
-            }
-        }
     }
     deliver_progress(state);
     room_.publish(state);
@@ -331,6 +324,39 @@ void net_client::update(game_state& state) {
     state.online.status = status_;
     state.online.server_now = clock_.now(local_now());
     send_commands(state);
+}
+
+void net_client::publish_book(game_state& state) {
+    online_view& online = state.online;
+    online.book_answers = book_answers_;
+    online.book_refusals = book_refusals_;
+    online.book_error = book_error_;
+    if (!book_changed_) {
+        return;
+    }
+    book_changed_ = false;
+    const bool live = book_known_ && book_scope_ == book_listed_;
+    if (live) {
+        book_counts_.clear();
+        for (const auto& [id, slot] : tee_slots_) {
+            if (slot.course_id == book_listed_) { book_counts_.emplace(id, slot); }
+        }
+    } else if (!book_known_) {
+        book_counts_.clear();
+    }
+    online.book_course_id = book_known_ ? book_listed_ : std::string();
+    online.book_ready = book_known_;
+    online.book_live = live;
+    online.tee_slots = book_counts_;
+}
+
+void net_client::forget_book() {
+    ++book_request_;
+    book_listed_.clear();
+    book_known_ = false;
+    book_counts_.clear();
+    book_error_.clear();
+    book_changed_ = true;
 }
 
 void net_client::deliver_progress(game_state& state) {
@@ -427,12 +453,9 @@ void net_client::send_commands(game_state& state) {
             stdb_play_ball(client, room_id_, command.ball_id);
             break;
         case net_command_type::open_tee_book:
-            book_course_ = command.course_id;
-            book_acknowledged_ = false;
-            book_after_ = last_book_status_at_;
-            state.online.book_ready = false;
-            state.online.tee_slots.clear();
-            stdb_open_tee_book(client, command.room_id, command.course_id.data(), command.course_id.size());
+            ++book_request_;
+            book_error_.clear();
+            stdb_open_tee_book(client, command.room_id, command.course_id.data(), command.course_id.size(), book_request_);
             break;
         case net_command_type::book_tee:
             stdb_book_tee(client, command.room_id, command.reservation_id, command.course_id.data(), command.course_id.size(), command.scheduled_at, command.takes_cart);
@@ -522,6 +545,7 @@ void net_client::handle(const stdb_event& event, game_state& state) {
         if (self_subscription_ != 0 && event.subscription == self_subscription_) {
             self_applied_ = true;
             progress_changed_ = true;
+            book_changed_ = true;
         }
         break;
     case STDB_EVENT_SUBSCRIPTION_FAILED:
@@ -542,6 +566,14 @@ void net_client::handle(const stdb_event& event, game_state& state) {
         break;
     case STDB_EVENT_REDUCER_FAILED: {
         reducer_failure failure{text_of(event.reducer), text_of(event.text)};
+        if (failure.reducer == reducer_open_tee_book) {
+            // The latest request's refusal ends its wait; an older request's says nothing now.
+            if (event.request != 0 && event.request == book_request_) {
+                ++book_refusals_;
+                book_error_ = failure.error;
+            }
+            break;
+        }
         if (gameplay_reducer(failure.reducer)) {
             state.online.refusals.push_back(failure);
         } else {
@@ -618,6 +650,7 @@ void net_client::handle_row(const stdb_event& event, game_state& state) {
     case STDB_TABLE_TEE_SLOT: {
         const auto& v = row.tee_slot;
         const tee_slot_info slot{v.slot_id, text_of(v.course_id), v.world_id, v.room_id, v.scheduled_at, v.booked_count};
+        book_changed_ = true;
         if (change == STDB_ROW_DELETE) {
             const auto found = tee_slots_.find(v.slot_id);
             if (found != tee_slots_.end() && found->second.booked_count == slot.booked_count) { tee_slots_.erase(found); }
@@ -647,11 +680,16 @@ void net_client::handle_row(const stdb_event& event, game_state& state) {
     }
     case STDB_TABLE_MY_TEE_BOOK_STATUS:
         if (change != STDB_ROW_DELETE) {
-            clock_.sample(row.tee_book_status.server_now, local_now());
-            if (text_of(row.tee_book_status.course_id) == book_course_ && row.tee_book_status.server_now > book_after_) {
-                book_acknowledged_ = true;
+            const stdb_tee_book_status& status = row.tee_book_status;
+            clock_.sample(status.server_now, local_now());
+            book_scope_ = text_of(status.course_id);
+            if (status.request_id != 0 && status.request_id == book_request_) {
+                book_listed_ = book_scope_;
+                book_known_ = true;
+                book_error_.clear();
+                ++book_answers_;
             }
-            last_book_status_at_ = std::max(last_book_status_at_, row.tee_book_status.server_now);
+            book_changed_ = true;
         }
         break;
     case STDB_TABLE_MY_LINK_CODE:
@@ -712,6 +750,7 @@ void net_client::handle_row(const stdb_event& event, game_state& state) {
             }
             const std::uint64_t room = change == STDB_ROW_DELETE ? 0 : row.room_member.room_id;
             if (room != room_id_) {
+                forget_book();
                 clear_online_presentation(state);
                 state.online.room.reset();
                 room_.begin(room, state);
@@ -728,6 +767,7 @@ void net_client::handle_row(const stdb_event& event, game_state& state) {
     case STDB_TABLE_ROOM:
         if (row.room.room_id == room_id_ && room_id_ != 0) {
             if (change == STDB_ROW_DELETE) {
+                forget_book();
                 clear_online_presentation(state);
                 state.online.room.reset();
             } else {
@@ -836,10 +876,10 @@ void net_client::forget_progress(game_state& state) {
     reservation_.reset();
     tee_slots_.clear();
     departures_.clear();
-    book_course_.clear();
-    book_after_ = 0;
-    last_book_status_at_ = 0;
-    book_acknowledged_ = false;
+    book_scope_.clear();
+    book_answers_ = 0;
+    book_refusals_ = 0;
+    forget_book();
     room_.clear(state);
     state.hub_flow = hub_flow_state{};
     clear_online_presentation(state);

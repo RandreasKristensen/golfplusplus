@@ -460,7 +460,12 @@ struct net_tuning {
     float shot_correction_distance = 0.0f;
     float shot_correction_seconds = 0.0f;
     float remote_trail_fade_seconds = 0.0f;  // another player's shot trail, after the ball stops
-    float notice_seconds = 0.0f;             // how long a refusal from the server shows
+    float notice_seconds = 0.0f;             // how long a notice shows
+    // The open tee book asks for its course's counts again after this long, and
+    // gives up on a request unanswered for tee_book_list_timeout_seconds (the
+    // times are listed from the clock regardless, only the counts wait).
+    float tee_book_refresh_seconds = 0.0f;
+    float tee_book_list_timeout_seconds = 0.0f;
     // Driving with a passenger, my cart goes to them alone (the ride_motion
     // row only the rider follows) this often, seconds; they ride on it
     // carried on between, a new one blending in over ride_correction_seconds.
@@ -535,8 +540,8 @@ struct hole_sign_tuning {
     float post_radius = 0.0f;
 };
 
-// The signs pointing the way from every green but the last to the next tee
-// (game/way_sign.h), in world units: a board on one post out of play.
+// The signs pointing the way to the tees (game/way_sign.h), in world units:
+// fingerpost boards on one post out of play.
 struct way_sign_tuning {
     float path_reach = 0.0f;     // a path leads the way when it comes this near the pin and the next tee
     float green_offset = 0.0f;   // the sign behind a green: at least this far past its edge
@@ -544,11 +549,19 @@ struct way_sign_tuning {
     float behind_spread = 0.0f;  // degrees either side of straight behind it may turn to, failing that
     float tee_clearance = 0.0f;  // every sign at least this far from every tee box, out of the way of play from it
     float path_offset = 0.0f;    // a junction's sign: the post's foot past the path's edge
-    float junction_lead = 0.0f;  // a junction's sign stands this far back along the way in
-    float board_width = 0.0f;  // along the way it points
+    // A board's lettering is one fixed size, so its length follows its label
+    // (way_board_length), from the post's axis to the pointed end along the
+    // way it points. The face is painted at face height 24 texels over
+    // board_height, text at the way_sign_number style's scale: a digit takes
+    // 5 font pixels of that scale and a space 4, so these are texels / that
+    // density, and the label's text is boxed by 10 texels each side.
+    float board_length = 0.0f;  // for a one-digit label
+    float digit_length = 0.0f;  // each digit after the first
+    float space_length = 0.0f;  // each space between numbers
     float board_height = 0.0f;
     float board_thickness = 0.0f;
-    float board_lift = 0.0f;  // its bottom edge over the post's foot
+    float board_gap = 0.0f;   // between stacked boards, one's bottom edge to the next's top
+    float board_lift = 0.0f;  // the lowest board's bottom edge over the post's foot
     float post_radius = 0.0f;
 };
 

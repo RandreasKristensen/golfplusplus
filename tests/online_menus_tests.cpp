@@ -1,4 +1,5 @@
 #include "doctest.h"
+#include "renderer/overlay_batch.h"
 
 #include "core/startup_flow.h"
 #include "game/net_types.h"
@@ -84,6 +85,7 @@ TEST_CASE("PLAY ONLINE signs in silently first, and only opens the browser when 
 
     online_menu_status online = signed_out();
     online.status = net_status::signing_in;
+    online.failure_id.clear();
     render_startup_menu menu = render(state, online);
     CHECK(menu.message == "SIGNING IN...");
     REQUIRE(menu.tiles.size() == 1U);
@@ -94,7 +96,7 @@ TEST_CASE("PLAY ONLINE signs in silently first, and only opens the browser when 
     online.failure_id = net_failure_no_stored_sign_in;
     menu = render(state, online);
     CHECK(menu.message == "SIGN IN WITH YOUR BROWSER");
-    CHECK(!menu.message_is_error);
+    CHECK(menu.severity == message_severity::status);
     REQUIRE(menu.tiles.size() == 2U);
     CHECK(menu.tiles[0].title == "SIGN IN");
     result = update(state, enter(), online);
@@ -109,7 +111,7 @@ TEST_CASE("PLAY ONLINE signs in silently first, and only opens the browser when 
     online.failure_id = "connect_failed";
     menu = render(state, online);
     CHECK(menu.message == "CANNOT REACH THE SERVER");
-    CHECK(menu.message_is_error);
+    CHECK(menu.severity == message_severity::error);
     CHECK(menu.tiles[0].title == "RETRY");
 
     update(state, input_state{}, signed_in_as(""));
@@ -135,7 +137,7 @@ TEST_CASE("without online play the sign-in screen only says so") {
     CHECK(state.flow == startup_flow::online_login);
     CHECK(result.requests.empty());
     const render_startup_menu menu = render(state, online_menu_status{});
-    CHECK(menu.message_is_error);
+    CHECK(menu.severity == message_severity::error);
     REQUIRE(menu.tiles.size() == 1U);
     CHECK(menu.tiles[0].title == "BACK");
 }
@@ -174,7 +176,7 @@ TEST_CASE("name entry claims the typed name, shows refusals inline and moves on 
     CHECK(!state.waiting);
     const render_startup_menu menu = render(state, nameless);
     CHECK(menu.message == "NAME TAKEN");
-    CHECK(menu.message_is_error);
+    CHECK(menu.severity == message_severity::error);
     REQUIRE(menu.field.has_value());
     CHECK(menu.field->value == "ANN A");
 
@@ -300,4 +302,49 @@ TEST_CASE("LINK ANOTHER LOGIN shows the code, asking for one only when there is 
     result = update(state, input_state{}, online);
     CHECK(result.requests.empty());
     CHECK(render(state, online).message == "LINKING LOGINS IS OFF ON THIS SERVER");
+}
+
+TEST_CASE("replacing a menu message replaces its severity: a retry never inherits an earlier error") {
+    startup_flow_state state;
+    open_online_login(state);
+    state.message_key = "online.error.connect_failed";
+    online_menu_status online = signed_out();
+    online.status = net_status::failed;
+    online.failure_id = "connect_failed";
+    // The failure shows as an error ...
+    CHECK(render(state, online).severity == message_severity::error);
+    // ... and the retry in progress, which replaces the text, is a status.
+    online.status = net_status::signing_in;
+    online.failure_id.clear();
+    render_startup_menu menu = render(state, online);
+    CHECK(menu.message == "SIGNING IN...");
+    CHECK(menu.severity == message_severity::status);
+    online.status = net_status::waiting_for_browser;
+    CHECK(render(state, online).severity == message_severity::status);
+
+    // Joining after an error says so as a status too.
+    startup_flow_state joining;
+    open_online_login(joining);
+    joining.flow = startup_flow::joining;
+    joining.message_key = "online.error.name_taken";
+    menu = render(joining, signed_in_as("ME"));
+    CHECK(!menu.message.empty());
+    CHECK(menu.severity == message_severity::status);
+
+    // The text drawn for each severity differs: an error uses the error style, a status the subtitle.
+    const text_assets& text = shipped_text_assets();
+    for (const message_severity severity : {message_severity::status, message_severity::error}) {
+        render_startup_menu shown;
+        shown.screen = startup_menu_screen::form;
+        set_message(shown, "SAMPLE", severity);
+        overlay_batch batch;
+        batch.grid = overlay_grid{854, 480};
+        draw_startup_menu(batch, text, shown, test_scene_colors().ground);
+        const glm::vec3 error_colour(0.94f, 0.38f, 0.26f);
+        bool has_error_colour = false;
+        for (const overlay_vertex& vertex : batch.vertices) {
+            has_error_colour = has_error_colour || glm::vec3(vertex.color) == error_colour;
+        }
+        CHECK(has_error_colour == (severity == message_severity::error));
+    }
 }

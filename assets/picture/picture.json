@@ -1,5 +1,6 @@
 {
-  "target_lines": 360,
+  "ui_lines": 360,
+  "scene_lines": [360, 720],
   "camcorder": {
     "middle_grey": 0.45,
     "iris_min_stops": -0.5,

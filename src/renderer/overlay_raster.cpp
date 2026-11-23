@@ -14,8 +14,20 @@ std::uint8_t to_byte(const float value) {
     return static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f));
 }
 
-float edge_function(const glm::vec2 a, const glm::vec2 b, const glm::vec2 p) {
-    return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+// Corners are snapped to this many steps per texel and the edge functions
+// computed in doubles, so they are exact: a texel on the edge two triangles
+// share (the diagonal of a quad passes through texel middles) is covered by
+// exactly one of them.
+constexpr float corner_steps_per_texel = 256.0f;
+
+glm::vec2 snapped(const glm::vec2 corner) {
+    return glm::vec2(std::round(corner.x * corner_steps_per_texel), std::round(corner.y * corner_steps_per_texel)) /
+           corner_steps_per_texel;
+}
+
+double edge_function(const glm::vec2 a, const glm::vec2 b, const glm::vec2 p) {
+    return (static_cast<double>(b.x) - a.x) * (static_cast<double>(p.y) - a.y) -
+           (static_cast<double>(b.y) - a.y) * (static_cast<double>(p.x) - a.x);
 }
 
 // For a counter-clockwise triangle (y up): the edge a -> b is a top edge
@@ -25,8 +37,8 @@ bool top_left_edge(const glm::vec2 a, const glm::vec2 b) {
     return (d.y == 0.0f && d.x < 0.0f) || d.y < 0.0f;
 }
 
-bool covers(const float w, const bool top_left) {
-    return w > 0.0f || (w == 0.0f && top_left);
+bool covers(const double w, const bool top_left) {
+    return w > 0.0 || (w == 0.0 && top_left);
 }
 
 void blend(rgba_image& image, const int column, const int row, const glm::vec4& color) {
@@ -41,10 +53,13 @@ void blend(rgba_image& image, const int column, const int row, const glm::vec4& 
 
 // `a`, `b`, `c` in texel units (x right, y up), any winding.
 void paint_triangle(rgba_image& image, glm::vec2 a, glm::vec2 b, glm::vec2 c, const glm::vec4& color) {
-    if (edge_function(a, b, c) < 0.0f) {
+    a = snapped(a);
+    b = snapped(b);
+    c = snapped(c);
+    if (edge_function(a, b, c) < 0.0) {
         std::swap(b, c);
     }
-    if (edge_function(a, b, c) == 0.0f) {
+    if (edge_function(a, b, c) == 0.0) {
         return;
     }
     const bool top_left_ab = top_left_edge(a, b);

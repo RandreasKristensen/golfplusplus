@@ -47,7 +47,7 @@ struct look_changes {
     bool shadows = false;  // the shadow map and the blob shadows
     bool shafts = false;   // the shafts' programs and the lamps' maps
     bool streaks = false;  // rain or wind: how many streaks are drawn
-    bool ground = false;   // ground colours, baked into the course's meshes
+    bool ground = false;   // ground colours and stand-ins, baked into the course's meshes, and the maps' inks
     bool picture = false;  // anything in picture.json
 };
 

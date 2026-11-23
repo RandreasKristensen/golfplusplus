@@ -301,10 +301,10 @@ void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& 
     }
     draw_give_up_prompt(batch, text, data.give_up_label);
     draw_stroke_ticks(batch, data.stroke_count);
-    draw_notice(batch, text, data.notice_label);
+    draw_notice(batch, text, data.notice_label, data.notice_severity);
 }
 
 void draw_debug_text(overlay_batch& batch, const text_assets& text, const render_data& data) {
     draw_fps_counter(batch, text, data.fps_label);
-    draw_profile_overlay(batch, text, data.profile_summary, data.sync_breaches);
+    if (data.profile_summary) { draw_profile_overlay(batch, text, *data.profile_summary, data.sync_breaches); }
 }

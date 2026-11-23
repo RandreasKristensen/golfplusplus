@@ -76,12 +76,14 @@ std::vector<render_mesh_chunk> chunk_with_extent(const std::vector<render_terrai
     return chunks;
 }
 
-template <typename visible_fn>
+template <typename visible_fn, typename level_fn>
 render_chunk_cull_stats collect_ranges(const std::vector<render_mesh_chunk>& chunks,
                                        const visible_fn& is_visible,
+                                       const level_fn& level_of,
                                        const std::size_t index_count,
                                        const std::size_t max_ranges,
-                                       std::vector<render_index_range>& ranges) {
+                                       std::vector<render_index_range>& ranges,
+                                       const std::uint32_t merge_gap) {
     ranges.clear();
     render_chunk_cull_stats stats;
     const std::uint32_t clamped_count = static_cast<std::uint32_t>(
@@ -89,6 +91,7 @@ render_chunk_cull_stats collect_ranges(const std::vector<render_mesh_chunk>& chu
     stats.indices_total = clamped_count;
 
     if (chunks.empty()) {
+        stats.indices_visible = clamped_count;
         append_render_index_range(ranges, 0U, clamped_count);
     } else {
         stats.chunks_total = static_cast<std::uint32_t>(chunks.size());
@@ -99,14 +102,23 @@ render_chunk_cull_stats collect_ranges(const std::vector<render_mesh_chunk>& chu
                 continue;
             }
             ++stats.chunks_visible;
+            const std::size_t level = level_of(i);
+            if (level > 0U) {
+                const render_mesh_chunk::span& coarse = chunk.coarse[level - 1U];
+                stats.indices_visible += coarse.count;
+                append_render_index_range(ranges, coarse.first, coarse.count, coarse.list);
+                continue;
+            }
             if (chunk.first_index >= clamped_count) {
                 continue;
             }
             const std::uint32_t count = std::min(chunk.index_count, clamped_count - chunk.first_index);
+            stats.indices_visible += count;
             append_render_index_range(ranges, chunk.first_index, count);
         }
     }
 
+    merge_render_index_gaps(ranges, merge_gap);
     limit_render_index_ranges(ranges, max_ranges);
     stats.draw_ranges = static_cast<std::uint32_t>(ranges.size());
     for (const render_index_range& range : ranges) {
@@ -150,18 +162,35 @@ std::vector<render_mesh_chunk> build_render_mesh_chunks(const std::vector<render
 
 void append_render_index_range(std::vector<render_index_range>& ranges,
                                const std::uint32_t first_index,
-                               const std::uint32_t index_count) {
+                               const std::uint32_t index_count,
+                               const std::uint8_t level) {
     if (index_count == 0U) {
         return;
     }
     if (!ranges.empty()) {
         render_index_range& last = ranges.back();
-        if (last.first_index + last.index_count == first_index) {
+        if (last.level == level && last.first_index + last.index_count == first_index) {
             last.index_count += index_count;
             return;
         }
     }
-    ranges.push_back(render_index_range{first_index, index_count});
+    ranges.push_back(render_index_range{first_index, index_count, level});
+}
+
+void merge_render_index_gaps(std::vector<render_index_range>& ranges, const std::uint32_t max_gap) {
+    std::size_t kept = 0;
+    for (std::size_t i = 0; i < ranges.size(); ++i) {
+        if (kept > 0) {
+            render_index_range& last = ranges[kept - 1U];
+            const std::uint32_t end = last.first_index + last.index_count;
+            if (ranges[i].level == last.level && ranges[i].first_index <= end + max_gap) {
+                last.index_count = ranges[i].first_index + ranges[i].index_count - last.first_index;
+                continue;
+            }
+        }
+        ranges[kept++] = ranges[i];
+    }
+    ranges.resize(kept);
 }
 
 void limit_render_index_ranges(std::vector<render_index_range>& ranges, const std::size_t max_ranges) {
@@ -170,6 +199,9 @@ void limit_render_index_ranges(std::vector<render_index_range>& ranges, const st
         std::size_t best = 0;
         std::uint32_t best_gap = std::numeric_limits<std::uint32_t>::max();
         for (std::size_t i = 0; i + 1U < ranges.size(); ++i) {
+            if (ranges[i].level != ranges[i + 1U].level) {
+                continue;
+            }
             const std::uint32_t end = ranges[i].first_index + ranges[i].index_count;
             const std::uint32_t next = ranges[i + 1U].first_index;
             const std::uint32_t gap = next > end ? next - end : 0U;
@@ -177,6 +209,9 @@ void limit_render_index_ranges(std::vector<render_index_range>& ranges, const st
                 best_gap = gap;
                 best = i;
             }
+        }
+        if (best_gap == std::numeric_limits<std::uint32_t>::max()) {
+            return;
         }
         const std::uint32_t merged_end = ranges[best + 1U].first_index + ranges[best + 1U].index_count;
         ranges[best].index_count = merged_end - ranges[best].first_index;
@@ -188,21 +223,29 @@ render_chunk_cull_stats collect_chunk_index_ranges(const std::vector<render_mesh
                                                    const std::vector<bool>& visible,
                                                    const std::size_t index_count,
                                                    const std::size_t max_ranges,
-                                                   std::vector<render_index_range>& ranges) {
+                                                   std::vector<render_index_range>& ranges,
+                                                   const std::uint32_t merge_gap) {
     const auto is_visible = [&visible](const std::size_t i) {
         return i >= visible.size() || visible[i];
     };
-    return collect_ranges(chunks, is_visible, index_count, max_ranges, ranges);
+    return collect_ranges(chunks, is_visible, [](const std::size_t) { return std::size_t{0}; }, index_count, max_ranges, ranges, merge_gap);
 }
 
 render_chunk_cull_stats collect_visible_index_ranges(const std::vector<render_mesh_chunk>& chunks,
                                                      const view_frustum& frustum,
                                                      const std::size_t index_count,
                                                      const std::size_t max_ranges,
-                                                     std::vector<render_index_range>& ranges) {
+                                                     std::vector<render_index_range>& ranges,
+                                                     const std::uint32_t merge_gap,
+                                                     const render_lod_view* lod,
+                                                     const std::vector<float>* lod_error_meters) {
+    const auto level_of = [&chunks, lod, lod_error_meters](const std::size_t i) {
+        return lod != nullptr && lod_error_meters != nullptr ? choose_chunk_lod_level(chunks[i], *lod_error_meters, *lod) : std::size_t{0};
+    };
     const auto is_visible = [&chunks, &frustum](const std::size_t i) {
         const render_mesh_bounds& bounds = chunks[i].bounds;
-        return !bounds.valid || frustum_intersects_aabb(frustum, bounds.min, bounds.max);
+        return !bounds.valid ||
+            (frustum_intersects_aabb(frustum, bounds.min, bounds.max) && !frustum_hides_aabb(frustum, bounds.min, bounds.max));
     };
-    return collect_ranges(chunks, is_visible, index_count, max_ranges, ranges);
+    return collect_ranges(chunks, is_visible, level_of, index_count, max_ranges, ranges, merge_gap);
 }

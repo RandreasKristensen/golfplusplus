@@ -133,6 +133,10 @@ private:
     // as the reason on disconnect.
     void end_session(const std::string& failure, game_state& state);
     void subscribe_self();
+    // Gives the game the tee book's counts and how its latest request went.
+    void publish_book(game_state& state);
+    // Drops the counts and invalidates any request in flight: out of the room or session.
+    void forget_book();
     void subscribe_room(std::uint64_t room_id);
     // A new connection or a sign-out: its subscriptions are gone.
     void forget_session(game_state& state);
@@ -165,12 +169,24 @@ private:
     std::uint32_t self_subscription_ = 0;
     std::uint32_t room_subscription_ = 0;
     std::optional<tee_reservation_info> reservation_;
-    std::map<std::uint64_t, tee_slot_info> tee_slots_;
+    std::map<std::uint64_t, tee_slot_info> tee_slots_;  // the my_tee_slots view as it stands
     std::map<std::uint64_t, departure_info> departures_;
-    std::string book_course_;
-    bool book_acknowledged_ = false;
-    std::int64_t book_after_ = 0;
-    std::int64_t last_book_status_at_ = 0;
+    // The tee book. open_tee_book calls are numbered by `book_request_`; only the
+    // status row answering the latest one is an answer, so a late answer for another
+    // course or an obsolete request (A, then B, then A) changes nothing. The slot view
+    // follows the course of the newest status row (`book_scope_`); the counts handed
+    // to the game are those of the course last answered (`book_listed_`), kept
+    // (not live) while the view follows another, and dropped when the room or the
+    // session ends.
+    std::uint64_t book_request_ = 0;
+    std::string book_scope_;
+    std::string book_listed_;
+    bool book_known_ = false;
+    std::map<std::uint64_t, tee_slot_info> book_counts_;
+    std::uint64_t book_answers_ = 0;
+    std::uint64_t book_refusals_ = 0;
+    std::string book_error_;
+    bool book_changed_ = false;
     room_rows room_;
     server_clock clock_;
     bool self_applied_ = false;     // the first progress snapshot is complete

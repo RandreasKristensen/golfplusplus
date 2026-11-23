@@ -13,6 +13,8 @@
     "shot_correction_seconds": 0.3,
     "remote_trail_fade_seconds": 1.5,
     "notice_seconds": 3.0,
+    "tee_book_refresh_seconds": 60.0,
+    "tee_book_list_timeout_seconds": 10.0,
     "ride_motion_interval_seconds": 0.05,
     "ride_correction_seconds": 0.12
   },

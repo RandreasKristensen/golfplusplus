@@ -208,7 +208,7 @@ void step_up_to_ball(game_state& state) {
         return;
     }
     if (bag_on_back(state)) {
-        state.notice = game_notice{text_hud_bag_on_back, 0.0f};
+        state.notice = game_notice{text_hud_bag_on_back, 0.0f, message_severity::error};
         return;
     }
     if (state.ball->kind == ball_kind::warmup) { select_putter(state); club = club_in_hand(state); }

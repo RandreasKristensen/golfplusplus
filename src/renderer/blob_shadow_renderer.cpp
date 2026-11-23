@@ -48,13 +48,13 @@ bool blob_shadow_renderer::init(const std::string& vertex_path, const std::strin
     }
     glBindVertexArray(vao_);
     glBindBuffer(GL_ARRAY_BUFFER, corner_vbo_);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quad_corners), quad_corners, GL_STATIC_DRAW);
+    storage_.buffer(corner_vbo_, GL_ARRAY_BUFFER, sizeof(quad_corners), quad_corners, GL_STATIC_DRAW);
     glEnableVertexAttribArray(corner_location);
     glVertexAttribPointer(corner_location, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr);
 
     capacity_ = initial_instance_capacity;
     glBindBuffer(GL_ARRAY_BUFFER, instance_vbo_);
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(capacity_ * sizeof(render_blob_shadow)), nullptr, GL_DYNAMIC_DRAW);
+    storage_.buffer(instance_vbo_, GL_ARRAY_BUFFER, capacity_ * sizeof(render_blob_shadow), nullptr, GL_DYNAMIC_DRAW);
     instance_attribute(base_location, offsetof(render_blob_shadow, base));
     instance_attribute(normal_location, offsetof(render_blob_shadow, normal));
     instance_attribute(shape_location, offsetof(render_blob_shadow, stretch));
@@ -66,8 +66,7 @@ bool blob_shadow_renderer::init(const std::string& vertex_path, const std::strin
 void blob_shadow_renderer::shutdown() {
     for (unsigned int* buffer : {&corner_vbo_, &instance_vbo_}) {
         if (*buffer != 0) {
-            glDeleteBuffers(1, buffer);
-            *buffer = 0;
+            storage_.delete_buffer(*buffer);
         }
     }
     if (vao_ != 0) {
@@ -92,15 +91,13 @@ void blob_shadow_renderer::draw(const std::vector<render_blob_shadow>* trees, co
     const std::size_t required = tree_count + frame.size();
     if (required > capacity_) {
         capacity_ = grow_buffer_capacity(capacity_, required);
-        glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(capacity_ * sizeof(render_blob_shadow)), nullptr, GL_DYNAMIC_DRAW);
-        record_buffer_upload(profile, 0);
+        storage_.buffer(instance_vbo_, GL_ARRAY_BUFFER, capacity_ * sizeof(render_blob_shadow), nullptr, GL_DYNAMIC_DRAW, profile);
         trees_uploaded_ = false;
     }
     if (trees_changed || !trees_uploaded_) {
         if (tree_count > 0) {
             const std::size_t bytes = tree_count * sizeof(render_blob_shadow);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(bytes), trees->data());
-            record_buffer_write(profile, bytes);
+            storage_.write(GL_ARRAY_BUFFER, 0, bytes, trees->data(), upload_kind::cached, profile);
         }
         tree_count_ = tree_count;
         trees_revision_ = trees_revision;
@@ -108,9 +105,8 @@ void blob_shadow_renderer::draw(const std::vector<render_blob_shadow>* trees, co
     }
     if (!frame.empty()) {
         const std::size_t bytes = frame.size() * sizeof(render_blob_shadow);
-        glBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(tree_count * sizeof(render_blob_shadow)),
-                        static_cast<GLsizeiptr>(bytes), frame.data());
-        record_buffer_write(profile, bytes);
+        storage_.write(GL_ARRAY_BUFFER, tree_count * sizeof(render_blob_shadow),
+                        bytes, frame.data(), upload_kind::dynamic, profile);
     }
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     if (required == 0) {

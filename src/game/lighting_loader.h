@@ -235,7 +235,7 @@ struct wind_style {
     glm::vec3 speck_color{0.0f};
 };
 
-// The ground by surface: the terrain, ponds, and every map of a hole.
+// The 3D ground by surface: the terrain and ponds.
 struct ground_colors {
     glm::vec3 fairway{0.0f};
     glm::vec3 fairway_edge{0.0f};  // the fairway shades towards this at its edge
@@ -247,6 +247,36 @@ struct ground_colors {
     glm::vec3 backdrop{0.0f};    // the plain under and around the course
     glm::vec3 pond_bed{0.0f};    // the mud a pond's floor turns to away from its banks
     glm::vec3 cart_path{0.0f};   // a cart path's top (renderer/cart_path_mesh.h)
+};
+
+// How the printed maps of a course look (the course map and the hole signs'
+// faces): the paper, the ink of each surface and of what is marked over it.
+// Their own palette, never the 3D ground's colours.
+struct map_inks {
+    glm::vec3 paper{0.0f};
+    glm::vec3 paper_shadow{0.0f};  // under the course map's sheet
+    glm::vec3 fold{0.0f};          // its creases
+    glm::vec3 fairway{0.0f};
+    glm::vec3 rough{0.0f};
+    glm::vec3 heavy_rough{0.0f};
+    glm::vec3 green{0.0f};
+    glm::vec3 bunker{0.0f};
+    glm::vec3 water{0.0f};
+    glm::vec3 tree{0.0f};          // a tree's crown
+    glm::vec3 tree_shadow{0.0f};   // under it, to the lower right
+    glm::vec3 tree_outline{0.0f};  // round a tree or a wood
+    glm::vec3 tee{0.0f};  // a tee box
+    glm::vec3 cart_path{0.0f};
+    glm::vec3 fence{0.0f};
+    glm::vec3 flagstick{0.0f};
+    glm::vec3 flag{0.0f};
+    glm::vec3 marker_outline{0.0f};  // round the marks
+    glm::vec3 ball{0.0f};
+    glm::vec3 player{0.0f};
+    glm::vec3 bag{0.0f};
+    // How far another hole's fairway, rough and green fade towards the paper
+    // on a hole sign's map, 0..1.
+    float other_hole_fade = 0.0f;
 };
 
 // The ball, tee boxes, cups and flags, aim dots and collectibles: lost balls,
@@ -294,6 +324,7 @@ struct glow_floors {
 
 struct scene_colors {
     ground_colors ground;
+    map_inks map;
     marker_colors markers;
     figure_colors figures;
     glow_floors glow;
@@ -335,6 +366,11 @@ struct shadow_style {
     float map_strength = 0.0f;
     float map_softness = 0.0f;
     float map_edge_fade = 0.0f;
+    // The map of the swaying trees is drawn again once a crown has moved this many of its texels (a calm day never).
+    float map_pose_texels = 0.0f;
+    // ... and once the sun has turned this many degrees (a 40 m caster's shadow under a sun 5 degrees up is 460 m
+    // long: 0.02 degrees shifts its end a quarter of a texel).
+    float map_sun_degrees = 0.0f;
 };
 
 // The sun's shafts in the haze (renderer/sun_shaft_pass.h): the shadows of
@@ -407,15 +443,20 @@ struct water_style {
     float wobble_height_share = 0.0f;
 };
 
-// The grass as drawn (terrain.frag). Mown grass lies in stripes the
-// mower's width, stripe_fairway_meters on fairways and stripe_green_meters on
-// greens, each pass's blades leaning the way it went, along the hole: leaning
-// away from the eye they show their lit sides and look lighter, towards it
-// darker, by stripe_shade. All grass varies in patches patch_meters across
+// The grass as drawn (terrain.frag). Fairways and greens are one even colour
+// with fine tufts fixed in the world: fibre_*_meters across, each varying the
+// colour by fibre_*_shade of it and tilting the light by fibre_*_slope (a
+// green's finer and calmer than a fairway's, both calmer than the rough);
+// tufts finer than a pixel fade out, and the wet shine dulls by what they
+// would have shown. The night lights' light on the ground rolls off towards
+// lamp_light_cap, so lamps overlapping on a pale green light it without
+// clipping it white. The rough varies in patches patch_meters across
 // by patch_share of its colour, as real turf does with soil and wear. Near
 // the eye the rough stands up in blades (renderer/grass_renderer.h): tufts
 // tuft_spacing_meters apart, blade_height_meters tall (the rough's first
-// cut), blade_width_meters wide at the root, thinning out by reach_meters,
+// cut), blade_width_meters wide at the root (drawn at least blade_min_pixels
+// wide, as much fainter as it is thinner, so blades finer than a pixel do not
+// shimmer as the eye moves), thinning out by reach_meters,
 // and beyond in `rings` rings in all, each twice as far out with its tufts
 // twice as far apart and twice as wide, thinning into the next;
 // the wind bends them by up to blade_sway of their height; each is
@@ -423,14 +464,19 @@ struct water_style {
 // Heavy rough's blades stand heavy_blade_share times as tall. Every number
 // here shows live when lighting.json is saved.
 struct grass_style {
-    float stripe_fairway_meters = 0.0f;
-    float stripe_green_meters = 0.0f;
-    float stripe_shade = 0.0f;
+    float fibre_fairway_meters = 0.0f;
+    float fibre_fairway_shade = 0.0f;
+    float fibre_fairway_slope = 0.0f;
+    float fibre_green_meters = 0.0f;
+    float fibre_green_shade = 0.0f;
+    float fibre_green_slope = 0.0f;
+    float lamp_light_cap = 0.0f;
     float patch_meters = 0.0f;
     float patch_share = 0.0f;
     float tuft_spacing_meters = 0.0f;
     float blade_height_meters = 0.0f;
     float blade_width_meters = 0.0f;
+    float blade_min_pixels = 0.0f;
     float reach_meters = 0.0f;
     float blade_sway = 0.0f;
     float base_shade = 0.0f;
@@ -443,12 +489,20 @@ struct grass_style {
 // assets/play/tuning/trees.json: its crown's shape (round, oval, cone for a
 // spruce, umbrella for a pine's flat top, weeping, or a bush's dome from
 // the ground); the trunk's share of its height below the crown and its
-// thickness as a share of the crown's radius; how many limbs, leaf clumps
-// near and far, each clump's size as a share of the crown's radius, how
-// far a clump hangs (weeping), and how much taller than wide a grown one
-// stands; how much of the sun behind a leaf shines through it (thin
-// broadleaves about 15%, needles less); its bark, and its leaves fresh in
-// spring, in summer and turned.
+// thickness as a share of the crown's radius; how many stems rise from the
+// ground (1 for a tree); how its branches grow (space colonization): how far
+// the trunk leads up the crown (apical dominance, 1 a spruce's single leader),
+// how much they bend toward the light and droop under their weight, the
+// spacing of their ends (twig_spacing, of the crown's radius) and the pipe
+// model's exponent (Leonardo's rule, r^n = sum of the children's r^n); how
+// many leaf clumps sit at the branch ends, each clump's size as a share of
+// the crown's radius, how far a clump hangs (weeping), and how much taller
+// than wide a grown one stands; how its fine twigs zig-zag (oak, beech) and
+// hang as whips (birch, willow), and the haze of the finest twigs round them
+// (dense on birch and clipped hedges, sparse on a weeping willow's whips); how much of the sun behind a leaf shines
+// through it (thin broadleaves about 15%, needles less); its bark, the haze
+// of its fine twigs and buds, its leaves fresh in spring, in summer, turned
+// and withered (kept through winter: game/tree_season.h).
 enum class crown_shape : std::uint8_t {
     round,
     oval,
@@ -463,16 +517,65 @@ struct tree_look {
     crown_shape shape = crown_shape::round;
     float trunk_share = 0.0f;
     float trunk_radius = 0.0f;
-    int limbs = 0;
+    int stems = 0;
+    float apical_dominance = 0.0f;
+    float light_bend = 0.0f;
+    float branch_droop = 0.0f;
+    float twig_spacing = 0.0f;
+    float pipe_exponent = 0.0f;
     int clumps = 0;
     float clump_size = 0.0f;
     float droop = 0.0f;
     float aspect = 0.0f;
+    float twig_kink = 0.0f;
+    float twig_hang = 0.0f;
+    float twig_haze = 0.0f;
     float shine_through = 0.0f;
     glm::vec3 bark{0.0f};
+    glm::vec3 twig{0.0f};
     glm::vec3 spring{0.0f};
     glm::vec3 summer{0.0f};
     glm::vec3 autumn{0.0f};
+    glm::vec3 withered{0.0f};
+};
+
+// Where a tree is drawn as an image of its own grown model, a view grid
+// baked per species and variant (renderer/tree_impostor.h): `azimuths` views
+// round the tree at each of `elevations_degrees` (in the model's unit frame,
+// rising, at most eight), each `tile_pixels` square. A run of trees is drawn so
+// once its image is off from the model by at most `max_error_pixels` of the
+// pass's own picture: that error is `radius_error` of the crown's radius plus
+// `wind_error` of the tree's height per m/s of wind (the pose warp's reach).
+struct tree_impostor_style {
+    int azimuths = 0;
+    std::vector<float> elevations_degrees;
+    int tile_pixels = 0;
+    float radius_error = 0.0f;
+    float wind_error = 0.0f;
+    float max_error_pixels = 0.0f;
+    // Whole trees are drawn depth first once their crowns would cover the picture this many times over: by day,
+    // and with the night lights on, when every pixel lit twice costs far more.
+    float depth_first_coverage = 0.0f;
+    float depth_first_coverage_lamps = 0.0f;
+};
+
+// Leaves falling from the crowns (renderer/falling_leaf.h), presentation only:
+// how many a crown holds per square metre of its footprint (leaf area index
+// over one leaf's area), a leaf's size, how fast it falls and how far and how
+// often it flutters, how long it lies on the ground, how many more fall per m/s
+// of wind, and the most drawn per tree and per pass. A leaf is drawn only where
+// it covers at least `min_pixels` of the pass's picture.
+struct falling_leaf_style {
+    float leaves_per_square_meter = 0.0f;
+    float leaf_size_meters = 0.0f;
+    float fall_speed = 0.0f;
+    float flutter_seconds = 0.0f;
+    float flutter_meters = 0.0f;
+    float lie_seconds = 0.0f;
+    float wind_factor = 0.0f;
+    int most_per_tree = 0;
+    int most_per_pass = 0;
+    float min_pixels = 0.0f;
 };
 
 // A light after dark: its colour times its intensity (past 1 blooms), and how
@@ -543,6 +646,24 @@ struct lightning_style {
     glm::vec3 color{0.0f};
 };
 
+// The ground's coarser stand-ins (renderer/render_mesh_lod.h). Each chunk of
+// the ground gets `levels` index lists, each fewer triangles than the last
+// and off the full ground by at most `finest_error_meters`, then
+// `error_ratio` times as much for each level further, with every vertex
+// colour, normal and sky value off by at most `attribute_error`. Mirrors
+// of water draw a chunk as its coarsest level whose error spans at most
+// `mirror_max_error_pixels` of the mirror's picture, 0 meaning the full ground;
+// the picture and zoom always draw the full ground. The levels are made when a
+// course loads.
+inline constexpr int max_terrain_lod_levels = 6;
+struct terrain_lod_style {
+    int levels = 0;
+    float finest_error_meters = 0.0f;
+    float error_ratio = 0.0f;
+    float attribute_error = 0.0f;
+    float mirror_max_error_pixels = 0.0f;
+};
+
 struct lighting_palette {
     std::vector<lighting_key> keys;  // by rising sun elevation
     sky_style sky;
@@ -551,7 +672,10 @@ struct lighting_palette {
     shaft_style shafts;
     water_style water;
     grass_style grass;
+    terrain_lod_style terrain_lod;
     std::vector<tree_look> trees;
+    tree_impostor_style tree_impostor;
+    falling_leaf_style falling_leaves;
     night_light_style night_lights;
     weather_style weather;
     rain_style rain;

@@ -8,11 +8,16 @@
 
 #include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 struct shadow_map_fit {
     glm::mat4 view_proj{1.0f};  // world to the map's clip space
     float depth_range = 0.0f;   // metres along the sun its depth spans
+    // Which map it is, apart from the sun: the snapped corner in light space, and where its depth is centred along
+    // the sun. A map drawn for another eye is as good while these match and the depth has moved less than an extent.
+    glm::vec2 corner{0.0f};
+    float depth_middle = 0.0f;
 };
 
 // World to light space, no translation: x and y across the sun, z towards it.

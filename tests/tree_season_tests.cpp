@@ -130,3 +130,49 @@ TEST_CASE("the seasons agree with the trees: no leaf before spring, full by summ
     CHECK(foliage_share(main, start("winter")) == 0.0f);
     CHECK(foliage_share(main, start("winter") - 1.0f) > 0.0f);
 }
+
+TEST_CASE("a beech and an oak keep withered leaves through winter and drop them at leaf-out; a birch keeps none") {
+    const tree_tuning& trees = shipped_content().tuning.trees;
+    const tree_species& beech = named(trees, "beech");
+    const tree_species& oak = named(trees, "oak");
+    const tree_species& birch = named(trees, "birch");
+    const tree_species& spruce = named(trees, "spruce");
+    REQUIRE(beech.withered_share > 0.0f);
+    REQUIRE(oak.withered_share > 0.0f);
+    const float july = static_cast<float>(day_of_year(7, 1));
+    const float december = static_cast<float>(day_of_year(12, 1));
+    const float january = static_cast<float>(day_of_year(1, 15));
+    const float march = static_cast<float>(day_of_year(3, 15));
+    CHECK(withered_share(trees, beech, july) == 0.0f);
+    // All of the kept share as the rest has fallen, then thinning through the winter, continuously over the new year.
+    CHECK(near(withered_share(trees, beech, beech.bare_day), beech.withered_share));
+    CHECK(withered_share(trees, beech, december) <= beech.withered_share);
+    CHECK(withered_share(trees, beech, january) < withered_share(trees, beech, december));
+    CHECK(withered_share(trees, beech, march) < withered_share(trees, beech, january));
+    CHECK(near(withered_share(trees, beech, 365.0f), withered_share(trees, beech, 1.0f), 0.002f));
+    CHECK(near(withered_share(trees, beech, beech.leaf_out_day), beech.withered_share * trees.withered_left_at_leaf_out));
+    CHECK(withered_share(trees, beech, beech.full_leaf_day) == 0.0f);
+    // Halfway through the leaf fall, half the kept share has withered on.
+    const float falling = 0.5f * (beech.turned_day + beech.bare_day);
+    CHECK(near(withered_share(trees, beech, falling), 0.5f * beech.withered_share));
+    CHECK(withered_share(trees, oak, january) > 0.0f);
+    for (float day = 1.0f; day <= 365.0f; day += 1.0f) {
+        CHECK(withered_share(trees, birch, day) == 0.0f);
+        CHECK(withered_share(trees, spruce, day) == 0.0f);
+        CHECK(crown_leaves(trees, beech, day) <= 1.0f);
+        CHECK(crown_leaves(trees, beech, day) >= foliage_share(beech, day));
+    }
+}
+
+TEST_CASE("a winter beech's withered leaves slow a ball more than a bare birch's twigs do") {
+    const game_tuning& tuning = shipped_content().tuning;
+    const tree_tuning& trees = tuning.trees;
+    const float january = static_cast<float>(day_of_year(1, 15));
+    const float beech = crown_leaves(trees, named(trees, "beech"), january);
+    const float birch = crown_leaves(trees, named(trees, "birch"), january);
+    CHECK(birch == 0.0f);
+    CHECK(crown_density(trees, beech) > crown_density(trees, birch));
+    CHECK(crown_density(trees, beech) < 1.0f);
+    // The beech hedges keep most of theirs.
+    CHECK(crown_leaves(trees, named(trees, "hedge"), january) > beech);
+}

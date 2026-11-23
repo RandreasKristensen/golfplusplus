@@ -15,23 +15,20 @@ bool framebuffer::init(const int width, const int height, const framebuffer_form
 
     glGenTextures(1, &color_tex_);
     glBindTexture(GL_TEXTURE_2D, color_tex_);
+    const bool mipmaps = format.linear && format.mipmaps;
     switch (format.color) {
     case framebuffer_color::rgb8:
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width_, height_, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+        storage_.texture_image(color_tex_, GL_RGB, width_, height_, GL_RGB, GL_UNSIGNED_BYTE, nullptr, mipmaps);
         break;
     case framebuffer_color::hdr:
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F, width_, height_, 0, GL_RGB, GL_FLOAT, nullptr);
+        storage_.texture_image(color_tex_, GL_R11F_G11F_B10F, width_, height_, GL_RGB, GL_FLOAT, nullptr, mipmaps);
         break;
     case framebuffer_color::signed_hdr:
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width_, height_, 0, GL_RGBA, GL_FLOAT, nullptr);
+        storage_.texture_image(color_tex_, GL_RGBA16F, width_, height_, GL_RGBA, GL_FLOAT, nullptr, mipmaps);
         break;
     case framebuffer_color::exact:
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width_, height_, 0, GL_RGBA, GL_FLOAT, nullptr);
+        storage_.texture_image(color_tex_, GL_RGBA32F, width_, height_, GL_RGBA, GL_FLOAT, nullptr, mipmaps);
         break;
-    }
-    const bool mipmaps = format.linear && format.mipmaps;
-    if (mipmaps) {
-        glGenerateMipmap(GL_TEXTURE_2D);
     }
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
                     mipmaps ? GL_LINEAR_MIPMAP_NEAREST : format.linear ? GL_LINEAR : GL_NEAREST);
@@ -43,12 +40,12 @@ bool framebuffer::init(const int width, const int height, const framebuffer_form
     if (format.depth == framebuffer_depth::drawn) {
         glGenRenderbuffers(1, &depth_rbo_);
         glBindRenderbuffer(GL_RENDERBUFFER, depth_rbo_);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width_, height_);
+        storage_.depth_stencil(depth_rbo_, width_, height_);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depth_rbo_);
     } else if (format.depth == framebuffer_depth::sampled) {
         glGenTextures(1, &depth_tex_);
         glBindTexture(GL_TEXTURE_2D, depth_tex_);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width_, height_, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, nullptr);
+        storage_.texture_image(depth_tex_, GL_DEPTH24_STENCIL8, width_, height_, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -69,20 +66,11 @@ bool framebuffer::init(const int width, const int height, const framebuffer_form
 }
 
 void framebuffer::shutdown() {
-    if (depth_rbo_ != 0) {
-        glDeleteRenderbuffers(1, &depth_rbo_);
-        depth_rbo_ = 0;
-    }
+    storage_.delete_renderbuffer(depth_rbo_);
 
-    if (depth_tex_ != 0) {
-        glDeleteTextures(1, &depth_tex_);
-        depth_tex_ = 0;
-    }
+    storage_.delete_texture(depth_tex_);
 
-    if (color_tex_ != 0) {
-        glDeleteTextures(1, &color_tex_);
-        color_tex_ = 0;
-    }
+    storage_.delete_texture(color_tex_);
 
     if (fbo_ != 0) {
         glDeleteFramebuffers(1, &fbo_);

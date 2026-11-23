@@ -6,6 +6,7 @@
 
 #include "renderer/frustum.h"
 #include "renderer/render_mesh.h"
+#include "renderer/render_mesh_lod.h"
 
 // GL-free render chunking and chunk culling for static indexed meshes
 // (course terrain + ground, material overlays).
@@ -43,9 +44,13 @@ std::vector<render_mesh_chunk> build_render_mesh_chunks(const std::vector<render
                                                         const std::vector<std::uint32_t>& indices,
                                                         const render_chunk_settings& settings = render_chunk_settings{});
 
+// `level` 0 indexes render_static_mesh::indices, a coarser one
+// render_static_mesh::lod_indices (render_mesh_chunk::span::list). Ranges of
+// different levels never join.
 struct render_index_range {
     std::uint32_t first_index = 0;
     std::uint32_t index_count = 0;
+    std::uint8_t level = 0;
 };
 
 // Per-mesh culling result for one frame. Plain data so callers can fold it into
@@ -56,6 +61,7 @@ struct render_chunk_cull_stats {
     std::uint32_t chunks_culled = 0;
     // glDrawElements calls needed for this mesh (== ranges.size()).
     std::uint32_t draw_ranges = 0;
+    std::uint64_t indices_visible = 0;
     std::uint64_t indices_total = 0;
     // Includes indices of culled chunks that were merged into a range to stay
     // under the range limit.
@@ -63,30 +69,43 @@ struct render_chunk_cull_stats {
 };
 
 // Appends [first_index, first_index + index_count) to `ranges`, extending the
-// last range instead when the two are contiguous. Empty ranges are ignored.
+// last range instead when the two are contiguous and of one level. Empty ranges are ignored.
 void append_render_index_range(std::vector<render_index_range>& ranges,
                                std::uint32_t first_index,
-                               std::uint32_t index_count);
+                               std::uint32_t index_count,
+                               std::uint8_t level = 0);
 
 // While there are more than `max_ranges` ranges (min 1), joins the neighbouring
-// pair separated by the smallest index gap. The gap is then drawn too, which is
+// pair of one level separated by the smallest index gap (none left: stops). The gap is then drawn too, which is
 // always safe (it only draws geometry the GPU clips) and trades a few culled
 // indices for fewer draw calls. Expects sorted, non-overlapping ranges.
 void limit_render_index_ranges(std::vector<render_index_range>& ranges, std::size_t max_ranges);
 
+// Joins neighbouring ranges that lie no more than `max_gap` indices apart, the
+// gap drawn too: a draw call costs about as much as drawing that many indices,
+// so a gap smaller than that is cheaper drawn than skipped. Order is kept.
+void merge_render_index_gaps(std::vector<render_index_range>& ranges, std::uint32_t max_gap);
+
 // Rebuilds `ranges` (cleared first, capacity kept) with the merged index ranges
 // of the chunks flagged in `visible` (one flag per chunk; missing flags count
 // as visible). Chunk ranges are clamped to `index_count`. With no chunks, a
-// non-empty mesh is drawn as one range.
+// non-empty mesh is drawn as one range. Gaps up to `merge_gap` indices are
+// merged, then the smallest more until at most `max_ranges` remain.
 render_chunk_cull_stats collect_chunk_index_ranges(const std::vector<render_mesh_chunk>& chunks,
                                                    const std::vector<bool>& visible,
                                                    std::size_t index_count,
                                                    std::size_t max_ranges,
-                                                   std::vector<render_index_range>& ranges);
+                                                   std::vector<render_index_range>& ranges,
+                                                   std::uint32_t merge_gap = 0U);
 
 // Same, with visibility from a conservative frustum test of each chunk's bounds.
+// With `lod`, each visible chunk is drawn as the level choose_chunk_lod_level
+// gives it (`lod_error_meters` as in render_static_mesh).
 render_chunk_cull_stats collect_visible_index_ranges(const std::vector<render_mesh_chunk>& chunks,
                                                      const view_frustum& frustum,
                                                      std::size_t index_count,
                                                      std::size_t max_ranges,
-                                                     std::vector<render_index_range>& ranges);
+                                                     std::vector<render_index_range>& ranges,
+                                                     std::uint32_t merge_gap = 0U,
+                                                     const render_lod_view* lod = nullptr,
+                                                     const std::vector<float>* lod_error_meters = nullptr);

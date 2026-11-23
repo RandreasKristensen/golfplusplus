@@ -43,7 +43,7 @@ void append_rect(std::vector<hole_sign_vertex>& vertices,
 
 // A box with half extents along three perpendicular unit axes; `textured_face`
 // (the +across side) carries the face texture, read left to right by someone
-// looking at it.
+// looking at it, and so does the -across side with `textured_back`.
 void append_box(std::vector<hole_sign_vertex>& vertices,
                 const glm::vec3& center,
                 const glm::vec3& along,
@@ -51,6 +51,7 @@ void append_box(std::vector<hole_sign_vertex>& vertices,
                 const glm::vec3& half,
                 const glm::vec3& color,
                 const bool textured_face,
+                const bool textured_back,
                 const bool bottom) {
     const glm::vec3 a = along * half.x;
     const glm::vec3 up = world_up * half.y;
@@ -58,7 +59,9 @@ void append_box(std::vector<hole_sign_vertex>& vertices,
     // Looking at the +across side, the viewer's right is across x up, negated.
     const glm::vec3 face_right = safe_normalize(glm::cross(-across, world_up), along) * half.x;
     append_rect(vertices, center + c, across, face_right, up, textured_face ? glm::vec3(1.0f) : color, textured_face);
-    append_rect(vertices, center - c, -across, a, up, color, false);
+    // Looking at the -across side, the viewer's right is the front's left.
+    append_rect(vertices, center - c, -across, textured_back ? -face_right : a, up, textured_back ? glm::vec3(1.0f) : color,
+                textured_back);
     append_rect(vertices, center + a, along, c, up, color, false);
     append_rect(vertices, center - a, -along, c, up, color, false);
     append_rect(vertices, center + up, world_up, a, c, color, false);
@@ -87,7 +90,9 @@ std::vector<hole_sign_source> hole_sign_sources(const play_area& area, const std
         sources.push_back(hole_sign_source{texts[i], area.signs[i].board_center, {}});
     }
     for (const way_sign& sign : area.way_signs) {
-        sources.push_back(hole_sign_source{hole_sign_text{static_cast<int>(sign.to_hole) + 1, 0, 0, false}, sign.board_center, {}});
+        for (const way_board& board : sign.boards) {
+            sources.push_back(hole_sign_source{hole_sign_text{}, board.center, way_sign_label(board.to_holes)});
+        }
     }
     for (const prop_board& board : boards) {
         sources.push_back(hole_sign_source{hole_sign_text{}, board.center, board.label});
@@ -141,35 +146,39 @@ std::vector<prop_board> prop_boards(const play_area& area, const prop_catalog& p
 void append_hole_sign_model(std::vector<hole_sign_vertex>& vertices, const hole_sign& sign, const prop_model& model) {
     append_box(vertices, sign.board_center, sign.down_hole, sign.face_normal,
                glm::vec3(sign.board_half_width, sign.board_half_height, sign.board_thickness * 0.5f), model.color("board"), true,
-               true);
+               false, true);
     for (const glm::vec3& foot : sign.post_feet) {
         const float height = hole_sign_top(sign) - foot.y;
         append_box(vertices, foot + world_up * (height * 0.5f), sign.down_hole, sign.face_normal,
-                   glm::vec3(sign.post_radius, height * 0.5f, sign.post_radius), model.color("post"), false, false);
+                   glm::vec3(sign.post_radius, height * 0.5f, sign.post_radius), model.color("post"), false, false, false);
     }
 }
 
-void append_way_sign_model(std::vector<hole_sign_vertex>& vertices, const way_sign& sign, const prop_model& model) {
+void append_way_board_model(std::vector<hole_sign_vertex>& vertices, const way_sign& sign, const std::size_t board_index,
+                            const prop_model& model) {
+    const way_board& placed = sign.boards[board_index];
     const glm::vec3 board = model.color("board");
-    append_box(vertices, sign.board_center, sign.points, sign.face_normal,
-               glm::vec3(sign.board_half_width, sign.board_half_height, sign.board_thickness * 0.5f), board, true, true);
+    append_box(vertices, placed.center, placed.points, placed.face_normal,
+               glm::vec3(placed.half_width, sign.board_half_height, sign.board_thickness * 0.5f), board, true, true, true);
     // The pointed end: a wedge as thick as the board, as long as it is half high.
-    const glm::vec3 end = sign.board_center + sign.points * sign.board_half_width;
+    const glm::vec3 end = placed.center + placed.points * placed.half_width;
     const glm::vec3 up = world_up * sign.board_half_height;
-    const glm::vec3 tip = end + sign.points * sign.board_half_height;
-    const glm::vec3 side = sign.face_normal * (sign.board_thickness * 0.5f);
+    const glm::vec3 tip = end + placed.points * sign.board_half_height;
+    const glm::vec3 side = placed.face_normal * (sign.board_thickness * 0.5f);
     for (const float s : {1.0f, -1.0f}) {
-        append_triangle(vertices, end + up + side * s, end - up + side * s, tip + side * s, sign.face_normal * s, board);
+        append_triangle(vertices, end + up + side * s, end - up + side * s, tip + side * s, placed.face_normal * s, board);
     }
     for (const float s : {1.0f, -1.0f}) {
         const glm::vec3 edge = end + up * s;
-        const glm::vec3 normal = safe_normalize(sign.points + world_up * s, sign.points);
+        const glm::vec3 normal = safe_normalize(placed.points + world_up * s, placed.points);
         append_triangle(vertices, edge + side, edge - side, tip + side, normal, board);
         append_triangle(vertices, edge - side, tip - side, tip + side, normal, board);
     }
-    const float height = way_sign_top(sign) - sign.post_foot.y;
-    append_box(vertices, sign.post_foot + world_up * (height * 0.5f), sign.points, sign.face_normal,
-               glm::vec3(sign.post_radius, height * 0.5f, sign.post_radius), model.color("post"), false, false);
+    if (board_index == 0) {
+        const float height = way_sign_top(sign) - sign.post_foot.y;
+        append_box(vertices, sign.post_foot + world_up * (height * 0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f),
+                   glm::vec3(sign.post_radius, height * 0.5f, sign.post_radius), model.color("post"), false, false, false);
+    }
 }
 
 render_hole_signs build_render_hole_signs(const play_area& area,
@@ -187,7 +196,7 @@ render_hole_signs build_render_hole_signs(const play_area& area,
         const hole_sign& sign = area.signs[i];
         const hole_sign_labels labels = make_hole_sign_labels(text, texts[i].number, texts[i].par, texts[i].meters, texts[i].practice);
         clear_overlay_batch(batch);
-        draw_hole_sign_face(batch, text, labels, area, sign, colors.ground);
+        draw_hole_sign_face(batch, text, labels, area, sign, colors.map);
         signs.truncated_text_count += batch.truncated_text_count;
 
         render_hole_sign drawn;
@@ -198,16 +207,19 @@ render_hole_signs build_render_hole_signs(const play_area& area,
         signs.signs.push_back(std::move(drawn));
     }
     for (const way_sign& sign : area.way_signs) {
-        clear_overlay_batch(batch);
-        draw_way_sign_face(batch, text, make_hole_sign_labels(text, static_cast<int>(sign.to_hole) + 1, 0, 0, false).number);
-        signs.truncated_text_count += batch.truncated_text_count;
+        for (std::size_t i = 0; i < sign.boards.size(); ++i) {
+            clear_overlay_batch(batch);
+            draw_way_sign_face(batch, text, way_sign_label(sign.boards[i].to_holes),
+                               way_sign_face_width(sign.boards[i].half_width, sign.board_half_height));
+            signs.truncated_text_count += batch.truncated_text_count;
 
-        render_hole_sign drawn;
-        drawn.face = rasterize_overlay_batch(batch, model.color("board"));
-        drawn.first_vertex = signs.vertices.size();
-        append_way_sign_model(signs.vertices, sign, model);
-        drawn.vertex_count = signs.vertices.size() - drawn.first_vertex;
-        signs.signs.push_back(std::move(drawn));
+            render_hole_sign drawn;
+            drawn.face = rasterize_overlay_batch(batch, model.color("board"));
+            drawn.first_vertex = signs.vertices.size();
+            append_way_board_model(signs.vertices, sign, i, model);
+            drawn.vertex_count = signs.vertices.size() - drawn.first_vertex;
+            signs.signs.push_back(std::move(drawn));
+        }
     }
     for (const prop_board& board : boards) {
         clear_overlay_batch(batch);

@@ -1,51 +1,11 @@
 #pragma once
 
-// Lightweight per-frame profiling for the renderer/simulation hot path.
-//
-// Design rules (see AGENTS.md):
-//   - No global mutable state. `app` owns a single `profiler` and hands out a
-//     `frame_profile*` to the code that records into it.
-//   - A null `frame_profile*` means "profiling disabled". Every record helper
-//     and `profile_scope` is a no-op on null, so call sites stay clean and the
-//     disabled cost is one predictable branch (no clock reads, no allocation).
-//   - `src/physics/` stays pure: physics never receives a `frame_profile*`.
-//     Terrain sampling reports work done as a pure output field on
-//     `terrain_sample::triangles_tested`; the caller accumulates it.
-//
-// Usage
-// -----
-// Owning it (app):
-//     profiler profiler_;                       // member of app
-//     profiler_.enabled = show_fps_;            // runtime flag
-//     profiler_end_frame(profiler_, raw_dt);    // publish previous frame
-//     profiler_begin_frame(profiler_);          // start this frame
-//     frame_profile* profile = profiler_frame(profiler_);  // null when off
-//
-// Timing a scope:
-//     {
-//         profile_scope timer(profile, profile_stage::make_render_data);
-//         data = make_render_data(...);
-//     }
-//
-// Counting GL work:
-//     record_draw_call(profile);                 // one glDraw* submission
-//     record_uniform_set(profile);               // one glUniform* set
-//     record_uniform_location_query(profile);    // one glGetUniformLocation
-//     record_buffer_upload(profile, byte_count); // one glBufferData: storage
-//                                                // (re)allocation, 0 bytes for
-//                                                // a nullptr orphan
-//     record_buffer_write(profile, byte_count);  // one glBufferSubData
-//
-// Accumulating terrain sampling work at the call site:
-//     const terrain_sample sample = sample_terrain_mesh(mesh, position, y);
-//     record_terrain_sample(profile, sample.triangles_tested);
-//
-// Optional GPU timings (see renderer/gl_timer.h):
-//     record_gpu_stage(profile, gpu_profile_stage::terrain, elapsed_ms);
-//
-// Reading results: `profiler::published` holds the average over the last
-// publish window and is what the debug overlay renders.
+// Per-frame wall times, GPU timestamps, submitted work and resident resources.
+// The app publishes the originating frame once delayed timestamps arrive.
 
+#include "profiling/frame_accounting.h"
+#include <array>
+#include <functional>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -61,6 +21,9 @@ enum class profile_stage : std::size_t {
     render_overlay,
     render_crt,
     window_swap,
+    query_read,
+    upload,
+    readback,
     count
 };
 
@@ -92,10 +55,24 @@ enum class gpu_profile_stage : std::size_t {
 
 inline constexpr std::size_t gpu_profile_stage_count = static_cast<std::size_t>(gpu_profile_stage::count);
 
+enum class gpu_stage_group : std::size_t { scene, reflection, zoom, zoom_reflection, count };
+using gpu_stage_times = std::array<double, gpu_profile_stage_count>;
+using gpu_view_times = std::array<gpu_stage_times, static_cast<std::size_t>(gpu_stage_group::count)>;
+
 // Plain data. Zero-initialised means "nothing recorded".
 struct frame_profile {
+    std::uint64_t frame_number = 0;
+    frame_accounting work;
+    process_memory memory;
+    std::uint64_t gpu_buffer_bytes = 0;
+    std::uint64_t gpu_texture_bytes = 0;
+    std::uint64_t gpu_renderbuffer_bytes = 0;
+    double course_load_ms = 0;
+    double course_bake_ms = 0;
+    double gpu_frame_ms = 0;
+    // Children of a reflection or zoom have their own columns. The parent is inclusive.
+    gpu_view_times gpu_ms{};
     double stage_ms[profile_stage_count] = {};
-    double gpu_stage_ms[gpu_profile_stage_count] = {};
     bool gpu_timers_available = false;
 
     std::uint32_t terrain_sample_calls = 0;
@@ -118,7 +95,7 @@ struct frame_profile {
     std::uint32_t debug_overlay_buffer_calls = 0;
     std::uint64_t debug_overlay_buffer_bytes = 0;
     // Frustum culling of the chunked static meshes (terrain + material overlay
-    // summed). Filled by the owner from renderer::cull_stats() after render().
+    // summed) from the main scene.
     std::uint32_t visible_chunks = 0;
     std::uint32_t culled_chunks = 0;
     std::uint32_t chunk_draw_ranges = 0;
@@ -130,8 +107,10 @@ struct frame_profile {
     float frame_ms = 0.0f;
 };
 
-// Owned by `app`. Never a global, never a singleton.
+using frame_profile_sink = std::function<void(const frame_profile&)>;
+
 struct profiler {
+    std::uint64_t next_frame = 0;
     bool enabled = false;
     float publish_interval_seconds = 0.25f;
 
@@ -141,21 +120,14 @@ struct profiler {
 
     frame_profile accumulator;
     int accumulated_frames = 0;
+    int accumulated_gpu_frames = 0;
     float accumulated_seconds = 0.0f;
-    bool frame_open = false;
 };
 
-// Starts recording a frame when `enabled`. Clears the live frame.
-void profiler_begin_frame(profiler& profile);
-
-// Folds the live frame into the running average and publishes it every
-// `publish_interval_seconds`. Safe to call when no frame is open.
-void profiler_end_frame(profiler& profile, float frame_seconds);
-
-// Null when profiling is off — pass this straight into the recording helpers.
-inline frame_profile* profiler_frame(profiler& profile) {
-    return profile.frame_open ? &profile.frame : nullptr;
-}
+// Start an empty, numbered record, or return null when recording is disabled.
+frame_profile* profiler_begin_frame(profiler& profile);
+// Fold a completed record into the overlay's publishing window.
+void publish_profile(profiler& profile, const frame_profile& frame);
 
 inline void record_draw_call(frame_profile* profile, const std::uint32_t count = 1) {
     if (profile != nullptr) {
@@ -172,6 +144,13 @@ inline void record_uniform_set(frame_profile* profile, const std::uint32_t count
 inline void record_uniform_location_query(frame_profile* profile) {
     if (profile != nullptr) {
         profile->uniform_location_queries += 1U;
+    }
+}
+
+// glGet* and glIsEnabled calls that read state back from the driver.
+inline void record_state_readbacks(frame_profile* profile, const std::uint32_t count) {
+    if (profile != nullptr) {
+        profile->work.state_readbacks += count;
     }
 }
 
@@ -202,10 +181,19 @@ inline void record_terrain_sample(frame_profile* profile, const int triangles_te
     }
 }
 
-inline void record_gpu_stage(frame_profile* profile, const gpu_profile_stage stage, const double milliseconds) {
-    if (profile != nullptr && stage != gpu_profile_stage::count) {
-        profile->gpu_stage_ms[static_cast<std::size_t>(stage)] += milliseconds;
-        profile->gpu_timers_available = true;
+inline gpu_stage_group child_stage_group(const gpu_profile_stage parent, const gpu_stage_group group) {
+    if (parent == gpu_profile_stage::zoom) { return gpu_stage_group::zoom; }
+    if (parent == gpu_profile_stage::reflection) {
+        return group == gpu_stage_group::zoom ? gpu_stage_group::zoom_reflection : gpu_stage_group::reflection;
+    }
+    return group;
+}
+
+inline void record_timestamp_segment(frame_profile& frame, const gpu_profile_stage stage, const gpu_stage_group group,
+                                     const std::uint64_t start, const std::uint64_t end) {
+    if (end >= start) {
+        frame.gpu_ms[static_cast<std::size_t>(group)][static_cast<std::size_t>(stage)] +=
+            static_cast<double>(end - start) / 1000000.0;
     }
 }
 
@@ -217,6 +205,7 @@ struct debug_overlay_cost_mark {
     std::uint32_t buffer_reallocations = 0;
     std::uint32_t buffer_writes = 0;
     std::uint64_t buffer_upload_bytes = 0;
+    std::uint64_t dynamic_upload_bytes = 0;
 };
 
 inline debug_overlay_cost_mark mark_debug_overlay_cost(const frame_profile* profile) {
@@ -227,6 +216,7 @@ inline debug_overlay_cost_mark mark_debug_overlay_cost(const frame_profile* prof
         mark.buffer_reallocations = profile->buffer_reallocations;
         mark.buffer_writes = profile->buffer_writes;
         mark.buffer_upload_bytes = profile->buffer_upload_bytes;
+        mark.dynamic_upload_bytes = profile->work.dynamic_upload_bytes;
     }
     return mark;
 }
@@ -245,10 +235,31 @@ inline void reclaim_debug_overlay_cost(frame_profile* profile, const debug_overl
     profile->buffer_writes = mark.buffer_writes;
     profile->buffer_reallocations = mark.buffer_reallocations;
     profile->buffer_upload_bytes = mark.buffer_upload_bytes;
+    profile->work.dynamic_upload_bytes = mark.dynamic_upload_bytes;
     profile->debug_overlay_draw_calls += draws;
     profile->debug_overlay_uniform_sets += uniforms;
     profile->debug_overlay_buffer_calls += buffer_calls;
     profile->debug_overlay_buffer_bytes += buffer_bytes;
+}
+
+class profile_pass_scope {
+public:
+    profile_pass_scope(frame_profile* frame, const profile_pass pass) : frame_(frame) {
+        if (frame_) {
+            previous_ = frame_->work.active_pass;
+            frame_->work.active_pass = pass;
+        }
+    }
+    ~profile_pass_scope() { if (frame_) { frame_->work.active_pass = previous_; } }
+    profile_pass_scope(const profile_pass_scope&) = delete;
+    profile_pass_scope& operator=(const profile_pass_scope&) = delete;
+private:
+    frame_profile* frame_;
+    profile_pass previous_ = profile_pass::main;
+};
+
+inline double elapsed_milliseconds(const std::chrono::steady_clock::time_point start) {
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 }
 
 // RAII CPU timer. Accumulates into `stage`, so calling it twice in one frame
@@ -266,9 +277,7 @@ public:
         if (profile_ == nullptr) {
             return;
         }
-        const std::chrono::duration<double, std::milli> elapsed =
-            std::chrono::steady_clock::now() - start_;
-        profile_->stage_ms[static_cast<std::size_t>(stage_)] += elapsed.count();
+        profile_->stage_ms[static_cast<std::size_t>(stage_)] += elapsed_milliseconds(start_);
     }
 
     profile_scope(const profile_scope&) = delete;

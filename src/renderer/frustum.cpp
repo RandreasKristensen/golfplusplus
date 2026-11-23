@@ -59,3 +59,24 @@ bool frustum_intersects_aabb(const view_frustum& frustum,
     }
     return true;
 }
+
+bool frustum_hides_aabb(const view_frustum& frustum, const glm::vec3& box_min, const glm::vec3& box_max) {
+    const hidden_disc& disc = frustum.hidden;
+    if (!(disc.radius > 0.0f)) {
+        return false;
+    }
+    const glm::vec2 center = disc.size * 0.5f;
+    for (int corner = 0; corner < 8; ++corner) {
+        const glm::vec4 clip = disc.view_proj * glm::vec4((corner & 1) != 0 ? box_max.x : box_min.x,
+                                                           (corner & 2) != 0 ? box_max.y : box_min.y,
+                                                           (corner & 4) != 0 ? box_max.z : box_min.z, 1.0f);
+        if (!(clip.w > 1.0e-4f)) {
+            return false;
+        }
+        const glm::vec2 pixel = (glm::vec2(clip.x, clip.y) / clip.w * 0.5f + 0.5f) * disc.size;
+        if (!(glm::distance(pixel, center) < disc.radius)) {
+            return false;
+        }
+    }
+    return true;
+}

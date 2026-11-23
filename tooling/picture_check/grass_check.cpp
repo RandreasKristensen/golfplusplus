@@ -63,7 +63,7 @@ std::vector<place> places_of(const check_course& course) {
     std::size_t paths = 0;
     for (std::size_t i = 0; i < course.overlay.vertices.size() && paths < most_of_a_kind; i += 997) {
         const render_terrain_vertex& vertex = course.overlay.vertices[i];
-        if (vertex.paved > 0.5f) {
+        if (vertex.paved() > 0.5f) {
             places.push_back({glm::vec2(vertex.position.x, vertex.position.z), 10.0f});
             ++paths;
         }
@@ -162,13 +162,13 @@ grass_check_result check_grass(const check_course& course, const lighting_palett
             haze.full_distance = 1.0e5f;
             lighting.upload(light, haze, {}, nullptr);
 
-            timers.begin_frame(false);
+            timers.begin_frame(nullptr);
             picture.bind();
             glViewport(0, 0, side, side);
             glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            const grass_frame frame{&course.terrain, &course.overlay, &course.grass, view_proj, eye,
-                                    palette.colors.ground.rough, glm::vec2(strong_wind, 0.0f), 7.0f};
+            const grass_frame frame{&course.grass, view_proj, eye,
+                                    palette.colors.ground.rough, glm::vec2(strong_wind, 0.0f), 7.0f, side, {}};
             grass.draw(frame, style, shadows, shadow_unit, timers, nullptr);
             const std::vector<glm::vec4> blades = read_colors(picture, side, side);
             picture.bind(); glViewport(0,0,side,side);
@@ -194,7 +194,7 @@ grass_check_result check_grass(const check_course& course, const lighting_palett
             glClearColor(-1000.0f, 1.0f, 0.0f, 0.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             truth.use();
-            ground.draw(truth, &course.terrain, &course.overlay, view_proj, make_view_frustum(view_proj), overlay_depth::over_all, nullptr);
+            ground.draw(truth, &course.terrain, &course.overlay, view_proj, make_view_frustum(view_proj), overlay_depth::over_all, {}, nullptr);
             const std::vector<glm::vec4> surface = read_colors(picture, side, side);
             picture.bind();
             glClearColor(0.0f, 1.0f, 0.0f, 0.0f);

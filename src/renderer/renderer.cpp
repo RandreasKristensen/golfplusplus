@@ -4,6 +4,7 @@
 #include "renderer/cart_batch.h"
 #include "renderer/course_map_overlay.h"
 #include "renderer/held_props.h"
+#include "renderer/prop_glow.h"
 #include "renderer/gl_loader.h"
 #include "renderer/hud_overlay.h"
 #include "renderer/menu_overlay.h"
@@ -40,13 +41,6 @@ constexpr const char* fence_net_texture_path = "world/props/fence_net.bmp";
 constexpr float min_far_plane = 160.0f;
 constexpr float far_plane_extent_scale = 2.5f;
 
-void delete_buffer(unsigned int& buffer) {
-    if (buffer != 0) {
-        glDeleteBuffers(1, &buffer);
-        buffer = 0;
-    }
-}
-
 void delete_vertex_array(unsigned int& vao) {
     if (vao != 0) {
         glDeleteVertexArrays(1, &vao);
@@ -62,6 +56,7 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
     colors_ = palette.colors;
     water_style_ = palette.water;
     grass_style_ = palette.grass;
+    terrain_lod_style_ = palette.terrain_lod;
     props_ = props;
     if (window_ == nullptr) {
         return false;
@@ -82,9 +77,10 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
         eyepiece_pass_.init(path("crt.vert"), path("eyepiece.frag"), screen_vao_) &&
         tape_pass_.init(path("crt.vert"), path("tape.frag"), screen_vao_, picture.tape) &&
         tv_pass_.init(path("crt.vert"), path("crt.frag"), screen_vao_, picture.tv) &&
-        tree_renderer_.init(path("tree.vert"), path("tree.frag"), palette.trees) &&
-        world_marker_renderer_.init(path("world_marker.vert"), path("lit_flat.frag")) &&
+        tree_renderer_.init(path("tree.vert"), path("tree.frag"), palette.trees, palette.tree_impostor) &&
+        world_marker_renderer_.init(path("world_marker.vert"), path("lit_flat.frag"), true) &&
         tee_box_renderer_.init(path("tee_box.vert"), path("tee_box.frag")) &&
+        cup_renderer_.init(path("world_marker.vert"), path("lit_flat.frag")) &&
         prop_renderer_.init(path("prop.vert"), path("prop.frag")) &&
         blob_shadow_renderer_.init(path("blob_shadow.vert"), path("blob_shadow.frag")) &&
         shadow_map_pass_.init(path("shadow_map.vert"), path("shadow_map.frag"), palette.shadows) &&
@@ -99,10 +95,12 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
         weather_renderer_.init(path("weather_streak.vert"), path("weather_streak.frag"),
                                std::max(palette.rain.max_drops, palette.wind.max_specks)) &&
         overlay_pass_.init(path("overlay.vert"), path("overlay.frag")) &&
+        course_map_renderer_.init(path("course_map_sheet.vert"), path("course_map_sheet.frag")) &&
         backdrop_pass_.init(asset_root, path("backdrop.vert"), path("backdrop.frag"), screen_vao_, palette.sky);
     if (!ok) {
         return false;
     }
+    tree_renderer_.set_falling_leaves(palette.falling_leaves);
 
     const std::optional<rgba_image> grass = load_bmp_file(std::filesystem::path(asset_root) / grass_texture_path);
     if (!grass || !grass_texture_.upload(*grass, texture_sampling::tiled_detail)) {
@@ -117,11 +115,6 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
     terrain_shader_.use();
     terrain_shader_.set_int("u_grass", grass_texture_unit);
     terrain_shader_.set_int("u_path", path_texture_unit);
-    terrain_shader_.set_int("u_shadow_map", shadow_map_unit);
-    tee_box_renderer_.shader().use();
-    tee_box_renderer_.shader().set_int("u_shadow_map", shadow_map_unit);
-    prop_renderer_.shader().use();
-    prop_renderer_.shader().set_int("u_shadow_map", shadow_map_unit);
 
     gpu_timers_.init();
     return true;
@@ -137,6 +130,7 @@ void renderer::shutdown() {
     tree_renderer_.shutdown();
     world_marker_renderer_.shutdown();
     tee_box_renderer_.shutdown();
+    cup_renderer_.shutdown();
     prop_renderer_.shutdown();
     blob_shadow_renderer_.shutdown();
     shadow_map_pass_.shutdown();
@@ -150,6 +144,7 @@ void renderer::shutdown() {
     grass_renderer_.shutdown();
     weather_renderer_.shutdown();
     overlay_pass_.shutdown();
+    course_map_renderer_.shutdown();
     backdrop_pass_.shutdown();
     grass_texture_.shutdown();
     path_texture_.shutdown();
@@ -164,32 +159,25 @@ void renderer::shutdown() {
 
     terrain_renderer_.shutdown();
     for (primitive_buffers* buffers : {&ground_, &ball_}) {
-        delete_buffer(buffers->vbo);
+        storage_.delete_buffer(buffers->vbo);
         delete_vertex_array(buffers->vao);
         *buffers = primitive_buffers{};
     }
-    delete_buffer(screen_vbo_);
+    storage_.delete_buffer(screen_vbo_);
     delete_vertex_array(screen_vao_);
 
     scene_fbo_.shutdown();
     window_ = nullptr;
 }
 
-void renderer::render(const render_data& data, const text_assets& text, frame_profile* profile) {
+void renderer::render(const render_data& data, const text_assets& text) {
+    frame_profile* profile = allocations_.frame;
     if (window_ == nullptr) {
         return;
     }
 
     const profile_scope render_timer(profile, profile_stage::render);
-    terrain_shader_.set_profile(profile);
-    ball_shader_.set_profile(profile);
-    camcorder_pass_.set_profile(profile);
-    eyepiece_pass_.set_profile(profile);
-    tape_pass_.set_profile(profile);
-    tv_pass_.set_profile(profile);
-    backdrop_pass_.set_profile(profile);
-    sun_shaft_pass_.set_profile(profile);
-    gpu_timers_.begin_frame(profile != nullptr);
+    gpu_timers_.begin_frame(profile);
 
     int screen_width = 0;
     int screen_height = 0;
@@ -197,35 +185,44 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
     screen_width = std::max(1, screen_width);
     screen_height = std::max(1, screen_height);
     if (!ensure_framebuffer_size(screen_width, screen_height)) {
+        gpu_timers_.end_frame();
         return;
     }
 
     // Rebuilt with the course; the bus's doors are drawn each frame.
-    const bool new_course = !bus_door_seeded_ || world_props_revision_ != data.trees_revision;
-    if (new_course) {
-        world_props_.clear();
-        if (data.world_props) { append_world_props(world_props_, *data.world_props, props_, colors_.glow); }
-        world_props_revision_ = data.trees_revision;
-    }
+    const bool new_course = refresh_static_geometry(data, profile);
     advance_bus_doors(data, new_course);
     const glm::mat4 proj = scene_projection(data.camera_fov_degrees, data.area_extent);
     const glm::mat4 view = glm::lookAt(data.camera_position, data.camera_target, glm::vec3(0.0f, 1.0f, 0.0f));
     if (!data.vcr.still_frame || !camcorder_pass_.has_frame()) {
         const profile_scope scene_timer(profile, profile_stage::render_scene);
         const std::vector<tree_body> no_trees;
-        tree_renderer_.set_seasons(data.tree_species);
+        tree_renderer_.set_trees(data.trees != nullptr ? *data.trees : no_trees, data.trees_revision, profile);
+        tree_renderer_.set_seasons(data.tree_species, profile);
         tree_renderer_.set_motion(data.clock_seconds, glm::vec2(data.weather.surface_wind.x, data.weather.surface_wind.z));
-        build_shadow_casters(shadow_casters_, shadow_models_, data, colors_, props_, shadow_map_pass_.style(), &world_props_);
-        shadow_map_pass_.draw(tree_renderer_, data.trees != nullptr ? *data.trees : no_trees, data.trees_revision,
-                              floodlight_renderer_, data.floodlights, shadow_casters_, shadow_models_,
+        stage_frame_geometry(data, profile);
+        grass_renderer_.fetch_ahead(data.grass, data.camera_position, grass_style_);
+        const prop_caster_source casting{prop_renderer_.static_buffer(), prop_renderer_.static_opaque_runs(),
+                                         prop_renderer_.frame_buffer(), prop_frame_.ranges(prop_view::sun_shadow, false),
+                                         prop_renderer_.static_revision(), &prop_frame_.batch()};
+        shadow_map_pass_.draw(tree_renderer_, floodlight_renderer_, data.floodlights,
+                              marker_caster_source{world_marker_renderer_.buffer(), world_marker_renderer_.instance_buffer(),
+                                                   &world_marker_batch_},
+                              casting,
                               data.lighting.sun_direction, data.lighting.shadows.sun_share, data.camera_position,
                               gpu_timers_, profile);
         glEnable(GL_DEPTH_TEST);
         const glm::vec3 sky = data.lighting.sky_zenith;
+        // A pond's pixels read what lies beside them, so with one in either view nothing is masked.
+        const glm::mat4 zoom_proj = zoomed_projection(proj, data.rangefinder_eyepiece.magnification);
+        const bool mask_eyepiece = eyepiece_masking_ && data.show_rangefinder && !data.camera_underwater &&
+            !water_may_show(data, proj * view) && !water_may_show(data, zoom_proj * view);
         if (data.show_rangefinder) {
+            const profile_pass_scope pass(profile, profile_pass::zoom);
             gpu_timers_.begin(gpu_profile_stage::zoom);
-            eyepiece_pass_.begin_zoom(sky);
-            render_scene(view, zoomed_projection(proj, data.rangefinder_eyepiece.magnification), data, profile);
+            eyepiece_pass_.begin_zoom(sky, mask_eyepiece);
+            render_scene(view, zoom_proj, data, eyepiece_pass_.zoom_target(), profile,
+                         false, nullptr, 0.0f, true);
             eyepiece_pass_.end_zoom();
             gpu_timers_.end();
         }
@@ -233,21 +230,23 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
         glViewport(0, 0, picture_.width, picture_.height);
         glClearColor(sky.r, sky.g, sky.b, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-        render_scene(view, proj, data, profile);
+        const draw_target scene_view{scene_fbo_.id(), picture_.width, picture_.height, false};
+        const hidden_disc hidden = mask_eyepiece ? eyepiece_pass_.mask_scene(proj * view, picture_.width, picture_.height) : hidden_disc{};
+        render_scene(view, proj, data, scene_view, profile, false, nullptr, 0.0f, false, hidden);
         if (!data.camera_underwater) {
             const frame_lighting_block& lighting = lighting_uniforms_.block();
             lamp_shadow_pass_.update(lighting_uniforms_.lights(), glm::vec3(lighting.haze_eye), tree_renderer_,
-                                     data.trees != nullptr ? *data.trees : no_trees, data.trees_revision,
-                                     floodlight_renderer_, data.floodlights, gpu_timers_, profile);
+                                     floodlight_renderer_, data.floodlights, shadow_map_pass_.pose_tolerance_meters(),
+                                     gpu_timers_, profile);
             sun_shaft_pass_.draw(lighting, shadow_map_pass_, lamp_shadow_pass_, scene_fbo_.depth_texture(), proj * view,
                                  gpu_timers_);
             scene_fbo_.bind();
             glViewport(0, 0, picture_.width, picture_.height);
         }
         if (data.camera_underwater) {
-            water_renderer_.draw_underwater(proj * view, water_style_, data.camera_water_level, data.clock_seconds, gpu_timers_, profile);
+            water_renderer_.draw_underwater(proj * view, scene_view, water_style_, data.camera_water_level, data.clock_seconds, gpu_timers_, profile);
         }
-        render_viewmodel(view, data);
+        render_viewmodel(view, data, profile);
         const unsigned int scene = data.show_rangefinder
             ? eyepiece_pass_.draw(scene_fbo_.color_texture(), data.rangefinder_eyepiece, gpu_timers_)
             : scene_fbo_.color_texture();
@@ -265,7 +264,7 @@ void renderer::render(const render_data& data, const text_assets& text, frame_pr
         gpu_timers_.end();
     }
 
-    gpu_timers_.collect(profile);
+    gpu_timers_.end_frame();
 }
 
 void renderer::render_loading_screen(const text_assets& text) {
@@ -289,7 +288,7 @@ void renderer::render_loading_screen(const text_assets& text) {
     render_tape(scene_fbo_.color_texture(), 0.0f, 1.0f);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    draw_loading_screen(overlay_pass_.begin(nullptr, overlay_grid{picture_.width, picture_.height}), text);
+    draw_loading_screen(overlay_pass_.begin(nullptr, ui_grid()), text);
     overlay_pass_.flush();
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
@@ -297,7 +296,7 @@ void renderer::render_loading_screen(const text_assets& text) {
 }
 
 bool renderer::init_geometry() {
-    const auto make_primitive = [](primitive_buffers& buffers, const std::vector<float>& vertices, const bool with_vao) {
+    const auto make_primitive = [this](primitive_buffers& buffers, const std::vector<float>& vertices, const bool with_vao) {
         buffers.vertex_count = static_cast<int>(vertices.size() / 6);
         if (with_vao) {
             glGenVertexArrays(1, &buffers.vao);
@@ -305,7 +304,7 @@ bool renderer::init_geometry() {
         }
         glGenBuffers(1, &buffers.vbo);
         glBindBuffer(GL_ARRAY_BUFFER, buffers.vbo);
-        glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices.size() * sizeof(float)), vertices.data(), GL_STATIC_DRAW);
+        storage_.buffer(buffers.vbo, GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
         if (with_vao) {
             glEnableVertexAttribArray(0);
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), nullptr);
@@ -338,7 +337,7 @@ bool renderer::init_geometry() {
     glGenBuffers(1, &screen_vbo_);
     glBindVertexArray(screen_vao_);
     glBindBuffer(GL_ARRAY_BUFFER, screen_vbo_);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(screen_vertices), screen_vertices, GL_STATIC_DRAW);
+    storage_.buffer(screen_vbo_, GL_ARRAY_BUFFER, sizeof(screen_vertices), screen_vertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), nullptr);
     glEnableVertexAttribArray(1);
@@ -354,7 +353,10 @@ glm::mat4 renderer::scene_projection(const float fov_degrees, const float area_e
 }
 
 bool renderer::ensure_framebuffer_size(const int screen_width, const int screen_height) {
-    picture_ = picture_size_for_window(screen_width, screen_height, picture_style_.target_lines);
+    const int preset = std::clamp(scene_preset_, 0, static_cast<int>(picture_style_.scene_lines.size()) - 1);
+    picture_ = picture_size_for_window(screen_width, screen_height, picture_style_.scene_lines[static_cast<std::size_t>(preset)],
+                                       picture_style_.ui_lines);
+    camcorder_pass_.set_grain_cell(picture_.unit);
     const bool scene_ok = (scene_fbo_.width() == picture_.width && scene_fbo_.height() == picture_.height) ||
         scene_fbo_.init(picture_.width, picture_.height,
                         framebuffer_format{framebuffer_color::hdr, framebuffer_depth::sampled, false, false});
@@ -366,7 +368,7 @@ bool renderer::ensure_framebuffer_size(const int screen_width, const int screen_
 
 // What is pinned to the camera, what I hold, drawn over the scene at the
 // field of view it was posed for (render_data.h).
-void renderer::render_viewmodel(const glm::mat4& view, const render_data& data) {
+void renderer::render_viewmodel(const glm::mat4& view, const render_data& data, frame_profile* profile) {
     const auto held = [this](const std::optional<render_item_use>& use) -> std::optional<held_use> {
         const auto model = use ? props_.find(use->model) : props_.end();
         return model != props_.end() ? std::optional<held_use>(held_use{&model->second, use->elapsed}) : std::nullopt;
@@ -381,7 +383,11 @@ void renderer::render_viewmodel(const glm::mat4& view, const render_data& data) 
                       colors_.glow);
     // Never cut into by the world it sits in.
     glClear(GL_DEPTH_BUFFER_BIT);
-    draw_props(viewmodel_batch_, scene_projection(data.viewmodel_fov_degrees, data.area_extent) * view, nullptr);
+    gpu_timers_.begin(gpu_profile_stage::props);
+    prop_renderer_.shader().use();
+    shadow_map_pass_.bind(prop_renderer_.shader(), shadow_map_unit);
+    prop_renderer_.draw(viewmodel_batch_, scene_projection(data.viewmodel_fov_degrees, data.area_extent) * view, profile);
+    gpu_timers_.end();
 }
 
 // The doors swing towards what the game says (render_data.h), taking the
@@ -396,41 +402,13 @@ void renderer::advance_bus_doors(const render_data& data, const bool snap) {
     bus_door_progress_ = door_swing_step(before, data.bus_doors_open, elapsed, bus != nullptr ? bus->number("door_swing_seconds") : 0.0f);
 }
 
-void renderer::build_prop_batch(const render_data& data) {
-    prop_batch_.clear();
-    if (data.world_props) { append_bus_doors(prop_batch_, *data.world_props, props_, colors_.glow, bus_door_progress_); }
-    const auto model = [this](const std::string& id) -> const prop_model* {
-        const auto found = props_.find(id);
-        return found != props_.end() ? &found->second : nullptr;
-    };
-    append_carts_and_bags(prop_batch_, data, props_, colors_);
-    if (data.dap_hand) { append_dap_hand(prop_batch_, *data.dap_hand, colors_.figures.skin, remote_tint(colors_.figures, data.my_figure ? data.my_figure->player_id : 0)); }
-    if (data.my_club) {
-        if (const prop_model* club = model(data.my_club->club_model)) {
-            append_swing_club(prop_batch_, *data.my_club, data.ball_visual_radius_meters, *club, colors_.glow);
-        }
-    }
-    for (const render_remote_avatar& avatar : data.remote_avatars) {
-        if (avatar.swing) {
-            if (const prop_model* theirs = model(avatar.swing->club_model)) {
-                append_swing_club(prop_batch_, *avatar.swing, data.ball_visual_radius_meters, *theirs, colors_.glow);
-            }
-        }
-        if (const std::optional<prop_holder> holder = remote_prop_holder(avatar, data.avatar_eye_height, props_)) {
-            append_held_props(prop_batch_, *holder, colors_.glow);
-        }
-        append_figure_gear(prop_batch_, avatar, data.avatar_eye_height, props_, colors_);
-    }
-}
-
-void renderer::draw_props(const prop_batch& batch, const glm::mat4& view_proj, frame_profile* profile) {
-    if (batch.empty()) {
-        return;
-    }
+void renderer::draw_scene_props(const bool reflected, const glm::mat4& view_proj, frame_profile* profile) {
+    const std::array<glm::vec4, 2> glow = glow_floor_table(colors_.glow);
     gpu_timers_.begin(gpu_profile_stage::props);
     prop_renderer_.shader().use();
     shadow_map_pass_.bind(prop_renderer_.shader(), shadow_map_unit);
-    prop_renderer_.draw(batch, view_proj, profile);
+    prop_renderer_.draw_frame(prop_frame_, reflected ? prop_view::mirror : prop_view::scene, view_proj, glow, profile);
+    prop_renderer_.draw_static(view_proj, glow, profile);
     gpu_timers_.end();
 }
 
@@ -474,12 +452,16 @@ void renderer::render_flight_path(const glm::mat4& view, const glm::mat4& proj, 
 }
 
 void renderer::render_course_map(const render_data& data, const text_assets& text) {
-    const course_map_layout layout = make_course_map_layout(data, overlay_grid{picture_.width, picture_.height});
-    draw_course_map_paper(overlay_pass_.batch(), layout);
-    update_course_map_fill_cache(course_map_fill_cache_, layout, data.terrain_mesh);
-    // The fill comes from its own retained buffer, between the paper and the marks.
-    overlay_pass_.draw_retained(course_map_fill_cache_.fill.vertices, course_map_fill_cache_.revision);
-    draw_course_map_marks(overlay_pass_.batch(), text, layout, data);
+    const course_map_layout layout = make_course_map_layout(data, ui_grid());
+    draw_course_map_paper(overlay_pass_.batch(), layout, colors_.map);
+    if (data.course_map != nullptr) {
+        // The ground is its own draw, between the paper and the marks.
+        overlay_pass_.flush();
+        course_map_renderer_.draw(*data.course_map, colors_.map, looks_revision_, layout.center, layout.half_size,
+                                  nullptr);
+    }
+    draw_course_map_folds(overlay_pass_.batch(), layout, colors_.map);
+    draw_course_map_marks(overlay_pass_.batch(), text, layout, data, colors_.map);
 }
 
 // Flushed as its own draw so its GL cost goes into the debug-overlay counters
@@ -500,7 +482,7 @@ void renderer::render_overlay(const glm::mat4& view_proj, const render_data& dat
 
     // Every primitive appends to one vertex stream in submission order, so
     // painter's-order blending holds and the overlay is normally one draw.
-    overlay_batch& batch = overlay_pass_.begin(profile, overlay_grid{picture_.width, picture_.height});
+    overlay_batch& batch = overlay_pass_.begin(profile, ui_grid());
     if (data.show_course_results) {
         draw_course_results(batch, text, data.scorecard);
     } else {
@@ -518,7 +500,7 @@ void renderer::render_overlay(const glm::mat4& view_proj, const render_data& dat
         draw_startup_menu(overlay_pass_.batch(), text, data.startup_menu, colors_.ground);
     }
     draw_vcr_tag(overlay_pass_.batch(), text, data.vcr);
-    draw_notice(overlay_pass_.batch(), text, data.look_notice);
+    draw_notice(overlay_pass_.batch(), text, data.look_notice, message_severity::error);
     if (data.show_fps) {
         render_debug_overlay(data, text, profile);
     }

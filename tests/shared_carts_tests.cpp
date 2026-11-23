@@ -90,7 +90,7 @@ TEST_CASE("a cart going over is drawn lying on the ground, never through it nor 
         prop_batch batch;
         append_cart_model(batch, cart, model, test_scene_colors());
         float lowest = 1000.0f;
-        for (const prop_vertex& vertex : batch.opaque()) {
+        for (const prop_vertex& vertex : batch.opaque_vertices()) {
             lowest = std::min(lowest, vertex.position.y - ground(vertex.position));
         }
         return lowest;
@@ -360,4 +360,70 @@ TEST_CASE("at a seat's door the strip at the bottom says walking in sits me down
     game_state online = online_with_other_cart(glm::vec3(30.0f, 0.0f, 0.0f));
     stand_at_door(online, *shown_cart(online, other), cart_seat::driver);
     CHECK(std::string(frame_for(online).key_hints) == text_hud_seat_door_ride);
+}
+
+TEST_CASE("a parked cart keeps its remembered ground fit, a moved one is fitted again") {
+    game_state state = online_with_other_cart(glm::vec3(6.0f, 0.0f, 0.0f));
+    const auto at_other = [&state](cart_fit_memo* fits) -> render_cart {
+        const render_data data = make_render_data(state, shipped_text_assets(), shipped_content().skills, render_meshes{},
+                                                  test_props(), 60.0f, false, fits);
+        const glm::vec3 parked = state.online.carts.at(other).position;
+        const auto found = std::find_if(data.carts.begin(), data.carts.end(), [&parked](const render_cart& cart) {
+            return std::abs(cart.position.x - parked.x) < 0.001f && std::abs(cart.position.z - parked.z) < 0.001f;
+        });
+        CHECK(found != data.carts.end());
+        return found != data.carts.end() ? *found : render_cart{};
+    };
+    cart_fit_memo fits;
+    const render_cart fresh = at_other(nullptr);
+    const render_cart first = at_other(&fits);
+    CHECK(near(first.position, fresh.position, 0.0f));
+    CHECK(near(first.up, fresh.up, 0.0f));
+    REQUIRE(fits.entries.size() == 2U);
+
+    // A kept fit is returned as it was, not asked for again.
+    for (cart_fit_memo::entry& held : fits.entries) {
+        held.fit.position.y += 5.0f;
+    }
+    CHECK(near(at_other(&fits).position.y, fresh.position.y + 5.0f, 0.0001f));
+
+    state.online.carts.at(other).position.x += 1.5f;
+    const render_cart moved = at_other(&fits);
+    CHECK(near(moved.position, at_other(nullptr).position, 0.0f));
+    CHECK(moved.position.y < fresh.position.y + 2.0f);
+
+    state.online.carts.at(other).yaw += 0.5f;
+    CHECK(near(at_other(&fits).up, at_other(nullptr).up, 0.0f));
+    CHECK(fits.entries.size() == 2U);
+}
+
+TEST_CASE("scripted crowd carts are drawn and remembered like another player's") {
+    game_state state = started_game(fixture_hub_course());
+    cart_in_world scripted;
+    scripted.owner = 77;
+    scripted.pose.position = glm::vec3(8.0f, 0.0f, 3.0f);
+    scripted.item = state.default_loadout.cart;
+    scripted.driven = true;
+    std::vector<cart_in_world> crowd{scripted};
+    cart_fit_memo fits;
+    const auto frame = [&]() {
+        return make_render_data(state, shipped_text_assets(), shipped_content().skills, render_meshes{}, test_props(), 60.0f,
+                                false, &fits, crowd);
+    };
+    const render_data first = frame();
+    REQUIRE(first.carts.size() == carts_in_world(state).size() + 1);
+    CHECK(first.carts.back().driven);
+    CHECK(near(first.carts.back().position.x, 8.0f, 2.0f));
+    REQUIRE(fits.entries.size() == first.carts.size());
+
+    // Parked: its kept fit comes back. Moved: fitted afresh where it now is.
+    for (cart_fit_memo::entry& held : fits.entries) { held.fit.position.y += 5.0f; }
+    CHECK(near(frame().carts.back().position.y, first.carts.back().position.y + 5.0f, 0.0001f));
+    crowd[0].pose.position.x += 1.0f;
+    CHECK(near(frame().carts.back().position.y, first.carts.back().position.y, 1.0f));
+
+    // A cart no longer scripted drops out of the memo.
+    crowd.clear();
+    CHECK(frame().carts.size() == carts_in_world(state).size());
+    CHECK(fits.entries.size() == carts_in_world(state).size());
 }

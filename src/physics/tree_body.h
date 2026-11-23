@@ -22,7 +22,8 @@ struct tree_shape {
     float leaf_height = 0.0f;
     tree_kind kind = tree_kind::tree;
     // Its species (an index into the tuning's trees, 0 the default) and the
-    // share of its crown in leaf on the course's date: what slows a ball.
+    // share of a full crown's leaves on it on the course's date, withered ones
+    // counted: what slows a ball.
     std::uint8_t species = 0;
     float foliage = 1.0f;
 };

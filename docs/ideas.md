@@ -2,8 +2,42 @@
 
 (recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
 
-## **Todo**
+## **Wishlist before next release - G++ Pro Edition**
 
+- Chipping
+- more courses - a lot of famous danish, and get american imports working to get a ton of american courses.
+- Teepads - prettier, no teepads on real courses,
+- Scrambles, best ball, closest to the pin, mulligans, pick up and drop ball rules.
+- background from sorrounding area on the map? would be so cool
+- weird white and blue lines on the edge of the ground when sun's hitting just right.
+- The ui-text shouldn't change with the resolution.
+- the flight line should still be drawn when you exit the following cam by moving.
+- better fairway drawing and tee placements in the importer? I think especially horsens par 18 is a good example of some of the holes im sure are wrong.
+- some sound for missing stuff like crashes, and maybe some volume mixing, like playing the different sounds at different volumes by default. maybe a mixer.json or something.
+- fucked up names for every course so I can make this alpha version "public"-ish? Making a website to release it on, and making the repo private
+- remove fine? I dont think i like it haha it makes the difference between the fidelity of assets too jarring
+- clean the build folder
+- Starting a shot shouldn't point at the flag its cheating.
+- should teetimes be local time?
+- F1 and F2 menus authorization?
+- error messages only for error message - move loading screens to and fro courses, ball dropping, +x for water or hitting stuff to other places
+- does cart path affect the ball differently? It should
+- the hub needs one more run through - the teepads, the clubhouse.
+- clean up ui? the date and shit on the screen, the club selection, the club display.
+
+## **Todo Agent Setup rules**
+
+- Its important for me with the seggregation of stuff like what draws assets, animations, sound etc to always be explicit, so its like a shell that can be changed later.
+- UI should be minimal - In the perfect world we would have none. Time would be a watch and an animation to look at it, ui should be hidden in real world objects like the wind in the rangefinder or the particles.
+- Error messages should only ever appear if an actual error is present.
+- Game philosophy: Just like the UI, I want the game to model real life and interactibility as its pillars. If any design choice come up, either ask or make the choice by asking
+        1. How Is this/golf in real life?
+        2. How do we best let the player interact with this thing, so it feels real
+- Performance is key, if something undermines performance it should be togglable, like the lighting enginge i guess.
+
+**Workflow**
+I want the agents to be able to use worktrees, branches and pull requests.
+I want an agent constantly looking at the todo/, and the open issues, then branches and pull requests from them.
 - I am very particular about the game design for this project: its the only hope for this game to have character, when its a vibe coded lofi game. I am very often finding that the models I'm using have to, and are making design decisions, even when I ask them to ask me for anything undefined. at some level i expect this will always be the case, so we need some design guidelines that capture the essence of the game direction, so fewer wrong design choices will be made.
   1. UI should have some guidelines, that I think should use especially the rangefinder as examples, UI that is not intrusive and fits in the game. I want as little UI as possible, and the UI we have I would like to be physical things in the world you interact with. Stuff like the distance numbers that pop up are the exceptions, and are taken from the MMORPG side of the game, but most of the UI should be "as little as possible". Also similar UI elements like Error messages should have a general and consistent look and display, which they currently dont.
   2. For game design choices, the general guideline should be realism first. For any design decision, ask yourself "how would this work in real life, and whats the easiest abstraction of this in code that would make it feel like that in game, without sacrificing UX too much." Worse UX for more realism is often preferred, like walking to your bag to get a club.
@@ -14,16 +48,7 @@ This should take precedent over basically every other readme!
 
 ## **Bugs**
 
-- Maps should rotate so its widest part is always horizontal.
-We need some like open world feeling road off the course. It should be much wider than a normal cart course - it should be real road sized.
 - The headcovers are ugly as hell
-- The "hole x" waysigns are still too close to the tee.
-- The step counting walk speed is way too slow now.
-- Falgsticks donnt draw shadows - why is this? Everything we make should draw shadows.
-When joining online you have to choose draw/fade twice. It also gives you a choice of straight, which im unsure whether thats actually a real choice in golf, needs research. Also, I have to choose it every time i log in - which i think is not just reset database, but a bug.
-The bigger road off the track code is still fucked - on the horsens par 3 its just in front of the first tee. It should always be out of the way, but close to the first tee. How do we ensure it doesn't interfere with play, but is close to the first, which presumably would make it close to the 18th/9th/6th/last hole on most courses
--The map has trees "outside" the map. I like its current size where its scaled to show just the holes, but it shouldn't draw anything outside of the map edges.
-The hit-numbers as well as the walking steps numbers are big, then get instantly small, They should just get gradually a bit smaller as they fall down the screen. 
 
 
 ## **alpha roadmap**

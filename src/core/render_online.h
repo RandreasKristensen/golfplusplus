@@ -4,6 +4,7 @@
 // balls, bags and clubs, shot trails and name tags, the server's notices and
 // "waiting for group". Nothing is added offline. GL-free.
 
+#include "core/render_gear.h"
 #include "game/game_state.h"
 #include "game/prop_loader.h"
 #include "game/text_assets.h"
@@ -13,7 +14,8 @@
 #include <optional>
 #include <string>
 
-void add_online_render_data(render_data& data, const game_state& game, const text_assets& text, const prop_catalog& props);
+void add_online_render_data(render_data& data, const game_state& game, const text_assets& text, const prop_catalog& props,
+                             cart_fit_memo& fits);
 
 // Another player's bag where their player_bag row has it, and its model
 // (their loadout's bag); none online without a row, or offline.

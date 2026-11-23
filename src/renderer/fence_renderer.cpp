@@ -81,7 +81,7 @@ bool fence_renderer::begin(const render_fences* fences, const glm::mat4& view_pr
         // Posts first, then nets, in one buffer.
         std::vector<fence_vertex> vertices = fences->posts;
         vertices.insert(vertices.end(), fences->nets.begin(), fences->nets.end());
-        buffer_.upload(vertices.data(), vertices.size() * sizeof(fence_vertex), profile);
+        buffer_.upload(vertices.data(), vertices.size() * sizeof(fence_vertex), profile, upload_kind::cached);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         post_vertex_count_ = fences->posts.size();
         net_vertex_count_ = fences->nets.size();

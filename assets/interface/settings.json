@@ -46,6 +46,15 @@
       "default": 0
     },
     {
+      "id": "scene_resolution",
+      "label": "menu.settings.scene_resolution",
+      "values": ["menu.settings.detail_standard", "menu.settings.detail_fine"],
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0
+    },
+    {
       "id": "tape_wear",
       "label": "menu.settings.tape_wear",
       "value": "menu.settings.percent",

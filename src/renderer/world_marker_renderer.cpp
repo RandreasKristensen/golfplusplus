@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 
+#include <array>
 #include <cstddef>
 #include <type_traits>
 
@@ -49,6 +50,8 @@ void use_stencil(const marker_stencil stencil) {
 // flagsticks, aim dots and club without growing on early frames; a room's
 // carts and players grow it.
 constexpr std::size_t initial_vertex_capacity = 12288;
+// A room's figures and balls, without growing on early frames.
+constexpr std::size_t initial_instance_capacity = 1024;
 }
 
 // The vertex buffer is uploaded as raw floats: position.xyz, color.rgb, glow.
@@ -57,13 +60,16 @@ static_assert(offsetof(world_marker_vertex, color) == 3 * sizeof(float), "world_
 static_assert(offsetof(world_marker_vertex, glow) == 6 * sizeof(float), "world_marker_vertex::glow must follow color");
 static_assert(std::is_standard_layout<world_marker_vertex>::value, "world_marker_vertex must be standard layout");
 
-bool world_marker_renderer::init(const std::string& vertex_path, const std::string& fragment_path) {
+bool world_marker_renderer::init(const std::string& vertex_path, const std::string& fragment_path, const bool instanced) {
     shutdown();
 
-    if (!shader_.load_from_files(vertex_path, fragment_path)) {
+    if (!shader_.load_from_files(vertex_path, fragment_path) ||
+        (instanced && (!instanced_shader_.load_from_files(vertex_path, fragment_path, "#define INSTANCED\n") || !meshes_.init() ||
+                       !instance_buffer_.init(initial_instance_capacity * sizeof(mesh_instance))))) {
         shutdown();
         return false;
     }
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glGenVertexArrays(1, &vao_);
     if (vao_ == 0) {
@@ -108,6 +114,9 @@ bool world_marker_renderer::init(const std::string& vertex_path, const std::stri
 
 void world_marker_renderer::shutdown() {
     buffer_.shutdown();
+    instance_buffer_.shutdown();
+    meshes_.shutdown();
+    instanced_shader_.shutdown();
 
     if (vao_ != 0) {
         glDeleteVertexArrays(1, &vao_);
@@ -117,25 +126,39 @@ void world_marker_renderer::shutdown() {
     shader_.shutdown();
 }
 
-void world_marker_renderer::draw(const world_marker_batch& batch,
-                                 const glm::mat4& view_proj,
-                                 frame_profile* profile) {
+void world_marker_renderer::stage(const world_marker_batch& batch, frame_profile* profile, const upload_kind kind) {
+    if (batch.empty() || vao_ == 0) {
+        return;
+    }
+    const std::size_t bytes = batch.vertices().size() * sizeof(world_marker_vertex);
+    if (kind == upload_kind::dynamic) {
+        std::array<std::size_t, static_cast<std::size_t>(marker_part::count)> ends{};
+        for (std::size_t p = 0; p < batch.part_end_count(); ++p) { ends[p] = batch.part_end(p) * sizeof(world_marker_vertex); }
+        buffer_.upload_changed(batch.vertices().data(), bytes, ends.data(), batch.part_end_count(), profile);
+    } else {
+        buffer_.upload(batch.vertices().data(), bytes, profile, kind);
+    }
+    if (instance_buffer_.id() != 0 && batch.instance_count() > 0) {
+        batch.join_instances(scratch_);
+        instance_buffer_.upload_changed(scratch_.data(), scratch_.size() * sizeof(mesh_instance), profile);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void world_marker_renderer::draw(const world_marker_batch& batch, const marker_view view, const glm::mat4& view_proj,
+                                 const std::array<glm::vec4, 2>& glow_floors, frame_profile* profile) {
     if (batch.empty() || shader_.id() == 0 || vao_ == 0) {
         return;
     }
 
-    buffer_.upload(batch.vertices().data(),
-                   batch.vertices().size() * sizeof(world_marker_vertex),
-                   profile);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
     shader_.set_profile(profile);
     shader_.use();
     shader_.set_mat4("u_view_proj", view_proj);
+    shader_.set_vec4_array("u_glow_floors", glow_floors.data(), 2);
 
     glBindVertexArray(vao_);
     for (const world_marker_run& run : batch.runs()) {
-        if (run.count == 0) {
+        if (run.count == 0 || !batch.shown_in(run, view)) {
             continue;
         }
         use_stencil(run.stencil);
@@ -153,4 +176,17 @@ void world_marker_renderer::draw(const world_marker_batch& batch,
     glDepthMask(GL_TRUE);
     glDisable(GL_POLYGON_OFFSET_FILL);
     glBindVertexArray(0);
+
+    if (instance_buffer_.id() == 0 || batch.instance_runs().empty()) {
+        return;
+    }
+    instanced_shader_.set_profile(profile);
+    instanced_shader_.use();
+    instanced_shader_.set_mat4("u_view_proj", view_proj);
+    instanced_shader_.set_vec4_array("u_glow_floors", glow_floors.data(), 2);
+    for (const world_marker_instance_run& run : batch.instance_runs()) {
+        if (batch.shown_in(run.part, view)) {
+            meshes_.draw(instance_buffer_.id(), run.mesh, batch.instance_base(run.mesh) + run.first, run.count, profile);
+        }
+    }
 }

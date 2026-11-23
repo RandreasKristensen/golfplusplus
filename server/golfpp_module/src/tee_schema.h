@@ -64,12 +64,14 @@ SPACETIMEDB_SCHEDULE(tee_expiry, 1, expire_tee)
 
 // A book request's acknowledgement/clock, scoped to the account. A refresh
 // materializes only this course's next day of slots, never a table subscription.
+// `request_id` is the client's own number for the request being answered.
 struct tee_book_status_row {
     std::uint64_t account_id;
     std::string course_id;
     std::int64_t server_now;
+    std::uint64_t request_id;
 };
-SPACETIMEDB_STRUCT(tee_book_status_row, account_id, course_id, server_now)
+SPACETIMEDB_STRUCT(tee_book_status_row, account_id, course_id, server_now, request_id)
 SPACETIMEDB_TABLE(tee_book_status_row, tee_book_status, Private)
 FIELD_PrimaryKey(tee_book_status, account_id)
 

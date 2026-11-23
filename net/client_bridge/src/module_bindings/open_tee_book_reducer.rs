@@ -9,6 +9,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub(super) struct OpenTeeBookArgs {
     pub room_id: u64,
     pub course_id: String,
+    pub request_id: u64,
 }
 
 impl From<OpenTeeBookArgs> for super::Reducer {
@@ -16,6 +17,7 @@ impl From<OpenTeeBookArgs> for super::Reducer {
         Self::OpenTeeBook {
             room_id: args.room_id,
             course_id: args.course_id,
+            request_id: args.request_id,
         }
     }
 }
@@ -35,8 +37,8 @@ pub trait open_tee_book {
     /// The reducer will run asynchronously in the future,
     ///  and this method provides no way to listen for its completion status.
     /// /// Use [`open_tee_book:open_tee_book_then`] to run a callback after the reducer completes.
-    fn open_tee_book(&self, room_id: u64, course_id: String) -> __sdk::Result<()> {
-        self.open_tee_book_then(room_id, course_id, |_, _| {})
+    fn open_tee_book(&self, room_id: u64, course_id: String, request_id: u64) -> __sdk::Result<()> {
+        self.open_tee_book_then(room_id, course_id, request_id, |_, _| {})
     }
 
     /// Request that the remote module invoke the reducer `open_tee_book` to run as soon as possible,
@@ -49,6 +51,7 @@ pub trait open_tee_book {
         &self,
         room_id: u64,
         course_id: String,
+        request_id: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -61,12 +64,19 @@ impl open_tee_book for super::RemoteReducers {
         &self,
         room_id: u64,
         course_id: String,
+        request_id: u64,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
             + 'static,
     ) -> __sdk::Result<()> {
-        self.imp
-            .invoke_reducer_with_callback(OpenTeeBookArgs { room_id, course_id }, callback)
+        self.imp.invoke_reducer_with_callback(
+            OpenTeeBookArgs {
+                room_id,
+                course_id,
+                request_id,
+            },
+            callback,
+        )
     }
 }

@@ -46,11 +46,12 @@ inline constexpr float ribbon_edge_drop = 0.18f;
 // How deep bunkers and ponds are carved into the ground (carved_height), in
 // metres from their edge: a bunker's floor is `bunker_depth` down
 // `bunker_lip_meters` in from its edge; a pond's floor is `water_min_depth`
-// under its level at its edge, deepening to `water_max_depth` under it
+// under its level near its edge, deepening to `water_max_depth` under it
 // `water_bank_meters` in, so a creek a few metres across stays shallow and a
-// lake is deep; outside, its shore lies at its level for half of
-// `water_shore_meters` (more than a fine cell's diagonal), then rises to the
-// ground, so the water meets the ground at its outline.
+// lake is deep. Across its outline, for a fine cell's diagonal either side,
+// its bank is one straight slope of `water_edge_slope` through its level, so
+// every ground triangle across the outline meets the water on the outline;
+// outside, its shore then rises to the ground over `water_shore_meters`.
 struct terrain_zone_tuning {
     float bunker_depth = 0.0f;
     float bunker_lip_meters = 0.0f;
@@ -58,13 +59,16 @@ struct terrain_zone_tuning {
     float water_max_depth = 0.0f;
     float water_bank_meters = 0.0f;
     float water_shore_meters = 0.0f;
+    float water_edge_slope = 0.0f;
 };
 
-// A zone the ground is carved by at a point, with its pond's level (water
-// only) or the pieces of its edge outside every other bunker (bunkers only).
+// A zone the ground is carved by at a point, with its pond's level and how far
+// either side of its outline its bank is straight (water only) or the pieces
+// of its edge outside every other bunker (bunkers only).
 struct carving_zone {
     const material_zone* zone = nullptr;
     float water_level = 0.0f;
+    float water_edge_meters = 0.0f;
     const std::vector<zone_edge>* bunker_edge = nullptr;
 };
 
@@ -148,16 +152,23 @@ glm::vec3 sample_terrain_spline_point(const terrain_spline& terrain, float t);
 terrain_mesh build_terrain_mesh(const terrain_spline& terrain);
 
 // The zone that decides the material at `position` (XZ): its index in
-// `zones`, its material and how far inside it the point is (metres from its
-// edge). Where zones overlap, bunker beats green beats water beats fairway;
-// among equals, the one the point is deepest in. Zones of unknown type are
-// ignored.
+// `zones` and its material. Where zones overlap, bunker beats green beats
+// water beats fairway; among equals, the one the point is deepest in (metres
+// from its edge; the first on a tie). Zones of unknown type are ignored.
+// `among` (ascending indices, as physics/surface_index.h gives) limits the
+// zones looked at to those that can hold the point; the result is the same.
 struct zone_hit {
     std::size_t index = 0;
     terrain_material material = terrain_material::fairway;
-    float depth = 0.0f;
 };
-std::optional<zone_hit> winning_zone_at(const std::vector<material_zone>& zones, const glm::vec3& position);
+struct index_range {
+    const std::uint32_t* first = nullptr;
+    const std::uint32_t* last = nullptr;
+    const std::uint32_t* begin() const { return first; }
+    const std::uint32_t* end() const { return last; }
+};
+std::optional<zone_hit> winning_zone_at(const std::vector<material_zone>& zones, const glm::vec3& position,
+                                        const index_range* among = nullptr);
 
 // The material of the winning zone at `position` (XZ), nothing outside every zone.
 std::optional<terrain_material> zone_material_at(const std::vector<material_zone>& zones, const glm::vec3& position);

@@ -405,9 +405,9 @@ pub unsafe extern "C" fn stdb_leave_wheel(client: *mut StdbClient, expected_room
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn stdb_open_tee_book(client: *mut StdbClient, room: u64, course: *const c_char, len: usize) {
+pub unsafe extern "C" fn stdb_open_tee_book(client: *mut StdbClient, room: u64, course: *const c_char, len: usize, request: u64) {
     let course = StdbString { data: course, len }.to_string();
-    if let Some(c) = self::client(client) { c.call("open_tee_book", |conn, done| conn.reducers.open_tee_book_then(room, course, done)); }
+    if let Some(c) = self::client(client) { c.call_request("open_tee_book", request, |conn, done| conn.reducers.open_tee_book_then(room, course, request, done)); }
 }
 #[no_mangle]
 pub unsafe extern "C" fn stdb_book_tee(client: *mut StdbClient, room: u64, booking: u64, course: *const c_char, len: usize, at: i64, cart: bool) {

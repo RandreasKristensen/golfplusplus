@@ -72,12 +72,12 @@ void hole_sign_renderer::shutdown() {
 }
 
 void hole_sign_renderer::upload(const render_hole_signs& signs, frame_profile* profile) {
-    buffer_.upload(signs.vertices.data(), signs.vertices.size() * sizeof(hole_sign_vertex), profile);
+    buffer_.upload(signs.vertices.data(), signs.vertices.size() * sizeof(hole_sign_vertex), profile, upload_kind::cached);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     for (texture& face : faces_) {
         face.shutdown();
     }
-    faces_.assign(signs.signs.size(), texture{});
+    faces_.assign(signs.signs.size(), texture{storage_});
     for (std::size_t i = 0; i < signs.signs.size(); ++i) {
         // Chunky texels up close and mipmaps far off. The face's wood frame
         // is one colour all round, so the repeat at its edges never shows.

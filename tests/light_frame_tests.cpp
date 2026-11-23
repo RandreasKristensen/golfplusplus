@@ -162,6 +162,44 @@ TEST_CASE("trees and floodlight poles darken the ground faintly at their foot, r
     CHECK(data.tree_shadows_revision == 8U);
 }
 
+TEST_CASE("a blob caster that has not moved is not looked up again, and one that has is") {
+    const game_state game = started_game(fixture_hub_course());
+    const glm::vec3 spot = game.player.position + glm::vec3(3.0f, 0.0f, 0.0f);
+    blob_ground_memo memo;
+    const auto frame = [&](const glm::vec3& ball, const float sun_elevation, blob_ground_memo& remembered) {
+        render_data data = lit_frame(sun_at(sun_elevation), 1.0f, 0.0f);
+        data.show_ball = true;
+        data.ball_position = ball;
+        add_frame_lights(data, game, fixture_palette(), tree_shadow_cache{}, remembered);
+        return data.blob_shadows;
+    };
+    const auto same = [](const std::vector<render_blob_shadow>& a, const std::vector<render_blob_shadow>& b) {
+        if (a.size() != b.size()) { return false; }
+        for (std::size_t i = 0; i < a.size(); ++i) {
+            if (a[i].base != b[i].base || a[i].normal != b[i].normal || a[i].stretch != b[i].stretch ||
+                a[i].radius != b[i].radius || a[i].strength != b[i].strength) { return false; }
+        }
+        return true;
+    };
+    // Whatever the memo holds, the frame is what a fresh one gives: standing still, moved, a turned sun, a new count.
+    const glm::vec3 first = above_ground(game, spot, 10.0f);
+    const glm::vec3 moved = above_ground(game, spot + glm::vec3(0.0f, 0.0f, 4.0f), 6.0f);
+    for (const auto& [ball, sun] : {std::pair{first, 50.0f}, std::pair{first, 50.0f}, std::pair{moved, 50.0f},
+                                    std::pair{moved, 35.0f}, std::pair{first, 35.0f}}) {
+        blob_ground_memo fresh;
+        CHECK(same(frame(ball, sun, memo), frame(ball, sun, fresh)));
+    }
+    CHECK(memo.entries.size() == 2U);
+    // The memo is dropped with its course: another revision of the ground is asked afresh.
+    game_state other = game;
+    other.static_anchors.revision += 1;
+    render_data data = lit_frame(sun_at(35.0f), 1.0f, 0.0f);
+    data.show_ball = true;
+    data.ball_position = first;
+    add_frame_lights(data, other, fixture_palette(), tree_shadow_cache{}, memo);
+    CHECK(memo.entries.size() == 2U);
+}
+
 TEST_CASE("after dark the ball, carts' headlights and the floodlights light up, and the ball and lamps glow past white") {
     const game_state game = started_game(fixture_hub_course());
     const night_light_style& style = fixture_palette().night_lights;

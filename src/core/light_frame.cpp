@@ -141,15 +141,35 @@ std::vector<blob_caster> frame_casters(const render_data& data, const game_state
     return casters;
 }
 
-std::vector<render_blob_shadow> frame_blob_shadows(const render_data& data, const game_state& game, const shadow_style& style) {
+std::vector<render_blob_shadow> frame_blob_shadows(const render_data& data, const game_state& game, const shadow_style& style,
+                                                   blob_ground_memo& memo) {
     std::vector<render_blob_shadow> blobs;
     const render_shadows& shadows = data.lighting.shadows;
-    for (const blob_caster& caster : frame_casters(data, game, style)) {
+    const std::uint64_t revision = game.static_anchors.revision * 1000003ULL + game.terrain_render_revision;
+    if (memo.revision != revision) {
+        memo.entries.clear();
+        memo.revision = revision;
+    }
+    const std::vector<blob_caster> casters = frame_casters(data, game, style);
+    memo.entries.resize(casters.size());
+    for (std::size_t i = 0; i < casters.size(); ++i) {
+        const blob_caster& caster = casters[i];
         const glm::vec3 source = caster.bottom + world_up * caster.lift;
-        const terrain_sample ground =
-            cast_blob_onto_ground(game.area, source, data.lighting.sun_direction, shadows.sun_share, shadows.max_stretch);
+        blob_ground_memo::entry& held = memo.entries[i];
+        if (held.source != source || held.bottom != caster.bottom || held.towards_sun != data.lighting.sun_direction ||
+            held.sun_share != shadows.sun_share || held.max_stretch != shadows.max_stretch) {
+            held.source = source;
+            held.bottom = caster.bottom;
+            held.towards_sun = data.lighting.sun_direction;
+            held.sun_share = shadows.sun_share;
+            held.max_stretch = shadows.max_stretch;
+            held.ground =
+                cast_blob_onto_ground(game.area, source, data.lighting.sun_direction, shadows.sun_share, shadows.max_stretch);
+            held.height = std::max(0.0f, caster.bottom.y - terrain_height(game.area, caster.bottom));
+        }
+        const terrain_sample& ground = held.ground;
         // With no sun only what touches the ground darkens it.
-        const float height = std::max(0.0f, caster.bottom.y - terrain_height(game.area, caster.bottom));
+        const float height = held.height;
         const float contact = glm::clamp(1.0f - height / style.contact_reach, 0.0f, 1.0f);
         const float stretch = caster.lift > 0.0f
             ? glm::mix(1.0f, blob_stretch(data.lighting.sun_direction, ground.normal, shadows.max_stretch), shadows.sun_share)
@@ -199,7 +219,7 @@ void refresh_tree_shadows(tree_shadow_cache& cache, const game_state& game, cons
 }
 
 void add_frame_lights(render_data& data, const game_state& game, const lighting_palette& palette,
-                      const tree_shadow_cache& trees) {
+                      const tree_shadow_cache& trees, blob_ground_memo& memo) {
     data.glow = night_glow_floors(palette.colors.glow, palette.night_lights, data.lighting.night_lights);
     const night_light_style& style = palette.night_lights;
     data.lighting.lamp_glow = style.floodlight.color * style.lamp_glow * data.lighting.night_lights;
@@ -209,7 +229,13 @@ void add_frame_lights(render_data& data, const game_state& game, const lighting_
         return;
     }
     data.lights = night_lights(data, game, palette.night_lights);
-    data.blob_shadows = frame_blob_shadows(data, game, palette.shadows);
+    data.blob_shadows = frame_blob_shadows(data, game, palette.shadows, memo);
     data.tree_shadows = &trees.blobs;
     data.tree_shadows_revision = trees.revision;
+}
+
+void add_frame_lights(render_data& data, const game_state& game, const lighting_palette& palette,
+                      const tree_shadow_cache& trees) {
+    blob_ground_memo once;
+    add_frame_lights(data, game, palette, trees, once);
 }

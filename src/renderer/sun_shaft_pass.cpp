@@ -28,7 +28,7 @@ bool sun_shaft_pass::init(const std::string& shader_dir, const unsigned int scre
     const std::string vertex = shader_file(shader_dir, "crt.vert");
     const std::string steps = "#define SHAFT_STEPS " + std::to_string(style.steps) + "\n";
     const std::size_t lamp_variants = static_cast<std::size_t>(style.lamps) + 1;
-    marches_.assign(2 * lamp_variants, shader_program{});
+    marches_.assign(2 * lamp_variants, shader_program{storage_});
     for (const bool sun : {false, true}) {
         for (std::size_t lamps = 0; lamps < lamp_variants; ++lamps) {
             if (!sun && lamps == 0) {
@@ -85,13 +85,6 @@ void sun_shaft_pass::destroy_targets() {
     scene_color_ = 0;
     width_ = 0;
     height_ = 0;
-}
-
-void sun_shaft_pass::set_profile(frame_profile* profile) {
-    for (shader_program& program : marches_) {
-        program.set_profile(profile);
-    }
-    composite_.set_profile(profile);
 }
 
 bool sun_shaft_pass::ensure_size(const int width, const int height, const unsigned int scene_color) {

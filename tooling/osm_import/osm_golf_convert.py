@@ -3295,7 +3295,8 @@ def _course_ground(world: dict, sampler, origin_lat: float, origin_lon: float, c
 
 
 def _write_ground_only(args) -> None:
-    """Adds or replaces the ground grid of an existing course world."""
+    """Adds or replaces the ground grid of an existing course world, over the
+    box the map's paper shows (osm_ground.world_box) round its placed holes."""
     course_folder = Path(args.out) / args.ground_only
     with open(course_folder / "course.json", "r", encoding="utf-8") as f:
         course = json.load(f)
@@ -3311,13 +3312,7 @@ def _write_ground_only(args) -> None:
     projection = world["projection"]
     origin_lat, origin_lon = float(projection["origin_lat"]), float(projection["origin_lon"])
     elevation = _make_elevation_sampler(args, config, origin_lat, origin_lon)
-    ground = world.get("ground")
-    if ground:
-        x, z = ground["origin"]
-        box = (x, z, x + (ground["columns"] - 1) * ground["cell_size"],
-               z + (ground["rows"] - 1) * ground["cell_size"])
-    else:
-        box = osm_ground.world_box(osm_ground.placed_hole_points(world, hole_jsons), float(config["ground"]["margin"]))
+    box = osm_ground.world_box(osm_ground.placed_hole_points(world, hole_jsons), float(config["ground"]["margin"]))
     world["ground"] = _course_ground(world, elevation, origin_lat, origin_lon, config, box)
     try:
         osm_publish.publish(course_folder, {course["world"]: osm_ground.course_world_text(world)})
@@ -3402,8 +3397,9 @@ Examples:
                     help="Name (and id) for the imported course instead of the OSM name, "
                          "e.g. \"Kalø Par 3\" with --ref-prefix P")
     ap.add_argument("--ground-only", metavar="COURSE_ID",
-                    help="Only (re)write the ground grid of an existing course world, "
-                         "e.g. a hand-made one; reads the course and its holes from the asset folders")
+                    help="Only (re)write the ground grid of an existing course world, fitted to "
+                         "the course map's paper round its holes; reads the course and its holes "
+                         "from the asset folders")
     args = ap.parse_args()
 
     if args.ground_only:

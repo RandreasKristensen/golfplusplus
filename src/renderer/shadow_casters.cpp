@@ -1,71 +1,19 @@
 #include "renderer/shadow_casters.h"
 
-#include "physics/vector_math.h"
-#include "renderer/bag_batch.h"
 #include "renderer/fence_batch.h"
 #include "renderer/hole_sign_batch.h"
-#include "renderer/remote_avatar_batch.h"
 
-#include <algorithm>
 #include <vector>
 
-namespace {
-// The triangles of `vertices` with a corner within `reach` of `eye`.
-template <typename Vertex>
-void append_near_triangles(world_marker_batch& figures, const std::vector<Vertex>& vertices, const glm::vec3& eye,
-                           const float reach) {
+std::vector<glm::vec3> static_caster_corners(const render_hole_signs* signs, const render_fences* fences) {
     std::vector<glm::vec3> corners;
-    for (std::size_t i = 0; i + 2 < vertices.size(); i += 3) {
-        const bool near = std::any_of(vertices.begin() + static_cast<std::ptrdiff_t>(i),
-                                      vertices.begin() + static_cast<std::ptrdiff_t>(i + 3),
-                                      [&](const Vertex& vertex) { return horizontal_distance(vertex.position, eye) <= reach; });
-        if (near) {
-            corners.insert(corners.end(), {vertices[i].position, vertices[i + 1].position, vertices[i + 2].position});
-        }
-    }
-    if (!corners.empty()) {
-        figures.append_world_triangles(corners, glm::vec3(0.0f), 0.0f, marker_stencil::none);
-    }
-}
-
-void append_flagsticks(world_marker_batch& figures, const render_data& data, const scene_colors& colors) {
-    const flag_pose flag{data.weather.flag_wind, data.weather.flag_lift, data.weather.flag_phase, data.weather.flag_flap};
-    const auto standing = [&](const glm::vec3& pin, const float height) {
-        if (std::find(data.flags_out.begin(), data.flags_out.end(), pin) == data.flags_out.end()) {
-            append_pin_flagstick(figures, pin, height, colors.markers, colors.glow, flag, data.flagstick_radius_meters);
+    const auto add = [&corners](const auto& vertices) {
+        const std::size_t whole = vertices.size() - vertices.size() % 3;
+        for (std::size_t i = 0; i < whole; ++i) {
+            corners.push_back(vertices[i].position);
         }
     };
-    if (data.show_hole) {
-        standing(data.pin_position, data.pin_visual_height_meters);
-    }
-    for (std::size_t i = 0; i < data.pin_markers.size(); ++i) {
-        standing(data.pin_markers[i], i < data.pin_marker_heights.size() ? data.pin_marker_heights[i] : data.pin_visual_height_meters);
-    }
-    for (const auto& [foot, tip] : data.lying_flags) {
-        append_lying_flagstick(figures, foot, tip, colors.markers, colors.glow);
-    }
-}
-}
-
-void build_shadow_casters(world_marker_batch& figures, prop_batch& models, const render_data& data, const scene_colors& colors,
-                          const prop_catalog& props, const shadow_style& map, const prop_batch* static_models) {
-    figures.clear();
-    models.clear();
-    append_flagsticks(figures, data, colors);
-    if (data.hole_signs != nullptr) {
-        append_near_triangles(figures, data.hole_signs->vertices, data.camera_position, map.map_extent);
-    }
-    if (data.fences != nullptr) {
-        append_near_triangles(figures, data.fences->posts, data.camera_position, map.map_extent);
-    }
-    append_carts_and_bags(models, data, props, colors);
-    if (static_models) { models.append(*static_models); }
-    if (data.my_figure) {
-        append_remote_avatar(figures, *data.my_figure, data.avatar_eye_height, data.ball_visual_radius_meters, colors);
-        append_figure_gear(models, *data.my_figure, data.avatar_eye_height, props, colors);
-    }
-    for (const render_remote_avatar& avatar : data.remote_avatars) {
-        append_remote_avatar(figures, avatar, data.avatar_eye_height, data.ball_visual_radius_meters, colors);
-        append_figure_gear(models, avatar, data.avatar_eye_height, props, colors);
-    }
+    if (signs != nullptr) { add(signs->vertices); }
+    if (fences != nullptr) { add(fences->posts); }
+    return corners;
 }

@@ -3,6 +3,7 @@
 #include <array>
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 // GL-free view frustum culling helpers (unit tested without an OpenGL context).
@@ -29,8 +30,19 @@ enum class frustum_plane_id : int {
     count
 };
 
+// A round part of the picture that nothing drawn will show (the rangefinder's
+// eyepiece replaces it, renderer/eyepiece_pass.h), in pixels of a picture
+// `size` wide and tall: `view_proj` takes the world to that picture. A
+// zero `radius` hides nothing.
+struct hidden_disc {
+    glm::mat4 view_proj{1.0f};
+    glm::vec2 size{0.0f};
+    float radius = 0.0f;
+};
+
 struct view_frustum {
     std::array<frustum_plane, static_cast<int>(frustum_plane_id::count)> planes{};
+    hidden_disc hidden;
 };
 
 // Extracts the six normalized planes of an OpenGL clip matrix (proj * view).
@@ -45,3 +57,7 @@ bool frustum_intersects_aabb(const view_frustum& frustum,
                              const glm::vec3& box_min,
                              const glm::vec3& box_max,
                              float margin = 0.05f);
+
+// True when the box projects wholly inside the frustum's hidden disc, so every
+// pixel it could draw is thrown away. False when any corner is behind the eye.
+bool frustum_hides_aabb(const view_frustum& frustum, const glm::vec3& box_min, const glm::vec3& box_max);

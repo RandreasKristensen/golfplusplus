@@ -159,21 +159,24 @@ void add_other_pin_markers(render_data& data, const game_state& game) {
     }
 }
 
-// What the course map shows: the course's holes, each numbered along its
-// line of play, with its tee box.
-void add_course_map(render_data& data, const game_state& game, const text_assets& text) {
+// What the course map shows: the ground printed on it, the course's holes,
+// each numbered along its line of play, with its tee box.
+void add_course_map(render_data& data, const game_state& game, const text_assets& text, const course_map_sheet* sheet) {
     data.course_map_outline = game.area.holes_outline;
+    data.course_map = sheet;
+    data.map_meters_per_unit = game.tuning.scale.meters_per_world_unit;
     if (!bag_on_back(game)) {
         data.map_bag_position = bag_position(game);
     }
-    for (const hole_sign& sign : game.area.signs) {
+    const std::vector<hole_sign_text> texts = hole_sign_texts(game);
+    for (std::size_t i = 0; i < game.area.signs.size() && i < texts.size(); ++i) {
+        const hole_sign& sign = game.area.signs[i];
         if (sign.line_of_play.empty()) {
             continue;
         }
-        const std::size_t number = sign.area_hole + 1;
         const tee_box* box = hole_tee_box(game.area.tee_boxes, sign.area_hole);
         data.map_holes.push_back(render_map_hole{
-            format_text(text, text_course_map_hole_number, {{"hole", std::to_string(number)}}), sign.line_of_play,
+            format_text(text, text_course_map_hole_number, {{"hole", std::to_string(texts[i].number)}}), sign.line_of_play,
             box != nullptr ? std::optional<tee_box>(*box) : std::nullopt});
     }
 }
@@ -383,7 +386,11 @@ render_data make_render_data(const game_state& game,
                              const render_meshes& meshes,
                              const prop_catalog& props,
                              const float fov_degrees,
-                             const bool interact_prompt) {
+                             const bool interact_prompt,
+                             cart_fit_memo* cart_fits,
+                             const std::vector<cart_in_world>& scripted_carts) {
+    cart_fit_memo once;
+    cart_fit_memo& fits = cart_fits != nullptr ? *cart_fits : once;
     render_data data;
     const camera_view view = live_camera_view(game, fov_degrees);
     data.camera_position = view.position;
@@ -402,8 +409,10 @@ render_data make_render_data(const game_state& game,
     data.trees = &game.static_anchors.trees;
     const float day = static_cast<float>(game.world.day_of_year);
     for (const tree_species& species : game.tuning.trees.species) {
-        data.tree_species.push_back(
-            render_tree_species{species.name, foliage_share(species, day), turned_share(species, day), fresh_share(species, day)});
+        render_tree_species shown{species.name, foliage_share(species, day), turned_share(species, day), fresh_share(species, day),
+                                  withered_share(game.tuning.trees, species, day)};
+        shown.falling = leaves_falling(game.tuning.trees, species, day, &shown.falling_withered);
+        data.tree_species.push_back(shown);
     }
     data.trees_revision = game.static_anchors.revision;
     data.area_center = game.area.center;
@@ -465,7 +474,7 @@ render_data make_render_data(const game_state& game,
     if (on_foot(game)) {
         data.my_figure = my_figure(game, data);
     }
-    add_carts_and_bags(data, game, props, data.my_figure ? &*data.my_figure : nullptr);
+    add_carts_and_bags(data, game, props, data.my_figure ? &*data.my_figure : nullptr, fits, scripted_carts);
     data.smoking = shown_use(game, game.smoking);
     data.drinking = shown_use(game, game.drinking);
 
@@ -478,8 +487,6 @@ render_data make_render_data(const game_state& game,
         if (near->kind == interactable_kind::warmup) { data.key_hints = text_hub_warmup_hint; }
         if (near->kind == interactable_kind::booked_start) { data.key_hints = text_hub_start_hint; }
     }
-    if (game.hub_flow.ball_request) { data.notice_label = lookup_text(text, text_hub_pending); }
-    if (!game.hub_flow.travel_course.empty()) { data.notice_label = lookup_text(text, text_hub_travel); }
     data.show_bag_hints = interact_available(game) && nearest_interactable(game)->kind == interactable_kind::bag;
     // At a seat's door: walking in sits me down, at the wheel or beside it.
     if (const std::optional<seat_door> door = data.key_hints == nullptr ? seat_door_at(game) : std::nullopt) {
@@ -508,7 +515,7 @@ render_data make_render_data(const game_state& game,
     }
     data.show_course_map = game.course_map_active;
     if (data.show_course_map) {
-        add_course_map(data, game, text);
+        add_course_map(data, game, text, meshes.course_map);
     }
     data.show_scorecard = game.scorecard_active;
     data.show_course_results = round_results_shown(game);
@@ -526,6 +533,6 @@ render_data make_render_data(const game_state& game,
         data.shot_number = shot_number_row(game, *game.shot_number, data.ball_position, text);
     }
     add_putting_read(data, game, text);
-    add_online_render_data(data, game, text, props);
+    add_online_render_data(data, game, text, props, fits);
     return data;
 }

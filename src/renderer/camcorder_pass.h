@@ -12,6 +12,7 @@
 // `camcorder` section; exposure, white, gain and saturation by time of day
 // are the lighting palette's (render_lighting).
 
+#include "renderer/gl_storage.h"
 #include "game/picture_loader.h"
 #include "profiling/profiling.h"
 #include "renderer/framebuffer.h"
@@ -24,6 +25,11 @@
 
 class camcorder_pass {
 public:
+    explicit camcorder_pass(gl_storage storage = {})
+        : downsample_(storage), adapt_(storage), bloom_(storage), smear_(storage), record_(storage),
+          quarter_(storage), bloom_target_(storage), smear_target_(storage),
+          adapt_targets_{framebuffer(storage), framebuffer(storage)}, picture_(storage) {}
+
     // `shader_dir` holds the camcorder shaders and crt.vert; `screen_vao` is
     // a full-screen quad (position.xyz, uv) owned by the caller.
     // `fields_per_second` is how often the gain noise changes.
@@ -34,10 +40,12 @@ public:
     // Records `scene_texture` (HDR) in `light` into the picture; `seconds`
     // runs the lag and the noise.
     void draw(unsigned int scene_texture, const render_lighting& light, float seconds, gl_timer_pool& timers);
+    // The gain noise is drawn in blocks this many scene pixels square (picture_size::unit),
+    // so its grain keeps its size on screen at every scene resolution.
+    void set_grain_cell(const int cell) { grain_cell_ = cell; }
     // Whether the picture holds a recorded frame at the current size.
     bool has_frame() const { return has_frame_; }
     unsigned int color_texture() const { return picture_.color_texture(); }
-    void set_profile(frame_profile* profile);
 
 private:
     void draw_quad(const shader_program& shader);
@@ -53,6 +61,7 @@ private:
     framebuffer smear_target_;
     std::array<framebuffer, 2> adapt_targets_;
     framebuffer picture_;
+    int grain_cell_ = 1;
     camcorder_style style_;
     float fields_per_second_ = 0.0f;
     int adapt_index_ = 0;  // which adapt target holds the latest

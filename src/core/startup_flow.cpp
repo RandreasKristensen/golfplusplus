@@ -354,8 +354,7 @@ render_startup_menu make_startup_menu_render_data(const startup_flow_state& stat
 
     menu.screen = screen_for_flow(state.flow);
     if (!state.message_key.empty()) {
-        menu.message = lookup_text(text, state.message_key.c_str());
-        menu.message_is_error = true;
+        set_message(menu, lookup_text(text, state.message_key.c_str()), message_severity::error);
     }
     const auto selected = [&state](const std::size_t i) { return static_cast<int>(i) == state.selection; };
 

@@ -1,22 +1,20 @@
 #pragma once
 
-// What the shadow map casts besides trees and floodlights: every figure (mine
-// on foot too, which I never see) with what it carries, every cart and every
-// bag, every flagstick with its flag, standing or lying, and every hole sign,
-// way sign and fence post near enough to fall on the map, built from the
-// pieces they are drawn with, so the sun casts a golfer's shape and not a
-// blob. Only their positions reach the map (renderer/shadow_map_pass.h).
-// GL-free.
+// What casts into the sun's shadow map from the static world: every hole
+// sign, way sign and fence post, as one list of triangles uploaded once per
+// course and selected by tile (renderer/caster_index.h). Everything that moves
+// casts from the frame's uploads instead: the figures and flagsticks are runs
+// of the world markers' buffer (marker_view::sun_shadow), carts, bags and
+// carried gear runs of the prop frame's (prop_view::sun_shadow), the placed
+// models a range of the static prop buffer. Only positions reach the map
+// (renderer/shadow_map_pass.h). GL-free.
 
-#include "game/lighting_loader.h"
-#include "game/prop_loader.h"
-#include "renderer/prop_batch.h"
 #include "renderer/render_data.h"
-#include "renderer/world_marker_batch.h"
 
-// Clears both and fills them with this frame's casters: the figures,
-// flagsticks, signs and fence posts, and the carts' models (their models
-// from `props`). Flagsticks use the same cylinders as the picture; signs and posts
-// further from the camera than the map reaches are left out.
-void build_shadow_casters(world_marker_batch& figures, prop_batch& models, const render_data& data, const scene_colors& colors,
-                          const prop_catalog& props, const shadow_style& map, const prop_batch* static_models = nullptr);
+#include <vector>
+
+#include <glm/vec3.hpp>
+
+// The corners (three per triangle) of every sign and fence post, which change
+// only with the course.
+std::vector<glm::vec3> static_caster_corners(const render_hole_signs* signs, const render_fences* fences);

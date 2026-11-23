@@ -10,12 +10,15 @@
 #include "game/scorecard.h"
 #include "game/text_ids.h"
 #include "game/text_assets.h"
+#include "physics/surface_index.h"
+#include "physics/terrain.h"
 #include "physics/vector_math.h"
 
 #include "test_support.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <vector>
@@ -220,7 +223,8 @@ TEST_CASE("the land's relief is scaled about its mean, greens flatter, and what 
     }
 
     // The pin is anchored on the scaled green, the tee box is flush with the
-    // scaled ground and the pond fills its scaled bowl to its lowest rim.
+    // scaled ground and the pond fills its scaled bowl to just under its lowest
+    // rim, by its straight bank's rise over a fine cell's diagonal.
     REQUIRE(course.tee_boxes.size() == 2);
     const tee_box& box = course.tee_boxes.front();
     CHECK(near(box.center.y, sample_terrain_mesh(course.ground, box.center, course.ground_y).point.y, 1e-4f));
@@ -233,7 +237,9 @@ TEST_CASE("the land's relief is scaled about its mean, greens flatter, and what 
         rim = std::min(rim, scaled(point));
     }
     REQUIRE(course.water_levels.size() == 2);
-    CHECK(near(course.water_levels[1], rim, 0.02f));
+    const float most_freeboard = tuning.terrain.zones.water_edge_slope * tuning.terrain.zone_cell_size * 1.41421356f;
+    CHECK(course.water_levels[1] < rim - 0.5f * most_freeboard + 0.02f);
+    CHECK(course.water_levels[1] > rim - most_freeboard - 0.02f);
     const glm::vec3 past = pond.center - glm::normalize(glm::vec3(0.05f, 0.0f, 0.02f)) * (zone_half_extent(pond).x + 3.0f);
     CHECK(near(sample_area(course, past).point.y, mean + relief.scale * (slope(past.x, past.z) - mean), 0.02f));
 }
@@ -764,4 +770,55 @@ TEST_CASE("relative scores read over, under and even") {
     CHECK(format_relative_score(strings, 2) == "+2");
     CHECK(format_relative_score(strings, -1) == "-1");
     CHECK(format_relative_score(strings, 0) == "EVEN");
+}
+
+TEST_CASE("the surface and ground indexes answer as a scan of every hole, zone and triangle does, on every shipped course") {
+    std::uint32_t seed = 12345U;
+    const auto unit = [&seed]() {
+        seed = seed * 1664525U + 1013904223U;
+        return static_cast<float>(seed >> 8) / 16777216.0f;
+    };
+    const auto same = [](const terrain_sample& a, const terrain_sample& b) {
+        return a.point == b.point && a.normal == b.normal && a.material == b.material &&
+            a.distance_from_center == b.distance_from_center && a.inside_surface == b.inside_surface &&
+            a.triangle_index == b.triangle_index;
+    };
+    std::size_t disagreements = 0;
+    for (const course_definition& course : shipped_content().courses) {
+        game_state state = make_game_state(shipped_content(), save_data{});
+        REQUIRE(start_course(state, course));
+        const play_area& area = state.area;
+        std::vector<terrain_mesh> scanned_holes = area.holes;
+        for (terrain_mesh& hole : scanned_holes) {
+            hole.spatial_index = terrain_mesh_index{};
+        }
+        terrain_mesh scanned_ground = area.ground;
+        scanned_ground.spatial_index = terrain_mesh_index{};
+        for (int i = 0; i < 160; ++i) {
+            // Along the holes, and anywhere in and a little past the course.
+            glm::vec3 at(area.center.x + (unit() * 2.2f - 1.1f) * area.extent, 0.0f,
+                         area.center.z + (unit() * 2.2f - 1.1f) * area.extent);
+            if (i % 2 == 0) {
+                const terrain_mesh& hole = area.holes[static_cast<std::size_t>(i / 2) % area.holes.size()];
+                const glm::vec3 vertex = hole.vertices[static_cast<std::size_t>(unit() * static_cast<float>(hole.vertices.size() - 1U))].position;
+                at = vertex + glm::vec3((unit() - 0.5f) * 40.0f, 0.0f, (unit() - 0.5f) * 40.0f);
+            }
+            const std::optional<terrain_sample> hole = sample_holes(area.holes, area.surface, at);
+            const std::optional<terrain_sample> held = sample_holes(scanned_holes, at);
+            disagreements += hole.has_value() != held.has_value() || (hole && !same(*hole, *held)) ? 1U : 0U;
+            const std::optional<zone_hit> zone = winning_zone_at(area.zones, area.surface, at);
+            const std::optional<zone_hit> listed = winning_zone_at(area.zones, at);
+            disagreements += zone.has_value() != listed.has_value() ||
+                    (zone && (zone->index != listed->index || zone->material != listed->material))
+                ? 1U
+                : 0U;
+            if (i % 20 == 0) {
+                disagreements += same(sample_terrain_mesh(area.ground, at, area.ground_y),
+                                      sample_terrain_mesh(scanned_ground, at, area.ground_y))
+                    ? 0U
+                    : 1U;
+            }
+        }
+    }
+    CHECK(disagreements == 0U);
 }

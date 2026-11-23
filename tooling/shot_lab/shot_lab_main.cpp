@@ -12,6 +12,7 @@
 #include "game/game_content.h"
 #include "game/game_state.h"
 #include "game/json_util.h"
+#include "game/place_definition.h"
 #include "game/play_area.h"
 #include "game/shot_simulation.h"
 #include "physics/vector_math.h"
@@ -194,7 +195,7 @@ int main(int argc, char** argv) {
         start = anchor_on_terrain(state.area, start);
     }
     // Still, dry air: the weather's own default.
-    course_definition lab_course = state.course;
+    place_definition lab_course = state.place;
     lab_course.green_stimp_feet = lab_stimp_feet;
     shot_course course = make_shot_course(state.area, 0, weather_state{}, lab_course, {}, state.tuning);
     course.hole.pin = pin;

@@ -8,11 +8,10 @@
 #include "game/play_area.h"
 #include "game/shot_simulation.h"
 #include "physics/vector_math.h"
-#include "renderer/course_map_fill.h"
 #include "renderer/hole_sign_batch.h"
 #include "renderer/hole_sign_face.h"
+#include "renderer/map_ink.h"
 #include "renderer/overlay_raster.h"
-#include "renderer/terrain_palette.h"
 
 #include "test_support.h"
 
@@ -184,13 +183,13 @@ TEST_CASE("a hole sign's face shows the hole in map inks and its labels fit") {
 
     overlay_batch batch;
     draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 18, 5, 999, false), area, area.signs.front(),
-                        test_scene_colors().ground);
+                        test_scene_colors().map);
     CHECK(batch.truncated_text_count == 0U);
     const rgba_image face = rasterize_overlay_batch(batch, test_props().at("hole_sign").color("board"));
     CHECK(face.width == hole_sign_face_width);
     CHECK(face.height == hole_sign_face_height);
-    CHECK(count_texels(face, course_map_ink(terrain_material_color(test_scene_colors().ground, terrain_material::fairway))) > 20U);
-    CHECK(count_texels(face, course_map_ink(terrain_material_color(test_scene_colors().ground, terrain_material::green))) > 4U);
+    CHECK(count_texels(face, map_material_ink(test_scene_colors().map, terrain_material::fairway)) > 20U);
+    CHECK(count_texels(face, map_material_ink(test_scene_colors().map, terrain_material::green)) > 4U);
 }
 
 TEST_CASE("render hole signs are rebuilt only when the signs change") {
@@ -226,9 +225,9 @@ TEST_CASE("the scene paints its sign faces again when the course loads again, no
     CHECK(!refresh_scene_hole_signs(signs, state, catalog, text, colors, test_props(), ""));
     CHECK(signs.revision == first_upload);
 
-    // The same course again with other ground colours (the tour's F2 edit).
-    colors.ground.fairway = glm::vec3(0.9f, 0.1f, 0.1f);
-    colors.ground.rough = glm::vec3(0.1f, 0.1f, 0.9f);
+    // The same course again with other map inks (the tour's F2 edit).
+    colors.map.fairway = glm::vec3(0.9f, 0.1f, 0.1f);
+    colors.map.rough = glm::vec3(0.1f, 0.1f, 0.9f);
     REQUIRE(start_course(state, fixture_hub_course()));
     CHECK(refresh_scene_hole_signs(signs, state, catalog, text, colors, test_props(), ""));
     CHECK(signs.revision == first_upload + 1);
@@ -258,8 +257,12 @@ TEST_CASE("render hole signs carry a face and a model per sign, numbered by cour
     const render_hole_signs signs =
         build_render_hole_signs(state.area, hole_sign_texts(state), {}, shipped_text_assets(), test_scene_colors(), test_props().at("hole_sign"), 7);
     CHECK(signs.revision == 7U);
-    // The hole signs, then the way signs.
-    REQUIRE(signs.signs.size() == state.area.signs.size() + state.area.way_signs.size());
+    // The hole signs, then each way sign's boards.
+    std::size_t way_boards = 0;
+    for (const way_sign& sign : state.area.way_signs) {
+        way_boards += sign.boards.size();
+    }
+    REQUIRE(signs.signs.size() == state.area.signs.size() + way_boards);
     CHECK(signs.truncated_text_count == 0U);
     std::size_t next_vertex = 0;
     for (std::size_t i = 0; i < signs.signs.size(); ++i) {
@@ -267,7 +270,11 @@ TEST_CASE("render hole signs carry a face and a model per sign, numbered by cour
         CHECK(sign.first_vertex == next_vertex);
         CHECK(sign.vertex_count > 0U);
         CHECK(sign.vertex_count % 3U == 0U);
-        CHECK(sign.face.width == (i < state.area.signs.size() ? hole_sign_face_width : way_sign_face_width));
+        if (i < state.area.signs.size()) {
+            CHECK(sign.face.width == hole_sign_face_width);
+        } else {
+            CHECK(sign.face.height == way_sign_face_height);
+        }
         next_vertex += sign.vertex_count;
     }
     CHECK(next_vertex == signs.vertices.size());
@@ -285,40 +292,112 @@ TEST_CASE("render hole signs carry a face and a model per sign, numbered by cour
     CHECK(textured == 6U);
 }
 
-TEST_CASE("a way sign's pointed end runs on from the end of its face, flush with it") {
+TEST_CASE("a way board's pointed end runs on from the end of its face, flush with it, and both faces carry the texture") {
     way_sign sign;
-    sign.points = glm::normalize(glm::vec3(3.0f, 0.0f, 4.0f));
-    sign.face_normal = glm::vec3(-sign.points.z, 0.0f, sign.points.x);
     sign.post_foot = glm::vec3(10.0f, 2.0f, -5.0f);
-    sign.board_half_width = 0.5f;
     sign.board_half_height = 0.2f;
     sign.board_thickness = 0.05f;
     sign.post_radius = 0.06f;
-    sign.board_center = sign.post_foot + sign.face_normal * 0.085f + glm::vec3(0.0f, 1.0f, 0.0f);
+    way_board board;
+    board.half_width = 0.5f;
+    board.points = glm::normalize(glm::vec3(3.0f, 0.0f, 4.0f));
+    board.face_normal = glm::vec3(-board.points.z, 0.0f, board.points.x);
+    board.center = sign.post_foot + board.points * board.half_width + glm::vec3(0.0f, 1.0f, 0.0f);
+    sign.boards = {board};
     std::vector<hole_sign_vertex> vertices;
-    append_way_sign_model(vertices, sign, test_props().at("hole_sign"));
+    append_way_board_model(vertices, sign, 0, test_props().at("hole_sign"));
 
-    const glm::vec3 front = sign.board_center + sign.face_normal * (sign.board_thickness * 0.5f);
     float face_end = -1.0f;
+    std::size_t textured = 0;
     for (const hole_sign_vertex& vertex : vertices) {
         if (vertex.textured > 0.5f) {
-            CHECK(std::abs(glm::dot(vertex.position - front, sign.face_normal)) < 0.0001f);
-            face_end = std::max(face_end, glm::dot(vertex.position - sign.board_center, sign.points));
+            ++textured;
+            // On one of the two faces, either side of the board's middle.
+            CHECK(std::abs(std::abs(glm::dot(vertex.position - board.center, board.face_normal)) - sign.board_thickness * 0.5f) <
+                  0.0001f);
+            face_end = std::max(face_end, glm::dot(vertex.position - board.center, board.points));
         }
     }
-    CHECK(std::abs(face_end - sign.board_half_width) < 0.0001f);
+    CHECK(textured == 12U);
+    CHECK(std::abs(face_end - board.half_width) < 0.0001f);
     // Both of the face's end corners are corners of the pointed end, whose tip
     // lies on in the face's plane.
-    const glm::vec3 end = front + sign.points * sign.board_half_width;
-    const glm::vec3 tip = end + sign.points * sign.board_half_height;
+    const glm::vec3 front = board.center + board.face_normal * (sign.board_thickness * 0.5f);
+    const glm::vec3 end = front + board.points * board.half_width;
+    const glm::vec3 tip = end + board.points * sign.board_half_height;
     for (const glm::vec3& corner : {end + glm::vec3(0.0f, sign.board_half_height, 0.0f), end - glm::vec3(0.0f, sign.board_half_height, 0.0f), tip}) {
         const bool shared = std::any_of(vertices.begin(), vertices.end(), [&](const hole_sign_vertex& vertex) {
             return vertex.textured < 0.5f && glm::length(vertex.position - corner) < 0.0001f;
         });
         CHECK(shared);
     }
+    // The tip is the board's half width twice and its half height from the post's axis.
+    CHECK(near(way_board_tip(sign, board), sign.post_foot + glm::vec3(0.0f, 1.0f, 0.0f) + board.points * 1.2f, 0.0001f));
 }
 
+namespace {
+// A board saying `to_holes`, built as place_way_signs builds it, and its face's width in texels.
+struct lettered_board {
+    float half_width = 0.0f;
+    float length = 0.0f;
+    int face_width = 0;
+    text_layout layout;
+};
+
+lettered_board lettered(const std::vector<std::size_t>& to_holes) {
+    const way_sign_tuning& tuning = shipped_content().tuning.way_sign;
+    const float half_height = 0.5f * tuning.board_height;
+    lettered_board board;
+    board.length = way_board_length(tuning, way_sign_label(to_holes));
+    board.half_width = 0.5f * (board.length - half_height);
+    board.face_width = way_sign_face_width(board.half_width, half_height);
+    board.layout = layout_way_sign_label(shipped_text_assets(), way_sign_label(to_holes), board.face_width);
+    return board;
+}
+
+// The lettering's height in texels: the font's rows at the layout's scale.
+int glyph_texels(const text_layout& layout) {
+    return layout.scale * shipped_text_assets().font.height;
+}
+}
+
+TEST_CASE("a way board says the numbers of the tees it points to") {
+    CHECK(way_sign_label({1U}) == "2");
+    CHECK(way_sign_label({1U, 6U}) == "2  7");
+    CHECK(way_sign_label({9U, 10U}) == "10  11");
+}
+
+TEST_CASE("every way board's lettering is the same size and texel density whatever it says; the board is as long as its label needs") {
+    const way_sign_tuning& tuning = shipped_content().tuning.way_sign;
+    const lettered_board one = lettered({1U});
+    const lettered_board two_digits = lettered({9U});
+    const lettered_board two_numbers = lettered({1U, 6U});
+    const lettered_board widest = lettered({9U, 10U});
+    const lettered_board three = lettered({1U, 8U, 17U});
+    for (const lettered_board* board : {&one, &two_digits, &two_numbers, &widest, &three}) {
+        CHECK(!board->layout.truncated);
+        CHECK(board->layout.scale == one.layout.scale);
+        CHECK(glyph_texels(board->layout) == glyph_texels(one.layout));
+        // Texels per metre along the board and up it.
+        CHECK(near(static_cast<float>(board->face_width) / (2.0f * board->half_width),
+                   static_cast<float>(way_sign_face_height) / tuning.board_height, 0.01f));
+    }
+    CHECK(one.layout.scale >= 2);
+    CHECK(near(one.length, tuning.board_length, 0.0001f));
+    CHECK(two_digits.length > one.length);
+    CHECK(two_numbers.length > two_digits.length);
+    CHECK(widest.length > two_numbers.length);
+    CHECK(three.length > two_numbers.length);
+    CHECK(widest.face_width > one.face_width);
+    // Each board is wider than its lettering with the frame to spare.
+    for (const lettered_board* board : {&one, &widest, &three}) {
+        CHECK(rect_left(board->layout.bounds) > -1.0f + 2.0f * 3.0f / static_cast<float>(board->face_width) - 0.0001f);
+        CHECK(rect_right(board->layout.bounds) < 1.0f - 2.0f * 3.0f / static_cast<float>(board->face_width) + 0.0001f);
+    }
+    overlay_batch batch;
+    draw_way_sign_face(batch, shipped_text_assets(), way_sign_label({9U, 10U}), widest.face_width);
+    CHECK(batch.truncated_text_count == 0U);
+}
 
 TEST_CASE("a hole sign's map runs the hole across the face, tee on the right and pin on the left, fitted to the box") {
     hole_data hole = wide_hole(20.0f, 40.0f);
@@ -373,6 +452,9 @@ TEST_CASE("a hole sign's map is framed on its hole alone and shows the whole cou
     crowded.holes.push_back(build_terrain_mesh_index(std::move(other)));
     crowded.zones.push_back(circle_zone(material_zone_type::bunker, glm::vec3(0.0f, 0.0f, 90.0f), 6.0f));
     crowded.zones.push_back(circle_zone(material_zone_type::green, glm::vec3(-28.0f, 0.0f, 30.0f), 4.0f));
+    // The first hole's zones, then its bunker; the green is the other hole's.
+    crowded.zone_holes.assign(crowded.zones.size() - 1, 0);
+    crowded.zone_holes.push_back(1);
     crowded.trees.push_back(tree_instance{glm::vec3(5.0f, 0.0f, 40.0f), tree_shape{}});
     CHECK(near(make_hole_sign_map_frame(crowded, sign).origin, frame.origin));
     const auto spot = [&](const glm::vec3& point) { return hole_sign_map_spot_at(crowded, sign, point); };
@@ -382,7 +464,7 @@ TEST_CASE("a hole sign's map is framed on its hole alone and shows the whole cou
 
     // Only the sign's own hole is in full ink: the other's fairway and green
     // are faded, on its own and on the map.
-    const ground_colors& ground = test_scene_colors().ground;
+    const map_inks& inks = test_scene_colors().map;
     const std::optional<hole_sign_map_spot> own_fairway = spot(glm::vec3(0.0f, 0.0f, 60.0f));
     const std::optional<hole_sign_map_spot> other_fairway = spot(glm::vec3(-28.0f, 0.0f, 38.0f));
     const std::optional<hole_sign_map_spot> own_green = spot(hole.pin_position);
@@ -392,16 +474,16 @@ TEST_CASE("a hole sign's map is framed on its hole alone and shows the whole cou
     CHECK((own_green->material == terrain_material::green && other_green->material == terrain_material::green));
     CHECK((own_fairway->own_hole && own_green->own_hole));
     CHECK((!other_fairway->own_hole && !other_green->own_hole));
-    CHECK(hole_sign_map_ink(ground, *own_fairway) != hole_sign_map_ink(ground, *other_fairway));
-    CHECK(hole_sign_map_ink(ground, *own_green) != hole_sign_map_ink(ground, *other_green));
+    CHECK(hole_sign_map_ink(inks, *own_fairway) != hole_sign_map_ink(inks, *other_fairway));
+    CHECK(hole_sign_map_ink(inks, *own_green) != hole_sign_map_ink(inks, *other_green));
 
     const text_assets& text = shipped_text_assets();
     overlay_batch batch;
-    draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 4, 120, true), crowded, sign, test_scene_colors().ground);
+    draw_hole_sign_face(batch, text, make_hole_sign_labels(text, 1, 4, 120, true), crowded, sign, inks);
     const rgba_image drawn = rasterize_overlay_batch(batch, test_props().at("hole_sign").color("board"));
-    CHECK(count_texels(drawn, course_map_material_ink(test_scene_colors().ground, terrain_material::bunker)) > 0U);
-    CHECK(count_texels(drawn, course_map_tree_ink) == 1U);
-    CHECK(count_texels(drawn, hole_sign_map_ink(ground, *own_fairway)) > 20U);
-    CHECK(count_texels(drawn, hole_sign_map_ink(ground, *other_fairway)) > 20U);
-    CHECK(count_texels(drawn, hole_sign_map_ink(ground, *other_green)) > 0U);
+    CHECK(count_texels(drawn, map_material_ink(inks, terrain_material::bunker)) > 0U);
+    CHECK(count_texels(drawn, inks.tree) == 1U);
+    CHECK(count_texels(drawn, hole_sign_map_ink(inks, *own_fairway)) > 20U);
+    CHECK(count_texels(drawn, hole_sign_map_ink(inks, *other_fairway)) > 20U);
+    CHECK(count_texels(drawn, hole_sign_map_ink(inks, *other_green)) > 0U);
 }

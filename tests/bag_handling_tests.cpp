@@ -113,10 +113,11 @@ TEST_CASE("remote handling follows walking without restarting and uses the local
     REQUIRE(remote.handled_props.size() == 1U);
     CHECK(remote.remote_avatars.front().carried_club_model.empty());
     render_data local;
+    cart_fit_memo fits;
     render_remote_avatar figure;
     figure.position = state.remote_avatars.at(2).position;
     figure.yaw = state.remote_avatars.at(2).yaw;
-    add_handling(local, figure, state, *state.remote_avatars.at(2).handling, 0, "golf_bag", test_props());
+    add_handling(local, figure, state, *state.remote_avatars.at(2).handling, 0, "golf_bag", test_props(), fits);
     REQUIRE(local.handled_props.size() == 1U);
     const prop_model& club = test_props().at("club_putter");
     CHECK(near(point_in(handled_prop_frame(local.handled_props.front()), club, "face"),

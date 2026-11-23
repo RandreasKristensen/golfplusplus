@@ -14,6 +14,7 @@ layout(location = 2) in vec4 a_leaf;  // xy: a leaf card's corner; z: 1 on leave
 layout(location = 3) in vec3 a_instance_offset;
 layout(location = 4) in vec3 a_instance_scale;
 layout(location = 5) in vec2 a_instance_turn;  // x: yaw; y: tint
+layout(location = 6) in vec2 a_card;  // a card's hold of withered leaves and its own seed
 
 uniform mat4 u_view_proj;
 uniform mat4 u_shadow_view_proj;
@@ -26,7 +27,10 @@ out vec3 v_shadow;
 out vec2 v_uv;
 out float v_leaf;
 out float v_depth;
+flat out vec2 v_card;
 flat out float v_tint;
+
+invariant gl_Position;  // the depth pass must match it exactly
 
 void main() {
     float c = cos(a_instance_turn.x);
@@ -40,5 +44,6 @@ void main() {
     v_uv = a_leaf.xy;
     v_leaf = a_leaf.z;
     v_depth = a_leaf.w;
+    v_card = a_card;
     v_tint = a_instance_turn.y;
 }

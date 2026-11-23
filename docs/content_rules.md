@@ -7,7 +7,9 @@ Paths are relative to the repository root.
 text in C++: tuning in `assets/play/tuning/`, rewards and skills in
 `assets/play/progression/`, items (what they do, how they are used, their
 sounds) in `assets/play/items/`, a model's colours, shape, points and mounts in
-its prop file, scene colours and light in `assets/picture/lighting.json`. A
+its prop file, scene colours and light in `assets/picture/lighting.json` (the
+printed maps' inks, shared by the course map and the hole signs, in its `map`
+section). A
 new cigarette, beer, cart or trinket is files, never C++. Loaders never invent
 fallbacks: missing content fails loudly at startup. Only an omitted optional
 field takes its default; a present but malformed one (a tree, road, zone or
@@ -114,8 +116,9 @@ practice cups' flags are short (`practice_pin_visual_height_meters`). Bunker dep
 makes one deep and one shallow by sinking or raising the land under it.
 The hub's edges are planted by `tooling/practice_ground/hub_planting.py` (fixed seed, existing species only)
 into the world's `trees` and `bushes` (the same arrays as a course's; `bushes` are a position, radius and
-height): shelterbelts of mixed broadleaf with some spruce and scrub west and north beyond the nets, a wooded
-crest on the east ridge, and hedges along the south roads. `check_layout` and a shipped-content test keep every
+height, scrub unless a `species` is named): shelterbelts of mixed broadleaf with some spruce and scrub west
+and north beyond the nets, a wooded crest on the east ridge, and clipped beech hedges (`hedge`) along the
+south roads. `check_layout` and a shipped-content test keep every
 plant off the range and its nets, the hill terrace and ramp, the plaza and facilities, paths, pads and
 each firing line's flight width (10 m plus 12% of its length). The roads run off the grid's west and east edges.
 The hill tee sits at the east end of the same tee line, beside the bays, on a ridge

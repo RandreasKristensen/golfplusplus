@@ -1,4 +1,5 @@
 #include "core/app.h"
+#include <chrono>
 
 #include "game/mode_dispatch.h"
 
@@ -17,14 +18,16 @@ void app::apply_look(const look_reload& reload) {
     }
     lighting_ = reload.next.lighting;
     tape_style_ = reload.next.picture.tape;
+    ui_lines_ = reload.next.picture.ui_lines;
     if (reload.changes.shadows) {
         tree_shadows_ = tree_shadow_cache{};
     }
-    // Ground colours are baked into the course's meshes, which only loading
+    // Ground colours and the coarser ground are baked into the course's meshes, which only loading
     // a course builds: the tour loads its course again, a round shows them
     // from the next course.
     if (reload.changes.ground && menu_.flow == startup_flow::touring) {
         const std::string place_id = game_.place.id;
-        enter_place(game_, place_id);
+        const auto start = std::chrono::steady_clock::now();
+        if (enter_place(game_, place_id)) { course_load_ms_ = elapsed_milliseconds(start); }
     }
 }

@@ -362,18 +362,26 @@ impl StdbClient {
     where
         F: FnOnce(&DbConnection, ReducerDone) -> spacetimedb_sdk::Result<()>,
     {
+        self.call_request(reducer, 0, invoke)
+    }
+
+    /// `call` for a reducer whose refusal the caller matches to its request by `request`.
+    pub fn call_request<F>(&self, reducer: &'static str, request: u64, invoke: F) -> bool
+    where
+        F: FnOnce(&DbConnection, ReducerDone) -> spacetimedb_sdk::Result<()>,
+    {
         let Some(conn) = &self.connection else {
-            push(&self.queue, Event::ReducerFailed(reducer, NOT_CONNECTED.to_string()));
+            push(&self.queue, Event::ReducerFailed(reducer, NOT_CONNECTED.to_string(), request));
             return false;
         };
         let queue = self.queue.clone();
         let report: ReducerDone = Box::new(move |_, result| match result {
             Ok(Ok(())) => {}
-            Ok(Err(message)) => push(&queue, Event::ReducerFailed(reducer, message)),
-            Err(error) => push(&queue, Event::ReducerFailed(reducer, login::failure(REQUEST_FAILED, error))),
+            Ok(Err(message)) => push(&queue, Event::ReducerFailed(reducer, message, request)),
+            Err(error) => push(&queue, Event::ReducerFailed(reducer, login::failure(REQUEST_FAILED, error), request)),
         });
         if let Err(error) = invoke(conn, report) {
-            push(&self.queue, Event::ReducerFailed(reducer, login::failure(REQUEST_FAILED, error)));
+            push(&self.queue, Event::ReducerFailed(reducer, login::failure(REQUEST_FAILED, error), request));
             return false;
         }
         true

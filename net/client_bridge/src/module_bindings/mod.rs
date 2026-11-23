@@ -299,6 +299,7 @@ pub enum Reducer {
     OpenTeeBook {
         room_id: u64,
         course_id: String,
+        request_id: u64,
     },
     PickUpBall {
         expected_room: u64,
@@ -551,12 +552,15 @@ impl __sdk::Reducer for Reducer {
                     expected_room: expected_room.clone(),
                 })
             }
-            Reducer::OpenTeeBook { room_id, course_id } => {
-                __sats::bsatn::to_vec(&open_tee_book_reducer::OpenTeeBookArgs {
-                    room_id: room_id.clone(),
-                    course_id: course_id.clone(),
-                })
-            }
+            Reducer::OpenTeeBook {
+                room_id,
+                course_id,
+                request_id,
+            } => __sats::bsatn::to_vec(&open_tee_book_reducer::OpenTeeBookArgs {
+                room_id: room_id.clone(),
+                course_id: course_id.clone(),
+                request_id: request_id.clone(),
+            }),
             Reducer::PickUpBall {
                 expected_room,
                 ball_id,

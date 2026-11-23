@@ -532,6 +532,7 @@ pub struct StdbDeparture {
 pub struct StdbTeeBookStatus {
     pub course_id: StdbString,
     pub server_now: i64,
+    pub request_id: u64,
 }
 
 #[repr(C)]
@@ -581,6 +582,8 @@ pub struct StdbEvent {
     pub reducer: StdbString,
     /// SubscriptionApplied, SubscriptionFailed: the stdb_subscribe handle.
     pub subscription: u32,
+    /// ReducerFailed: the request number the call was given, 0 for none.
+    pub request: u64,
     /// SignedIn.
     pub login_method: StdbLoginMethod,
     /// Disconnected: the bridge is signing in again by itself.
@@ -643,9 +646,9 @@ pub fn layout() -> Vec<usize> {
     describe!(out, StdbTeeSlot, slot_id, course_id, world_id, room_id, scheduled_at, booked_count);
     describe!(out, StdbTeeReservation, reservation_id, slot_id, started_at, grouped, completed, revision, course_id, world_id, room_id, scheduled_at, takes_cart);
     describe!(out, StdbDeparture, slot_id, course_id, scheduled_at, names);
-    describe!(out, StdbTeeBookStatus, course_id, server_now);
+    describe!(out, StdbTeeBookStatus, course_id, server_now, request_id);
     out.push(size_of::<StdbRow>());
-    describe!(out, StdbEvent, kind, text, reducer, subscription, login_method, retrying, table, change, row);
+    describe!(out, StdbEvent, kind, text, reducer, subscription, request, login_method, retrying, table, change, row);
     out.push(size_of::<StdbEventKind>());
     out.push(size_of::<bool>());
     out

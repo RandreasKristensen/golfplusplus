@@ -12,6 +12,9 @@ uniform vec4 u_shadow;
 // the depth there, 0..1), 0..1: four soft taps on a turned square, each
 // already a 2x2 filtered test.
 float shadow_map_light(vec3 coords) {
+    if (u_shadow.x <= 0.0) {
+        return 1.0;
+    }
     vec2 from_middle = abs(coords.xy * 2.0 - 1.0);
     float inside = (1.0 - smoothstep(1.0 - u_shadow.w, 1.0, max(from_middle.x, from_middle.y))) *
         step(0.0, coords.z) * step(coords.z, 1.0);

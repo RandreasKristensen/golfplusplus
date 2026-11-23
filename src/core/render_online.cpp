@@ -93,9 +93,16 @@ std::optional<shown_bag> remote_bag(const game_state& game, const std::uint64_t 
     return item != nullptr ? std::optional<shown_bag>(shown_bag{bag->second.place, item->model}) : std::nullopt;
 }
 
-void add_online_render_data(render_data& data, const game_state& game, const text_assets& text, const prop_catalog& props) {
+void add_online_render_data(render_data& data, const game_state& game, const text_assets& text, const prop_catalog& props,
+                             cart_fit_memo& fits) {
+    // One notice, by priority: a refusal or consequence the player must read, then
+    // what is only progress. Travel is shown by its own screen, never here.
     if (game.notice) {
         data.notice_label = lookup_text(text, game.notice->text_key.c_str());
+        data.notice_severity = game.notice->severity;
+    } else if (game.hub_flow.ball_request) {
+        data.notice_label = lookup_text(text, text_hub_pending);
+        data.notice_severity = message_severity::status;
     }
     if (!is_online(game)) {
         return;
@@ -116,7 +123,7 @@ void add_online_render_data(render_data& data, const game_state& game, const tex
         }
         data.remote_avatars.push_back(shown_avatar(game, account, avatar, player->second, props));
         if (avatar.handling && !data.remote_avatars.back().seated && !active_dap(game, account)) {
-            add_handling(data, data.remote_avatars.back(), game, *avatar.handling, account, bag_model_of(game, account), props);
+            add_handling(data, data.remote_avatars.back(), game, *avatar.handling, account, bag_model_of(game, account), props, fits);
         }
         if (const auto pair = active_dap(game, account)) {
             auto& shown = data.remote_avatars.back();
@@ -151,5 +158,6 @@ void add_online_render_data(render_data& data, const game_state& game, const tex
     }
     if (waiting_for_group(game) && data.notice_label.empty()) {
         data.notice_label = lookup_text(text, text_scorecard_waiting_for_group);
+        data.notice_severity = message_severity::status;
     }
 }

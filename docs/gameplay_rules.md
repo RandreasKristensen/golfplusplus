@@ -72,7 +72,14 @@ course file's date (`course_sky`, never changing) moves its weather by the
 month (`weather_season_tuning`: Danish autumn and winter rainier, windier
 and foggier, thunder only in the warm months), sets its air's normals, and
 sets how much of each tree is in leaf (`game/tree_season.h`): a bare crown
-slows a ball as `bare_crown_density` of a leafy one. Heavy rough and bushes
+slows a ball as `bare_crown_density` of a leafy one. Beech and oak keep a
+share of their leaves withered through winter (`withered_share`, the hub's
+clipped beech hedges most), and those slow a ball as live leaves do. The
+shares are estimates for mixed-age crowns: marcescence is strongest on young
+trees, hedges and low in the crown and the last leaves fall at bud break
+([Hamburg 2026](https://www.uni-hamburg.de/en/newsroom/forschung/2026/0304-fv-ha-gw-marzeszenz.html),
+[Clemson](https://hgic.clemson.edu/when-leaves-dont-let-go-marcescence/),
+[Svendsen 2001, Denmark](https://alcesjournal.org/index.php/alces/article/view/607)). Heavy rough and bushes
 are real golf's: heavy rough takes more speed and spin off a strike and
 shuts the face more (`lies.heavy_rough_*`), and lets a ball roll less; a
 bush's tangle catches a ball (`solids.bush_density`).

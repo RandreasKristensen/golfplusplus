@@ -3,12 +3,14 @@
 // Builds the renderer's frame from game state: camera rigs, HUD state and
 // marker lists. GL-free, so it is unit tested.
 
+#include "core/render_gear.h"
 #include "game/game_state.h"
 #include "game/reward_rules.h"
 #include "game/text_assets.h"
 #include "physics/cup.h"
 #include "profiling/profiling.h"
 #include "renderer/camera_transition.h"
+#include "renderer/course_map_sheet.h"
 #include "renderer/hole_sign_batch.h"
 #include "renderer/render_data.h"
 #include "renderer/render_mesh.h"
@@ -53,14 +55,20 @@ struct render_meshes {
     const render_water* water = nullptr;
     const render_floodlights* floodlights = nullptr;
     const grass_field* grass = nullptr;
+    const course_map_sheet* course_map = nullptr;  // the paper map's ground
 };
 
 // The in-round frame (no menus, no debug text); `fov_degrees` is the
 // player's field of view setting, `interact_prompt` its interact prompt one.
+// `cart_fits` carries the carts' ground fits from one frame to the next; none
+// (a test's or a still's) fits every cart afresh. `scripted_carts` are the
+// benchmark's crowd (see add_carts_and_bags); none in a real frame.
 render_data make_render_data(const game_state& game,
                              const text_assets& text,
                              const skill_catalog& skills,
                              const render_meshes& meshes,
                              const prop_catalog& props,
                              float fov_degrees,
-                             bool interact_prompt);
+                             bool interact_prompt,
+                             cart_fit_memo* cart_fits = nullptr,
+                             const std::vector<cart_in_world>& scripted_carts = {});

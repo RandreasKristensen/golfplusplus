@@ -403,7 +403,7 @@ void draw_startup_menu(overlay_batch& batch, const text_assets& text, const rend
     draw_label(batch, text.font, find_text_style(text, style_title), menu.title, ui_rect{glm::vec2(0.0f, 0.80f), glm::vec2(0.78f, 0.10f)});
     const bool book = menu.screen == startup_menu_screen::tee_book || menu.screen == startup_menu_screen::course_book;
     const ui_rect subtitle_box{glm::vec2(0.0f, book ? 0.62f : 0.66f), glm::vec2(0.76f, book ? 0.07f : 0.045f)};
-    const text_style& message_style = find_text_style(text, menu.message_is_error ? style_error : style_subtitle);
+    const text_style& message_style = find_text_style(text, menu.severity == message_severity::error ? style_error : style_subtitle);
     if (picker(menu.screen) && !book && !menu.message.empty()) {
         draw_label(batch, text.font, message_style, menu.message, subtitle_box);
     } else {

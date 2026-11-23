@@ -15,3 +15,10 @@ float value_noise(vec2 p) {
     return mix(mix(hash12(cell), hash12(cell + vec2(1.0, 0.0)), t.x),
                mix(hash12(cell + vec2(0.0, 1.0)), hash12(cell + vec2(1.0, 1.0)), t.x), t.y);
 }
+
+// 0..1, fixed for a point in space.
+float hash13(vec3 p) {
+    vec3 q = fract(p * 0.1031);
+    q += dot(q, q.zyx + 31.32);
+    return fract((q.x + q.y) * q.z);
+}

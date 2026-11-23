@@ -12,6 +12,7 @@ in vec3 v_normal;
 in vec3 v_shadow;
 in float v_up;
 flat in float v_tint;
+flat in float v_alpha;
 #ifdef GRASS_DEBUG_ROOTS
 flat in vec3 v_root;
 #endif
@@ -38,5 +39,5 @@ void main() {
     float sun = shadow_map_light(v_shadow);
     vec3 light = surface_light(n, mix(0.7, 1.0, v_up), sun) + local_light(v_world, n);
     vec3 color = u_rough_color * v_tint * mix(u_shades.x, u_shades.y, v_up) * wet.x;
-    frag_color = vec4(hazed(color * light, v_world), 1.0);
+    frag_color = vec4(hazed(color * light, v_world), v_alpha);
 }

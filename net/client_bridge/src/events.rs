@@ -49,7 +49,8 @@ pub enum Event {
     SubscriptionApplied(u32),
     SubscriptionFailed(u32, String),
     Row(StdbRowChange, Row),
-    ReducerFailed(&'static str, String),
+    /// Which reducer, why, and the request number its caller gave it (0: none).
+    ReducerFailed(&'static str, String, u64),
 }
 
 /// Shared by the SDK's callbacks, which all run on the thread that calls
@@ -128,6 +129,7 @@ fn empty_event(kind: StdbEventKind) -> StdbEvent {
         text: StdbString::EMPTY,
         reducer: StdbString::EMPTY,
         subscription: 0,
+        request: 0,
         login_method: StdbLoginMethod::Browser,
         retrying: false,
         table: StdbTable::Player,
@@ -199,7 +201,7 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
             slot_id: r.slot_id, course_id: arena.text(&r.course_id), scheduled_at: r.scheduled_at, names: arena.text(&r.names.join("
 ")) } }),
         Row::MyTeeBookStatus(r) => (StdbTable::MyTeeBookStatus, StdbRow { tee_book_status: StdbTeeBookStatus {
-            course_id: arena.text(&r.course_id), server_now: r.server_now } }),
+            course_id: arena.text(&r.course_id), server_now: r.server_now, request_id: r.request_id } }),
         Row::Room(r) => (
             StdbTable::Room,
             StdbRow { room: StdbRoom { room_id: r.room_id, course_id: arena.text(&r.course_id), player_count: r.player_count, world_id: r.world_id, kind: r.kind } },
@@ -461,9 +463,10 @@ pub fn to_c(arena: &mut Arena, event: &Event) -> StdbEvent {
             let (table, row) = row_to_c(arena, row);
             StdbEvent { table, change: *change, row, ..empty_event(StdbEventKind::Row) }
         }
-        Event::ReducerFailed(reducer, message) => StdbEvent {
+        Event::ReducerFailed(reducer, message, request) => StdbEvent {
             reducer: arena.text(reducer),
             text: arena.text(message),
+            request: *request,
             ..empty_event(StdbEventKind::ReducerFailed)
         },
     }

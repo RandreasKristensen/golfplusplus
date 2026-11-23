@@ -23,7 +23,8 @@ out vec4 frag_color;
 uniform sampler2D u_beneath_color;  // the scene before the water
 uniform sampler2D u_beneath_depth;
 uniform sampler2D u_reflection;
-uniform mat4 u_reflection_view_proj;
+uniform mat4 u_reflection_view_proj;  // world to the mirror texture's clip space (its crop of the picture)
+uniform vec4 u_reflection_range;      // the lookup's clamp in that texture: u min, v min, u max, v max
 uniform mat4 u_view_proj;
 uniform mat4 u_inverse_view_proj;
 uniform float u_time;
@@ -87,9 +88,6 @@ vec2 rain_slope(vec3 world, float near) {
 // The fine ripples' slope, 0 .. about 1 each way: the gradient of noise in
 // cells of fine_cell_meters, drifting with the wind.
 const float fine_cell_meters = 0.35;
-// The undrawn waves' streaks: how fine across the view, how long along it.
-const float streak_across_meters = 0.5;
-const float streak_along_meters = 6.0;
 
 vec2 fine_slope_at(vec2 ground) {
     const float e = 0.15;
@@ -136,8 +134,20 @@ float filtered_fresnel(float cosine, float slope) {
     return area > 0.0 ? dot(f, facing) / area : 1.0;
 }
 
+// The share of the surface whose reflected ray, `up` its height before the
+// undrawn waves of `slope` tilt it, points down into the next wave.
+float water_masked_share(float up, float slope) {
+    float reach = 2.0 * slope + 0.02;
+    return 1.0 - smoothstep(-reach, reach, up);
+}
+
 // Project the surface into its own mirror. Tilting the lookup displaces the
 // reflected image; unresolved slopes broaden it without changing the scene.
+// The mirror holds only the part of the picture the water covers, widened by
+// how far the lookup can move (water_reflection_reach, renderer/water_crop.h
+// mirrors the 0.08, the spread and the slopes here). A point on the surface
+// is at its own picture position in its mirror, and the picture's offsets are
+// the texture's, because the texture is as many texels as the whole picture.
 vec3 reflected_color(vec3 world, vec3 normal, float smear, vec3 air, float clear) {
     vec4 clip = u_reflection_view_proj * vec4(world, 1.0);
     vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
@@ -148,7 +158,7 @@ vec3 reflected_color(vec3 world, vec3 normal, float smear, vec3 air, float clear
     vec3 color = vec3(0);
     for (int i = 0; i < SMEAR_SAMPLES; ++i) {
         vec2 offset = spread * (float(i) / float(SMEAR_SAMPLES - 1) - 0.5);
-        color += texture(u_reflection, clamp(uv + distortion + offset, vec2(0.001), vec2(0.999))).rgb;
+        color += texture(u_reflection, clamp(uv + distortion + offset, u_reflection_range.xy, u_reflection_range.zw)).rgb;
     }
     // The mirrored scene already carries the light along the reflected ray.
     return max(color / float(SMEAR_SAMPLES) - air, vec3(0)) / max(clear, 0.05);
@@ -202,18 +212,12 @@ void main() {
     float clear = 1.0 - haze_at(v_world);
     float fresnel = filtered_fresnel(dot(normal, view), smear);
     vec3 bounce = reflect(-view, normal);
-    // The waves not drawn still tilt each spot's ray up or down. Seen at a
-    // low angle a wave's face runs across the view and is long along it, so
-    // the tilt is noise fine across the view and long along it, drifting
-    // with the wind: the reflection frays into vertical streaks.
-    vec2 along_view = normalize(-view.xz + vec2(1.0e-5));
-    vec2 drifted = v_world.xz - 0.3 * u_wind * u_time;
-    float tilt = value_noise(vec2(dot(drifted, vec2(-along_view.y, along_view.x)) / streak_across_meters,
-                                  dot(drifted, along_view) / streak_along_meters)) * 2.0 - 1.0;
-    bounce.y += 2.0 * smear * tilt;
-    // A wave tilted past the view sends its ray down into the next wave,
-    // which shows the water's own light, not the bright horizon.
-    float masked = 1.0 - smoothstep(-0.02, 0.02, bounce.y);
+    // A wave face tilted past the view sends its ray down into the next wave,
+    // which shows the water's own light, not the bright horizon. The waves
+    // not drawn tilt the ray up to twice their slope either way: the share of
+    // them that does, never a per-pixel pick, which speckles distant water.
+    // Mirrors water_masked_share.
+    float masked = water_masked_share(bounce.y, smear);
     // Gaussian approximation to convolving the Phong lobe with the undrawn
     // slopes (reflection doubles their angle): broaden it and preserve its
     // integrated energy, rather than turning distant waves into a flat glint.

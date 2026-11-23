@@ -94,7 +94,53 @@ world_marker_batch::world_marker_batch()
 void world_marker_batch::clear() {
     vertices_.clear();
     runs_.clear();
+    for (std::vector<mesh_instance>& list : instances_) { list.clear(); }
+    instance_runs_.clear();
+    open_run_.fill(0);
+    part_ = marker_part::cups;
+    part_ends_.fill(0);
+    parts_ended_ = false;
+    break_run_ = false;
     layer_ = 0;
+}
+
+void world_marker_batch::end_part(const marker_part part) {
+    part_ends_[static_cast<std::size_t>(part)] = vertices_.size();
+    parts_ended_ = true;
+    break_run_ = true;
+    open_run_.fill(0);
+    part_ = static_cast<marker_part>(std::min(static_cast<std::size_t>(part) + 1, static_cast<std::size_t>(marker_part::count) - 1));
+}
+
+bool world_marker_batch::shown_in(const world_marker_run& run, const marker_view view) const {
+    if (!parts_ended_) {
+        return true;
+    }
+    // The first part whose end lies past the run's start.
+    std::size_t part = 0;
+    while (part + 1 < part_ends_.size() && part_ends_[part] <= run.first) {
+        ++part;
+    }
+    return shown_in(static_cast<marker_part>(part), view);
+}
+
+bool world_marker_batch::shown_in(const marker_part part, const marker_view view) const {
+    if (!parts_ended_) {
+        return true;
+    }
+    switch (part) {
+    case marker_part::address_feet: return view == marker_view::scene || view == marker_view::zoom;
+    case marker_part::my_figure: return view == marker_view::mirror || view == marker_view::sun_shadow;
+    case marker_part::poles: return view != marker_view::zoom;
+    case marker_part::zoom_poles: return view == marker_view::zoom;
+    case marker_part::flagsticks:
+    case marker_part::avatars: return true;
+    case marker_part::cups:
+    case marker_part::collectibles:
+    case marker_part::balls: return view != marker_view::sun_shadow;
+    case marker_part::count: break;
+    }
+    return false;
 }
 
 void world_marker_batch::append_disc(const glm::mat4& model,
@@ -123,6 +169,45 @@ void world_marker_batch::append_sphere(const glm::mat4& model,
                                        const float glow,
                                        const bool depth_write) {
     append_triangles(unit_sphere_, model, color, glow, depth_write);
+}
+
+void world_marker_batch::append_instance(const prop_mesh mesh, const glm::mat4& model, const glm::vec3& color, const float glow) {
+    const std::size_t m = static_cast<std::size_t>(mesh);
+    if (open_run_[m] == 0) {
+        instance_runs_.push_back(world_marker_instance_run{part_, mesh, instances_[m].size(), 0});
+        open_run_[m] = instance_runs_.size();
+    }
+    instances_[m].push_back(make_mesh_instance(model, color, glow));
+    ++instance_runs_[open_run_[m] - 1].count;
+}
+
+std::size_t world_marker_batch::instance_count() const {
+    std::size_t count = 0;
+    for (const std::vector<mesh_instance>& list : instances_) { count += list.size(); }
+    return count;
+}
+
+std::size_t world_marker_batch::instance_base(const prop_mesh mesh) const {
+    std::size_t base = 0;
+    for (std::size_t m = 0; m < static_cast<std::size_t>(mesh); ++m) { base += instances_[m].size(); }
+    return base;
+}
+
+void world_marker_batch::join_instances(std::vector<mesh_instance>& out) const {
+    out.clear();
+    for (const std::vector<mesh_instance>& list : instances_) { out.insert(out.end(), list.begin(), list.end()); }
+}
+
+std::vector<world_marker_vertex> world_marker_batch::instanced_vertices() const {
+    std::vector<world_marker_vertex> vertices;
+    for (const prop_mesh mesh : {prop_mesh::cylinder, prop_mesh::sphere, prop_mesh::quad}) {
+        for (const mesh_instance& instance : instances(mesh)) {
+            for (std::size_t i = 0; i < meshes_.vertex_count(mesh); ++i) {
+                vertices.push_back(world_marker_vertex{placed_position(instance, meshes_, mesh, i), instance.color, instance.glow});
+            }
+        }
+    }
+    return vertices;
 }
 
 void world_marker_batch::append_triangles(const std::vector<glm::vec3>& local_positions,
@@ -167,8 +252,9 @@ void world_marker_batch::append_world_triangles(const std::vector<glm::vec3>& co
 }
 
 world_marker_run& world_marker_batch::run_for(const bool depth_write, const marker_stencil stencil) {
-    if (runs_.empty() || runs_.back().depth_write != depth_write || runs_.back().stencil != stencil ||
+    if (runs_.empty() || break_run_ || runs_.back().depth_write != depth_write || runs_.back().stencil != stencil ||
         runs_.back().layer != layer_) {
+        break_run_ = false;
         world_marker_run run;
         run.depth_write = depth_write;
         run.stencil = stencil;
@@ -303,13 +389,33 @@ float marker_height(const std::vector<float>* heights, const std::size_t index, 
 }
 }
 
-void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, const float pin_visual_height_meters,
-                          const marker_colors& colors, const glow_floors& glow, const flag_pose& flag,
-                          const float radius_meters) {
+float flagstick_draw_radius(const world_marker_scene& scene, const glm::vec3& position, const float height_meters,
+                            const float pixel_per_meter) {
+    // The farther end of the pole is the narrowest on screen.
+    const float distance = std::max(glm::length(position - scene.camera_position),
+                                    glm::length(position + world_up * height_meters - scene.camera_position));
+    const float across_flats = std::cos(glm::pi<float>() / static_cast<float>(primitive_cylinder_segments));
+    return std::max(scene.flagstick_radius_meters, 0.5f * distance * pixel_per_meter / across_flats);
+}
+
+void append_pin_pole(world_marker_batch& batch, const glm::vec3& position, const float pin_visual_height_meters,
+                     const marker_colors& colors, const glow_floors& glow, const float radius_meters) {
     const float pin_height = std::max(0.1f, pin_visual_height_meters);
     batch.append_cylinder(glm::scale(glm::translate(glm::mat4(1), position),
                                     glm::vec3(radius_meters, pin_height, radius_meters)),
                           colors.pin_pole, glow.pin_pole, true);
+}
+
+void append_pin_flagstick(world_marker_batch& batch, const glm::vec3& position, const float pin_visual_height_meters,
+                          const marker_colors& colors, const glow_floors& glow, const flag_pose& flag,
+                          const float radius_meters) {
+    append_pin_pole(batch, position, pin_visual_height_meters, colors, glow, radius_meters);
+    append_pin_flag(batch, position, pin_visual_height_meters, colors, glow, flag);
+}
+
+void append_pin_flag(world_marker_batch& batch, const glm::vec3& position, const float pin_visual_height_meters,
+                     const marker_colors& colors, const glow_floors& glow, const flag_pose& flag) {
+    const float pin_height = std::max(0.1f, pin_visual_height_meters);
 
     // Hung from just under the pole's top, flying out from it at `angle`
     // from straight down, its fly end waving across the wind.
@@ -372,6 +478,25 @@ void build_tee_box_batch(world_marker_batch& batch, const std::vector<tee_box>* 
     batch.set_layer(0);
 }
 
+namespace {
+// Every cup's opening, the hole's and the course's.
+void append_cups(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors) {
+    std::vector<glm::vec3> cups;
+    if (scene.pin_markers != nullptr) {
+        cups = *scene.pin_markers;
+    }
+    if (scene.show_hole) {
+        cups.push_back(scene.pin_position);
+    }
+    append_cup_holes(batch, cups, scene.cup_radius_meters, scene.cup_depth_meters, colors.markers, colors.glow);
+}
+}
+
+void build_cup_batch(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors) {
+    batch.clear();
+    append_cups(batch, scene, colors);
+}
+
 void build_world_marker_batch(world_marker_batch& batch, const world_marker_scene& scene, const scene_colors& colors) {
     const marker_colors& marks = colors.markers;
     batch.clear();
@@ -384,47 +509,67 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
         const std::vector<glm::vec3>& out = markers(scene.flags_out);
         return std::find(out.begin(), out.end(), cup) != out.end();
     };
-    std::vector<glm::vec3> cups = markers(scene.pin_markers);
-    if (scene.show_hole) {
-        cups.push_back(scene.pin_position);
+    if (!scene.cups_apart) {
+        append_cups(batch, scene, colors);
     }
-    append_cup_holes(batch, cups, scene.cup_radius_meters, scene.cup_depth_meters, marks, colors.glow);
-    if (scene.show_hole) {
-        if (!flag_out(scene.pin_position)) {
-            append_pin_flagstick(batch, scene.pin_position, scene.pin_visual_height_meters, marks, colors.glow, scene.flag,
-                                 scene.flagstick_radius_meters);
+    batch.end_part(marker_part::cups);
+    // Every standing flagstick: the hole's, then the course's.
+    std::vector<std::pair<glm::vec3, float>> standing;
+    if (scene.show_hole && !flag_out(scene.pin_position)) {
+        standing.emplace_back(scene.pin_position, scene.pin_visual_height_meters);
+    }
+    const std::vector<glm::vec3>& others = markers(scene.pin_markers);
+    for (std::size_t i = 0; i < others.size(); ++i) {
+        if (!flag_out(others[i])) {
+            standing.emplace_back(others[i], marker_height(scene.pin_marker_heights, i, scene.pin_visual_height_meters));
         }
+    }
+    for (const auto& [position, height] : standing) {
+        append_pin_pole(batch, position, height, marks, colors.glow,
+                        flagstick_draw_radius(scene, position, height, scene.pixel_per_meter));
+    }
+    batch.end_part(marker_part::poles);
+    if (scene.zoom_pixel_per_meter > 0.0f) {
+        for (const auto& [position, height] : standing) {
+            append_pin_pole(batch, position, height, marks, colors.glow,
+                            flagstick_draw_radius(scene, position, height, scene.zoom_pixel_per_meter));
+        }
+    }
+    batch.end_part(marker_part::zoom_poles);
+
+    for (const auto& [position, height] : standing) {
+        append_pin_flag(batch, position, height, marks, colors.glow, scene.flag);
     }
     if (scene.lying_flags != nullptr) {
         for (const auto& [foot, tip] : *scene.lying_flags) {
             append_lying_flagstick(batch, foot, tip, marks, colors.glow);
         }
     }
-
+    batch.end_part(marker_part::flagsticks);
     if (scene.collectibles != nullptr) {
         for (const render_collectible& collectible : *scene.collectibles) {
             append_collectible(batch, collectible, scene.ball_visual_radius_meters, marks, colors.glow.ball);
         }
     }
-    const std::vector<glm::vec3>& standing = markers(scene.pin_markers);
-    for (std::size_t i = 0; i < standing.size(); ++i) {
-        if (!flag_out(standing[i])) {
-            const float height = marker_height(scene.pin_marker_heights, i, scene.pin_visual_height_meters);
-            append_pin_flagstick(batch, standing[i], height, marks, colors.glow, scene.flag, scene.flagstick_radius_meters);
-        }
-    }
-
-    if (scene.address_feet != nullptr) {
-        append_address_feet(batch, *scene.address_feet, colors);
-    }
+    batch.end_part(marker_part::collectibles);
     if (scene.remote_avatars != nullptr) {
         for (const render_remote_avatar& avatar : *scene.remote_avatars) {
             append_remote_avatar(batch, avatar, scene.avatar_eye_height, scene.ball_visual_radius_meters, colors);
         }
     }
+    batch.end_part(marker_part::avatars);
     if (scene.remote_balls != nullptr) {
         for (const render_remote_ball& ball : *scene.remote_balls) {
             append_remote_ball(batch, ball, scene.ball_visual_radius_meters, colors.figures, colors.glow.ball);
         }
     }
+    batch.end_part(marker_part::balls);
+    if (scene.address_feet != nullptr) {
+        append_address_feet(batch, *scene.address_feet, colors);
+    }
+    batch.end_part(marker_part::address_feet);
+    if (scene.my_figure != nullptr) {
+        append_remote_avatar(batch, *scene.my_figure, scene.avatar_eye_height, scene.ball_visual_radius_meters, colors);
+    }
+    batch.end_part(marker_part::my_figure);
 }

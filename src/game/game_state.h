@@ -20,6 +20,7 @@
 #include "game/hole_data.h"
 #include "game/item_catalog.h"
 #include "game/loadout.h"
+#include "game/message_severity.h"
 #include "game/motion_sync.h"
 #include "game/net_types.h"
 #include "game/play_area.h"
@@ -240,10 +241,12 @@ struct remote_shot {
     std::vector<glm::vec3> trail;
 };
 
-// A message from the server shown for a moment (a refused action).
+// A message shown for a moment: a refused action (error) or a rules consequence
+// (status). Every producer names its severity.
 struct game_notice {
     std::string text_key;
     float age = 0.0f;
+    message_severity severity;
 };
 
 // A "+XP" popup. Age runs to tuning.xp_drops.lifetime_seconds.

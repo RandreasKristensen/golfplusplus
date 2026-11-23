@@ -1,8 +1,8 @@
 #pragma once
 
 // Ground colours by surface, from lighting.json's ground colours. Shared by
-// the 3D terrain and every 2D view of a hole (menu thumbnails, course map,
-// sign faces), so they always agree.
+// the 3D terrain and the menu thumbnails of a hole. The printed maps (course
+// map, sign faces) have their own inks (renderer/map_ink.h).
 
 #include "game/lighting_loader.h"
 #include "physics/terrain.h"

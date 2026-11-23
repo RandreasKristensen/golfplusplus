@@ -82,6 +82,7 @@ set(GOLFPP_SHARED_SOURCES
   src/physics/ground_contact.cpp
   src/physics/turf_contact.cpp
   src/physics/ground_mesh.cpp
+  src/physics/surface_index.cpp
   src/physics/ground_pad.cpp
   src/physics/impact.cpp
   src/physics/land_relief.cpp
@@ -124,6 +125,7 @@ set(GOLFPP_SHARED_SOURCES
   src/game/json_util.cpp
   src/game/pixel_font_data.cpp
   src/game/area_solids.cpp
+  src/game/area_surface.cpp
   src/game/play_area.cpp
   src/game/tree_season.cpp
   src/game/progress_rules.cpp

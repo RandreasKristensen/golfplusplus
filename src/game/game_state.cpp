@@ -135,7 +135,7 @@ void update_shot_playback(game_state& state, const float dt) {
     // a ball hit on the green costs two.
     ball.strokes += shot.result.penalty_strokes;
     if (shot.result.penalty_strokes > 0) {
-        state.notice = game_notice{shot.result.lost ? text_hud_water_penalty : text_hud_ball_hit_penalty, 0.0f};
+        state.notice = game_notice{shot.result.lost ? text_hud_water_penalty : text_hud_ball_hit_penalty, 0.0f, message_severity::status};
     }
     state.shot.reset();
     if (following) {

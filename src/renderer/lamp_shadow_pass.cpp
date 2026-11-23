@@ -25,8 +25,7 @@ bool lamp_shadow_pass::init(const std::string& vertex_path, const std::string& f
     }
     glGenTextures(1, &depth_texture_);
     glBindTexture(GL_TEXTURE_2D, depth_texture_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, style.lamps * style.lamp_map_resolution, style.lamp_map_resolution,
-                 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+    storage_.texture_image(depth_texture_, GL_DEPTH_COMPONENT24, style.lamps * style.lamp_map_resolution, style.lamp_map_resolution, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -56,39 +55,35 @@ void lamp_shadow_pass::shutdown() {
         glDeleteFramebuffers(1, &fbo_);
         fbo_ = 0;
     }
-    if (depth_texture_ != 0) {
-        glDeleteTextures(1, &depth_texture_);
-        depth_texture_ = 0;
-    }
+    storage_.delete_texture(depth_texture_);
     shader_.shutdown();
     tree_shader_.shutdown();
     held_.clear();
     slots_.clear();
     view_projs_.clear();
     casters_known_ = false;
+    pose_.forget();
 }
 
 void lamp_shadow_pass::update(const std::vector<render_light>& lights, const glm::vec3& eye, tree_renderer& tree_batch,
-                              const std::vector<tree_body>& trees, const std::uint64_t trees_revision,
                               floodlight_renderer& floodlight_batch, const render_floodlights* floodlights,
-                              gl_timer_pool& timers, frame_profile* profile) {
+                              const float pose_tolerance_meters, gl_timer_pool& timers, frame_profile* profile) {
     slots_.clear();
     view_projs_.clear();
-    const bool any_casters = !trees.empty() || (floodlights != nullptr && !floodlights->vertices.empty());
+    const bool any_casters = tree_batch.tree_count() > 0 || (floodlights != nullptr && !floodlights->vertices.empty());
     if (fbo_ == 0 || !any_casters) {
         return;
     }
+    const std::uint64_t trees_revision = tree_batch.trees_revision();
     const std::uint64_t floodlights_revision = floodlights != nullptr ? floodlights->revision : 0;
-    const bool moved = tree_batch.motion_wind() != tree_wind_ ||
-        (tree_batch.moving() && tree_batch.motion_time() != tree_motion_time_);
+    const bool moved = !pose_.within(tree_batch.motion_time(), tree_batch.motion_wind(), tree_batch.pose_reach(), pose_tolerance_meters);
     if (!casters_known_ || trees_revision != trees_revision_ || floodlights_revision != floodlights_revision_ ||
         tree_model_revision_ != tree_batch.model_revision() || moved) {
         std::fill(held_.begin(), held_.end(), std::nullopt);
         trees_revision_ = trees_revision;
         floodlights_revision_ = floodlights_revision;
         casters_known_ = true;
-        tree_motion_time_ = tree_batch.motion_time();
-        tree_wind_ = tree_batch.motion_wind();
+        pose_.remember(tree_batch.motion_time(), tree_batch.motion_wind());
         tree_model_revision_ = tree_batch.model_revision();
     }
     const lamp_tiling tiling =
@@ -101,6 +96,7 @@ void lamp_shadow_pass::update(const std::vector<render_light>& lights, const glm
     if (tiling.redraw.empty()) {
         return;
     }
+    const profile_pass_scope pass(profile, profile_pass::lamp_shadow);
     timers.begin(gpu_profile_stage::lamp_shadows);
     const int resolution = style_.lamp_map_resolution;
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
@@ -117,7 +113,7 @@ void lamp_shadow_pass::update(const std::vector<render_light>& lights, const glm
         glClear(GL_DEPTH_BUFFER_BIT);
         const glm::mat4 view_proj = lamp_shadow_view_proj(*held_[tile], style_.lamp_near_meters);
         tree_shader_.use();
-        tree_batch.draw_casters(trees, trees_revision, tree_shader_, view_proj, profile);
+        tree_batch.draw_casters(tree_shader_, view_proj, profile);
         shader_.use();
         floodlight_batch.draw_casters(floodlights, shader_, view_proj, profile);
     }

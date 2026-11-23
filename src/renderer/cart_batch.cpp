@@ -157,7 +157,7 @@ render_cart cart_rolled(const glm::vec3& position, const float yaw, const bool o
     prop_batch drawn;
     append_cart_model(drawn, cart, model, scene_colors{});
     float lift = -std::numeric_limits<float>::max();
-    for (const prop_vertex& vertex : drawn.opaque()) {
+    for (const prop_vertex& vertex : drawn.opaque_vertices()) {
         lift = std::max(lift, ground_height(vertex.position) + tyre_least_clearance - vertex.position.y);
     }
     cart.position += world_up * lift;

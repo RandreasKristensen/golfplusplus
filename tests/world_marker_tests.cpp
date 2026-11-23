@@ -171,18 +171,25 @@ void check_run(const world_marker_run& run, const bool depth_write, const std::s
     CHECK(run.count == count);
 }
 
-std::size_t check_flagstick(const world_marker_batch& batch,
-                            std::size_t index,
-                            const glm::vec3& position,
-                            const float pin_visual_height_meters,
-                            const float pole_half_width = 0.0f) {
+std::size_t check_pole(const world_marker_batch& batch,
+                       const std::size_t index,
+                       const glm::vec3& position,
+                       const float pin_visual_height_meters,
+                       const float pole_half_width = 0.0f) {
     const float pin_height = std::max(0.1f, pin_visual_height_meters);
-    const glm::vec3 pole_color = test_scene_colors().markers.pin_pole;
+    return check_piece(batch, index, make_cylinder_positions(primitive_cylinder_segments),
+                       glm::scale(glm::translate(glm::mat4(1), position),
+                                  glm::vec3(pole_half_width, pin_height, pole_half_width)),
+                       test_scene_colors().markers.pin_pole, test_scene_colors().glow.pin_pole);
+}
+
+std::size_t check_flag(const world_marker_batch& batch,
+                       std::size_t index,
+                       const glm::vec3& position,
+                       const float pin_visual_height_meters) {
+    const float pin_height = std::max(0.1f, pin_visual_height_meters);
     const glm::vec3 flag_color = test_scene_colors().markers.flag;
     const glow_floors& glow = test_scene_colors().glow;
-    index = check_piece(batch, index, make_cylinder_positions(primitive_cylinder_segments),
-                        glm::scale(glm::translate(glm::mat4(1), position),
-                                   glm::vec3(pole_half_width,pin_height,pole_half_width)), pole_color, glow.pin_pole);
     // In calm the flag hangs from just under the pole's top, its fly end
     // 0.72 m out along +x and 0.35 rad from straight down.
     const glm::vec3 hoist_top = position + glm::vec3(0.0f, std::min(pin_height * 0.86f + 0.24f, pin_height), 0.0f);
@@ -203,6 +210,12 @@ std::size_t check_flagstick(const world_marker_batch& batch,
         ++index;
     }
     return index;
+}
+
+std::size_t check_flagstick(const world_marker_batch& batch, const std::size_t index, const glm::vec3& position,
+                            const float pin_visual_height_meters, const float pole_half_width = 0.0f) {
+    return check_flag(batch, check_pole(batch, index, position, pin_visual_height_meters, pole_half_width), position,
+                      pin_visual_height_meters);
 }
 
 void check_stencil_run(const world_marker_run& run, const marker_stencil stencil, const std::size_t first,
@@ -244,9 +257,9 @@ TEST_CASE("at address the club head rests on the ground behind the ball, its fac
     pose.fit = club_fit_of(club);
     prop_batch batch;
     append_swing_club(batch, pose, radius, club, test_scene_colors().glow);
-    REQUIRE(batch.opaque().size() == prop_model_vertex_count(club));
-    float lowest = batch.opaque().front().position.y;
-    for (const prop_vertex& vertex : batch.opaque()) {
+    REQUIRE(batch.opaque_vertices().size() == prop_model_vertex_count(club));
+    float lowest = batch.opaque_vertices().front().position.y;
+    for (const prop_vertex& vertex : batch.opaque_vertices()) {
         lowest = std::min(lowest, vertex.position.y);
     }
     CHECK(std::abs(lowest - (pose.ball_position.y - radius)) <= 0.005f);
@@ -280,8 +293,8 @@ TEST_CASE("every club, the putter too, soles its own head on the ground behind t
         const auto lowest_and_face = [&](const render_club_pose& p) {
             prop_batch batch;
             append_swing_club(batch, p, radius, club, test_scene_colors().glow);
-            float lowest = batch.opaque().front().position.y;
-            for (const prop_vertex& vertex : batch.opaque()) {
+            float lowest = batch.opaque_vertices().front().position.y;
+            for (const prop_vertex& vertex : batch.opaque_vertices()) {
                 lowest = std::min(lowest, vertex.position.y);
             }
             return std::pair{lowest, glm::vec3(swing_club_frame(p, radius, club) * glm::vec4(club.point("face"), 1.0f))};
@@ -369,11 +382,12 @@ TEST_CASE("world marker batch cuts the hole's cup, then stands its flagstick") {
     CHECK(check_flagstick(batch, flagstick_first, scene.pin_position, 2.1f, 0.00635f) ==
           batch.vertices().size());
 
-    // Its opening marked (no depth) | its inside | the flagstick.
-    REQUIRE(batch.runs().size() == 3U);
+    // Its opening marked (no depth) | its inside | the pole | the flag.
+    REQUIRE(batch.runs().size() == 4U);
     check_stencil_run(batch.runs()[0], marker_stencil::mark_holes, 0, cup_mark_vertex_count);
     check_stencil_run(batch.runs()[1], marker_stencil::hole_insides, cup_mark_vertex_count, cup_inside_vertex_count);
-    check_stencil_run(batch.runs()[2], marker_stencil::none, flagstick_first, flagstick_vertex_count);
+    check_stencil_run(batch.runs()[2], marker_stencil::none, flagstick_first, pole_vertex_count);
+    check_stencil_run(batch.runs()[3], marker_stencil::none, flagstick_first + pole_vertex_count, 2 * quad_vertex_count);
     // The hole is the cup as wide and deep as it plays, in the cup's colour.
     for (std::size_t i = cup_mark_vertex_count; i < flagstick_first; ++i) {
         const world_marker_vertex& vertex = batch.vertices()[i];
@@ -571,7 +585,7 @@ TEST_CASE("the tee box batch holds every tee box's grout, then every box's tiles
     CHECK(batch.empty());
 }
 
-TEST_CASE("world marker batch groups a hub into three runs in submission order") {
+TEST_CASE("world marker batch groups a hub into four runs in submission order") {
     const std::vector<glm::vec3> pins = {
         glm::vec3(5.0f, 3.0f, 120.0f), glm::vec3(45.0f, -1.0f, 150.0f), glm::vec3(85.0f, 6.0f, 90.0f)};
 
@@ -585,16 +599,21 @@ TEST_CASE("world marker batch groups a hub into three runs in submission order")
     build_world_marker_batch(batch, scene, test_scene_colors());
 
     const std::size_t flagsticks_first = 3 * (cup_mark_vertex_count + cup_inside_vertex_count);
+    // Every pole, then every flag.
     std::size_t index = flagsticks_first;
     for (const glm::vec3& pin : pins) {
-        index = check_flagstick(batch, index, pin, 2.4f);
+        index = check_pole(batch, index, pin, 2.4f);
+    }
+    for (const glm::vec3& pin : pins) {
+        index = check_flag(batch, index, pin, 2.4f);
     }
     CHECK(index == batch.vertices().size());
 
-    REQUIRE(batch.runs().size() == 3U);
+    REQUIRE(batch.runs().size() == 4U);
     check_stencil_run(batch.runs()[0], marker_stencil::mark_holes, 0, 3 * cup_mark_vertex_count);
     check_stencil_run(batch.runs()[1], marker_stencil::hole_insides, 3 * cup_mark_vertex_count, 3 * cup_inside_vertex_count);
-    check_stencil_run(batch.runs()[2], marker_stencil::none, flagsticks_first, 3 * flagstick_vertex_count);
+    check_stencil_run(batch.runs()[2], marker_stencil::none, flagsticks_first, 3 * pole_vertex_count);
+    check_stencil_run(batch.runs()[3], marker_stencil::none, flagsticks_first + 3 * pole_vertex_count, 3 * 2 * quad_vertex_count);
 }
 
 TEST_CASE("world marker batch cuts every cup's hole before anything else") {
@@ -608,10 +627,10 @@ TEST_CASE("world marker batch cuts every cup's hole before anything else") {
     world_marker_batch batch;
     build_world_marker_batch(batch, scene, test_scene_colors());
 
-    // Every cup's opening | every cup's inside | the flagsticks.
-    REQUIRE(batch.runs().size() == 3U);
+    // Every cup's opening | every cup's inside | the poles | the flags.
+    REQUIRE(batch.runs().size() == 4U);
     const std::vector<marker_stencil> stencils = {marker_stencil::mark_holes, marker_stencil::hole_insides,
-                                                  marker_stencil::none};
+                                                  marker_stencil::none, marker_stencil::none};
     for (std::size_t i = 0; i < stencils.size(); ++i) {
         CHECK(batch.runs()[i].stencil == stencils[i]);
     }
@@ -852,11 +871,11 @@ TEST_CASE("another player is a figure on foot, sat down in a cart, their group i
     avatar.position = glm::vec3(10.0f, 2.0f, -4.0f);
     avatar.player_id = 3;
     append_remote_avatar(batch, avatar, 1.65f, 0.05f, test_scene_colors());
-    CHECK(batch.vertices().size() == remote_figure_vertex_count());
+    CHECK(batch.instanced_vertices().size() == remote_figure_vertex_count());
     // Standing on the ground, no taller than a person.
     float lowest = 1000.0f;
     float highest = -1000.0f;
-    for (const world_marker_vertex& vertex : batch.vertices()) {
+    for (const world_marker_vertex& vertex : batch.instanced_vertices()) {
         lowest = std::min(lowest, vertex.position.y);
         highest = std::max(highest, vertex.position.y);
     }
@@ -869,14 +888,14 @@ TEST_CASE("another player is a figure on foot, sat down in a cart, their group i
         avatar.seated = true;
         avatar.at_wheel = at_wheel;
         append_remote_avatar(batch, avatar, 1.65f, 0.05f, test_scene_colors());
-        CHECK(batch.vertices().size() == remote_seated_vertex_count());
+        CHECK(batch.instanced_vertices().size() == remote_seated_vertex_count());
     }
 
     batch.clear();
     avatar.seated = false;
     avatar.group_id = 2;
     append_remote_avatar(batch, avatar, 1.65f, 0.05f, test_scene_colors());
-    CHECK(batch.vertices().size() == remote_figure_vertex_count());
+    CHECK(batch.instanced_vertices().size() == remote_figure_vertex_count());
     CHECK(group_highlight(test_scene_colors().figures, 2) != group_highlight(test_scene_colors().figures, 3));
     CHECK(remote_tint(test_scene_colors().figures, 1) != remote_tint(test_scene_colors().figures, 2));
 }
@@ -892,7 +911,7 @@ TEST_CASE("another player holds my club at their ball, and what they smoke and d
     avatar.swing = pose;
     world_marker_batch batch;
     append_remote_avatar(batch, avatar, 1.65f, 0.05f, test_scene_colors());
-    CHECK(batch.vertices().size() == remote_figure_vertex_count());
+    CHECK(batch.instanced_vertices().size() == remote_figure_vertex_count());
 
     CHECK(!remote_prop_holder(avatar, 1.65f, test_props()).has_value());
     avatar.smoking = render_item_use{"cigarette", 0.5f};
@@ -901,10 +920,12 @@ TEST_CASE("another player holds my club at their ball, and what they smoke and d
     REQUIRE(holder.has_value());
     prop_batch props;
     append_held_props(props, *holder, test_scene_colors().glow);
-    REQUIRE(!props.opaque().empty());
+    REQUIRE(!props.opaque_vertices().empty());
     // At their face, not at arm's length in front of a camera.
     const glm::vec3 head(holder->frame[3]);
-    for (const std::vector<prop_vertex>* vertices : {&props.opaque(), &props.blended()}) {
+    const std::vector<prop_vertex> solid = props.opaque_vertices();
+    const std::vector<prop_vertex> blended = props.blended_vertices();
+    for (const std::vector<prop_vertex>* vertices : {&solid, &blended}) {
         for (const prop_vertex& vertex : *vertices) {
             CHECK(glm::length(vertex.position - head) < 0.8f);
             CHECK(vertex.position.y > avatar.position.y + 1.0f);
@@ -918,7 +939,7 @@ TEST_CASE("another player holds my club at their ball, and what they smoke and d
     CHECK(from_head.y < 0.0f);
     CHECK(glm::dot(from_head, yaw_direction(avatar.yaw)) > 0.1f);
     // Both have their smoke and beer (blended) and their solid parts.
-    CHECK(!props.blended().empty());
+    CHECK(!props.blended_vertices().empty());
     // A model they hold that is not in the catalog draws nothing.
     avatar.smoking = render_item_use{"no_such_model", 0.5f};
     avatar.drinking.reset();
@@ -938,14 +959,14 @@ TEST_CASE("a whole cart stands on the ground, roofed over a seated head, its whe
     const prop_model& model = test_props().at("golf_cart");
     const float seat_offset = model.point("steering_wheel").x;
     append_cart_model(batch, cart, model, test_scene_colors());
-    CHECK(batch.opaque().size() == cart_vertex_count(model));
+    CHECK(batch.opaque_vertices().size() == cart_vertex_count(model));
     float lowest = 1000.0f;
     float highest = -1000.0f;
     glm::vec3 wheel_sum(0.0f);
     glm::vec3 rim_low(1000.0f);
     glm::vec3 rim_high(-1000.0f);
     std::size_t wheel_vertices = 0;
-    for (const prop_vertex& vertex : batch.opaque()) {
+    for (const prop_vertex& vertex : batch.opaque_vertices()) {
         lowest = std::min(lowest, vertex.position.y);
         highest = std::max(highest, vertex.position.y);
         if (vertex.color == test_props().at("golf_cart").color("rubber") && vertex.position.y > cart.position.y + 0.8f) {
@@ -977,9 +998,9 @@ TEST_CASE("a whole cart stands on the ground, roofed over a seated head, its whe
     const auto highest_trim = [&](const float steer) {
         prop_batch turned;
         append_cart_model(turned, render_cart{cart.position, cart.yaw, true, steer}, model, test_scene_colors());
-        CHECK(turned.opaque().size() == cart_vertex_count(model));
+        CHECK(turned.opaque_vertices().size() == cart_vertex_count(model));
         float top = -1000.0f;
-        for (const prop_vertex& vertex : turned.opaque()) {
+        for (const prop_vertex& vertex : turned.opaque_vertices()) {
             if (vertex.color == test_props().at("golf_cart").color("trim")) {
                 top = std::max(top, vertex.position.y);
             }
@@ -1001,7 +1022,55 @@ TEST_CASE("the marker batch draws the remote players and balls it is given") {
     scene.ball_visual_radius_meters = 0.05f;
     build_world_marker_batch(batch, scene, test_scene_colors());
     const std::size_t sphere = make_sphere_positions(primitive_sphere_latitude_segments, primitive_sphere_longitude_segments).size();
-    CHECK(batch.vertices().size() == 2U * remote_figure_vertex_count() + 3U * sphere);
+    CHECK(batch.instanced_vertices().size() == 2U * remote_figure_vertex_count() + 3U * sphere);
+}
+
+TEST_CASE("the figures and balls are instances, one run of each mesh in each part, and are drawn by the views that show the part") {
+    const std::vector<render_remote_avatar> avatars(2);
+    const std::vector<render_remote_ball> balls(3);
+    render_remote_avatar mine;
+    world_marker_scene scene;
+    scene.remote_avatars = &avatars;
+    scene.remote_balls = &balls;
+    scene.my_figure = &mine;
+    scene.avatar_eye_height = 1.65f;
+    scene.ball_visual_radius_meters = 0.05f;
+    world_marker_batch batch;
+    build_world_marker_batch(batch, scene, test_scene_colors());
+    const canonical_meshes meshes;
+    std::size_t total = 0;
+    std::array<std::size_t, static_cast<std::size_t>(marker_part::count)> vertices_of_part{};
+    std::array<int, static_cast<std::size_t>(marker_part::count) * prop_mesh_count> runs_of{};
+    for (const world_marker_instance_run& run : batch.instance_runs()) {
+        CHECK(run.count > 0U);
+        CHECK(run.first + run.count <= batch.instances(run.mesh).size());
+        total += run.count;
+        vertices_of_part[static_cast<std::size_t>(run.part)] += run.count * meshes.vertex_count(run.mesh);
+        ++runs_of[static_cast<std::size_t>(run.part) * prop_mesh_count + static_cast<std::size_t>(run.mesh)];
+    }
+    // Every instance is in one run, and each part has no more than one run of a mesh.
+    CHECK(total == batch.instance_count());
+    for (const int runs : runs_of) { CHECK(runs <= 1); }
+    CHECK(vertices_of_part[static_cast<std::size_t>(marker_part::avatars)] == 2U * remote_figure_vertex_count());
+    CHECK(vertices_of_part[static_cast<std::size_t>(marker_part::balls)] == 3U * meshes.vertex_count(prop_mesh::sphere));
+    CHECK(vertices_of_part[static_cast<std::size_t>(marker_part::my_figure)] == remote_figure_vertex_count());
+    CHECK(vertices_of_part[static_cast<std::size_t>(marker_part::cups)] == 0U);
+    // The joined lists are what is uploaded: each mesh's instances start after the meshes before it.
+    std::vector<mesh_instance> joined;
+    batch.join_instances(joined);
+    CHECK(joined.size() == batch.instance_count());
+    CHECK(batch.instance_base(prop_mesh::cylinder) == 0U);
+    CHECK(batch.instance_base(prop_mesh::sphere) == batch.instances(prop_mesh::cylinder).size());
+    CHECK(batch.instance_base(prop_mesh::quad) == batch.instances(prop_mesh::cylinder).size() + batch.instances(prop_mesh::sphere).size());
+    // Other players are in every view that has people, their balls not in the sun's shadow, mine only in mirrors and shadows.
+    CHECK(batch.shown_in(marker_part::avatars, marker_view::sun_shadow));
+    CHECK(batch.shown_in(marker_part::balls, marker_view::scene));
+    CHECK(!batch.shown_in(marker_part::balls, marker_view::sun_shadow));
+    CHECK(!batch.shown_in(marker_part::my_figure, marker_view::scene));
+    CHECK(batch.shown_in(marker_part::my_figure, marker_view::mirror));
+    batch.clear();
+    CHECK(batch.empty());
+    CHECK(batch.instance_runs().empty());
 }
 
 TEST_CASE("a cart tilts with the ground under its wheels, its tyres standing a little clear of it") {
@@ -1009,7 +1078,7 @@ TEST_CASE("a cart tilts with the ground under its wheels, its tyres standing a l
         prop_batch batch;
         append_cart_model(batch, cart, test_props().at("golf_cart"), test_scene_colors());
         float gap = 1000.0f;
-        for (const prop_vertex& vertex : batch.opaque()) {
+        for (const prop_vertex& vertex : batch.opaque_vertices()) {
             gap = std::min(gap, vertex.position.y - ground(vertex.position));
         }
         return gap;
@@ -1065,7 +1134,7 @@ TEST_CASE("the club's head never cuts into the ball, however the face turns or l
                 prop_batch batch;
                 append_swing_club(batch, pose, radius, club, test_scene_colors().glow);
                 float nearest = 1000.0f;
-                for (const prop_vertex& vertex : batch.opaque()) {
+                for (const prop_vertex& vertex : batch.opaque_vertices()) {
                     nearest = std::min(nearest, glm::length(vertex.position - pose.ball_position));
                 }
                 CHECK(nearest >= radius * 0.98f);
