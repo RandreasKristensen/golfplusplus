@@ -83,7 +83,9 @@ std::optional<zone_hit> winning_zone_at(const std::vector<material_zone>& zones,
                                         const index_range* among) {
     // The edge distance (depth) is only worked out to break a tie of priority.
     std::optional<std::size_t> best;
-    std::optional<float> best_depth;
+    // The winner's edge distance, measured only once a tie needs it.
+    bool best_depth_known = false;
+    float best_depth = 0.0f;
     int best_priority = -2;
     const auto consider = [&](const std::size_t index) {
         const material_zone& zone = zones[index];
@@ -96,16 +98,17 @@ std::optional<zone_hit> winning_zone_at(const std::vector<material_zone>& zones,
             return;
         }
         if (priority == best_priority) {
-            if (!best_depth) {
+            if (!best_depth_known) {
                 best_depth = zone_edge_distance(zones[*best], position);
+                best_depth_known = true;
             }
             const float depth = zone_edge_distance(zone, position);
-            if (depth <= *best_depth) {
+            if (depth <= best_depth) {
                 return;
             }
             best_depth = depth;
         } else {
-            best_depth.reset();
+            best_depth_known = false;
             best_priority = priority;
         }
         best = index;

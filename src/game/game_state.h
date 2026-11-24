@@ -420,7 +420,7 @@ struct game_state {
     bool takes_cart = true;
     cart_state cart;
     std::optional<cart_ride> ride;  // sat in a cart, or stepping into or out of one
-    std::optional<door_push> door_push;  // walking into a seat's door
+    std::optional<::door_push> door_push;  // walking into a seat's door
     // Carts going over onto a side and lying there, as shown, by owner (0:
     // mine): presentation, from when each was seen tipping.
     std::map<std::uint64_t, cart_fall_shown> cart_falls;
@@ -478,7 +478,7 @@ struct game_state {
     bool skills_panel_active = false;
     // Pacing a distance off, and the count shown (game/pacing.h).
     std::optional<pacing_walk> pacing;
-    std::optional<pace_count> pace_count;
+    std::optional<::pace_count> pace_count;
     // Crouched reading the green, 0 standing .. 1 down, and how long I have
     // been down: the green's dots' clock (game/green_read.h).
     float crouch = 0.0f;
