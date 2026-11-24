@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             platform: macos
           # The oldest glibc a player's Linux needs is the one built on.
           - os: ubuntu-22.04
