@@ -19,6 +19,9 @@ namespace {
 // Set down, a bag leans back on its stand this far from upright; slung on
 // a back it crosses it at this angle, its bottom at the hips.
 constexpr float stand_lean_degrees = 14.0f;
+// A bag lying beside a body: its round and the gap to the body's box.
+constexpr float lying_bag_radius = 0.15f;
+constexpr float lying_bag_gap = 0.04f;
 constexpr float back_tilt_degrees = 22.0f;
 // Its bottom against the hips, as shares of the figure's eye height: this
 // high, this far behind the figure.
@@ -44,6 +47,15 @@ glm::mat4 ground_bag_frame(const render_ground_bag& bag, const prop_model& model
     const float lean = glm::radians(stand_lean_degrees);
     const glm::vec3 up = world_up * std::cos(lean) - front * std::sin(lean);
     return posed_model(bag.position, up, front, glm::vec3(1.0f)) * glm::translate(glm::mat4(1.0f), -model.point("hang"));
+}
+
+glm::mat4 lying_bag_frame(const render_lying_body& body, const prop_model& model) {
+    const glm::vec3 along = yaw_direction(body.yaw);
+    const glm::vec3 beside = yaw_left(along) * (body.half_width + lying_bag_radius + lying_bag_gap);
+    const float length = model.point("mouth").y - model.point("hang").y;
+    glm::vec3 bottom = body.position - along * (0.5f * length) + beside;
+    bottom.y = body.ground[1] + lying_bag_radius;
+    return posed_model(bottom, along, world_up, glm::vec3(1.0f)) * glm::translate(glm::mat4(1.0f), -model.point("hang"));
 }
 
 glm::mat4 back_bag_frame(const render_remote_avatar& figure, const float eye_height, const prop_model& model) {
@@ -86,6 +98,11 @@ void append_carts_and_bags(prop_batch& batch, const render_data& data, const pro
     for (const render_ground_bag& bag : data.ground_bags) {
         if (const prop_model* model = find_model(props, bag.model)) {
             append_prop_model(batch, *model, ground_bag_frame(bag, *model), glow, std::nullopt, bag_paint_color(colors.figures, bag.paint));
+        }
+    }
+    for (const render_lying_body& body : data.lying_bodies) {
+        if (const prop_model* model = find_model(props, body.bag_model)) {
+            append_prop_model(batch, *model, lying_bag_frame(body, *model), glow, std::nullopt, bag_paint_color(colors.figures, body.bag_paint));
         }
     }
     for (const render_handled_prop& prop : data.handled_props) {

@@ -10,6 +10,7 @@
 
 #include "game/cart_seats.h"
 #include "game/effects.h"
+#include "game/fallen_body.h"
 #include "game/game_tuning.h"
 #include "physics/body_collision.h"
 #include "physics/cart_dynamics.h"
@@ -103,10 +104,11 @@ struct walk_step {
 // edge higher than a step I fall.
 walk_step step_walker(const walker& in, const move_input& input, const walk_world& world);
 
-// What stops me on foot besides the area's solids: every cart (`carts`)
-// and the flagsticks in their cups.
+// What stops me on foot besides the area's solids: every cart (`carts`),
+// the bodies lying and the flagsticks in their cups.
 std::vector<solid> walker_obstacles(const std::vector<cart_pose>& carts, const std::vector<cup>& cups,
-                                    const std::vector<bool>& flags_in, const game_tuning& tuning);
+                                    const std::vector<bool>& flags_in, const game_tuning& tuning,
+                                    const std::vector<fallen_body>& bodies = {});
 
 // --- At the wheel ----------------------------------------------------------
 
@@ -145,10 +147,10 @@ cart_ground cart_ground_under(const cart_pose& pose, const cart_world& world);
 cart_move step_cart_mover(const cart_mover& in, const cart_controls& controls, const cart_world& world);
 
 // What stops a cart besides the area's solids: the other carts, people on
-// foot (their feet) and the flagsticks in their cups.
+// foot (their feet), the bodies lying and the flagsticks in their cups.
 std::vector<solid> cart_obstacles_of(const std::vector<cart_pose>& carts, const std::vector<glm::vec3>& people,
                                      const std::vector<cup>& cups, const std::vector<bool>& flags_in,
-                                     const game_tuning& tuning);
+                                     const game_tuning& tuning, const std::vector<fallen_body>& bodies = {});
 
 // A cart's body as it moves (physics/body_collision.h).
 ground_body cart_body(const cart_pose& pose, const cart_tuning& tuning);

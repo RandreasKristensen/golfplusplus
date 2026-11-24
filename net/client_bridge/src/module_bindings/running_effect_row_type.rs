@@ -9,7 +9,8 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub struct RunningEffectRow {
     pub id: u64,
     pub account_id: u64,
-    pub item_id: String,
+    pub source_kind: u8,
+    pub source_id: String,
     pub target: String,
     pub bucket: u8,
     pub value: f32,
@@ -29,7 +30,8 @@ impl __sdk::InModule for RunningEffectRow {
 pub struct RunningEffectRowCols {
     pub id: __sdk::__query_builder::Col<RunningEffectRow, u64>,
     pub account_id: __sdk::__query_builder::Col<RunningEffectRow, u64>,
-    pub item_id: __sdk::__query_builder::Col<RunningEffectRow, String>,
+    pub source_kind: __sdk::__query_builder::Col<RunningEffectRow, u8>,
+    pub source_id: __sdk::__query_builder::Col<RunningEffectRow, String>,
     pub target: __sdk::__query_builder::Col<RunningEffectRow, String>,
     pub bucket: __sdk::__query_builder::Col<RunningEffectRow, u8>,
     pub value: __sdk::__query_builder::Col<RunningEffectRow, f32>,
@@ -45,7 +47,8 @@ impl __sdk::__query_builder::HasCols for RunningEffectRow {
         RunningEffectRowCols {
             id: __sdk::__query_builder::Col::new(table_name, "id"),
             account_id: __sdk::__query_builder::Col::new(table_name, "account_id"),
-            item_id: __sdk::__query_builder::Col::new(table_name, "item_id"),
+            source_kind: __sdk::__query_builder::Col::new(table_name, "source_kind"),
+            source_id: __sdk::__query_builder::Col::new(table_name, "source_id"),
             target: __sdk::__query_builder::Col::new(table_name, "target"),
             bucket: __sdk::__query_builder::Col::new(table_name, "bucket"),
             value: __sdk::__query_builder::Col::new(table_name, "value"),

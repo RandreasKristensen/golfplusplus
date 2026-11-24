@@ -14,6 +14,10 @@ std::size_t gear_paint_index(const gear_paint& paint, const std::size_t paint_co
     return static_cast<std::size_t>(paint.account % paint_count);
 }
 
+std::uint64_t shirt_id_of(const game_state& state, const std::uint64_t account) {
+    return account == 0 ? state.online.account_id : account;
+}
+
 gear_paint gear_paint_of(const game_state& state, const std::uint64_t owner) {
     const std::uint64_t me = state.online.account_id;
     if (owner == 0 || owner == me) {

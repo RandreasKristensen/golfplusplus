@@ -134,6 +134,9 @@ void renderer::render_scene(const glm::mat4& view, const glm::mat4& proj, const 
     fence_renderer_.draw_nets(data.fences, view_proj, profile);
     gpu_timers_.begin(gpu_profile_stage::weather);
     weather_renderer_.draw(data.weather, view_proj, profile);
+    if (!reflected) {
+        world_bolt_renderer_.draw(data.weather.lightning, data.camera_position, view_proj, profile);
+    }
     gpu_timers_.end();
 }
 

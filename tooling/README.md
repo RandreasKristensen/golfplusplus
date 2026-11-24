@@ -105,8 +105,9 @@ database is missing or the module changed since the last publish (then
 regenerates the client bindings, before the game builds), and turns on
 anonymous logins. Then two clients start, each its own guest account (deleted
 when it closes, so its name is free again next time), on
-`http://localhost:3000`, database `golfpp`. `gb -x` stops them and the
-server.
+`http://localhost:3000`, database `golfpp`. Once both close, `gb` stops the
+server if it started it (`gb -r` runs its one game in its own window and
+does the same); `gb -x` stops them and the server.
 
 The server only runs while you test: the database lives in SpacetimeDB's data
 directory, so it, its accounts and its settings survive `gb -x`, and the next
@@ -117,7 +118,7 @@ and scores.
 
 `net/dev.ps1` on its own: no arguments brings the server up, `-Down` stops it.
 It needs the spacetime CLI and the Emscripten SDK (`-Emsdk`, else `EMSDK`,
-else `~\emsdk`). Anonymous logins are turned on with `admin_set_config` as the
+else `~\emsdk`). Anonymous logins and god commands (`allow_god`, for the god menu) are turned on with `admin_set_config` as the
 publisher, keeping the issuer and client id from `assets/play/online.json` (so
 browser sign-in works locally too) and the database's link secret (a random
 one for a new database).

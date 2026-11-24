@@ -8,6 +8,7 @@
 #include "game/ball_kind.h"
 #include "game/place_definition.h"
 #include "game/effects.h"
+#include "game/flight_cursor.h"
 #include "game/golfer.h"
 #include "game/golf_cart.h"
 #include "game/loadout.h"
@@ -107,6 +108,7 @@ enum class net_command_type {
     leave_cart,
     right_cart,
     set_flag,
+    god_strike,
     place_bag,
     take_club,
     set_golfer,
@@ -134,6 +136,7 @@ inline constexpr const char* reducer_board_cart = "board_cart";
 inline constexpr const char* reducer_leave_cart = "leave_cart";
 inline constexpr const char* reducer_right_cart = "right_cart";
 inline constexpr const char* reducer_set_flag = "set_flag";
+inline constexpr const char* reducer_god_strike = "god_strike";
 inline constexpr const char* reducer_place_bag = "place_bag";
 inline constexpr const char* reducer_take_club = "take_club";
 inline constexpr const char* reducer_set_golfer = "set_golfer";
@@ -163,6 +166,7 @@ struct net_command {
     // on foot from `start`), and where they leave me (`motion`).
     std::vector<move_run> runs;
     std::uint64_t first_step = 0;
+    std::int64_t first_time_ms = 0;  // the shared-clock time of the first step (game/step_timeline.h)
     glm::vec3 start{0.0f};
     std::uint64_t last_step = 0;  // local only: my last fixed step at this motion
     glm::vec3 placed{0.0f};       // local only: predicted_motion::placed
@@ -173,6 +177,7 @@ struct net_command {
     std::vector<int> flags_out;  // take_shot: the holes whose flag I have out
     std::size_t hole_index = 0;  // tee_up, set_flag
     bool flag_out = false;       // set_flag
+    bool knock_out = false;      // god_strike: knock me out, not daze me
     bag_place bag;               // place_bag: where to
     std::string club_id;         // take_club
     golfer_row golfer;           // set_golfer
@@ -204,7 +209,7 @@ enum class net_status {
 // only on a server with the same, else asks for an update
 // (net_failure_outdated_game). Bump it with every change to the module's
 // tables, views or reducers; the server_protocol view itself never changes.
-inline constexpr std::uint32_t protocol_version = 31;
+inline constexpr std::uint32_t protocol_version = 38;
 inline constexpr const char* online_hub_course = "practice_ground";
 
 // The failure ids the bridge and the client give (src/net/stdb_bridge.h,
@@ -223,6 +228,9 @@ inline constexpr const char* net_failure_subscription_failed = "subscription_fai
 inline constexpr const char* net_failure_request_failed = "request_failed";
 inline constexpr const char* net_failure_outdated_game = "outdated_game";
 inline constexpr const char* net_failure_content_mismatch = "content_mismatch";
+// The server knocked me out (a ball or lightning): it has ended my presence and
+// my session, and the game returns to the menu with a message.
+inline constexpr const char* net_failure_knocked_out = "knocked_out";
 
 // A reducer the server refused, with its server_errors.h id.
 struct reducer_failure {
@@ -343,6 +351,17 @@ struct room_shot {
     bool holed = false;
 };
 
+// A ball in flight met a golfer or a cart (a ball_contact_event row): the
+// shot it belongs to and the contact, which every client replays it with
+// (replay_contacts) in `index` order.
+struct room_contact {
+    std::uint64_t account_id = 0;  // the shooter
+    int hole = 0;
+    int stroke = 0;
+    int index = 0;
+    flight_contact contact;
+};
+
 // A player's bag in my room and the club in their hand (a player_bag row).
 struct room_bag {
     bag_place place;
@@ -378,6 +397,13 @@ inline std::optional<cart_condition> cart_condition_from_number(const std::uint8
     }
     return static_cast<cart_condition>(number);
 }
+
+// Lightning struck a golfer in my room (a lightning_strike_event row): where
+// the bolt came down, for the sky to draw. The outcome is in the rows it made.
+struct room_strike {
+    std::uint64_t account_id = 0;
+    glm::vec3 position{0.0f};
+};
 
 // Another player's use of an item the server accepted (an item_use_event row).
 struct room_item_use {
@@ -436,6 +462,9 @@ struct online_view {
     std::map<std::uint64_t, spare_ball> spare_balls;
     std::map<std::uint64_t, int> group_sizes;
     std::map<std::uint64_t, room_cart> carts;  // by owner
+    // The bodies lying in my room by row id (body rows): knocked-out golfers,
+    // whoever they are, until they expire.
+    std::map<std::uint64_t, fallen_body> bodies;
     std::map<std::uint64_t, loadout> loadouts;  // by account, as their player_loadout rows have it
     std::map<std::uint64_t, room_bag> bags;     // by account
     std::optional<room_ride> ride;              // riding in another's cart: its driver's ride_motion to me
@@ -443,7 +472,9 @@ struct online_view {
     // Shots, others' item uses and refused gameplay reducers that arrived
     // and the game has not taken yet, oldest first.
     std::vector<room_shot> shots;
+    std::vector<room_contact> contacts;
     std::vector<room_item_use> item_uses;
+    std::vector<room_strike> strikes;
     std::vector<reducer_failure> refusals;
     // The server's clock now, as near as this client can tell (from its own
     // avatar_motion rows); 0 until known.

@@ -482,7 +482,7 @@ TEST_CASE("movement XP is paid for at most the hour's meters") {
 
 TEST_CASE("paced and crouched walking runs replay on the server with item-modified speed") {
     game_state state = online_walker();
-    state.online.effects.push_back(active_effect{"test", item_effect{effect_target_walk_speed,
+    state.online.effects.push_back(active_effect{item_source("test"), item_effect{effect_target_walk_speed,
         effect_bucket::increased, 0.5f, effect_duration::equipped}, 0, effect_never_ends});
     const mover_state joined = joined_at(state.player.position, state.tuning);
     for (int frame = 0; frame < 90; ++frame) {

@@ -137,6 +137,7 @@ std::optional<float> solid_hit(const solid& thing, const glm::vec3& eye, const g
     case solid_kind::path:
     case solid_kind::cart:
     case solid_kind::person:
+    case solid_kind::body:
     case solid_kind::ball:
         break;
     }

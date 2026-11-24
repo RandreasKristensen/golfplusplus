@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "core/god_menu.h"
+#include "game/knockout.h"
 #include "game/mode_dispatch.h"
 #include "test_support.h"
 
@@ -39,7 +40,7 @@ TEST_CASE("the god menu opens only when enabled, and its rows wrap") {
     REQUIRE(menu.open);
     god_menu_keys up;
     up.up = true;
-    CHECK(update_god_menu(menu, sky_controls{}, up, breezy(), 12.0f).menu.row == god_menu_row::profiler);
+    CHECK(update_god_menu(menu, sky_controls{}, up, breezy(), 12.0f).menu.row == god_menu_row::strike);
 }
 
 TEST_CASE("changing a live row starts from the live value, and backspace lets it run live again") {
@@ -212,3 +213,50 @@ TEST_CASE("a solid's outline: a box its twelve edges, an upright cylinder its tw
 }
 
 
+
+namespace {
+// The strike row selected on an open menu, Enter pressed.
+void press_strike(god_menu_state& menu, game_state& state) {
+    god_menu_keys enter;
+    enter.strike = true;
+    sky_controls sky;
+    run_god_menu(menu, sky, state, enter);
+}
+}
+
+TEST_CASE("the strike row picks dazed or knocked out with the arrows and strikes me on Enter, offline") {
+    game_state dazed = started_hole();
+    dazed.local_unix_ms = 1'800'000'000'000;
+    god_menu_state menu;
+    menu.enabled = true;
+    menu.open = true;
+    menu.row = god_menu_row::strike;
+    press_strike(menu, dazed);
+    REQUIRE(dazed.strike_points.size() == 1U);
+    CHECK(dazed.strike_points.front() == dazed.player.position);
+    CHECK(!dazed.knocked_out);
+    CHECK(event_started_at(running_effects(dazed.effects, shot_unix_ms(dazed)), "dazed", shot_unix_ms(dazed)).has_value());
+
+    menu = update_god_menu(menu, sky_controls{}, pressed_right(), breezy(), 12.0f).menu;
+    CHECK(menu.strike_knocks_out);
+    game_state out = started_hole();
+    out.local_unix_ms = 1'800'000'000'000;
+    press_strike(menu, out);
+    CHECK(out.knocked_out);
+    CHECK(out.save_requested);
+    REQUIRE(out.save.bodies.size() == 1U);
+    CHECK(out.strike_points.size() == 1U);
+}
+
+TEST_CASE("Enter strikes only on the strike row of an open menu") {
+    game_state state = started_hole();
+    god_menu_state menu;
+    menu.enabled = true;
+    menu.open = true;
+    press_strike(menu, state);  // on the time row
+    menu.row = god_menu_row::strike;
+    menu.open = false;
+    press_strike(menu, state);
+    CHECK(state.strike_points.empty());
+    CHECK(!without_god_menu_keys(input_state{}).enter.pressed);
+}

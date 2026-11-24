@@ -94,5 +94,26 @@
     "fist_radius_meters": 0.065,
     "arm_radius_meters": 0.045,
     "thumb_share": 0.6
+  },
+  "ball_hits": {
+    "head_band_share": 0.12,
+    "legs_band_share": 0.5,
+    "min_speed_mps": 5.0,
+    "putt_speed_mps": 3.0,
+    "drive_speed_mps": 60.0,
+    "head_knockout_max": 0.3333
+  },
+  "knockout": {
+    "body_minutes": 60.0,
+    "body_half_width_meters": 0.25,
+    "body_height_meters": 0.25
+  },
+  "lightning": {
+    "check_seconds": 10.0,
+    "open_strike_hours": 24.0,
+    "building_factor": 0.02,
+    "tree_factor": 1.5,
+    "address_factor": 2.0,
+    "knockout_share": 0.1
   }
 }

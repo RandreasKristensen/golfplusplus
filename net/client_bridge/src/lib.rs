@@ -326,7 +326,7 @@ pub unsafe extern "C" fn stdb_update_motion(client: *mut StdbClient, expected_ro
     };
     c.call("update_motion", |conn, done| {
         conn.reducers.update_motion_then(expected_room, m.mode, m.x, m.y, m.z, m.yaw, m.speed, m.turn_rate, m.client_time, s.first_step,
-                                         s.start_x, s.start_y, s.start_z, runs, m.setup.aim, m.setup.face_open,
+                                         s.start_x, s.start_y, s.start_z, runs, s.first_time_ms, m.setup.aim, m.setup.face_open,
                                          m.setup.ball_position, m.setup.backswing, m.crouched, done)
     })
 }
@@ -358,6 +358,15 @@ pub unsafe extern "C" fn stdb_take_shot(client: *mut StdbClient, expected_room: 
         conn.reducers.take_shot_then(expected_room, s.stroke, s.aim_angle, s.face_open, s.ball_position, s.backswing, s.strike_timing,
                                      club, s.shot_at, flags_out, done)
     });
+}
+
+/// # Safety
+/// See `client`.
+#[no_mangle]
+pub unsafe extern "C" fn stdb_god_strike(client: *mut StdbClient, expected_room: u64, knock_out: bool) {
+    if let Some(c) = self::client(client) {
+        c.call("god_strike", |conn, done| conn.reducers.god_strike_then(expected_room, knock_out, done));
+    }
 }
 
 /// # Safety

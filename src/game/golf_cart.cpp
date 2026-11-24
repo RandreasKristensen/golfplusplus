@@ -1,6 +1,7 @@
 #include "game/golf_cart.h"
 
 #include "game/body_contact.h"
+#include "game/contact_play.h"
 #include "game/game_state.h"
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
@@ -162,6 +163,7 @@ void drive(game_state& state, const game_input& input, const float dt, frame_pro
         }
         const cart_motion before_step = cart.motion;
         step_predicted_cart(state, controls, spec, grip_scale, others, profile);
+        note_my_path(state, state.motion_sync.last_step_time_ms);
         if (cart.motion.condition != cart_condition::upright) {
             overturned(state, before_step);
         }

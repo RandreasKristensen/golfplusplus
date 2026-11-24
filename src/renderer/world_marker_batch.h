@@ -76,6 +76,7 @@ inline constexpr int world_marker_disc_segments = 18;
 
 struct render_remote_avatar;
 struct render_remote_ball;
+struct render_lying_body;
 
 // The parts build_world_marker_batch lays out one after the other, each in
 // runs of its own, so a view draws the parts it shows from the one upload:
@@ -252,6 +253,8 @@ struct world_marker_scene {
     // Other players and their balls.
     const std::vector<render_remote_avatar>* remote_avatars = nullptr;
     const std::vector<render_remote_ball>* remote_balls = nullptr;
+    // Fallen golfers' bodies (lying_body.h), drawn with the avatars.
+    const std::vector<render_lying_body>* lying_bodies = nullptr;
     float avatar_eye_height = 0.0f;
 };
 

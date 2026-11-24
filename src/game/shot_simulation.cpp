@@ -164,6 +164,7 @@ shot_event_kind event_of(const solid_kind kind) {
         return shot_event_kind::tree_hit;
     case solid_kind::board:
     case solid_kind::cart:
+    case solid_kind::body:  // a thud, never someone hit (person_hit)
         return shot_event_kind::board_hit;
     case solid_kind::flagstick:
         return shot_event_kind::flag_hit;
@@ -296,90 +297,18 @@ shot_step step_shot(const ball_state& ball,
     return step;
 }
 
-shot_result simulate_ball(const ball_state& launched, const shot_course& course, const game_tuning& tuning) {
-    shot_result result;
-    ball_state ball = launched;
-    terrain_sample ground = sample_area(course.area, ball.position);
-    result.trajectory.push_back(ball.position);
-
-    const int linger_steps = static_cast<int>(std::ceil(std::max(0.0f, tuning.ball.water_linger_seconds) / shot_step_seconds));
-    int on_pond_floor = -1;  // steps since a lost ball reached the floor
-    int steps = 0;
-    bool in_leaves = false;
-    std::optional<shot_event_kind> touching;
-    std::optional<std::size_t> touching_cup;
-    // Where the ball was as it first came over each cup it went into.
-    std::vector<glm::vec3> came_in(course.area.cups.size(), glm::vec3(0.0f));
-    std::optional<std::size_t> resting_cup;
-    const bool from_green = ground.material == terrain_material::green;
-    bool hit_ball_on_green = false;
-    while (steps < shot_max_steps) {
-        const ball_state before = ball;
-        const shot_step step = step_shot(ball, ground, course, tuning, shot_step_seconds, steps);
-        ++steps;
-        ball = step.ball;
-        ground = step.ground;
-
-        const float time = static_cast<float>(steps) * shot_step_seconds;
-        if (step.landed) {
-            result.events.push_back(shot_event{time, shot_event_kind::land, ground.material});
-        }
-        if (step.hit && step.hit != touching) {
-            result.events.push_back(shot_event{time, *step.hit});
-        }
-        if (from_green && step.hit == shot_event_kind::ball_hit && step.hit_dynamic) {
-            const solid& other = course.dynamic[*step.hit_dynamic];
-            hit_ball_on_green = hit_ball_on_green || sample_area(course.area, other.base).material == terrain_material::green;
-        }
-        touching = step.hit;
-        if (step.through_leaves && !in_leaves) {
-            result.events.push_back(shot_event{time, shot_event_kind::leaves});
-        }
-        in_leaves = step.through_leaves;
-        if (step.cup && step.cup != touching_cup) {
-            result.events.push_back(shot_event{time, shot_event_kind::cup_rattle});
-            came_in[*step.cup] = before.position;
-        }
-        touching_cup = step.cup;
-        if (steps % shot_steps_per_trajectory_point == 0) {
-            result.trajectory.push_back(ball.position);
-        }
-        if (ball_in_water(ball, ground) && ball.position.y + ball.radius < ground.water_level) {
-            result.lost = true;
-        }
-        if (result.lost) {
-            on_pond_floor = on_pond_floor >= 0 || ball_is_grounded(ball, ground) ? on_pond_floor + 1 : -1;
-            if (on_pond_floor >= linger_steps) {
-                break;
-            }
-            continue;
-        }
-        if (step.plugged) {
-            break;
-        }
-        if (step.resting && glm::length(ball.velocity) <= tuning.ball.stop_speed) {
-            if (step.cup && in_cup(ball, course.area.cups[*step.cup])) {
-                resting_cup = step.cup;
-            }
-            break;
-        }
+std::optional<shot_launch> launch_shot(const shot_setup& setup, const shot_course& course, const game_tuning& tuning,
+                                       const std::vector<club_definition>& clubs, const swing_errors& errors) {
+    const club_definition* club = find_club(clubs, setup.club_id);
+    if (club == nullptr) {
+        return std::nullopt;
     }
-    if (steps % shot_steps_per_trajectory_point != 0) {
-        result.trajectory.push_back(ball.position);
-    }
-
-    result.duration = static_cast<float>(steps) * shot_step_seconds;
-    result.holed = resting_cup && (course.practice || *resting_cup == course.hole.index);
-    result.rest_position = result.lost ? launched.position : ball.position;
-    result.penalty_strokes = (result.lost ? 1 : 0) + (hit_ball_on_green ? 2 : 0);
-    if (resting_cup && !result.holed) {
-        // Lifted out of another green's cup and dropped beside it.
-        const cup& other = course.area.cups[*resting_cup];
-        const glm::vec3 side = safe_normalize(horizontal(came_in[*resting_cup] - other.centre), glm::vec3(1.0f, 0.0f, 0.0f));
-        const glm::vec3 drop = other.centre + side * (tuning.cup.wrong_cup_drop_distance_meters / tuning.scale.meters_per_world_unit);
-        result.rest_position = resting_ball_position(course.area, drop, ball.radius);
-    }
-    return result;
+    const shot_setup held = clamped_setup(setup, setup_limits_for(*club, tuning.setup));
+    const ball_on_lie on =
+        ball_on_lie_at(course.area, held.ball_start, held.aim_angle, held.hand, course.weather.wetness, tuning);
+    const strike_outcome strike = club_strike(*club, held, on, tuning, errors);
+    return shot_launch{launched_ball(held.ball_start, tuning.scale.ball_physics_radius_meters, strike.launch),
+                       strike.centredness};
 }
 
 shot_result simulate_shot(const shot_setup& setup,
@@ -387,28 +316,19 @@ shot_result simulate_shot(const shot_setup& setup,
                           const game_tuning& tuning,
                           const std::vector<club_definition>& clubs,
                           const swing_errors& errors) {
-    const club_definition* club = find_club(clubs, setup.club_id);
-    if (club == nullptr) {
+    const std::optional<shot_launch> launch = launch_shot(setup, course, tuning, clubs, errors);
+    if (!launch) {
         shot_result still;
         still.rest_position = setup.ball_start;
         still.trajectory.push_back(setup.ball_start);
         return still;
     }
-    const shot_setup held = clamped_setup(setup, setup_limits_for(*club, tuning.setup));
-    const ball_on_lie on =
-        ball_on_lie_at(course.area, held.ball_start, held.aim_angle, held.hand, course.weather.wetness, tuning);
-    const strike_outcome strike = club_strike(*club, held, on, tuning, errors);
-    shot_result result =
-        simulate_ball(launched_ball(held.ball_start, tuning.scale.ball_physics_radius_meters, strike.launch), course, tuning);
-    result.strike_centredness = strike.centredness;
+    shot_result result = simulate_ball(launch->ball, course, tuning);
+    result.strike_centredness = launch->strike_centredness;
     return result;
 }
 
-shot_result simulate_struck_shot(const shot_record& record,
-                                 const golfer_profile& golfer,
-                                 const shot_course& course,
-                                 const game_tuning& tuning,
-                                 const std::vector<club_definition>& clubs) {
+shot_course struck_course(const shot_record& record, const shot_course& course, const game_tuning& tuning) {
     shot_course seeded = course;
     seeded.seed = record.seed;
     const std::vector<solid> moving = snapshot_solids(record.snapshot, tuning);
@@ -418,13 +338,31 @@ shot_result simulate_struck_shot(const shot_record& record,
     if (has_shooter) {
         seeded.shooter = seeded.dynamic.size() - 1;
     }
+    return seeded;
+}
+
+swing_errors struck_swing_errors(const shot_record& record, const golfer_profile& golfer, const shot_course& course,
+                                 const game_tuning& tuning, const std::vector<club_definition>& clubs) {
     const club_definition* club = find_club(clubs, record.setup.club_id);
     if (club == nullptr) {
-        return simulate_shot(record.setup, seeded, tuning, clubs);
+        return {};
     }
-    const swing_errors errors =
-        struck_errors(record.setup, record.seed, *club, lie_at(course.area, record.setup.ball_start), golfer, tuning);
-    return simulate_shot(record.setup, seeded, tuning, clubs, errors);
+    return struck_errors(record.setup, record.seed, *club, lie_at(course.area, record.setup.ball_start), golfer, tuning);
+}
+
+shot_result simulate_struck_shot(const shot_record& record,
+                                 const golfer_profile& golfer,
+                                 const shot_course& course,
+                                 const game_tuning& tuning,
+                                 const std::vector<club_definition>& clubs) {
+    const shot_course seeded = struck_course(record, course, tuning);
+    const std::size_t first_moving = course.dynamic.size();
+    shot_result result = simulate_shot(record.setup, seeded, tuning, clubs,
+                                       struck_swing_errors(record, golfer, course, tuning, clubs));
+    for (person_hit& hit : result.person_hits) {
+        hit.entry = snapshot_entry_of_solid(record.snapshot, hit.entry - first_moving).value_or(0);
+    }
+    return result;
 }
 
 glm::vec3 shot_position_at(const shot_result& result, const float time) {

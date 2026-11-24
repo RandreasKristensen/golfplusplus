@@ -8,6 +8,7 @@
 
 #include "game/course_definition.h"
 #include "game/course_world_definition.h"
+#include "game/effect_catalog.h"
 #include "game/hole_data.h"
 #include "game/item_catalog.h"
 #include "game/json_util.h"
@@ -66,6 +67,9 @@ std::optional<std::uint64_t> load_simulation_content_hash(const std::string& ass
 
 // Every item under `asset_root`'s items_path (parse_item_catalog).
 item_catalog_load_result load_items(const std::string& asset_root);
+
+// Every event effect under `asset_root`'s effects_path (parse_effect_catalog).
+effect_catalog_load_result load_effects(const std::string& asset_root);
 
 std::optional<hole_data> load_hole_from_file(const std::string& path);
 

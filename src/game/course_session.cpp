@@ -25,7 +25,7 @@ void end_ball_play(game_state& state) {
     state.shot.reset();
     state.mode = game_mode::walking;
     state.address = address_state{};
-    state.flight_path_points.clear();
+    state.my_flight_line = flight_line{};
     state.online_hole = online_hole_state{};
     state.ball_correction.reset();
     state.give_up_prompt.reset();

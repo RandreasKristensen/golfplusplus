@@ -1,6 +1,8 @@
 #include "doctest.h"
 
 #include "core/render_frame.h"
+#include "game/effects.h"
+#include "game/item_catalog.h"
 #include "game/shot_number.h"
 #include "game/shot_simulation.h"
 #include "game/text_assets.h"
@@ -15,6 +17,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/trigonometric.hpp>
@@ -79,6 +82,24 @@ TEST_CASE("a shot's number is how far it carries as struck in still air at sea l
     CHECK(near(number_of(setup, 1, perfect_golfer(), ball_lie::tee).meters, carry, 0.01f));
     // The dice move it: another seed of a real swing carries otherwise.
     CHECK(number_of(setup, 1, golfer_profile{}, ball_lie::tee).meters != number_of(setup, 2, golfer_profile{}, ball_lie::tee).meters);
+}
+
+TEST_CASE("a beer's club speed carries a full shot about 5% further while it lasts") {
+    const game_content& content = shipped_content();
+    const std::vector<active_effect> drunk = effects_after_use({}, *content.items.find("beer"), 0);
+    golfer_profile drinker = perfect_golfer();
+    drinker.club_speed_scale = effective_value(1.0f, effect_target_shot_club_speed, drunk, 10000);
+    CHECK(near(drinker.club_speed_scale, 1.05f, 1.0e-6f));
+    for (const std::string label : {"DR", "7I", "PW"}) {
+        const club_definition& club = club_labelled(label);
+        const ball_lie lie = label == "DR" ? ball_lie::tee : ball_lie::fairway;
+        const shot_setup setup = stock_swing(club, content.tuning, 1.0f, lie);
+        const float further = number_of(setup, 1, drinker, lie).meters / number_of(setup, 1, perfect_golfer(), lie).meters;
+        CHECK(further > 1.03f);
+        CHECK(further < 1.08f);
+    }
+    // Twenty seconds after the drink it is gone.
+    CHECK(effective_value(1.0f, effect_target_shot_club_speed, drunk, 20000) == 1.0f);
 }
 
 TEST_CASE("a putt's number is how far it rolls on a level green, longer the longer the stroke") {

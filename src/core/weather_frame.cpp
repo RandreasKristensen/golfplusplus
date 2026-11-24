@@ -157,7 +157,7 @@ render_weather make_render_weather(const weather_presentation& state, const weat
     out.flag_flap = wind.flag_flap * out.flag_lift;
     out.surface_wind = glm::vec3(weather.wind.x, 0.0f, weather.wind.z);
     out.surface_rain = clamp01(shown.rain);
-    out.lightning = make_render_lightning(state.lightning, palette.lightning);
+    out.lightning = make_render_lightning(state.lightning, palette.lightning, camera);
     return out;
 }
 

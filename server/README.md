@@ -53,11 +53,11 @@ The official server:
 ```
 spacetime login
 spacetime publish golfpp --server maincloud --bin-path server/golfpp_module/build/lib.wasm
-spacetime call golfpp admin_set_config <issuer> <client id> false <secret> --server maincloud
+spacetime call golfpp admin_set_config <issuer> <client id> false <secret> false --server maincloud
 ```
 
 with SpacetimeAuth's issuer, the game's client id and a link secret of its own
-(each a quoted string, written as in `hosting.md`, step 3),
+(the last `false` is `allow_god`: never `true` here; each a quoted string, written as in `hosting.md`, step 3),
 never the local one. Republishing keeps its settings and progress: the secret
 is set once per database, not per release. Usage and energy are on the
 database's Maincloud dashboard (`docs/performance.md`).

@@ -6,5 +6,7 @@
     "sound": "emote_beer"
   },
   "stacking": "refresh",
-  "effects": []
+  "effects": [
+    { "target": "shot.club_speed", "bucket": "increased", "value": 0.05, "duration": { "seconds": 20 } }
+  ]
 }

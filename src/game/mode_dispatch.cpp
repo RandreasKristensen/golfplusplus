@@ -18,13 +18,6 @@
 
 namespace {
 void queue_xp_drop(game_state& state, const std::string& skill_id, const std::int64_t xp) {
-    for (xp_drop& drop : state.xp_drops) {
-        if (drop.skill_id == skill_id) {
-            drop.xp += xp;
-            drop.age = 0.0f;
-            return;
-        }
-    }
     state.xp_drops.push_back(xp_drop{skill_id, xp, 0.0f});
 }
 
@@ -87,6 +80,8 @@ golfer_profile my_golfer(const game_state& state) {
         golfer.natural = natural_shape_from_index(state.online.golfer->natural).value_or(natural_shape::neutral);
     }
     golfer.spread_scale = effective_value(1.0f, effect_target_shot_spread, current_effects(state), shot_unix_ms(state));
+    golfer.club_speed_scale =
+        effective_value(1.0f, effect_target_shot_club_speed, current_effects(state), shot_unix_ms(state));
     return golfer;
 }
 
@@ -164,6 +159,13 @@ void record_flag(game_state& state, const std::size_t hole, const bool out) {
     command.type = net_command_type::set_flag;
     command.hole_index = hole;
     command.flag_out = out;
+    push_command(state, std::move(command));
+}
+
+void record_god_strike(game_state& state, const bool knock_out) {
+    net_command command;
+    command.type = net_command_type::god_strike;
+    command.knock_out = knock_out;
     push_command(state, std::move(command));
 }
 

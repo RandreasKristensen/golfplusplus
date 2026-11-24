@@ -14,8 +14,11 @@
 // extrapolation drifts too far from where the player really is or which way
 // they face (the mouse turns without a turn rate), and before any action, so
 // the server has played my steps first. Never more often than
-// net.motion_min_interval_seconds otherwise.
+// net.motion_min_interval_seconds otherwise, but near a ball in flight
+// (net.contact_send_meters) steps go every net.contact_send_interval_seconds,
+// so the server finds a contact from them soon (game/contact_prediction.h).
 
+#include "game/contact_prediction.h"
 #include "game/game_tuning.h"
 #include "game/net_types.h"
 #include "game/golf_cart.h"
@@ -82,6 +85,12 @@ struct motion_sync_state {
     std::vector<move_run> unsent;
     std::uint64_t unsent_first = 0;
     glm::vec3 unsent_start{0.0f};
+    // The shared-clock time of the first unsent step (game/step_timeline.h),
+    // and of the last step recorded with its number: a batch never starts
+    // before the steps between them, whatever the clock estimate does.
+    std::int64_t unsent_first_time_ms = 0;
+    std::int64_t last_step_time_ms = 0;
+    std::uint64_t last_step_number = 0;
     // On foot: my motion as my last step left it.
     std::optional<net_motion> stepped;
     std::deque<predicted_motion> history;
@@ -90,8 +99,14 @@ struct motion_sync_state {
     std::uint64_t breaches = 0;
     std::deque<sync_breach> reports;
     float ride_since = 0.0f;  // since my last ride motion (game/ride_sync.h)
+    // My own steps as the server will have them, for the contacts I predict
+    // (game/contact_play.h), and whether a ball in flight passes near me.
+    my_path_log path;
+    bool near_flight = false;
 };
 
+// Near a ball in flight (`sync.near_flight`) the least interval is
+// net.contact_send_interval_seconds and steps not yet sent are due at it.
 bool should_send_motion(const motion_sync_state& sync, const net_motion& now, const net_tuning& tuning);
 
 // The local player's motion this frame.

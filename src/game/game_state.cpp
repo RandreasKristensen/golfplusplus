@@ -1,8 +1,10 @@
 #include "game/game_state.h"
+#include "game/lightning_play.h"
 
 #include "game/address_play.h"
 #include "game/bag_handling.h"
 
+#include "game/contact_play.h"
 #include "game/course_session.h"
 #include "game/golf_bag.h"
 #include "game/green_read.h"
@@ -35,19 +37,6 @@ namespace {
 // Longer frames are played as this long, so a hitch does not jump the player
 // or a playing shot far ahead.
 constexpr float max_update_seconds = 0.05f;
-
-void append_flight_path_point(game_state& state, const glm::vec3& position) {
-    const flight_path_tuning& tuning = state.tuning.flight_path;
-    std::vector<glm::vec3>& points = state.flight_path_points;
-    if (!points.empty() && glm::length(position - points.back()) < tuning.min_point_spacing) {
-        return;
-    }
-    points.push_back(position);
-    const std::size_t max_points = static_cast<std::size_t>(std::max(2, tuning.max_points));
-    if (points.size() > max_points) {
-        points.erase(points.begin(), points.begin() + static_cast<std::ptrdiff_t>(points.size() - max_points));
-    }
-}
 
 // Using what I smoke or drink: a use plays for its item's seconds and does
 // not start again meanwhile, online or off (the server refuses it too).
@@ -89,7 +78,6 @@ void stop_following(game_state& state, const glm::vec3& watched) {
     if (horizontal_distance(state.player.position, watched) > 0.0001f) {
         state.player.yaw = yaw_towards(state.player.position, watched);
     }
-    state.flight_path_points.clear();
 }
 
 // Anything I do to move or act takes over from the shot camera, as it
@@ -105,19 +93,27 @@ bool takes_over_from_follow(const game_input& input) {
 // once it has finished playing.
 void update_shot_playback(game_state& state, const float dt) {
     if (!state.shot) {
+        flight_line& line = state.my_flight_line;
+        if (!line.points.empty()) {
+            line.rested_seconds += dt;
+            if (flight_line_faded(line, state.tuning.flight_path)) {
+                line = flight_line{};
+            }
+        }
         return;
     }
     shot_playback& shot = *state.shot;
     shot.elapsed += dt;
+    shot.blend.elapsed += dt;
     const float duration = shot.result.duration;
     const float progress = duration > 0.0f ? std::min(1.0f, shot.elapsed / duration) : 1.0f;
     my_ball& ball = *state.ball;
-    ball.position = shot_position_at(shot.result, shot.elapsed) + shot.correction * progress;
+    ball.position = shot_position_at(shot.result, shot.elapsed) + shot.correction * progress +
+        blend_offset(shot.blend);
     shot.next_event = push_shot_events(state, shot.result, shot.correction, shot.next_event, shot.elapsed);
+    // The flight line is the shot's, drawn whichever way I look.
+    extend_flight_line(state.my_flight_line, ball.position, state.tuning.flight_path);
     const bool following = state.mode == game_mode::following_shot;
-    if (following) {
-        append_flight_path_point(state, ball.position);
-    }
     if (following && shot.elapsed >= shot.follow_seconds && shot.elapsed < shot.result.duration) {
         // Rolling out: I walk again, looking at my ball, which plays on.
         stop_following(state, ball.position);
@@ -222,6 +218,7 @@ game_state make_game_state(const game_content& content, const save_data& save) {
     state.rewards = content.rewards;
     state.skills = content.skills;
     state.items = content.items;
+    state.event_effects = content.effects;
     state.default_loadout = content.default_loadout;
     state.save = save;
     state.save.equipped = fitted_loadout(save.equipped, content.default_loadout, content.items);
@@ -243,6 +240,7 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
     update_shot_number(state, dt);
     update_pace_count(state, dt);
     state.weather = course_weather_at(state, shot_unix_ms(state));
+    update_offline_lightning(state);
     state.player.speed = 0.0f;
     state.player.turn_rate = 0.0f;
     state.player.move_angle = 0.0f;
@@ -266,6 +264,7 @@ void update_game(game_state& state, const game_input& input, const float raw_dt,
     update_online_play(state, dt);
     update_boarding(state);
     update_remote_players(state, dt);
+    update_contact_prediction(state);
     // Boarding the bus this frame: the next motion would name the room I have left.
     if (!state.hub_flow.ball_request && state.hub_flow.travel_course.empty()) { sync_motion(state, dt); }
 }
@@ -339,11 +338,14 @@ void play_shot(game_state& state, shot_result result) {
     }
     state.shot_start_position = ball.position;
     state.mode = game_mode::following_shot;
-    state.flight_path_points.clear();
-    append_flight_path_point(state, ball.position);
+    state.my_flight_line = flight_line{};
+    extend_flight_line(state.my_flight_line, ball.position, state.tuning.flight_path);
     const float follow_seconds =
         shot_rolled_at(result, state.tuning.camera.follow_roll_meters / state.tuning.scale.meters_per_world_unit);
-    state.shot = shot_playback{std::move(result), 0.0f, follow_seconds, 0};
+    shot_playback playing;
+    playing.result = std::move(result);
+    playing.follow_seconds = follow_seconds;
+    state.shot = std::move(playing);
 }
 
 bool interact_available(const game_state& state) {

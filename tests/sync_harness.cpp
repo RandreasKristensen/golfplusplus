@@ -83,7 +83,7 @@ void sync_harness::reduce(const net_command& command) {
             refuse_next_motion.clear();
             break;
         }
-        const move_request request{command.motion, command.first_step, command.start, command.runs};
+        const move_request request{command.motion, command.first_step, command.start, command.runs, command.first_time_ms};
         const move_outcome moved = play_move(mover, cart, me, request, static_cast<float>(now - accepted_at), world());
         error = moved.error;
         if (error.empty() && !moved.repeated) {
@@ -91,6 +91,7 @@ void sync_harness::reduce(const net_command& command) {
             avatar = moved.shown;
             if (moved.cart) { cart = *moved.cart; }
             accepted_at = now;
+            if (after_move) { after_move(moved); }
         }
         break;
     }
@@ -130,6 +131,7 @@ void sync_harness::reduce(const net_command& command) {
 move_world sync_harness::world() const {
     move_world moving{client.area, client.world.cart_roads, client.tuning};
     moving.walk_speed = client.tuning.player.walk_speed;
+    moving.now_ms = static_cast<std::int64_t>(now * 1000.0);
     moving.spec = my_cart_spec(client);
     moving.wetness = client.weather.wetness;
     moving.limits = movement_limits_for(client.tuning, moving.spec, {}, 0);

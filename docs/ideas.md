@@ -22,8 +22,11 @@
 - F1 and F2 menus authorization?
 - error messages only for error message - move loading screens to and fro courses, ball dropping, +x for water or hitting stuff to other places
 - does cart path affect the ball differently? It should
-- the hub needs one more run through - the teepads, the clubhouse.
+- the hub needs one more run through - the teepads, the clubhouse, remove the clocks
 - clean up ui? the date and shit on the screen, the club selection, the club display.
+- a couple effects for the cigarette and beer
+- achievements and titles
+
 
 ## **Todo Agent Setup rules**
 
@@ -45,6 +48,7 @@ I want an agent constantly looking at the todo/, and the open issues, then branc
 There are also some guidelines like the file-length, that I am unsure whether if healthy - are we just splitting files to split them? How do we design more amture guidelines like this for 
 We also need some new guidelines for testing - it keeps growing (which I guess is expected) but often hasn't tested what I would say is "expected behaviour" It often seems its testing the code is the code type of thing. How do we test behaviour instead? I am also using a bunch of time on actual in game testing, so more minimal testing might also be okay? I don't know, but it needs to be looked at.
 This should take precedent over basically every other readme!
+- dapping up should prompt someone whether they want it, and the animation should be better (open hand, velocity, sound, there are overlapping pipes for the arm)
 
 ## **Bugs**
 

@@ -12,7 +12,9 @@
 
 #include "game/game_tuning.h"
 #include "game/movement_step.h"
+#include "game/mover_path.h"
 #include "game/net_types.h"
+#include "game/step_timeline.h"
 #include "play_rules.h"
 
 #include <cstdint>
@@ -33,6 +35,7 @@ struct mover_state {
     glm::vec3 position{0.0f};  // on foot; sat, the seat
     vertical_body vertical;
     std::uint64_t step = 0;    // the last fixed step played or passed over
+    std::int64_t step_time_ms = 0;  // when it was, on the shared clock (step_timeline.h); 0 none yet
     // Seconds of movement left to spend: real time since, saved up to
     // server.max_motion_gap_seconds. A step spends its length; a claimed
     // move the time it takes at its mode's speed.
@@ -56,6 +59,9 @@ struct move_request {
     std::uint64_t first_step = 0;
     glm::vec3 start{0.0f};
     std::vector<move_run> runs;
+    // The shared-clock time of the first step (step_timeline.h); 0: none
+    // claimed, so the steps play but count as standing for contacts.
+    std::int64_t first_time_ms = 0;
 };
 
 // What the steps meet and what moves them: the room as its rows have it and
@@ -78,6 +84,7 @@ struct move_world {
     const club_definition* club = nullptr;
     // The cart whose passenger seat its row gives me: riding along, I sit in it.
     std::optional<cart_pose> ridden;
+    std::int64_t now_ms = 0;  // the server's clock, which a batch's times are held to
 };
 
 struct move_outcome {
@@ -89,6 +96,12 @@ struct move_outcome {
     float walked_meters = 0.0f;     // on foot, for movement XP
     float road_meters = 0.0f;       // at my wheel on a cart road
     bool overturned = false;        // my cart tipped or sank under me
+    // Where my feet and my cart were after each step played, on the shared
+    // clock, from where they were before when that is known: what contacts
+    // with a ball in flight are found from (flight_rules.h). A batch that is
+    // late or untimed is one place held, as standing.
+    std::vector<mover_sample> feet;
+    std::vector<mover_sample> cart_poses;
 };
 
 // Plays `request` for `account` from `mover`, `seconds` after the last
@@ -102,6 +115,8 @@ struct move_outcome {
 // cart's wheel; a cart going over puts me beside it. At address or in the
 // swing I stand to my own ball (beside it, else refused) as the sent setup,
 // inside my club's limits, puts me; riding along, in the seat of `ridden`.
+// The steps' times are placed after the last (step_timeline.h): a batch in the
+// server's future or overlapping steps already played is refused.
 move_outcome play_move(const mover_state& mover, const std::optional<room_cart>& cart, std::uint64_t account,
                        const move_request& request, float seconds, const move_world& world);
 

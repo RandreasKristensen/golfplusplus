@@ -10,6 +10,7 @@
 #include "movement_rules.h"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -33,6 +34,8 @@ struct sync_harness {
     std::string refuse_next_motion;
     std::uint32_t random = 37;
     std::vector<std::string> refusals;
+    // Called with each motion the server accepts and plays, as the reducer hands its steps to the flights.
+    std::function<void(const move_outcome&)> after_move;
 
     sync_harness();
     void tick(const game_input& input = {}, float dt = 0.02f);

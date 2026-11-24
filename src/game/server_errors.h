@@ -8,6 +8,7 @@ inline constexpr const char* error_server_unavailable = "server_unavailable";
 inline constexpr const char* error_owner_only = "owner_only";
 inline constexpr const char* error_internal_only = "internal_only";
 inline constexpr const char* error_invalid_config = "invalid_config";
+inline constexpr const char* error_god_disabled = "god_disabled";
 inline constexpr const char* error_linking_off = "linking_off";
 inline constexpr const char* error_login_rejected = "login_rejected";
 inline constexpr const char* error_not_signed_in = "not_signed_in";

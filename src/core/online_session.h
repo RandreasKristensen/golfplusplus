@@ -26,8 +26,8 @@ enum class online_round_event {
 
 struct online_round_status {
     online_round_event event = online_round_event::none;
-    // lost: a string table key saying why, or empty when the sign-in screen
-    // says it (the connection failed).
+    // lost: a string table key saying why (knocked out, room lost), or empty
+    // when the sign-in screen says it (the connection failed).
     std::string message_key;
 };
 
@@ -51,6 +51,9 @@ public:
     const std::vector<reducer_failure>& refusals() const { return refusals_; }
 
 private:
+    // The session ended because the server knocked me out (net_failure_knocked_out).
+    bool knocked_out() const;
+
     net_client net_;
     std::vector<reducer_failure> refusals_;
     bool rejoining_ = false;    // the connection dropped during the round

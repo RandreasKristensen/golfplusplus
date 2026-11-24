@@ -225,11 +225,15 @@ TEST_CASE("the game's net commands become reducer calls, once") {
     smoke.type = net_command_type::use_item;
     smoke.item_id = "cigarette";
     state.net_commands.push_back(smoke);
+    net_command strike;
+    strike.type = net_command_type::god_strike;
+    strike.knock_out = true;
+    state.net_commands.push_back(strike);
 
     client.update(state);
     const std::vector<fake_stdb_bridge::call>& calls = fake_bridge().calls;
     const std::vector<std::string> expected{"stdb_update_motion", "stdb_take_shot", "stdb_tee_up",
-                                            "stdb_claim_collectible", "stdb_use_item"};
+                                            "stdb_claim_collectible", "stdb_use_item", "stdb_god_strike"};
     REQUIRE(fake_bridge().call_names() == expected);
     CHECK(calls[0].motion.x == state.player.position.x);
     CHECK(calls[1].shot.stroke == 3);
@@ -240,10 +244,11 @@ TEST_CASE("the game's net commands become reducer calls, once") {
     CHECK(calls[2].flag);
     CHECK(calls[3].text == "lost_ball");
     CHECK(calls[4].text == "cigarette");
+    CHECK(calls[5].flag);
     CHECK(state.net_commands.empty());
 
     client.update(state);
-    CHECK(fake_bridge().calls.size() == 5U);
+    CHECK(fake_bridge().calls.size() == 6U);
 }
 
 TEST_CASE("commands made while not connected are dropped, not sent later") {
@@ -776,12 +781,12 @@ TEST_CASE("my room's rows become its players, balls, carts, loadouts, groups, sh
     queue_event(row_event(STDB_TABLE_GOLF_GROUP, STDB_ROW_INSERT, row));
     row = stdb_row{};
     const std::int32_t flags_out[] = {3};
-    const stdb_snapshot_entry snapshot[] = {stdb_snapshot_entry{1, 4.0f, 0.0f, 5.0f, 0.5f, false},
-                                            stdb_snapshot_entry{0, 1.0f, 2.0f, 3.5f, 0.0f, true}};
+    const stdb_snapshot_entry snapshot[] = {stdb_snapshot_entry{1, 4.0f, 0.0f, 5.0f, 0.5f, false, 0},
+                                            stdb_snapshot_entry{0, 1.0f, 2.0f, 3.5f, 0.0f, true, 43}};
     const std::string putting = "shape.putt";
     const stdb_skill_level levels[] = {stdb_skill_level{fake_text(putting), 12}};
     row.shot_event = stdb_shot_event{7, 43, 1, stdb_shot{2, 0.25f, 0.1f, -0.4f, 0.8f, -0.3f, fake_text(club), 3500, flags_out, 1},
-                                     1, 2, 0.5f, levels, 1, 99, snapshot, 2, 1.0f, 2.0f, 3.0f, 7.0f, 8.0f, 9.0f, false};
+                                     1, 2, 0.5f, 1.05f, levels, 1, 99, snapshot, 2, 1.0f, 2.0f, 3.0f, 7.0f, 8.0f, 9.0f, false};
     queue_event(row_event(STDB_TABLE_SHOT_EVENT, STDB_ROW_INSERT, row));
     row = stdb_row{};
     row.item_use_event = stdb_item_use_event{7, 42, fake_text(cigarette)};
@@ -839,8 +844,11 @@ TEST_CASE("my room's rows become its players, balls, carts, loadouts, groups, sh
     REQUIRE(shot.record.snapshot.size() == 2U);
     CHECK(shot.record.snapshot[0].kind == snapshot_kind::cart);
     CHECK(shot.record.snapshot[1].shooter);
+    CHECK(shot.record.snapshot[0].account == 0U);
+    CHECK(shot.record.snapshot[1].account == 43U);
     CHECK(shot.golfer.natural == natural_shape::fade);
     CHECK(shot.golfer.spread_scale == 0.5f);
+    CHECK(shot.golfer.club_speed_scale == 1.05f);
     CHECK(skill_level(shot.golfer, "shape.putt") == 12);
     CHECK(skill_level(shot.golfer, "shape.flop") == golfer_top_level);
     CHECK((shot.flags_out == std::vector<int>{3}));
@@ -872,7 +880,7 @@ TEST_CASE("my active effect rows are the effects the server runs on me; others' 
     const std::string item = "lucky_charm";
     const std::string target = "xp.all";
     stdb_row row{};
-    row.running_effect = stdb_running_effect{5, 42, fake_text(item), fake_text(target), 1, 0.5f, 1, 30.0f, 1000, 31000};
+    row.running_effect = stdb_running_effect{5, 42, 0, fake_text(item), fake_text(target), 1, 0.5f, 1, 30.0f, 1000, 31000};
     queue_event(row_event(STDB_TABLE_RUNNING_EFFECT, STDB_ROW_INSERT, row));
     row.running_effect.id = 6;
     row.running_effect.account_id = 43;
@@ -880,7 +888,7 @@ TEST_CASE("my active effect rows are the effects the server runs on me; others' 
     client.update(state);
     REQUIRE(state.online.effects.size() == 1U);
     const active_effect& effect = state.online.effects.front();
-    CHECK(effect.item == "lucky_charm");
+    CHECK(effect.source == item_source("lucky_charm"));
     CHECK(effect.effect.target == "xp.all");
     CHECK(effect.effect.bucket == effect_bucket::increased);
     CHECK(effect.effect.duration == effect_duration::seconds);
@@ -892,6 +900,18 @@ TEST_CASE("my active effect rows are the effects the server runs on me; others' 
     queue_event(row_event(STDB_TABLE_RUNNING_EFFECT, STDB_ROW_DELETE, row));
     client.update(state);
     CHECK(state.online.effects.empty());
+
+    // An event effect's row keeps its kind: the same id is not the item's.
+    const std::string event = "dazed";
+    row.running_effect = stdb_running_effect{7, 42, static_cast<uint8_t>(effect_source_kind::event), fake_text(event),
+                                             fake_text("player.walk_speed"), 1, -0.3f, 1, 20.0f, 2000, 22000};
+    queue_event(row_event(STDB_TABLE_RUNNING_EFFECT, STDB_ROW_INSERT, row));
+    client.update(state);
+    REQUIRE(state.online.effects.size() == 1U);
+    CHECK(state.online.effects.front().source == event_source("dazed"));
+    CHECK(!(state.online.effects.front().source == item_source("dazed")));
+    CHECK(near(state.online.effects.front().effect.value, -0.3f, 0.0001f));
+    CHECK(state.online.effects.front().ends_at_ms == 22000);
 }
 
 TEST_CASE("refused gameplay goes to the game, refused menu actions to the menus") {
@@ -1758,4 +1778,26 @@ TEST_CASE("playing a spare and lifting a ball cross the bridge with the ball's i
     }
     CHECK((names == std::vector<std::string>{"stdb_play_ball", "stdb_pick_up_ball", "stdb_pick_up_ball"}));
     CHECK((numbers == std::vector<std::int64_t>{17, 18, 0}));
+}
+
+TEST_CASE("a lightning strike row of my room is a strike for the sky, and another room's is not") {
+    game_state state = started_hole();
+    net_client client = connected_client(state, 42);
+    queue_event(member_row(42, 7, STDB_ROW_INSERT));
+    queue_event(applied(5));
+    client.update(state);
+    REQUIRE(state.online.room_ready);
+    stdb_row row{};
+    row.lightning_strike = stdb_lightning_strike{7, 43, 1.5f, 2.5f, -3.5f};
+    queue_event(row_event(STDB_TABLE_LIGHTNING_STRIKE_EVENT, STDB_ROW_INSERT, row));
+    row.lightning_strike = stdb_lightning_strike{8, 44, 9.0f, 9.0f, 9.0f};
+    queue_event(row_event(STDB_TABLE_LIGHTNING_STRIKE_EVENT, STDB_ROW_INSERT, row));
+    client.update(state);
+    REQUIRE(state.online.strikes.size() == 1U);
+    CHECK(state.online.strikes.front().account_id == 43U);
+    CHECK(near(state.online.strikes.front().position, glm::vec3(1.5f, 2.5f, -3.5f)));
+    // Leaving the room forgets strikes the game has not taken.
+    queue_event(member_row(42, 7, STDB_ROW_DELETE));
+    client.update(state);
+    CHECK(state.online.strikes.empty());
 }

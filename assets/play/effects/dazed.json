@@ -1,0 +1,10 @@
+{
+  "name": "effect.dazed.name",
+  "description": "effect.dazed.description",
+  "icon": "dazed",
+  "harmful": true,
+  "effects": [
+    { "target": "player.walk_speed", "bucket": "increased", "value": -0.3, "duration": { "seconds": 20 } }
+  ],
+  "screen": { "vignette": { "colour": [0.75, 0.04, 0.03], "seconds": 2.0 } }
+}

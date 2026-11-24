@@ -84,6 +84,10 @@ typedef enum stdb_table {
     STDB_TABLE_DAP = 27,
     STDB_TABLE_PRACTICE_BALL = 28,
     STDB_TABLE_DEPARTURE_BOARD = 29,
+    STDB_TABLE_BODY = 30,
+    STDB_TABLE_MY_KNOCKOUT_NOTICE = 31,
+    STDB_TABLE_BALL_CONTACT_EVENT = 32,
+    STDB_TABLE_LIGHTNING_STRIKE_EVENT = 33,
     STDB_TABLE_MY_TEE_BOOK_STATUS = 26
 } stdb_table;
 
@@ -200,6 +204,7 @@ typedef struct stdb_move_run {
 // on foot taken from start_*.
 typedef struct stdb_steps {
     uint64_t first_step;
+    int64_t first_time_ms;  // the shared-clock time of the first step (game/step_timeline.h)
     float start_x;
     float start_y;
     float start_z;
@@ -247,6 +252,22 @@ typedef struct stdb_practice_ball {
     int64_t placed_at;  // server microseconds
 } stdb_practice_ball;
 
+// A knocked-out golfer lying in the room (the body table, game/fallen_body.h).
+typedef struct stdb_body {
+    uint64_t id;
+    uint64_t account_id;
+    uint64_t room_id;
+    float x;  // the middle of the lying body, on the ground
+    float y;
+    float z;
+    float yaw;  // the way their head points
+    int64_t fell_at;  // server microseconds
+    int64_t expires_at;
+    bool bag_on_back;
+    uint8_t colour;  // favourite colour, game/gear_paint.h
+    uint8_t hand;    // handedness in game/shot_setup.h
+} stdb_body;
+
 typedef struct stdb_golf_cart {
     uint64_t owner;
     uint64_t room_id;
@@ -283,6 +304,7 @@ typedef struct stdb_snapshot_entry {
     float z;
     float yaw;
     bool shooter;
+    uint64_t account;  // a person's; 0 for anyone else
 } stdb_snapshot_entry;
 
 // A golfer's level in a skill, as a shot used it.
@@ -299,6 +321,7 @@ typedef struct stdb_shot_event {
     uint8_t hand;           // handedness
     uint8_t natural_shape;  // the golfer's as the server played it
     float spread_scale;     // likewise
+    float club_speed_scale;  // likewise
     const stdb_skill_level* levels;  // likewise, before the shot
     size_t levels_count;
     uint64_t seed;
@@ -312,6 +335,37 @@ typedef struct stdb_shot_event {
     float rest_z;
     bool holed;
 } stdb_shot_event;
+
+// A ball in flight met a golfer or a cart (the ball_contact_event table,
+// game/flight_cursor.h flight_contact): shot (account_id, hole, stroke), contact `index`.
+typedef struct stdb_ball_contact {
+    uint64_t room_id;
+    uint64_t account_id;  // the shooter
+    int32_t hole;
+    int32_t stroke;
+    int32_t index;
+    int32_t step;
+    uint8_t kind;  // snapshot_kind
+    float x;
+    float y;
+    float z;
+    float yaw;
+    bool shooter;
+    uint64_t account;
+    float time;
+    float speed_mps;
+    float height_m;
+} stdb_ball_contact;
+
+// Lightning struck a golfer (the lightning_strike_event table): where the
+// bolt came down in room `room_id`.
+typedef struct stdb_lightning_strike {
+    uint64_t room_id;
+    uint64_t account_id;
+    float x;
+    float y;
+    float z;
+} stdb_lightning_strike;
 
 typedef struct stdb_dap {
     uint64_t id;
@@ -370,7 +424,8 @@ typedef struct stdb_green_flag {
 typedef struct stdb_running_effect {
     uint64_t id;
     uint64_t account_id;
-    stdb_string item_id;
+    uint8_t source_kind;  // effect_source_kind in game/effects.h
+    stdb_string source_id;  // an item id or an event effect id
     stdb_string target;
     uint8_t bucket;    // effect_bucket in game/effects.h
     float value;
@@ -389,6 +444,12 @@ typedef struct stdb_link_status {
     stdb_string result;
     int64_t at_micros;
 } stdb_link_status;
+
+// The my_knockout_notice view: this connection's session ended because the
+// golfer was knocked out.
+typedef struct stdb_knockout_notice {
+    int64_t at_micros;
+} stdb_knockout_notice;
 
 typedef struct stdb_server_protocol {
     uint32_t version;  // protocol_version in game/net_types.h
@@ -448,7 +509,11 @@ typedef union stdb_row {
     stdb_avatar_motion avatar_motion;
     stdb_ball ball;
     stdb_practice_ball practice_ball;
+    stdb_body body;
+    stdb_knockout_notice knockout_notice;
     stdb_shot_event shot_event;
+    stdb_ball_contact ball_contact;
+    stdb_lightning_strike lightning_strike;
     stdb_item_use_event item_use_event;
     stdb_dap dap;
     stdb_link_code link_code;
@@ -548,6 +613,7 @@ void stdb_leave_cart(stdb_client* client, uint64_t expected_room);
 void stdb_right_cart(stdb_client* client, uint64_t expected_room, uint64_t owner);
 void stdb_take_shot(stdb_client* client, uint64_t expected_room, const stdb_shot* shot);
 void stdb_set_flag(stdb_client* client, uint64_t expected_room, int32_t hole, bool out);
+void stdb_god_strike(stdb_client* client, uint64_t expected_room, bool knock_out);
 void stdb_place_bag(stdb_client* client, uint64_t expected_room, uint8_t place, uint8_t seat, uint64_t cart_owner, float x, float y, float z, float yaw);
 void stdb_take_club(stdb_client* client, uint64_t expected_room, const char* club_id, size_t len);
 void stdb_set_golfer(stdb_client* client, uint8_t hand, uint8_t natural_shape, uint8_t favourite_colour);

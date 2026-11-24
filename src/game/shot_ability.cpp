@@ -106,6 +106,8 @@ swing_errors struck_errors(const shot_setup& setup, const std::uint64_t seed, co
     const shot_ability ability = ability_for(setup, club, lie, golfer, tuning);
     swing_errors errors = rolled_errors(seed, ability.spread);
     errors.speed_share += ability.bias.speed_share;
+    // Exactly nothing at a scale of 1, so a shot without the effect plays as before to the bit.
+    errors.speed_share += (1.0f + errors.speed_share) * (golfer.club_speed_scale - 1.0f);
     errors.strike_high += ability.bias.strike_high;
     return errors;
 }

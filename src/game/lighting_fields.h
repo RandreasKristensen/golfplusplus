@@ -279,6 +279,9 @@ inline constexpr bounded_field<lightning_style> lightning_fields[] = {
     {"bolt_brightness", &lightning_style::bolt_brightness, 0.0f, 32.0f},
     {"glow_radius_deg", &lightning_style::glow_radius_deg, 0.1f, 180.0f},
     {"glow_strength", &lightning_style::glow_strength, 0.0f, 8.0f},
+    {"world_bolt_height_meters", &lightning_style::world_bolt_height_meters, 10.0f, 5000.0f},
+    {"world_bolt_width_meters", &lightning_style::world_bolt_width_meters, 0.01f, 5.0f},
+    {"world_bolt_wander", &lightning_style::world_bolt_wander, 0.0f, 1.0f},
 };
 inline constexpr float max_fall_speed = 30.0f;
 

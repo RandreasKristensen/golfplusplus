@@ -29,6 +29,7 @@ pub struct MotionStateRow {
     pub hour_started: __sdk::Timestamp,
     pub walk_meters_this_hour: f32,
     pub cart_meters_this_hour: f32,
+    pub step_time_ms: i64,
 }
 
 impl __sdk::InModule for MotionStateRow {
@@ -61,6 +62,7 @@ pub struct MotionStateRowCols {
     pub hour_started: __sdk::__query_builder::Col<MotionStateRow, __sdk::Timestamp>,
     pub walk_meters_this_hour: __sdk::__query_builder::Col<MotionStateRow, f32>,
     pub cart_meters_this_hour: __sdk::__query_builder::Col<MotionStateRow, f32>,
+    pub step_time_ms: __sdk::__query_builder::Col<MotionStateRow, i64>,
 }
 
 impl __sdk::__query_builder::HasCols for MotionStateRow {
@@ -104,6 +106,7 @@ impl __sdk::__query_builder::HasCols for MotionStateRow {
                 table_name,
                 "cart_meters_this_hour",
             ),
+            step_time_ms: __sdk::__query_builder::Col::new(table_name, "step_time_ms"),
         }
     }
 }

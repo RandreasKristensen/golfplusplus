@@ -250,6 +250,21 @@ item_catalog_load_result load_items(const std::string& asset_root) {
     return parse_item_catalog(texts);
 }
 
+effect_catalog_load_result load_effects(const std::string& asset_root) {
+    const std::filesystem::path root = std::filesystem::path(asset_root) / effects_path;
+    std::map<std::string, std::string> texts;
+    for (const std::filesystem::path& path : json_files_under(root)) {
+        const std::optional<std::string> text = read_text_file(path);
+        if (!text) {
+            effect_catalog_load_result result;
+            result.error = "cannot read " + path.string();
+            return result;
+        }
+        texts[path.lexically_relative(root).generic_string()] = *text;
+    }
+    return parse_effect_catalog(texts);
+}
+
 std::optional<hub_definition> load_hub(const std::string& asset_root) {
     const auto text = read_text_file(std::filesystem::path(asset_root) / hub_manifest_path);
     return text ? parse_hub_from_text(*text) : std::nullopt;

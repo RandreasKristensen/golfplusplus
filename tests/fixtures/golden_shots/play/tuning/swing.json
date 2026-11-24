@@ -43,7 +43,8 @@
     "alpha": 0.45,
     "min_point_spacing": 0.25,
     "max_points": 96,
-    "line_width": 1.0
+    "line_width": 1.0,
+    "fade_seconds": 1.5
   },
   "xp_drops": {
     "lifetime_seconds": 2.4,

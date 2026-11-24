@@ -29,6 +29,8 @@ struct golfer_profile {
     // Every spread multiplied by this: items' effects on shot.spread
     // (effects.h effective_value), 1 without any.
     float spread_scale = 1.0f;
+    // The club's speed multiplied by this: items' effects on shot.club_speed.
+    float club_speed_scale = 1.0f;
 };
 
 int skill_level(const golfer_profile& golfer, const std::string& skill);

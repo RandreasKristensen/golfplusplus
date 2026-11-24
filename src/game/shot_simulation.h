@@ -37,6 +37,14 @@
 inline constexpr float shot_step_seconds = 1.0f / 120.0f;
 inline constexpr int shot_max_steps = 120 * 60;
 inline constexpr int shot_steps_per_trajectory_point = 2;
+// A stored flight (ball_flight.h) keeps the ball's full state every
+// flight_checkpoint_steps (1/12 s) and a box round its path every
+// flight_chunk_steps (1/4 s). Part of determinism, like the steps above: a
+// flight resumes from a checkpoint exactly.
+inline constexpr int flight_checkpoint_steps = 10;
+inline constexpr int flight_chunk_steps = 30;
+static_assert(flight_chunk_steps % flight_checkpoint_steps == 0);
+static_assert(flight_checkpoint_steps % shot_steps_per_trajectory_point == 0);
 
 // The hole a shot is played on, in play-area coordinates.
 struct shot_hole {
@@ -100,6 +108,16 @@ struct shot_event {
     terrain_material material = terrain_material::fairway;  // land only
 };
 
+// A ball meeting a person, once per contact. `entry` is the person's index
+// in the course's dynamic solids from simulate_ball, and the index in the
+// shot record's snapshot from simulate_struck_shot. Metres and m/s throughout.
+struct person_hit {
+    std::size_t entry = 0;
+    float time = 0.0f;  // seconds after launch
+    float speed_mps = 0.0f;  // the ball's, just before the contact step
+    float contact_height_m = 0.0f;  // of the ball's centre above the person's feet, within their height
+};
+
 struct shot_result {
     // In the cup when holed; where it was hit from when lost in water.
     glm::vec3 rest_position{0.0f};
@@ -109,6 +127,7 @@ struct shot_result {
     // launch; the last point is where the simulation stopped, at `duration`.
     std::vector<glm::vec3> trajectory;
     std::vector<shot_event> events;  // in time order
+    std::vector<person_hit> person_hits;  // in time order
     // How near the face's middle it was struck, 1 dead centre (which sound).
     float strike_centredness = 1.0f;
     // Under water: it sinks to the pond's floor and lies there
@@ -173,13 +192,22 @@ shot_step step_shot(const ball_state& ball,
                     float dt,
                     int step = 0);
 
-// Steps `launched` until it rests, plugs or hits shot_max_steps. Holed when
-// it rests in the cup of the course's hole; resting in another green's cup
-// it is dropped beside it (cup.wrong_cup_drop_distance_meters), on the side
-// it came in from.
+// Steps `launched` until it rests, plugs or hits shot_max_steps (flight_cursor.h
+// holds the stepping). Holed when it rests in the cup of the course's hole;
+// resting in another green's cup it is dropped beside it
+// (cup.wrong_cup_drop_distance_meters), on the side it came in from.
 shot_result simulate_ball(const ball_state& launched,
                           const shot_course& course,
                           const game_tuning& tuning);
+
+// A shot set up as `setup` says, struck: the ball as launched and how near
+// the face's middle it was hit. None for an unknown club.
+struct shot_launch {
+    ball_state ball;
+    float strike_centredness = 1.0f;
+};
+std::optional<shot_launch> launch_shot(const shot_setup& setup, const shot_course& course, const game_tuning& tuning,
+                                       const std::vector<club_definition>& clubs, const swing_errors& errors = {});
 
 // The whole shot, its setup held within the club's limits, the swing
 // straying by `errors`: none is the shot as set up, the preview's. An
@@ -190,6 +218,14 @@ shot_result simulate_shot(const shot_setup& setup,
                           const game_tuning& tuning,
                           const std::vector<club_definition>& clubs,
                           const swing_errors& errors = {});
+
+// `course` as `record`'s shot meets it: its seed and what the snapshot holds
+// (the people, carts and balls at rest) among the dynamic solids, the shooter last.
+shot_course struck_course(const shot_record& record, const shot_course& course, const game_tuning& tuning);
+
+// How `golfer` swings `record`'s shot off: the dice's strays.
+swing_errors struck_swing_errors(const shot_record& record, const golfer_profile& golfer, const shot_course& course,
+                                 const game_tuning& tuning, const std::vector<club_definition>& clubs);
 
 // The shot as `golfer` hits it: `record`'s setup, its swing straying by
 // the golfer's ability (shot_ability.h) times the record's dice, which

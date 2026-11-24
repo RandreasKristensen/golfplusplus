@@ -41,6 +41,7 @@ enum class solid_kind {
     path,  // a cart path's stretch (a slab)
     cart,
     person,
+    body,  // a knocked-out golfer lying on the ground (game/fallen_body.h)
     ball  // another's at rest, as of a shot: it never moves
 };
 

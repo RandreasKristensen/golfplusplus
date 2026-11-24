@@ -1,10 +1,13 @@
 #include "doctest.h"
 
+#include "game/ball_contact.h"
+#include "game/contact_play.h"
 #include "game/course_session.h"
 #include "game/group_round.h"
 #include "game/game_state.h"
 #include "game/golf_cart.h"
 #include "game/interactables.h"
+#include "core/god_menu.h"
 #include "game/golf_bag.h"
 #include "game/mode_dispatch.h"
 #include "game/motion_sync.h"
@@ -22,6 +25,7 @@
 #include "test_support.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -163,11 +167,11 @@ TEST_CASE("online the effects on me are what I equipped and what the server runs
     boost.duration = effect_duration::seconds;
     boost.seconds = 10.0f;
     const std::int64_t now = shot_unix_ms(state);
-    state.effects.push_back(active_effect{"offline_charm", boost, now, now + 10000});
+    state.effects.push_back(active_effect{item_source("offline_charm"), boost, now, now + 10000});
     CHECK(current_effects(state).empty());
-    state.online.effects.push_back(active_effect{"lucky_charm", boost, now, now + 10000});
+    state.online.effects.push_back(active_effect{item_source("lucky_charm"), boost, now, now + 10000});
     REQUIRE(current_effects(state).size() == 1U);
-    CHECK(current_effects(state).front().item == "lucky_charm");
+    CHECK(current_effects(state).front().source == item_source("lucky_charm"));
 
     // Using an item asks the server; nothing is earned or started here.
     game_input smoke;
@@ -559,10 +563,10 @@ TEST_CASE("another player's shot plays from the server's event and ends where it
     balls = remote_balls(state);
     REQUIRE(balls.size() == 1U);
     CHECK(near(balls[0].position, rest, 0.001f));
-    CHECK(state.remote_shots.at(other).trail.size() > 2U);
+    CHECK(state.remote_shots.at(other).trail.points.size() > 2U);
 
     // The trail fades out, then goes.
-    wait(state, state.tuning.net.remote_trail_fade_seconds + 0.05f);
+    wait(state, state.tuning.flight_path.fade_seconds + 0.05f);
     CHECK(state.remote_shots.empty());
 }
 
@@ -1393,4 +1397,251 @@ TEST_CASE("online live score rows cannot finish my round before the holed shot h
     CHECK(!state.round->strokes[0]);
     REQUIRE(state.ball);
     CHECK(state.ball->place != ball_place::in_cup);
+}
+
+namespace {
+// A person standing where the ball of `shot` is early in its flight, and the contact the ball makes with them.
+struct met_person {
+    room_shot shot;
+    flight_contact contact;
+};
+
+met_person shot_meeting_a_person(game_state& state, const std::uint64_t account, const int stroke) {
+    on_hole(state);
+    const club_definition& club = state.clubs.front();
+    shot_setup setup = stock_swing(club, state.tuning, 0.9f, lie_at(state.area, state.ball->position), state.player.yaw);
+    setup.ball_start = state.ball->position;
+    setup.shot_at = 1800006000000;
+    met_person met;
+    met.shot = played_shot(account, state.ball->hole ? static_cast<int>(*state.ball->hole) : -1, stroke, setup, glm::vec3(0.0f), false);
+    met.shot.record.seed = 1234;
+    met.shot.rest = room_shot_result(state, met.shot).rest_position;
+    shot_course course = current_shot_course(state);
+    course.weather = course_weather_at(state, setup.shot_at);
+    const ball_flight flight = replay_contacts(met.shot.record, met.shot.golfer, course, state.tuning, state.clubs, {});
+    const glm::vec3 at = flight.result.trajectory[4];
+    const snapshot_entry person{snapshot_kind::person, glm::vec3(at.x, terrain_height(state.area, at), at.z), 0.0f, false, 77};
+    const std::optional<flight_contact> found = first_contact(flight, standing_path(person, setup.shot_at - 1000, setup.shot_at + 60000),
+                                                              struck_course(met.shot.record, course, state.tuning), state.tuning);
+    if (found) {
+        met.contact = *found;
+    }
+    return met;
+}
+}
+
+TEST_CASE("a contact settled on another's shot playing here rebuilds it from its record and contacts and blends the ball over") {
+    game_state state = online_hub();
+    const met_person met = shot_meeting_a_person(state, other, 1);
+    REQUIRE(met.contact.speed_mps > 0.0f);
+    add_other(state, glm::vec3(5.0f, 0.0f, 0.0f), 0);
+    state.online.shots.push_back(met.shot);
+    update_game(state, game_input{}, 0.016f);
+    REQUIRE(state.remote_shots.count(other) == 1U);
+    const shot_result before = state.remote_shots.at(other).result;
+    for (int i = 0; i < 400 && state.remote_shots.at(other).elapsed < met.contact.time + 0.2f; ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
+    REQUIRE(state.remote_shots.at(other).elapsed > met.contact.time);
+
+    state.online.contacts.push_back(room_contact{other, met.shot.hole, 1, 0, met.contact});
+    state.online.contacts.push_back(room_contact{other, met.shot.hole, 1, 0, met.contact});  // heard twice: once
+    update_game(state, game_input{}, 0.0f);
+    const remote_shot& playing = state.remote_shots.at(other);
+    REQUIRE(playing.contacts.size() == 1U);
+    const shot_result rebuilt = room_shot_result(state, met.shot, {met.contact});
+    CHECK(playing.result.trajectory == rebuilt.trajectory);
+    CHECK(playing.result.rest_position == rebuilt.rest_position);
+    CHECK(!(rebuilt.rest_position == before.rest_position));
+    CHECK(glm::length(playing.blend.offset) > 0.0f);
+    // The ball is drawn where it was, and over the correction time arrives on the new path.
+    const glm::vec3 drawn = remote_shot_position(playing);
+    wait(state, state.tuning.net.shot_correction_seconds);
+    CHECK(glm::length(playing.blend.offset * (1.0f - std::min(1.0f, playing.blend.elapsed / playing.blend.seconds))) < 0.0001f);
+    CHECK(glm::length(drawn - shot_position_at(playing.result, std::min(playing.elapsed, playing.result.duration))) >= 0.0f);
+}
+
+TEST_CASE("a contact settled on my own shot rebuilds it the same, and one before my shot plays changes nothing") {
+    game_state state = online_hub();
+    const met_person met = shot_meeting_a_person(state, me, 1);
+    state.online.contacts.push_back(room_contact{me, met.shot.hole, 1, 0, met.contact});
+    update_game(state, game_input{}, 0.016f);
+    CHECK(!state.shot.has_value());
+
+    address_looking_down(state);
+    start_swing_on_time(state);
+    answer_my_swing(state);
+    swing_through(state);
+    REQUIRE(shot_playing(state));
+    REQUIRE(state.shot->source.has_value());
+    const room_shot answered = *state.shot->source;
+    flight_contact contact = met.contact;
+    shot_course course = current_shot_course(state);
+    course.weather = course_weather_at(state, answered.record.setup.shot_at);
+    const ball_flight flight = replay_contacts(answered.record, answered.golfer, course, state.tuning, state.clubs, {});
+    const glm::vec3 at = flight.result.trajectory[4];
+    const std::optional<flight_contact> found = first_contact(
+        flight, standing_path(snapshot_entry{snapshot_kind::person, glm::vec3(at.x, terrain_height(state.area, at), at.z), 0.0f, false, 77},
+                              answered.record.setup.shot_at - 1000, answered.record.setup.shot_at + 60000),
+        struck_course(answered.record, course, state.tuning), state.tuning);
+    REQUIRE(found);
+    contact = *found;
+    wait(state, contact.time + 0.1f);
+    REQUIRE(shot_playing(state));
+    state.online.contacts.push_back(room_contact{me, answered.hole, answered.stroke, 0, contact});
+    update_game(state, game_input{}, 0.0f);
+    REQUIRE(shot_playing(state));
+    CHECK(state.shot->contacts.size() == 1U);
+    CHECK(state.shot->result.trajectory == room_shot_result(state, answered, {contact}).trajectory);
+    play_out_shot(state);
+    CHECK(near(state.ball->position, room_shot_result(state, answered, {contact}).rest_position, 0.01f));
+}
+
+namespace {
+// Another's shot playing here and the moment it meets a person early on; I stand where it does, from a little before.
+struct struck_me {
+    met_person met;
+    std::int64_t shot_at = 0;
+    std::int64_t contact_ms = 0;
+};
+
+void set_clock(game_state& state, const std::int64_t unix_ms) {
+    state.online.server_now = unix_ms * 1000;
+}
+
+struck_me standing_in_the_ball_s_way(game_state& state) {
+    struck_me made{shot_meeting_a_person(state, other, 1), 0, 0};
+    CHECK(made.met.contact.speed_mps > 0.0f);
+    made.shot_at = made.met.shot.record.setup.shot_at;
+    made.contact_ms = made.shot_at + std::llround(made.met.contact.time * 1000.0f);
+    set_clock(state, made.shot_at - 500);
+    state.online.shots.push_back(made.met.shot);
+    update_game(state, game_input{}, 0.016f);
+    CHECK(state.remote_shots.count(other) == 1U);
+    state.player.position = made.met.contact.mover.position;
+    note_my_path(state, made.shot_at - 400);
+    return made;
+}
+
+int person_hits_heard(const game_state& state) {
+    return static_cast<int>(std::count_if(state.audio_events.begin(), state.audio_events.end(), [](const audio_event& event) {
+        return event.type == audio_event_type::ball_hit && event.hit == shot_event_kind::person_hit;
+    }));
+}
+}
+
+TEST_CASE("my own game shows my hit at once from my steps, agrees with the server's row and starts no effect") {
+    game_state state = online_hub();
+    const struck_me made = standing_in_the_ball_s_way(state);
+    CHECK(state.remote_shots.at(other).result.person_hits.empty());
+    set_clock(state, made.contact_ms + 30);
+    state.audio_events.clear();
+    update_game(state, game_input{}, 0.016f);
+
+    const remote_shot& playing = state.remote_shots.at(other);
+    REQUIRE(playing.watch.predicted.has_value());
+    CHECK(playing.watch.predicted->step == made.met.contact.step);
+    CHECK(playing.watch.predicted->mover.account == me);
+    CHECK(playing.contacts.empty());
+    CHECK(playing.result.person_hits.size() == 1U);  // me
+    CHECK(current_effects(state).empty());
+    CHECK(person_hits_heard(state) == 0);
+    for (int i = 0; i < 600 && playing.elapsed < made.met.contact.time + 0.05f; ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
+    REQUIRE(playing.elapsed >= made.met.contact.time);
+    CHECK(person_hits_heard(state) == 1);
+
+    // The server's row for the same contact replaces the prediction without a jump.
+    state.online.contacts.push_back(room_contact{other, made.met.shot.hole, 1, 0, made.met.contact});
+    update_game(state, game_input{}, 0.0f);
+    CHECK(!playing.watch.predicted.has_value());
+    REQUIRE(playing.contacts.size() == 1U);
+    CHECK(playing.result.trajectory == room_shot_result(state, made.met.shot, {made.met.contact}).trajectory);
+    CHECK(glm::length(playing.blend.offset) < 0.01f);
+    CHECK(person_hits_heard(state) == 1);
+    CHECK(current_effects(state).empty());
+}
+
+TEST_CASE("a prediction the server's row never confirms is retracted when overdue and not made again") {
+    game_state state = online_hub();
+    const struck_me made = standing_in_the_ball_s_way(state);
+    remote_shot& playing = state.remote_shots.at(other);
+    const shot_result original = playing.result;
+    const glm::vec3 correction = playing.correction;
+    set_clock(state, made.contact_ms + 30);
+    update_game(state, game_input{}, 0.016f);
+    REQUIRE(playing.watch.predicted.has_value());
+    CHECK(playing.result.rest_position != original.rest_position);
+    for (int i = 0; i < 600 && playing.elapsed < made.met.contact.time + 0.1f; ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
+
+    const std::int64_t hold = static_cast<std::int64_t>(state.tuning.net.contact_prediction_hold_seconds * 1000.0f);
+    set_clock(state, made.contact_ms + hold + 100);
+    update_game(state, game_input{}, 0.016f);
+    CHECK(!playing.watch.predicted.has_value());
+    CHECK(playing.watch.given_up);
+    CHECK(playing.result.trajectory == original.trajectory);
+    CHECK(playing.correction == correction);
+    CHECK(glm::length(playing.blend.offset) > 0.0f);
+    for (int i = 0; i < 20; ++i) {
+        update_game(state, game_input{}, 0.02f);
+    }
+    CHECK(!playing.watch.predicted.has_value());
+    CHECK(playing.contacts.empty());
+    CHECK(current_effects(state).empty());
+}
+
+TEST_CASE("a ball I am not in the way of is not predicted, and near_flight follows my distance from it") {
+    game_state state = online_hub();
+    const struck_me made = standing_in_the_ball_s_way(state);
+    const float unit = state.tuning.scale.meters_per_world_unit;
+    // Beside the line, a few metres off: out of reach of the ball but within the send distance.
+    const glm::vec3 beside = made.met.contact.mover.position + glm::vec3(0.0f, 0.0f, 6.0f / unit);
+    state.player.position = beside;
+    note_my_path(state, made.shot_at - 300);
+    set_clock(state, made.contact_ms + 30);
+    update_game(state, game_input{}, 0.016f);
+    CHECK(!state.remote_shots.at(other).watch.predicted.has_value());
+    CHECK(!state.remote_shots.at(other).watch.given_up);
+    CHECK(state.motion_sync.near_flight);
+
+    state.player.position = made.met.contact.mover.position + glm::vec3(0.0f, 0.0f, 300.0f / unit);
+    note_my_path(state, made.contact_ms + 40);
+    update_game(state, game_input{}, 0.016f);
+    CHECK(!state.motion_sync.near_flight);
+}
+
+TEST_CASE("a lightning strike in my room is drawn where it struck, whoever it struck, and only once") {
+    game_state state = online_hub();
+    add_other(state, glm::vec3(3.0f, 0.0f, 0.0f), 0);
+    state.online.strikes.push_back(room_strike{other, glm::vec3(3.0f, 0.0f, 0.0f)});
+    state.online.strikes.push_back(room_strike{me, state.player.position});
+    update_game(state, game_input{}, 0.0f);
+    CHECK(state.online.strikes.empty());
+    REQUIRE(state.strike_points.size() == 2U);
+    CHECK(state.strike_points[0] == glm::vec3(3.0f, 0.0f, 0.0f));
+    CHECK(state.strike_points[1] == state.player.position);
+    state.strike_points.clear();
+    update_game(state, game_input{}, 0.016f);
+    CHECK(state.strike_points.empty());
+}
+
+TEST_CASE("online, the god menu's strike is the god_strike command, and nothing happens here until the server's rows say so") {
+    game_state state = online_hub();
+    god_menu_state menu;
+    menu.enabled = true;
+    menu.open = true;
+    menu.row = god_menu_row::strike;
+    menu.strike_knocks_out = true;
+    god_menu_keys enter;
+    enter.strike = true;
+    sky_controls sky;
+    run_god_menu(menu, sky, state, enter);
+    const net_command* asked = find_command(state, net_command_type::god_strike);
+    REQUIRE(asked != nullptr);
+    CHECK(asked->knock_out);
+    CHECK(state.strike_points.empty());
+    CHECK(!state.knocked_out);
 }

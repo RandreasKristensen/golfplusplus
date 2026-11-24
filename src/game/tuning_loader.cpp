@@ -467,6 +467,7 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.flight_path.min_point_spacing = flight_path.number("min_point_spacing");
     tuning.flight_path.max_points = flight_path.integer("max_points");
     tuning.flight_path.line_width = flight_path.number("line_width");
+    tuning.flight_path.fade_seconds = flight_path.number("fade_seconds");
 
     const section_reader xp_drops = section("xp_drops");
     tuning.xp_drops.lifetime_seconds = xp_drops.number("lifetime_seconds");
@@ -492,11 +493,13 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.net.motion_min_interval_seconds = net.number("motion_min_interval_seconds");
     tuning.net.motion_correction_distance = net.number("motion_correction_distance");
     tuning.net.motion_correction_yaw = net.number("motion_correction_yaw");
+    tuning.net.contact_send_meters = net.number("contact_send_meters");
+    tuning.net.contact_send_interval_seconds = net.number("contact_send_interval_seconds");
+    tuning.net.contact_prediction_hold_seconds = net.number("contact_prediction_hold_seconds");
     tuning.net.remote_extrapolation_seconds = net.number("remote_extrapolation_seconds");
     tuning.net.remote_correction_seconds = net.number("remote_correction_seconds");
     tuning.net.shot_correction_distance = net.number("shot_correction_distance");
     tuning.net.shot_correction_seconds = net.number("shot_correction_seconds");
-    tuning.net.remote_trail_fade_seconds = net.number("remote_trail_fade_seconds");
     tuning.net.notice_seconds = net.number("notice_seconds");
     tuning.net.tee_book_refresh_seconds = net.number("tee_book_refresh_seconds");
     tuning.net.tee_book_list_timeout_seconds = net.number("tee_book_list_timeout_seconds");
@@ -541,6 +544,10 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.server.interact_slack = server.number("interact_slack");
     tuning.server.shot_time_slack_seconds = server.number("shot_time_slack_seconds");
     tuning.server.timing_slack_seconds = server.number("timing_slack_seconds");
+    tuning.server.contact_rewind_seconds = server.number("contact_rewind_seconds");
+    if (!(tuning.server.contact_rewind_seconds > 0.0f)) {
+        missing.push_back("server.contact_rewind_seconds (positive)");
+    }
     tuning.server.step_start_tolerance = server.number("step_start_tolerance");
     tuning.server.walk_xp_meters_per_hour = server.number("walk_xp_meters_per_hour");
     tuning.server.cart_xp_meters_per_hour = server.number("cart_xp_meters_per_hour");
@@ -708,6 +715,36 @@ game_tuning_parse_result parse_game_tuning(const json& root) {
     tuning.golfer.flop_start_degrees = golfer.number("flop_start_degrees");
     tuning.golfer.flop_full_degrees = golfer.number("flop_full_degrees");
     tuning.golfer.word_threshold = golfer.number("word_threshold");
+
+    const section_reader ball_hits = section("ball_hits");
+    tuning.ball_hits.head_band_share = ball_hits.number("head_band_share");
+    tuning.ball_hits.legs_band_share = ball_hits.number("legs_band_share");
+    tuning.ball_hits.min_speed_mps = ball_hits.number("min_speed_mps");
+    tuning.ball_hits.putt_speed_mps = ball_hits.number("putt_speed_mps");
+    tuning.ball_hits.drive_speed_mps = ball_hits.number("drive_speed_mps");
+    tuning.ball_hits.head_knockout_max = ball_hits.number("head_knockout_max");
+    if (!(tuning.ball_hits.drive_speed_mps > tuning.ball_hits.putt_speed_mps)) {
+        missing.push_back("ball_hits.drive_speed_mps (above putt_speed_mps)");
+    }
+
+    const section_reader knockout = section("knockout");
+    tuning.knockout.body_minutes = knockout.number("body_minutes");
+    tuning.knockout.body_half_width_meters = knockout.number("body_half_width_meters");
+    tuning.knockout.body_height_meters = knockout.number("body_height_meters");
+
+    const section_reader lightning = section("lightning");
+    tuning.lightning.check_seconds = lightning.number("check_seconds");
+    tuning.lightning.open_strike_hours = lightning.number("open_strike_hours");
+    tuning.lightning.building_factor = lightning.number("building_factor");
+    tuning.lightning.tree_factor = lightning.number("tree_factor");
+    tuning.lightning.address_factor = lightning.number("address_factor");
+    tuning.lightning.knockout_share = lightning.number("knockout_share");
+    if (!(tuning.lightning.check_seconds > 0.0f)) {
+        missing.push_back("lightning.check_seconds (above 0)");
+    }
+    if (!(tuning.lightning.open_strike_hours > 0.0f)) {
+        missing.push_back("lightning.open_strike_hours (above 0)");
+    }
 
     const section_reader lies = section("lies");
     tuning.lies.rough_grip_share = lies.number("rough_grip_share");

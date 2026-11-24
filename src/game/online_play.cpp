@@ -49,7 +49,7 @@ void adopt_ball_row(game_state& state) {
     }
     state.shot.reset();
     state.ball_correction.reset();
-    state.flight_path_points.clear();
+    state.my_flight_line = flight_line{};
     state.give_up_prompt.reset();
     state.mode = game_mode::walking;
     state.address = address_state{};
@@ -189,10 +189,26 @@ void take_room_events(game_state& state) {
         }
     }
     state.online.shots.clear();
+    // Contacts settled on shots, in order, once their shot has played here;
+    // one arriving after my shot has ended moves my ball to the server's.
+    for (const room_contact& met : state.online.contacts) {
+        if (!meet_room_contact(state, met) && met.account_id == state.online.account_id && !state.shot && ball_in_play(state) &&
+            met.stroke == state.ball->strokes) {
+            const room_ball* server = my_server_ball(state);
+            if (server != nullptr && !server->in_cup && glm::length(server->position - state.ball->position) > 0.0f) {
+                state.ball_correction = ball_blend{state.ball->position, server->position, 0.0f};
+            }
+        }
+    }
+    state.online.contacts.clear();
     for (const room_item_use& use : state.online.item_uses) {
         start_remote_item_use(state, use);
     }
     state.online.item_uses.clear();
+    for (const room_strike& strike : state.online.strikes) {
+        state.strike_points.push_back(strike.position);
+    }
+    state.online.strikes.clear();
 }
 
 void update_ball_correction(game_state& state, const float dt) {

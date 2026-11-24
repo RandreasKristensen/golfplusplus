@@ -13,6 +13,7 @@ pub struct ServerConfigRow {
     pub auth_audience: String,
     pub allow_anonymous: bool,
     pub server_secret: String,
+    pub allow_god: bool,
 }
 
 impl __sdk::InModule for ServerConfigRow {
@@ -29,6 +30,7 @@ pub struct ServerConfigRowCols {
     pub auth_audience: __sdk::__query_builder::Col<ServerConfigRow, String>,
     pub allow_anonymous: __sdk::__query_builder::Col<ServerConfigRow, bool>,
     pub server_secret: __sdk::__query_builder::Col<ServerConfigRow, String>,
+    pub allow_god: __sdk::__query_builder::Col<ServerConfigRow, bool>,
 }
 
 impl __sdk::__query_builder::HasCols for ServerConfigRow {
@@ -41,6 +43,7 @@ impl __sdk::__query_builder::HasCols for ServerConfigRow {
             auth_audience: __sdk::__query_builder::Col::new(table_name, "auth_audience"),
             allow_anonymous: __sdk::__query_builder::Col::new(table_name, "allow_anonymous"),
             server_secret: __sdk::__query_builder::Col::new(table_name, "server_secret"),
+            allow_god: __sdk::__query_builder::Col::new(table_name, "allow_god"),
         }
     }
 }

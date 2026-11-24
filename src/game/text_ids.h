@@ -14,6 +14,8 @@ inline constexpr const char* text_online_browser_signed_in = "online.browser.sig
 inline constexpr const char* text_online_browser_failed = "online.browser.failed";
 // Taken out of an online round's room while still connected
 inline constexpr const char* text_online_room_lost = "online.room_lost";
+// The menu message after a knockout, online or offline.
+inline constexpr const char* text_menu_knocked_out = "menu.knocked_out";
 // The server's tee_in_use refusal, shown before asking when the tee is taken.
 inline constexpr const char* text_online_tee_in_use = "online.error.tee_in_use";
 // Teeing up with my ball still in its cup, offline and the server's
@@ -200,6 +202,21 @@ inline constexpr const char* text_hud_rangefinder_uphill = "hud.rangefinder.uphi
 inline constexpr const char* text_hud_rangefinder_downhill = "hud.rangefinder.downhill";
 // The distance it plays like on the slope.
 inline constexpr const char* text_hud_rangefinder_plays_like = "hud.rangefinder.plays_like";
+// The effect shelf (game/effect_text.h): a square's minutes left and the hidden
+// count, and the lines saying what an effect changes.
+inline constexpr const char* text_hud_effect_minutes = "hud.effect_minutes";
+inline constexpr const char* text_hud_effect_more = "hud.effect_more";
+inline constexpr const char* text_hud_effect_more_many = "hud.effect_more_many";
+inline constexpr const char* text_effect_change_percent = "effect.change.percent";
+inline constexpr const char* text_effect_change_flat = "effect.change.flat";
+inline constexpr const char* text_effect_target_walk_speed = "effect.target.walk_speed";
+inline constexpr const char* text_effect_target_cart_top_speed = "effect.target.cart_top_speed";
+inline constexpr const char* text_effect_target_cart_uphill = "effect.target.cart_uphill";
+inline constexpr const char* text_effect_target_cart_drift = "effect.target.cart_drift";
+inline constexpr const char* text_effect_target_shot_spread = "effect.target.shot_spread";
+inline constexpr const char* text_effect_target_shot_club_speed = "effect.target.shot_club_speed";
+inline constexpr const char* text_effect_target_all_xp = "effect.target.all_xp";
+inline constexpr const char* text_effect_target_skill_xp = "effect.target.skill_xp";
 inline constexpr const char* text_hud_xp_drop = "hud.xp_drop";
 inline constexpr const char* text_hud_shot_number = "hud.shot_number";
 inline constexpr const char* text_hud_paces = "hud.paces";
@@ -243,6 +260,9 @@ inline constexpr const char* text_god_wind_direction = "god.wind_direction";
 inline constexpr const char* text_god_wetness = "god.wetness";
 inline constexpr const char* text_god_solids = "god.solids";
 inline constexpr const char* text_god_profiler = "god.profiler";
+inline constexpr const char* text_god_strike = "god.strike";
+inline constexpr const char* text_god_dazed = "god.dazed";
+inline constexpr const char* text_god_knocked_out = "god.knocked_out";
 inline constexpr const char* text_god_on = "god.on";
 inline constexpr const char* text_god_off = "god.off";
 inline constexpr const char* text_god_hours = "god.hours";
@@ -344,6 +364,7 @@ inline constexpr const char* style_name_tag_group = "name_tag_group";
 inline constexpr const char* style_hud_scale = "hud_scale";
 inline constexpr const char* style_hud_club = "hud_club";
 inline constexpr const char* style_hud_club_name = "hud_club_name";
+inline constexpr const char* style_effect_seconds = "effect_seconds";
 inline constexpr const char* style_god_title = "god_title";
 inline constexpr const char* style_god_label = "god_label";
 inline constexpr const char* style_god_live = "god_live";

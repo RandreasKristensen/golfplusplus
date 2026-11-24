@@ -73,6 +73,7 @@ A new database lets no game in until the owner sets it up with
 | `auth_audience` | The game's client id at that provider |
 | `allow_anonymous` | `true`: any game may connect without signing in |
 | `server_secret` | Keys the link codes that join two logins into one account, and the dice of every shot: at least 32 characters, kept private (it never leaves the server). `""` turns linking off and lets anyone work out a shot's dice |
+| `allow_god` | `true`: the developer's god commands work (`god_strike`, the god menu's STRIKE ME). Only on a local development server: **keep it `false` on every real server** |
 
 **Friends, no sign-in** (simplest for a private server): anonymous logins on.
 Make a secret first:
@@ -88,10 +89,10 @@ then (Windows PowerShell 5.1 needs the inner quotes escaped; in PowerShell 7 and
 Bash they are written plainly):
 
 ```powershell
-spacetime call golfpp admin_set_config '\"\"' '\"\"' true '\"<secret>\"' --server local
+spacetime call golfpp admin_set_config '\"\"' '\"\"' true '\"<secret>\"' false --server local
 ```
 ```bash
-spacetime call golfpp admin_set_config '""' '""' true '"<secret>"' --server local
+spacetime call golfpp admin_set_config '""' '""' true '"<secret>"' false --server local
 ```
 
 **Sign-in with a browser**: pass the provider's issuer and the game's client id

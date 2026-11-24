@@ -62,10 +62,12 @@ set(sources
   src/game/shot_dice.cpp
   src/game/shot_snapshot.cpp
   src/game/effects.cpp
+  src/game/effect_catalog.cpp
   src/game/hole_loader.cpp
   src/game/item_catalog.cpp
   src/game/loadout.cpp
   src/game/movement_step.cpp
+  src/game/fallen_body.cpp
   src/game/floodlights.cpp
   src/game/hole_sign.cpp
   src/game/way_sign.cpp
@@ -77,6 +79,12 @@ set(sources
   src/game/skill_catalog.cpp
   src/game/progression.cpp
   src/game/shot_simulation.cpp
+  src/game/flight_cursor.cpp
+  src/game/ball_flight.cpp
+  src/game/ball_contact.cpp
+  src/game/mover_path.cpp
+  src/game/step_timeline.cpp
+  src/game/contact_settle.cpp
   src/game/tee_box.cpp
   src/game/sky_clock.cpp
   src/game/weather.cpp

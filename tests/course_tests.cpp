@@ -409,7 +409,7 @@ TEST_CASE("a hole completing ends nothing else: my seat in my cart, a lit cigare
     quicker.value = 0.5f;
     quicker.duration = effect_duration::seconds;
     quicker.seconds = 60.0f;
-    state.effects.push_back(active_effect{"shoes", quicker, shot_unix_ms(state), shot_unix_ms(state) + 60000});
+    state.effects.push_back(active_effect{item_source("shoes"), quicker, shot_unix_ms(state), shot_unix_ms(state) + 60000});
     const glm::vec3 cup = pin_anchor_position(state, 1);
     state.ball->strokes = 1;
     play_shot(state, shot_result{cup, true, 5.0f, {state.ball->position, cup}, {}});
@@ -425,7 +425,8 @@ TEST_CASE("a hole completing ends nothing else: my seat in my cart, a lit cigare
     CHECK(driving_cart(state));
     CHECK(near(state.player.position, seated));
     CHECK(state.smoking.has_value());
-    CHECK(state.effects.size() == 1U);
+    // The cigarette's and the shoes'.
+    CHECK(state.effects.size() == 2U);
     REQUIRE(state.ball.has_value());
     CHECK(state.ball->place == ball_place::in_cup);
 }

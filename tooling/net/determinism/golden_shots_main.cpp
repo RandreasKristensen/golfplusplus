@@ -4,7 +4,10 @@
 // shared fixed steps (game/movement_step.h) and drops a cart into each
 // hole's first deep water, and prints every field of
 // each result, floats as their exact bits (0x then 8 hex digits), one row per
-// line: a shot's summary, then each of its trajectory points and events.
+// line: a shot's summary, then each of its trajectory points and events. Each
+// putt is also flown as a stored flight (game/ball_flight.h) met by a golfer
+// and a driving cart (game/ball_contact.h), its contacts, hits, checkpoints
+// and boxes printed, and rebuilt from the shot's record and contacts.
 // check_determinism.ps1 builds this natively and to WASM and compares the
 // two row by row. Exits 1 when a shot's holed, lost or penalty strokes are
 // not what shots.json expects.
@@ -12,16 +15,19 @@
 // Usage: golden_shots <repo root>
 
 #include "game/content_files.h"
+#include "game/ball_contact.h"
 #include "game/course_loader.h"
 #include "game/json_util.h"
 #include "game/movement_step.h"
 #include "game/play_area.h"
 #include "game/shot_simulation.h"
+#include "game/step_timeline.h"
 #include "physics/cart_dynamics.h"
 #include "physics/cart_rollover.h"
 #include "physics/vector_math.h"
 #include "server_content.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -59,9 +65,9 @@ void print_bits(const glm::vec3& value) {
     print_bits(value.z);
 }
 
-// Every field of `result`, as rows "shot <i> ...".
-void print_shot(const std::size_t i, const shot_result& result) {
-    std::printf("shot %zu summary rest", i);
+// Every field of `result`, as rows "<what> <i> ...".
+void print_shot(const char* what, const std::size_t i, const shot_result& result) {
+    std::printf("%s %zu summary rest", what, i);
     print_bits(result.rest_position);
     std::printf(" holed %d duration", result.holed ? 1 : 0);
     print_bits(result.duration);
@@ -70,13 +76,13 @@ void print_shot(const std::size_t i, const shot_result& result) {
     std::printf(" lost %d penalty %d points %zu events %zu\n", result.lost ? 1 : 0, result.penalty_strokes,
                 result.trajectory.size(), result.events.size());
     for (std::size_t j = 0; j < result.trajectory.size(); ++j) {
-        std::printf("shot %zu point %zu", i, j);
+        std::printf("%s %zu point %zu", what, i, j);
         print_bits(result.trajectory[j]);
         std::printf("\n");
     }
     for (std::size_t j = 0; j < result.events.size(); ++j) {
         const shot_event& event = result.events[j];
-        std::printf("shot %zu event %zu", i, j);
+        std::printf("%s %zu event %zu", what, i, j);
         print_bits(event.time);
         std::printf(" kind %d material %d\n", static_cast<int>(event.kind), static_cast<int>(event.material));
     }
@@ -122,6 +128,125 @@ std::vector<golden_drive> golden_drives(const cart_surfaces_tuning& surfaces) {
         {&surfaces.fairway, 0.0f, 0.3f, 0.0f, {1.0f, 1.0f}, 0.0f, 8.0f},
         {&surfaces.green, 0.0f, 0.0f, 0.5f, {1.0f, 0.0f}, 0.0f, 1.0f},
     };
+}
+
+// The putts' flights with movers (see print_contact_flight).
+struct contact_counts {
+    int people = 0;
+    int carts = 0;
+};
+
+bool same_shot(const shot_result& a, const shot_result& b) {
+    if (a.trajectory.size() != b.trajectory.size() || a.events.size() != b.events.size() ||
+        a.person_hits.size() != b.person_hits.size() || a.duration != b.duration || a.holed != b.holed) {
+        return false;
+    }
+    for (std::size_t i = 0; i < a.trajectory.size(); ++i) {
+        if (std::memcmp(&a.trajectory[i], &b.trajectory[i], sizeof a.trajectory[i]) != 0) {
+            return false;
+        }
+    }
+    for (std::size_t i = 0; i < a.events.size(); ++i) {
+        if (a.events[i].time != b.events[i].time || a.events[i].kind != b.events[i].kind) {
+            return false;
+        }
+    }
+    return std::memcmp(&a.rest_position, &b.rest_position, sizeof a.rest_position) == 0;
+}
+
+// Plays every contact `path` makes with `flight`, one after another, as the
+// server does where movement is played.
+ball_flight play_path(ball_flight flight, const mover_path& path, const shot_course& flown, const game_tuning& tuning,
+                      std::vector<flight_contact>& contacts) {
+    for (int i = 0; i < 8; ++i) {
+        const std::optional<flight_contact> contact = first_contact(flight, path, flown, tuning);
+        if (!contact) {
+            break;
+        }
+        contacts.push_back(*contact);
+        flight = replay_after_contact(flight, *contact, flown, tuning);
+    }
+    return flight;
+}
+
+// A putt's flight met by a golfer standing 1.2 m ahead, then by a cart driving
+// slowly across the line where the ball is a little later: played in one
+// contact at a time, then rebuilt from the shot's record and its contacts, as
+// a client does. Rows for the flight (its contacts, hits, checkpoints and
+// boxes) and the rebuilt shot. False when the rebuilt shot differs.
+bool print_contact_flight(const std::size_t i, const shot_record& record, const shot_course& course,
+                          const server_content& content, const play_area& area, contact_counts& counts) {
+    const game_tuning& tuning = content.tuning;
+    const float unit = tuning.scale.meters_per_world_unit;
+    shot_record bare = record;
+    bare.snapshot = split_snapshot(record.snapshot).still;
+    const shot_course flown = struck_course(bare, course, tuning);
+    ball_flight flight = fly_struck_shot(bare, golfer_profile{}, course, tuning, content.clubs);
+    std::vector<flight_contact> contacts;
+    const std::int64_t from = record.setup.shot_at - 100;
+    const glm::vec3 heading = yaw_direction(record.setup.aim_angle);
+
+    const snapshot_entry golfer{snapshot_kind::person, anchor_on_terrain(area, record.setup.ball_start + heading * (1.2f / unit)), 0.0f,
+                                false, 1};
+    flight = play_path(flight, standing_path(golfer, from, from + 30'000), flown, tuning, contacts);
+    if (flight.steps > 1) {
+        const int later = std::min(contacts.empty() ? 0 : contacts.back().step + 20, flight.steps - 2);
+        const flight_cursor there = cursor_at(flight, later, flown, tuning);
+        const glm::vec3 going = safe_normalize(horizontal(there.ball.velocity), heading);
+        const glm::vec3 left = yaw_left(going);
+        mover_path driving;
+        driving.mover = snapshot_entry{snapshot_kind::cart, glm::vec3(0.0f), yaw_towards(glm::vec3(0.0f), going), false, 2};
+        const glm::vec3 base = there.ball.position - glm::vec3(0.0f, there.ball.radius, 0.0f) + going * (0.4f / unit) + left * (0.5f / unit);
+        for (int step = 0; step <= 600; ++step) {
+            const float seconds = static_cast<float>(step) * move_step_seconds;
+            driving.samples.push_back(mover_sample{step_time_ms(from, static_cast<std::uint64_t>(step)),
+                                                   base - left * (0.5f / unit * seconds), driving.mover.yaw});
+        }
+        driving.until_ms = driving.samples.back().time_ms + 9;
+        flight = play_path(flight, driving, flown, tuning, contacts);
+    }
+
+    print_shot("flight", i, flight.result);
+    std::printf("flight %zu steps %d open %d contacts %zu checkpoints %zu boxes %zu\n", i, flight.steps, flight.open_from_step,
+                flight.contacts.size(), flight.checkpoints.size(), flight.boxes.size());
+    for (std::size_t j = 0; j < contacts.size(); ++j) {
+        const flight_contact& contact = contacts[j];
+        counts.people += contact.mover.kind == snapshot_kind::person ? 1 : 0;
+        counts.carts += contact.mover.kind == snapshot_kind::cart ? 1 : 0;
+        std::printf("flight %zu contact %zu step %d kind %d account %llu", i, j, contact.step, static_cast<int>(contact.mover.kind),
+                    static_cast<unsigned long long>(contact.mover.account));
+        print_bits(contact.time);
+        print_bits(contact.speed_mps);
+        print_bits(contact.height_m);
+        print_bits(contact.mover.position);
+        print_bits(contact.mover.yaw);
+        std::printf("\n");
+    }
+    for (std::size_t j = 0; j < flight.result.person_hits.size(); ++j) {
+        const person_hit& hit = flight.result.person_hits[j];
+        std::printf("flight %zu hit %zu entry %zu", i, j, hit.entry);
+        print_bits(hit.time);
+        print_bits(hit.speed_mps);
+        print_bits(hit.contact_height_m);
+        std::printf("\n");
+    }
+    for (std::size_t j = 0; j < flight.checkpoints.size(); ++j) {
+        const flight_cursor& cursor = flight.checkpoints[j].cursor;
+        std::printf("flight %zu checkpoint %zu steps %d inside %d", i, j, cursor.steps, cursor.in_contact ? 1 : 0);
+        print_bits(cursor.ball.position);
+        print_bits(cursor.ball.velocity);
+        print_bits(cursor.ball.spin);
+        std::printf("\n");
+    }
+    for (std::size_t j = 0; j < flight.boxes.size(); ++j) {
+        std::printf("flight %zu box %zu", i, j);
+        print_bits(flight.boxes[j].low);
+        print_bits(flight.boxes[j].high);
+        std::printf("\n");
+    }
+    const ball_flight rebuilt = replay_contacts(bare, golfer_profile{}, course, tuning, content.clubs, contacts);
+    print_shot("rebuilt", i, rebuilt.result);
+    return same_shot(rebuilt.result, flight.result);
 }
 
 std::vector<int> golden_flags_out(const json& shot) {
@@ -175,6 +300,7 @@ int main(int argc, char** argv) {
 
     const float radius = content.tuning.scale.ball_physics_radius_meters;
     int unexpected = 0;
+    contact_counts counts;
     for (std::size_t i = 0; i < shots->size(); ++i) {
         const json& shot = (*shots)[i];
         const std::size_t hole = static_cast<std::size_t>(json_int(shot, "hole").value_or(0));
@@ -209,7 +335,14 @@ int main(int argc, char** argv) {
         const shot_result result =
             simulate_struck_shot(record, golfer_profile{}, server_shot_course(*course, hole, input.shot_at, golden_flags_out(shot), content),
                                  content.tuning, content.clubs);
-        print_shot(i, result);
+        print_shot("shot", i, result);
+        if (json_string(shot, "club").value_or("") == "putter") {
+            const shot_course flown_on = server_shot_course(*course, hole, input.shot_at, golden_flags_out(shot), content);
+            if (!print_contact_flight(i, record, flown_on, content, course->area, counts)) {
+                std::fprintf(stderr, "golden shot %zu: the flight rebuilt from its contacts is not the one played\n", i);
+                ++unexpected;
+            }
+        }
         const std::optional<bool> holed = json_bool(shot, "holed");
         const std::optional<bool> lost = json_bool(shot, "lost");
         const std::optional<int> penalty = json_int(shot, "penalty_strokes");
@@ -219,6 +352,11 @@ int main(int argc, char** argv) {
                          result.holed ? 1 : 0, result.lost ? 1 : 0, result.penalty_strokes);
             ++unexpected;
         }
+    }
+
+    if (counts.people == 0 || counts.carts == 0) {
+        std::fprintf(stderr, "the putts' flights met %d golfers and %d carts: both kinds are needed\n", counts.people, counts.carts);
+        ++unexpected;
     }
 
     const cart_spec& spec = *content.items.find(content.default_loadout.cart)->cart;

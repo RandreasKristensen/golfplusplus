@@ -9,10 +9,12 @@
 #include "game/remote_players.h"
 #include "game/scorecard.h"
 #include "game/tee_box.h"
+#include "game/vignette_strength.h"
 #include "physics/tree_body.h"
 #include "profiling/profiling.h"
 #include "renderer/cart_batch.h"
 #include "renderer/god_menu_overlay.h"
+#include "renderer/lying_body.h"
 #include "renderer/menu_overlay.h"
 #include "renderer/remote_avatar_batch.h"
 #include "renderer/render_mesh.h"
@@ -24,6 +26,7 @@
 #include <vector>
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 struct render_fences;  // renderer/fence_batch.h
@@ -49,6 +52,19 @@ enum class skill_icon_id {
 
 // "golf_swing", "smoking", "fitness"; anything else is generic.
 skill_icon_id skill_icon_from_name(const std::string& name);
+
+// One square of the effect shelf (game/effect_shelf.h), its words resolved:
+// `icon` names its art (renderer/effect_icons.h), `seconds` is empty while it
+// lasts as long as it is equipped, and the hover's tooltip shows the name,
+// the description (empty for an item) and what it changes.
+struct render_effect_square {
+    std::string icon;
+    bool harmful = false;
+    std::string seconds;
+    std::string name;
+    std::string description;
+    std::vector<std::string> changes;
+};
 
 struct render_xp_drop {
     skill_icon_id icon = skill_icon_id::generic;
@@ -118,8 +134,8 @@ struct render_name_tag {
     player_relationship relationship = player_relationship::unknown;
 };
 
-// Another player's shot trail, fading once their ball stops.
-struct render_trail {
+// A shot's flight line, mine or another player's (game/flight_line.h).
+struct render_flight_line {
     std::vector<glm::vec3> points;
     float alpha = 0.0f;
 };
@@ -245,13 +261,21 @@ struct render_streaks {
     float tumble_phase = 0.0f;
 };
 
-// A lightning strike in the sky this frame (core/lightning_frame.h): its
-// bolt (none when `bolt` is false) from `direction` down to the horizon,
-// `bolt_width` wide and wandering up to `bolt_jitter` (radians) by `seed`,
-// `bolt_brightness` bright in `color`, lighting the clouds within
-// `glow_radius` of its top by `glow_strength`, all times `flash` (0: none).
+// A lightning strike this frame (core/lightning_frame.h). A random one is
+// drawn in the sky: its bolt (none when `bolt` is false) from `direction`
+// down to the horizon, `bolt_width` wide and wandering up to `bolt_jitter`
+// (radians) by `seed`. A real one has a `point` instead (renderer/world_bolt.h):
+// a bolt in the world from `world_height` metres over the point down to it,
+// at least `world_width` metres wide, wandering `world_wander` of each
+// segment. Both are `bolt_brightness` bright in `color`, the clouds lit
+// within `glow_radius` of the sky's top by `glow_strength`, all times
+// `flash` (0: none).
 struct render_lightning {
     glm::vec3 direction{0.0f, 1.0f, 0.0f};
+    std::optional<glm::vec3> point;
+    float world_height = 0.0f;
+    float world_width = 0.0f;
+    float world_wander = 0.0f;
     float flash = 0.0f;
     float seed = 0.0f;
     bool bolt = false;
@@ -414,10 +438,8 @@ struct render_data {
     std::optional<render_club_pose> my_club;
     std::optional<render_address_feet> address_feet;
 
-    bool show_flight_path = false;
-    const std::vector<glm::vec3>* flight_path_points = nullptr;
+    std::vector<render_flight_line> flight_lines;
     glm::vec3 flight_path_color{0.0f};
-    float flight_path_alpha = 0.0f;
     float flight_path_width = 0.0f;
 
     // Sat at my cart's wheel: the cart HUD shows.
@@ -438,8 +460,8 @@ struct render_data {
     std::optional<dap_hand_pose> dap_hand;
     // Other players in my room (online).
     std::vector<render_remote_avatar> remote_avatars;
+    std::vector<render_lying_body> lying_bodies;  // knocked-out golfers' bodies
     std::vector<render_remote_ball> remote_balls;
-    std::vector<render_trail> remote_trails;
     std::vector<render_name_tag> name_tags;
     float avatar_eye_height = 0.0f;
 
@@ -510,6 +532,13 @@ struct render_data {
     bool show_skills_panel = false;
     std::vector<render_skill_progress> skills;
     std::vector<render_xp_drop> xp_drops;
+    // The effect shelf beside the club label, newest first, and the freed
+    // mouse's place in overlay clip space while the right button is held on
+    // foot: the square under it shows its tooltip (renderer/effect_shelf_overlay.h).
+    std::vector<render_effect_square> effect_squares;
+    // The coloured screen edges to draw under the HUD (game/vignette_strength.h).
+    std::vector<vignette_look> vignettes;
+    std::optional<glm::vec2> effect_cursor;
     std::optional<render_shot_number> shot_number;
     // The paces counted so far, popped up ahead of my eyes as a shot's
     // number is (game/pacing.h).

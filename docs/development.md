@@ -28,6 +28,8 @@ clubs among them) and rewards: a new tuning field goes in that copy too. Environ
 (`GOLFPP_COURSE`, `GOLFPP_SCREENSHOT`, `GOLFPP_GAME_TIME`, `GOLFPP_WEATHER`,
 `GOLFPP_GOD`, …) are in `docs/performance.md`.
 
+**God menu strike.** F1's STRIKE ME row (Left/Right: dazed or knocked out, Enter: strike) calls lightning down on me, offline or online; online only on a server with `allow_god`, which `tooling/net/dev.ps1` sets on the local one.
+
 **Tuning the look live.** The game reloads `assets/picture/lighting.json`
 and `picture.json` when they are saved (their write times polled every half
 second, `src/game/look_reload.h`): edit them next to the visual tour. A file
@@ -87,7 +89,7 @@ The server module (from PowerShell, after `. <emsdk>\emsdk_env.ps1`):
 spacetime build --module-path server/golfpp_module
 spacetime start                                           # a local server, in another terminal
 spacetime publish golfpp --server local --bin-path server/golfpp_module/build/lib.wasm
-tooling\net\check_determinism.ps1 -Emsdk <emsdk>         # golden shots, drives and walks, native vs WASM
+tooling\net\check_determinism.ps1 -Emsdk <emsdk>         # golden shots, drives, walks and flights with contacts, native vs WASM
 tooling\net\check_determinism.ps1 -SelfTest               # that comparison fails on perturbed rows (native only)
 spacetime generate --lang rust --bin-path server/golfpp_module/build/lib.wasm --out-dir net/client_bridge/src/module_bindings
 ```
@@ -96,7 +98,9 @@ spacetime generate --lang rust --bin-path server/golfpp_module/build/lib.wasm --
 (`tooling\net\dev.ps1`) and launches one client on it, so PLAY OFFLINE and PLAY
 ONLINE both work; if the server fails it still launches for offline play.
 `.\tooling\gb -m` runs local multiplayer (server, publish, two anonymous
-clients); `.\tooling\gb -x` stops the clients and the server. A release build
+clients). Both wait for the game to close and then stop the server if they
+started it (one already running is left alone); `.\tooling\gb -x` stops the
+clients and the server. A release build
 (`tooling\release\build_release.ps1`) also publishes its module locally through
 `dev.ps1`. Hosting is `server/hosting.md`, shipped
 to owners who run their own server. The module's plain C++ rule `.cpp` files in

@@ -2,6 +2,23 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
+
+bool operator==(const effect_source& a, const effect_source& b) {
+    return a.kind == b.kind && a.id == b.id;
+}
+
+effect_source item_source(std::string id) {
+    return effect_source{effect_source_kind::item, std::move(id)};
+}
+
+effect_source event_source(std::string id) {
+    return effect_source{effect_source_kind::event, std::move(id)};
+}
+
+std::int64_t effect_milliseconds(const float seconds) {
+    return static_cast<std::int64_t>(std::llround(static_cast<double>(seconds) * 1000.0));
+}
 
 bool effect_running(const active_effect& effect, const std::int64_t now_ms) {
     return effect.started_at_ms <= now_ms && now_ms < effect.ends_at_ms;

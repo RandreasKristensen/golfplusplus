@@ -45,14 +45,15 @@ room_shot shot_of(const stdb_shot_event& event) {
     shot.record.seed = event.seed;
     for (std::size_t i = 0; i < event.snapshot_count; ++i) {
         const stdb_snapshot_entry& entry = event.snapshot[i];
-        const snapshot_kind kind = entry.kind <= static_cast<std::uint8_t>(snapshot_kind::ball)
+        const snapshot_kind kind = entry.kind <= static_cast<std::uint8_t>(snapshot_kind::body)
             ? static_cast<snapshot_kind>(entry.kind)
             : snapshot_kind::person;
-        shot.record.snapshot.push_back(snapshot_entry{kind, glm::vec3(entry.x, entry.y, entry.z), entry.yaw, entry.shooter});
+        shot.record.snapshot.push_back(snapshot_entry{kind, glm::vec3(entry.x, entry.y, entry.z), entry.yaw, entry.shooter, entry.account});
     }
     shot.golfer.hand = setup.hand;
     shot.golfer.natural = natural_shape_from_index(event.natural_shape).value_or(natural_shape::neutral);
     shot.golfer.spread_scale = event.spread_scale;
+    shot.golfer.club_speed_scale = event.club_speed_scale;
     for (std::size_t i = 0; i < event.levels_count; ++i) {
         shot.golfer.levels[text_of(event.levels[i].skill_id)] = event.levels[i].level;
     }
@@ -60,6 +61,23 @@ room_shot shot_of(const stdb_shot_event& event) {
     shot.rest = glm::vec3(event.rest_x, event.rest_y, event.rest_z);
     shot.holed = event.holed;
     return shot;
+}
+
+room_contact contact_of(const stdb_ball_contact& event) {
+    room_contact contact;
+    contact.account_id = event.account_id;
+    contact.hole = event.hole;
+    contact.stroke = event.stroke;
+    contact.index = event.index;
+    flight_contact& met = contact.contact;
+    met.step = event.step;
+    const snapshot_kind kind = event.kind <= static_cast<std::uint8_t>(snapshot_kind::body)
+        ? static_cast<snapshot_kind>(event.kind) : snapshot_kind::person;
+    met.mover = snapshot_entry{kind, glm::vec3(event.x, event.y, event.z), event.yaw, event.shooter, event.account};
+    met.time = event.time;
+    met.speed_mps = event.speed_mps;
+    met.height_m = event.height_m;
+    return contact;
 }
 
 room_bag bag_of(const stdb_player_bag& row) {
@@ -99,10 +117,13 @@ bool room_rows::apply(const stdb_event& event,
     case STDB_TABLE_DAP: room = row.dap.room_id; break;
     case STDB_TABLE_BALL: room = row.ball.room_id; break;
     case STDB_TABLE_PRACTICE_BALL: room = row.practice_ball.room_id; break;
+    case STDB_TABLE_BODY: room = row.body.room_id; break;
     case STDB_TABLE_GOLF_CART: room = row.golf_cart.room_id; break;
     case STDB_TABLE_PLAYER_BAG: room = row.player_bag.room_id; break;
     case STDB_TABLE_GREEN_FLAG: room = row.green_flag.room_id; break;
     case STDB_TABLE_SHOT_EVENT: room = row.shot_event.room_id; break;
+    case STDB_TABLE_BALL_CONTACT_EVENT: room = row.ball_contact.room_id; break;
+    case STDB_TABLE_LIGHTNING_STRIKE_EVENT: room = row.lightning_strike.room_id; break;
     case STDB_TABLE_ITEM_USE_EVENT: room = row.item_use_event.room_id; break;
     default: break;
     }
@@ -165,6 +186,20 @@ bool room_rows::apply(const stdb_event& event,
         apply_change(spares_, b.id, change, spare_ball{b.id, b.account_id, glm::vec3(b.x, b.y, b.z), b.in_cup, b.placed_at});
         break;
     }
+    case STDB_TABLE_BODY: {
+        const stdb_body& b = row.body;
+        fallen_body lying;
+        lying.account = b.account_id;
+        lying.position = glm::vec3(b.x, b.y, b.z);
+        lying.yaw = b.yaw;
+        lying.fell_at_ms = b.fell_at / 1000;
+        lying.expires_at_ms = b.expires_at / 1000;
+        lying.bag_on_back = b.bag_on_back;
+        lying.colour = b.colour;
+        lying.hand = hand_of(b.hand);
+        apply_change(bodies_, b.id, change, lying);
+        break;
+    }
     case STDB_TABLE_GOLF_CART: {
         const stdb_golf_cart& c = row.golf_cart;
         apply_view_change(carts_, c.owner, change,
@@ -180,6 +215,19 @@ bool room_rows::apply(const stdb_event& event,
         // Events only ever arrive as inserts.
         if (change != STDB_ROW_DELETE) {
             shots_.push_back(shot_of(row.shot_event));
+        }
+        changed_ = true;
+        return true;
+    case STDB_TABLE_BALL_CONTACT_EVENT:
+        if (change != STDB_ROW_DELETE) {
+            contacts_.push_back(contact_of(row.ball_contact));
+        }
+        changed_ = true;
+        return true;
+    case STDB_TABLE_LIGHTNING_STRIKE_EVENT:
+        if (change != STDB_ROW_DELETE) {
+            const stdb_lightning_strike& strike = row.lightning_strike;
+            strikes_.push_back(room_strike{strike.account_id, glm::vec3(strike.x, strike.y, strike.z)});
         }
         changed_ = true;
         return true;
@@ -244,12 +292,17 @@ void room_rows::publish(game_state& state) {
     state.online.ride = ridden != carts_.end() && ridden->second.passenger == state.online.account_id
         ? ride_ : std::nullopt;
     state.online.shots.insert(state.online.shots.end(), shots_.begin(), shots_.end());
+    state.online.contacts.insert(state.online.contacts.end(), contacts_.begin(), contacts_.end());
     state.online.item_uses.insert(state.online.item_uses.end(), item_uses_.begin(), item_uses_.end());
+    state.online.strikes.insert(state.online.strikes.end(), strikes_.begin(), strikes_.end());
     shots_.clear();
+    contacts_.clear();
     item_uses_.clear();
+    strikes_.clear();
     state.online.daps = daps_;
     state.online.balls = balls_;
     state.online.spare_balls = spares_;
+    state.online.bodies = bodies_;
     state.online.carts = carts_;
     state.online.loadouts = loadouts_;
     state.online.bags = bags_;
@@ -268,10 +321,14 @@ void room_rows::clear(game_state& state) {
     ready_ = false;
     ride_.reset();
     shots_.clear();
+    contacts_.clear();
     item_uses_.clear();
+    strikes_.clear();
     state.online.room_ready = false;
     state.online.shots.clear();
+    state.online.contacts.clear();
     state.online.item_uses.clear();
+    state.online.strikes.clear();
     state.online.ride.reset();
     members_.clear();
     names_.clear();
@@ -279,6 +336,7 @@ void room_rows::clear(game_state& state) {
     daps_.clear(); state.online.daps.clear(); state.dap_pending.reset();
     balls_.clear();
     spares_.clear();
+    bodies_.clear();
     carts_.clear();
     loadouts_.clear();
     bags_.clear();
@@ -288,6 +346,7 @@ void room_rows::clear(game_state& state) {
     state.online.players.clear();
     state.online.balls.clear();
     state.online.spare_balls.clear();
+    state.online.bodies.clear();
     state.online.carts.clear();
     state.online.loadouts.clear();
     state.online.bags.clear();

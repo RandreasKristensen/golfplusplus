@@ -56,6 +56,11 @@ game_content_load_result load_game_content(const std::string& asset_root) {
         return fail(items.error);
     }
     content.items = std::move(*items.catalog);
+    effect_catalog_load_result effects = load_effects(asset_root);
+    if (!effects.catalog) {
+        return fail(effects.error);
+    }
+    content.effects = std::move(*effects.catalog);
     const std::optional<std::string> loadout_text = read_text_file(root / default_loadout_path);
     const std::optional<loadout> defaults = loadout_text ? parse_loadout_from_text(*loadout_text) : std::nullopt;
     if (!defaults || !loadout_fits(*defaults, content.items)) {

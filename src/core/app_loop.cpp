@@ -6,6 +6,8 @@
 #include "core/key_bindings.h"
 #include "core/play_screen.h"
 #include "game/settings.h"
+#include "game/text_ids.h"
+#include <SDL.h>
 #include <chrono>
 
 std::int64_t app::unix_now_ms() {
@@ -24,15 +26,29 @@ void app::update_round(const float dt, frame_profile* profile) {
         : handedness::right;
     game_.favourite_colour = static_cast<std::uint8_t>(
         setting_value(menu_.settings, *find_setting(content_.settings, setting_favourite_colour)));
-    advance_game(game_input_from_keys(god_.open ? without_god_menu_keys(input_) : input_, mouse_look_radians(),
-                                      game_.tuning.setup), dt, profile);
-    set_mouse_captured(!benchmark_);
+    // Right held on foot frees the cursor over the effect shelf; its counts never turn the look.
+    effect_cursor_ = next_effect_cursor(effect_cursor_, wants_effect_cursor(game_, input_.mouse_right.is_down));
+    advance_game(game_input_from_keys(god_.open ? without_god_menu_keys(input_) : input_,
+                                      look_blocked(effect_cursor_) ? 0.0f : mouse_look_radians(), game_.tuning.setup), dt, profile);
+    set_mouse_captured(!benchmark_ && !effect_cursor_.freed);
     set_text_input_enabled(false);
     if (game_.save_requested) {
         save_progress();
     }
+    if (game_.knocked_out) {
+        game_.knocked_out = false;
+        return_to_menu();
+        menu_.message_key = text_menu_knocked_out;
+        return;
+    }
 
     render_data data = make_frame(dt, false, profile, benchmark_ ? benchmark_->camera() : std::nullopt);
+    if (effect_cursor_.freed) {
+        int width = 1;
+        int height = 1;
+        SDL_GetWindowSize(window_.sdl_window(), &width, &height);
+        data.effect_cursor = mouse_clip_position(input_, width, height);
+    }
     play_game_audio();
     present_frame(data, profile);
 }

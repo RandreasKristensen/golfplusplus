@@ -59,7 +59,7 @@ shot_ability ability_for(const shot_setup& setup, const club_definition& club, b
                          const game_tuning& tuning);
 
 // How far `golfer`'s swing at `setup` strays with the shot's dice `seed`:
-// the ability's spread rolled, plus its bias.
+// the ability's spread rolled, plus its bias, at the golfer's club speed scale.
 swing_errors struck_errors(const shot_setup& setup, std::uint64_t seed, const club_definition& club, ball_lie lie,
                            const golfer_profile& golfer, const game_tuning& tuning);
 

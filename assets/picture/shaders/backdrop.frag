@@ -64,7 +64,7 @@ uniform vec4 u_cloud_deck_look;
 // A lightning strike: towards the top of its bolt and its flash (0 none);
 // its seed, the bolt's brightness (0 for a flash inside the cloud), width
 // and wander (radians); its colour and how much it lights the clouds within
-// u_lightning_glow_radius of its top.
+// u_lightning_glow_radius of its top; its bolt ends at the horizon.
 uniform vec4 u_lightning;
 uniform vec4 u_lightning_bolt;
 uniform vec4 u_lightning_glow;
@@ -218,7 +218,7 @@ vec3 add_lightning(vec3 sky, vec3 direction, float elevation, float pixel, float
     glow = glow * glow * u_lightning_glow.a * (0.35 + 0.65 * cloud);
 
     float top_elevation = max(asin(clamp(top.y, -1.0, 1.0)), 0.01);
-    float down = 1.0 - elevation / top_elevation;  // 0 at its top, 1 at the horizon
+    float down = (top_elevation - elevation) / top_elevation;  // 0 at its top, 1 at its bottom
     float along = clamp(down, 0.0, 1.0) * float(bolt_runs);
     float run = min(floor(along), float(bolt_runs - 1));
     float from = 0.0;

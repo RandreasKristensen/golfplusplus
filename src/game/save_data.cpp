@@ -42,6 +42,49 @@ std::map<std::string, repeatable_collectible_state> repeatable_collectibles_from
     }
     return values;
 }
+
+std::optional<fallen_body> body_from_json(const json& entry) {
+    const std::optional<std::string> place = json_string(entry, "place");
+    const std::optional<glm::vec3> position = json_vec3(entry, "position");
+    const std::optional<float> yaw = json_float(entry, "yaw");
+    const auto fell = entry.find("fell_at_ms");
+    const auto expires = entry.find("expires_at_ms");
+    const std::optional<bool> bag = json_bool(entry, "bag_on_back");
+    const std::optional<int> colour = json_int(entry, "colour");
+    const std::optional<std::string> hand = json_string(entry, "hand");
+    if (!place || !position || !yaw || fell == entry.end() || expires == entry.end() || !bag || !colour || *colour < 0 ||
+        *colour > 255 || !hand || (*hand != "left" && *hand != "right")) {
+        return std::nullopt;
+    }
+    const std::optional<std::int64_t> fell_at = json_int64(*fell);
+    const std::optional<std::int64_t> expires_at = json_int64(*expires);
+    if (!fell_at || !expires_at) {
+        return std::nullopt;
+    }
+    fallen_body body;
+    body.place_id = *place;
+    body.position = *position;
+    body.yaw = *yaw;
+    body.fell_at_ms = *fell_at;
+    body.expires_at_ms = *expires_at;
+    body.bag_on_back = *bag;
+    body.colour = static_cast<std::uint8_t>(*colour);
+    body.hand = *hand == "left" ? handedness::left : handedness::right;
+    return body;
+}
+
+// The bodies that read whole; one that does not is dropped, not the save.
+std::vector<fallen_body> bodies_from_json(const json& root) {
+    std::vector<fallen_body> bodies;
+    if (const json* entries = json_array(root, "bodies")) {
+        for (const json& entry : *entries) {
+            if (std::optional<fallen_body> body = entry.is_object() ? body_from_json(entry) : std::nullopt) {
+                bodies.push_back(std::move(*body));
+            }
+        }
+    }
+    return bodies;
+}
 }
 
 save_data migrate_save_data(save_data save) {
@@ -83,6 +126,7 @@ std::optional<save_data> parse_save_data(const std::string& text) {
     if (const std::optional<std::string> natural = json_string(*root, "natural_shape")) {
         save.natural = natural_shape_from_name(*natural);
     }
+    save.bodies = bodies_from_json(*root);
     if (const json* equipped = json_object(*root, "loadout")) {
         save.equipped = parse_loadout_from_text(equipped->dump()).value_or(loadout{});
     }
@@ -124,6 +168,21 @@ std::string save_data_to_json(const save_data& save) {
     if (save.natural) {
         root["natural_shape"] = natural_shape_name(*save.natural);
     }
+
+    json bodies = json::array();
+    for (const fallen_body& body : save.bodies) {
+        json entry = json::object();
+        entry["place"] = body.place_id;
+        entry["position"] = {body.position.x, body.position.y, body.position.z};
+        entry["yaw"] = body.yaw;
+        entry["fell_at_ms"] = body.fell_at_ms;
+        entry["expires_at_ms"] = body.expires_at_ms;
+        entry["bag_on_back"] = body.bag_on_back;
+        entry["colour"] = static_cast<int>(body.colour);
+        entry["hand"] = body.hand == handedness::left ? "left" : "right";
+        bodies.push_back(entry);
+    }
+    root["bodies"] = bodies;
 
     return root.dump(2) + "\n";
 }

@@ -32,6 +32,7 @@ world_marker_scene marker_scene_for(const render_data& data, const int scene_hei
     markers.ball_visual_radius_meters = data.ball_visual_radius_meters;
     markers.remote_avatars = &data.remote_avatars;
     markers.remote_balls = &data.remote_balls;
+    markers.lying_bodies = &data.lying_bodies;
     markers.avatar_eye_height = data.avatar_eye_height;
     return markers;
 }

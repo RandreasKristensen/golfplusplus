@@ -21,12 +21,17 @@ void online_session::update(game_state& state) {
     }
 }
 
+bool online_session::knocked_out() const {
+    return failure_id(net_.failure()) == net_failure_knocked_out;
+}
+
 online_menu_status online_session::menu_status(const game_state& state, const std::chrono::system_clock::time_point now) const {
     online_menu_status status;
     status.available = true;
     status.status = net_.status();
     status.guest = net_.guest();
-    if (!net_.failure().empty()) {
+    // A knockout is no failure of signing in: the player may sign in again at once.
+    if (!net_.failure().empty() && !knocked_out()) {
         status.failure_id = failure_id(net_.failure());
     }
     status.account_id = state.online.account_id;
@@ -88,7 +93,7 @@ online_round_status online_session::watch_round(const game_state& state) {
     const net_status status = net_.status();
     if (status == net_status::signed_out || status == net_status::failed) {
         rejoining_ = false;
-        return {online_round_event::lost, {}};
+        return {online_round_event::lost, status == net_status::failed && knocked_out() ? text_menu_knocked_out : std::string()};
     }
     if (status != net_status::connected) {
         // Signing in again by itself: the room is gone once it is back.

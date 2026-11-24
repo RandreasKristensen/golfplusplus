@@ -23,3 +23,7 @@ std::size_t gear_paint_index(const gear_paint& paint, std::size_t paint_count);
 
 // The paint of `owner`'s gear (0 or my account: mine).
 gear_paint gear_paint_of(const game_state& state, std::uint64_t owner);
+
+// Who picks `account`'s shirt (renderer remote_tint): the account itself, and
+// for 0 (offline's me, a body of mine) the shirt I wear: my account online, else 0.
+std::uint64_t shirt_id_of(const game_state& state, std::uint64_t account);

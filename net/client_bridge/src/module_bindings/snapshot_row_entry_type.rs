@@ -13,6 +13,7 @@ pub struct SnapshotRowEntry {
     pub z: f32,
     pub yaw: f32,
     pub shooter: bool,
+    pub account: u64,
 }
 
 impl __sdk::InModule for SnapshotRowEntry {

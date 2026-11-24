@@ -267,6 +267,9 @@
     "bolt_brightness": 6,
     "glow_radius_deg": 28,
     "glow_strength": 1.4,
+    "world_bolt_height_meters": 300,
+    "world_bolt_width_meters": 0.25,
+    "world_bolt_wander": 0.3,
     "color": [0.82, 0.86, 1.0]
   },
   "wind": {

@@ -180,7 +180,7 @@ TEST_CASE("an item's timed effect raises XP while it runs, and walking speed by 
     smoker.duration = effect_duration::seconds;
     smoker.seconds = 30.0f;
     const std::int64_t now = shot_unix_ms(state);
-    state.effects.push_back(active_effect{"lucky_charm", smoker, now, now + 30000});
+    state.effects.push_back(active_effect{item_source("lucky_charm"), smoker, now, now + 30000});
     const int before = xp_of(state, state.rewards.shot.skill_id);
     record_shot(state, shot_setup{});
     CHECK(xp_of(state, state.rewards.shot.skill_id) - before == 2 * state.rewards.shot.xp);
@@ -195,7 +195,7 @@ TEST_CASE("an item's timed effect raises XP while it runs, and walking speed by 
     quicker.value = 1.0f;
     quicker.duration = effect_duration::seconds;
     quicker.seconds = 30.0f;
-    state.effects.push_back(active_effect{"shoes", quicker, shot_unix_ms(state), shot_unix_ms(state) + 30000});
+    state.effects.push_back(active_effect{item_source("shoes"), quicker, shot_unix_ms(state), shot_unix_ms(state) + 30000});
     game_input forward;
     forward.forward_held = true;
     update_game(state, forward, 0.05f);
@@ -476,7 +476,10 @@ TEST_CASE("moving or acting takes over from the shot camera, and the ball plays 
         update_game(state, input, 0.02f);
         CHECK(state.mode == game_mode::walking);
         CHECK(state.shot.has_value());
-        CHECK(state.flight_path_points.empty());
+        const std::size_t drawn = state.my_flight_line.points.size();
+        CHECK(drawn >= 2);  // the flight line outlives the shot camera
+        update_game(state, game_input{}, 0.1f);
+        CHECK(state.my_flight_line.points.size() > drawn);
         return horizontal_distance(state.player.position, stood);
     };
     game_input walk;
@@ -531,7 +534,7 @@ TEST_CASE("overlays show only while held, the rangefinder in a cart too") {
     CHECK(addressing.skills_panel_active);
 }
 
-TEST_CASE("xp drops pool small gains and merge repeats of one skill") {
+TEST_CASE("xp drops pool small gains and every award of one skill is its own drop") {
     game_state state = started_hole();
     const int threshold = state.tuning.xp_drops.min_visible_xp;
     REQUIRE(threshold > 1);
@@ -553,13 +556,17 @@ TEST_CASE("xp drops pool small gains and merge repeats of one skill") {
 
     update_xp_drops(state, 0.5f);
     gain(threshold);
-    REQUIRE(state.xp_drops.size() == 1U);
-    CHECK(state.xp_drops[0].xp == 2 * threshold);
-    CHECK(state.xp_drops[0].age == 0.0f);
+    REQUIRE(state.xp_drops.size() == 2U);
+    CHECK(state.xp_drops[0].skill_id == "fitness");
+    CHECK(state.xp_drops[1].skill_id == "fitness");
+    CHECK(state.xp_drops[0].xp == threshold);
+    CHECK(state.xp_drops[1].xp == threshold);
+    CHECK(state.xp_drops[0].age == 0.5f);
+    CHECK(state.xp_drops[1].age == 0.0f);
 
-    update_xp_drops(state, state.tuning.xp_drops.lifetime_seconds - 0.01f);
+    update_xp_drops(state, state.tuning.xp_drops.lifetime_seconds - 0.49f);
     CHECK(state.xp_drops.size() == 1U);
-    update_xp_drops(state, 0.02f);
+    update_xp_drops(state, 0.5f);
     CHECK(state.xp_drops.empty());
 }
 

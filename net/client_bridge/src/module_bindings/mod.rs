@@ -9,9 +9,15 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub mod account_login_row_type;
 pub mod admin_set_config_reducer;
 pub mod avatar_motion_row_type;
+pub mod ball_contact_event_row_type;
+pub mod ball_contact_event_table;
+pub mod ball_flight_row_type;
 pub mod ball_row_type;
 pub mod ball_table;
 pub mod board_cart_reducer;
+pub mod body_expiry_row_type;
+pub mod body_row_type;
+pub mod body_table;
 pub mod book_tee_reducer;
 pub mod cancel_tee_reducer;
 pub mod cart_tow_row_type;
@@ -25,7 +31,9 @@ pub mod dap_reducer;
 pub mod dap_row_type;
 pub mod departure_board_table;
 pub mod departure_view_type;
+pub mod flight_due_row_type;
 pub mod give_up_hole_reducer;
+pub mod god_strike_reducer;
 pub mod golf_cart_row_type;
 pub mod golf_group_row_type;
 pub mod golf_group_table;
@@ -38,10 +46,14 @@ pub mod item_use_event_row_type;
 pub mod item_use_event_table;
 pub mod item_use_row_type;
 pub mod join_course_reducer;
+pub mod knockout_notice_row_type;
 pub mod leave_cart_reducer;
 pub mod leave_group_reducer;
 pub mod leave_room_reducer;
 pub mod leave_wheel_reducer;
+pub mod lightning_run_row_type;
+pub mod lightning_strike_event_row_type;
+pub mod lightning_strike_event_table;
 pub mod link_attempt_row_type;
 pub mod link_budget_row_type;
 pub mod link_code_expiry_row_type;
@@ -57,6 +69,7 @@ pub mod my_collected_table;
 pub mod my_completed_courses_table;
 pub mod my_golf_carts_table;
 pub mod my_golfer_progress_table;
+pub mod my_knockout_notice_table;
 pub mod my_link_code_table;
 pub mod my_link_status_table;
 pub mod my_skills_table;
@@ -124,9 +137,15 @@ pub mod xp_rollup_run_row_type;
 pub use account_login_row_type::AccountLoginRow;
 pub use admin_set_config_reducer::admin_set_config;
 pub use avatar_motion_row_type::AvatarMotionRow;
+pub use ball_contact_event_row_type::BallContactEventRow;
+pub use ball_contact_event_table::*;
+pub use ball_flight_row_type::BallFlightRow;
 pub use ball_row_type::BallRow;
 pub use ball_table::*;
 pub use board_cart_reducer::board_cart;
+pub use body_expiry_row_type::BodyExpiryRow;
+pub use body_row_type::BodyRow;
+pub use body_table::*;
 pub use book_tee_reducer::book_tee;
 pub use cancel_tee_reducer::cancel_tee;
 pub use cart_tow_row_type::CartTowRow;
@@ -140,7 +159,9 @@ pub use dap_reducer::dap;
 pub use dap_row_type::DapRow;
 pub use departure_board_table::*;
 pub use departure_view_type::DepartureView;
+pub use flight_due_row_type::FlightDueRow;
 pub use give_up_hole_reducer::give_up_hole;
+pub use god_strike_reducer::god_strike;
 pub use golf_cart_row_type::GolfCartRow;
 pub use golf_group_row_type::GolfGroupRow;
 pub use golf_group_table::*;
@@ -153,10 +174,14 @@ pub use item_use_event_row_type::ItemUseEventRow;
 pub use item_use_event_table::*;
 pub use item_use_row_type::ItemUseRow;
 pub use join_course_reducer::join_course;
+pub use knockout_notice_row_type::KnockoutNoticeRow;
 pub use leave_cart_reducer::leave_cart;
 pub use leave_group_reducer::leave_group;
 pub use leave_room_reducer::leave_room;
 pub use leave_wheel_reducer::leave_wheel;
+pub use lightning_run_row_type::LightningRunRow;
+pub use lightning_strike_event_row_type::LightningStrikeEventRow;
+pub use lightning_strike_event_table::*;
 pub use link_attempt_row_type::LinkAttemptRow;
 pub use link_budget_row_type::LinkBudgetRow;
 pub use link_code_expiry_row_type::LinkCodeExpiryRow;
@@ -172,6 +197,7 @@ pub use my_collected_table::*;
 pub use my_completed_courses_table::*;
 pub use my_golf_carts_table::*;
 pub use my_golfer_progress_table::*;
+pub use my_knockout_notice_table::*;
 pub use my_link_code_table::*;
 pub use my_link_status_table::*;
 pub use my_skills_table::*;
@@ -249,6 +275,7 @@ pub enum Reducer {
         auth_audience: String,
         allow_anonymous: bool,
         server_secret: String,
+        allow_god: bool,
     },
     BoardCart {
         expected_room: u64,
@@ -279,6 +306,10 @@ pub enum Reducer {
     },
     GiveUpHole {
         expected_room: u64,
+    },
+    GodStrike {
+        expected_room: u64,
+        knock_out: bool,
     },
     JoinCourse {
         course_id: String,
@@ -392,6 +423,7 @@ pub enum Reducer {
         start_y: f32,
         start_z: f32,
         runs: Vec<MoveRunRow>,
+        first_time_ms: i64,
         setup_aim: u16,
         setup_face_open: i16,
         setup_ball_position: i8,
@@ -430,6 +462,7 @@ impl __sdk::Reducer for Reducer {
             Reducer::CreateLinkCode => "create_link_code",
             Reducer::Dap { .. } => "dap",
             Reducer::GiveUpHole { .. } => "give_up_hole",
+            Reducer::GodStrike { .. } => "god_strike",
             Reducer::JoinCourse { .. } => "join_course",
             Reducer::LeaveCart { .. } => "leave_cart",
             Reducer::LeaveGroup { .. } => "leave_group",
@@ -465,11 +498,13 @@ impl __sdk::Reducer for Reducer {
                 auth_audience,
                 allow_anonymous,
                 server_secret,
+                allow_god,
             } => __sats::bsatn::to_vec(&admin_set_config_reducer::AdminSetConfigArgs {
                 auth_issuer: auth_issuer.clone(),
                 auth_audience: auth_audience.clone(),
                 allow_anonymous: allow_anonymous.clone(),
                 server_secret: server_secret.clone(),
+                allow_god: allow_god.clone(),
             }),
             Reducer::BoardCart {
                 expected_room,
@@ -525,6 +560,13 @@ impl __sdk::Reducer for Reducer {
                     expected_room: expected_room.clone(),
                 })
             }
+            Reducer::GodStrike {
+                expected_room,
+                knock_out,
+            } => __sats::bsatn::to_vec(&god_strike_reducer::GodStrikeArgs {
+                expected_room: expected_room.clone(),
+                knock_out: knock_out.clone(),
+            }),
             Reducer::JoinCourse { course_id } => {
                 __sats::bsatn::to_vec(&join_course_reducer::JoinCourseArgs {
                     course_id: course_id.clone(),
@@ -713,6 +755,7 @@ impl __sdk::Reducer for Reducer {
                 start_y,
                 start_z,
                 runs,
+                first_time_ms,
                 setup_aim,
                 setup_face_open,
                 setup_ball_position,
@@ -733,6 +776,7 @@ impl __sdk::Reducer for Reducer {
                 start_y: start_y.clone(),
                 start_z: start_z.clone(),
                 runs: runs.clone(),
+                first_time_ms: first_time_ms.clone(),
                 setup_aim: setup_aim.clone(),
                 setup_face_open: setup_face_open.clone(),
                 setup_ball_position: setup_ball_position.clone(),
@@ -775,17 +819,21 @@ impl __sdk::Reducer for Reducer {
 #[doc(hidden)]
 pub struct DbUpdate {
     ball: __sdk::TableUpdate<BallRow>,
+    ball_contact_event: __sdk::TableUpdate<BallContactEventRow>,
+    body: __sdk::TableUpdate<BodyRow>,
     dap_pair: __sdk::TableUpdate<DapRow>,
     departure_board: __sdk::TableUpdate<DepartureView>,
     golf_group: __sdk::TableUpdate<GolfGroupRow>,
     green_flag: __sdk::TableUpdate<GreenFlagRow>,
     item_use_event: __sdk::TableUpdate<ItemUseEventRow>,
+    lightning_strike_event: __sdk::TableUpdate<LightningStrikeEventRow>,
     my_account: __sdk::TableUpdate<PlayerRow>,
     my_avatar_motion: __sdk::TableUpdate<AvatarMotionRow>,
     my_collected: __sdk::TableUpdate<CollectedRow>,
     my_completed_courses: __sdk::TableUpdate<CompletedCourseRow>,
     my_golf_carts: __sdk::TableUpdate<GolfCartRow>,
     my_golfer_progress: __sdk::TableUpdate<GolferProgressRow>,
+    my_knockout_notice: __sdk::TableUpdate<KnockoutNoticeRow>,
     my_link_code: __sdk::TableUpdate<LinkCodeView>,
     my_link_status: __sdk::TableUpdate<LinkStatus>,
     my_skills: __sdk::TableUpdate<GolferSkillRow>,
@@ -816,6 +864,12 @@ impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
                 "ball" => db_update
                     .ball
                     .append(ball_table::parse_table_update(table_update)?),
+                "ball_contact_event" => db_update
+                    .ball_contact_event
+                    .append(ball_contact_event_table::parse_table_update(table_update)?),
+                "body" => db_update
+                    .body
+                    .append(body_table::parse_table_update(table_update)?),
                 "dap_pair" => db_update
                     .dap_pair
                     .append(dap_pair_table::parse_table_update(table_update)?),
@@ -831,6 +885,9 @@ impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
                 "item_use_event" => db_update
                     .item_use_event
                     .append(item_use_event_table::parse_table_update(table_update)?),
+                "lightning_strike_event" => db_update.lightning_strike_event.append(
+                    lightning_strike_event_table::parse_table_update(table_update)?,
+                ),
                 "my_account" => db_update
                     .my_account
                     .append(my_account_table::parse_table_update(table_update)?),
@@ -849,6 +906,9 @@ impl TryFrom<__ws::v2::TransactionUpdate> for DbUpdate {
                 "my_golfer_progress" => db_update
                     .my_golfer_progress
                     .append(my_golfer_progress_table::parse_table_update(table_update)?),
+                "my_knockout_notice" => db_update
+                    .my_knockout_notice
+                    .append(my_knockout_notice_table::parse_table_update(table_update)?),
                 "my_link_code" => db_update
                     .my_link_code
                     .append(my_link_code_table::parse_table_update(table_update)?),
@@ -935,6 +995,10 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.ball = cache
             .apply_diff_to_table::<BallRow>("ball", &self.ball)
             .with_updates_by_pk(|row| &row.account_id);
+        diff.ball_contact_event = self.ball_contact_event.into_event_diff();
+        diff.body = cache
+            .apply_diff_to_table::<BodyRow>("body", &self.body)
+            .with_updates_by_pk(|row| &row.id);
         diff.dap_pair = cache
             .apply_diff_to_table::<DapRow>("dap_pair", &self.dap_pair)
             .with_updates_by_pk(|row| &row.id);
@@ -945,6 +1009,7 @@ impl __sdk::DbUpdate for DbUpdate {
             .apply_diff_to_table::<GreenFlagRow>("green_flag", &self.green_flag)
             .with_updates_by_pk(|row| &row.id);
         diff.item_use_event = self.item_use_event.into_event_diff();
+        diff.lightning_strike_event = self.lightning_strike_event.into_event_diff();
         diff.player = cache
             .apply_diff_to_table::<PlayerRow>("player", &self.player)
             .with_updates_by_pk(|row| &row.account_id);
@@ -990,6 +1055,10 @@ impl __sdk::DbUpdate for DbUpdate {
             "my_golfer_progress",
             &self.my_golfer_progress,
         );
+        diff.my_knockout_notice = cache.apply_diff_to_table::<KnockoutNoticeRow>(
+            "my_knockout_notice",
+            &self.my_knockout_notice,
+        );
         diff.my_link_code =
             cache.apply_diff_to_table::<LinkCodeView>("my_link_code", &self.my_link_code);
         diff.my_link_status =
@@ -1023,6 +1092,12 @@ impl __sdk::DbUpdate for DbUpdate {
                 "ball" => db_update
                     .ball
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "ball_contact_event" => db_update
+                    .ball_contact_event
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "body" => db_update
+                    .body
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "dap_pair" => db_update
                     .dap_pair
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
@@ -1037,6 +1112,9 @@ impl __sdk::DbUpdate for DbUpdate {
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "item_use_event" => db_update
                     .item_use_event
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "lightning_strike_event" => db_update
+                    .lightning_strike_event
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "my_account" => db_update
                     .my_account
@@ -1055,6 +1133,9 @@ impl __sdk::DbUpdate for DbUpdate {
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "my_golfer_progress" => db_update
                     .my_golfer_progress
+                    .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
+                "my_knockout_notice" => db_update
+                    .my_knockout_notice
                     .append(__sdk::parse_row_list_as_inserts(table_rows.rows)?),
                 "my_link_code" => db_update
                     .my_link_code
@@ -1129,6 +1210,12 @@ impl __sdk::DbUpdate for DbUpdate {
                 "ball" => db_update
                     .ball
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "ball_contact_event" => db_update
+                    .ball_contact_event
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "body" => db_update
+                    .body
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "dap_pair" => db_update
                     .dap_pair
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
@@ -1143,6 +1230,9 @@ impl __sdk::DbUpdate for DbUpdate {
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "item_use_event" => db_update
                     .item_use_event
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "lightning_strike_event" => db_update
+                    .lightning_strike_event
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "my_account" => db_update
                     .my_account
@@ -1161,6 +1251,9 @@ impl __sdk::DbUpdate for DbUpdate {
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "my_golfer_progress" => db_update
                     .my_golfer_progress
+                    .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
+                "my_knockout_notice" => db_update
+                    .my_knockout_notice
                     .append(__sdk::parse_row_list_as_deletes(table_rows.rows)?),
                 "my_link_code" => db_update
                     .my_link_code
@@ -1235,17 +1328,21 @@ impl __sdk::DbUpdate for DbUpdate {
 #[doc(hidden)]
 pub struct AppliedDiff<'r> {
     ball: __sdk::TableAppliedDiff<'r, BallRow>,
+    ball_contact_event: __sdk::TableAppliedDiff<'r, BallContactEventRow>,
+    body: __sdk::TableAppliedDiff<'r, BodyRow>,
     dap_pair: __sdk::TableAppliedDiff<'r, DapRow>,
     departure_board: __sdk::TableAppliedDiff<'r, DepartureView>,
     golf_group: __sdk::TableAppliedDiff<'r, GolfGroupRow>,
     green_flag: __sdk::TableAppliedDiff<'r, GreenFlagRow>,
     item_use_event: __sdk::TableAppliedDiff<'r, ItemUseEventRow>,
+    lightning_strike_event: __sdk::TableAppliedDiff<'r, LightningStrikeEventRow>,
     my_account: __sdk::TableAppliedDiff<'r, PlayerRow>,
     my_avatar_motion: __sdk::TableAppliedDiff<'r, AvatarMotionRow>,
     my_collected: __sdk::TableAppliedDiff<'r, CollectedRow>,
     my_completed_courses: __sdk::TableAppliedDiff<'r, CompletedCourseRow>,
     my_golf_carts: __sdk::TableAppliedDiff<'r, GolfCartRow>,
     my_golfer_progress: __sdk::TableAppliedDiff<'r, GolferProgressRow>,
+    my_knockout_notice: __sdk::TableAppliedDiff<'r, KnockoutNoticeRow>,
     my_link_code: __sdk::TableAppliedDiff<'r, LinkCodeView>,
     my_link_status: __sdk::TableAppliedDiff<'r, LinkStatus>,
     my_skills: __sdk::TableAppliedDiff<'r, GolferSkillRow>,
@@ -1279,6 +1376,12 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks: &mut __sdk::DbCallbacks<RemoteModule>,
     ) {
         callbacks.invoke_table_row_callbacks::<BallRow>("ball", &self.ball, event);
+        callbacks.invoke_table_row_callbacks::<BallContactEventRow>(
+            "ball_contact_event",
+            &self.ball_contact_event,
+            event,
+        );
+        callbacks.invoke_table_row_callbacks::<BodyRow>("body", &self.body, event);
         callbacks.invoke_table_row_callbacks::<DapRow>("dap_pair", &self.dap_pair, event);
         callbacks.invoke_table_row_callbacks::<DepartureView>(
             "departure_board",
@@ -1290,6 +1393,11 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks.invoke_table_row_callbacks::<ItemUseEventRow>(
             "item_use_event",
             &self.item_use_event,
+            event,
+        );
+        callbacks.invoke_table_row_callbacks::<LightningStrikeEventRow>(
+            "lightning_strike_event",
+            &self.lightning_strike_event,
             event,
         );
         callbacks.invoke_table_row_callbacks::<PlayerRow>("my_account", &self.my_account, event);
@@ -1316,6 +1424,11 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks.invoke_table_row_callbacks::<GolferProgressRow>(
             "my_golfer_progress",
             &self.my_golfer_progress,
+            event,
+        );
+        callbacks.invoke_table_row_callbacks::<KnockoutNoticeRow>(
+            "my_knockout_notice",
+            &self.my_knockout_notice,
             event,
         );
         callbacks.invoke_table_row_callbacks::<LinkCodeView>(
@@ -2050,17 +2163,21 @@ impl __sdk::SpacetimeModule for RemoteModule {
 
     fn register_tables(client_cache: &mut __sdk::ClientCache<Self>) {
         ball_table::register_table(client_cache);
+        ball_contact_event_table::register_table(client_cache);
+        body_table::register_table(client_cache);
         dap_pair_table::register_table(client_cache);
         departure_board_table::register_table(client_cache);
         golf_group_table::register_table(client_cache);
         green_flag_table::register_table(client_cache);
         item_use_event_table::register_table(client_cache);
+        lightning_strike_event_table::register_table(client_cache);
         my_account_table::register_table(client_cache);
         my_avatar_motion_table::register_table(client_cache);
         my_collected_table::register_table(client_cache);
         my_completed_courses_table::register_table(client_cache);
         my_golf_carts_table::register_table(client_cache);
         my_golfer_progress_table::register_table(client_cache);
+        my_knockout_notice_table::register_table(client_cache);
         my_link_code_table::register_table(client_cache);
         my_link_status_table::register_table(client_cache);
         my_skills_table::register_table(client_cache);
@@ -2083,17 +2200,21 @@ impl __sdk::SpacetimeModule for RemoteModule {
     }
     const ALL_TABLE_NAMES: &'static [&'static str] = &[
         "ball",
+        "ball_contact_event",
+        "body",
         "dap_pair",
         "departure_board",
         "golf_group",
         "green_flag",
         "item_use_event",
+        "lightning_strike_event",
         "my_account",
         "my_avatar_motion",
         "my_collected",
         "my_completed_courses",
         "my_golf_carts",
         "my_golfer_progress",
+        "my_knockout_notice",
         "my_link_code",
         "my_link_status",
         "my_skills",

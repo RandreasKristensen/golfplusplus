@@ -351,6 +351,7 @@ struct flight_path_tuning {
     float min_point_spacing = 0.0f;
     int max_points = 0;
     float line_width = 0.0f;
+    float fade_seconds = 0.0f;  // once the ball rests
 };
 
 // The rangefinder held up walking or in a cart (game/rangefinder.h).
@@ -450,6 +451,14 @@ struct net_tuning {
     float motion_min_interval_seconds = 0.0f;  // never send motion more often than this
     float motion_correction_distance = 0.0f;   // resend when others' extrapolation is this far off (world units)
     float motion_correction_yaw = 0.0f;        // ...or turned this far off (radians)
+    // Within contact_send_meters of a ball in flight, movement goes at least every
+    // contact_send_interval_seconds, so the server finds a contact from my steps soon.
+    // A contact my game predicts from my own steps is retracted when the server's
+    // row has not come contact_prediction_hold_seconds after its time (the rewind
+    // window and the row's way here).
+    float contact_send_meters = 0.0f;
+    float contact_send_interval_seconds = 0.0f;
+    float contact_prediction_hold_seconds = 0.0f;
     // Others are carried on along their last motion for at most this long,
     // then stand still; a new motion blends in over remote_correction_seconds.
     float remote_extrapolation_seconds = 0.0f;
@@ -459,7 +468,6 @@ struct net_tuning {
     // shot_correction_seconds once it has ended.
     float shot_correction_distance = 0.0f;
     float shot_correction_seconds = 0.0f;
-    float remote_trail_fade_seconds = 0.0f;  // another player's shot trail, after the ball stops
     float notice_seconds = 0.0f;             // how long a notice shows
     // The open tee book asks for its course's counts again after this long, and
     // gives up on a request unanswered for tee_book_list_timeout_seconds (the
@@ -520,6 +528,10 @@ struct server_tuning {
     // How much earlier than the server's clock the client may use an item
     // again, or act once its ball rests (it times them by frames).
     float timing_slack_seconds = 0.0f;
+    // How far back movement may still arrive and count: a ball's contact
+    // with a mover settles this long after it, and a batch whose steps all
+    // end earlier than this counts as standing (step_timeline.h, contact_settle.h).
+    float contact_rewind_seconds = 0.0f;
     // XP awards keep their per-award detail this many days, then are summed
     // per golfer, skill and month by a job run this often (progress_rollup.h).
     int xp_award_keep_days = 0;
@@ -847,6 +859,42 @@ struct dap_tuning {
     float thumb_share = 0.0f;
 };
 
+// What a ball that hits a person does to them (game/ball_hit_rules.h). The
+// bands are shares of rangefinder.person_height; speeds are the ball's, in m/s.
+struct ball_hit_tuning {
+    float head_band_share = 0.0f;  // the top of the body: a contact above 1 - this is a head hit
+    float legs_band_share = 0.0f;  // a contact below this is the legs
+    // Slower than this a ball does nothing (a putt rolling into a foot).
+    float min_speed_mps = 0.0f;
+    // The speed share of a hit is 0 at putt_speed_mps and below, rising
+    // linearly to 1 at drive_speed_mps and above.
+    float putt_speed_mps = 0.0f;
+    float drive_speed_mps = 0.0f;
+    // The chance a head hit at a speed share of 1 knocks someone out.
+    float head_knockout_max = 0.0f;
+};
+
+// A knocked-out golfer's body (game/fallen_body.h): how long it lies, and
+// the size of the low box it is for a ball, a walker and a cart. Its length
+// is a standing person's height (rangefinder.person_height).
+struct knockout_tuning {
+    float body_minutes = 0.0f;
+    float body_half_width_meters = 0.0f;
+    float body_height_meters = 0.0f;
+};
+
+// Lightning striking golfers (game/lightning_rules.h): at full thunder in the
+// open a golfer is struck on average once per open_strike_hours; a check runs
+// every check_seconds. The factors scale that chance by where the golfer is.
+struct lightning_tuning {
+    float check_seconds = 0.0f;
+    float open_strike_hours = 0.0f;
+    float building_factor = 0.0f;  // under a building's roof
+    float tree_factor = 0.0f;      // under a tree's canopy
+    float address_factor = 0.0f;   // club in hand at address or in the swing
+    float knockout_share = 0.0f;   // of strikes that knock out, the rest daze
+};
+
 struct game_tuning {
     dap_tuning dap;
     world_scale_tuning scale;
@@ -882,4 +930,7 @@ struct game_tuning {
     sky_timeline sky_clock;
     lie_tuning lies;
     golfer_tuning golfer;
+    ball_hit_tuning ball_hits;
+    knockout_tuning knockout;
+    lightning_tuning lightning;
 };

@@ -94,6 +94,7 @@ bool renderer::init(SDL_Window* window, const std::string& asset_root, const pic
         grass_renderer_.init(path("grass_blade.vert"), path("grass_blade.frag")) &&
         weather_renderer_.init(path("weather_streak.vert"), path("weather_streak.frag"),
                                std::max(palette.rain.max_drops, palette.wind.max_specks)) &&
+        world_bolt_renderer_.init(path("world_bolt.vert"), path("world_bolt.frag")) &&
         overlay_pass_.init(path("overlay.vert"), path("overlay.frag")) &&
         course_map_renderer_.init(path("course_map_sheet.vert"), path("course_map_sheet.frag")) &&
         backdrop_pass_.init(asset_root, path("backdrop.vert"), path("backdrop.frag"), screen_vao_, palette.sky);
@@ -143,6 +144,7 @@ void renderer::shutdown() {
     reflection_pass_.shutdown();
     grass_renderer_.shutdown();
     weather_renderer_.shutdown();
+    world_bolt_renderer_.shutdown();
     overlay_pass_.shutdown();
     course_map_renderer_.shutdown();
     backdrop_pass_.shutdown();
@@ -412,7 +414,7 @@ void renderer::draw_scene_props(const bool reflected, const glm::mat4& view_proj
     gpu_timers_.end();
 }
 
-// My shot's flight path and other players' shot trails, as line strips.
+// Every shot's flight line, as line strips.
 void renderer::render_flight_path(const glm::mat4& view, const glm::mat4& proj, const render_data& data, frame_profile* profile) {
     const auto draw_path = [&](const std::vector<glm::vec3>& points, const float alpha) {
         if (points.size() < 2) {
@@ -430,8 +432,7 @@ void renderer::render_flight_path(const glm::mat4& view, const glm::mat4& proj, 
         glDrawArrays(GL_LINE_STRIP, 0, static_cast<GLsizei>(flight_path_vertices_.size()));
         record_draw_call(terrain_shader_.profile());
     };
-    const bool own_path = data.show_flight_path && data.flight_path_points != nullptr;
-    if (!own_path && data.remote_trails.empty()) {
+    if (data.flight_lines.empty()) {
         return;
     }
 
@@ -440,11 +441,8 @@ void renderer::render_flight_path(const glm::mat4& view, const glm::mat4& proj, 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glLineWidth(std::max(1.0f, data.flight_path_width));
-    if (own_path) {
-        draw_path(*data.flight_path_points, data.flight_path_alpha);
-    }
-    for (const render_trail& trail : data.remote_trails) {
-        draw_path(trail.points, trail.alpha);
+    for (const render_flight_line& line : data.flight_lines) {
+        draw_path(line.points, line.alpha);
     }
     glLineWidth(1.0f);
     glDisable(GL_BLEND);

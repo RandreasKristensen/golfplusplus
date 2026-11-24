@@ -73,7 +73,7 @@ void benchmark_driver::enter(game_state& game, sky_controls& sky, god_menu_state
     game.mode = game_mode::walking;
     game.shot.reset();
     game.ball.reset();
-    game.flight_path_points.clear();
+    game.my_flight_line = flight_line{};
     god.weather = view == benchmark_view::shot ? weather_kind::rain : weather_kind::clear;
     god.wind_speed = view == benchmark_view::walk ? 10.0f : 2.0f;
     god.wind_heading = 0.0f;
@@ -191,7 +191,7 @@ void benchmark_driver::populate(render_data& data) {
     data.remote_avatars.insert(data.remote_avatars.end(), figures_.begin(), figures_.end());
     data.remote_balls.insert(data.remote_balls.end(), balls_.begin(), balls_.end());
     observations_[frame_] = {data.player_position.x, data.player_position.z, data.lighting.sun_direction.y,
-                             data.weather.surface_rain, data.ball_position.y, data.show_ball && data.show_flight_path,
+                             data.weather.surface_rain, data.ball_position.y, data.show_ball && !data.flight_lines.empty(),
                              data.show_rangefinder, data.rangefinder_flag.has_value(), data.remote_avatars.size(),
                              data.remote_balls.size(), data.carts.size()};
 }

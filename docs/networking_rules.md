@@ -23,7 +23,7 @@ content loaded at startup before account/room subscriptions or commands. It
 is a 64-bit FNV-1a compatibility fingerprint, not authentication: sorted
 asset-relative paths and CRLF-normalized file texts, each length-framed in
 little-endian bytes. It covers every JSON under `play/tuning`,
-`play/progression`, `play/items`, `interface/fonts`, `world/courses`, `world/hub` and `world/props` (hub collision bounds).
+`play/progression`, `play/items`, `play/effects`, `interface/fonts`, `world/courses`, `world/hub` and `world/props` (hub collision bounds).
 Presentation and connection settings are excluded. Missing/empty views or a
 different hash disconnect with `content_mismatch`; reconnects check again.
 
@@ -44,12 +44,13 @@ Motion is sparse and rate-limited (`src/game/motion_sync.h`); the one
 frequent motion is a driver's cart to the rider in it (`src/game/ride_sync.h`),
 in a `ride_motion` row only that rider subscribes to. The client plays
 ahead and the server's answer wins (`src/game/online_play.h`), but for a
-shot: a shot is a setup plus a seed the server rolls and the snapshot of the
-room it takes from its rows (`shot_record`; other balls only once their
-`rests_at` has passed, `resting_balls`), written into its event; the
-client sends the setup at Space, holds the swing at its top for the answer and
-launches the ball from it, bit for bit as the server played it. A hole is over
-when the server says so. Others are presentation only. At their ball others
+shot: a shot is a setup plus a seed the server rolls and the snapshot of what
+does not move in the room, taken from its rows (`shot_record`: bodies lying,
+other balls once their `rests_at` has passed, `resting_balls`, spares), written
+into its event; the client sends the setup at Space, holds the swing at its top
+for the answer and launches the ball from it, bit for bit as the server played
+it. Golfers and carts are not in the snapshot: see **Shots meet movement as it
+is played** below. A hole is over when the server says so. Others are presentation only. At their ball others
 are drawn from their setup: every dial change goes with their motion
 (`src/game/sent_setup.h`, clamped to the club in hand by `update_motion`), they
 stand to it with `stance_at_address` as their own game does, and their swing
@@ -150,7 +151,8 @@ tables are Private, listed once in `each_golfer_table`, and read through the
 `docs/todo/skills.md`.
 
 **Saves.** `src/game/save_data.h` is the offline save; any change to its shape
-bumps `current_save_version` (in the alpha an older save may be refused).
+bumps `current_save_version` (in the alpha an older save may be refused). Version 10
+added `bodies`: offline knocked-out bodies with their place and real-time expiry.
 Parsing ignores unknown fields and refuses newer versions. Save on hole and
 course completion, leaving a round and clean exit; never mid-hole or transient
 state. An unreadable save is backed up, never overwritten. Settings live in
@@ -259,6 +261,104 @@ refused replacement keeps the complete original reservation. The module checks
 a destination by its manifest (`find_server_course`: carts, hole count); the course
 itself is built when someone enters it. LEAVE GROUP and RETURN TO HUB in the
 pause menu only send their intents.
+
+**Shots meet movement as it is played** (`flight_rules.h`, `flight_reducers.h`,
+`flight_schema.h`; the pure parts are `game/ball_contact.h`, `contact_settle.h`,
+`step_timeline.h`). Every motion's steps carry the shared-clock time of the first
+(`update_motion`'s `first_time_ms`, kept in `motion_state.step_time_ms`; every later step
+is that plus whole step lengths); `play_move` refuses a batch in the server's future
+or over steps already played (`error_invalid_motion`, the rows restored as for any
+refused motion), and a batch older than `server.contact_rewind_seconds` or with no
+time claimed plays but counts as standing. `play_move` also returns where each step
+left the golfer's feet and the driven cart. At the swing `take_shot` flies the shot
+on what does not move and against every golfer and cart standing where it is now
+(provisional: the earliest such contact is pending), writes the `shot_event` (the
+clients' playback starts from it) and keeps the flight in a Private `ball_flight` row
+(its record, golfer, checkpoints, boxes, contacts as `state`, `flight_codec.h`, bit
+for bit; the boxes again as plain columns). The ball row is where the shot rests so
+far, the stroke counted, `rests_at` its rest. Each batch of steps for a golfer or
+driven cart is compared with the room's flights by their boxes first and decoded only
+on overlap; a mover's own steps replace what was known of it (it may no longer be
+there), and the earliest contact found is pending. A pending contact is applied once
+settled: every mover near the flight has stepped past it, never later than the rewind
+window after it (a scheduled `settle_flight_due` covers silent movers). Applying plays
+the flight on from it (`replay_after_contact`), writes a Public room-scoped
+`ball_contact_event` row (the shot's account, hole and stroke, the contact's index,
+step, what was met where, time, speed, height), updates the ball row and rolls the hit
+outcome only for a golfer's first contact of the flight (`ball_hit_rules.h`, the shot's
+seed): dazed starts `dazed` (`hit_effect_rules.h`: the account's earlier `dazed` rows
+go; a refresh ends the old rows where the new ones start) at the contact's time, a
+knockout lays the body where the ball met them (`knock_out_account`); carts have no
+outcome. The shot is final at its rest plus the rewind window (the same scheduled
+look): its penalty, position, hole, score, round and course completions, booking and
+shot XP are applied then, once, from the final flight (`finish_shot`), and the flight
+row goes. Anything that needs the ball final (`take_shot`, `tee_up`, `give_up_hole`,
+`place_practice_ball`, `play_ball`, `pick_up_ball`, `start_booked_round`) lands a
+flight whose ball has rested first, and leaving the room lands it. Clients replay a
+shot's `shot_event`, then each `ball_contact_event` of it in index order
+(`replay_contacts`, `meet_room_contact`), blending to the new path over
+`net.shot_correction_seconds`. Offline keeps the whole flight at the swing.
+
+**The struck golfer's own game shows its hit at once** (`contact_prediction.h`,
+`contact_play.h`). Each fixed step logs where I stand (feet, or my cart's pose when I
+drive) with its shared-clock time (`motion_sync_state::path`, the last
+`net.contact_prediction_hold_seconds`). Every frame a flight playing here (mine or
+another's) whose trajectory is near me is searched with the server's `first_contact`
+over that path, held up to now, never a guess ahead. A contact found is shown as a
+presentation-only prediction: the shot replayed with it appended after the contacts
+the rows gave, the person_hit sound heard at once and the ball blending to the new
+path. Effects (dazed, knockout) never start from it. The server's contact row for
+that index replaces it (the ordinary blend); with no row by the contact's time plus
+`net.contact_prediction_hold_seconds` (the rewind window and the row's way here)
+it is retracted, the shot replayed with the rows alone and blended back, and that
+flight is never predicted again. My own shot is not predicted when it would end
+before the prediction could be retracted. While a flight's boxes for the time still
+to come pass within `net.contact_send_meters` of me, motion goes at least every
+`net.contact_send_interval_seconds` while steps are unsent (`should_send_motion`,
+`motion_sync_state::near_flight`), so the server hears my steps in time.
+
+**The server starts effects from shots.** Clients never start `dazed`; they follow
+their own `running_effect` rows. Offline the same rules start it in
+`game_state::effects`.
+
+**Knockouts and bodies.** A knocked-out outcome (never the shooter's) is not
+dazed: when the contact settles the server runs `knock_out_account` (rules in
+`knockout_rules.h`) with the golfer's feet at the contact. If they are still in that
+room with an accepted position it inserts a `body` row (Public, room-scoped, indexed
+by room and account; position and yaw from the contact, bag on back
+from `player_bag`, colour and hand from `player`; times in server microseconds)
+and a `body_expiry` scheduled row (`expire_body` deletes the body), then ends the
+golfer's presence by `end_presence`, the path `client_disconnected` uses (a guest's
+account is deleted, anyone else leaves the room, loses the session and goes
+offline; completed scores and the booking stay) and writes a Private
+`knockout_notice` row, keyed by the session's identity, which the `my_knockout_notice`
+view shows only to that connection. A body belongs to the world, not the golfer:
+leaving, reconnecting, a deleted guest account or a republish never remove it,
+only its expiry. Clients read their room's bodies through the room subscription
+(`SELECT * FROM body WHERE room_id = …`, `online_view::bodies`) and shots and
+movement collide with them as with any dynamic solid (`room_snapshot`,
+`room_move_world`). A notice arriving ends the client's session
+(`net_failure_knocked_out`, disconnect, credentials kept) and `online_session`
+returns the player to the main menu with `menu.knocked_out`; signing in again is
+allowed at once. The notice is deleted when its identity next connects (and when
+a deleted guest's connection closes).
+
+**Lightning.** A scheduled `check_lightning` (one `lightning_run` row, made when the
+module is initialised or a client connects and finds none) runs every
+`lightning.check_seconds` (10 s). For each room with players it reads the weather at
+the room's course and the server's clock (`lightning_check_rules.h`); a room not above
+the thunderstorm level is passed over before anyone in it is looked up, so a calm world
+costs a pass over its few rooms and one weather call each. In a storm room each golfer
+(`avatar_motion` rows: on foot, in a cart or at their ball, hub included) rolls the
+game's rule (`game/lightning_rules.h`) from `server_shot_seed` on the server's secret.
+Every strike writes a Public room-scoped `lightning_strike_event` row (room, account,
+where they stood, time) which every client of the room turns into a bolt, then dazes
+the golfer from now (`start_dazed`) or knocks them out where they stand
+(`knock_out_account`). Clients never roll lightning and never start its effects: they
+follow `running_effect` rows and the knockout notice as for a ball. `god_strike(expected_room,
+knock_out)` (the god menu's STRIKE ME) applies the same strike (`apply_lightning_hit`) to the
+caller, refused with `god_disabled` unless `server_config.allow_god` (set by `admin_set_config`;
+only the local dev server, never a real one).
 
 **Paired Social greetings.** Protocol 24 adds `dap(expected_room, target)` and
 room-scoped `dap_pair` rows. The reducer reads both accepted `motion_state`

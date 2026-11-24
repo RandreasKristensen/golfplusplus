@@ -190,6 +190,7 @@ bool stdb_update_motion(stdb_client*, uint64_t, const stdb_motion* motion, const
     record("stdb_update_motion");
     fake_bridge().calls.back().motion = *motion;
     fake_bridge().calls.back().first_step = steps->first_step;
+    fake_bridge().calls.back().first_time_ms = steps->first_time_ms;
     fake_bridge().calls.back().runs.assign(steps->runs, steps->runs + steps->run_count);
     return fake_bridge().connected;
 }
@@ -243,6 +244,11 @@ void stdb_take_shot(stdb_client*, uint64_t, const stdb_shot* shot) {
 void stdb_set_flag(stdb_client*, uint64_t, const int32_t hole, const bool out) {
     record("stdb_set_flag", {}, hole);
     fake_bridge().calls.back().flag = out;
+}
+
+void stdb_god_strike(stdb_client*, uint64_t, const bool knock_out) {
+    record("stdb_god_strike");
+    fake_bridge().calls.back().flag = knock_out;
 }
 
 void stdb_place_bag(stdb_client*, uint64_t, const uint8_t place, const uint8_t seat, const uint64_t cart_owner, const float x, const float y,

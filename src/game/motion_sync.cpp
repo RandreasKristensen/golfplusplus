@@ -1,12 +1,15 @@
 #include "game/motion_sync.h"
 
+#include "game/contact_play.h"
 #include "game/game_state.h"
 #include "game/green_read.h"
 #include "game/group_round.h"
 #include "game/mode_dispatch.h"
 #include "game/ride_sync.h"
+#include "game/step_timeline.h"
 #include "physics/vector_math.h"
 
+#include <algorithm>
 #include <cmath>
 #include <utility>
 
@@ -56,8 +59,12 @@ bool should_send_motion(const motion_sync_state& sync, const net_motion& now, co
     if (!latest) {
         return true;
     }
-    if (since < tuning.motion_min_interval_seconds) {
+    const float min_interval = sync.near_flight ? tuning.contact_send_interval_seconds : tuning.motion_min_interval_seconds;
+    if (since < min_interval) {
         return false;
+    }
+    if (sync.near_flight && !sync.unsent.empty()) {
+        return true;
     }
     const net_motion& last = *latest;
     if (!same_intent(last, now)) {
@@ -94,6 +101,7 @@ void push_motion(game_state& state, net_motion now) {
     command.type = net_command_type::motion;
     command.runs = std::move(sync.unsent);
     command.first_step = sync.unsent_first;
+    command.first_time_ms = sync.unsent_first_time_ms;
     command.start = sync.unsent_start;
     command.last_step = sync.step;
     sync.unsent.clear();
@@ -194,7 +202,14 @@ std::uint64_t record_step(game_state& state, const move_input& input) {
     if (sync.unsent.empty()) {
         sync.unsent_first = sync.step;
         sync.unsent_start = state.player.position;
+        sync.unsent_first_time_ms = shot_unix_ms(state);
+        if (sync.last_step_time_ms != 0) {
+            sync.unsent_first_time_ms = std::max(
+                sync.unsent_first_time_ms, step_time_ms(sync.last_step_time_ms, sync.step - sync.last_step_number));
+        }
     }
+    sync.last_step_time_ms = step_time_ms(sync.unsent_first_time_ms, sync.step - sync.unsent_first);
+    sync.last_step_number = sync.step;
     append_step(sync.unsent, input);
     return sync.step;
 }
@@ -203,6 +218,7 @@ void stepped_on_foot(game_state& state) {
     net_motion motion = current_motion(state);
     motion.mode = std::abs(state.player.speed) > still_speed ? motion_mode::walk : motion_mode::idle;
     state.motion_sync.stepped = motion;
+    note_my_path(state, state.motion_sync.last_step_time_ms);
 }
 
 void send_steps(game_state& state) {

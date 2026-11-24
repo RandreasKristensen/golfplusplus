@@ -23,7 +23,11 @@ pub enum Row {
     AvatarMotion(AvatarMotionRow),
     Ball(BallRow),
     PracticeBall(PracticeBallRow),
+    Body(BodyRow),
+    MyKnockoutNotice(KnockoutNoticeRow),
     ShotEvent(ShotEventRow),
+    BallContactEvent(BallContactEventRow),
+    LightningStrikeEvent(LightningStrikeEventRow),
     ItemUseEvent(ItemUseEventRow),
     Dap(DapRow),
     PlayerLoadout(PlayerLoadoutRow),
@@ -100,7 +104,7 @@ impl Arena {
     fn snapshot(&mut self, entries: &[SnapshotRowEntry]) -> (*const StdbSnapshotEntry, usize) {
         let owned: Box<[StdbSnapshotEntry]> = entries
             .iter()
-            .map(|e| StdbSnapshotEntry { kind: e.kind, x: e.x, y: e.y, z: e.z, yaw: e.yaw, shooter: e.shooter })
+            .map(|e| StdbSnapshotEntry { kind: e.kind, x: e.x, y: e.y, z: e.z, yaw: e.yaw, shooter: e.shooter, account: e.account })
             .collect();
         let view = (owned.as_ptr(), owned.len());
         self.snapshots.push(owned);
@@ -286,6 +290,29 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                 },
             },
         ),
+        Row::Body(r) => (
+            StdbTable::Body,
+            StdbRow {
+                body: StdbBody {
+                    id: r.id,
+                    account_id: r.account_id,
+                    room_id: r.room_id,
+                    x: r.x,
+                    y: r.y,
+                    z: r.z,
+                    yaw: r.yaw,
+                    fell_at: r.fell_at,
+                    expires_at: r.expires_at,
+                    bag_on_back: r.bag_on_back,
+                    colour: r.colour,
+                    hand: r.hand,
+                },
+            },
+        ),
+        Row::MyKnockoutNotice(r) => (
+            StdbTable::MyKnockoutNotice,
+            StdbRow { knockout_notice: StdbKnockoutNotice { at_micros: r.at.to_micros_since_unix_epoch() } },
+        ),
         Row::ShotEvent(r) => {
             let (flags_out, flags_out_count) = arena.ints(&r.flags_out);
             let (snapshot, snapshot_count) = arena.snapshot(&r.snapshot);
@@ -312,6 +339,7 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                     hand: r.hand,
                     natural_shape: r.natural_shape,
                     spread_scale: r.spread_scale,
+                    club_speed_scale: r.club_speed_scale,
                     levels,
                     levels_count,
                     seed: r.seed,
@@ -329,6 +357,35 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
             )
         }
         Row::Dap(r) => (StdbTable::Dap, StdbRow { dap: StdbDap { id: r.id, room_id: r.room_id, first: r.first, second: r.second, started_at: r.started_at, first_x: r.first_x, first_y: r.first_y, first_z: r.first_z, second_x: r.second_x, second_y: r.second_y, second_z: r.second_z } }),
+        Row::BallContactEvent(r) => (
+            StdbTable::BallContactEvent,
+            StdbRow {
+                ball_contact: StdbBallContact {
+                    room_id: r.room_id,
+                    account_id: r.account_id,
+                    hole: r.hole,
+                    stroke: r.stroke,
+                    index: r.index,
+                    step: r.step,
+                    kind: r.kind,
+                    x: r.x,
+                    y: r.y,
+                    z: r.z,
+                    yaw: r.yaw,
+                    shooter: r.shooter,
+                    account: r.account,
+                    time: r.time,
+                    speed_mps: r.speed_mps,
+                    height_m: r.height_m,
+                },
+            },
+        ),
+        Row::LightningStrikeEvent(r) => (
+            StdbTable::LightningStrikeEvent,
+            StdbRow {
+                lightning_strike: StdbLightningStrike { room_id: r.room_id, account_id: r.account_id, x: r.x, y: r.y, z: r.z },
+            },
+        ),
         Row::ItemUseEvent(r) => (
             StdbTable::ItemUseEvent,
             StdbRow {
@@ -379,7 +436,8 @@ fn row_to_c(arena: &mut Arena, row: &Row) -> (StdbTable, StdbRow) {
                 running_effect: StdbRunningEffect {
                     id: r.id,
                     account_id: r.account_id,
-                    item_id: arena.text(&r.item_id),
+                    source_kind: r.source_kind,
+                    source_id: arena.text(&r.source_id),
                     target: arena.text(&r.target),
                     bucket: r.bucket,
                     value: r.value,

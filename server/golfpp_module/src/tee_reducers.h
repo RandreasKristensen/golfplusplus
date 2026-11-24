@@ -150,7 +150,7 @@ SPACETIMEDB_REDUCER(return_to_hub, ReducerContext ctx, std::uint64_t room_id) {
     return Ok();
 }
 SPACETIMEDB_REDUCER(start_booked_round, ReducerContext ctx, std::uint64_t room_id, std::uint64_t reservation_id) {
-    member_result me = caller_member(ctx);
+    member_result me = landed_first(ctx, caller_member(ctx));
     if (!me.member) { return refused(me); }
     if (dap_busy(ctx, me.member->account_id)) { return Err(error_not_available); }
     const auto booking = ctx.db[tee_reservation_account_id].find(me.member->account_id);

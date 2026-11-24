@@ -301,7 +301,7 @@ TEST_CASE("pacing and green reading preserve normalized directional movement and
                         if (forward_sign == 0 && side_sign == 0) { continue; }
                         game_state state = on_green(0.0f);
                         if (boosted) {
-                            state.effects.push_back(active_effect{"test", item_effect{effect_target_walk_speed,
+                            state.effects.push_back(active_effect{item_source("test"), item_effect{effect_target_walk_speed,
                                 effect_bucket::increased, 0.5f, effect_duration::equipped}, 0, effect_never_ends});
                         }
                         game_input input;

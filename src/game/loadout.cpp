@@ -88,7 +88,7 @@ std::vector<active_effect> equipped_effects(const loadout& equipped, const item_
         }
         for (const item_effect& effect : item->effects) {
             if (effect.duration == effect_duration::equipped) {
-                effects.push_back(active_effect{id, effect, std::numeric_limits<std::int64_t>::min(), effect_never_ends});
+                effects.push_back(active_effect{item_source(id), effect, std::numeric_limits<std::int64_t>::min(), effect_never_ends});
             }
         }
     }

@@ -170,8 +170,7 @@ bool check_round(live_check& run) {
     const auto xp_before = skill_xp(s.online.progress.skills, s.rewards.shot.skill_id);
     const auto sent = s.online.server_now;
     if (!strike(run, 0, false, 0.6f) || !run.require("deliberately early first strike writes actual start with negative lateness", run.until([&] {
-        return s.online.reservation && s.online.reservation->started_at > 0 && s.online.reservation->started_at < run.due &&
-            skill_xp(s.online.progress.skills, s.rewards.shot.skill_id) >= xp_before + s.rewards.shot.xp;
+        return s.online.reservation && s.online.reservation->started_at > 0 && s.online.reservation->started_at < run.due;
     }))) { return false; }
     print_start(run, 0);
     // A2: a ball in flight is not yet at its rest point for another golfer's shot.
@@ -187,7 +186,11 @@ bool check_round(live_check& run) {
     for (std::size_t i = 2; i < 5; ++i) { resting = resting && in_snapshot(second, s.online.balls.at(run.state(i).online.account_id).position); }
     if (!run.require("in-flight ball absent from another's shot snapshot; resting tee balls present", !in_snapshot(second, first.rest) && resting) ||
         !wait_for_clock(run, 2, seen + flight + micros / 2, "first ball at rest on the server clock") || !strike(run, 2) ||
-        !run.require("rested ball present in a later shot's snapshot", in_snapshot(*last_shot(run, 2), first.rest))) { return false; }
+        !run.require("rested ball present in a later shot's snapshot", in_snapshot(*last_shot(run, 2), s.online.balls.at(s.online.account_id).position))) { return false; }
+    // A shot's XP is paid when its flight is final (its rest plus the rewind window), not at the swing.
+    if (!run.require("first shot's XP paid once its flight landed", run.until([&] {
+        return skill_xp(s.online.progress.skills, s.rewards.shot.skill_id) >= xp_before + s.rewards.shot.xp;
+    }))) { return false; }
     for (std::size_t i = 1; i < 3; ++i) {
         if (!run.require("early first strikes write starts", run.until([&] { const auto& r = run.state(i).online.reservation; return r && r->started_at > 0 && r->started_at < run.due; }))) { return false; }
         print_start(run, i);

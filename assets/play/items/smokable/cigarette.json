@@ -7,5 +7,7 @@
     "sound": "emote_smoke"
   },
   "stacking": "refresh",
-  "effects": []
+  "effects": [
+    { "target": "player.walk_speed", "bucket": "increased", "value": 0.05, "duration": { "seconds": 20 } }
+  ]
 }

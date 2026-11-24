@@ -1,9 +1,11 @@
 #include "game/address_play.h"
 
 #include "game/address_view.h"
+#include "game/ball_hit_rules.h"
 #include "game/golf_bag.h"
 #include "game/golf_cart.h"
 #include "game/hub_flow.h"
+#include "game/knockout.h"
 #include "game/mode_dispatch.h"
 #include "game/my_balls.h"
 #include "game/remote_players.h"
@@ -134,7 +136,7 @@ void stand_to_setup(game_state& state, frame_profile* profile) {
 }
 
 // Offline what moves that my shot may meet: me, stood at the ball, my cart
-// where it stands (not sunk) and my spares at rest.
+// where it stands (not sunk), my spares at rest and the bodies lying.
 std::vector<snapshot_entry> offline_snapshot(const game_state& state, const glm::vec3& struck_from) {
     std::vector<snapshot_entry> entries{snapshot_entry{snapshot_kind::person, state.player.position, 0.0f, true}};
     if (own_cart(state) && state.cart.motion.condition != cart_condition::sunk) {
@@ -142,6 +144,9 @@ std::vector<snapshot_entry> offline_snapshot(const game_state& state, const glm:
     }
     const std::vector<snapshot_entry> spares = spares_in_snapshot(state.spare_balls, struck_from, state.tuning);
     entries.insert(entries.end(), spares.begin(), spares.end());
+    for (const fallen_body& body : bodies_in_world(state)) {
+        entries.push_back(body_snapshot_entry(body));
+    }
     return entries;
 }
 
@@ -167,12 +172,20 @@ void launch_shot(game_state& state) {
         const shot_record record{setup, next_shot_seed(state), offline_snapshot(state, setup.ball_start)};
         ++state.shots_hit;
         result = simulate_struck_shot(record, my_golfer(state), course, state.tuning, state.clubs);
+        if (const event_effect_definition* dazed = state.event_effects.find(dazed_effect_id)) {
+            state.effects = effects_after_hits(running_effects(std::move(state.effects), shot_unix_ms(state)),
+                                               hit_consequences(result, record.snapshot, state.tuning, record.seed), *dazed,
+                                               shot_unix_ms(state));
+        }
         number = shot_number_for(record, my_golfer(state), lie, current_shot_course(state).green_stimp_feet, state.tuning, state.clubs);
     }
     if (number) {
         state.shot_number = shot_number_popup{*number, 0.0f};
     }
     play_shot(state, result);
+    if (state.address.answer) {
+        state.shot->source = *state.address.answer;
+    }
     // Where the server says it rests wins, should this client's sum differ.
     if (state.address.answer) {
         const glm::vec3 off_by = state.address.answer->rest - result.rest_position;

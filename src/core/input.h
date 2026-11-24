@@ -5,6 +5,8 @@
 
 #include <string>
 
+#include <glm/vec2.hpp>
+
 struct button_state {
     bool is_down = false;
     bool pressed = false;   // went down this frame
@@ -76,3 +78,8 @@ int wheel_steps_away(int y, float precise_x, float precise_y, bool flipped);
 // Clears the per-frame flags (pressed, released, typed text, quit, mouse movement and wheel) and keeps
 // which buttons are held, and how far a held right button has dragged.
 input_state next_frame_input(const input_state& input);
+
+// Where the mouse is in overlay clip space (-1..1, y up) over a window of
+// `window_width` x `window_height` pixels, which the menus and the effect
+// shelf's hover read it in.
+glm::vec2 mouse_clip_position(const input_state& input, int window_width, int window_height);

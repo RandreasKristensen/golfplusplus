@@ -63,7 +63,7 @@ TEST_CASE("dap uses nearest F pending acknowledgement refusal and session guards
     state.ball=my_ball{0,glm::vec3(20,0,20),3,ball_place::at_rest,ball_kind::scored};
     state.online.balls[1]=room_ball{0,state.ball->position,3,false,ball_kind::scored};
     const auto revision=state.terrain_render_revision;
-    state.online.effects.push_back(active_effect{"boost",{"xp.social",effect_bucket::increased,1.0f,effect_duration::seconds,10},0,100000});
+    state.online.effects.push_back(active_effect{item_source("boost"),{"xp.social",effect_bucket::increased,1.0f,effect_duration::seconds,10},0,100000});
     const auto saved=state.save.skills;
     request_dap(state,2); REQUIRE(state.dap_pending); REQUIRE(!state.net_commands.empty());
     CHECK(state.net_commands.back().type==net_command_type::dap); CHECK(state.net_commands.back().target_account==2);
@@ -113,7 +113,7 @@ TEST_CASE("dap Social award uses each recipient's own effective XP and keeps inp
     const auto reward=shipped_content().rewards.dap;
     CHECK(reward.skill_id=="social"); CHECK(reward.xp>0);
     save_data before;
-    active_effect boost{"test", {"xp.social",effect_bucket::increased,1.0f,effect_duration::seconds,10},0,10000};
+    active_effect boost{item_source("test"), {"xp.social",effect_bucket::increased,1.0f,effect_duration::seconds,10},0,10000};
     const auto first=award_xp(before,reward,{{boost},1000});
     const auto second=award_xp(before,reward,{{},1000});
     REQUIRE(first.awarded.size()==1); REQUIRE(second.awarded.size()==1);

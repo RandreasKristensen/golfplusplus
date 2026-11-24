@@ -3,10 +3,13 @@
 #   .\tooling\gb -r     bring up the local server (tooling\net\dev.ps1), build,
 #                       then launch golf++ on it, so PLAY OFFLINE and PLAY
 #                       ONLINE both work; if the server does not come up it
-#                       still launches, and offline play works
+#                       still launches, and offline play works; it runs in
+#                       this window and, once it closes, stops the server
+#                       if this run started it
 #   .\tooling\gb -rr    the same, stopping running golf++ from this build first
 #   .\tooling\gb -m     bring up the local server (tooling\net\dev.ps1), build,
-#                       then launch two clients on it signed in anonymously
+#                       then launch two clients on it signed in anonymously,
+#                       stopping the server it started once both close
 #   .\tooling\gb -mm    the same, stopping running golf++ from this build first
 #   .\tooling\gb -x     stop golf++ from this build and the local server
 [CmdletBinding()]
@@ -66,6 +69,21 @@ function Invoke-DevServer {
     return $LASTEXITCODE -eq 0
 }
 
+# Whether something listens on the local server's port.
+function Test-ServerPort {
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $connect = $client.BeginConnect("127.0.0.1", 3000, $null, $null)
+        return $connect.AsyncWaitHandle.WaitOne(300) -and $client.Connected
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $client.Close()
+    }
+}
+
 $modes = @($Run, $Rerun, $Multiplayer, $Remultiplayer, $Stop) | Where-Object { $_ }
 if ($modes.Count -gt 1) {
     throw "Use only one of -r, -rr, -m, -mm and -x."
@@ -86,6 +104,9 @@ try {
     # Before the game's build: a new module regenerates the client bindings
     # it compiles.
     $server_up = $false
+    # A server this run starts is stopped once the game it launched closes;
+    # one that was already running is left alone.
+    $server_started = $modes.Count -gt 0 -and -not (Test-ServerPort)
     if ($Multiplayer -or $Remultiplayer) {
         $server_up = Invoke-DevServer @() -Required
     }
@@ -117,22 +138,29 @@ try {
         throw "Expected executable was not produced: $exe_path"
     }
 
+    # The game runs in this window, its log here; this waits until it closes.
     if ($Run -or $Rerun) {
         Write-Host "[gb] launching golf++"
         if ($server_up) {
-            Start-Process -FilePath $exe_path -WorkingDirectory $build_dir -ArgumentList $server_args
+            Start-Process -FilePath $exe_path -WorkingDirectory $build_dir -ArgumentList $server_args -NoNewWindow -Wait
         }
         else {
-            Start-Process -FilePath $exe_path -WorkingDirectory $build_dir
+            Start-Process -FilePath $exe_path -WorkingDirectory $build_dir -NoNewWindow -Wait
         }
         return
     }
 
+    $clients = @()
     for ($i = 1; $i -le $client_count; $i++) {
         Write-Host "[gb] launching client $i of $client_count (local server, anonymous)"
-        Start-Process -FilePath $exe_path -WorkingDirectory $build_dir -ArgumentList $client_args
+        $clients += Start-Process -FilePath $exe_path -WorkingDirectory $build_dir -ArgumentList $client_args -PassThru
     }
+    Write-Host "[gb] waiting for the clients to close"
+    $clients | Wait-Process
 }
 finally {
     Pop-Location
+    if ($server_started) {
+        Invoke-DevServer @("-Down") | Out-Null
+    }
 }

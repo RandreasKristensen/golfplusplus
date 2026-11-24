@@ -21,6 +21,7 @@ struct fake_stdb_bridge {
         bool flag = false;   // its bool argument, if any
         stdb_motion motion{};
         std::uint64_t first_step = 0;          // update_motion's steps
+        std::int64_t first_time_ms = 0;
         std::vector<stdb_move_run> runs;       // copied
         stdb_shot shot{};
         std::string club_id;          // shot.club_id, copied

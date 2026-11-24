@@ -98,8 +98,12 @@ pub enum StdbTable {
     MyTeeReservation = 25,
     MyTeeBookStatus = 26,
     Dap = 27,
+    BallContactEvent = 32,
+    LightningStrikeEvent = 33,
     PracticeBall = 28,
     DepartureBoard = 29,
+    Body = 30,
+    MyKnockoutNotice = 31,
 }
 
 #[repr(C)]
@@ -247,6 +251,7 @@ pub struct StdbMoveRun {
 #[derive(Clone, Copy)]
 pub struct StdbSteps {
     pub first_step: u64,
+    pub first_time_ms: i64,
     pub start_x: f32,
     pub start_y: f32,
     pub start_z: f32,
@@ -303,6 +308,25 @@ pub struct StdbPracticeBall {
     pub placed_at: i64,
 }
 
+/// A knocked-out golfer lying in the room (the body table).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbBody {
+    pub id: u64,
+    pub account_id: u64,
+    pub room_id: u64,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub yaw: f32,
+    /// Server microseconds.
+    pub fell_at: i64,
+    pub expires_at: i64,
+    pub bag_on_back: bool,
+    pub colour: u8,
+    pub hand: u8,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct StdbGolfCart {
@@ -347,6 +371,8 @@ pub struct StdbSnapshotEntry {
     pub z: f32,
     pub yaw: f32,
     pub shooter: bool,
+    /// A person's account; 0 for anyone else.
+    pub account: u64,
 }
 
 #[repr(C)]
@@ -366,6 +392,7 @@ pub struct StdbShotEvent {
     pub hand: u8,
     pub natural_shape: u8,
     pub spread_scale: f32,
+    pub club_speed_scale: f32,
     pub levels: *const StdbSkillLevel,
     pub levels_count: usize,
     pub seed: u64,
@@ -394,6 +421,37 @@ pub struct StdbDap {
     pub second_x: f32,
     pub second_y: f32,
     pub second_z: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbBallContact {
+    pub room_id: u64,
+    pub account_id: u64,
+    pub hole: i32,
+    pub stroke: i32,
+    pub index: i32,
+    pub step: i32,
+    pub kind: u8,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub yaw: f32,
+    pub shooter: bool,
+    pub account: u64,
+    pub time: f32,
+    pub speed_mps: f32,
+    pub height_m: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbLightningStrike {
+    pub room_id: u64,
+    pub account_id: u64,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
 }
 
 #[repr(C)]
@@ -454,7 +512,9 @@ pub struct StdbGreenFlag {
 pub struct StdbRunningEffect {
     pub id: u64,
     pub account_id: u64,
-    pub item_id: StdbString,
+    /// effect_source_kind in game/effects.h.
+    pub source_kind: u8,
+    pub source_id: StdbString,
     pub target: StdbString,
     /// effect_bucket in game/effects.h.
     pub bucket: u8,
@@ -478,6 +538,13 @@ pub struct StdbLinkCode {
 #[derive(Clone, Copy)]
 pub struct StdbLinkStatus {
     pub result: StdbString,
+    pub at_micros: i64,
+}
+
+/// The my_knockout_notice view: this session ended because the golfer was knocked out.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StdbKnockoutNotice {
     pub at_micros: i64,
 }
 
@@ -554,7 +621,11 @@ pub union StdbRow {
     pub avatar_motion: StdbAvatarMotion,
     pub ball: StdbBall,
     pub practice_ball: StdbPracticeBall,
+    pub body: StdbBody,
+    pub knockout_notice: StdbKnockoutNotice,
     pub shot_event: StdbShotEvent,
+    pub ball_contact: StdbBallContact,
+    pub lightning_strike: StdbLightningStrike,
     pub item_use_event: StdbItemUseEvent,
     pub dap: StdbDap,
     pub link_code: StdbLinkCode,
@@ -626,19 +697,21 @@ pub fn layout() -> Vec<usize> {
     describe!(out, StdbGolfCart, owner, room_id, x, y, z, yaw, passenger, condition, driver, motion_id);
     describe!(out, StdbShot, stroke, aim_angle, face_open, ball_position, backswing, strike_timing, club_id, shot_at, flags_out, flags_out_count);
     describe!(out, StdbMoveRun, kind, steps, forward, side, run, jump, yaw, steer, paced, crouched);
-    describe!(out, StdbSteps, first_step, start_x, start_y, start_z, runs, run_count);
-    describe!(out, StdbSnapshotEntry, kind, x, y, z, yaw, shooter);
+    describe!(out, StdbSteps, first_step, first_time_ms, start_x, start_y, start_z, runs, run_count);
+    describe!(out, StdbSnapshotEntry, kind, x, y, z, yaw, shooter, account);
     describe!(out, StdbSkillLevel, skill_id, level);
-    describe!(out, StdbShotEvent, room_id, account_id, hole, shot, hand, natural_shape, spread_scale, levels, levels_count, seed,
+    describe!(out, StdbShotEvent, room_id, account_id, hole, shot, hand, natural_shape, spread_scale, club_speed_scale, levels, levels_count, seed,
               snapshot, snapshot_count,
               start_x, start_y, start_z, rest_x, rest_y, rest_z, holed);
+    describe!(out, StdbBallContact, room_id, account_id, hole, stroke, index, step, kind, x, y, z, yaw, shooter, account, time, speed_mps, height_m);
+    describe!(out, StdbLightningStrike, room_id, account_id, x, y, z);
     describe!(out, StdbDap, id, room_id, first, second, started_at, first_x, first_y, first_z, second_x, second_y, second_z);
     describe!(out, StdbItemUseEvent, room_id, account_id, item_id);
     describe!(out, StdbLoadoutMount, mount, item_id);
     describe!(out, StdbPlayerLoadout, account_id, cart, cart_mounts, cart_mounts_count, smokable, drinkable, bag);
     describe!(out, StdbPlayerBag, account_id, room_id, place, seat, cart_owner, x, y, z, yaw, club_in_hand);
     describe!(out, StdbGreenFlag, id, room_id, hole);
-    describe!(out, StdbRunningEffect, id, account_id, item_id, target, bucket, value, duration, seconds, started_at_ms, ends_at_ms);
+    describe!(out, StdbRunningEffect, id, account_id, source_kind, source_id, target, bucket, value, duration, seconds, started_at_ms, ends_at_ms);
     describe!(out, StdbLinkCode, code, expires_at_micros);
     describe!(out, StdbLinkStatus, result, at_micros);
     describe!(out, StdbServerProtocol, version);
@@ -647,6 +720,8 @@ pub fn layout() -> Vec<usize> {
     describe!(out, StdbTeeReservation, reservation_id, slot_id, started_at, grouped, completed, revision, course_id, world_id, room_id, scheduled_at, takes_cart);
     describe!(out, StdbDeparture, slot_id, course_id, scheduled_at, names);
     describe!(out, StdbTeeBookStatus, course_id, server_now, request_id);
+    describe!(out, StdbBody, id, account_id, room_id, x, y, z, yaw, fell_at, expires_at, bag_on_back, colour, hand);
+    describe!(out, StdbKnockoutNotice, at_micros);
     out.push(size_of::<StdbRow>());
     describe!(out, StdbEvent, kind, text, reducer, subscription, request, login_method, retrying, table, change, row);
     out.push(size_of::<StdbEventKind>());

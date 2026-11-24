@@ -22,11 +22,19 @@
 
 void update_remote_players(game_state& state, float dt);
 
+// The course a shot the server played flies on here: the weather at its
+// shot_at and the flags as they were.
+shot_course room_shot_course(const game_state& state, const room_shot& shot);
+
 // A shot the server played, simulated here from its event as the server
 // simulated it: its record (setup, dice and snapshot), the golfer as the
-// server played them, in the weather at its shot_at with the flags as they
-// were, bit for bit.
-shot_result room_shot_result(const game_state& state, const room_shot& shot);
+// server played them, in that course, bit for bit.
+shot_result room_shot_result(const game_state& state, const room_shot& shot, const std::vector<flight_contact>& contacts = {});
+
+// A contact the server has settled on a shot playing here (mine or another's):
+// the shot is replayed with it (replay_contacts) and the ball blends to its
+// new path over net.shot_correction_seconds. False when no such shot plays.
+bool meet_room_contact(game_state& state, const room_contact& met);
 
 // Plays another player's shot from the server's event, ending where the
 // server says it rests: their club comes down from the top of its

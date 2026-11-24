@@ -7,6 +7,7 @@
 #include "game/hub_definition.h"
 #include "game/prop_loader.h"
 #include "game/course_definition.h"
+#include "game/effect_catalog.h"
 #include "game/game_tuning.h"
 #include "game/item_catalog.h"
 #include "game/loadout.h"
@@ -30,6 +31,7 @@ struct game_content {
     skill_catalog skills;
     reward_rules rewards;
     item_catalog items;
+    effect_catalog effects;  // the event effects (game/effect_catalog.h)
     loadout default_loadout;  // fits `items`
     std::vector<setting_definition> settings;  // settings screen order
 };

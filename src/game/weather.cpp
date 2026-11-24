@@ -20,9 +20,8 @@ constexpr std::uint32_t prevailing_stream = 0x55u;
 constexpr std::uint32_t damp_stream = 0x57u;
 constexpr std::uint32_t regime_stream = 0x58u;
 constexpr std::uint32_t temperature_stream = 0x59u;
-// Cloud from this cover on counts as cloudy, thunder from this a thunderstorm.
+// Cloud from this cover on counts as cloudy.
 constexpr float cloudy_cover = 0.5f;
-constexpr float thunderstorm_thunder = 0.5f;
 
 // A fixed value in [0, 1) for a lattice point (splitmix64).
 float lattice_value(const std::uint32_t seed, const std::uint32_t stream, const std::int64_t index) {

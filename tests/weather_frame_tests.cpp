@@ -336,3 +336,64 @@ TEST_CASE("weather streaks retain their projected world position when the select
         CHECK(near(projected(head(centre)),projected(at),0.00001f));
     }
 }
+
+TEST_CASE("a real strike is drawn in the world on the golfer, not as the sky's bolt; a random one stays in the sky") {
+    const lightning_style& style = fixture_palette().lightning;
+    const glm::vec3 camera(0.0f, 1.7f, 0.0f);
+    const glm::vec3 golfer(3.0f, 0.0f, 20.0f);
+    const render_lightning real = make_render_lightning(strike_at(lightning_presentation{}, golfer, camera, 1.0f, style), style, camera);
+    REQUIRE(real.point.has_value());
+    CHECK(*real.point == golfer);
+    CHECK(real.flash == 1.0f);
+    CHECK(!real.bolt);
+    // The clouds still light over their bearing: up in the sky towards them.
+    CHECK(real.direction.y > 0.0f);
+    CHECK(real.direction.x > 0.0f);
+
+    lightning_presentation random;
+    lightning_strike strike;
+    strike.seed = 3.0f;
+    random.strike = strike;
+    const render_lightning sky = make_render_lightning(random, style, camera);
+    CHECK(!sky.point.has_value());
+    CHECK(sky.bolt);
+}
+
+TEST_CASE("a real strike shows when random ones are held back, and its thunder comes by distance") {
+    const lightning_style& style = fixture_palette().lightning;
+    const glm::vec3 camera(0.0f);
+    lightning_presentation near_by = strike_at(lightning_presentation{}, glm::vec3(10.0f, 0.0f, 20.0f), camera, 1.0f, style);
+    // Not allowed (aiming), and the weather is calm: the strike is still up.
+    near_by = update_lightning(near_by, 0.0f, false, style, 0.02f);
+    REQUIRE(near_by.strike.has_value());
+    CHECK(make_render_lightning(near_by, style, camera).flash > 0.0f);
+    CHECK(make_render_lightning(near_by, style, camera).point.has_value());
+    // Gone by flash_seconds, like any strike.
+    near_by = update_lightning(near_by, 0.0f, false, style, style.flash_seconds);
+    CHECK(!near_by.strike.has_value());
+
+    const float meters = 3000.0f;
+    lightning_presentation far_off = strike_at(lightning_presentation{}, glm::vec3(0.0f, 0.0f, meters), camera, 1.0f, style);
+    REQUIRE(far_off.coming.size() == 1U);
+    CHECK(near(far_off.coming.front().delay, meters / style.sound_speed, 0.001f));
+    CHECK(!far_off.coming.front().close);
+    const lightning_presentation close = strike_at(lightning_presentation{}, glm::vec3(0.0f, 0.0f, 20.0f), camera, 1.0f, style);
+    REQUIRE(close.coming.size() == 1U);
+    CHECK(close.coming.front().close);
+    CHECK(close.coming.front().delay < far_off.coming.front().delay);
+    // A world unit that is not a metre changes the distance the sound has to come.
+    const lightning_presentation scaled = strike_at(lightning_presentation{}, glm::vec3(0.0f, 0.0f, meters), camera, 0.5f, style);
+    CHECK(near(scaled.coming.front().delay, 0.5f * meters / style.sound_speed, 0.001f));
+    // Heard once, only when the sound has come.
+    int claps = 0;
+    float heard_at = 0.0f;
+    for (float t = 0.0f; t < 15.0f; t += 0.05f) {
+        far_off = update_lightning(far_off, 0.0f, false, style, 0.05f);
+        if (far_off.close_claps + far_off.far_claps > 0) {
+            heard_at = t;
+        }
+        claps += far_off.close_claps + far_off.far_claps;
+    }
+    CHECK(claps == 1);
+    CHECK(near(heard_at, meters / style.sound_speed, 0.1f));
+}

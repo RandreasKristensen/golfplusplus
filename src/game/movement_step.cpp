@@ -111,9 +111,13 @@ walk_step step_walker(const walker& in, const move_input& input, const walk_worl
 }
 
 std::vector<solid> walker_obstacles(const std::vector<cart_pose>& carts, const std::vector<cup>& cups,
-                                    const std::vector<bool>& flags_in, const game_tuning& tuning) {
+                                    const std::vector<bool>& flags_in, const game_tuning& tuning,
+                                    const std::vector<fallen_body>& bodies) {
     std::vector<solid> solids;
     add_carts(solids, carts, tuning);
+    for (const solid& lying : body_solids(bodies, tuning)) {
+        solids.push_back(lying);
+    }
     add_flagsticks(solids, cups, flags_in, tuning);
     return solids;
 }
@@ -181,9 +185,12 @@ cart_move step_cart_mover(const cart_mover& in, const cart_controls& controls, c
 
 std::vector<solid> cart_obstacles_of(const std::vector<cart_pose>& carts, const std::vector<glm::vec3>& people,
                                      const std::vector<cup>& cups, const std::vector<bool>& flags_in,
-                                     const game_tuning& tuning) {
+                                     const game_tuning& tuning, const std::vector<fallen_body>& bodies) {
     std::vector<solid> solids;
     add_carts(solids, carts, tuning);
+    for (const solid& lying : body_solids(bodies, tuning)) {
+        solids.push_back(lying);
+    }
     for (const glm::vec3& feet : people) {
         solid person;
         person.kind = solid_kind::person;

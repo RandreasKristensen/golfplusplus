@@ -231,7 +231,14 @@ TEST_CASE("playback ends at the simulated rest whatever the frame rate") {
         CHECK(!state.shot.has_value());
         CHECK(state.mode == game_mode::walking);
         CHECK(state.ball->position == result.rest_position);
-        CHECK(state.flight_path_points.empty());
+        // My flight line fades as everyone's does, then goes.
+        CHECK(flight_line_alpha(state.my_flight_line, state.tuning.flight_path) == state.tuning.flight_path.alpha);
+        update_game(state, game_input{}, dt);
+        CHECK(flight_line_alpha(state.my_flight_line, state.tuning.flight_path) < state.tuning.flight_path.alpha);
+        for (float waited = 0.0f; waited <= state.tuning.flight_path.fade_seconds; waited += dt) {
+            update_game(state, game_input{}, dt);
+        }
+        CHECK(state.my_flight_line.points.empty());
     }
 }
 

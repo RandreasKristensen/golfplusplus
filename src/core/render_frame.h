@@ -41,6 +41,9 @@ glm::vec3 drawn_ball_center(const glm::vec3& physics_center, const world_scale_t
 std::optional<render_club_pose> club_pose_at(const game_state& game, const shot_setup& setup, float raise,
                                              const std::string& club_model, const prop_catalog& props);
 
+// `line` drawn, at its fade, once it has a segment.
+void add_flight_line(render_data& data, const flight_line& line, const flight_path_tuning& tuning);
+
 // What each sign of the play area says (area.signs order): its course hole,
 // par and length; a practice ground's bay, its target's distance.
 std::vector<hole_sign_text> hole_sign_texts(const game_state& game);

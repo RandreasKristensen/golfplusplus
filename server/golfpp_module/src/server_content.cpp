@@ -78,6 +78,19 @@ server_content_load_result parse_server_content(const content_files& files) {
         return result;
     }
     content.items = std::move(*items.catalog);
+    std::map<std::string, std::string> effect_texts;
+    const std::string effects_prefix = std::string(effects_path) + "/";
+    for (const auto& [path, text] : files) {
+        if (path.compare(0, effects_prefix.size(), effects_prefix) == 0) {
+            effect_texts[path.substr(effects_prefix.size())] = std::string(text);
+        }
+    }
+    effect_catalog_load_result effects = parse_effect_catalog(effect_texts);
+    if (!effects.catalog) {
+        result.error = effects.error;
+        return result;
+    }
+    content.effects = std::move(*effects.catalog);
     const std::optional<std::string> loadout_text = file_text(files, default_loadout_path);
     const std::optional<loadout> defaults = loadout_text ? parse_loadout_from_text(*loadout_text) : std::nullopt;
     if (!defaults || !loadout_fits(*defaults, content.items)) {

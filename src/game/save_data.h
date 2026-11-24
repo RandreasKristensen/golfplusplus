@@ -4,6 +4,7 @@
 // Every change to this shape bumps current_save_version and adds a step to
 // migrate_save_data.
 
+#include "game/fallen_body.h"
 #include "game/golfer.h"
 #include "game/loadout.h"
 #include "game/progression.h"
@@ -13,7 +14,7 @@
 #include <string>
 #include <vector>
 
-inline constexpr int current_save_version = 9;
+inline constexpr int current_save_version = 10;
 
 struct repeatable_collectible_state {
     int claim_count = 0;
@@ -36,6 +37,9 @@ struct save_data {
     loadout equipped;
     // The golfer's natural shape (v8), picked before the save's first round.
     std::optional<natural_shape> natural;
+    // My body, or bodies, lying where I was knocked out (v10), each in its
+    // place and until its real-time expiry: dropped once expired.
+    std::vector<fallen_body> bodies;
 };
 
 save_data migrate_save_data(save_data save);

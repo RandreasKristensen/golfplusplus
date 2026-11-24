@@ -10,7 +10,9 @@
 // server decides the weather there. GOLFPP_WEATHER starts with the weather
 // held. Its solids row draws every solid's outline near the camera, for
 // checking an import; its profiler row shows the FPS and profiling overlay,
-// the profiler recording only while it is shown. GL-free.
+// the profiler recording only while it is shown. Its strike row (Enter) has
+// lightning strike me, dazed or knocked out, offline and online (game/
+// lightning_play.h; the server must allow it). GL-free.
 
 #include "core/input.h"
 #include "core/sky_frame.h"
@@ -36,9 +38,10 @@ enum class god_menu_row : std::size_t {
     wind_direction,
     wetness,
     solids,
-    profiler
+    profiler,
+    strike
 };
-inline constexpr std::size_t god_menu_row_count = 11;
+inline constexpr std::size_t god_menu_row_count = 12;
 
 struct god_menu_state {
     bool enabled = false;  // GOLFPP_GOD or --god
@@ -55,6 +58,7 @@ struct god_menu_state {
     std::optional<float> wetness;       // 0..1
     bool show_solids = false;    // every solid's outline drawn
     bool show_profiler = false;  // the FPS and profiling overlay
+    bool strike_knocks_out = false;  // the strike row: knock me out, not daze me
 };
 
 // What the menu is told each frame, from the keys.
@@ -65,6 +69,7 @@ struct god_menu_keys {
     bool left = false;
     bool right = false;
     bool live = false;  // Backspace: the row runs live again
+    bool strike = false;  // Enter: the strike row strikes
 };
 
 struct god_menu_update {
@@ -96,7 +101,7 @@ render_god_menu god_menu_view(const god_menu_state& menu,
                               bool online,
                               const text_assets& text);
 
-// F1 and, while the menu is open, the arrows and Backspace.
+// F1 and, while the menu is open, the arrows, Backspace and Enter.
 god_menu_keys god_menu_keys_of(const input_state& input);
 
 // `input` without the keys the open menu takes, so play does not see them.

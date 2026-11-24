@@ -1,5 +1,6 @@
 #include "game/item_catalog.h"
 
+#include "game/effect_catalog.h"
 #include "game/json_util.h"
 
 #include <algorithm>
@@ -12,59 +13,6 @@ constexpr item_kind all_kinds[] = {item_kind::smokable, item_kind::drinkable, it
                                    item_kind::club,     item_kind::bag};
 const std::vector<std::string> merged_keys{"use", "spec"};
 constexpr const char* club_classes[] = {"driver", "woods", "hybrids", "long_irons", "short_irons", "wedges", "putter"};
-constexpr double milliseconds_per_second = 1000.0;
-
-std::int64_t milliseconds(const float seconds) {
-    return static_cast<std::int64_t>(std::llround(static_cast<double>(seconds) * milliseconds_per_second));
-}
-
-std::optional<effect_bucket> bucket_from_name(const std::string& name) {
-    if (name == "flat") {
-        return effect_bucket::flat;
-    }
-    if (name == "increased") {
-        return effect_bucket::increased;
-    }
-    if (name == "more") {
-        return effect_bucket::more;
-    }
-    return std::nullopt;
-}
-
-std::optional<item_effect> parse_effect(const json& object) {
-    const std::optional<std::string> target = json_string(object, "target");
-    const std::optional<std::string> bucket_name = json_string(object, "bucket");
-    const std::optional<effect_bucket> bucket = bucket_name ? bucket_from_name(*bucket_name) : std::nullopt;
-    const std::optional<float> value = json_float(object, "value");
-    if (!target || target->empty() || !bucket || !value || !object.contains("duration")) {
-        return std::nullopt;
-    }
-    item_effect effect;
-    effect.target = *target;
-    effect.bucket = *bucket;
-    effect.value = *value;
-    const json& duration = object["duration"];
-    if (duration.is_object()) {
-        const std::optional<float> seconds = json_float(duration, "seconds");
-        if (!seconds || !(*seconds > 0.0f)) {
-            return std::nullopt;
-        }
-        effect.duration = effect_duration::seconds;
-        effect.seconds = *seconds;
-        return effect;
-    }
-    const std::string name = duration.is_string() ? duration.get<std::string>() : "";
-    if (name == "instant") {
-        effect.duration = effect_duration::instant;
-    } else if (name == "use") {
-        effect.duration = effect_duration::use;
-    } else if (name == "equipped") {
-        effect.duration = effect_duration::equipped;
-    } else {
-        return std::nullopt;
-    }
-    return effect;
-}
 
 std::optional<item_use_rules> parse_use(const json& object) {
     const std::optional<float> seconds = json_float(object, "seconds_per_use");
@@ -228,7 +176,7 @@ std::optional<item_definition> parse_resolved_item(const std::string& id, const 
         }
     }
     for (const json& object : *effects) {
-        std::optional<item_effect> effect = object.is_object() ? parse_effect(object) : std::nullopt;
+        std::optional<item_effect> effect = object.is_object() ? parse_effect_entry(object) : std::nullopt;
         if (!effect || (effect->duration == effect_duration::use && !item.use)) {
             return std::nullopt;
         }
@@ -337,24 +285,24 @@ std::vector<active_effect> effects_after_use(std::vector<active_effect> running,
     if (item.stacking == item_stacking::refresh) {
         running.erase(std::remove_if(running.begin(), running.end(),
                                      [&item](const active_effect& effect) {
-                                         return effect.item == item.id && effect.effect.duration != effect_duration::equipped;
+                                         return effect.source == item_source(item.id) && effect.effect.duration != effect_duration::equipped;
                                      }),
                       running.end());
     }
     for (const item_effect& effect : item.effects) {
         std::int64_t ends_at = now_ms;
         if (effect.duration == effect_duration::seconds) {
-            ends_at = now_ms + milliseconds(effect.seconds);
+            ends_at = now_ms + effect_milliseconds(effect.seconds);
         } else if (effect.duration == effect_duration::use && item.use) {
-            ends_at = now_ms + milliseconds(item.use->seconds_per_use);
+            ends_at = now_ms + effect_milliseconds(item.use->seconds_per_use);
         } else {
             continue;  // instant: nothing lasts; equipped: the loadout's
         }
-        running.push_back(active_effect{item.id, effect, now_ms, ends_at});
+        running.push_back(active_effect{item_source(item.id), effect, now_ms, ends_at});
     }
     return running;
 }
 
 bool item_use_playing(const item_definition& item, const std::int64_t used_at_ms, const std::int64_t now_ms) {
-    return item.use && used_at_ms != 0 && now_ms >= used_at_ms && now_ms < used_at_ms + milliseconds(item.use->seconds_per_use);
+    return item.use && used_at_ms != 0 && now_ms >= used_at_ms && now_ms < used_at_ms + effect_milliseconds(item.use->seconds_per_use);
 }

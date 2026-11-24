@@ -1,5 +1,6 @@
 #include "core/input.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -53,4 +54,9 @@ input_state next_frame_input(const input_state& input) {
     next.mouse_right = held_only(input.mouse_right);
     next.mouse_middle = held_only(input.mouse_middle);
     return next;
+}
+
+glm::vec2 mouse_clip_position(const input_state& input, const int window_width, const int window_height) {
+    return glm::vec2(static_cast<float>(input.mouse_x) / static_cast<float>(std::max(1, window_width)) * 2.0f - 1.0f,
+                     1.0f - static_cast<float>(input.mouse_y) / static_cast<float>(std::max(1, window_height)) * 2.0f);
 }

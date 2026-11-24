@@ -25,7 +25,7 @@ spacetime publish $checkName --server $checkServer --bin-path server/golfpp_modu
 $checkBytes = New-Object byte[] 32
 [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($checkBytes)
 $checkSecret = -join ($checkBytes | ForEach-Object { $_.ToString('x2') })
-spacetime call $checkName admin_set_config '"https://cleanup2.invalid"' '"cleanup2"' true ('"' + $checkSecret + '"') --server $checkServer
+spacetime call $checkName admin_set_config '"https://cleanup2.invalid"' '"cleanup2"' true ('"' + $checkSecret + '"') false --server $checkServer
 .\build\release\golfpp-online-check.exe $checkServer $checkName
 ```
 

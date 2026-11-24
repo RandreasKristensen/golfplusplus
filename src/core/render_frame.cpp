@@ -1,5 +1,7 @@
 #include "core/render_frame.h"
 
+#include "core/effect_shelf_frame.h"
+#include "core/render_bodies.h"
 #include "core/render_gear.h"
 #include "core/render_online.h"
 #include "core/render_putting.h"
@@ -27,6 +29,7 @@
 #include "game/shot_simulation.h"
 #include "game/swing.h"
 #include "game/text_ids.h"
+#include "game/vignette_strength.h"
 #include "game/weather.h"
 #include "physics/flight_model.h"
 #include "physics/vector_math.h"
@@ -83,6 +86,7 @@ render_remote_avatar my_figure(const game_state& game, const render_data& data) 
     me.position = game.player.position;
     me.yaw = game.player.yaw;
     me.left_handed = game.hand == handedness::left;
+    me.player_id = shirt_id_of(game, 0);
     me.crouch = game.crouch;
     if (data.my_club) {
         me.swing = data.my_club;
@@ -370,6 +374,12 @@ std::optional<render_club_pose> club_pose_at(const game_state& game, const shot_
     return pose;
 }
 
+void add_flight_line(render_data& data, const flight_line& line, const flight_path_tuning& tuning) {
+    if (line.points.size() >= 2) {
+        data.flight_lines.push_back(render_flight_line{line.points, flight_line_alpha(line, tuning)});
+    }
+}
+
 std::vector<hole_sign_text> hole_sign_texts(const game_state& game) {
     std::vector<hole_sign_text> texts;
     for (const hole_sign& sign : game.area.signs) {
@@ -459,10 +469,8 @@ render_data make_render_data(const game_state& game,
         add_address(data, game, *club, text, props);
     }
 
-    data.show_flight_path = game.mode == game_mode::following_shot && !game.flight_path_points.empty();
-    data.flight_path_points = &game.flight_path_points;
+    add_flight_line(data, game.my_flight_line, game.tuning.flight_path);
     data.flight_path_color = game.tuning.flight_path.color;
-    data.flight_path_alpha = game.tuning.flight_path.alpha;
     data.flight_path_width = game.tuning.flight_path.line_width;
 
     if (course_started(game)) {
@@ -533,6 +541,9 @@ render_data make_render_data(const game_state& game,
         data.shot_number = shot_number_row(game, *game.shot_number, data.ball_position, text);
     }
     add_putting_read(data, game, text);
+    add_effect_shelf(data, game, text);
+    data.vignettes = running_vignettes(current_effects(game), game.event_effects, shot_unix_ms(game));
+    add_lying_bodies(data, game);
     add_online_render_data(data, game, text, props, fits);
     return data;
 }

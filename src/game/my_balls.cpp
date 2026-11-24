@@ -10,7 +10,7 @@
 namespace {
 // My ball in play is put away: nothing it was doing goes on.
 void settle_ball_in_play(game_state& state) {
-    state.shot.reset(); state.address = address_state{}; state.flight_path_points.clear();
+    state.shot.reset(); state.address = address_state{}; state.my_flight_line = flight_line{};
     state.online_hole = online_hole_state{}; state.ball_correction.reset(); state.give_up_prompt.reset();
     state.mode = game_mode::walking;
 }

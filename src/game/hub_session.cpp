@@ -25,7 +25,7 @@ bool start_hub(game_state& state, const hub_definition& hub) {
     state.ball.reset(); state.spare_balls.clear(); state.shot.reset(); state.address = address_state{};
     state.online_hole = online_hole_state{}; state.ball_correction.reset();
     state.mode = game_mode::walking; state.give_up_prompt.reset();
-    state.flight_path_points.clear(); state.picker.reset(); state.handling.reset();
+    state.my_flight_line = flight_line{}; state.picker.reset(); state.handling.reset();
     state.results_dismissed = false; state.shots_hit = 0;
     leave_cart_at_once(state);
     state.player = player_state{};

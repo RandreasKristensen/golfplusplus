@@ -1,6 +1,7 @@
 #pragma once
 
-// What items do to the game's numbers (game/item_catalog.h): each effect
+// What items and events do to the game's numbers (game/item_catalog.h,
+// game/effect_catalog.h): each effect
 // adds to one target's flat, increased or more bucket while it lasts, and a
 // final value is (base + sum of flat) x (1 + sum of increased) x the product
 // of (1 + each more). Gameplay reads every number an item can change through
@@ -26,6 +27,8 @@ inline constexpr const char* effect_target_cart_uphill = "cart.uphill";
 inline constexpr const char* effect_target_cart_drift = "cart.drift";
 // Every spread of my swing (game/shot_ability.h): below 1 straighter.
 inline constexpr const char* effect_target_shot_spread = "shot.spread";
+// The club's speed at impact (game/shot_ability.h): above 1 the ball goes further.
+inline constexpr const char* effect_target_shot_club_speed = "shot.club_speed";
 
 enum class effect_bucket {
     flat,
@@ -50,14 +53,33 @@ struct item_effect {
 
 inline constexpr std::int64_t effect_never_ends = std::numeric_limits<std::int64_t>::max();
 
-// One effect running: from the use (or equipping) of `item`, over
-// [started_at_ms, ends_at_ms).
+// What an effect comes from: an item's use or equipping, or an event effect
+// (game/effect_catalog.h) such as being dazed.
+enum class effect_source_kind : std::uint8_t {
+    item,
+    event
+};
+
+struct effect_source {
+    effect_source_kind kind = effect_source_kind::item;
+    std::string id;  // an item id (game/item_catalog.h) or an event effect id (game/effect_catalog.h)
+};
+
+bool operator==(const effect_source& a, const effect_source& b);
+
+effect_source item_source(std::string id);
+effect_source event_source(std::string id);
+
+// One effect running: from `source`, over [started_at_ms, ends_at_ms).
 struct active_effect {
-    std::string item;
+    effect_source source;
     item_effect effect;
     std::int64_t started_at_ms = 0;
     std::int64_t ends_at_ms = 0;
 };
+
+// Whole milliseconds in `seconds`.
+std::int64_t effect_milliseconds(float seconds);
 
 bool effect_running(const active_effect& effect, std::int64_t now_ms);
 

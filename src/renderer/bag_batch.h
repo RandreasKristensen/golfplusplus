@@ -16,6 +16,8 @@
 
 // A bag's model frame: set down, and on `figure`'s back (`eye_height` its eyes').
 glm::mat4 ground_bag_frame(const render_ground_bag& bag, const prop_model& model);
+// A fallen golfer's bag lying on the ground beside the body, its mouth towards the head, its pocket up.
+glm::mat4 lying_bag_frame(const render_lying_body& body, const prop_model& model);
 glm::mat4 back_bag_frame(const render_remote_avatar& figure, float eye_height, const prop_model& model);
 // The club `figure` carries: its grip in the hand on the golfer's side, its head ahead, just off the ground.
 glm::mat4 carried_club_frame(const render_remote_avatar& figure, float eye_height, const prop_model& model);

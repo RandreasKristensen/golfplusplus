@@ -2,6 +2,7 @@
 
 #include "game/area_solids.h"
 
+#include "game/lightning_play.h"
 #include "game/mode_dispatch.h"
 #include "game/text_ids.h"
 #include "physics/vector_math.h"
@@ -86,6 +87,9 @@ void change_row(god_menu_state& menu, sky_controls& sky, const int by, const wea
     case god_menu_row::profiler:
         menu.show_profiler = !menu.show_profiler;
         break;
+    case god_menu_row::strike:
+        menu.strike_knocks_out = !menu.strike_knocks_out;
+        break;
     }
 }
 
@@ -124,6 +128,9 @@ void make_live(god_menu_state& menu, sky_controls& sky) {
         break;
     case god_menu_row::profiler:
         menu.show_profiler = false;
+        break;
+    case god_menu_row::strike:
+        menu.strike_knocks_out = false;
         break;
     }
 }
@@ -239,13 +246,15 @@ render_god_menu god_menu_view(const god_menu_state& menu,
                                  menu.show_solids, selected(god_menu_row::solids)));
     view.rows.push_back(row_view(text, text_god_profiler, lookup_text(text, menu.show_profiler ? text_god_on : text_god_off),
                                  menu.show_profiler, selected(god_menu_row::profiler)));
+    view.rows.push_back(row_view(text, text_god_strike, lookup_text(text, menu.strike_knocks_out ? text_god_knocked_out : text_god_dazed),
+                                 false, selected(god_menu_row::strike)));
     view.note = lookup_text(text, online ? text_god_online : text_god_keys);
     return view;
 }
 
 god_menu_keys god_menu_keys_of(const input_state& input) {
     return god_menu_keys{input.key_f1.pressed, input.up.pressed, input.down.pressed, input.left.pressed,
-                         input.right.pressed, input.backspace.pressed};
+                         input.right.pressed, input.backspace.pressed, input.enter.pressed};
 }
 
 input_state without_god_menu_keys(input_state input) {
@@ -254,6 +263,7 @@ input_state without_god_menu_keys(input_state input) {
     input.left = button_state{};
     input.right = button_state{};
     input.backspace = button_state{};
+    input.enter = button_state{};
     return input;
 }
 
@@ -265,6 +275,9 @@ void run_god_menu(god_menu_state& menu, sky_controls& sky, game_state& game, con
     menu = next.menu;
     sky = next.sky;
     game.weather_override = god_weather(menu, live, game.tuning.weather);
+    if (keys.strike && menu.open && menu.row == god_menu_row::strike) {
+        strike_me(game, menu.strike_knocks_out);
+    }
 }
 
 std::vector<world_segment> god_solid_outlines(const god_menu_state& menu, const game_state& game, const glm::vec3& eye) {

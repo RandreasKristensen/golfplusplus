@@ -48,6 +48,10 @@ enum class weather_kind : std::uint8_t {
 };
 inline constexpr std::size_t weather_kind_count = 9;
 
+// Thunder from this on is a thunderstorm (weather_kind_of), and the least at
+// which lightning strikes golfers (game/lightning_rules.h).
+inline constexpr float thunderstorm_thunder = 0.5f;
+
 struct weather_state {
     weather_kind kind = weather_kind::clear;
     float cloud = 0.0f;    // the sky's cover, 0 clear .. 1 overcast

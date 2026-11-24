@@ -3,6 +3,7 @@
 #include "physics/vector_math.h"
 #include "renderer/camera_local.h"
 #include "renderer/primitive_mesh.h"
+#include "renderer/lying_body.h"
 #include "renderer/remote_avatar_batch.h"
 
 #include <glm/common.hpp>
@@ -555,6 +556,11 @@ void build_world_marker_batch(world_marker_batch& batch, const world_marker_scen
     if (scene.remote_avatars != nullptr) {
         for (const render_remote_avatar& avatar : *scene.remote_avatars) {
             append_remote_avatar(batch, avatar, scene.avatar_eye_height, scene.ball_visual_radius_meters, colors);
+        }
+    }
+    if (scene.lying_bodies != nullptr) {
+        for (const render_lying_body& body : *scene.lying_bodies) {
+            append_lying_body(batch, body, colors);
         }
     }
     batch.end_part(marker_part::avatars);

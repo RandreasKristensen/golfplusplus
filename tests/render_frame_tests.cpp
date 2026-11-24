@@ -399,7 +399,8 @@ TEST_CASE("online frames show other players, their tags, balls and trails; offli
     shot.result.duration = 1.0f;
     shot.result.trajectory = {glm::vec3(0.0f), glm::vec3(1.0f)};
     shot.elapsed = 2.0f;
-    shot.trail = {glm::vec3(0.0f), glm::vec3(1.0f)};
+    shot.trail.points = {glm::vec3(0.0f), glm::vec3(1.0f)};
+    shot.trail.rested_seconds = 1.0f;
     state.remote_shots[2] = shot;
 
     render_data data = frame_for(state);
@@ -425,8 +426,8 @@ TEST_CASE("online frames show other players, their tags, balls and trails; offli
     CHECK(data.name_tags[0].position.y > avatar.position.y);
     CHECK(data.name_tags[0].relationship == player_relationship::unknown);
     CHECK(data.remote_balls.size() == 1U);
-    REQUIRE(data.remote_trails.size() == 1U);
-    CHECK(data.remote_trails[0].alpha < state.tuning.flight_path.alpha);
+    REQUIRE(data.flight_lines.size() == 1U);
+    CHECK(data.flight_lines[0].alpha < state.tuning.flight_path.alpha);
     CHECK(data.avatar_eye_height == state.tuning.camera.walking_eye_height);
 
     // In my group, their tag says so; another group's doesn't.

@@ -52,6 +52,7 @@
 #include "renderer/texture.h"
 #include "renderer/tree_renderer.h"
 #include "renderer/tv_pass.h"
+#include "renderer/world_bolt_renderer.h"
 #include "renderer/world_marker_batch.h"
 #include "renderer/world_marker_renderer.h"
 
@@ -165,6 +166,7 @@ private:
     water_renderer water_renderer_{storage_};
     reflection_pass reflection_pass_{storage_};
     weather_renderer weather_renderer_{storage_};
+    world_bolt_renderer world_bolt_renderer_{storage_};
     world_marker_renderer world_marker_renderer_{storage_};
     world_marker_renderer tee_box_renderer_{storage_};
     world_marker_renderer cup_renderer_{storage_};

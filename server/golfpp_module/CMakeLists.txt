@@ -108,14 +108,18 @@ set(GOLFPP_SHARED_SOURCES
   src/game/golfer.cpp
   src/game/shot_ability.cpp
   src/game/shot_dice.cpp
+  src/game/ball_hit_rules.cpp
+  src/game/lightning_rules.cpp
   src/game/shot_setup.cpp
   src/game/shot_snapshot.cpp
   src/game/effects.cpp
+  src/game/effect_catalog.cpp
   src/game/hole_loader.cpp
   src/game/item_catalog.cpp
   src/game/loadout.cpp
   src/game/address_view.cpp
   src/game/movement_step.cpp
+  src/game/fallen_body.cpp
   src/game/sent_setup.cpp
   src/game/floodlights.cpp
   src/game/cart_path.cpp
@@ -134,6 +138,12 @@ set(GOLFPP_SHARED_SOURCES
   src/game/skill_catalog.cpp
   src/game/round_state.cpp
   src/game/shot_simulation.cpp
+  src/game/flight_cursor.cpp
+  src/game/ball_flight.cpp
+  src/game/ball_contact.cpp
+  src/game/contact_settle.cpp
+  src/game/mover_path.cpp
+  src/game/step_timeline.cpp
   src/game/sky_clock.cpp
   src/game/weather.cpp
   src/game/tuning_loader.cpp
@@ -144,7 +154,7 @@ list(TRANSFORM GOLFPP_SHARED_SOURCES PREPEND "${GOLFPP_ROOT}/")
 # Every asset file matching these patterns is compiled in: the play
 # content, the font, and every course's manifest, world and holes.
 set(GOLFPP_CONTENT_PATTERNS
-  play/tuning/*.json play/progression/*.json play/items/*.json interface/fonts/*.json world/courses/*.json world/props/*.json world/hub/*.json)
+  play/tuning/*.json play/progression/*.json play/items/*.json play/effects/*.json interface/fonts/*.json world/courses/*.json world/props/*.json world/hub/*.json)
 set(GOLFPP_ASSET_ROOT "${GOLFPP_ROOT}/assets")
 set(GOLFPP_CONTENT_FILES "")
 foreach(pattern IN LISTS GOLFPP_CONTENT_PATTERNS)
@@ -176,6 +186,11 @@ add_executable(lib
   src/play_rules.cpp
   src/cart_rules.cpp
   src/movement_rules.cpp
+  src/hit_effect_rules.cpp
+  src/knockout_rules.cpp
+  src/lightning_check_rules.cpp
+  src/flight_rules.cpp
+  src/flight_codec.cpp
   src/server_content.cpp
   ${GOLFPP_SHARED_SOURCES}
   "${GOLFPP_EMBEDDED_SOURCE}"

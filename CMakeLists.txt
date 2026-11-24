@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(golfpp VERSION 0.2.1 LANGUAGES CXX)
+project(golfpp VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -118,6 +118,9 @@ golfpp_library(golfpp-game
     src/game/course_world_loader.cpp
     src/game/delivery.cpp
     src/game/effects.cpp
+    src/game/effect_catalog.cpp
+    src/game/effect_shelf.cpp
+    src/game/effect_text.cpp
     src/game/game_content.cpp
     src/game/game_walking.cpp
     src/game/ball_lift.cpp
@@ -160,6 +163,9 @@ golfpp_library(golfpp-game
     src/game/online_play.cpp
     src/game/motion_sync.cpp
     src/game/movement_step.cpp
+    src/game/fallen_body.cpp
+    src/game/knockout.cpp
+    src/game/lightning_play.cpp
     src/game/sent_setup.cpp
     src/game/sync_reconciliation.cpp
     src/game/cart_prediction.cpp
@@ -188,9 +194,20 @@ golfpp_library(golfpp-game
     src/game/scorecard.cpp
     src/game/shot_ability.cpp
     src/game/shot_dice.cpp
+    src/game/vignette_strength.cpp
+    src/game/ball_hit_rules.cpp
+    src/game/lightning_rules.cpp
     src/game/shot_number.cpp
     src/game/shot_setup.cpp
     src/game/shot_simulation.cpp
+    src/game/flight_cursor.cpp
+    src/game/ball_flight.cpp
+    src/game/ball_contact.cpp
+    src/game/contact_settle.cpp
+    src/game/contact_prediction.cpp
+    src/game/contact_play.cpp
+    src/game/mover_path.cpp
+    src/game/step_timeline.cpp
     src/game/shot_snapshot.cpp
     src/game/sky_clock.cpp
     src/game/weather.cpp
@@ -218,6 +235,10 @@ golfpp_library(golfpp-render-data
     src/renderer/bag_batch.cpp
     src/renderer/cart_batch.cpp
     src/renderer/control_icons.cpp
+    src/renderer/effect_icons.cpp
+    src/renderer/effect_shelf_layout.cpp
+    src/renderer/effect_shelf_overlay.cpp
+    src/renderer/vignette_overlay.cpp
     src/renderer/course_map_card.cpp
     src/renderer/course_map_layout.cpp
     src/renderer/course_map_overlay.cpp
@@ -269,6 +290,7 @@ golfpp_library(golfpp-render-data
     src/renderer/render_mesh_lod.cpp
     src/renderer/dap_pose.cpp
     src/renderer/remote_avatar_batch.cpp
+    src/renderer/lying_body.cpp
     src/renderer/render_tree.cpp
     src/renderer/scene_lights.cpp
     src/renderer/lamp_shadows.cpp
@@ -287,6 +309,8 @@ golfpp_library(golfpp-render-data
     src/renderer/text_input.cpp
     src/renderer/ui_rect.cpp
     src/renderer/vcr_overlay.cpp
+    src/renderer/xp_drop_layout.cpp
+    src/renderer/world_bolt.cpp
     src/renderer/world_marker_batch.cpp
 )
 target_link_libraries(golfpp-render-data PUBLIC golfpp-game)
@@ -376,6 +400,8 @@ golfpp_library(golfpp-app-logic
     src/audio/underwater_filter.cpp
     src/audio/voice_pool.cpp
     src/core/god_menu.cpp
+    src/core/effect_cursor.cpp
+    src/core/effect_shelf_frame.cpp
     src/core/input.cpp
     src/core/key_bindings.cpp
     src/core/light_frame.cpp
@@ -389,6 +415,7 @@ golfpp_library(golfpp-app-logic
     src/core/tee_book_text.cpp
     src/core/departure_board.cpp
     src/core/render_frame.cpp
+    src/core/render_bodies.cpp
     src/core/render_gear.cpp
     src/core/render_online.cpp
     src/core/render_putting.cpp
@@ -469,6 +496,7 @@ add_executable(golfpp
     src/renderer/falling_leaf_renderer.cpp
     src/renderer/tv_pass.cpp
     src/renderer/weather_renderer.cpp
+    src/renderer/world_bolt_renderer.cpp
     src/renderer/world_marker_renderer.cpp
 )
 set_target_properties(golfpp PROPERTIES OUTPUT_NAME "golf++")
@@ -611,6 +639,11 @@ if (GOLFPP_BUILD_TESTS)
         server/golfpp_module/src/play_rules.cpp
         server/golfpp_module/src/cart_rules.cpp
         server/golfpp_module/src/movement_rules.cpp
+        server/golfpp_module/src/hit_effect_rules.cpp
+        server/golfpp_module/src/knockout_rules.cpp
+        server/golfpp_module/src/lightning_check_rules.cpp
+        server/golfpp_module/src/flight_rules.cpp
+        server/golfpp_module/src/flight_codec.cpp
         server/golfpp_module/src/progress_rollup.cpp
         server/golfpp_module/src/server_content.cpp
     )
@@ -632,6 +665,10 @@ if (GOLFPP_BUILD_TESTS)
         tests/my_balls_tests.cpp
         tests/osd_tests.cpp
         tests/shot_snapshot_tests.cpp
+        tests/ball_hit_tests.cpp
+        tests/knockout_tests.cpp
+        tests/lightning_tests.cpp
+        tests/lying_body_tests.cpp
         tests/camera_transition_tests.cpp
         tests/cart_dynamics_tests.cpp
         tests/cart_path_tests.cpp
@@ -666,6 +703,11 @@ if (GOLFPP_BUILD_TESTS)
         tests/tree_model_tests.cpp
         tests/falling_leaf_tests.cpp
         tests/hole_sign_tests.cpp
+        tests/effect_tests.cpp
+        tests/effect_cursor_tests.cpp
+        tests/effect_shelf_tests.cpp
+        tests/effect_shelf_overlay_tests.cpp
+        tests/xp_drop_layout_tests.cpp
         tests/item_tests.cpp
         tests/tee_box_tests.cpp
         tests/light_frame_tests.cpp
@@ -692,6 +734,9 @@ if (GOLFPP_BUILD_TESTS)
         tests/play_rules_tests.cpp
         tests/physics_tests.cpp
         tests/swept_contact_tests.cpp
+        tests/ball_contact_tests.cpp
+        tests/contact_prediction_tests.cpp
+        tests/flight_rules_tests.cpp
         tests/profiling_tests.cpp
         tests/progression_tests.cpp
         tests/save_persistence_tests.cpp
@@ -722,6 +767,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/text_input_tests.cpp
         tests/text_layout_tests.cpp
         tests/utf8_tests.cpp
+        tests/world_bolt_tests.cpp
         tests/world_marker_tests.cpp
     )
     set_target_properties(golfpp-tests PROPERTIES OUTPUT_NAME "golf++-tests")

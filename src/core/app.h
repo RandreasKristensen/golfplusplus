@@ -4,6 +4,7 @@
 // main loop. An optional callback receives each profiled iteration after GPU readback.
 
 #include "audio/audio_engine.h"
+#include "core/effect_cursor.h"
 #include "core/god_menu.h"
 #include "core/input.h"
 #include "core/light_frame.h"
@@ -112,6 +113,7 @@ private:
     renderer renderer_;
     audio_engine audio_;
     input_state input_;
+    effect_cursor_state effect_cursor_;  // the mouse freed to point at the effect shelf while walking
     game_content content_;
     text_assets text_;
     startup_catalog catalog_;

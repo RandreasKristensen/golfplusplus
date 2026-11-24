@@ -53,6 +53,10 @@ void record_shot(game_state& state, const shot_setup& setup);
 // Online: set_flag; the room's rows say when it is.
 void record_flag(game_state& state, std::size_t hole, bool out);
 
+// The god menu's strike on me, online: god_strike, which the server refuses
+// unless it allows god commands. (Offline: strike_me, game/lightning_play.h.)
+void record_god_strike(game_state& state, bool knock_out);
+
 // I moved my bag to where state.bag now has it, or took `club_id` from it
 // into my hand. Online: place_bag, take_club. Offline nothing more.
 void record_bag_moved(game_state& state);

@@ -11,6 +11,7 @@
 #include "game/content_hash.h"
 #include "game/course_definition.h"
 #include "game/course_world_definition.h"
+#include "game/effect_catalog.h"
 #include "game/game_tuning.h"
 #include "game/hole_data.h"
 #include "game/item_catalog.h"
@@ -38,6 +39,7 @@ struct server_content {
     reward_rules rewards;
     skill_catalog skills;
     item_catalog items;
+    effect_catalog effects;  // the event effects (game/effect_catalog.h)
     loadout default_loadout;  // fits `items`
     pixel_font_data font;
     std::optional<hub_definition> hub;

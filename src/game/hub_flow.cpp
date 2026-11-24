@@ -37,7 +37,7 @@ void request_ball_preparation(game_state& state, const net_command_type type, co
         state.ball = my_ball{hole, resting_ball_position(state.area, station, state.tuning.scale.ball_physics_radius_meters),
             0, ball_place::teed, ball_kind::warmup};
         state.shot.reset(); state.address = address_state{}; state.mode = game_mode::walking;
-        state.flight_path_points.clear(); state.give_up_prompt.reset(); state.ball_correction.reset();
+        state.my_flight_line = flight_line{}; state.give_up_prompt.reset(); state.ball_correction.reset();
         state.player.position = tee_stance_position(state.area, state.ball->position, state.area.cups[hole].centre,
             state.tuning.player.ball_stand_off_distance);
         state.player.yaw = yaw_towards(state.ball->position, state.area.cups[hole].centre);
@@ -63,7 +63,7 @@ void clear_online_presentation(game_state& state) {
     state.dap_pending.reset(); state.online.daps.clear();
     state.ball.reset(); state.shot.reset(); state.address = address_state{};
     state.mode = game_mode::walking; state.ball_correction.reset();
-    state.flight_path_points.clear(); state.remote_avatars.clear(); state.remote_shots.clear();
+    state.my_flight_line = flight_line{}; state.remote_avatars.clear(); state.remote_shots.clear();
     state.picker.reset(); state.handling.reset(); state.give_up_prompt.reset();
     state.bag_row_seen.reset(); state.bag_expected.reset();
     state.pacing.reset(); state.ride.reset(); state.ride_shown.reset(); state.cart_falls.clear();

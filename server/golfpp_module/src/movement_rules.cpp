@@ -113,6 +113,31 @@ move_outcome play_move(const mover_state& mover, const std::optional<room_cart>&
         out.error = error_invalid_motion;
         return out;
     }
+    std::uint32_t total_steps = 0;
+    for (const move_run& run : request.runs) {
+        total_steps += run.steps;
+    }
+    // The batch's place on the shared clock after the last: refused in the
+    // server's future or over steps played, passed over when nothing is new.
+    const bool timed = request.first_time_ms != 0 && total_steps != 0;
+    bool late = !timed;
+    std::optional<timeline_anchor> anchor;
+    if (mover.step_time_ms != 0) {
+        anchor = timeline_anchor{mover.step, mover.step_time_ms};
+    }
+    std::optional<timeline_anchor> placed_anchor;
+    if (timed) {
+        const timeline_result placed = place_batch(anchor, timed_batch{request.first_step, total_steps, request.first_time_ms},
+                                                  world.now_ms, tuning.server);
+        if (placed.verdict != timeline_verdict::accepted) {
+            out.error = error_invalid_motion;
+            return out;
+        }
+        late = placed.late;
+        if (!placed.repeated) {
+            placed_anchor = placed.anchor;
+        }
+    }
     mover_state& m = out.mover;
     m.credit_seconds = std::min(tuning.server.max_motion_gap_seconds, m.credit_seconds + std::max(0.0f, seconds));
     std::optional<room_cart> my_cart = cart;
@@ -141,6 +166,21 @@ move_outcome play_move(const mover_state& mover, const std::optional<room_cart>&
         m.cart_yaw_rate = body.motion.yaw_rate;
         m.cart_lift_seconds = body.motion.lift_seconds;
         m.cart_vertical = body.vertical;
+    };
+    // The place before the batch is known from the last anchor: a golfer on
+    // foot stood there, a cart stood where its row has it.
+    if (anchor && !in_cart(mover.mode)) {
+        out.feet.push_back(mover_sample{anchor->time_ms, mover.position, 0.0f});
+    }
+    if (anchor && my_cart) {
+        out.cart_poses.push_back(mover_sample{anchor->time_ms, my_cart->position, my_cart->yaw});
+    }
+    const auto note = [&](std::vector<mover_sample>& samples, const std::uint64_t number, const glm::vec3& at, const float yaw) {
+        const std::int64_t time =
+            timed ? step_time_ms(request.first_time_ms, number - request.first_step) : world.now_ms;
+        if (samples.empty() || samples.back().position != at || samples.back().yaw != yaw) {
+            samples.push_back(mover_sample{time, at, yaw});
+        }
     };
     float walked_speed = 0.0f;
     float walked_angle = 0.0f;
@@ -183,6 +223,7 @@ move_outcome play_move(const mover_state& mover, const std::optional<room_cart>&
                 walked_angle = walked.after.move_angle;
                 walked_yaw = input.yaw;
                 out.walked_meters += horizontal_distance(from, m.position) * tuning.scale.meters_per_world_unit;
+                note(out.feet, number, m.position, 0.0f);
                 continue;
             }
             if (body.motion.condition != cart_condition::upright) {
@@ -193,6 +234,7 @@ move_outcome play_move(const mover_state& mover, const std::optional<room_cart>&
             const cart_move moved = step_cart_mover(body, cart_controls{static_cast<float>(input.forward), steer_of(input.steer)},
                                                     driving_world);
             body = moved.after;
+            note(out.cart_poses, number, body.pose.position, body.pose.yaw);
             if (on_road) {
                 out.road_meters += horizontal_distance(from, body.pose.position) * tuning.scale.meters_per_world_unit;
             }
@@ -276,6 +318,20 @@ move_outcome play_move(const mover_state& mover, const std::optional<room_cart>&
     shown.client_time = asked.client_time;
     m.mode = mode;
     m.client_time = asked.client_time;
+    if (placed_anchor) {
+        m.step_time_ms = placed_anchor->time_ms;
+    }
+    if (late) {
+        // Counts as standing: where the batch left it, held from its last step.
+        for (std::vector<mover_sample>* samples : {&out.feet, &out.cart_poses}) {
+            if (samples->size() > 1) {
+                const mover_sample last = samples->back();
+                const bool prefixed = anchor && samples->front().time_ms == anchor->time_ms;
+                mover_sample first = prefixed ? samples->front() : last;
+                *samples = prefixed ? std::vector<mover_sample>{first, last} : std::vector<mover_sample>{last};
+            }
+        }
+    }
     out.shown = shown;
     return out;
 }

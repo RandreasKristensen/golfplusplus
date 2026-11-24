@@ -9,7 +9,7 @@ on port 3000; builds the server module (quick when nothing changed);
 publishes it as `golfpp` when the database is missing or the build changed
 since the last publish here (migrating it, else replacing the disposable
 local database), then regenerates the client bindings; and turns
-on anonymous logins (admin_set_config, as the publisher) keeping the issuer
+on anonymous logins and god commands (admin_set_config, as the publisher) keeping the issuer
 and client id from assets/play/online.json and the database's link secret (a new
 one for a new database). The database lives in SpacetimeDB's own data
 directory, so it survives the server being stopped.
@@ -202,8 +202,8 @@ function Publish-Module {
 }
 
 function Enable-Anonymous {
-    if ((Get-ConfigValue "allow_anonymous") -eq "true") {
-        Say "anonymous logins are on"
+    if ((Get-ConfigValue "allow_anonymous") -eq "true" -and (Get-ConfigValue "allow_god") -eq "true") {
+        Say "anonymous logins and god commands are on"
         return
     }
     $online = Get-Content -LiteralPath (Join-Path $repo_root "assets\play\online.json") -Raw | ConvertFrom-Json
@@ -214,13 +214,13 @@ function Enable-Anonymous {
         [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
         $secret = -join ($bytes | ForEach-Object { $_.ToString("x2") })
     }
-    Say "turning on anonymous logins"
+    Say "turning on anonymous logins and god commands (the local server only)"
     $result = Invoke-Spacetime @("call", $database, "admin_set_config",
                                  (Json-Argument $online.auth_issuer), (Json-Argument $online.auth_client_id),
-                                 "true", (Json-Argument $secret), "--server", "local")
-    if (-not $result.ok -or (Get-ConfigValue "allow_anonymous") -ne "true") {
+                                 "true", (Json-Argument $secret), "true", "--server", "local")
+    if (-not $result.ok -or (Get-ConfigValue "allow_anonymous") -ne "true" -or (Get-ConfigValue "allow_god") -ne "true") {
         $result.messages | ForEach-Object { Write-Host $_ }
-        throw "Could not turn on anonymous logins (only the publisher can)."
+        throw "Could not turn on anonymous logins and god commands (only the publisher can)."
     }
 }
 

@@ -319,7 +319,7 @@ TEST_CASE("items that speed a player up let the server's motion check allow it")
     faster.value = 0.5f;
     faster.duration = effect_duration::seconds;
     faster.seconds = 10.0f;
-    const std::vector<active_effect> effects{active_effect{"shoes", faster, 0, 10000}};
+    const std::vector<active_effect> effects{active_effect{item_source("shoes"), faster, 0, 10000}};
     const cart_spec& cart = *content.items.find(content.default_loadout.cart)->cart;
     const float running = content.tuning.player.walk_speed * content.tuning.player.run_factor;
     CHECK(near(movement_limits_for(content.tuning, cart, effects, 5000).foot_speed, running * 1.5f, 0.0001f));

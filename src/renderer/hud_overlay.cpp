@@ -5,6 +5,9 @@
 
 #include "game/text_ids.h"
 #include "renderer/control_icons.h"
+#include "renderer/effect_shelf_overlay.h"
+#include "renderer/vignette_overlay.h"
+#include "renderer/hud_boxes.h"
 #include "renderer/hud_panel.h"
 #include "renderer/pixel_font.h"
 #include "renderer/rangefinder_overlay.h"
@@ -12,6 +15,7 @@
 #include "renderer/shot_number_overlay.h"
 #include "renderer/ui_rect.h"
 #include "renderer/vcr_overlay.h"
+#include "renderer/xp_drop_layout.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -43,7 +47,7 @@ void draw_profile_overlay(overlay_batch& batch, const text_assets& text, const f
 
 // Top right, under the VCR tag: the club's short name over its full name.
 void draw_club_label(overlay_batch& batch, const text_assets& text, const std::string& label, const std::string& name) {
-    const ui_rect panel = rect_from_edges(0.60f, 0.64f, 0.95f, 0.88f);
+    const ui_rect panel = club_label_box();
     draw_hud_panel(batch, panel);
 
     const ui_rect inner = inset_rect(panel, glm::vec2(0.02f, 0.012f));
@@ -55,7 +59,7 @@ void draw_club_label(overlay_batch& batch, const text_assets& text, const std::s
 
 // Top centre, clear of the stroke ticks, cart panel, club and XP drops. Empty offline.
 void draw_mode_label(overlay_batch& batch, const text_assets& text, const std::string& label) {
-    draw_label(batch, text.font, find_text_style(text, style_hud_mode), label, rect_from_edges(-0.27f, 0.85f, 0.27f, 0.97f));
+    draw_label(batch, text.font, find_text_style(text, style_hud_mode), label, mode_label_box());
 }
 
 void draw_skills_panel(overlay_batch& batch, const text_assets& text, const std::vector<render_skill_progress>& skills) {
@@ -180,40 +184,19 @@ void draw_xp_icon(overlay_batch& batch,
 }
 
 void draw_xp_drops(overlay_batch& batch, const text_assets& text, const std::vector<render_xp_drop>& drops) {
-    if (drops.empty()) {
-        return;
-    }
-
-    const glm::vec3 panel_color(0.035f, 0.040f, 0.040f);
-    const glm::vec3 outline_color(0.68f, 0.70f, 0.56f);
     const text_style& label_style = find_text_style(text, style_xp_drop);
-    const glm::vec2 row_half(0.155f, 0.043f);
-    const float row_gap = 0.092f;
-    const float right = 0.585f;
-    const float start_y = 0.565f;
-    const float travel_y = 0.62f;
+    for (const xp_drop_slot& slot : layout_xp_drops(drops)) {
+        const render_xp_drop& drop = drops[slot.drop];
+        const ui_rect& box = slot.box;
+        draw_xp_icon(batch, drop.icon, glm::vec2(rect_left(box) + 0.05f, box.center.y), slot.alpha);
 
-    for (std::size_t i = 0; i < drops.size(); ++i) {
-        const render_xp_drop& drop = drops[i];
-        if (drop.xp <= 0) {
-            continue;
-        }
-
-        const float progress = std::clamp(drop.progress, 0.0f, 1.0f);
-        const float alpha = progress > 0.78f ? std::max(0.16f, 1.0f - (progress - 0.78f) / 0.22f) : 1.0f;
-        const glm::vec2 center(right - row_half.x, start_y - static_cast<float>(i) * row_gap + progress * travel_y);
-
-        draw_overlay_quad(batch, center + glm::vec2(0.010f, -0.010f), row_half, glm::vec3(0.0f), 0.18f * alpha);
-        draw_overlay_quad(batch, center, row_half, panel_color, 0.72f * alpha);
-        draw_button_outline(batch, center, row_half, outline_color, 0.42f * alpha);
-        draw_xp_icon(batch, drop.icon, center + glm::vec2(-0.105f, 0.0f), alpha);
-
-        const std::string label = format_text(text, text_hud_xp_drop, {{"xp", std::to_string(std::max<std::int64_t>(0, drop.xp))}});
-        draw_label(batch,
-                   text.font,
-                   with_color(label_style, label_style.color * alpha),
-                   label,
-                   rect_from_edges(center.x - 0.075f, center.y - row_half.y + 0.004f, center.x + row_half.x - 0.008f, center.y + row_half.y - 0.004f));
+        // No panel: a dark copy a hair below and right keeps the text readable on the picture.
+        const std::string label = format_text(text, text_hud_xp_drop, {{"xp", std::to_string(drop.xp)}});
+        const ui_rect text_box = rect_from_edges(rect_left(box) + 0.10f, rect_bottom(box) + 0.004f, rect_right(box), rect_top(box) - 0.004f);
+        const glm::vec2 shadow = glm::vec2(0.008f, -0.014f);
+        const text_layout shadow_layout = layout_text(text.font, label_style, label, ui_rect{text_box.center + shadow, text_box.half_size}, batch.grid);
+        draw_text_layout(batch, text.font, shadow_layout, glm::vec3(0.04f, 0.035f, 0.03f), slot.alpha);
+        draw_text_layout(batch, text.font, layout_text(text.font, label_style, label, text_box, batch.grid), label_style.color, slot.alpha);
     }
 }
 
@@ -259,6 +242,9 @@ skill_icon_id skill_icon_from_name(const std::string& name) {
 }
 
 void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& data, const glm::mat4& view_proj) {
+    for (const vignette_look& look : data.vignettes) {
+        draw_vignette(batch, look.colour, look.strength);
+    }
     draw_name_tags(batch, text, data.name_tags, view_proj);
     if (data.show_scorecard) {
         draw_compact_scorecard(batch, text, data.scorecard);
@@ -271,6 +257,7 @@ void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& 
     }
     draw_mode_label(batch, text, data.mode_label);
     draw_club_label(batch, text, data.selected_club_label, data.selected_club_name);
+    draw_effect_shelf(batch, text, data.effect_squares, data.effect_cursor);
     draw_xp_drops(batch, text, data.xp_drops);
     if (data.shot_number) {
         draw_shot_number(batch, text, *data.shot_number, view_proj);
@@ -302,6 +289,7 @@ void draw_hud(overlay_batch& batch, const text_assets& text, const render_data& 
     draw_give_up_prompt(batch, text, data.give_up_label);
     draw_stroke_ticks(batch, data.stroke_count);
     draw_notice(batch, text, data.notice_label, data.notice_severity);
+    draw_effect_tooltip(batch, text, data.effect_squares, data.effect_cursor);
 }
 
 void draw_debug_text(overlay_batch& batch, const text_assets& text, const render_data& data) {

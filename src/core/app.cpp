@@ -64,14 +64,13 @@ menu_pointer mouse_menu_pointer(const input_state& input, SDL_Window* window) {
     int width = 1;
     int height = 1;
     SDL_GetWindowSize(window, &width, &height);
-    const float x = static_cast<float>(input.mouse_x) / static_cast<float>(std::max(1, width)) * 2.0f - 1.0f;
-    const float y = 1.0f - static_cast<float>(input.mouse_y) / static_cast<float>(std::max(1, height)) * 2.0f;
+    const glm::vec2 position = mouse_clip_position(input, width, height);
     menu_pointer pointer;
     if (input.mouse_dx != 0 || input.mouse_dy != 0) {
-        pointer.hover = glm::vec2(x, y);
+        pointer.hover = position;
     }
     if (input.mouse_left.pressed) {
-        pointer.click = glm::vec2(x, y);
+        pointer.click = position;
     }
     return pointer;
 }
@@ -588,6 +587,11 @@ render_data app::make_frame(const float dt, const bool snap_camera, frame_profil
     data.camera_water_level = water_level_at(game_.area, data.camera_position).value_or(0.0f);
     // The menus' tour fades its weather too, but strikes no lightning behind them.
     const bool strikes = menu_.flow == startup_flow::playing || menu_.flow == startup_flow::touring;
+    for (const glm::vec3& point : game_.strike_points) {
+        weather_shown_.lightning = strike_at(weather_shown_.lightning, point, data.camera_position,
+                                             game_.tuning.scale.meters_per_world_unit, lighting_.lightning);
+    }
+    game_.strike_points.clear();
     weather_shown_ = update_frame_weather(weather_shown_, game_, lighting_, data, strikes || touring_.has_value(), strikes, dt);
     for (int i = 0; i < weather_shown_.lightning.close_claps + weather_shown_.lightning.far_claps; ++i) {
         audio_.play(i < weather_shown_.lightning.close_claps ? sound_thunder_close : sound_thunder_far);

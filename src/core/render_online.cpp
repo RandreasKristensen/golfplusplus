@@ -25,15 +25,6 @@ namespace {
 constexpr float tag_height_on_foot = 1.30f;
 constexpr float tag_height_seated = 1.55f;
 
-float trail_alpha(const remote_shot& shot, const game_tuning& tuning) {
-    const float after = shot.elapsed - shot.result.duration;
-    if (after <= 0.0f) {
-        return tuning.flight_path.alpha;
-    }
-    const float fade = tuning.net.remote_trail_fade_seconds;
-    return fade > 0.0f ? tuning.flight_path.alpha * std::max(0.0f, 1.0f - after / fade) : 0.0f;
-}
-
 std::optional<render_item_use> shown_use(const game_state& game, const std::optional<item_use_shown>& use) {
     const item_definition* item = use ? game.items.find(use->item) : nullptr;
     return item != nullptr ? std::optional<render_item_use>(render_item_use{item->model, use->elapsed}) : std::nullopt;
@@ -110,7 +101,6 @@ void add_online_render_data(render_data& data, const game_state& game, const tex
     if (const auto pair = active_dap(game, game.online.account_id); pair && game.mode == game_mode::walking && !game.shot) {
         data.dap_hand = paired_dap_pose(*pair, game.online.account_id, game.hand, game.online.server_now, game.tuning);
         if (data.my_figure) {
-            data.my_figure->player_id = game.online.account_id;
             data.my_figure->dap = data.dap_hand; data.my_figure->reach = data.dap_hand->hand;
             data.my_figure->yaw = data.dap_hand->yaw; data.my_figure->carried_club_model.clear();
         }
@@ -152,9 +142,7 @@ void add_online_render_data(render_data& data, const game_state& game, const tex
         data.remote_balls.push_back(render_remote_ball{drawn_ball_center(ball.position, game.tuning.scale, game.area.cups), ball.account_id});
     }
     for (const auto& [account, shot] : game.remote_shots) {
-        if (shot.trail.size() >= 2) {
-            data.remote_trails.push_back(render_trail{shot.trail, trail_alpha(shot, game.tuning)});
-        }
+        add_flight_line(data, shot.trail, game.tuning.flight_path);
     }
     if (waiting_for_group(game) && data.notice_label.empty()) {
         data.notice_label = lookup_text(text, text_scorecard_waiting_for_group);

@@ -626,7 +626,10 @@ struct night_light_style {
 // (assets/picture/shaders/backdrop.frag), its bolt is bolt_width_deg wide,
 // wandering up to bolt_jitter_deg either way, bolt_brightness bright in
 // `color`, lighting the clouds within glow_radius_deg of its top by
-// glow_strength.
+// glow_strength. A real strike's bolt is drawn in the world instead
+// (renderer/world_bolt.h): from world_bolt_height_meters up down to the
+// golfer, never narrower than world_bolt_width_meters, its channel wandering
+// world_bolt_wander of each of its segments' length.
 struct lightning_style {
     float strikes_per_minute = 0.0f;
     float flash_seconds = 0.0f;
@@ -643,6 +646,9 @@ struct lightning_style {
     float bolt_brightness = 0.0f;
     float glow_radius_deg = 0.0f;
     float glow_strength = 0.0f;
+    float world_bolt_height_meters = 0.0f;
+    float world_bolt_width_meters = 0.0f;
+    float world_bolt_wander = 0.0f;
     glm::vec3 color{0.0f};
 };
 

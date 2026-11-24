@@ -6,6 +6,7 @@
 
 #include "game/address_view.h"
 #include "game/ball_kind.h"
+#include "game/contact_blend.h"
 #include "game/bag_handling.h"
 #include "game/bag_sync.h"
 #include "game/bag_place.h"
@@ -18,6 +19,8 @@
 #include "game/game_tuning.h"
 #include "game/golf_cart.h"
 #include "game/hole_data.h"
+#include "game/effect_catalog.h"
+#include "game/flight_line.h"
 #include "game/item_catalog.h"
 #include "game/loadout.h"
 #include "game/message_severity.h"
@@ -187,6 +190,13 @@ struct shot_playback {
     // Online: where the server says it rests, less where it played to here;
     // blended in over the playback.
     glm::vec3 correction{0.0f};
+    // Online: the shot as the server played it and the contacts it has met so
+    // far (ball_contact_event rows): each rebuilds the result from them and
+    // blends from where the ball was drawn.
+    std::optional<room_shot> source;
+    std::vector<flight_contact> contacts;
+    contact_blend blend;
+    contact_watch watch;
 };
 
 // Online: my ball moving to where the server says it rests, after its shot
@@ -236,9 +246,13 @@ struct remote_shot {
     shot_setup input;
     shot_result result;
     glm::vec3 correction{0.0f};  // the server's rest less this simulation's
+    std::optional<room_shot> source;  // see shot_playback
+    std::vector<flight_contact> contacts;
+    contact_blend blend;
+    contact_watch watch;
     float elapsed = 0.0f;
     std::size_t next_event = 0;  // first of result.events not heard yet
-    std::vector<glm::vec3> trail;
+    flight_line trail;
 };
 
 // A message shown for a moment: a refused action (error) or a rules consequence
@@ -345,6 +359,7 @@ struct game_state {
     reward_rules rewards;
     skill_catalog skills;
     item_catalog items;
+    effect_catalog event_effects;
     loadout default_loadout;
 
     // The course and the ground under the player.
@@ -372,6 +387,10 @@ struct game_state {
     // completion); app clears it.
     save_data save;
     bool save_requested = false;
+    // Offline: I was knocked out (game/knockout.h); app takes it, saves and
+    // returns to the main menu with the message. Online the server ends my
+    // session and net_client reports net_failure_knocked_out.
+    bool knocked_out = false;
 
     // Online only. The network client sends and clears `net_commands`, and
     // fills `online` from the server.
@@ -473,11 +492,18 @@ struct game_state {
     std::optional<shot_number_popup> shot_number;
     // XP gains too small to show yet, per skill (see xp_drop_tuning).
     std::map<std::string, std::int64_t> pending_xp_drop_amounts;
-    std::vector<glm::vec3> flight_path_points;
+    flight_line my_flight_line;
     // Where the ball sat when the current shot was hit (the follow camera
     // stays at the address view of this spot).
     glm::vec3 shot_start_position{0.0f};
     std::vector<audio_event> audio_events;
+    // Where lightning struck a golfer (mine offline, the room's online), for
+    // the sky to draw: app takes them every frame (core/lightning_frame.h).
+    std::vector<glm::vec3> strike_points;
+    // Offline lightning (game/lightning_play.h): the session's dice, picked
+    // from the clock at the first check, and the last check number rolled.
+    std::uint64_t lightning_seed = 0;
+    std::int64_t lightning_checked = 0;
 
     // Render caches outside game_state key on this; it only ever increases.
     std::uint64_t terrain_render_revision = 0;

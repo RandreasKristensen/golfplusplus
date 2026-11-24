@@ -11,6 +11,7 @@ pub(super) struct AdminSetConfigArgs {
     pub auth_audience: String,
     pub allow_anonymous: bool,
     pub server_secret: String,
+    pub allow_god: bool,
 }
 
 impl From<AdminSetConfigArgs> for super::Reducer {
@@ -20,6 +21,7 @@ impl From<AdminSetConfigArgs> for super::Reducer {
             auth_audience: args.auth_audience,
             allow_anonymous: args.allow_anonymous,
             server_secret: args.server_secret,
+            allow_god: args.allow_god,
         }
     }
 }
@@ -45,12 +47,14 @@ pub trait admin_set_config {
         auth_audience: String,
         allow_anonymous: bool,
         server_secret: String,
+        allow_god: bool,
     ) -> __sdk::Result<()> {
         self.admin_set_config_then(
             auth_issuer,
             auth_audience,
             allow_anonymous,
             server_secret,
+            allow_god,
             |_, _| {},
         )
     }
@@ -67,6 +71,7 @@ pub trait admin_set_config {
         auth_audience: String,
         allow_anonymous: bool,
         server_secret: String,
+        allow_god: bool,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -81,6 +86,7 @@ impl admin_set_config for super::RemoteReducers {
         auth_audience: String,
         allow_anonymous: bool,
         server_secret: String,
+        allow_god: bool,
 
         callback: impl FnOnce(&super::ReducerEventContext, Result<Result<(), String>, __sdk::InternalError>)
             + Send
@@ -92,6 +98,7 @@ impl admin_set_config for super::RemoteReducers {
                 auth_audience,
                 allow_anonymous,
                 server_secret,
+                allow_god,
             },
             callback,
         )

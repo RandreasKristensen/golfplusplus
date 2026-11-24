@@ -34,7 +34,7 @@ item_effect effect_on(const std::string& target, const effect_bucket bucket, con
 }
 
 active_effect running(const item_effect& effect, const std::int64_t from = 0, const std::int64_t to = effect_never_ends) {
-    return active_effect{"test_item", effect, from, to};
+    return active_effect{item_source("test_item"), effect, from, to};
 }
 
 // Items as their files say, keyed by path under items_path.
@@ -222,7 +222,7 @@ TEST_CASE("the loadout takes the default for any slot that does not fit, and its
 
     const std::vector<active_effect> equipped = equipped_effects(defaults, items);
     REQUIRE(equipped.size() == 1U);
-    CHECK(equipped[0].item == "drift_cart");
+    CHECK(equipped[0].source == item_source("drift_cart"));
     CHECK(effective_value(0.0f, "cart.drift", equipped, 0) == 1.0f);
     CHECK(effective_value(0.0f, "cart.drift", equipped, 9000000000000) == 1.0f);
 

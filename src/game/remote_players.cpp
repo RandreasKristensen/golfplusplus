@@ -1,6 +1,7 @@
 #include "game/remote_players.h"
 
 #include "game/course_session.h"
+#include "game/ball_contact.h"
 #include "game/mode_dispatch.h"
 #include "game/play_area.h"
 #include "game/player_jump.h"
@@ -116,11 +117,6 @@ swing_tempo remote_tempo(const game_state& state, const shot_setup& setup) {
                            : swing_tempo{state.tuning.swing.backswing_seconds, state.tuning.swing.downswing_seconds};
 }
 
-void append_trail_point(std::vector<glm::vec3>& trail, const glm::vec3& point, const float min_spacing) {
-    if (trail.empty() || glm::length(point - trail.back()) >= min_spacing) {
-        trail.push_back(point);
-    }
-}
 }
 
 void update_remote_players(game_state& state, const float dt) {
@@ -144,12 +140,12 @@ void update_remote_players(game_state& state, const float dt) {
         it = gone ? state.remote_avatars.erase(it) : std::next(it);
     }
 
-    const float fade = state.tuning.net.remote_trail_fade_seconds;
     for (auto it = state.remote_shots.begin(); it != state.remote_shots.end();) {
         remote_shot& shot = it->second;
         const bool resting = shot.elapsed >= shot.result.duration;
         const bool struck = shot.elapsed >= 0.0f;
         shot.elapsed += dt;
+        shot.blend.elapsed += dt;
         if (!struck && shot.elapsed >= 0.0f) {
             if (const club_definition* club = find_club(state.clubs, shot.input.club_id)) {
                 push_club_hit(state, *club, shot.result, shot.input.ball_start);
@@ -159,12 +155,13 @@ void update_remote_players(game_state& state, const float dt) {
         if (shot.result.holed && !resting && shot.elapsed >= shot.result.duration) {
             push_audio_event(state, audio_event_type::ball_cup, remote_shot_position(shot));
         }
-        append_trail_point(shot.trail, remote_shot_position(shot), state.tuning.flight_path.min_point_spacing);
-        it = shot.elapsed >= shot.result.duration + fade ? state.remote_shots.erase(it) : std::next(it);
+        extend_flight_line(shot.trail, remote_shot_position(shot), state.tuning.flight_path);
+        shot.trail.rested_seconds = std::max(0.0f, shot.elapsed - shot.result.duration);
+        it = flight_line_faded(shot.trail, state.tuning.flight_path) ? state.remote_shots.erase(it) : std::next(it);
     }
 }
 
-shot_result room_shot_result(const game_state& state, const room_shot& shot) {
+shot_course room_shot_course(const game_state& state, const room_shot& shot) {
     std::vector<bool> flags_in(state.area.cups.size(), true);
     for (const int out : shot.flags_out) {
         if (out >= 0 && static_cast<std::size_t>(out) < flags_in.size()) {
@@ -175,7 +172,56 @@ shot_result room_shot_result(const game_state& state, const room_shot& shot) {
                                                 course_weather_at(state, shot.record.setup.shot_at), state.place, flags_in,
                                                 state.tuning);
     course.practice = !state.place.rules.scored;
-    return simulate_struck_shot(shot.record, shot.golfer, course, state.tuning, state.clubs);
+    return course;
+}
+
+shot_result room_shot_result(const game_state& state, const room_shot& shot, const std::vector<flight_contact>& contacts) {
+    const shot_course course = room_shot_course(state, shot);
+    if (contacts.empty()) {
+        return simulate_struck_shot(shot.record, shot.golfer, course, state.tuning, state.clubs);
+    }
+    return replay_contacts(shot.record, shot.golfer, course, state.tuning, state.clubs, contacts).result;
+}
+
+namespace {
+// The shot as it plays after `contact` (a ball_contact_event row) joined its
+// contacts: the result rebuilt, the sounds already heard not repeated, and
+// the ball blending from where it was drawn.
+template <typename Playing>
+void meet_contact(const game_state& state, Playing& playing, const room_contact& met, const glm::vec3& drawn) {
+    if (!playing.source || met.index != static_cast<int>(playing.contacts.size())) {
+        return;
+    }
+    playing.contacts.push_back(met.contact);
+    playing.watch.predicted.reset();  // the row's contact replaces my own prediction
+    playing.result = room_shot_result(state, *playing.source, playing.contacts);
+    playing.correction = glm::vec3(0.0f);
+    const float at = std::clamp(playing.elapsed, 0.0f, playing.result.duration);
+    playing.blend = contact_blend{drawn - shot_position_at(playing.result, at), 0.0f, state.tuning.net.shot_correction_seconds};
+    playing.next_event = static_cast<std::size_t>(std::count_if(
+        playing.result.events.begin(), playing.result.events.end(),
+        [&playing](const shot_event& event) { return event.time <= playing.elapsed; }));
+}
+}
+
+bool meet_room_contact(game_state& state, const room_contact& met) {
+    const bool mine = met.account_id == state.online.account_id;
+    const auto matches = [&met](const auto& playing) {
+        return playing.source && playing.source->stroke == met.stroke && playing.source->hole == met.hole;
+    };
+    if (mine) {
+        if (state.shot && matches(*state.shot)) {
+            meet_contact(state, *state.shot, met, state.ball ? state.ball->position : glm::vec3(0.0f));
+            return true;
+        }
+        return false;
+    }
+    const auto shot = state.remote_shots.find(met.account_id);
+    if (shot == state.remote_shots.end() || !matches(shot->second)) {
+        return false;
+    }
+    meet_contact(state, shot->second, met, remote_shot_position(shot->second));
+    return true;
 }
 
 void start_remote_shot(game_state& state, const room_shot& shot) {
@@ -194,10 +240,11 @@ void start_remote_shot(game_state& state, const room_shot& shot) {
     const shot_setup& setup = shot.record.setup;
     remote_shot playing;
     playing.input = setup;
+    playing.source = shot;
     playing.result = room_shot_result(state, shot);
     playing.correction = shot.rest - playing.result.rest_position;
     playing.elapsed = -remote_tempo(state, setup).down_seconds;
-    playing.trail.push_back(remote_shot_position(playing));
+    extend_flight_line(playing.trail, remote_shot_position(playing), state.tuning.flight_path);
     state.remote_shots[shot.account_id] = std::move(playing);
 }
 
@@ -257,7 +304,8 @@ std::optional<remote_address> remote_address_pose(const game_state& state, const
 glm::vec3 remote_shot_position(const remote_shot& shot) {
     const float duration = shot.result.duration;
     const float progress = duration > 0.0f ? std::clamp(shot.elapsed / duration, 0.0f, 1.0f) : 1.0f;
-    return shot_position_at(shot.result, std::clamp(shot.elapsed, 0.0f, duration)) + shot.correction * progress;
+    return shot_position_at(shot.result, std::clamp(shot.elapsed, 0.0f, duration)) + shot.correction * progress +
+        blend_offset(shot.blend);
 }
 
 bool remote_shot_playing(const remote_shot& shot) {

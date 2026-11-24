@@ -2,6 +2,7 @@
 
 #include "game/game_state.h"
 #include "game/golf_cart.h"
+#include "game/knockout.h"
 #include "game/movement_step.h"
 #include "game/play_area.h"
 #include "physics/body_collision.h"
@@ -34,7 +35,7 @@ std::vector<glm::vec3> people_on_foot(const game_state& state) {
 }
 
 std::vector<solid> walking_obstacles(const game_state& state) {
-    return walker_obstacles(shown_carts(state, false), state.area.cups, state.flags_in, state.tuning);
+    return walker_obstacles(shown_carts(state, false), state.area.cups, state.flags_in, state.tuning, bodies_in_world(state));
 }
 
 void keep_walker_clear(game_state& state, const glm::vec3& before) {
@@ -48,5 +49,6 @@ void keep_walker_clear(game_state& state, const glm::vec3& before) {
 }
 
 std::vector<solid> cart_obstacles(const game_state& state) {
-    return cart_obstacles_of(shown_carts(state, true), people_on_foot(state), state.area.cups, state.flags_in, state.tuning);
+    return cart_obstacles_of(shown_carts(state, true), people_on_foot(state), state.area.cups, state.flags_in, state.tuning,
+                             bodies_in_world(state));
 }

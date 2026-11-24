@@ -48,6 +48,12 @@ into it; what moves is built and uploaded once a frame (`stage_frame_geometry`),
 only when it changed, and every view and the shadow map draw the parts they
 show from that upload.
 
+**A knocked-out golfer's body is the golfer's figure lying on its back**
+(`src/renderer/lying_body.h`, instances in the markers' avatars part), head
+at its yaw's end, every part inside the body's solid box and resting on the
+ground under it; its bag lies beside it (`lying_bag_frame`). Presentation only:
+`core/render_bodies.h` reads `bodies_in_world`.
+
 **The crowd is instances, never rebuilt vertices.** Every piece of a model,
 and every part of a figure and its ball, is a `mesh_instance`
 (`src/renderer/mesh_instance.h`): the matrix that places one of three canonical
@@ -308,6 +314,43 @@ failed requests are errors; progress (waiting on the server, ball preparation,
 checking bookings), a group wait and a rules consequence (a stroke penalty) are
 statuses. Travel is shown by the travel screen alone, with no HUD notice; the HUD
 shows one notice, an error before progress.
+
+**The effect shelf** is two rows of small squares (12 UI pixels, buff-icon style) left of
+the club label spanning its height, one square per running effect source (an item with
+three effects is one square), newest leftmost in the top row, a full row continuing in
+the one below, its seconds under it (`45`, then `2M` past 99 s; none while equipped). Built from
+`current_effects` (`core/effect_shelf_frame.h`, words from en.json), laid out once in UI
+pixels for drawing and hit tests (`renderer/effect_shelf_layout.h`: square on screen, a
+`+N` square when the rows would reach the mode label) and drawn by
+`renderer/effect_shelf_overlay.h` with code-drawn icons (`effect_icons.h`; a shipped
+effect naming an icon it cannot draw fails a test). Holding the right button while
+walking on foot (`wants_effect_cursor`, `core/effect_cursor.h`) frees the mouse; the
+square under it shows a tooltip. The mouse's counts never turn the look while it is
+free or for two frames after it is captured again.
+
+**Screen vignettes** (the dazed red edge) are overlay quads (`renderer/vignette_overlay.h`),
+drawn first in the HUD so the tape and TV take them: the event's colour at the screen
+edge, clear a fixed way in, its strength falling evenly from 1 to 0 over the vignette's
+seconds from the effect's start (`game/vignette_strength.h`, from `current_effects` and
+the shared clock). Presentation only.
+
+**A real lightning strike is drawn on the struck golfer, in the world.** Random lightning
+is decoration in the sky (`backdrop.frag`, `render_lightning::bolt`), held back while
+aiming or a shot is in the air. A strike on a golfer (the server's `lightning_strike_event`
+in the room, or mine offline; `core/lightning_frame.h` `strike_at`) is never held back and
+is not drawn in the sky pass: `renderer/world_bolt.h` builds a jagged camera-facing ribbon
+channel with a few branches from `world_bolt_height_meters` over the golfer down to their
+feet (shape from the strike's seed), and `world_bolt_renderer` adds it in the scene pass
+(depth-tested, never written, so ground and trees hide it), flickering with the flash; the
+sky still lights the clouds over the golfer's bearing. Its thunder is heard after the sound
+has come the distance from the camera, the close clap or the far rumble as for any strike.
+Presentation only.
+
+**XP drops** are an icon and `+N XP` text with no panel, right-aligned under the club
+label (`renderer/xp_drop_layout.h`), one per award (no stacking; gains below
+`min_visible_xp` pool until visible). Each falls a short way and fades over
+`xp_drops.lifetime_seconds`; simultaneous drops are spaced a line apart, newest on top,
+and only the newest few show.
 
 **One model at every distance.** Trees have one full model per species variant, indexed with bit-identical vertices shared and the triangle order kept.
 Its leaf clumps' cards are drawn in every season and every pass (picture, depth first, bake, sun and lamp

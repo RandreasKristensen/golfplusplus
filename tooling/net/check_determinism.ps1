@@ -4,7 +4,10 @@ walks and drives over the fixture course twice, natively and to WASM with
 Emscripten, runs both, and compares every row of their output exactly: each
 shot's summary (rest, holed, duration, strike, lost, penalty and how many
 trajectory points and events), every trajectory point and every event, and
-each drive, walk and cart sinking into a pond, floats by their bits.
+each drive, walk and cart sinking into a pond, floats by their bits. Each putt's
+flight is also met by a golfer and a driving cart (the stored flight, its
+contacts, hits, checkpoints and boxes) and rebuilt from the shot's record and
+contacts: those rows are compared too.
 
 The server simulates shots and steps every player's walking and driving
 inputs in WASM, and clients predict both natively, bit for bit, so any
@@ -69,8 +72,8 @@ function Format-Row([string]$row) {
 # What a row is: "shot 3 point 120", "shot 3 summary", "walk 2".
 function Get-RowId([string]$row) {
     $words = @($row -split ' ')
-    $count = if ($words[0] -eq 'shot' -and $words.Count -gt 3 -and $words[2] -in 'point', 'event') { 4 }
-        elseif ($words[0] -eq 'shot') { 3 } else { 2 }
+    $count = if ($words[0] -in 'shot', 'flight', 'rebuilt' -and $words.Count -gt 3 -and $words[2] -in 'point', 'event', 'contact', 'hit', 'checkpoint', 'box') { 4 }
+        elseif ($words[0] -in 'shot', 'flight', 'rebuilt') { 3 } else { 2 }
     ($words | Select-Object -First $count) -join ' '
 }
 

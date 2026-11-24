@@ -43,13 +43,81 @@ stability factor (`surfaces.cart.path.grip`, against asphalt's 0.8), so a hard
 turn on a flat path slides wide rather than tipping the cart; further departures
 require an explicit owner design decision, documentation where they live, and tests.
 
-**Items change numbers only through `effective_value`.** Gameplay reads every
-number an item can change (`src/game/effects.h`: XP, walking speed, the cart's
-speed, …) through `effective_value` on the shared clock, offline and on the
-server alike, never an item's raw numbers. A final value is `(base + Σ flat) ×
+**Effects change numbers only through `effective_value`.** Items and event
+effects (`assets/play/effects/`, e.g. dazed) are one system: an effect has a
+source, an item or an event. Gameplay reads every number an effect can change
+(`src/game/effects.h`: XP, walking speed, the cart's speed, …) through
+`effective_value` on the shared clock, offline and on the server alike, never
+an item's raw numbers. A final value is `(base + Σ flat) ×
 (1 + Σ increased) × Π (1 + more)`. Looks (a model) and rules (an item) are
 separate files. Hub model collision points are also compiled into the server
 (`game/hub_scene.h`).
+
+**A ball that hits a person plays as it lies, with no penalty (Rule 11.1);
+what it does to them is seeded data** (`src/game/ball_hit_rules.h`, tuning
+`ball_hits` in `player.json`). The shot records each contact (`person_hit`: the
+snapshot entry, time, the ball's speed in m/s and the contact height in metres).
+Under `min_speed_mps` nothing happens (a putt rolling into a foot); above it the
+person is dazed (the `dazed` event effect). A head hit (the top `head_band_share`
+of their height) can knock out instead, with `head_knockout_max` (1 in 3) times a
+speed share that is 0 at a putt's speed and 1 at a full drive's. The roll is the
+shot's seed in its own dice stream, so replays agree and clients cannot predict
+it. **The shooter hit by their own ball (a ricochet) is dazed, never knocked out**
+(owner decision; offline only lightning will).
+Online the roll is made once per golfer per flight, on their first contact (owner
+decision 2026-11-23): later contacts with the same golfer only bounce.
+
+**A flown shot can be resumed and played on from a contact, through one stepping
+path.** `simulate_ball` steps a `flight_cursor` (`src/game/flight_cursor.h`: the
+ball's full state and everything the next step depends on) with `advance_flight`,
+and so does everything else that flies a ball. A stored flight (`ball_flight.h`)
+keeps the cursor every `flight_checkpoint_steps` (10 steps, 1/12 s) and a box
+round the path every `flight_chunk_steps` (30 steps, 1/4 s); resuming from a
+checkpoint gives the original's steps to the bit. A mover (a golfer on foot or a
+cart, `mover_path.h`) that meets the ball is found by comparing its path's time
+span and swept box with the chunk boxes, then the ball's segment per step with its
+solid at that time, and confirmed by stepping the ball once with that solid in the
+course (`ball_contact.h`: `first_contact`); `replay_after_contact` flies the ball on
+from the checkpoint before it with the solid present while the ball keeps striking
+it, then on the static course. A client rebuilds the same flight from the shot's
+record and its contacts (`replay_contacts`). Movement steps carry shared-clock times
+(`step_timeline.h`), and a contact is final once settled (`contact_settle.h`,
+`server.contact_rewind_seconds`). These are pure building blocks; the server rows
+that use them are described in the networking rules.
+
+**A knocked-out golfer leaves a body that lies for an hour of real time**
+(`src/game/fallen_body.h`; tuning `knockout`: `body_minutes` 60, the lying box's
+width and height; its length is a standing person's height). The body is a thing
+in the world, not the player: it stays where they fell even after they log in
+again, and is gone at exactly 60 minutes (`body_expired`). It is one low
+dynamic solid (`snapshot_kind::body`, `solid_kind::body`) in the same lists as
+people and carts, so it stops balls (a thud, `board_hit`), walkers and carts
+through the shot snapshot and the walking and driving obstacles, in the game
+and in the server's `play_move`. It is never a target of `hit_outcome`: only
+people standing are hit. Knocked out online, the golfer is logged out as a
+disconnect does (the hole in play abandoned, completed scores and the booking
+kept, a cart seat freed). Offline only lightning knocks you out
+(`knock_out_offline` in `game/knockout.h`): the body lies in that place, kept
+in the save (`save_data::bodies`, save version 10) with its real-time expiry,
+and I return to the main menu. A second knockout leaves a second body.
+
+**Lightning strikes golfers, in the hub and on courses**
+(`src/game/lightning_rules.h`, tuning `lightning` in `player.json`). Thunder above
+the thunderstorm level (`thunderstorm_thunder`, 0.5) gives each golfer a strike
+chance per second: in the open at full thunder one per `open_strike_hours` (24 storm-hours),
+rising linearly from 0 at the level, times the cover and the club. Real lightning
+safety: only a building's roof shelters (`building_factor` 0.02); a tree's canopy is
+worse than the open (`tree_factor` 1.5, side flash); a cart is no shelter (open);
+a club in hand at address or in the swing is worse (`address_factor` 2). Cover is the
+nearest solid overhead in the one solids list: a canopy (`leaves`, its underside
+over the head) is a tree, a `board` box with its underside over the head a building's roof;
+a building's body box standing on the ground shelters nobody beside it, and no shipped
+building has a roof anyone can stand under (the rule serves one that does). A struck
+golfer is dazed, or knocked out with probability `knockout_share` (1 in 10). A check
+runs every `check_seconds` of the shared clock, each golfer rolling their own dice from
+the check's seed (the server's secret online, so no client can predict it; a session
+seed offline); a strike is never a decision of the client. Offline it is the only
+knockout (`game/lightning_play.h`).
 
 **The weather is shared, replayable and in play.** A course's weather is a pure
 function of the course and UTC time (`weather_at`), the same for everyone: no

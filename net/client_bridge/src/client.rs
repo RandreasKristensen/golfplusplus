@@ -247,6 +247,7 @@ impl StdbClient {
         watch!(my_avatar_motion, AvatarMotion);
         watch_keyed!(ball, Ball);
         watch_keyed!(practice_ball, PracticeBall);
+        watch!(body, Body);
         watch_keyed!(dap_pair, Dap);
         watch!(my_golf_carts, GolfCart);
         watch_keyed!(player_loadout, PlayerLoadout);
@@ -256,6 +257,8 @@ impl StdbClient {
         watch_keyed!(ride_motion, RideMotion);
         watch_events!(shot_event, ShotEvent);
         watch_events!(item_use_event, ItemUseEvent);
+        watch_events!(ball_contact_event, BallContactEvent);
+        watch_events!(lightning_strike_event, LightningStrikeEvent);
         watch!(my_account, MyAccount);
         watch!(my_golfer_progress, MyGolferProgress);
         watch!(my_skills, MySkills);
@@ -264,6 +267,7 @@ impl StdbClient {
         watch!(my_world_flags, MyWorldFlags);
         watch!(my_link_code, MyLinkCode);
         watch!(my_link_status, MyLinkStatus);
+        watch!(my_knockout_notice, MyKnockoutNotice);
         watch!(server_protocol, ServerProtocol);
         watch!(server_content_hash, ServerContentHash);
     }

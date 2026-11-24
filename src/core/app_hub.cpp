@@ -48,8 +48,7 @@ void app::update_hub_menu(const float dt, frame_profile* profile) {
     set_mouse_captured(false);
     int width = 1, height = 1;
     SDL_GetWindowSize(window_.sdl_window(), &width, &height);
-    const glm::vec2 point(static_cast<float>(input_.mouse_x) / std::max(1, width) * 2 - 1,
-        1 - static_cast<float>(input_.mouse_y) / std::max(1, height) * 2);
+    const glm::vec2 point = mouse_clip_position(input_, width, height);
     menu_pointer pointer;
     if (input_.mouse_dx || input_.mouse_dy) { pointer.hover = point; }
     if (input_.mouse_left.pressed) { pointer.click = point; }

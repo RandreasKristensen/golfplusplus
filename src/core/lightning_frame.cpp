@@ -13,6 +13,9 @@ namespace {
 constexpr int max_pulses = 4;
 // No strike sooner than this after the last, however thundery.
 constexpr float min_gap_seconds = 0.6f;
+// A strike on a point nearer the camera than this (in world units) has no
+// bearing from it; the strike's seed chooses one.
+constexpr float near_point_units = 0.5f;
 
 // The next value in [0, 1) of `state` (xorshift32).
 float next_random(std::uint32_t& state) {
@@ -83,6 +86,18 @@ lightning_presentation update_lightning(lightning_presentation state, const floa
     return state;
 }
 
+lightning_presentation strike_at(lightning_presentation state, const glm::vec3& point, const glm::vec3& camera,
+                                 const float meters_per_unit, const lightning_style& style) {
+    lightning_strike strike;
+    strike.point = point;
+    strike.seed = next_random(state.random) * 100.0f;
+    strike.bolt = true;
+    state.strike = strike;
+    const float meters = glm::length(point - camera) * meters_per_unit;
+    state.coming.push_back(thunder_clap{meters / style.sound_speed, meters <= style.close_meters});
+    return state;
+}
+
 float lightning_flash(const float age, const float seed, const lightning_style& style) {
     if (age < 0.0f || age >= style.flash_seconds || style.pulse_seconds <= 0.0f) {
         return 0.0f;
@@ -100,7 +115,8 @@ float lightning_flash(const float age, const float seed, const lightning_style& 
     return flash;
 }
 
-render_lightning make_render_lightning(const lightning_presentation& state, const lightning_style& style) {
+render_lightning make_render_lightning(const lightning_presentation& state, const lightning_style& style,
+                                       const glm::vec3& camera) {
     render_lightning out;
     out.color = style.color;
     out.bolt_width = glm::radians(style.bolt_width_deg);
@@ -108,10 +124,23 @@ render_lightning make_render_lightning(const lightning_presentation& state, cons
     out.bolt_brightness = style.bolt_brightness;
     out.glow_radius = glm::radians(style.glow_radius_deg);
     out.glow_strength = style.glow_strength;
+    out.world_height = style.world_bolt_height_meters;
+    out.world_width = style.world_bolt_width_meters;
+    out.world_wander = style.world_bolt_wander;
     if (state.strike) {
         out.direction = state.strike->direction;
+        if (state.strike->point) {
+            // Drawn in the world on the golfer (renderer/world_bolt.h); the clouds
+            // still light over their bearing.
+            const glm::vec3 across = *state.strike->point - camera;
+            const float flat = std::sqrt(across.x * across.x + across.z * across.z);
+            const float around = flat >= near_point_units ? std::atan2(across.x, across.z) : state.strike->seed;
+            const float up = glm::radians(0.5f * (style.top_min_deg + style.top_max_deg));
+            out.direction = glm::vec3(std::sin(around) * std::cos(up), std::sin(up), std::cos(around) * std::cos(up));
+            out.point = state.strike->point;
+        }
         out.seed = state.strike->seed;
-        out.bolt = state.strike->bolt;
+        out.bolt = state.strike->bolt && !state.strike->point;
         out.flash = lightning_flash(state.strike->age, state.strike->seed, style);
     }
     return out;

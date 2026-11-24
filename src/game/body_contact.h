@@ -3,7 +3,8 @@
 // Me on foot and my cart bumping into the area's solids that stop us
 // (play_area::solids) and into each other, as the shared fixed steps do it
 // (game/movement_step.h): on foot I stop at every cart, and my cart at
-// people on foot and other carts, as they are shown here.
+// people on foot and other carts, as they are shown here; both stop at the
+// bodies lying (game/knockout.h).
 
 struct game_state;
 
@@ -13,8 +14,8 @@ struct game_state;
 
 #include <glm/vec3.hpp>
 
-// What stops me on foot besides the area's solids: every cart as shown and
-// the flagsticks standing in their cups. Built once a step's frame.
+// What stops me on foot besides the area's solids: every cart as shown, the
+// bodies lying and the flagsticks standing in their cups. Built once a step's frame.
 std::vector<solid> walking_obstacles(const game_state& state);
 // On foot, put here from `before`: kept clear (a correction from the server).
 void keep_walker_clear(game_state& state, const glm::vec3& before);
