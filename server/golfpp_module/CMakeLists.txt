@@ -205,7 +205,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   set(EXPORTED_FUNCS "['_malloc','_free','___describe_module__','___call_reducer__','___call_view__','___call_view_anon__','___call_procedure__']")
 
   # Applied to both the module and the bindings, so everything sees the same flags.
-  target_compile_options(lib PRIVATE -fno-exceptions -O2 -g0)
+  # zlib inflates the embedded content (Emscripten's port).
+  target_compile_options(lib PRIVATE -fno-exceptions -O2 -g0 "SHELL:-sUSE_ZLIB=1")
   target_compile_options(spacetimedb_cpp_library PRIVATE -fno-exceptions -O2 -g0)
 
   # Size initial memory for the embedded content plus this heap reserve;
@@ -221,6 +222,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     "SHELL:-sALLOW_MEMORY_GROWTH=1"
     "SHELL:-sINITIAL_HEAP=16MB"
     "SHELL:-sSUPPORT_LONGJMP=0"
+    "SHELL:-sUSE_ZLIB=1"
     "SHELL:-sSUPPORT_ERRNO=0"
     "SHELL:-std=c++20"
     "SHELL:-O2"

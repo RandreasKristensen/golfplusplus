@@ -128,7 +128,7 @@ The version is `project(VERSION)` in `CMakeLists.txt`. Players' builds set
 `GOLFPP_NO_CONSOLE` (errors only in SDL's log): debug from the presets.
 
 **Flag any new dependency first.** Approved: the SpacetimeDB CLI, C++ bindings
-and `spacetimedb-sdk` (pinned to the CLI's version), the Emscripten SDK, the
+and `spacetimedb-sdk` (pinned to the CLI's version), the Emscripten SDK (and its zlib port, which inflates the module's embedded content), the
 crates in `net/client_bridge/Cargo.toml`, SpacetimeAuth, Inno Setup 6 and
 Python for releases, GitHub Actions for the macOS and Linux releases, and the
 pinned SDL2, SDL2_mixer and GLM sources in `tooling/release/build_deps.sh`,
