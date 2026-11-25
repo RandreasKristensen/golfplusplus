@@ -1,6 +1,6 @@
 # Builds what macOS and Linux players download (tooling/release/build_release.sh)
 # on GitHub's runners. Run it by hand from the Actions tab (the packages are
-# then the run's artifacts; release_tag attaches to an existing release),
+# then the run's artifacts; release_destination can attach to an existing release),
 # or push a release tag (alpha-v<version>): the
 # packages are then attached to that tag's GitHub release, made as a draft
 # when there is none. Windows' installer and the server package are built
@@ -15,8 +15,13 @@ on:
         type: choice
         options: [all, macos, linux]
         default: all
+      release_destination:
+        description: Release to receive this build (latest includes alpha prereleases)
+        type: choice
+        options: [none, latest, specific]
+        default: none
       release_tag:
-        description: Existing release tag to receive this build (blank keeps artifacts only)
+        description: Existing release tag (only used with specific)
         type: string
         default: ''
   push:
@@ -26,7 +31,44 @@ permissions:
   contents: read
 
 jobs:
+  destination:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Resolve the release destination
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF_TAG: ${{ github.ref_name }}
+          DESTINATION: ${{ inputs.release_destination }}
+          SPECIFIC_TAG: ${{ inputs.release_tag }}
+        run: |
+          tag=''
+          if [ "$EVENT" = push ]; then
+            tag="$REF_TAG"
+          else
+            case "$DESTINATION" in
+              none) ;;
+              latest)
+                tag=$(gh api --paginate --slurp "repos/$GH_REPO/releases" --jq '[.[][] | select(.draft == false and (.tag_name | startswith("alpha-v")))] | max_by(.published_at) | .tag_name // empty')
+                test -n "$tag" || { echo 'No published alpha release found' >&2; exit 1; }
+                ;;
+              specific)
+                tag="$SPECIFIC_TAG"
+                [[ "$tag" =~ ^alpha-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Enter an alpha-v<version> release tag' >&2; exit 1; }
+                gh release view "$tag" > /dev/null
+                ;;
+              *) echo 'Unknown release destination' >&2; exit 1 ;;
+            esac
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Release destination: ${tag:-artifacts only}"
+
   build:
+    needs: destination
     permissions:
       contents: write
     strategy:
@@ -39,11 +81,11 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Check the repair destination
-        if: inputs.release_tag != ''
+        if: needs.destination.outputs.tag != '' && github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ inputs.release_tag }}
+          TAG: ${{ needs.destination.outputs.tag }}
         run: |
           version=$(sed -n 's/^project(golfpp VERSION \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' CMakeLists.txt)
           test "$TAG" = "alpha-v$version"
@@ -101,14 +143,14 @@ jobs:
           if-no-files-found: error
 
       - name: Attach this platform's package to the release
-        if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
+        if: needs.destination.outputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ inputs.release_tag || github.ref_name }}
-          MANUAL_TAG: ${{ inputs.release_tag }}
+          TAG: ${{ needs.destination.outputs.tag }}
+          EVENT: ${{ github.event_name }}
         run: |
-          if [ -n "$MANUAL_TAG" ]; then
+          if [ "$EVENT" = workflow_dispatch ]; then
             gh release view "$TAG" > /dev/null
           elif ! gh release view "$TAG" > /dev/null 2>&1; then
             # The other platform may have created it since our view.
