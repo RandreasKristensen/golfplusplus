@@ -2,6 +2,23 @@
 
 (recurring) parse through of entire codebase to find bad practices, dead code, contradictory code etc. The code should be clean, because we are trying to rely less on documentation, and have code as documentation so the LLMs coding dont do things we dont want because of some bad code precedence.
 
+## **BUGS**
+
+øllen vender forkert for andre, både hullet og animationen
+man kan ikke højreklik hover i bilen
+armen bliver bare lang hvis man tager en club og går
+når andre går ind i bilen tp'er man bare rundt i et par sekunder
+green for lys
+man bliver i luften hvis man hopper og så interacter
+cart er fysisk i verden der hvor den vælter, ikke der hvor den ligger. kunne være fedt hvis man kan rejse den op igen
+hvad er reglerne for at ramme en bold?
+cart path kan flytte skilte (blommenlyst hul 6)
+the tee pole doesnt have any shadow
+mere power i putteren
+bhop
+names are bugged in the zoom
+
+
 ## **Wishlist before next release - G++ Pro Edition**
 
 - Chipping

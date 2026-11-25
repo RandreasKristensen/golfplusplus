@@ -1,6 +1,7 @@
 # Builds what macOS and Linux players download (tooling/release/build_release.sh)
 # on GitHub's runners. Run it by hand from the Actions tab (the packages are
-# then the run's artifacts), or push a release tag (alpha-v<version>): the
+# then the run's artifacts; release_tag attaches to an existing release),
+# or push a release tag (alpha-v<version>): the
 # packages are then attached to that tag's GitHub release, made as a draft
 # when there is none. Windows' installer and the server package are built
 # locally (tooling/release/build_release.ps1).
@@ -8,6 +9,16 @@ name: Release (macOS, Linux)
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to rebuild
+        type: choice
+        options: [all, macos, linux]
+        default: all
+      release_tag:
+        description: Existing release tag to receive this build (blank keeps artifacts only)
+        type: string
+        default: ''
   push:
     tags: ["alpha-v*"]
 
@@ -16,18 +27,27 @@ permissions:
 
 jobs:
   build:
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
+      # Ubuntu 22.04 preserves the release's oldest supported glibc baseline.
       matrix:
-        include:
-          - os: macos-15
-            platform: macos
-          # The oldest glibc a player's Linux needs is the one built on.
-          - os: ubuntu-22.04
-            platform: linux
+        include: ${{ fromJSON(inputs.platform == 'macos' && '[{"os":"macos-15","platform":"macos"}]' || inputs.platform == 'linux' && '[{"os":"ubuntu-22.04","platform":"linux"}]' || '[{"os":"macos-15","platform":"macos"},{"os":"ubuntu-22.04","platform":"linux"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check the repair destination
+        if: inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          version=$(sed -n 's/^project(golfpp VERSION \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' CMakeLists.txt)
+          test "$TAG" = "alpha-v$version"
+          gh release view "$TAG" > /dev/null
 
       - name: Install build tools (Linux)
         if: matrix.platform == 'linux'
@@ -80,24 +100,18 @@ jobs:
             build/dist/*.tar.gz
           if-no-files-found: error
 
-  attach:
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          path: dist
-          merge-multiple: true
-      - name: Attach the packages to the release
+      - name: Attach this platform's package to the release
+        if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.release_tag || github.ref_name }}
+          MANUAL_TAG: ${{ inputs.release_tag }}
         run: |
-          if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" --draft --verify-tag --title "Alpha v${TAG#alpha-v}" --notes ""
+          if [ -n "$MANUAL_TAG" ]; then
+            gh release view "$TAG" > /dev/null
+          elif ! gh release view "$TAG" > /dev/null 2>&1; then
+            # The other platform may have created it since our view.
+            gh release create "$TAG" --draft --verify-tag --title "Alpha v${TAG#alpha-v}" --notes "" || gh release view "$TAG" > /dev/null
           fi
-          gh release upload "$TAG" dist/* --clobber
+          gh release upload "$TAG" build/dist/*.${{ matrix.platform == 'macos' && 'dmg' || 'tar.gz' }} --clobber

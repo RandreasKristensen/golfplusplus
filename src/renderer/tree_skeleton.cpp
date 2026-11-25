@@ -42,8 +42,11 @@ tree_skeleton grow_true(const tree_look& look, tree_dice& dice, const tree_true_
     const std::size_t wanted = static_cast<std::size_t>(std::max(1, look.clumps) * points_per_clump);
     const bool cone = look.shape == crown_shape::cone;
     for (std::size_t attempt = 0; points.size() < wanted && attempt < wanted * 400; ++attempt) {
-        glm::vec3 p = box.centre + glm::vec3(dice.between(-1.0f, 1.0f), dice.between(-1.0f, 1.0f),
-                                            dice.between(-1.0f, 1.0f)) * box.half;
+        // Sequence draws explicitly: constructor arguments have no fixed evaluation order.
+        const float z = dice.between(-1.0f, 1.0f);
+        const float y = dice.between(-1.0f, 1.0f);
+        const float x = dice.between(-1.0f, 1.0f);
+        glm::vec3 p = box.centre + glm::vec3(x, y, z) * box.half;
         if (cone) {
             const float rise = (p.y - crown_base) / std::max(crown_top - crown_base, 1.0e-3f);
             p.x *= std::max(1.0f - rise, 0.0f);
@@ -80,7 +83,9 @@ tree_skeleton grow_true(const tree_look& look, tree_dice& dice, const tree_true_
         int node = add(at, -1, 0.0f);
         const float lean = spread * dice.between(0.15f, 0.35f);
         while (at.y + step < trunk_top) {
-            const glm::vec3 wobble(dice.between(-0.04f, 0.04f), 0.0f, dice.between(-0.04f, 0.04f));
+            const float wobble_z = dice.between(-0.04f, 0.04f);
+            const float wobble_x = dice.between(-0.04f, 0.04f);
+            const glm::vec3 wobble(wobble_x, 0.0f, wobble_z);
             at += glm::normalize(up + out * lean + wobble) * step;
             node = add(at, node, 0.0f);
         }
@@ -122,7 +127,10 @@ tree_skeleton grow_true(const tree_look& look, tree_dice& dice, const tree_true_
                 continue;
             }
             const float age = std::min(trunk_left[n] / 0.6f, 1.0f);
-            const glm::vec3 jitter(dice.between(-1.0f, 1.0f), dice.between(-1.0f, 1.0f), dice.between(-1.0f, 1.0f));
+            const float jitter_z = dice.between(-1.0f, 1.0f);
+            const float jitter_y = dice.between(-1.0f, 1.0f);
+            const float jitter_x = dice.between(-1.0f, 1.0f);
+            const glm::vec3 jitter(jitter_x, jitter_y, jitter_z);
             const glm::vec3 way = glm::normalize(pull[n] / strength + up * (0.25f * look.light_bend) -
                                                  up * (0.25f * look.branch_droop * age) + jitter * bend_jitter);
             const glm::vec3 next = grown.nodes[n].position + way * step;

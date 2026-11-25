@@ -164,3 +164,17 @@ anonymous lifecycle checks cannot prove named persistence.
 `golfpp` whenever the built module changes. It first tries migration; if refused,
 it republishes with `--delete-data --yes`, then restores anonymous login support
 and regenerates bindings. Local accounts, bookings and scores may be deleted.
+
+**Cross-platform release checks.** `.github/workflows/release.yml` builds and tests
+on macOS 15 (Apple Clang) and Ubuntu 22.04 (GCC) for release tags and manual
+runs only. Releases follow the friends' playtest schedule; ordinary pushes and
+pull requests do not trigger packaging. A manual run with a blank release_tag
+can check both platforms ahead of a playtest. Windows alone cannot validate
+another compiler, standard library or OS. Each successful tag job attaches its
+own package, independently of the other platform.
+To repair one platform on an existing alpha release, run the workflow from the
+fixed main revision with `platform: macos` (or `linux`) and `release_tag` set to
+the existing tag. It tests and packages the selected revision, then replaces
+only that platform's asset; it does not move the tag. Keep project(VERSION)
+matching the release being repaired. The Actions run records the actual source
+revision. A blank release_tag uploads run artifacts only.

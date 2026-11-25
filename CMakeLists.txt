@@ -771,7 +771,7 @@ if (GOLFPP_BUILD_TESTS)
         tests/world_marker_tests.cpp
     )
     set_target_properties(golfpp-tests PROPERTIES OUTPUT_NAME "golf++-tests")
-    target_link_libraries(golfpp-tests PRIVATE golfpp-online-session golfpp-server-rules)
+    target_link_libraries(golfpp-tests PRIVATE golfpp-online-session golfpp-server-rules golfpp-determinism)
     target_include_directories(golfpp-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures" GOLFPP_TEST_FIXTURES_DIR)
     file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src" GOLFPP_SOURCE_DIR)

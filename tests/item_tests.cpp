@@ -277,7 +277,9 @@ TEST_CASE("an item's effect ends at the same moment offline and on the server") 
 }
 
 TEST_CASE("a held prop is lit by the sun on the side facing it, and at night by a floodlight beside it") {
-    const lighting_palette& palette = *load_lighting(asset_root());
+    const auto palette_result = load_lighting(asset_root());
+    REQUIRE(palette_result.has_value());
+    const lighting_palette& palette = *palette_result;
     // Midday: the sun high to the south.
     const lighting_key noon = lighting_at(palette, 50.0f);
     frame_lighting_block day;

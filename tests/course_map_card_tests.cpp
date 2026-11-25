@@ -33,7 +33,9 @@ const std::array<overlay_grid, 3> windows{overlay_grid{554, 416}, overlay_grid{6
 }
 
 TEST_CASE("the shipped map inks tell every surface apart, on the paper and faded on a hole sign") {
-    const map_inks& shipped = load_lighting(asset_root())->colors.map;
+    const auto palette = load_lighting(asset_root());
+    REQUIRE(palette.has_value());
+    const map_inks& shipped = palette->colors.map;
     const std::vector<terrain_material> surfaces{terrain_material::fairway, terrain_material::rough, terrain_material::green,
                                                  terrain_material::bunker, terrain_material::water};
     for (std::size_t i = 0; i < surfaces.size(); ++i) {
