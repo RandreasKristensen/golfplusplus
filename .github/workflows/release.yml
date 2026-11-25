@@ -53,7 +53,8 @@ jobs:
             case "$DESTINATION" in
               none) ;;
               latest)
-                tag=$(gh api --paginate --slurp "repos/$GH_REPO/releases" --jq '[.[][] | select(.draft == false and (.tag_name | startswith("alpha-v")))] | max_by(.published_at) | .tag_name // empty')
+                tag=$(gh api --paginate --slurp "repos/$GH_REPO/releases" |
+                  python3 -c 'import json, sys; releases = (release for page in json.load(sys.stdin) for release in page if not release["draft"] and release["tag_name"].startswith("alpha-v")); print(max(releases, key=lambda release: release["published_at"], default={}).get("tag_name", ""))')
                 test -n "$tag" || { echo 'No published alpha release found' >&2; exit 1; }
                 ;;
               specific)
